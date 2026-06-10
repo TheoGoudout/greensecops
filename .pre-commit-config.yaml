@@ -39,6 +39,16 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
+  # OpenAPI client generation
+  - repo: local
+    hooks:
+      - id: generate-openapi-client
+        name: Generate OpenAPI client
+        entry: bash scripts/generate-client.sh
+        language: system
+        files: ^backend/app/.*\.py$
+        pass_filenames: false
+
   # Frontend: biome lint + format
   - repo: local
     hooks:

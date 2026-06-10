@@ -18,7 +18,7 @@ const isLoggedIn = () => {
 const useAuth = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { showErrorToast } = useCustomToast()
+  const { showSuccessToast, showErrorToast } = useCustomToast()
 
   const { data: user } = useQuery<UserPublic | null, Error>({
     queryKey: ["currentUser"],
@@ -49,6 +49,7 @@ const useAuth = () => {
     mutationFn: login,
     onSuccess: () => {
       navigate({ to: "/" })
+      showSuccessToast("Welcome back, nice to see you again!")
     },
     onError: handleError.bind(showErrorToast),
   })
