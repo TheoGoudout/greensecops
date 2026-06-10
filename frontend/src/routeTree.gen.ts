@@ -18,7 +18,6 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutRulesRouteImport } from './routes/_layout/rules'
 import { Route as LayoutRepositoriesRouteImport } from './routes/_layout/repositories'
-import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
 import { Route as LayoutIssuesRouteImport } from './routes/_layout/issues'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutBillingRouteImport } from './routes/_layout/billing'
@@ -70,11 +69,6 @@ const LayoutRepositoriesRoute = LayoutRepositoriesRouteImport.update({
   path: '/repositories',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutItemsRoute = LayoutItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
-  getParentRoute: () => LayoutRoute,
-} as any)
 const LayoutIssuesRoute = LayoutIssuesRouteImport.update({
   id: '/issues',
   path: '/issues',
@@ -118,7 +112,6 @@ export interface FileRoutesByFullPath {
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/issues': typeof LayoutIssuesRoute
-  '/items': typeof LayoutItemsRoute
   '/repositories': typeof LayoutRepositoriesRoute
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
@@ -134,7 +127,6 @@ export interface FileRoutesByTo {
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/issues': typeof LayoutIssuesRoute
-  '/items': typeof LayoutItemsRoute
   '/repositories': typeof LayoutRepositoriesRoute
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
@@ -153,7 +145,6 @@ export interface FileRoutesById {
   '/_layout/billing': typeof LayoutBillingRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/issues': typeof LayoutIssuesRoute
-  '/_layout/items': typeof LayoutItemsRoute
   '/_layout/repositories': typeof LayoutRepositoriesRoute
   '/_layout/rules': typeof LayoutRulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
@@ -173,7 +164,6 @@ export interface FileRouteTypes {
     | '/billing'
     | '/dashboard'
     | '/issues'
-    | '/items'
     | '/repositories'
     | '/rules'
     | '/settings'
@@ -189,7 +179,6 @@ export interface FileRouteTypes {
     | '/billing'
     | '/dashboard'
     | '/issues'
-    | '/items'
     | '/repositories'
     | '/rules'
     | '/settings'
@@ -207,7 +196,6 @@ export interface FileRouteTypes {
     | '/_layout/billing'
     | '/_layout/dashboard'
     | '/_layout/issues'
-    | '/_layout/items'
     | '/_layout/repositories'
     | '/_layout/rules'
     | '/_layout/settings'
@@ -288,13 +276,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/items': {
-      id: '/_layout/items'
-      path: '/items'
-      fullPath: '/items'
-      preLoaderRoute: typeof LayoutItemsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
     '/_layout/issues': {
       id: '/_layout/issues'
       path: '/issues'
@@ -346,7 +327,6 @@ interface LayoutRouteChildren {
   LayoutBillingRoute: typeof LayoutBillingRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutIssuesRoute: typeof LayoutIssuesRoute
-  LayoutItemsRoute: typeof LayoutItemsRoute
   LayoutRepositoriesRoute: typeof LayoutRepositoriesRoute
   LayoutRulesRoute: typeof LayoutRulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
@@ -360,7 +340,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutBillingRoute: LayoutBillingRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutIssuesRoute: LayoutIssuesRoute,
-  LayoutItemsRoute: LayoutItemsRoute,
   LayoutRepositoriesRoute: LayoutRepositoriesRoute,
   LayoutRulesRoute: LayoutRulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
