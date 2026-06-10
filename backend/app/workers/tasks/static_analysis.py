@@ -23,9 +23,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
-def run_static_analysis(
-    self: object,  # noqa: ARG001
+def _run_static_analysis_impl(
     repo_id: str,
     branch: str = "",
     commit_sha: str = "",
@@ -158,6 +156,24 @@ def run_static_analysis(
             )
 
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
+
+
+@celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
+def run_static_analysis(
+    self: object,  # noqa: ARG001
+    repo_id: str,
+    branch: str = "",
+    commit_sha: str = "",
+    trigger: str = "manual",
+    workflow_file_id: str | None = None,
+) -> dict[str, str | int]:
+    return _run_static_analysis_impl(
+        repo_id=repo_id,
+        branch=branch,
+        commit_sha=commit_sha,
+        trigger=trigger,
+        workflow_file_id=workflow_file_id,
+    )
 
 
 def _fetch_workflow_files(repo: Repository) -> list[object]:
