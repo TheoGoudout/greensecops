@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from pydantic import EmailStr
 from sqlalchemy import DateTime
@@ -84,6 +85,7 @@ class FixStatus(str, enum.Enum):
 
 # ─── User ────────────────────────────────────────────────────────────────────
 
+
 # Shared properties
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
@@ -130,8 +132,12 @@ class User(UserBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
-    org_memberships: list["OrgMember"] = Relationship(back_populates="user", cascade_delete=True)
-    billing_subscription: "BillingSubscription | None" = Relationship(back_populates="user")
+    org_memberships: list["OrgMember"] = Relationship(
+        back_populates="user", cascade_delete=True
+    )
+    billing_subscription: Optional["BillingSubscription"] = Relationship(
+        back_populates="user"
+    )
 
 
 # Properties to return via API, id is always required
@@ -161,20 +167,28 @@ class Organization(SQLModel, table=True):
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
-    members: list["OrgMember"] = Relationship(back_populates="organization", cascade_delete=True)
-    repositories: list["Repository"] = Relationship(back_populates="organization", cascade_delete=True)
+    members: list["OrgMember"] = Relationship(
+        back_populates="organization", cascade_delete=True
+    )
+    repositories: list["Repository"] = Relationship(
+        back_populates="organization", cascade_delete=True
+    )
 
 
 class OrgMember(SQLModel, table=True):
     __tablename__ = "org_member"
-    org_id: uuid.UUID = Field(foreign_key="organization.id", primary_key=True, ondelete="CASCADE")
-    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True, ondelete="CASCADE")
+    org_id: uuid.UUID = Field(
+        foreign_key="organization.id", primary_key=True, ondelete="CASCADE"
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", primary_key=True, ondelete="CASCADE"
+    )
     role: OrgRole = Field(default=OrgRole.member)
     joined_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     organization: Organization | None = Relationship(back_populates="members")
-    user: "User | None" = Relationship(back_populates="org_memberships")
+    user: Optional["User"] = Relationship(back_populates="org_memberships")
 
 
 # ─── Repository ──────────────────────────────────────────────────────────────
@@ -182,22 +196,32 @@ class OrgMember(SQLModel, table=True):
 
 class Repository(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    org_id: uuid.UUID = Field(foreign_key="organization.id", nullable=False, ondelete="CASCADE")
+    org_id: uuid.UUID = Field(
+        foreign_key="organization.id", nullable=False, ondelete="CASCADE"
+    )
     github_repo_id: int = Field(unique=True, index=True)
     full_name: str = Field(max_length=512, index=True)  # e.g. "owner/repo"
     installation_id: int = Field(index=True)
     enabled: bool = Field(default=True)
     default_branch: str = Field(default="main", max_length=255)
-    fix_delivery_mode: FixDeliveryMode | None = Field(default=None)  # overrides org default
+    fix_delivery_mode: FixDeliveryMode | None = Field(
+        default=None
+    )  # overrides org default
     llm_provider: LLMProvider | None = Field(default=None)  # overrides org default
     llm_model: str | None = Field(default=None, max_length=255)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     organization: Organization | None = Relationship(back_populates="repositories")
-    workflow_files: list["WorkflowFile"] = Relationship(back_populates="repository", cascade_delete=True)
-    analyses: list["Analysis"] = Relationship(back_populates="repository", cascade_delete=True)
-    telemetry_runs: list["TelemetryRun"] = Relationship(back_populates="repository", cascade_delete=True)
+    workflow_files: list["WorkflowFile"] = Relationship(
+        back_populates="repository", cascade_delete=True
+    )
+    analyses: list["Analysis"] = Relationship(
+        back_populates="repository", cascade_delete=True
+    )
+    telemetry_runs: list["TelemetryRun"] = Relationship(
+        back_populates="repository", cascade_delete=True
+    )
 
 
 # ─── WorkflowFile ─────────────────────────────────────────────────────────────
@@ -206,7 +230,9 @@ class Repository(SQLModel, table=True):
 class WorkflowFile(SQLModel, table=True):
     __tablename__ = "workflow_file"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(foreign_key="repository.id", nullable=False, ondelete="CASCADE")
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
     path: str = Field(max_length=512)  # e.g. ".github/workflows/ci.yml"
     content_hash: str = Field(max_length=64, index=True)  # SHA-256 hex
     raw_content: str  # full YAML text
@@ -237,8 +263,12 @@ class Rule(SQLModel, table=True):
 
 class Analysis(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(foreign_key="repository.id", nullable=False, ondelete="CASCADE")
-    workflow_file_id: uuid.UUID = Field(foreign_key="workflow_file.id", nullable=False, ondelete="CASCADE")
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    workflow_file_id: uuid.UUID = Field(
+        foreign_key="workflow_file.id", nullable=False, ondelete="CASCADE"
+    )
     content_hash: str = Field(max_length=64, index=True)  # dedup key
     status: AnalysisStatus = Field(default=AnalysisStatus.pending)
     score: float | None = Field(default=None)  # 0-100
@@ -261,8 +291,12 @@ class Analysis(SQLModel, table=True):
 
 class Issue(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    analysis_id: uuid.UUID = Field(foreign_key="analysis.id", nullable=False, ondelete="CASCADE")
-    rule_id: uuid.UUID = Field(foreign_key="rule.id", nullable=False, ondelete="RESTRICT")
+    analysis_id: uuid.UUID = Field(
+        foreign_key="analysis.id", nullable=False, ondelete="CASCADE"
+    )
+    rule_id: uuid.UUID = Field(
+        foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
+    )
     severity: IssueSeverity
     category: IssueCategory
     line_start: int | None = Field(default=None)
@@ -274,7 +308,7 @@ class Issue(SQLModel, table=True):
     )
     analysis: Analysis | None = Relationship(back_populates="issues")
     rule: Rule | None = Relationship(back_populates="issues")
-    fix: "Fix | None" = Relationship(back_populates="issue")
+    fix: Optional["Fix"] = Relationship(back_populates="issue")
 
 
 # ─── Fix ─────────────────────────────────────────────────────────────────────
@@ -282,7 +316,9 @@ class Issue(SQLModel, table=True):
 
 class Fix(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    issue_id: uuid.UUID = Field(foreign_key="issue.id", unique=True, nullable=False, ondelete="CASCADE")
+    issue_id: uuid.UUID = Field(
+        foreign_key="issue.id", unique=True, nullable=False, ondelete="CASCADE"
+    )
     llm_provider: LLMProvider
     llm_model: str = Field(max_length=255)
     prompt_tokens: int | None = Field(default=None)
@@ -306,10 +342,14 @@ class Fix(SQLModel, table=True):
 class TelemetryRun(SQLModel, table=True):
     __tablename__ = "telemetry_run"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(foreign_key="repository.id", nullable=False, ondelete="CASCADE")
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
     workflow_run_id: int = Field(index=True)
-    runner_specs: str | None = Field(default=None)   # JSON: vcpus, ram_gb, location, etc.
-    metrics: str | None = Field(default=None)         # JSON: cpu_pct, ram_mb, net_io, etc.
+    runner_specs: str | None = Field(
+        default=None
+    )  # JSON: vcpus, ram_gb, location, etc.
+    metrics: str | None = Field(default=None)  # JSON: cpu_pct, ram_mb, net_io, etc.
     collected_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -322,9 +362,13 @@ class TelemetryRun(SQLModel, table=True):
 class BillingSubscription(SQLModel, table=True):
     __tablename__ = "billing_subscription"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="user.id", unique=True, nullable=False, ondelete="CASCADE")
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", unique=True, nullable=False, ondelete="CASCADE"
+    )
     tier: UserTier = Field(default=UserTier.free)
-    stripe_subscription_id: str | None = Field(default=None, max_length=255, unique=True)
+    stripe_subscription_id: str | None = Field(
+        default=None, max_length=255, unique=True
+    )
     stripe_customer_id: str | None = Field(default=None, max_length=255)
     analyses_used: int = Field(default=0)
     fixes_used: int = Field(default=0)
@@ -333,7 +377,7 @@ class BillingSubscription(SQLModel, table=True):
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
-    user: "User | None" = Relationship(back_populates="billing_subscription")
+    user: Optional["User"] = Relationship(back_populates="billing_subscription")
 
 
 # ─── Public / response schemas ────────────────────────────────────────────────
@@ -418,6 +462,7 @@ class BillingSubscriptionPublic(SQLModel):
 
 
 # ─── Generic utility schemas ──────────────────────────────────────────────────
+
 
 # Generic message
 class Message(SQLModel):
