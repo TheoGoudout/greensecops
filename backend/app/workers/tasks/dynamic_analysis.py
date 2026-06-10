@@ -11,8 +11,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="dynamic_analysis.run", bind=True, max_retries=3)
-def run_dynamic_analysis(self: object, telemetry_run_id: str) -> dict[str, str | float]:  # noqa: ARG001
+def _run_dynamic_analysis_impl(telemetry_run_id: str) -> dict[str, str | float]:
     with Session(engine) as session:
         run = session.get(TelemetryRun, uuid.UUID(telemetry_run_id))
         if not run:
@@ -23,7 +22,6 @@ def run_dynamic_analysis(self: object, telemetry_run_id: str) -> dict[str, str |
 
         enrichments: list[dict[str, str | float]] = []
 
-        # Check if runner is oversized based on actual CPU usage
         vcpus = specs.get("vcpus", 0)
         cpu_percent = metrics.get("cpu_percent", 100.0)
         ram_percent = metrics.get("ram_percent", 100.0)
@@ -37,7 +35,6 @@ def run_dynamic_analysis(self: object, telemetry_run_id: str) -> dict[str, str |
                 }
             )
 
-        # Find the latest completed analysis for this repo to attach enrichment
         latest_analysis = session.exec(
             select(Analysis)
             .where(Analysis.repo_id == run.repo_id)
@@ -58,3 +55,8 @@ def run_dynamic_analysis(self: object, telemetry_run_id: str) -> dict[str, str |
             "telemetry_run_id": telemetry_run_id,
             "enrichments": len(enrichments),
         }
+
+
+@celery_app.task(name="dynamic_analysis.run", bind=True, max_retries=3)
+def run_dynamic_analysis(self: object, telemetry_run_id: str) -> dict[str, str | float]:  # noqa: ARG001
+    return _run_dynamic_analysis_impl(telemetry_run_id)

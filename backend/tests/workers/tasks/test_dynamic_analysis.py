@@ -17,7 +17,7 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
-from app.workers.tasks.dynamic_analysis import run_dynamic_analysis
+from app.workers.tasks.dynamic_analysis import _run_dynamic_analysis_impl
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ def test_run_dynamic_analysis_returns_completed(db: Session, repo: Repository) -
     run = _make_telemetry_run(db, repo)
 
     # Act — call the underlying function directly, bypassing Celery
-    result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+    result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert result["status"] == "completed"
@@ -111,7 +111,7 @@ def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:  # n
     missing_id = str(uuid.uuid4())
 
     # Act
-    result = run_dynamic_analysis.__wrapped__(None, missing_id)
+    result = _run_dynamic_analysis_impl(missing_id)
 
     # Assert
     assert result["status"] == "error"
@@ -125,7 +125,7 @@ def test_run_dynamic_analysis_no_enrichment_for_small_runner(
     run = _make_telemetry_run(db, repo, vcpus=2, cpu_percent=50.0, ram_percent=50.0)
 
     # Act
-    result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+    result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert result["status"] == "completed"
@@ -139,7 +139,7 @@ def test_run_dynamic_analysis_enrichment_for_oversized_runner(
     run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=10.0, ram_percent=20.0)
 
     # Act
-    result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+    result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert result["status"] == "completed"
@@ -153,7 +153,7 @@ def test_run_dynamic_analysis_no_enrichment_when_cpu_high(
     run = _make_telemetry_run(db, repo, vcpus=8, cpu_percent=80.0, ram_percent=20.0)
 
     # Act
-    result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+    result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert int(result["enrichments"]) == 0
@@ -166,7 +166,7 @@ def test_run_dynamic_analysis_no_enrichment_when_ram_high(
     run = _make_telemetry_run(db, repo, vcpus=8, cpu_percent=10.0, ram_percent=50.0)
 
     # Act
-    result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+    result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert int(result["enrichments"]) == 0
@@ -181,7 +181,7 @@ def test_run_dynamic_analysis_logs_enrichment_when_analysis_exists(
 
     # Act — verify logger.info is called with enrichment info
     with patch("app.workers.tasks.dynamic_analysis.logger") as mock_logger:
-        result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+        result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert result["status"] == "completed"
@@ -206,7 +206,7 @@ def test_run_dynamic_analysis_empty_specs_and_metrics(
     db.refresh(run)
 
     # Act — should not raise
-    result = run_dynamic_analysis.__wrapped__(None, str(run.id))
+    result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert — defaults kick in: vcpus=0, so no oversizing signal
     assert result["status"] == "completed"
