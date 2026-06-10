@@ -1,8 +1,8 @@
-# Full Stack FastAPI Template
+# GreenSecOps
 
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
-<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/fastapi/full-stack-fastapi-template" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/fastapi/full-stack-fastapi-template.svg" alt="Coverage"></a>
+<a href="https://github.com/fastapi/greensecops/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/fastapi/greensecops/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
+<a href="https://github.com/fastapi/greensecops/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/fastapi/greensecops/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
+<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/fastapi/greensecops" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/fastapi/greensecops.svg" alt="Coverage"></a>
 
 ## Technology Stack and Features
 
@@ -28,23 +28,23 @@
 
 ### Dashboard Login
 
-[![API docs](img/login.png)](https://github.com/fastapi/full-stack-fastapi-template)
+[![API docs](img/login.png)](https://github.com/fastapi/greensecops)
 
 ### Dashboard - Admin
 
-[![API docs](img/dashboard.png)](https://github.com/fastapi/full-stack-fastapi-template)
+[![API docs](img/dashboard.png)](https://github.com/fastapi/greensecops)
 
 ### Dashboard - Items
 
-[![API docs](img/dashboard-items.png)](https://github.com/fastapi/full-stack-fastapi-template)
+[![API docs](img/dashboard-items.png)](https://github.com/fastapi/greensecops)
 
 ### Dashboard - Dark Mode
 
-[![API docs](img/dashboard-dark.png)](https://github.com/fastapi/full-stack-fastapi-template)
+[![API docs](img/dashboard-dark.png)](https://github.com/fastapi/greensecops)
 
 ### Interactive API Documentation
 
-[![API docs](img/docs.png)](https://github.com/fastapi/full-stack-fastapi-template)
+[![API docs](img/docs.png)](https://github.com/fastapi/greensecops)
 
 ## How To Use It
 
@@ -62,7 +62,7 @@ But you can do the following:
 - Clone this repository manually, set the name with the name of the project you want to use, for example `my-full-stack`:
 
 ```bash
-git clone git@github.com:fastapi/full-stack-fastapi-template.git my-full-stack
+git clone git@github.com:fastapi/greensecops.git my-full-stack
 ```
 
 - Enter into the new directory:
@@ -80,7 +80,7 @@ git remote set-url origin git@github.com:octocat/my-full-stack.git
 - Add this repo as another "remote" to allow you to get updates later:
 
 ```bash
-git remote add upstream git@github.com:fastapi/full-stack-fastapi-template.git
+git remote add upstream git@github.com:fastapi/greensecops.git
 ```
 
 - Push the code to your new repository:
@@ -100,8 +100,8 @@ git remote -v
 
 origin    git@github.com:octocat/my-full-stack.git (fetch)
 origin    git@github.com:octocat/my-full-stack.git (push)
-upstream    git@github.com:fastapi/full-stack-fastapi-template.git (fetch)
-upstream    git@github.com:fastapi/full-stack-fastapi-template.git (push)
+upstream    git@github.com:fastapi/greensecops.git (fetch)
+upstream    git@github.com:fastapi/greensecops.git (push)
 ```
 
 - Pull the latest changes without merging:
@@ -175,16 +175,16 @@ Decide a name for your new project's directory, you will use it below. For examp
 Go to the directory that will be the parent of your project, and run the command with your project's name:
 
 ```bash
-copier copy https://github.com/fastapi/full-stack-fastapi-template my-awesome-project --trust
+copier copy https://github.com/fastapi/greensecops my-awesome-project --trust
 ```
 
 If you have `pipx` and you didn't install `copier`, you can run it directly:
 
 ```bash
-pipx run copier copy https://github.com/fastapi/full-stack-fastapi-template my-awesome-project --trust
+pipx run copier copy https://github.com/fastapi/greensecops my-awesome-project --trust
 ```
 
-**Note** the `--trust` option is necessary to be able to execute a [post-creation script](https://github.com/fastapi/full-stack-fastapi-template/blob/master/.copier/update_dotenv.py) that updates your `.env` files.
+**Note** the `--trust` option is necessary to be able to execute a [post-creation script](https://github.com/fastapi/greensecops/blob/master/.copier/update_dotenv.py) that updates your `.env` files.
 
 ### Input Variables
 
@@ -230,4 +230,4 @@ Check the file [release-notes.md](./release-notes.md).
 
 ## License
 
-The Full Stack FastAPI Template is licensed under the terms of the MIT license.
+The GreenSecOps is licensed under the terms of the MIT license.

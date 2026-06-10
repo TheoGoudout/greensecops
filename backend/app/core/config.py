@@ -94,6 +94,33 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # GitHub App
+    GITHUB_APP_ID: int | None = None
+    GITHUB_APP_PRIVATE_KEY: str | None = None  # PEM content, not file path
+    GITHUB_WEBHOOK_SECRET: str | None = None
+    GITHUB_CLIENT_ID: str | None = None
+    GITHUB_CLIENT_SECRET: str | None = None
+    GITHUB_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/github/callback"
+
+    # LLM
+    DEFAULT_LLM_PROVIDER: str = "openai"
+    DEFAULT_LLM_MODEL: str = "gpt-4o-mini"
+    OPENAI_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+
+    # LangSmith
+    LANGCHAIN_TRACING_V2: bool = False
+    LANGCHAIN_API_KEY: str | None = None
+    LANGCHAIN_PROJECT: str = "greensecops"
+
+    # OPA
+    OPA_URL: str = "http://opa:8181"
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (
