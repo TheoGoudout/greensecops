@@ -1,6 +1,6 @@
 # Plan: GreenSecOps — CI/CD Intelligence Platform
 
-**Complexity**: Large  
+**Complexity**: Large
 **Stack**: FastAPI + SQLModel + PostgreSQL + Celery + Redis + React + TypeScript + Vite + Tailwind + shadcn/ui + OPA + LangChain + LangSmith + Docker Compose + Traefik
 
 ---
@@ -37,7 +37,7 @@ Logo concept: circuit-board leaf (green sustainability meets DevOps tech).
 | **Ultimate** | Custom | Unlimited | Unlimited | Unlimited | ✓ + Marketplace | On-prem, SLA |
 | **Open Source** | $0 | 5 public | Unlimited | 20 | ✗ | Global default |
 
-Open Source tier: verified by repo public visibility + OSS license detection.  
+Open Source tier: verified by repo public visibility + OSS license detection.
 Badge system available on all tiers.
 
 ---
