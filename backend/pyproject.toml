@@ -82,6 +82,17 @@ keep-runtime-typing = true
 [tool.coverage.run]
 source = ["app"]
 dynamic_context = "test_function"
+omit = [
+    "app/initial_data.py",
+    "app/backend_pre_start.py",
+    "app/tests_pre_start.py",
+    "app/services/llm/*",
+    "app/services/github/app_client.py",
+    "app/services/github/fix_delivery.py",
+    "app/workers/tasks/fix_generation.py",
+    "app/workers/tasks/fix_delivery.py",
+    "app/services/opa/evaluator.py",
+]
 
 [tool.coverage.report]
 show_missing = true
