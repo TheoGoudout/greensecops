@@ -22,7 +22,11 @@ class OpenAIProvider(BaseLLMProvider):
 
     async def generate(self, system_prompt: str, user_prompt: str) -> LLMResponse:
         from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ]
         response = await self._llm.ainvoke(messages)
         usage = response.usage_metadata or {}
         return LLMResponse(

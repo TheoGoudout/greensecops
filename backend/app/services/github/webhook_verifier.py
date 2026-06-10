@@ -12,7 +12,5 @@ def verify_webhook_signature(
         return False
     if not signature_header.startswith("sha256="):
         return False
-    expected = hmac.new(
-        secret.encode(), payload_bytes, hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
     return hmac.compare_digest(f"sha256={expected}", signature_header)

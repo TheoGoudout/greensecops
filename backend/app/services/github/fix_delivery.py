@@ -63,7 +63,9 @@ class FixDeliveryService:
                     headers=headers,
                     params={"ref": fix_branch},
                 )
-                file_sha = file_resp.json().get("sha", "") if file_resp.is_success else ""
+                file_sha = (
+                    file_resp.json().get("sha", "") if file_resp.is_success else ""
+                )
 
                 # Commit updated file
                 await client.put(

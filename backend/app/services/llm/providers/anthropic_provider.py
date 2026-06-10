@@ -4,7 +4,9 @@ from app.services.llm.base import BaseLLMProvider, LLMResponse
 
 
 class AnthropicProvider(BaseLLMProvider):
-    def __init__(self, model: str = "claude-haiku-4-5-20251001", api_key: str | None = None) -> None:
+    def __init__(
+        self, model: str = "claude-haiku-4-5-20251001", api_key: str | None = None
+    ) -> None:
         self._model = model
         self._llm = ChatAnthropic(
             model=model,
@@ -23,7 +25,11 @@ class AnthropicProvider(BaseLLMProvider):
 
     async def generate(self, system_prompt: str, user_prompt: str) -> LLMResponse:
         from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ]
         response = await self._llm.ainvoke(messages)
         usage = response.usage_metadata or {}
         return LLMResponse(
