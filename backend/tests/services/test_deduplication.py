@@ -1,6 +1,5 @@
 import uuid
 
-import pytest
 from sqlmodel import Session
 
 from app.services.deduplication import compute_content_hash, is_duplicate

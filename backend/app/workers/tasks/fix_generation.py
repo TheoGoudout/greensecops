@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="fix_generation.run", bind=True, max_retries=3)
-def run_fix_generation(self: object, issue_id: str) -> dict[str, str]:
+def run_fix_generation(
+    self: object,  # noqa: ARG001
+    issue_id: str,
+) -> dict[str, str]:
     with Session(engine) as session:
         issue = session.get(Issue, uuid.UUID(issue_id))
         if not issue:
@@ -34,20 +37,22 @@ def run_fix_generation(self: object, issue_id: str) -> dict[str, str]:
         rule = issue.rule
 
         # Determine LLM provider (repo → org → global default)
-        provider_str = (
-            repo.llm_provider.value if repo.llm_provider else None
-        )
+        provider_str = repo.llm_provider.value if repo.llm_provider else None
         model_str = repo.llm_model
 
         if not provider_str and repo.organization:
             org = repo.organization
-            provider_str = org.default_llm_provider.value if org.default_llm_provider else None
+            provider_str = (
+                org.default_llm_provider.value if org.default_llm_provider else None
+            )
             model_str = model_str or org.default_llm_model
 
         # Create Fix record in generating state
         fix = Fix(
             issue_id=issue.id,
-            llm_provider=LLMProvider(provider_str) if provider_str else LLMProvider.openai,
+            llm_provider=LLMProvider(provider_str)
+            if provider_str
+            else LLMProvider.openai,
             llm_model=model_str or "gpt-4o-mini",
             status=FixStatus.generating,
         )
@@ -86,7 +91,9 @@ def run_fix_generation(self: object, issue_id: str) -> dict[str, str]:
 
         logger.info(
             "Fix generated for issue %s: %d prompt tokens, %d completion tokens",
-            issue_id, result.prompt_tokens, result.completion_tokens,
+            issue_id,
+            result.prompt_tokens,
+            result.completion_tokens,
         )
         return {"status": "ready", "fix_id": str(fix.id), "issue_id": issue_id}
 
@@ -103,6 +110,7 @@ async def _generate_fix(
 ) -> object:
     # Configure LangSmith tracing via env vars (already set from settings)
     from app.core.config import settings
+
     if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY

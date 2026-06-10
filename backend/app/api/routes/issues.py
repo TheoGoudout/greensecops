@@ -12,7 +12,7 @@ router = APIRouter(prefix="/issues", tags=["issues"])
 @router.get("/", response_model=list[IssuePublic])
 def list_issues(
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
     analysis_id: uuid.UUID | None = None,
     category: IssueCategory | None = None,
     severity: IssueSeverity | None = None,
@@ -34,7 +34,7 @@ def list_issues(
 def get_issue(
     issue_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> Issue:
     issue = session.get(Issue, issue_id)
     if not issue:

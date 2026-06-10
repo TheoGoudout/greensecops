@@ -14,7 +14,7 @@ router = APIRouter(prefix="/fixes", tags=["fixes"])
 @router.get("/", response_model=list[FixPublic])
 def list_fixes(
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
     issue_id: uuid.UUID | None = None,
     status: FixStatus | None = None,
     skip: int = Query(default=0, ge=0),
@@ -33,7 +33,7 @@ def list_fixes(
 def get_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> Fix:
     fix = session.get(Fix, fix_id)
     if not fix:
@@ -45,9 +45,10 @@ def get_fix(
 def trigger_fix_generation(
     issue_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> dict[str, str]:
     from app.models import Issue
+
     issue = session.get(Issue, issue_id)
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
@@ -59,13 +60,15 @@ def trigger_fix_generation(
 def trigger_fix_delivery(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> dict[str, str]:
     fix = session.get(Fix, fix_id)
     if not fix:
         raise HTTPException(status_code=404, detail="Fix not found")
     if fix.status != FixStatus.ready:
-        raise HTTPException(status_code=409, detail=f"Fix is not ready (status: {fix.status})")
+        raise HTTPException(
+            status_code=409, detail=f"Fix is not ready (status: {fix.status})"
+        )
     deliver_fix.delay(fix_id=str(fix_id))
     return {"status": "queued", "fix_id": str(fix_id)}
 
@@ -74,7 +77,7 @@ def trigger_fix_delivery(
 def reject_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> None:
     fix = session.get(Fix, fix_id)
     if not fix:

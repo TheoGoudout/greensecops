@@ -1,6 +1,5 @@
 import secrets
 from datetime import timedelta
-from typing import Annotated
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
@@ -11,7 +10,6 @@ from app.api.deps import GitHubAppClientDep, SessionDep
 from app.core import security
 from app.core.config import settings
 from app.models import Token, User, UserCreate
-from app.services.github.app_client import GitHubAppClient
 
 router = APIRouter(prefix="/auth/github", tags=["auth"])
 
@@ -36,7 +34,7 @@ async def github_callback(
     code: str,
     session: SessionDep,
     github_client: GitHubAppClientDep,
-    state: str | None = None,
+    state: str | None = None,  # noqa: ARG001
 ) -> Token:
     if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="GitHub OAuth not configured")
@@ -45,7 +43,9 @@ async def github_callback(
         access_token = await github_client.exchange_oauth_code(code)
         gh_user = await github_client.get_oauth_user(access_token)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"GitHub OAuth failed: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"GitHub OAuth failed: {exc}"
+        ) from exc
 
     github_id: int = gh_user["id"]
     github_username: str = gh_user.get("login", "")

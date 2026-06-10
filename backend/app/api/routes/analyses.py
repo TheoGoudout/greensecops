@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select
 
 from app.api.deps import CurrentUser, SessionDep
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/analyses", tags=["analyses"])
 @router.get("/", response_model=list[AnalysisPublic])
 def list_analyses(
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
     grade: str | None = None,
@@ -43,7 +43,7 @@ def list_analyses(
 def get_analysis(
     analysis_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> Analysis:
     analysis = session.get(Analysis, analysis_id)
     if not analysis:
@@ -55,7 +55,7 @@ def get_analysis(
 def trigger_analysis(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
     branch: str | None = None,
 ) -> dict[str, str]:
     repo = session.get(Repository, repo_id)

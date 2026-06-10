@@ -1,15 +1,17 @@
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from sqlmodel import Session
 
-from app.api.deps import SessionDep, get_github_app_client
-from app.models import Analysis, AnalysisStatus, AnalysisTrigger, Repository, WorkflowFile
-from app.services.deduplication import compute_content_hash, is_duplicate
+from app.api.deps import SessionDep
+from app.core.config import settings
+from app.models import (
+    AnalysisTrigger,
+    Repository,
+)
 from app.services.github.app_client import GitHubAppClient
 from app.services.github.webhook_verifier import verify_webhook_signature
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,7 @@ def _handle_push_event(
         return
 
     from sqlmodel import select
+
     repo = session.exec(
         select(Repository).where(Repository.github_repo_id == github_repo_id)
     ).first()
@@ -112,6 +115,7 @@ def _handle_workflow_run_event(
         return
 
     from sqlmodel import select
+
     repo = session.exec(
         select(Repository).where(Repository.github_repo_id == github_repo_id)
     ).first()
@@ -131,9 +135,9 @@ def _handle_workflow_run_event(
 
 
 def _handle_issue_comment_event(
-    session: Session,
+    session: Session,  # noqa: ARG001
     payload: dict[str, Any],
-    background_tasks: BackgroundTasks,
+    background_tasks: BackgroundTasks,  # noqa: ARG001
 ) -> None:
     """Handle /greensecops commands in PR comments."""
     if payload.get("action") != "created":
@@ -157,13 +161,18 @@ def _handle_installation_event(
         return
     if action in ("deleted", "suspend"):
         from sqlmodel import select
+
         repos = session.exec(
             select(Repository).where(Repository.installation_id == installation_id)
         ).all()
         for repo in repos:
             repo.enabled = False
         session.commit()
-        logger.info("Disabled %d repos for uninstalled installation %s", len(repos), installation_id)
+        logger.info(
+            "Disabled %d repos for uninstalled installation %s",
+            len(repos),
+            installation_id,
+        )
 
 
 def _enqueue_static_analysis(
@@ -173,6 +182,7 @@ def _enqueue_static_analysis(
     trigger: AnalysisTrigger,
 ) -> None:
     from app.workers.tasks.static_analysis import run_static_analysis
+
     run_static_analysis.delay(
         repo_id=repo_id,
         branch=branch,

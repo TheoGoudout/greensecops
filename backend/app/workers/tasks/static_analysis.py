@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
 def run_static_analysis(
-    self: object,
+    self: object,  # noqa: ARG001
     repo_id: str,
     branch: str = "",
     commit_sha: str = "",
@@ -51,7 +51,9 @@ def run_static_analysis(
 
             duplicate, existing = is_duplicate(session, content_hash)
             if duplicate and existing:
-                logger.info("Skipping duplicate for %s (hash=%s)", path, content_hash[:8])
+                logger.info(
+                    "Skipping duplicate for %s (hash=%s)", path, content_hash[:8]
+                )
                 results.append({"path": path, "status": "skipped_duplicate"})
                 continue
 
@@ -102,8 +104,7 @@ def run_static_analysis(
                 continue
 
             rule_map: dict[str, Rule] = {
-                r.slug: r
-                for r in session.exec(select(Rule)).all()
+                r.slug: r for r in session.exec(select(Rule)).all()
             }
 
             score_inputs: list[tuple[str, float]] = []
@@ -137,17 +138,23 @@ def run_static_analysis(
             session.add(analysis)
             session.commit()
 
-            results.append({
-                "path": path,
-                "status": "completed",
-                "analysis_id": str(analysis.id),
-                "score": round(score, 1),
-                "grade": grade,
-                "issues": len(violations),
-            })
+            results.append(
+                {
+                    "path": path,
+                    "status": "completed",
+                    "analysis_id": str(analysis.id),
+                    "score": round(score, 1),
+                    "grade": grade,
+                    "issues": len(violations),
+                }
+            )
             logger.info(
                 "Analysis complete: repo=%s path=%s score=%.1f grade=%s issues=%d",
-                repo_id, path, score, grade, len(violations),
+                repo_id,
+                path,
+                score,
+                grade,
+                len(violations),
             )
 
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
@@ -164,7 +171,9 @@ def _fetch_workflow_files(repo: Repository) -> list[object]:
         r = aioredis.from_url(settings.REDIS_URL)
         try:
             client = GitHubAppClient(redis_client=r)
-            return list(await client.fetch_workflow_files(repo.installation_id, repo.full_name))
+            return list(
+                await client.fetch_workflow_files(repo.installation_id, repo.full_name)
+            )
         finally:
             await r.aclose()
 

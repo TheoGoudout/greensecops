@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="fix_delivery.deliver", bind=True, max_retries=3)
-def deliver_fix(self: object, fix_id: str) -> dict[str, str]:
+def deliver_fix(
+    self: object,  # noqa: ARG001
+    fix_id: str,
+) -> dict[str, str]:
     with Session(engine) as session:
         fix = session.get(Fix, uuid.UUID(fix_id))
         if not fix:
@@ -30,7 +33,9 @@ def deliver_fix(self: object, fix_id: str) -> dict[str, str]:
         if not repo:
             return {"status": "error", "detail": "repository_not_found"}
 
-        wf_file = session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
+        wf_file = (
+            session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
+        )
         if not wf_file:
             return {"status": "error", "detail": "workflow_file_not_found"}
 
@@ -86,8 +91,9 @@ async def _deliver(
     rule_slug: str,
     delivery_mode: str,
 ) -> object:
-    from app.core.config import settings
     import redis.asyncio as aioredis
+
+    from app.core.config import settings
     from app.services.github.app_client import GitHubAppClient
     from app.services.github.fix_delivery import FixDeliveryService
 

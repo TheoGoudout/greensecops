@@ -12,7 +12,7 @@ router = APIRouter(prefix="/rules", tags=["rules"])
 @router.get("/", response_model=list[RulePublic])
 def list_rules(
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
     category: IssueCategory | None = None,
     enabled: bool | None = None,
     skip: int = Query(default=0, ge=0),
@@ -31,7 +31,7 @@ def list_rules(
 def get_rule(
     rule_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> Rule:
     rule = session.get(Rule, rule_id)
     if not rule:

@@ -1,8 +1,6 @@
 import hashlib
 import hmac
 
-import pytest
-
 from app.services.github.webhook_verifier import verify_webhook_signature
 
 
