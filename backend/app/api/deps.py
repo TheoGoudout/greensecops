@@ -2,6 +2,7 @@ from collections.abc import Generator
 from typing import Annotated
 
 import jwt
+import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
@@ -12,6 +13,7 @@ from app.core import security
 from app.core.config import settings
 from app.core.db import engine
 from app.models import TokenPayload, User
+from app.services.github.app_client import GitHubAppClient
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
@@ -55,3 +57,21 @@ def get_current_active_superuser(current_user: CurrentUser) -> User:
             status_code=403, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+
+async def get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
+    client = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]  # type: ignore[type-arg]
+
+
+async def get_github_app_client(redis: RedisDep) -> GitHubAppClient:
+    return GitHubAppClient(redis_client=redis)
+
+
+GitHubAppClientDep = Annotated[GitHubAppClient, Depends(get_github_app_client)]

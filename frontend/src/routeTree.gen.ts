@@ -16,8 +16,14 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
-import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
+import { Route as LayoutRulesRouteImport } from './routes/_layout/rules'
+import { Route as LayoutRepositoriesRouteImport } from './routes/_layout/repositories'
+import { Route as LayoutIssuesRouteImport } from './routes/_layout/issues'
+import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
+import { Route as LayoutBillingRouteImport } from './routes/_layout/billing'
+import { Route as LayoutBadgesRouteImport } from './routes/_layout/badges'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -53,9 +59,34 @@ const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutItemsRoute = LayoutItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
+const LayoutRulesRoute = LayoutRulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutRepositoriesRoute = LayoutRepositoriesRouteImport.update({
+  id: '/repositories',
+  path: '/repositories',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutIssuesRoute = LayoutIssuesRouteImport.update({
+  id: '/issues',
+  path: '/issues',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutBillingRoute = LayoutBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutBadgesRoute = LayoutBadgesRouteImport.update({
+  id: '/badges',
+  path: '/badges',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAdminRoute = LayoutAdminRouteImport.update({
@@ -63,16 +94,28 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutAnalysesAnalysisIdRoute =
+  LayoutAnalysesAnalysisIdRouteImport.update({
+    id: '/analyses/$analysisId',
+    path: '/analyses/$analysisId',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof LayoutIndexRoute
   '/login': typeof LoginRoute
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/badges': typeof LayoutBadgesRoute
+  '/billing': typeof LayoutBillingRoute
+  '/dashboard': typeof LayoutDashboardRoute
+  '/issues': typeof LayoutIssuesRoute
+  '/repositories': typeof LayoutRepositoriesRoute
+  '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
-  '/': typeof LayoutIndexRoute
+  '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -80,9 +123,15 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/badges': typeof LayoutBadgesRoute
+  '/billing': typeof LayoutBillingRoute
+  '/dashboard': typeof LayoutDashboardRoute
+  '/issues': typeof LayoutIssuesRoute
+  '/repositories': typeof LayoutRepositoriesRoute
+  '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
+  '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,21 +141,33 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/items': typeof LayoutItemsRoute
+  '/_layout/badges': typeof LayoutBadgesRoute
+  '/_layout/billing': typeof LayoutBillingRoute
+  '/_layout/dashboard': typeof LayoutDashboardRoute
+  '/_layout/issues': typeof LayoutIssuesRoute
+  '/_layout/repositories': typeof LayoutRepositoriesRoute
+  '/_layout/rules': typeof LayoutRulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
     | '/login'
     | '/recover-password'
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
+    | '/badges'
+    | '/billing'
+    | '/dashboard'
+    | '/issues'
+    | '/repositories'
+    | '/rules'
     | '/settings'
-    | '/'
+    | '/analyses/$analysisId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -114,9 +175,15 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
+    | '/badges'
+    | '/billing'
+    | '/dashboard'
+    | '/issues'
+    | '/repositories'
+    | '/rules'
     | '/settings'
     | '/'
+    | '/analyses/$analysisId'
   id:
     | '__root__'
     | '/_layout'
@@ -125,9 +192,15 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/_layout/admin'
-    | '/_layout/items'
+    | '/_layout/badges'
+    | '/_layout/billing'
+    | '/_layout/dashboard'
+    | '/_layout/issues'
+    | '/_layout/repositories'
+    | '/_layout/rules'
     | '/_layout/settings'
     | '/_layout/'
+    | '/_layout/analyses/$analysisId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,7 +244,7 @@ declare module '@tanstack/react-router' {
     '/_layout': {
       id: '/_layout'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof LayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -189,11 +262,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/items': {
-      id: '/_layout/items'
-      path: '/items'
-      fullPath: '/items'
-      preLoaderRoute: typeof LayoutItemsRouteImport
+    '/_layout/rules': {
+      id: '/_layout/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof LayoutRulesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/repositories': {
+      id: '/_layout/repositories'
+      path: '/repositories'
+      fullPath: '/repositories'
+      preLoaderRoute: typeof LayoutRepositoriesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/issues': {
+      id: '/_layout/issues'
+      path: '/issues'
+      fullPath: '/issues'
+      preLoaderRoute: typeof LayoutIssuesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/dashboard': {
+      id: '/_layout/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof LayoutDashboardRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/billing': {
+      id: '/_layout/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof LayoutBillingRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/badges': {
+      id: '/_layout/badges'
+      path: '/badges'
+      fullPath: '/badges'
+      preLoaderRoute: typeof LayoutBadgesRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/admin': {
@@ -203,21 +311,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/analyses/$analysisId': {
+      id: '/_layout/analyses/$analysisId'
+      path: '/analyses/$analysisId'
+      fullPath: '/analyses/$analysisId'
+      preLoaderRoute: typeof LayoutAnalysesAnalysisIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutItemsRoute: typeof LayoutItemsRoute
+  LayoutBadgesRoute: typeof LayoutBadgesRoute
+  LayoutBillingRoute: typeof LayoutBillingRoute
+  LayoutDashboardRoute: typeof LayoutDashboardRoute
+  LayoutIssuesRoute: typeof LayoutIssuesRoute
+  LayoutRepositoriesRoute: typeof LayoutRepositoriesRoute
+  LayoutRulesRoute: typeof LayoutRulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutAnalysesAnalysisIdRoute: typeof LayoutAnalysesAnalysisIdRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
-  LayoutItemsRoute: LayoutItemsRoute,
+  LayoutBadgesRoute: LayoutBadgesRoute,
+  LayoutBillingRoute: LayoutBillingRoute,
+  LayoutDashboardRoute: LayoutDashboardRoute,
+  LayoutIssuesRoute: LayoutIssuesRoute,
+  LayoutRepositoriesRoute: LayoutRepositoriesRoute,
+  LayoutRulesRoute: LayoutRulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutAnalysesAnalysisIdRoute: LayoutAnalysesAnalysisIdRoute,
 }
 
 const LayoutRouteWithChildren =

@@ -1,0 +1,192 @@
+"""Tests for the /api/v1/badges/ endpoints."""
+
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.core.config import settings
+from app.models import (
+    Analysis,
+    AnalysisStatus,
+    AnalysisTrigger,
+    Organization,
+    Repository,
+    UserTier,
+    WorkflowFile,
+)
+
+# ─── Fixtures ────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def org(db: Session) -> Organization:
+    organization = Organization(
+        name=f"badges-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
+    )
+    db.add(organization)
+    db.commit()
+    db.refresh(organization)
+    return organization
+
+
+@pytest.fixture()
+def repo(db: Session, org: Organization) -> Repository:
+    # Use a deterministic full_name to make URL construction predictable
+    suffix = uuid.uuid4().hex[:8]
+    repository = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"badgesowner-{suffix}/repo-{suffix}",
+        installation_id=11112,
+        default_branch="main",
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+    return repository
+
+
+@pytest.fixture()
+def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/badge-test.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    return wf
+
+
+@pytest.fixture()
+def completed_analysis(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> Analysis:
+    a = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=workflow_file.id,
+        content_hash=workflow_file.content_hash,
+        status=AnalysisStatus.completed,
+        score=92.0,
+        grade="A+",
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+# ─── SVG badge ────────────────────────────────────────────────────────────────
+
+
+def test_svg_badge_unknown_repo_returns_unknown(
+    client: TestClient,
+) -> None:
+    # Act — owner and repo that don't exist
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/ghost-owner/ghost-repo/main.svg"
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers.get("content-type", "")
+    assert b"?" in response.content
+
+
+def test_svg_badge_known_repo_no_analysis(
+    client: TestClient,
+    repo: Repository,
+) -> None:
+    # Arrange — repo exists but no completed analysis for this branch
+    owner, repo_name = repo.full_name.split("/", 1)
+
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/nonexistent-branch.svg"
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers.get("content-type", "")
+    # No grade → unknown badge with "?"
+    assert b"?" in response.content
+
+
+def test_svg_badge_known_repo_with_grade(
+    client: TestClient,
+    repo: Repository,
+    completed_analysis: Analysis,
+) -> None:
+    # Arrange
+    owner, repo_name = repo.full_name.split("/", 1)
+
+    # Act
+    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.svg")
+
+    # Assert
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers.get("content-type", "")
+    assert b"A+" in response.content
+
+
+# ─── JSON badge ───────────────────────────────────────────────────────────────
+
+
+def test_json_badge_unknown_repo(
+    client: TestClient,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/ghost-owner/ghost-repo/main.json"
+    )
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schemaVersion"] == 1
+    assert body["message"] == "not configured"
+
+
+def test_json_badge_pending(
+    client: TestClient,
+    repo: Repository,
+) -> None:
+    # Arrange — repo exists but no completed analysis on this branch
+    owner, repo_name = repo.full_name.split("/", 1)
+
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/pending-branch.json"
+    )
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schemaVersion"] == 1
+    assert body["message"] == "pending"
+
+
+def test_json_badge_with_grade(
+    client: TestClient,
+    repo: Repository,
+    completed_analysis: Analysis,
+) -> None:
+    # Arrange
+    owner, repo_name = repo.full_name.split("/", 1)
+
+    # Act
+    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.json")
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schemaVersion"] == 1
+    assert body["message"] == "A+"
+    assert "color" in body
+    assert body.get("cacheSeconds") == 300

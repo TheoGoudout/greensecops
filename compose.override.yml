@@ -104,6 +104,48 @@ services:
         - VITE_API_URL=http://localhost:8000
         - NODE_ENV=development
 
+  redis:
+    restart: "no"
+    ports:
+      - "6379:6379"
+
+  celery-worker:
+    restart: "no"
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=2 -Q default,analysis,fixes
+    develop:
+      watch:
+        - path: ./backend
+          action: sync
+          target: /app/backend
+          ignore:
+            - ./backend/.venv
+            - .venv
+        - path: ./backend/pyproject.toml
+          action: rebuild
+    environment:
+      SMTP_HOST: "mailcatcher"
+      SMTP_PORT: "1025"
+      SMTP_TLS: "false"
+
+  celery-beat:
+    restart: "no"
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
+  flower:
+    restart: "no"
+    ports:
+      - "5555:5555"
+
+  opa:
+    restart: "no"
+    ports:
+      - "8181:8181"
+
   playwright:
     build:
       context: .

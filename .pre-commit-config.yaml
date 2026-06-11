@@ -1,77 +1,69 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
+default_stages: [pre-commit]
+
 repos:
+  # General file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    rev: v5.0.0
     hooks:
-      - id: check-added-large-files
-      - id: check-toml
-      - id: check-yaml
-        args:
-          - --unsafe
-      - id: end-of-file-fixer
-        exclude: |
-            (?x)^(
-                frontend/src/client/.*|
-                backend/app/email-templates/build/.*
-            )$
       - id: trailing-whitespace
-        exclude: ^frontend/src/client/.*
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # allow custom tags in compose files
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Python: ruff lint + format (replaces flake8, isort, black)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # Python: mypy type checking
   - repo: local
     hooks:
-      - id: local-biome-check
-        name: biome check
-        entry: npm run lint
+      - id: mypy-backend
+        name: mypy (backend)
+        entry: bash -c 'cd backend && uv run mypy app/ --ignore-missing-imports'
         language: system
-        types: [text]
-        files: ^frontend/
+        files: ^backend/app/.*\.py$
+        pass_filenames: false
+        stages: [pre-push]
 
-      - id: local-ruff-check
-        name: ruff check
-        entry: uv run ruff check --force-exclude --fix --exit-non-zero-on-fix
-        require_serial: true
-        language: unsupported
-        types: [python]
-
-      - id: local-ruff-format
-        name: ruff format
-        entry: uv run ruff format --force-exclude --exit-non-zero-on-format
-        require_serial: true
-        language: unsupported
-        types: [python]
-
-      - id: local-mypy
-        name: mypy check
-        entry: uv run mypy backend/app
-        require_serial: true
-        language: unsupported
+  # OpenAPI client generation
+  - repo: local
+    hooks:
+      - id: generate-openapi-client
+        name: Generate OpenAPI client
+        entry: bash scripts/generate-client.sh
+        language: system
+        files: ^backend/app/.*\.py$
         pass_filenames: false
 
-      - id: local-ty
-        name: ty check
-        entry: uv run ty check backend/app
-        require_serial: true
-        language: unsupported
+  # Frontend: biome lint + format
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: Biome lint & format (frontend)
+        entry: bash -c 'cd frontend && bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json)$
+        exclude: ^frontend/src/client/
         pass_filenames: false
 
-      - id: generate-frontend-sdk
-        name: Generate Frontend SDK
-        entry: bash ./scripts/generate-client.sh
-        pass_filenames: false
-        language: unsupported
-        files: ^backend/.*$|^scripts/generate-client\.sh$
-
-      - id: add-release-date
-        language: unsupported
-        name: add date to latest release header
-        entry: uv run python scripts/add_latest_release_date.py
-        files: ^release-notes\.md$
-        pass_filenames: false
-
-      - id: zizmor
-        name: zizmor
-        language: python
-        entry: uv run zizmor .
-        files: ^\.github\/workflows\/
-        require_serial: true
-        pass_filenames: false
+  # Conventional commits enforcement
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]

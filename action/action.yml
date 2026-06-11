@@ -1,0 +1,38 @@
+name: GreenSecOps Telemetry
+description: Collects CI/CD pipeline telemetry and sends it to GreenSecOps for analysis
+author: GreenSecOps
+
+inputs:
+  greensecops_url:
+    description: GreenSecOps instance URL
+    required: true
+  api_token:
+    description: GreenSecOps API token for authentication
+    required: true
+  workflow_run_id:
+    description: GitHub workflow run ID (defaults to current run)
+    required: false
+    default: ${{ github.run_id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install psutil
+      shell: bash
+      run: pip install psutil requests --quiet
+
+    - name: Collect and send telemetry
+      shell: bash
+      env:
+        GREENSECOPS_URL: ${{ inputs.greensecops_url }}
+        GREENSECOPS_TOKEN: ${{ inputs.api_token }}
+        WORKFLOW_RUN_ID: ${{ inputs.workflow_run_id }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_WORKFLOW: ${{ github.workflow }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_SHA: ${{ github.sha }}
+        RUNNER_OS: ${{ runner.os }}
+        RUNNER_ARCH: ${{ runner.arch }}
+        RUNNER_NAME: ${{ runner.name }}
+      run: python ${{ github.action_path }}/src/collect_telemetry.py

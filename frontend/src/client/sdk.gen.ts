@@ -3,23 +3,30 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, PrivateCreateUserData, PrivateCreateUserResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
-export class ItemsService {
+export class AnalysesService {
     /**
-     * Read Items
-     * Retrieve items.
+     * List Analyses
      * @param data The data for the request.
+     * @param data.repoId
+     * @param data.branch
+     * @param data.grade
+     * @param data.status
      * @param data.skip
      * @param data.limit
-     * @returns ItemsPublic Successful Response
+     * @returns AnalysisPublic Successful Response
      * @throws ApiError
      */
-    public static readItems(data: ItemsReadItemsData = {}): CancelablePromise<ItemsReadItemsResponse> {
+    public static listAnalyses(data: AnalysesListAnalysesData = {}): CancelablePromise<AnalysesListAnalysesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/items/',
+            url: '/api/v1/analyses/',
             query: {
+                repo_id: data.repoId,
+                branch: data.branch,
+                grade: data.grade,
+                status: data.status,
                 skip: data.skip,
                 limit: data.limit
             },
@@ -28,86 +35,327 @@ export class ItemsService {
             }
         });
     }
-    
+
     /**
-     * Create Item
-     * Create new item.
+     * Get Analysis
      * @param data The data for the request.
-     * @param data.requestBody
-     * @returns ItemPublic Successful Response
+     * @param data.analysisId
+     * @returns AnalysisPublic Successful Response
      * @throws ApiError
      */
-    public static createItem(data: ItemsCreateItemData): CancelablePromise<ItemsCreateItemResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/items/',
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-    
-    /**
-     * Read Item
-     * Get item by ID.
-     * @param data The data for the request.
-     * @param data.id
-     * @returns ItemPublic Successful Response
-     * @throws ApiError
-     */
-    public static readItem(data: ItemsReadItemData): CancelablePromise<ItemsReadItemResponse> {
+    public static getAnalysis(data: AnalysesGetAnalysisData): CancelablePromise<AnalysesGetAnalysisResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/items/{id}',
+            url: '/api/v1/analyses/{analysis_id}',
             path: {
-                id: data.id
+                analysis_id: data.analysisId
             },
             errors: {
                 422: 'Validation Error'
             }
         });
     }
-    
+
     /**
-     * Update Item
-     * Update an item.
+     * Trigger Analysis
      * @param data The data for the request.
-     * @param data.id
-     * @param data.requestBody
-     * @returns ItemPublic Successful Response
+     * @param data.repoId
+     * @param data.branch
+     * @returns string Successful Response
      * @throws ApiError
      */
-    public static updateItem(data: ItemsUpdateItemData): CancelablePromise<ItemsUpdateItemResponse> {
+    public static triggerAnalysis(data: AnalysesTriggerAnalysisData): CancelablePromise<AnalysesTriggerAnalysisResponse> {
         return __request(OpenAPI, {
-            method: 'PUT',
-            url: '/api/v1/items/{id}',
+            method: 'POST',
+            url: '/api/v1/analyses/trigger/{repo_id}',
             path: {
-                id: data.id
+                repo_id: data.repoId
             },
-            body: data.requestBody,
-            mediaType: 'application/json',
+            query: {
+                branch: data.branch
+            },
             errors: {
                 422: 'Validation Error'
             }
         });
     }
-    
+}
+
+export class AuthService {
     /**
-     * Delete Item
-     * Delete an item.
-     * @param data The data for the request.
-     * @param data.id
-     * @returns Message Successful Response
+     * Github Login
+     * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static deleteItem(data: ItemsDeleteItemData): CancelablePromise<ItemsDeleteItemResponse> {
+    public static githubLogin(): CancelablePromise<AuthGithubLoginResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/auth/github/login'
+        });
+    }
+
+    /**
+     * Github Callback
+     * @param data The data for the request.
+     * @param data.code
+     * @param data.state
+     * @returns Token Successful Response
+     * @throws ApiError
+     */
+    public static githubCallback(data: AuthGithubCallbackData): CancelablePromise<AuthGithubCallbackResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/auth/github/callback',
+            query: {
+                code: data.code,
+                state: data.state
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class BadgesService {
+    /**
+     * Get Badge
+     * @param data The data for the request.
+     * @param data.owner
+     * @param data.repo
+     * @param data.branch
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getBadge(data: BadgesGetBadgeData): CancelablePromise<BadgesGetBadgeResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/badges/{owner}/{repo}/{branch}.svg',
+            path: {
+                owner: data.owner,
+                repo: data.repo,
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Badge Json
+     * Shields.io-compatible JSON endpoint.
+     * @param data The data for the request.
+     * @param data.owner
+     * @param data.repo
+     * @param data.branch
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getBadgeJson(data: BadgesGetBadgeJsonData): CancelablePromise<BadgesGetBadgeJsonResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/badges/{owner}/{repo}/{branch}.json',
+            path: {
+                owner: data.owner,
+                repo: data.repo,
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class BillingService {
+    /**
+     * Get Subscription
+     * @returns BillingSubscriptionPublic Successful Response
+     * @throws ApiError
+     */
+    public static getSubscription(): CancelablePromise<BillingGetSubscriptionResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/subscription'
+        });
+    }
+
+    /**
+     * Get Tier Limits
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getTierLimits(): CancelablePromise<BillingGetTierLimitsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/limits'
+        });
+    }
+
+    /**
+     * Stripe Webhook
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static stripeWebhook(): CancelablePromise<BillingStripeWebhookResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/billing/webhook/stripe'
+        });
+    }
+}
+
+export class FixesService {
+    /**
+     * List Fixes
+     * @param data The data for the request.
+     * @param data.issueId
+     * @param data.status
+     * @param data.skip
+     * @param data.limit
+     * @returns FixPublic Successful Response
+     * @throws ApiError
+     */
+    public static listFixes(data: FixesListFixesData = {}): CancelablePromise<FixesListFixesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/fixes/',
+            query: {
+                issue_id: data.issueId,
+                status: data.status,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Fix
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns FixPublic Successful Response
+     * @throws ApiError
+     */
+    public static getFix(data: FixesGetFixData): CancelablePromise<FixesGetFixResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/fixes/{fix_id}',
+            path: {
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Reject Fix
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns void Successful Response
+     * @throws ApiError
+     */
+    public static rejectFix(data: FixesRejectFixData): CancelablePromise<FixesRejectFixResponse> {
         return __request(OpenAPI, {
             method: 'DELETE',
-            url: '/api/v1/items/{id}',
+            url: '/api/v1/fixes/{fix_id}',
             path: {
-                id: data.id
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Fix Generation
+     * @param data The data for the request.
+     * @param data.issueId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerFixGeneration(data: FixesTriggerFixGenerationData): CancelablePromise<FixesTriggerFixGenerationResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/generate/{issue_id}',
+            path: {
+                issue_id: data.issueId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Fix Delivery
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerFixDelivery(data: FixesTriggerFixDeliveryData): CancelablePromise<FixesTriggerFixDeliveryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/{fix_id}/deliver',
+            path: {
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class IssuesService {
+    /**
+     * List Issues
+     * @param data The data for the request.
+     * @param data.analysisId
+     * @param data.category
+     * @param data.severity
+     * @param data.skip
+     * @param data.limit
+     * @returns IssuePublic Successful Response
+     * @throws ApiError
+     */
+    public static listIssues(data: IssuesListIssuesData = {}): CancelablePromise<IssuesListIssuesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/issues/',
+            query: {
+                analysis_id: data.analysisId,
+                category: data.category,
+                severity: data.severity,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Issue
+     * @param data The data for the request.
+     * @param data.issueId
+     * @returns IssuePublic Successful Response
+     * @throws ApiError
+     */
+    public static getIssue(data: IssuesGetIssueData): CancelablePromise<IssuesGetIssueResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/issues/{issue_id}',
+            path: {
+                issue_id: data.issueId
             },
             errors: {
                 422: 'Validation Error'
@@ -136,7 +384,7 @@ export class LoginService {
             }
         });
     }
-    
+
     /**
      * Test Token
      * Test access token
@@ -149,7 +397,7 @@ export class LoginService {
             url: '/api/v1/login/test-token'
         });
     }
-    
+
     /**
      * Recover Password
      * Password Recovery
@@ -170,7 +418,7 @@ export class LoginService {
             }
         });
     }
-    
+
     /**
      * Reset Password
      * Reset password
@@ -190,7 +438,7 @@ export class LoginService {
             }
         });
     }
-    
+
     /**
      * Recover Password Html Content
      * HTML Content for Password Recovery
@@ -235,6 +483,175 @@ export class PrivateService {
     }
 }
 
+export class RepositoriesService {
+    /**
+     * List Repositories
+     * @param data The data for the request.
+     * @param data.orgId
+     * @param data.enabled
+     * @param data.skip
+     * @param data.limit
+     * @returns RepositoryPublic Successful Response
+     * @throws ApiError
+     */
+    public static listRepositories(data: RepositoriesListRepositoriesData = {}): CancelablePromise<RepositoriesListRepositoriesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/repositories/',
+            query: {
+                org_id: data.orgId,
+                enabled: data.enabled,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Repository
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns RepositoryPublic Successful Response
+     * @throws ApiError
+     */
+    public static getRepository(data: RepositoriesGetRepositoryData): CancelablePromise<RepositoriesGetRepositoryResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/repositories/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Toggle Repository
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.enabled
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static toggleRepository(data: RepositoriesToggleRepositoryData): CancelablePromise<RepositoriesToggleRepositoryResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/repositories/{repo_id}/toggle',
+            path: {
+                repo_id: data.repoId
+            },
+            query: {
+                enabled: data.enabled
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class RulesService {
+    /**
+     * List Rules
+     * @param data The data for the request.
+     * @param data.category
+     * @param data.enabled
+     * @param data.skip
+     * @param data.limit
+     * @returns RulePublic Successful Response
+     * @throws ApiError
+     */
+    public static listRules(data: RulesListRulesData = {}): CancelablePromise<RulesListRulesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/rules/',
+            query: {
+                category: data.category,
+                enabled: data.enabled,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Rule
+     * @param data The data for the request.
+     * @param data.ruleId
+     * @returns RulePublic Successful Response
+     * @throws ApiError
+     */
+    public static getRule(data: RulesGetRuleData): CancelablePromise<RulesGetRuleResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/rules/{rule_id}',
+            path: {
+                rule_id: data.ruleId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Toggle Rule
+     * @param data The data for the request.
+     * @param data.ruleId
+     * @param data.enabled
+     * @returns RulePublic Successful Response
+     * @throws ApiError
+     */
+    public static toggleRule(data: RulesToggleRuleData): CancelablePromise<RulesToggleRuleResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/rules/{rule_id}/toggle',
+            path: {
+                rule_id: data.ruleId
+            },
+            query: {
+                enabled: data.enabled
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class TelemetryService {
+    /**
+     * Ingest Telemetry
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @param data.authorization
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static ingestTelemetry(data: TelemetryIngestTelemetryData): CancelablePromise<TelemetryIngestTelemetryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/telemetry/ingest',
+            headers: {
+                authorization: data.authorization
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
 export class UsersService {
     /**
      * Read Users
@@ -258,7 +675,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Create User
      * Create new user.
@@ -278,7 +695,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Read User Me
      * Get current user.
@@ -291,7 +708,7 @@ export class UsersService {
             url: '/api/v1/users/me'
         });
     }
-    
+
     /**
      * Delete User Me
      * Delete own user.
@@ -304,7 +721,7 @@ export class UsersService {
             url: '/api/v1/users/me'
         });
     }
-    
+
     /**
      * Update User Me
      * Update own user.
@@ -324,7 +741,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Update Password Me
      * Update own password.
@@ -344,7 +761,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Register User
      * Create new user without the need to be logged in.
@@ -364,7 +781,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Read User By Id
      * Get a specific user by id.
@@ -385,7 +802,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Update User
      * Update a user.
@@ -409,7 +826,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Delete User
      * Delete a user.
@@ -453,7 +870,7 @@ export class UtilsService {
             }
         });
     }
-    
+
     /**
      * Health Check
      * @returns boolean Successful Response
@@ -463,6 +880,30 @@ export class UtilsService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/utils/health-check/'
+        });
+    }
+}
+
+export class WebhooksService {
+    /**
+     * Github Webhook
+     * @param data The data for the request.
+     * @param data.xHubSignature256
+     * @param data.xGithubEvent
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static githubWebhook(data: WebhooksGithubWebhookData = {}): CancelablePromise<WebhooksGithubWebhookResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/webhooks/github',
+            headers: {
+                'x-hub-signature-256': data.xHubSignature256,
+                'x-github-event': data.xGithubEvent
+            },
+            errors: {
+                422: 'Validation Error'
+            }
         });
     }
 }
