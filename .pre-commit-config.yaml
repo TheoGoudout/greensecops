@@ -10,6 +10,11 @@ repos:
       - id: check-yaml
         args: [--unsafe]  # allow custom tags in compose files
       - id: check-json
+        exclude: |
+            (?x)^(
+                .vscode/launch.json|
+                frontend/tsconfig.json
+            )$
       - id: check-toml
       - id: check-merge-conflict
       - id: detect-private-key
@@ -58,6 +63,17 @@ repos:
         language: system
         files: ^frontend/.*\.(ts|tsx|js|jsx|json)$
         exclude: ^frontend/src/client/
+        pass_filenames: false
+
+  # Action: biome lint + format
+  - repo: local
+    hooks:
+      - id: biome-check-action
+        name: Biome lint & format (action)
+        entry: bash -c 'cd action && bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/'
+        language: system
+        files: ^action/src/.*\.(ts|js|json)$
+        exclude: ^action/src/client/
         pass_filenames: false
 
   # Conventional commits enforcement
