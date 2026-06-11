@@ -11,4 +11,3 @@ export const slugify = (text: string) =>
     .toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/[^\w-]+/g, "")
-
