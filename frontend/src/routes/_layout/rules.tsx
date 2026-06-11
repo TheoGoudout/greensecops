@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
-
+import type { IssueCategory, RulePublic } from "@/client"
+import { RulesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
@@ -15,8 +16,6 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import useAuth from "@/hooks/useAuth"
-import { listRules, toggleRule } from "@/lib/api/services"
-import type { IssueCategory, RulePublic } from "@/lib/api/types"
 
 export const Route = createFileRoute("/_layout/rules")({
   component: Rules,
@@ -43,7 +42,8 @@ function RuleRow({
 }) {
   const queryClient = useQueryClient()
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => toggleRule(rule.id, enabled),
+    mutationFn: (enabled: boolean) =>
+      RulesService.toggleRule({ ruleId: rule.id, enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] })
     },
@@ -103,7 +103,7 @@ function Rules() {
   } = useQuery({
     queryKey: ["rules", { category }],
     queryFn: () =>
-      listRules({
+      RulesService.listRules({
         category: category === "all" ? undefined : category,
         limit: 200,
       }),

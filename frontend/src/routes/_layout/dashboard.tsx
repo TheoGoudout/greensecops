@@ -2,12 +2,11 @@ import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import type { LucideIcon } from "lucide-react"
 import { Activity, GitBranch, ShieldCheck, TrendingUp } from "lucide-react"
-
+import { AnalysesService, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import useAuth from "@/hooks/useAuth"
-import { listAnalyses, listRepositories } from "@/lib/api/services"
 
 export const Route = createFileRoute("/_layout/dashboard")({
   component: Dashboard,
@@ -51,12 +50,12 @@ function Dashboard() {
 
   const { data: repos, isLoading: reposLoading } = useQuery({
     queryKey: ["repositories"],
-    queryFn: () => listRepositories({ limit: 200 }),
+    queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
   })
 
   const { data: analyses, isLoading: analysesLoading } = useQuery({
     queryKey: ["analyses", "recent"],
-    queryFn: () => listAnalyses({ limit: 20 }),
+    queryFn: () => AnalysesService.listAnalyses({ limit: 20 }),
   })
 
   const activeCount = repos?.filter((r) => r.enabled).length ?? 0
@@ -149,12 +148,12 @@ function Dashboard() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    {analysis.score !== null && (
+                    {analysis.score != null && (
                       <span className="text-sm text-muted-foreground">
                         {Math.round(analysis.score)}/100
                       </span>
                     )}
-                    <GradeBadge grade={analysis.grade} />
+                    <GradeBadge grade={analysis.grade ?? null} />
                   </div>
                 </div>
               ))}

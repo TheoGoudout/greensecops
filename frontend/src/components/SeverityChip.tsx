@@ -1,4 +1,4 @@
-import type { IssueSeverity } from "@/lib/api/types"
+import type { IssueSeverity } from "@/client"
 import { cn } from "@/lib/utils"
 
 interface SeverityChipProps {

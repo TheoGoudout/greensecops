@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Wand2 } from "lucide-react"
 import { useState } from "react"
-
+import type { IssueCategory, IssueSeverity } from "@/client"
+import { FixesService, IssuesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
@@ -15,8 +16,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { generateFix, listIssues } from "@/lib/api/services"
-import type { IssueCategory, IssueSeverity } from "@/lib/api/types"
 
 export const Route = createFileRoute("/_layout/issues")({
   component: Issues,
@@ -46,7 +45,7 @@ const SEVERITIES: Array<{ value: IssueSeverity | "all"; label: string }> = [
 function GenerateFixButton({ issueId }: { issueId: string }) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: () => generateFix(issueId),
+    mutationFn: () => FixesService.triggerFixGeneration({ issueId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fixes"] })
     },
@@ -81,7 +80,7 @@ function Issues() {
   } = useQuery({
     queryKey: ["issues", { category, severity }],
     queryFn: () =>
-      listIssues({
+      IssuesService.listIssues({
         category: category === "all" ? undefined : category,
         severity: severity === "all" ? undefined : severity,
         limit: 200,
