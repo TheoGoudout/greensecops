@@ -1,4 +1,4 @@
-import type { IssueCategory } from "@/lib/api/types"
+import type { IssueCategory } from "@/client"
 import { cn } from "@/lib/utils"
 
 interface CategoryIconProps {

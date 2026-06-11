@@ -1,13 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Check, Copy } from "lucide-react"
-
+import type { RepositoryPublic } from "@/client"
+import { RepositoriesService } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
-import { listRepositories } from "@/lib/api/services"
-import type { RepositoryPublic } from "@/lib/api/types"
 
 export const Route = createFileRoute("/_layout/badges")({
   component: Badges,
@@ -77,7 +76,7 @@ function Badges() {
     isError,
   } = useQuery({
     queryKey: ["repositories"],
-    queryFn: () => listRepositories({ limit: 200 }),
+    queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
   })
 
   return (

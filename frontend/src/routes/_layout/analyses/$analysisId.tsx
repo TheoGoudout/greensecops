@@ -1,15 +1,14 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft } from "lucide-react"
-
+import type { IssueCategory, IssuePublic } from "@/client"
+import { AnalysesService, IssuesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { GradeBadge } from "@/components/GradeBadge"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getAnalysis, listIssues } from "@/lib/api/services"
-import type { IssueCategory, IssuePublic } from "@/lib/api/types"
 
 export const Route = createFileRoute("/_layout/analyses/$analysisId")({
   component: AnalysisDetail,
@@ -47,12 +46,12 @@ function AnalysisDetail() {
     isError: analysisError,
   } = useQuery({
     queryKey: ["analysis", analysisId],
-    queryFn: () => getAnalysis(analysisId),
+    queryFn: () => AnalysesService.getAnalysis({ analysisId }),
   })
 
   const { data: issues, isLoading: issuesLoading } = useQuery({
     queryKey: ["issues", analysisId],
-    queryFn: () => listIssues({ analysisId, limit: 500 }),
+    queryFn: () => IssuesService.listIssues({ analysisId, limit: 500 }),
     enabled: !!analysisId,
   })
 
@@ -95,14 +94,14 @@ function AnalysisDetail() {
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Grade</p>
                 <GradeBadge
-                  grade={analysis.grade}
+                  grade={analysis.grade ?? null}
                   className="text-sm px-3 py-1"
                 />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Score</p>
                 <p className="text-xl font-bold">
-                  {analysis.score !== null
+                  {analysis.score != null
                     ? `${Math.round(analysis.score)}/100`
                     : "—"}
                 </p>

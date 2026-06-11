@@ -1,17 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitBranch, ToggleLeft, ToggleRight } from "lucide-react"
-
+import type { RepositoryPublic } from "@/client"
+import { AnalysesService, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  listAnalyses,
-  listRepositories,
-  toggleRepository,
-} from "@/lib/api/services"
-import type { RepositoryPublic } from "@/lib/api/types"
 
 export const Route = createFileRoute("/_layout/repositories")({
   component: Repositories,
@@ -26,7 +21,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   const { data: analyses } = useQuery({
     queryKey: ["analyses", repo.id, "latest"],
     queryFn: () =>
-      listAnalyses({
+      AnalysesService.listAnalyses({
         repoId: repo.id,
         limit: 1,
         status: "completed",
@@ -36,7 +31,8 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   const latest = analyses?.[0] ?? null
 
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => toggleRepository(repo.id, enabled),
+    mutationFn: (enabled: boolean) =>
+      RepositoriesService.toggleRepository({ repoId: repo.id, enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
     },
@@ -64,7 +60,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
             params={{ analysisId: latest.id }}
             className="hover:opacity-80 transition-opacity"
           >
-            <GradeBadge grade={latest.grade} />
+            <GradeBadge grade={latest.grade ?? null} />
           </Link>
         ) : (
           <GradeBadge grade={null} />
@@ -99,7 +95,7 @@ function Repositories() {
     isError,
   } = useQuery({
     queryKey: ["repositories"],
-    queryFn: () => listRepositories({ limit: 200 }),
+    queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
   })
 
   return (

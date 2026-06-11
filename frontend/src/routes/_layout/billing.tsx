@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { CheckCircle2, Zap } from "lucide-react"
-
+import type { UserTier } from "@/client"
+import { BillingService } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getLimits, getSubscription } from "@/lib/api/services"
-import type { UserTier } from "@/lib/api/types"
 
 export const Route = createFileRoute("/_layout/billing")({
   component: Billing,
@@ -80,13 +79,22 @@ function UsageBar({
 function Billing() {
   const { data: subscription, isLoading: subLoading } = useQuery({
     queryKey: ["billing", "subscription"],
-    queryFn: getSubscription,
+    queryFn: BillingService.getSubscription,
   })
 
-  const { data: limitsData, isLoading: limitsLoading } = useQuery({
+  type TierLimits = {
+    tier: UserTier
+    limits: {
+      analyses: number | null
+      fixes: number | null
+      repos: number | null
+    }
+  }
+  const { data: limitsRaw, isLoading: limitsLoading } = useQuery({
     queryKey: ["billing", "limits"],
-    queryFn: getLimits,
+    queryFn: BillingService.getTierLimits,
   })
+  const limitsData = limitsRaw as TierLimits | undefined
 
   const currentTier = subscription?.tier ?? "free"
   const isLoading = subLoading || limitsLoading
