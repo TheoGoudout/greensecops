@@ -1,8 +1,14 @@
-from fastapi import APIRouter
+import logging
+
+import stripe
+from fastapi import APIRouter, Header, HTTPException, Request
 from sqlmodel import select
 
 from app.api.deps import CurrentUser, SessionDep
-from app.models import BillingSubscription, BillingSubscriptionPublic, UserTier
+from app.core.config import settings
+from app.models import BillingSubscription, BillingSubscriptionPublic, User, UserTier
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -44,7 +50,106 @@ def get_tier_limits(current_user: CurrentUser) -> dict[str, object]:
     }
 
 
+def _price_to_tier(price_id: str) -> UserTier | None:
+    mapping = {
+        settings.STRIPE_PRICE_STARTER: UserTier.starter,
+        settings.STRIPE_PRICE_PRO: UserTier.pro,
+        settings.STRIPE_PRICE_ULTIMATE: UserTier.ultimate,
+    }
+    return mapping.get(price_id)
+
+
+def _sync_subscription(
+    session: SessionDep,
+    customer_id: str,
+    stripe_sub_id: str,
+    price_id: str,
+    active: bool,
+) -> None:
+    tier = _price_to_tier(price_id) if active else UserTier.free
+    if tier is None:
+        logger.warning("Unknown Stripe price_id %s — defaulting to free", price_id)
+        tier = UserTier.free
+
+    sub = session.exec(
+        select(BillingSubscription).where(
+            BillingSubscription.stripe_customer_id == customer_id
+        )
+    ).first()
+    if not sub:
+        sub = session.exec(
+            select(BillingSubscription).where(
+                BillingSubscription.stripe_subscription_id == stripe_sub_id
+            )
+        ).first()
+    if not sub:
+        logger.warning("No subscription found for customer %s", customer_id)
+        return
+
+    sub.tier = tier
+    sub.stripe_subscription_id = stripe_sub_id
+    sub.stripe_customer_id = customer_id
+    session.add(sub)
+
+    user = session.get(User, sub.user_id)
+    if user:
+        user.tier = tier
+        session.add(user)
+
+    session.commit()
+
+
 @router.post("/webhook/stripe", status_code=200)
-async def stripe_webhook() -> dict[str, str]:
-    # Stripe webhook handler — full implementation in Phase 7
-    return {"status": "accepted"}
+async def stripe_webhook(
+    request: Request,
+    session: SessionDep,
+    stripe_signature: str | None = Header(default=None, alias="stripe-signature"),
+) -> dict[str, str]:
+    if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    payload = await request.body()
+    try:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        event = stripe.Webhook.construct_event(
+            payload, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
+        )
+    except stripe.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    event_type: str = event["type"]
+    data = event["data"]["object"]
+
+    if event_type in ("customer.subscription.created", "customer.subscription.updated"):
+        customer_id: str = data["customer"]
+        stripe_sub_id: str = data["id"]
+        active: bool = data["status"] in ("active", "trialing")
+        items = data.get("items", {}).get("data", [])
+        price_id: str = items[0]["price"]["id"] if items else ""
+        _sync_subscription(session, customer_id, stripe_sub_id, price_id, active)
+
+    elif event_type == "customer.subscription.deleted":
+        customer_id = data["customer"]
+        stripe_sub_id = data["id"]
+        _sync_subscription(session, customer_id, stripe_sub_id, "", active=False)
+
+    elif event_type == "checkout.session.completed":
+        customer_id = data.get("customer", "")
+        stripe_sub_id = data.get("subscription", "")
+        if customer_id and stripe_sub_id:
+            sub = session.exec(
+                select(BillingSubscription).where(
+                    BillingSubscription.stripe_subscription_id == stripe_sub_id
+                )
+            ).first()
+            if sub:
+                sub.stripe_customer_id = customer_id
+                session.add(sub)
+                session.commit()
+
+    else:
+        logger.debug("Unhandled Stripe event type: %s", event_type)
+
+    return {"status": "ok"}

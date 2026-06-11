@@ -257,6 +257,10 @@ export type BillingGetTierLimitsResponse = ({
     [key: string]: unknown;
 });
 
+export type BillingStripeWebhookData = {
+    stripeSignature?: (string | null);
+};
+
 export type BillingStripeWebhookResponse = ({
     [key: string]: (string);
 });
