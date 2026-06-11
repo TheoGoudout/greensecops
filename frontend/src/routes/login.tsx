@@ -9,6 +9,7 @@ import { z } from "zod"
 
 import type { Body_login_login_access_token as AccessToken } from "@/client"
 import { AuthLayout } from "@/components/Common/AuthLayout"
+import { GitHubOAuthButton } from "@/components/Common/GitHubOAuthButton"
 import {
   Form,
   FormControl,
@@ -44,7 +45,7 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       {
-        title: "Log In - FastAPI Template",
+        title: "Log In - GreenSecOps",
       },
     ],
   }),
@@ -128,6 +129,19 @@ function Login() {
               Log In
             </LoadingButton>
           </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                or
+              </span>
+            </div>
+          </div>
+
+          <GitHubOAuthButton />
 
           <div className="text-center text-sm">
             Don't have an account yet?{" "}

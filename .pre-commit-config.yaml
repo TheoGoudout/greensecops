@@ -65,7 +65,7 @@ repos:
         exclude: ^frontend/src/client/
         pass_filenames: false
 
-  # Action: biome lint + format
+  # Action: biome lint + format + type check
   - repo: local
     hooks:
       - id: biome-check-action
@@ -73,6 +73,14 @@ repos:
         entry: bash -c 'cd action && bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/'
         language: system
         files: ^action/src/.*\.(ts|js|json)$
+        exclude: ^action/src/client/
+        pass_filenames: false
+
+      - id: tsc-action
+        name: TypeScript check (action)
+        entry: bash -c 'cd action && bunx tsc --noEmit'
+        language: system
+        files: ^action/src/.*\.ts$
         exclude: ^action/src/client/
         pass_filenames: false
 

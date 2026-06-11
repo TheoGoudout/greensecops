@@ -4,13 +4,13 @@ import { FaXTwitter } from "react-icons/fa6"
 const socialLinks = [
   {
     icon: FaGithub,
-    href: "https://github.com/fastapi/fastapi",
+    href: "https://github.com/theogoudout/greensecops",
     label: "GitHub",
   },
-  { icon: FaXTwitter, href: "https://x.com/fastapi", label: "X" },
+  { icon: FaXTwitter, href: "https://x.com/greensecops", label: "X" },
   {
     icon: FaLinkedinIn,
-    href: "https://linkedin.com/company/fastapi",
+    href: "https://linkedin.com/company/greensecops",
     label: "LinkedIn",
   },
 ]

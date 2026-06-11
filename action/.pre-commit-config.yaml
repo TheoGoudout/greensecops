@@ -13,7 +13,7 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
 
-  # TypeScript: biome lint + format
+  # TypeScript: biome lint + format + type check
   - repo: local
     hooks:
       - id: biome-check-action
@@ -21,6 +21,14 @@ repos:
         entry: bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/
         language: system
         files: \.(ts|js|json)$
+        exclude: ^src/client/
+        pass_filenames: false
+
+      - id: tsc-action
+        name: TypeScript check (action)
+        entry: bunx tsc --noEmit
+        language: system
+        files: \.ts$
         exclude: ^src/client/
         pass_filenames: false
 
