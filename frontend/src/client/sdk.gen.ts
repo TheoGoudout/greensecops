@@ -35,7 +35,7 @@ export class AnalysesService {
             }
         });
     }
-    
+
     /**
      * Get Analysis
      * @param data The data for the request.
@@ -55,7 +55,7 @@ export class AnalysesService {
             }
         });
     }
-    
+
     /**
      * Trigger Analysis
      * @param data The data for the request.
@@ -93,7 +93,7 @@ export class AuthService {
             url: '/api/v1/auth/github/login'
         });
     }
-    
+
     /**
      * Github Callback
      * @param data The data for the request.
@@ -141,7 +141,7 @@ export class BadgesService {
             }
         });
     }
-    
+
     /**
      * Get Badge Json
      * Shields.io-compatible JSON endpoint.
@@ -180,7 +180,7 @@ export class BillingService {
             url: '/api/v1/billing/subscription'
         });
     }
-    
+
     /**
      * Get Tier Limits
      * @returns unknown Successful Response
@@ -192,7 +192,7 @@ export class BillingService {
             url: '/api/v1/billing/limits'
         });
     }
-    
+
     /**
      * Stripe Webhook
      * @returns string Successful Response
@@ -232,7 +232,7 @@ export class FixesService {
             }
         });
     }
-    
+
     /**
      * Get Fix
      * @param data The data for the request.
@@ -252,7 +252,7 @@ export class FixesService {
             }
         });
     }
-    
+
     /**
      * Reject Fix
      * @param data The data for the request.
@@ -272,7 +272,7 @@ export class FixesService {
             }
         });
     }
-    
+
     /**
      * Trigger Fix Generation
      * @param data The data for the request.
@@ -292,7 +292,7 @@ export class FixesService {
             }
         });
     }
-    
+
     /**
      * Trigger Fix Delivery
      * @param data The data for the request.
@@ -342,7 +342,7 @@ export class IssuesService {
             }
         });
     }
-    
+
     /**
      * Get Issue
      * @param data The data for the request.
@@ -384,7 +384,7 @@ export class LoginService {
             }
         });
     }
-    
+
     /**
      * Test Token
      * Test access token
@@ -397,7 +397,7 @@ export class LoginService {
             url: '/api/v1/login/test-token'
         });
     }
-    
+
     /**
      * Recover Password
      * Password Recovery
@@ -418,7 +418,7 @@ export class LoginService {
             }
         });
     }
-    
+
     /**
      * Reset Password
      * Reset password
@@ -438,7 +438,7 @@ export class LoginService {
             }
         });
     }
-    
+
     /**
      * Recover Password Html Content
      * HTML Content for Password Recovery
@@ -509,7 +509,7 @@ export class RepositoriesService {
             }
         });
     }
-    
+
     /**
      * Get Repository
      * @param data The data for the request.
@@ -529,7 +529,7 @@ export class RepositoriesService {
             }
         });
     }
-    
+
     /**
      * Toggle Repository
      * @param data The data for the request.
@@ -581,7 +581,7 @@ export class RulesService {
             }
         });
     }
-    
+
     /**
      * Get Rule
      * @param data The data for the request.
@@ -601,7 +601,7 @@ export class RulesService {
             }
         });
     }
-    
+
     /**
      * Toggle Rule
      * @param data The data for the request.
@@ -675,7 +675,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Create User
      * Create new user.
@@ -695,7 +695,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Read User Me
      * Get current user.
@@ -708,7 +708,7 @@ export class UsersService {
             url: '/api/v1/users/me'
         });
     }
-    
+
     /**
      * Delete User Me
      * Delete own user.
@@ -721,7 +721,7 @@ export class UsersService {
             url: '/api/v1/users/me'
         });
     }
-    
+
     /**
      * Update User Me
      * Update own user.
@@ -741,7 +741,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Update Password Me
      * Update own password.
@@ -761,7 +761,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Register User
      * Create new user without the need to be logged in.
@@ -781,7 +781,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Read User By Id
      * Get a specific user by id.
@@ -802,7 +802,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Update User
      * Update a user.
@@ -826,7 +826,7 @@ export class UsersService {
             }
         });
     }
-    
+
     /**
      * Delete User
      * Delete a user.
@@ -870,7 +870,7 @@ export class UtilsService {
             }
         });
     }
-    
+
     /**
      * Health Check
      * @returns boolean Successful Response
