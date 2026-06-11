@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -8,6 +9,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo,
+    Consolas, "Liberation Mono", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -74,6 +78,87 @@
   --sidebar-accent-foreground: oklch(0.25 0.05 152);
   --sidebar-border: oklch(0.88 0.015 152);
   --sidebar-ring: oklch(0.46 0.12 152);
+  --sidebar-active: oklch(0.46 0.12 152);
+
+  /* ---- Brand palette scales ---- */
+  --green-50: #e7f5ee;
+  --green-100: #c5e8d5;
+  --green-200: #93d3b0;
+  --green-300: #5fbc8b;
+  --green-400: #34a26b;
+  --green-500: #1f8a56;
+  --green-600: #1a7a4a;
+  --green-700: #15633c;
+  --green-800: #114f30;
+  --green-900: #0c3a23;
+  --blue-50: #e0f4fe;
+  --blue-100: #b8e8fd;
+  --blue-200: #7dd3fc;
+  --blue-300: #38bdf8;
+  --blue-400: #0ea5e9;
+  --blue-500: #0284c7;
+  --blue-600: #0369a1;
+  --blue-700: #075985;
+
+  /* ---- Grade scale (A+++ → F) ---- */
+  --grade-aaa-bg: #d1fae5;
+  --grade-aaa-fg: #065f46;
+  --grade-a-bg: #c5e8d5;
+  --grade-a-fg: #114f30;
+  --grade-b-bg: #ecfccb;
+  --grade-b-fg: #4d7c0f;
+  --grade-c-bg: #fef9c3;
+  --grade-c-fg: #a16207;
+  --grade-d-bg: #ffedd5;
+  --grade-d-fg: #c2410c;
+  --grade-e-bg: #fee2e2;
+  --grade-e-fg: #b91c1c;
+  --grade-f-bg: #fecaca;
+  --grade-f-fg: #7f1d1d;
+
+  /* ---- Severity scale ---- */
+  --sev-critical-bg: #fee2e2;
+  --sev-critical-fg: #b91c1c;
+  --sev-critical-bd: #fecaca;
+  --sev-high-bg: #ffedd5;
+  --sev-high-fg: #c2410c;
+  --sev-high-bd: #fed7aa;
+  --sev-medium-bg: #fef9c3;
+  --sev-medium-fg: #a16207;
+  --sev-medium-bd: #fef08a;
+  --sev-low-bg: #e0f4fe;
+  --sev-low-fg: #075985;
+  --sev-low-bd: #bae6fd;
+  --sev-info-bg: #f1f5f9;
+  --sev-info-fg: #475569;
+  --sev-info-bd: #e2e8f0;
+
+  /* ---- Category accents (5 analysis axes) ---- */
+  --cat-energy: #f59e0b;
+  --cat-reliability: #0ea5e9;
+  --cat-security: #ef4444;
+  --cat-performance: #1a7a4a;
+  --cat-maintainability: #64748b;
+
+  /* ---- Shadows ---- */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm:
+    0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
+  --shadow-md:
+    0 4px 12px -2px rgba(15, 23, 42, 0.1), 0 2px 6px -2px rgba(15, 23, 42, 0.06);
+  --shadow-lg:
+    0 12px 28px -8px rgba(15, 23, 42, 0.16),
+    0 6px 12px -6px rgba(15, 23, 42, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(26, 122, 74, 0.3);
+  --glow-primary: 0 4px 16px -4px rgba(26, 122, 74, 0.45);
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 300ms;
 }
 
 .dark {
@@ -108,6 +193,40 @@
   --sidebar-accent-foreground: oklch(0.97 0.005 152);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.6 0.13 152);
+  --sidebar-active: oklch(0.6 0.13 152);
+
+  /* ---- Grade scale — dark ---- */
+  --grade-aaa-bg: rgba(16, 185, 129, 0.18);
+  --grade-aaa-fg: #6ee7b7;
+  --grade-a-bg: rgba(26, 122, 74, 0.2);
+  --grade-a-fg: #5fbc8b;
+  --grade-b-bg: rgba(101, 163, 13, 0.2);
+  --grade-b-fg: #bef264;
+  --grade-c-bg: rgba(234, 179, 8, 0.18);
+  --grade-c-fg: #fde047;
+  --grade-d-bg: rgba(249, 115, 22, 0.18);
+  --grade-d-fg: #fdba74;
+  --grade-e-bg: rgba(239, 68, 68, 0.18);
+  --grade-e-fg: #fca5a5;
+  --grade-f-bg: rgba(127, 29, 29, 0.45);
+  --grade-f-fg: #fca5a5;
+
+  /* ---- Severity scale — dark ---- */
+  --sev-critical-bg: rgba(239, 68, 68, 0.16);
+  --sev-critical-fg: #fca5a5;
+  --sev-critical-bd: rgba(239, 68, 68, 0.35);
+  --sev-high-bg: rgba(249, 115, 22, 0.16);
+  --sev-high-fg: #fdba74;
+  --sev-high-bd: rgba(249, 115, 22, 0.35);
+  --sev-medium-bg: rgba(234, 179, 8, 0.16);
+  --sev-medium-fg: #fde047;
+  --sev-medium-bd: rgba(234, 179, 8, 0.32);
+  --sev-low-bg: rgba(14, 165, 233, 0.16);
+  --sev-low-fg: #7dd3fc;
+  --sev-low-bd: rgba(14, 165, 233, 0.32);
+  --sev-info-bg: #1f2a3f;
+  --sev-info-fg: #cbd5e1;
+  --sev-info-bd: #25304a;
 }
 
 @layer base {

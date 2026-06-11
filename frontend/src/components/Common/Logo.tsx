@@ -2,10 +2,10 @@ import { Link } from "@tanstack/react-router"
 
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
-import icon from "/assets/images/fastapi-icon.svg"
-import iconLight from "/assets/images/fastapi-icon-light.svg"
-import logo from "/assets/images/fastapi-logo.svg"
-import logoLight from "/assets/images/fastapi-logo-light.svg"
+import logoFull from "/assets/images/logo-full.png"
+import logoFullDark from "/assets/images/logo-full-dark.png"
+import logoMark from "/assets/images/logo-mark.png"
+import logoMarkDark from "/assets/images/logo-mark-dark.png"
 
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"
@@ -21,15 +21,15 @@ export function Logo({
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
-  const fullLogo = isDark ? logoLight : logo
-  const iconLogo = isDark ? iconLight : icon
+  const fullLogo = isDark ? logoFullDark : logoFull
+  const iconLogo = isDark ? logoMarkDark : logoMark
 
   const content =
     variant === "responsive" ? (
       <>
         <img
           src={fullLogo}
-          alt="FastAPI"
+          alt="GreenSecOps"
           className={cn(
             "h-6 w-auto group-data-[collapsible=icon]:hidden",
             className,
@@ -37,7 +37,7 @@ export function Logo({
         />
         <img
           src={iconLogo}
-          alt="FastAPI"
+          alt="GreenSecOps"
           className={cn(
             "size-5 hidden group-data-[collapsible=icon]:block",
             className,
@@ -47,7 +47,7 @@ export function Logo({
     ) : (
       <img
         src={variant === "full" ? fullLogo : iconLogo}
-        alt="FastAPI"
+        alt="GreenSecOps"
         className={cn(variant === "full" ? "h-6 w-auto" : "size-5", className)}
       />
     )
