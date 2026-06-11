@@ -49,12 +49,14 @@ const MOCK_FIX = {
 
 test.describe("Golden path: repository → analysis → issue → fix", () => {
   test.beforeEach(async ({ page }) => {
+    // The generated API client returns arrays directly for list endpoints
+    // (not the { data: [...], count: N } envelope).
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
-        route.fulfill({ json: { data: [MOCK_REPO], count: 1 } })
+        route.fulfill({ json: [MOCK_REPO] })
       }
     })
 
@@ -63,7 +65,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
       } else {
-        route.fulfill({ json: { data: [MOCK_ANALYSIS], count: 1 } })
+        route.fulfill({ json: [MOCK_ANALYSIS] })
       }
     })
 
@@ -72,12 +74,12 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       if (url.match(/\/issues\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ISSUE })
       } else {
-        route.fulfill({ json: { data: [MOCK_ISSUE], count: 1 } })
+        route.fulfill({ json: [MOCK_ISSUE] })
       }
     })
 
     await page.route("**/api/v1/fixes/**", (route) => {
-      route.fulfill({ json: { data: [MOCK_FIX], count: 1 } })
+      route.fulfill({ json: [MOCK_FIX] })
     })
   })
 
@@ -155,6 +157,7 @@ test.describe("GitHub OAuth login button", () => {
     })
 
     await page.goto("/auth/github/callback?code=test-code&state=test-state")
-    await expect(page).toHaveURL("/")
+    // The index route (/) immediately redirects authenticated users to /dashboard.
+    await expect(page).toHaveURL("/dashboard")
   })
 })
