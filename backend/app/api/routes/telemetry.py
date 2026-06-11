@@ -2,12 +2,12 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlmodel import select
 
-from app.api.deps import SessionDep
-from app.models import Repository, TelemetryRun
+from app.api.deps import GitHubOidcClaims, SessionDep
+from app.models import Repository, TelemetryMetricSample, TelemetryRun
 
 logger = logging.getLogger(__name__)
 
@@ -16,54 +16,101 @@ router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 class TelemetryPayload(BaseModel):
     workflow_run_id: int
-    repository: str  # "owner/repo"
     branch: str = ""
     commit_sha: str = ""
     workflow_name: str = ""
     runner_specs: dict[str, Any] = {}
     metrics: dict[str, Any] = {}
+    phase: str = "completed"
+
+
+class SamplePayload(BaseModel):
+    workflow_run_id: int
+    cpu_percent: float | None = None
+    ram_used_mb: float | None = None
+    disk_used_gb: float | None = None
+    net_bytes_sent: int | None = None
+    net_bytes_recv: int | None = None
+
+
+def _lookup_repo(session: SessionDep, repository: str) -> Repository | None:
+    return session.exec(
+        select(Repository).where(Repository.full_name == repository)
+    ).first()
 
 
 @router.post("/ingest", status_code=201)
 async def ingest_telemetry(
     payload: TelemetryPayload,
     session: SessionDep,
-    authorization: str | None = Header(default=None),  # noqa: ARG001
+    claims: GitHubOidcClaims,
 ) -> dict[str, str]:
-    # Find repository by full_name
-    repo = session.exec(
-        select(Repository).where(Repository.full_name == payload.repository)
-    ).first()
+    repository: str = claims.get("repository", "")
 
+    repo = _lookup_repo(session, repository)
     if not repo:
-        # Accept telemetry from unknown repos silently (repo not yet installed)
         logger.info(
             "Telemetry received for unregistered repo %s — ignoring",
-            payload.repository,
+            repository,
         )
         return {"status": "accepted", "note": "repository_not_registered"}
 
-    # Check for duplicate run
     existing = session.exec(
         select(TelemetryRun)
         .where(TelemetryRun.repo_id == repo.id)
         .where(TelemetryRun.workflow_run_id == payload.workflow_run_id)
+        .where(TelemetryRun.phase == payload.phase)
     ).first()
+
     if existing:
-        return {"status": "accepted", "note": "duplicate_run"}
+        return {"status": "accepted", "note": "duplicate_run_phase"}
 
     run = TelemetryRun(
         repo_id=repo.id,
         workflow_run_id=payload.workflow_run_id,
         runner_specs=json.dumps(payload.runner_specs),
         metrics=json.dumps(payload.metrics),
+        phase=payload.phase,
     )
     session.add(run)
     session.commit()
 
     logger.info(
-        "Telemetry ingested: repo=%s run_id=%d",
-        payload.repository,
+        "Telemetry ingested: repo=%s run_id=%d phase=%s",
+        repository,
         payload.workflow_run_id,
+        payload.phase,
     )
     return {"status": "accepted", "telemetry_run_id": str(run.id)}
+
+
+@router.post("/sample", status_code=200)
+async def ingest_sample(
+    payload: SamplePayload,
+    session: SessionDep,
+    claims: GitHubOidcClaims,
+) -> dict[str, str]:
+    repository: str = claims.get("repository", "")
+
+    repo = _lookup_repo(session, repository)
+    if not repo:
+        return {"status": "ok"}
+
+    sample = TelemetryMetricSample(
+        repo_id=repo.id,
+        workflow_run_id=payload.workflow_run_id,
+        cpu_percent=payload.cpu_percent,
+        ram_used_mb=payload.ram_used_mb,
+        disk_used_gb=payload.disk_used_gb,
+        net_bytes_sent=payload.net_bytes_sent,
+        net_bytes_recv=payload.net_bytes_recv,
+    )
+
+    try:
+        session.add(sample)
+        session.commit()
+    except Exception:
+        logger.exception("Failed to persist telemetry sample for repo %s", repository)
+        session.rollback()
+
+    return {"status": "ok"}

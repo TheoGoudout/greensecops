@@ -350,10 +350,31 @@ class TelemetryRun(SQLModel, table=True):
         default=None
     )  # JSON: vcpus, ram_gb, location, etc.
     metrics: str | None = Field(default=None)  # JSON: cpu_pct, ram_mb, net_io, etc.
+    phase: str | None = Field(default=None, max_length=32)  # "started" | "completed"
     collected_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     repository: Repository | None = Relationship(back_populates="telemetry_runs")
+
+
+# ─── TelemetryMetricSample ────────────────────────────────────────────────────
+
+
+class TelemetryMetricSample(SQLModel, table=True):
+    __tablename__ = "telemetry_metric_sample"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    workflow_run_id: int = Field(index=True)
+    sampled_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    cpu_percent: float | None = Field(default=None)
+    ram_used_mb: float | None = Field(default=None)
+    disk_used_gb: float | None = Field(default=None)
+    net_bytes_sent: int | None = Field(default=None)
+    net_bytes_recv: int | None = Field(default=None)
 
 
 # ─── BillingSubscription ─────────────────────────────────────────────────────
