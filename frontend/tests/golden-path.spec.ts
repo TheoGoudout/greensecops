@@ -91,20 +91,24 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
   test("dashboard shows recent analysis grade", async ({ page }) => {
     await page.goto("/")
-    await expect(page.locator("body")).not.toContainText("500")
+    await expect(page.getByText("Recent Analyses")).toBeVisible()
+    await expect(
+      page.getByText(`${MOCK_ANALYSIS.score}/100`).first(),
+    ).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
   test("issues page loads and shows issue with severity", async ({ page }) => {
     await page.goto("/issues")
     await expect(page).toHaveURL("/issues")
-    await expect(page.locator("body")).not.toContainText("500")
     await expect(page.getByText("missing_timeout")).toBeVisible()
+    await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
   test("analysis detail page loads without error", async ({ page }) => {
     await page.goto(`/analyses/${MOCK_ANALYSIS.id}`)
-    await expect(page.locator("body")).not.toContainText("404")
+    await expect(page.getByText("Analysis Detail")).toBeVisible()
+    await expect(page.getByText(`${MOCK_ANALYSIS.score}/100`)).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
@@ -116,7 +120,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
     })
 
     await page.goto("/issues")
-    await expect(page.locator("body")).not.toContainText("500")
+    await expect(page.getByText("missing_timeout")).toBeVisible()
     expect(rejectCalled).toBe(false)
   })
 })
