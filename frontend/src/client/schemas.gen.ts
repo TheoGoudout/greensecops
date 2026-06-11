@@ -346,6 +346,10 @@ export const IssuePublicSchema = {
             format: 'uuid',
             title: 'Rule Id'
         },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
         severity: {
             '$ref': '#/components/schemas/IssueSeverity'
         },
@@ -403,7 +407,7 @@ export const IssuePublicSchema = {
         }
     },
     type: 'object',
-    required: ['id', 'analysis_id', 'rule_id', 'severity', 'category', 'message'],
+    required: ['id', 'analysis_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message'],
     title: 'IssuePublic'
 } as const;
 

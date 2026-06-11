@@ -62,6 +62,7 @@ export type IssuePublic = {
     id: string;
     analysis_id: string;
     rule_id: string;
+    rule_slug: string;
     severity: IssueSeverity;
     category: IssueCategory;
     line_start?: (number | null);

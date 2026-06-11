@@ -441,6 +441,7 @@ class IssuePublic(SQLModel):
     id: uuid.UUID
     analysis_id: uuid.UUID
     rule_id: uuid.UUID
+    rule_slug: str
     severity: IssueSeverity
     category: IssueCategory
     line_start: int | None = None

@@ -6,6 +6,23 @@ from sqlmodel import select
 from app.api.deps import CurrentUser, SessionDep
 from app.models import Issue, IssueCategory, IssuePublic, IssueSeverity
 
+
+def _to_issue_public(issue: Issue) -> IssuePublic:
+    return IssuePublic(
+        id=issue.id,
+        analysis_id=issue.analysis_id,
+        rule_id=issue.rule_id,
+        rule_slug=issue.rule.slug if issue.rule else "",
+        severity=issue.severity,
+        category=issue.category,
+        line_start=issue.line_start,
+        line_end=issue.line_end,
+        message=issue.message,
+        context=issue.context,
+        created_at=issue.created_at,
+    )
+
+
 router = APIRouter(prefix="/issues", tags=["issues"])
 
 
@@ -18,7 +35,7 @@ def list_issues(
     severity: IssueSeverity | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
-) -> list[Issue]:
+) -> list[IssuePublic]:
     query = select(Issue)
     if analysis_id:
         query = query.where(Issue.analysis_id == analysis_id)
@@ -27,7 +44,7 @@ def list_issues(
     if severity:
         query = query.where(Issue.severity == severity)
     query = query.order_by(Issue.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
-    return list(session.exec(query).all())
+    return [_to_issue_public(issue) for issue in session.exec(query).all()]
 
 
 @router.get("/{issue_id}", response_model=IssuePublic)
@@ -35,8 +52,8 @@ def get_issue(
     issue_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
-) -> Issue:
+) -> IssuePublic:
     issue = session.get(Issue, issue_id)
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
-    return issue
+    return _to_issue_public(issue)
