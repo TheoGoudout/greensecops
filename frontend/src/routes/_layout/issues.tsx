@@ -161,7 +161,7 @@ function Issues() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <SeverityChip severity={issue.severity} />
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                        {issue.rule_id}
+                        {issue.rule_slug}
                       </span>
                       <span className="text-sm">{issue.message}</span>
                     </div>

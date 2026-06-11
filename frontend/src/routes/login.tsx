@@ -9,6 +9,7 @@ import { z } from "zod"
 
 import type { Body_login_login_access_token as AccessToken } from "@/client"
 import { AuthLayout } from "@/components/Common/AuthLayout"
+import { GitHubOAuthButton } from "@/components/Common/GitHubOAuthButton"
 import {
   Form,
   FormControl,
@@ -130,9 +131,10 @@ function Login() {
           to="/recover-password"
           className="text-primary hover:underline"
         >
-          Forgot password?
+          Forgot your password?
         </RouterLink>
       </p>
+      <GitHubOAuthButton />
     </AuthLayout>
   )
 }
