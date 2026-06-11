@@ -151,28 +151,28 @@ function Issues() {
               {issues.map((issue) => (
                 <div
                   key={issue.id}
-                  className="flex items-start justify-between gap-4 px-6 py-4"
+                  className="flex items-start gap-3 px-6 py-4"
                 >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <SeverityChip
-                      severity={issue.severity}
-                      className="mt-0.5 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm">{issue.message}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <CategoryIcon category={issue.category} withLabel />
-                        {issue.line_start !== null && (
-                          <span className="text-xs text-muted-foreground">
-                            · line {issue.line_start}
-                            {issue.line_end &&
-                            issue.line_end !== issue.line_start
-                              ? `–${issue.line_end}`
-                              : ""}
-                          </span>
-                        )}
-                      </div>
+                  <CategoryIcon
+                    category={issue.category}
+                    className="mt-0.5 shrink-0 text-base"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <SeverityChip severity={issue.severity} />
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                        {issue.rule_id}
+                      </span>
+                      <span className="text-sm">{issue.message}</span>
                     </div>
+                    {issue.line_start !== null && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        line {issue.line_start}
+                        {issue.line_end && issue.line_end !== issue.line_start
+                          ? `–${issue.line_end}`
+                          : ""}
+                      </p>
+                    )}
                   </div>
                   <GenerateFixButton issueId={issue.id} />
                 </div>

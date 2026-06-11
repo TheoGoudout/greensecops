@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import type { LucideIcon } from "lucide-react"
-import { Activity, GitBranch, ShieldCheck, TrendingUp } from "lucide-react"
-import { AnalysesService, RepositoriesService } from "@/client"
+import {
+  Activity,
+  AlertCircle,
+  ChevronRight,
+  GitBranch,
+  TrendingUp,
+} from "lucide-react"
+import { AnalysesService, IssuesService, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import useAuth from "@/hooks/useAuth"
 
 export const Route = createFileRoute("/_layout/dashboard")({
   component: Dashboard,
@@ -15,15 +20,30 @@ export const Route = createFileRoute("/_layout/dashboard")({
   }),
 })
 
+function relativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—"
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins} minute${mins !== 1 ? "s" : ""} ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return "yesterday"
+  return new Date(dateStr).toLocaleDateString()
+}
+
 function StatCard({
   icon: Icon,
   title,
   value,
+  hint,
   loading,
 }: {
   icon: LucideIcon
   title: string
   value: string | number
+  hint?: string
   loading: boolean
 }) {
   return (
@@ -38,7 +58,12 @@ function StatCard({
         {loading ? (
           <Skeleton className="h-8 w-16" />
         ) : (
-          <p className="text-2xl font-bold">{value}</p>
+          <>
+            <p className="text-2xl font-bold">{value}</p>
+            {hint && (
+              <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -46,8 +71,6 @@ function StatCard({
 }
 
 function Dashboard() {
-  const { user } = useAuth()
-
   const { data: repos, isLoading: reposLoading } = useQuery({
     queryKey: ["repositories"],
     queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
@@ -56,6 +79,11 @@ function Dashboard() {
   const { data: analyses, isLoading: analysesLoading } = useQuery({
     queryKey: ["analyses", "recent"],
     queryFn: () => AnalysesService.listAnalyses({ limit: 20 }),
+  })
+
+  const { data: issues, isLoading: issuesLoading } = useQuery({
+    queryKey: ["issues", "open"],
+    queryFn: () => IssuesService.listIssues({ limit: 200 }),
   })
 
   const activeCount = repos?.filter((r) => r.enabled).length ?? 0
@@ -69,41 +97,46 @@ function Dashboard() {
       ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
       : null
 
+  const criticalCount =
+    issues?.filter((i) => i.severity === "critical").length ?? 0
+
+  const repoMap = new Map(repos?.map((r) => [r.id, r]) ?? [])
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Welcome back, {user?.full_name ?? user?.email}
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          Here's an overview of your CI/CD health
+          Overview of your CI/CD health across all connected repositories.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={GitBranch}
-          title="Total Repositories"
-          value={repos?.length ?? 0}
-          loading={reposLoading}
-        />
-        <StatCard
           icon={Activity}
-          title="Active Repositories"
-          value={activeCount}
-          loading={reposLoading}
-        />
-        <StatCard
-          icon={ShieldCheck}
-          title="Recent Analyses"
+          title="Total analyses"
           value={analyses?.length ?? 0}
           loading={analysesLoading}
         />
         <StatCard
+          icon={GitBranch}
+          title="Active repositories"
+          value={activeCount}
+          hint={`of ${repos?.length ?? 0} connected`}
+          loading={reposLoading}
+        />
+        <StatCard
           icon={TrendingUp}
-          title="Avg Health Score"
-          value={avgScore !== null ? `${avgScore}/100` : "—"}
+          title="Average score"
+          value={avgScore !== null ? `${avgScore}/100` : "—/100"}
           loading={analysesLoading}
+        />
+        <StatCard
+          icon={AlertCircle}
+          title="Open issues"
+          value={issues?.length ?? 0}
+          hint={`${criticalCount} critical`}
+          loading={issuesLoading}
         />
       </div>
 
@@ -111,53 +144,60 @@ function Dashboard() {
         <CardHeader>
           <CardTitle className="text-base">Recent Analyses</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {analysesLoading ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 p-6">
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
           ) : !analyses?.length ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">
+            <p className="text-sm text-muted-foreground py-4 px-6 text-center">
               No analyses yet. Trigger one from the Repositories page.
             </p>
           ) : (
-            <div className="divide-y">
-              {analyses.map((analysis) => (
-                <div
-                  key={analysis.id}
-                  className="flex items-center justify-between py-3 gap-4"
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0">
+            <>
+              <div className="grid grid-cols-[2fr_1fr_1fr_auto_auto_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                <span>Repository</span>
+                <span>Commit</span>
+                <span>Analyzed</span>
+                <span>Grade</span>
+                <span>Score</span>
+                <span />
+              </div>
+              <div className="divide-y">
+                {analyses.map((analysis) => {
+                  const repo = repoMap.get(analysis.repo_id)
+                  return (
                     <Link
+                      key={analysis.id}
                       to="/analyses/$analysisId"
                       params={{ analysisId: analysis.id }}
-                      className="text-sm font-medium hover:underline truncate"
+                      className="grid grid-cols-[2fr_1fr_1fr_auto_auto_auto] items-center px-6 py-3 gap-4 hover:bg-muted/50 transition-colors"
                     >
-                      {analysis.commit_sha?.slice(0, 7) ?? "—"}{" "}
-                      <span className="text-muted-foreground font-normal">
-                        · {analysis.branch ?? "default branch"}
+                      <span className="text-sm font-medium truncate">
+                        {repo?.full_name ?? "—"}
                       </span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {analysis.commit_sha?.slice(0, 7) ?? "—"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {relativeTime(
+                          analysis.completed_at ?? analysis.created_at,
+                        )}
+                      </span>
+                      <GradeBadge grade={analysis.grade ?? null} />
+                      <span className="text-xs text-muted-foreground">
+                        {analysis.score != null
+                          ? `${Math.round(analysis.score)}/100`
+                          : "—"}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </Link>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {analysis.status} ·{" "}
-                      {analysis.created_at
-                        ? new Date(analysis.created_at).toLocaleDateString()
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {analysis.score != null && (
-                      <span className="text-sm text-muted-foreground">
-                        {Math.round(analysis.score)}/100
-                      </span>
-                    )}
-                    <GradeBadge grade={analysis.grade ?? null} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { CheckCircle2, Zap } from "lucide-react"
 import type { UserTier } from "@/client"
 import { BillingService } from "@/client"
 import { Button } from "@/components/ui/button"
@@ -22,6 +21,14 @@ const TIER_LABELS: Record<UserTier, string> = {
   open_source: "Open Source",
 }
 
+const TIER_DESCRIPTIONS: Record<UserTier, string> = {
+  free: "Great for personal projects and trying out GreenSecOps.",
+  starter: "For small teams with more repositories and analyses.",
+  pro: "For growing teams that need advanced features.",
+  ultimate: "Unlimited access for large organizations.",
+  open_source: "Free for qualifying open source projects.",
+}
+
 const TIER_PRICES: Record<UserTier, string> = {
   free: "$0/mo",
   starter: "$19/mo",
@@ -29,8 +36,6 @@ const TIER_PRICES: Record<UserTier, string> = {
   ultimate: "$299/mo",
   open_source: "Free",
 }
-
-const UPGRADE_ORDER: UserTier[] = ["free", "starter", "pro", "ultimate"]
 
 function UsageBar({
   used,
@@ -41,8 +46,8 @@ function UsageBar({
   limit: number | null
   label: string
 }) {
-  const pct = limit !== null ? Math.min((used / limit) * 100, 100) : 0
   const isUnlimited = limit === null
+  const pct = !isUnlimited ? Math.min((used / limit!) * 100, 100) : 0
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -56,7 +61,7 @@ function UsageBar({
         </span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
-        {!isUnlimited && (
+        {!isUnlimited ? (
           <div
             className={`h-full rounded-full transition-all ${
               pct >= 90
@@ -67,8 +72,7 @@ function UsageBar({
             }`}
             style={{ width: `${pct}%` }}
           />
-        )}
-        {isUnlimited && (
+        ) : (
           <div className="h-full rounded-full bg-primary/30 w-full" />
         )}
       </div>
@@ -99,135 +103,87 @@ function Billing() {
   const currentTier = subscription?.tier ?? "free"
   const isLoading = subLoading || limitsLoading
 
-  const upgradeTargets = UPGRADE_ORDER.filter(
-    (t) => UPGRADE_ORDER.indexOf(t) > UPGRADE_ORDER.indexOf(currentTier),
-  )
-
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Billing</h1>
-        <p className="text-muted-foreground">
-          Manage your subscription and monitor usage
-        </p>
+        <p className="text-muted-foreground">Your plan and usage.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground font-normal">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Current plan
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="flex items-baseline gap-3">
-                <span className="text-2xl font-bold">
-                  {TIER_LABELS[currentTier]}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {TIER_PRICES[currentTier]}
-                </span>
-              </div>
+              <>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-2xl font-bold">
+                    {TIER_LABELS[currentTier]}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {TIER_PRICES[currentTier]}
+                  </span>
+                  <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                    Active
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {TIER_DESCRIPTIONS[currentTier]}
+                </p>
+              </>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground font-normal">
-              Billing period
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Usage this period
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
             {isLoading ? (
-              <Skeleton className="h-8 w-40" />
-            ) : subscription?.period_start && subscription.period_end ? (
-              <p className="text-sm font-medium">
-                {new Date(subscription.period_start).toLocaleDateString()} –{" "}
-                {new Date(subscription.period_end).toLocaleDateString()}
-              </p>
+              <>
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </>
             ) : (
-              <p className="text-sm text-muted-foreground">No active period</p>
+              <>
+                <UsageBar
+                  label="Analyses"
+                  used={subscription?.analyses_used ?? 0}
+                  limit={limitsData?.limits.analyses ?? null}
+                />
+                <UsageBar
+                  label="AI Fixes"
+                  used={subscription?.fixes_used ?? 0}
+                  limit={limitsData?.limits.fixes ?? null}
+                />
+                <UsageBar
+                  label="Repositories"
+                  used={0}
+                  limit={limitsData?.limits.repos ?? null}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-fit mt-1"
+                  disabled
+                >
+                  Manage subscription
+                </Button>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Usage this period</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          {isLoading ? (
-            <>
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-            </>
-          ) : (
-            <>
-              <UsageBar
-                label="Analyses"
-                used={subscription?.analyses_used ?? 0}
-                limit={limitsData?.limits.analyses ?? null}
-              />
-              <UsageBar
-                label="AI Fixes"
-                used={subscription?.fixes_used ?? 0}
-                limit={limitsData?.limits.fixes ?? null}
-              />
-              <UsageBar
-                label="Repositories"
-                used={0}
-                limit={limitsData?.limits.repos ?? null}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {upgradeTargets.length > 0 && (
-        <Card className="border-primary/30">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Zap className="h-4 w-4 text-primary" />
-              Upgrade your plan
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {upgradeTargets.map((tier) => (
-                <div
-                  key={tier}
-                  className="flex flex-col gap-3 rounded-lg border p-4"
-                >
-                  <div>
-                    <p className="font-semibold">{TIER_LABELS[tier]}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {TIER_PRICES[tier]}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={tier === "pro" ? "default" : "outline"}
-                    className="gap-1.5"
-                    disabled
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Upgrade to {TIER_LABELS[tier]}
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              Stripe billing integration coming soon.
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
