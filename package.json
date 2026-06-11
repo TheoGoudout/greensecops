@@ -1,8 +1,9 @@
 {
-  "name": "fastapi-full-stack-template",
+  "name": "greensecops",
   "private": true,
   "workspaces": [
-    "frontend"
+    "frontend",
+    "action"
   ],
   "scripts": {
     "dev": "bun run --filter frontend dev",
