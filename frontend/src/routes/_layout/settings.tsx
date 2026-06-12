@@ -10,7 +10,11 @@ import useAuth from "@/hooks/useAuth"
 const tabsConfig = [
   { value: "my-profile", title: "My profile", component: UserInformation },
   { value: "password", title: "Password", component: ChangePassword },
-  { value: "github", title: "GitHub", component: GitHubIntegration },
+  {
+    value: "integrations",
+    title: "Integrations",
+    component: GitHubIntegration,
+  },
   { value: "danger-zone", title: "Danger zone", component: DeleteAccount },
 ]
 
