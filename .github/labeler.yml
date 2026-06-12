@@ -1,3 +1,8 @@
+upgrade:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/Dockerfile*'
+
 docs:
   - all:
     - changed-files:
