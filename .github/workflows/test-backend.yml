@@ -21,7 +21,15 @@ jobs:
         with:
           persist-credentials: false
       - name: Prepare env files
-        run: cp .env.example .env && cp frontend/.env.example frontend/.env
+        run: |
+          cp .env.example .env
+          cp frontend/.env.example frontend/.env
+          # Align Coolify-generated secrets with their .env counterparts so the
+          # backend process (running outside Docker) sees consistent credentials.
+          printf '\nFIRST_SUPERUSER_PASSWORD=%s\n' "$SERVICE_PASSWORD_FIRSTSUPERUSER" >> .env
+          printf 'POSTGRES_PASSWORD=%s\n' "$SERVICE_PASSWORD_POSTGRES" >> .env
+          printf 'POSTGRES_USER=%s\n' "$SERVICE_USER_POSTGRES" >> .env
+          printf 'SECRET_KEY=%s\n' "$SERVICE_PASSWORD_64_SECRETKEY" >> .env
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
