@@ -1,9 +1,18 @@
+import uuid
 from typing import Any
 
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import User, UserCreate, UserUpdate
+from app.models import (
+    Organization,
+    OrgMember,
+    OrgRole,
+    Repository,
+    User,
+    UserCreate,
+    UserUpdate,
+)
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -57,3 +66,111 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
         session.commit()
         session.refresh(db_user)
     return db_user
+
+
+# ─── Organizations / installations ────────────────────────────────────────────
+
+
+def upsert_organization(
+    *,
+    session: Session,
+    github_org_id: int | None,
+    name: str,
+    installation_id: int | None,
+) -> Organization:
+    """Find an org by github_org_id (then installation_id), else create it.
+
+    Keyed on unique columns so it is safe under webhook replay / Celery retry.
+    """
+    org: Organization | None = None
+    if github_org_id is not None:
+        org = session.exec(
+            select(Organization).where(Organization.github_org_id == github_org_id)
+        ).first()
+    if org is None and installation_id is not None:
+        org = session.exec(
+            select(Organization).where(
+                Organization.installation_id == installation_id
+            )
+        ).first()
+
+    if org is None:
+        org = Organization(
+            github_org_id=github_org_id,
+            name=name,
+            installation_id=installation_id,
+        )
+        session.add(org)
+    else:
+        org.name = name
+        if github_org_id is not None:
+            org.github_org_id = github_org_id
+        if installation_id is not None:
+            org.installation_id = installation_id
+        session.add(org)
+    session.commit()
+    session.refresh(org)
+    return org
+
+
+def add_org_owner(
+    *, session: Session, org_id: uuid.UUID, user_id: uuid.UUID
+) -> OrgMember:
+    """Idempotently link a user as an owner of an organization."""
+    member = session.get(OrgMember, (org_id, user_id))
+    if member is None:
+        member = OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.owner)
+        session.add(member)
+        session.commit()
+        session.refresh(member)
+    return member
+
+
+def upsert_repository(
+    *,
+    session: Session,
+    org_id: uuid.UUID,
+    github_repo_id: int,
+    full_name: str,
+    installation_id: int,
+    default_branch: str,
+) -> Repository:
+    """Upsert a repository by its unique github_repo_id; (re)enables it."""
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if repo is None:
+        repo = Repository(
+            org_id=org_id,
+            github_repo_id=github_repo_id,
+            full_name=full_name,
+            installation_id=installation_id,
+            default_branch=default_branch,
+            enabled=True,
+        )
+    else:
+        repo.org_id = org_id
+        repo.full_name = full_name
+        repo.installation_id = installation_id
+        repo.default_branch = default_branch
+        repo.enabled = True
+    session.add(repo)
+    session.commit()
+    session.refresh(repo)
+    return repo
+
+
+def disable_repositories_by_github_ids(
+    *, session: Session, github_repo_ids: list[int]
+) -> int:
+    """Flip enabled=False for the given GitHub repo ids; returns count changed."""
+    if not github_repo_ids:
+        return 0
+    repos = session.exec(
+        select(Repository).where(Repository.github_repo_id.in_(github_repo_ids))  # type: ignore[attr-defined]
+    ).all()
+    for repo in repos:
+        repo.enabled = False
+        session.add(repo)
+    session.commit()
+    return len(repos)

@@ -20,6 +20,21 @@ class WorkflowFileContent:
     sha: str
 
 
+@dataclass
+class InstallationRepo:
+    github_repo_id: int
+    full_name: str
+    default_branch: str
+
+
+@dataclass
+class UserInstallation:
+    installation_id: int
+    account_id: int
+    account_login: str
+    account_type: str  # "User" | "Organization"
+
+
 class GitHubAppClient:
     """GitHub App client with JWT auth and cached installation tokens."""
 
@@ -134,6 +149,85 @@ class GitHubAppClient:
                 return raw.decode("utf-8", errors="replace")
             return str(data.get("content", ""))
 
+    async def list_installation_repositories(
+        self, installation_id: int
+    ) -> list[InstallationRepo]:
+        """List all repositories an installation can access (installation token)."""
+        token = await self.get_installation_token(installation_id)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        per_page = 100
+        repos: list[InstallationRepo] = []
+        async with httpx.AsyncClient() as client:
+            page = 1
+            while True:
+                response = await client.get(
+                    f"{self._GITHUB_API}/installation/repositories",
+                    headers=headers,
+                    params={"per_page": per_page, "page": page},
+                )
+                response.raise_for_status()
+                data = response.json()
+                entries: list[dict[str, Any]] = data.get("repositories", [])
+                for entry in entries:
+                    repos.append(
+                        InstallationRepo(
+                            github_repo_id=entry["id"],
+                            full_name=entry["full_name"],
+                            default_branch=entry.get("default_branch") or "main",
+                        )
+                    )
+                total_count = data.get("total_count", len(repos))
+                if len(entries) < per_page or len(repos) >= total_count:
+                    break
+                page += 1
+        return repos
+
+    async def list_user_installations(
+        self, user_access_token: str
+    ) -> list[UserInstallation]:
+        """List installations the authenticated user controls (user token).
+
+        This is the authoritative, user-scoped list — the basis for both
+        verifying ownership and discovering all of a user's installations.
+        """
+        headers = {
+            "Authorization": f"Bearer {user_access_token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        per_page = 100
+        installations: list[UserInstallation] = []
+        async with httpx.AsyncClient() as client:
+            page = 1
+            while True:
+                response = await client.get(
+                    f"{self._GITHUB_API}/user/installations",
+                    headers=headers,
+                    params={"per_page": per_page, "page": page},
+                )
+                response.raise_for_status()
+                data = response.json()
+                entries: list[dict[str, Any]] = data.get("installations", [])
+                for entry in entries:
+                    account: dict[str, Any] = entry.get("account") or {}
+                    installations.append(
+                        UserInstallation(
+                            installation_id=entry["id"],
+                            account_id=account.get("id"),
+                            account_login=account.get("login", ""),
+                            account_type=account.get("type", "User"),
+                        )
+                    )
+                total_count = data.get("total_count", len(installations))
+                if len(entries) < per_page or len(installations) >= total_count:
+                    break
+                page += 1
+        return installations
+
     async def get_app_installation(self, installation_id: int) -> dict[str, Any]:
         jwt_token = self._build_jwt()
         url = f"{self._GITHUB_API}/app/installations/{installation_id}"
@@ -161,16 +255,22 @@ class GitHubAppClient:
             response.raise_for_status()
             return dict(response.json())
 
-    async def exchange_oauth_code(self, code: str) -> str:
+    async def exchange_oauth_code(
+        self, code: str, redirect_uri: str | None = None
+    ) -> str:
+        body: dict[str, Any] = {
+            "client_id": settings.GITHUB_CLIENT_ID,
+            "client_secret": settings.GITHUB_CLIENT_SECRET,
+            "code": code,
+        }
+        # The install user-auth flow has no per-request redirect_uri; omit it so
+        # GitHub does not reject the exchange on a redirect_uri mismatch.
+        if redirect_uri is not None:
+            body["redirect_uri"] = redirect_uri
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://github.com/login/oauth/access_token",
-                json={
-                    "client_id": settings.GITHUB_CLIENT_ID,
-                    "client_secret": settings.GITHUB_CLIENT_SECRET,
-                    "code": code,
-                    "redirect_uri": settings.GITHUB_OAUTH_REDIRECT_URI,
-                },
+                json=body,
                 headers={"Accept": "application/json"},
             )
             response.raise_for_status()

@@ -40,7 +40,9 @@ async def github_callback(
         raise HTTPException(status_code=503, detail="GitHub OAuth not configured")
 
     try:
-        access_token = await github_client.exchange_oauth_code(code)
+        access_token = await github_client.exchange_oauth_code(
+            code, redirect_uri=settings.GITHUB_OAUTH_REDIRECT_URI
+        )
         gh_user = await github_client.get_oauth_user(access_token)
     except Exception as exc:
         raise HTTPException(
