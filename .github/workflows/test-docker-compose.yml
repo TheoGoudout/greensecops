@@ -22,7 +22,13 @@ jobs:
         with:
           persist-credentials: false
       - name: Prepare env files
-        run: cp .env.example .env && cp frontend/.env.example frontend/.env
+        run: |
+          cp .env.example .env
+          cp frontend/.env.example frontend/.env
+          # Supply required secrets that compose.yml enforces with ?Variable not set.
+          printf '\nPOSTGRES_PASSWORD=testpassword\n' >> .env
+          printf 'SECRET_KEY=changethischangethischangethischangethischangethischangethischanget\n' >> .env
+          printf 'FIRST_SUPERUSER_PASSWORD=testpassword\n' >> .env
       - run: docker compose build
       - run: docker compose down -v --remove-orphans
       - run: docker compose up -d --wait backend frontend adminer
