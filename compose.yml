@@ -4,7 +4,7 @@ services:
     image: postgres:18
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES} -d ${POSTGRES_DB:-greensecops}"]
       interval: 10s
       retries: 5
       start_period: 30s
@@ -12,12 +12,13 @@ services:
     volumes:
       - app-db-data:/var/lib/postgresql/data/pgdata
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - PGDATA=/var/lib/postgresql/data/pgdata
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
-      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
-      - POSTGRES_DB=${POSTGRES_DB?Variable not set}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
 
   adminer:
     image: adminer
@@ -33,17 +34,17 @@ services:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
       - traefik.constraint-label=traefik-public
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-http.rule=Host(`adminer.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-http.entrypoints=http
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-http.middlewares=https-redirect
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-https.rule=Host(`adminer.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-https.entrypoints=https
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-https.tls=true
-      - traefik.http.routers.${STACK_NAME?Variable not set}-adminer-https.tls.certresolver=le
-      - traefik.http.services.${STACK_NAME?Variable not set}-adminer.loadbalancer.server.port=8080
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-http.rule=Host(`${SERVICE_FQDN_ADMINER}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-http.entrypoints=http
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-http.middlewares=https-redirect
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-https.rule=Host(`${SERVICE_FQDN_ADMINER}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-https.entrypoints=https
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-https.tls=true
+      - traefik.http.routers.${STACK_NAME:-greensecops}-adminer-https.tls.certresolver=le
+      - traefik.http.services.${STACK_NAME:-greensecops}-adminer.loadbalancer.server.port=8080
 
   prestart:
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_BACKEND:-greensecops-backend}:${TAG:-latest}'
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -56,24 +57,25 @@ services:
         restart: true
     command: bash scripts/prestart.sh
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DOMAIN=${DOMAIN}
-      - FRONTEND_HOST=${FRONTEND_HOST?Variable not set}
-      - ENVIRONMENT=${ENVIRONMENT}
-      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
-      - SECRET_KEY=${SECRET_KEY?Variable not set}
-      - FIRST_SUPERUSER=${FIRST_SUPERUSER?Variable not set}
-      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD?Variable not set}
+      - FRONTEND_HOST=${FRONTEND_HOST:-https://${SERVICE_FQDN_FRONTEND}}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-https://${SERVICE_FQDN_FRONTEND}}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER:-admin@example.com}
+      - FIRST_SUPERUSER_PASSWORD=${SERVICE_PASSWORD_FIRSTSUPERUSER}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@example.com}
       - POSTGRES_SERVER=db
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - SENTRY_DSN=${SENTRY_DSN}
       - REDIS_URL=redis://redis:6379/0
       - GITHUB_APP_ID=${GITHUB_APP_ID}
@@ -81,19 +83,19 @@ services:
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER}
-      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
       - OPA_URL=http://opa:8181
 
   backend:
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_BACKEND:-greensecops-backend}:${TAG:-latest}'
     restart: always
     networks:
       - traefik-public
@@ -108,24 +110,25 @@ services:
       prestart:
         condition: service_completed_successfully
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DOMAIN=${DOMAIN}
-      - FRONTEND_HOST=${FRONTEND_HOST?Variable not set}
-      - ENVIRONMENT=${ENVIRONMENT}
-      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
-      - SECRET_KEY=${SECRET_KEY?Variable not set}
-      - FIRST_SUPERUSER=${FIRST_SUPERUSER?Variable not set}
-      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD?Variable not set}
+      - FRONTEND_HOST=${FRONTEND_HOST:-https://${SERVICE_FQDN_FRONTEND}}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-https://${SERVICE_FQDN_FRONTEND}}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER:-admin@example.com}
+      - FIRST_SUPERUSER_PASSWORD=${SERVICE_PASSWORD_FIRSTSUPERUSER}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@example.com}
       - POSTGRES_SERVER=db
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - SENTRY_DSN=${SENTRY_DSN}
       - REDIS_URL=redis://redis:6379/0
       - GITHUB_APP_ID=${GITHUB_APP_ID}
@@ -133,23 +136,21 @@ services:
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER}
-      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
       - OPA_URL=http://opa:8181
-
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
       interval: 10s
       timeout: 5s
       retries: 5
-
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -157,19 +158,14 @@ services:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
       - traefik.constraint-label=traefik-public
-
-      - traefik.http.services.${STACK_NAME?Variable not set}-backend.loadbalancer.server.port=8000
-
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.rule=Host(`api.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.entrypoints=http
-
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.rule=Host(`api.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.entrypoints=https
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.tls=true
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.tls.certresolver=le
-
-      # Enable redirection for HTTP and HTTPS
-      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.middlewares=https-redirect
+      - traefik.http.services.${STACK_NAME:-greensecops}-backend.loadbalancer.server.port=8000
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-http.rule=Host(`${SERVICE_FQDN_BACKEND}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-http.entrypoints=http
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-https.rule=Host(`${SERVICE_FQDN_BACKEND}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-https.entrypoints=https
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-https.tls=true
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-https.tls.certresolver=le
+      - traefik.http.routers.${STACK_NAME:-greensecops}-backend-http.middlewares=https-redirect
 
   redis:
     image: redis:8-alpine
@@ -183,7 +179,7 @@ services:
       - app-redis-data:/data
 
   celery-worker:
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_BACKEND:-greensecops-backend}:${TAG:-latest}'
     restart: always
     build:
       context: .
@@ -202,33 +198,34 @@ services:
         condition: service_completed_successfully
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q default,analysis,fixes
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DOMAIN=${DOMAIN}
-      - ENVIRONMENT=${ENVIRONMENT}
-      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
       - POSTGRES_SERVER=db
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - REDIS_URL=redis://redis:6379/0
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
-      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER}
-      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
       - OPA_URL=http://opa:8181
       - SENTRY_DSN=${SENTRY_DSN}
 
   celery-beat:
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_BACKEND:-greensecops-backend}:${TAG:-latest}'
     restart: always
     build:
       context: .
@@ -243,16 +240,17 @@ services:
         condition: service_completed_successfully
     command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DOMAIN=${DOMAIN}
-      - ENVIRONMENT=${ENVIRONMENT}
-      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
       - POSTGRES_SERVER=db
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - REDIS_URL=redis://redis:6379/0
 
   flower:
@@ -270,14 +268,14 @@ services:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
       - traefik.constraint-label=traefik-public
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-http.rule=Host(`flower.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-http.entrypoints=http
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-http.middlewares=https-redirect
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-https.rule=Host(`flower.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-https.entrypoints=https
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-https.tls=true
-      - traefik.http.routers.${STACK_NAME?Variable not set}-flower-https.tls.certresolver=le
-      - traefik.http.services.${STACK_NAME?Variable not set}-flower.loadbalancer.server.port=5555
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-http.rule=Host(`${SERVICE_FQDN_FLOWER}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-http.entrypoints=http
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-http.middlewares=https-redirect
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-https.rule=Host(`${SERVICE_FQDN_FLOWER}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-https.entrypoints=https
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-https.tls=true
+      - traefik.http.routers.${STACK_NAME:-greensecops}-flower-https.tls.certresolver=le
+      - traefik.http.services.${STACK_NAME:-greensecops}-flower.loadbalancer.server.port=5555
 
   opa:
     image: openpolicyagent/opa:latest-static
@@ -292,7 +290,7 @@ services:
       - ./backend/app/rules:/policies:ro
 
   frontend:
-    image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_FRONTEND:-greensecops-frontend}:${TAG:-latest}'
     restart: always
     networks:
       - traefik-public
@@ -301,30 +299,25 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        - VITE_API_URL=https://api.${DOMAIN?Variable not set}
+        - VITE_API_URL=https://${SERVICE_FQDN_BACKEND}
         - NODE_ENV=production
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
       - traefik.constraint-label=traefik-public
+      - traefik.http.services.${STACK_NAME:-greensecops}-frontend.loadbalancer.server.port=80
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-http.rule=Host(`${SERVICE_FQDN_FRONTEND}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-http.entrypoints=http
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-https.rule=Host(`${SERVICE_FQDN_FRONTEND}`)
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-https.entrypoints=https
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-https.tls=true
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-https.tls.certresolver=le
+      - traefik.http.routers.${STACK_NAME:-greensecops}-frontend-http.middlewares=https-redirect
 
-      - traefik.http.services.${STACK_NAME?Variable not set}-frontend.loadbalancer.server.port=80
-
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.rule=Host(`dashboard.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.entrypoints=http
-
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.rule=Host(`dashboard.${DOMAIN?Variable not set}`)
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.entrypoints=https
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls=true
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls.certresolver=le
-
-      # Enable redirection for HTTP and HTTPS
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.middlewares=https-redirect
 volumes:
   app-db-data:
   app-redis-data:
 
 networks:
   traefik-public:
-    # Allow setting it to false for testing
     external: true
