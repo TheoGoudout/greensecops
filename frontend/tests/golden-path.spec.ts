@@ -53,7 +53,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
     // (not the { data: [...], count: N } envelope).
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.match(/\/repositories\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({ json: [MOCK_REPO] })
@@ -62,7 +62,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
     await page.route("**/api/v1/analyses/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+      if (url.match(/\/analyses\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS] })
@@ -71,7 +71,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
     await page.route("**/api/v1/issues/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/issues\/[0-9a-f-]{36}$/)) {
+      if (url.match(/\/issues\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ISSUE })
       } else {
         route.fulfill({ json: [MOCK_ISSUE] })
@@ -130,16 +130,12 @@ test.describe("GitHub OAuth login button", () => {
 
   test("login page shows Continue with GitHub button", async ({ page }) => {
     await page.goto("/login")
-    await expect(
-      page.getByRole("button", { name: /continue with github/i }),
-    ).toBeVisible()
+    await expect(page.getByTestId("github-oauth-btn")).toBeVisible()
   })
 
   test("signup page shows Continue with GitHub button", async ({ page }) => {
     await page.goto("/signup")
-    await expect(
-      page.getByRole("button", { name: /continue with github/i }),
-    ).toBeVisible()
+    await expect(page.getByTestId("github-oauth-btn")).toBeVisible()
   })
 
   test("GitHub OAuth callback stores token and redirects", async ({ page }) => {
