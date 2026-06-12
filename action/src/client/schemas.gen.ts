@@ -218,6 +218,12 @@ export const Body_login_login_access_tokenSchema = {
     title: 'Body_login-login_access_token'
 } as const;
 
+export const FixDeliveryModeSchema = {
+    type: 'string',
+    enum: ['pr', 'comment', 'disabled'],
+    title: 'FixDeliveryMode'
+} as const;
+
 export const FixPublicSchema = {
     properties: {
         id: {
@@ -321,6 +327,18 @@ export const HTTPValidationErrorSchema = {
     },
     type: 'object',
     title: 'HTTPValidationError'
+} as const;
+
+export const InstallationSyncRequestSchema = {
+    properties: {
+        code: {
+            type: 'string',
+            title: 'Code'
+        }
+    },
+    type: 'object',
+    required: ['code'],
+    title: 'InstallationSyncRequest'
 } as const;
 
 export const IssueCategorySchema = {
@@ -451,6 +469,44 @@ export const NewPasswordSchema = {
     type: 'object',
     required: ['token', 'new_password'],
     title: 'NewPassword'
+} as const;
+
+export const OrganizationPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        tier: {
+            '$ref': '#/components/schemas/UserTier'
+        },
+        default_llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        fix_delivery_mode: {
+            '$ref': '#/components/schemas/FixDeliveryMode'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'name', 'tier', 'default_llm_provider', 'fix_delivery_mode'],
+    title: 'OrganizationPublic'
 } as const;
 
 export const PrivateUserCreateSchema = {

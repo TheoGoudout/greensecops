@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -315,6 +315,34 @@ export class FixesService {
             path: {
                 fix_id: data.fixId
             },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class InstallationsService {
+    /**
+     * Sync Installations
+     * Verify, discover, and link every installation the user controls.
+     *
+     * Exchanges the OAuth ``code`` (issued during app installation when user
+     * authorization is enabled) for a user access token, then asks GitHub for the
+     * authoritative list of installations this user controls. Each is linked to the
+     * current user as an org owner and queued for repository sync. Idempotent —
+     * re-running doubles as a "refresh my installations" action.
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns OrganizationPublic Successful Response
+     * @throws ApiError
+     */
+    public static syncInstallations(data: InstallationsSyncInstallationsData): CancelablePromise<InstallationsSyncInstallationsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/installations/sync',
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }

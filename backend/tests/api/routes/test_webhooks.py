@@ -506,3 +506,131 @@ def test_github_webhook_installation_suspend_disables_repos(
     assert response.status_code == 200
     db.refresh(repo)
     assert repo.enabled is False
+
+
+def test_github_webhook_installation_created_upserts_org_and_enqueues(
+    client: TestClient,
+    db: Session,
+) -> None:
+    from sqlmodel import select
+
+    installation_id = int(uuid.uuid4().int % 10**6) + 700000
+    account_id = int(uuid.uuid4().int % 10**9)
+    login = f"created-acct-{uuid.uuid4().hex[:6]}"
+    payload = {
+        "action": "created",
+        "installation": {
+            "id": installation_id,
+            "account": {"id": account_id, "login": login, "type": "Organization"},
+        },
+    }
+
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_installation_sync") as enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "installation"},
+        )
+
+    assert response.status_code == 200
+    org = db.exec(
+        select(Organization).where(Organization.installation_id == installation_id)
+    ).first()
+    assert org is not None
+    assert org.github_org_id == account_id
+    assert org.name == login
+    enqueue.assert_called_once_with(installation_id, str(org.id))
+
+
+def test_github_webhook_installation_created_missing_account_skipped(
+    client: TestClient,
+) -> None:
+    payload = {"action": "created", "installation": {"id": 424242}}
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_installation_sync") as enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "installation"},
+        )
+    assert response.status_code == 200
+    enqueue.assert_not_called()
+
+
+# ─── Installation repositories event ──────────────────────────────────────────
+
+
+def test_github_webhook_installation_repositories_added_enqueues(
+    client: TestClient,
+    db: Session,
+) -> None:
+    from sqlmodel import select
+
+    installation_id = int(uuid.uuid4().int % 10**6) + 750000
+    account_id = int(uuid.uuid4().int % 10**9)
+    login = f"added-acct-{uuid.uuid4().hex[:6]}"
+    payload = {
+        "action": "added",
+        "installation": {
+            "id": installation_id,
+            "account": {"id": account_id, "login": login, "type": "User"},
+        },
+        "repositories_added": [{"id": 1, "full_name": "o/r"}],
+    }
+
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_installation_sync") as enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "installation_repositories"},
+        )
+
+    assert response.status_code == 200
+    org = db.exec(
+        select(Organization).where(Organization.installation_id == installation_id)
+    ).first()
+    assert org is not None
+    enqueue.assert_called_once_with(installation_id, str(org.id))
+
+
+def test_github_webhook_installation_repositories_removed_disables(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    installation_id = int(uuid.uuid4().int % 10**6) + 760000
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/removed-{uuid.uuid4().hex[:6]}",
+        installation_id=installation_id,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    payload = {
+        "action": "removed",
+        "installation": {"id": installation_id},
+        "repositories_removed": [{"id": repo.github_repo_id, "full_name": "x/y"}],
+    }
+
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "installation_repositories"},
+        )
+
+    assert response.status_code == 200
+    db.refresh(repo)
+    assert repo.enabled is False

@@ -159,6 +159,7 @@ class UsersPublic(SQLModel):
 class Organization(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     github_org_id: int | None = Field(default=None, unique=True, index=True)
+    installation_id: int | None = Field(default=None, unique=True, index=True)
     name: str = Field(max_length=255, index=True)
     tier: UserTier = Field(default=UserTier.free)
     default_llm_provider: LLMProvider = Field(default=LLMProvider.openai)

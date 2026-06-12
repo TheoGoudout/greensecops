@@ -4,10 +4,17 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import Organization, Repository, UserTier
+from app.models import (
+    Organization,
+    OrgMember,
+    OrgRole,
+    Repository,
+    User,
+    UserTier,
+)
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -239,3 +246,81 @@ def test_toggle_repository_not_found(
     # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Repository not found"
+
+
+# ─── Org-scoped access for non-superusers ────────────────────────────────────
+
+
+def _make_org_with_repo(db: Session, suffix: str) -> tuple[Organization, Repository]:
+    organization = Organization(name=f"scope-{suffix}-{uuid.uuid4().hex[:6]}")
+    db.add(organization)
+    db.commit()
+    db.refresh(organization)
+    repository = Repository(
+        org_id=organization.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/scope-{suffix}-{uuid.uuid4().hex[:6]}",
+        installation_id=int(uuid.uuid4().int % 10**6),
+        enabled=True,
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+    return organization, repository
+
+
+def test_list_repositories_scoped_to_user_orgs(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    user = db.exec(select(User).where(User.email == settings.EMAIL_TEST_USER)).first()
+    assert user is not None
+
+    my_org, my_repo = _make_org_with_repo(db, "mine")
+    _other_org, other_repo = _make_org_with_repo(db, "theirs")
+    db.add(OrgMember(org_id=my_org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/", headers=normal_user_token_headers
+    )
+
+    assert response.status_code == 200
+    ids = {r["id"] for r in response.json()}
+    assert str(my_repo.id) in ids
+    assert str(other_repo.id) not in ids
+
+
+def test_get_repository_cross_org_returns_404(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _other_org, other_repo = _make_org_with_repo(db, "getforbidden")
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{other_repo.id}",
+        headers=normal_user_token_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Repository not found"
+
+
+def test_toggle_repository_cross_org_returns_404(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    _other_org, other_repo = _make_org_with_repo(db, "toggleforbidden")
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{other_repo.id}/toggle",
+        params={"enabled": "false"},
+        headers=normal_user_token_headers,
+    )
+
+    assert response.status_code == 404
+    db.refresh(other_repo)
+    assert other_repo.enabled is True

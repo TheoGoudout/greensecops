@@ -11,6 +11,7 @@ celery_app = Celery(
         "app.workers.tasks.dynamic_analysis",
         "app.workers.tasks.fix_generation",
         "app.workers.tasks.fix_delivery",
+        "app.workers.tasks.installation_sync",
     ],
 )
 
@@ -28,5 +29,6 @@ celery_app.conf.update(
         "app.workers.tasks.dynamic_analysis.*": {"queue": "analysis"},
         "app.workers.tasks.fix_generation.*": {"queue": "fixes"},
         "app.workers.tasks.fix_delivery.*": {"queue": "fixes"},
+        "app.workers.tasks.installation_sync.*": {"queue": "analysis"},
     },
 )

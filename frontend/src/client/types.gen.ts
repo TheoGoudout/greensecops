@@ -37,6 +37,8 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
+export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
+
 export type FixPublic = {
     id: string;
     issue_id: string;
@@ -54,6 +56,10 @@ export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'del
 
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
+};
+
+export type InstallationSyncRequest = {
+    code: string;
 };
 
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
@@ -83,6 +89,15 @@ export type Message = {
 export type NewPassword = {
     token: string;
     new_password: string;
+};
+
+export type OrganizationPublic = {
+    id: string;
+    name: string;
+    tier: UserTier;
+    default_llm_provider: LLMProvider;
+    fix_delivery_mode: FixDeliveryMode;
+    created_at?: (string | null);
 };
 
 export type PrivateUserCreate = {
@@ -302,6 +317,12 @@ export type FixesTriggerFixDeliveryData = {
 export type FixesTriggerFixDeliveryResponse = ({
     [key: string]: (string);
 });
+
+export type InstallationsSyncInstallationsData = {
+    requestBody: InstallationSyncRequest;
+};
+
+export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>);
 
 export type IssuesListIssuesData = {
     analysisId?: (string | null);
