@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { GitBranch, ToggleLeft, ToggleRight } from "lucide-react"
+import { GitBranch } from "lucide-react"
 import type { RepositoryPublic } from "@/client"
 import { AnalysesService, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 
 export const Route = createFileRoute("/_layout/repositories")({
   component: Repositories,
@@ -39,21 +40,13 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   })
 
   return (
-    <div className="flex items-center justify-between py-4 gap-4">
-      <div className="flex items-center gap-3 min-w-0">
-        <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{repo.full_name}</p>
-          <p className="text-xs text-muted-foreground">
-            {repo.default_branch} ·{" "}
-            {repo.created_at
-              ? new Date(repo.created_at).toLocaleDateString()
-              : "—"}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 shrink-0">
+    <div className="grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-6 py-4 gap-4">
+      <span className="text-sm font-medium truncate">{repo.full_name}</span>
+      <span className="inline-flex items-center gap-1 text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded-md w-fit">
+        <GitBranch className="h-3 w-3" />
+        {repo.default_branch}
+      </span>
+      <div>
         {latest ? (
           <Link
             to="/analyses/$analysisId"
@@ -65,24 +58,16 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
         ) : (
           <GradeBadge grade={null} />
         )}
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => toggleMutation.mutate(!repo.enabled)}
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={repo.enabled}
+          onCheckedChange={(enabled) => toggleMutation.mutate(enabled)}
           disabled={toggleMutation.isPending}
-          aria-label={repo.enabled ? "Disable repository" : "Enable repository"}
-        >
-          {repo.enabled ? (
-            <ToggleRight className="h-5 w-5 text-primary" />
-          ) : (
-            <ToggleLeft className="h-5 w-5 text-muted-foreground" />
-          )}
-          <span className="text-xs">
-            {repo.enabled ? "Enabled" : "Disabled"}
-          </span>
-        </Button>
+        />
+        <span className="text-xs text-muted-foreground">
+          {repo.enabled ? "Enabled" : "Disabled"}
+        </span>
       </div>
     </div>
   )
@@ -100,11 +85,17 @@ function Repositories() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Repositories</h1>
-        <p className="text-muted-foreground">
-          Manage which repositories GreenSecOps analyses
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Repositories</h1>
+          <p className="text-muted-foreground">
+            Manage which repositories GreenSecOps analyses
+          </p>
+        </div>
+        <Button variant="outline" className="gap-2">
+          <GitBranch className="h-4 w-4" />
+          Install GitHub App
+        </Button>
       </div>
 
       <Card>
@@ -124,11 +115,19 @@ function Repositories() {
               No repositories found. Install the GitHub App to get started.
             </p>
           ) : (
-            <div className="divide-y px-6">
-              {repos.map((repo) => (
-                <RepoRow key={repo.id} repo={repo} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <span>Repository</span>
+                <span>Default branch</span>
+                <span>Latest grade</span>
+                <span>Analysis</span>
+              </div>
+              <div className="divide-y">
+                {repos.map((repo) => (
+                  <RepoRow key={repo.id} repo={repo} />
+                ))}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

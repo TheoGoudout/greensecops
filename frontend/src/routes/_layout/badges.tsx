@@ -27,45 +27,48 @@ function badgeMarkdown(repo: RepositoryPublic): string {
   return `![GreenSecOps](${url})`
 }
 
-function BadgeRow({ repo }: { repo: RepositoryPublic }) {
+function BadgeCard({ repo }: { repo: RepositoryPublic }) {
   const [copiedText, copy] = useCopyToClipboard()
   const markdown = badgeMarkdown(repo)
   const svgUrl = badgeSvgUrl(repo)
   const copied = copiedText === markdown
 
   return (
-    <div className="flex items-center justify-between gap-4 px-6 py-4">
-      <div className="flex items-center gap-4 min-w-0">
-        <img
-          src={svgUrl}
-          alt={`GreenSecOps badge for ${repo.full_name}`}
-          className="h-5 shrink-0"
-          onError={(e) => {
-            ;(e.target as HTMLImageElement).style.display = "none"
-          }}
-        />
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{repo.full_name}</p>
-          <code className="text-xs text-muted-foreground break-all">
-            {markdown}
-          </code>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold">
+          {repo.full_name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div>
+          <img
+            src={svgUrl}
+            alt={`GreenSecOps badge for ${repo.full_name}`}
+            className="h-5"
+            onError={(e) => {
+              ;(e.target as HTMLImageElement).style.display = "none"
+            }}
+          />
         </div>
-      </div>
-
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-1.5 shrink-0"
-        onClick={() => copy(markdown)}
-      >
-        {copied ? (
-          <Check className="h-3.5 w-3.5 text-green-600" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" />
-        )}
-        {copied ? "Copied" : "Copy"}
-      </Button>
-    </div>
+        <code className="text-xs text-muted-foreground bg-muted rounded px-2 py-1.5 break-all block">
+          {markdown}
+        </code>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 w-fit"
+          onClick={() => copy(markdown)}
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-primary" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+          {copied ? "Copied" : "Copy Markdown"}
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -88,37 +91,25 @@ function Badges() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-muted-foreground font-normal">
-            Copy the Markdown snippet and paste it into your{" "}
-            <code className="text-foreground font-mono text-xs">README.md</code>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex flex-col gap-2 p-6">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : isError ? (
-            <p className="text-sm text-destructive p-6">
-              Failed to load repositories.
-            </p>
-          ) : !repos?.length ? (
-            <p className="text-sm text-muted-foreground p-6 text-center">
-              No repositories found.
-            </p>
-          ) : (
-            <div className="divide-y">
-              {repos.map((repo) => (
-                <BadgeRow key={repo.id} repo={repo} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-40 w-full" />
+          ))}
+        </div>
+      ) : isError ? (
+        <p className="text-sm text-destructive">Failed to load repositories.</p>
+      ) : !repos?.length ? (
+        <p className="text-sm text-muted-foreground text-center">
+          No repositories found.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {repos.map((repo) => (
+            <BadgeCard key={repo.id} repo={repo} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

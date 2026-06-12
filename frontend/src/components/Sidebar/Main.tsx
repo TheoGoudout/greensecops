@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -33,6 +34,7 @@ export function Main({ items }: MainProps) {
 
   return (
     <SidebarGroup>
+      <SidebarGroupLabel>Platform</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {

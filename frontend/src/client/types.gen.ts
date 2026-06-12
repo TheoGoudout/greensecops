@@ -62,6 +62,7 @@ export type IssuePublic = {
     id: string;
     analysis_id: string;
     rule_id: string;
+    rule_slug: string;
     severity: IssueSeverity;
     category: IssueCategory;
     line_start?: (number | null);
@@ -256,6 +257,10 @@ export type BillingGetSubscriptionResponse = (BillingSubscriptionPublic);
 export type BillingGetTierLimitsResponse = ({
     [key: string]: unknown;
 });
+
+export type BillingStripeWebhookData = {
+    stripeSignature?: (string | null);
+};
 
 export type BillingStripeWebhookResponse = ({
     [key: string]: (string);

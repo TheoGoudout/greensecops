@@ -5,7 +5,6 @@ import type { IssueCategory, RulePublic } from "@/client"
 import { RulesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Select,
@@ -15,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 import useAuth from "@/hooks/useAuth"
 
 export const Route = createFileRoute("/_layout/rules")({
@@ -50,44 +50,30 @@ function RuleRow({
   })
 
   return (
-    <div className="flex items-start justify-between gap-4 px-6 py-4">
-      <div className="flex items-start gap-3 min-w-0">
-        <CategoryIcon category={rule.category} className="mt-0.5 shrink-0" />
+    <div className="flex items-center justify-between gap-4 px-6 py-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <CategoryIcon category={rule.category} className="shrink-0" />
         <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium">{rule.title}</p>
-            <SeverityChip severity={rule.severity} />
-          </div>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+            {rule.slug}
+          </span>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
             {rule.description}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-            {rule.slug}
-          </p>
         </div>
       </div>
-
-      {canToggle ? (
-        <Button
-          variant={rule.enabled ? "default" : "outline"}
-          size="sm"
-          className="shrink-0"
-          onClick={() => toggleMutation.mutate(!rule.enabled)}
-          disabled={toggleMutation.isPending}
-        >
-          {rule.enabled ? "Enabled" : "Disabled"}
-        </Button>
-      ) : (
-        <span
-          className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-            rule.enabled
-              ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-              : "bg-muted text-muted-foreground"
-          }`}
-        >
-          {rule.enabled ? "Enabled" : "Disabled"}
-        </span>
-      )}
+      <div className="flex items-center gap-3 shrink-0">
+        <SeverityChip severity={rule.severity} />
+        {canToggle ? (
+          <Switch
+            checked={rule.enabled}
+            onCheckedChange={(v) => toggleMutation.mutate(v)}
+            disabled={toggleMutation.isPending}
+          />
+        ) : (
+          <Switch checked={rule.enabled} onCheckedChange={() => {}} disabled />
+        )}
+      </div>
     </div>
   )
 }

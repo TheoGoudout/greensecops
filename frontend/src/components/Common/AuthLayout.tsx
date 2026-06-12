@@ -1,6 +1,5 @@
 import { Appearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
-import { Footer } from "./Footer"
 
 interface AuthLayoutProps {
   children: React.ReactNode
@@ -8,18 +7,18 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
-      <div className="bg-muted dark:bg-zinc-900 relative hidden lg:flex lg:items-center lg:justify-center">
-        <Logo variant="full" className="h-16" asLink={false} />
+    <div className="min-h-svh bg-background flex flex-col items-center justify-center p-4">
+      <div className="absolute top-4 right-4">
+        <Appearance />
       </div>
-      <div className="flex flex-col gap-4 p-6 md:p-10">
-        <div className="flex justify-end">
-          <Appearance />
+      <div className="bg-card border rounded-xl shadow-sm p-8 w-full max-w-sm">
+        <div className="flex flex-col items-center gap-2 mb-6">
+          <Logo variant="icon" asLink={false} className="size-12" />
+          <span className="text-lg font-semibold text-foreground">
+            GreenSecOps
+          </span>
         </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xs">{children}</div>
-        </div>
-        <Footer />
+        {children}
       </div>
     </div>
   )

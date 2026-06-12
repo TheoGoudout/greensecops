@@ -28,7 +28,7 @@ function UserInfo({ fullName, email }: UserInfoProps) {
   return (
     <div className="flex items-center gap-2.5 w-full min-w-0">
       <Avatar className="size-8">
-        <AvatarFallback className="bg-zinc-600 text-white">
+        <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
           {getInitials(fullName || "User")}
         </AvatarFallback>
       </Avatar>
@@ -50,9 +50,6 @@ export function User({ user }: { user: any }) {
     if (isMobile) {
       setOpenMobile(false)
     }
-  }
-  const handleLogout = async () => {
-    logout()
   }
 
   return (
@@ -85,9 +82,9 @@ export function User({ user }: { user: any }) {
                 User Settings
               </DropdownMenuItem>
             </RouterLink>
-            <DropdownMenuItem onClick={handleLogout}>
+            <DropdownMenuItem onClick={logout}>
               <LogOut />
-              Log Out
+              Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

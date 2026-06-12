@@ -118,6 +118,13 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str | None = None
     LANGCHAIN_PROJECT: str = "greensecops"
 
+    # Stripe
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+    STRIPE_PRICE_STARTER: str | None = None
+    STRIPE_PRICE_PRO: str | None = None
+    STRIPE_PRICE_ULTIMATE: str | None = None
+
     # OPA
     OPA_URL: str = "http://opa:8181"
 
