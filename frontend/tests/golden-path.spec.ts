@@ -51,7 +51,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   test.beforeEach(async ({ page }) => {
     // The generated API client returns arrays directly for list endpoints
     // (not the { data: [...], count: N } envelope).
-    await page.route("**/api/v1/repositories*", (route) => {
+    await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/repositories\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -60,7 +60,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route("**/api/v1/analyses*", (route) => {
+    await page.route("**/api/v1/analyses/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/analyses\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
@@ -69,7 +69,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route("**/api/v1/issues*", (route) => {
+    await page.route("**/api/v1/issues/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/issues\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ISSUE })
@@ -78,7 +78,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route("**/api/v1/fixes*", (route) => {
+    await page.route("**/api/v1/fixes/**", (route) => {
       route.fulfill({ json: [MOCK_FIX] })
     })
   })
