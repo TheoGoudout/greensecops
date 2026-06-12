@@ -12,6 +12,7 @@ export function GitHubOAuthButton() {
       variant="outline"
       className="w-full"
       onClick={handleClick}
+      data-testid="github-oauth-btn"
     >
       <FaGithub className="mr-2 h-4 w-4" />
       Continue with GitHub
