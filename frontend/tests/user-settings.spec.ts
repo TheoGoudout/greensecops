@@ -4,7 +4,7 @@ import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser, logOutUser } from "./utils/user"
 
-const tabs = ["My profile", "Password", "Danger zone"]
+const tabs = ["My profile", "Password", "Integrations", "Danger zone"]
 
 test("My profile tab is active by default", async ({ page }) => {
   await page.goto("/settings")
