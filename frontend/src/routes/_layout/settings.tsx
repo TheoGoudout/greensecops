@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import ChangePassword from "@/components/UserSettings/ChangePassword"
 import DeleteAccount from "@/components/UserSettings/DeleteAccount"
+import GitHubIntegration from "@/components/UserSettings/GitHubIntegration"
 import UserInformation from "@/components/UserSettings/UserInformation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import useAuth from "@/hooks/useAuth"
@@ -9,6 +10,7 @@ import useAuth from "@/hooks/useAuth"
 const tabsConfig = [
   { value: "my-profile", title: "My profile", component: UserInformation },
   { value: "password", title: "Password", component: ChangePassword },
+  { value: "github", title: "GitHub", component: GitHubIntegration },
   { value: "danger-zone", title: "Danger zone", component: DeleteAccount },
 ]
 

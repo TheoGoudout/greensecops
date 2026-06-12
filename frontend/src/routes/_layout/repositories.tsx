@@ -92,9 +92,15 @@ function Repositories() {
             Manage which repositories GreenSecOps analyses
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <GitBranch className="h-4 w-4" />
-          Install GitHub App
+        <Button variant="outline" className="gap-2" asChild>
+          <a
+            href={`https://github.com/apps/${import.meta.env.VITE_GITHUB_APP_NAME}/installations/new`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <GitBranch className="h-4 w-4" />
+            Install GitHub App
+          </a>
         </Button>
       </div>
 
