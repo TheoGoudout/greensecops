@@ -89,9 +89,7 @@ def upsert_organization(
         ).first()
     if org is None and installation_id is not None:
         org = session.exec(
-            select(Organization).where(
-                Organization.installation_id == installation_id
-            )
+            select(Organization).where(Organization.installation_id == installation_id)
         ).first()
 
     if org is None:

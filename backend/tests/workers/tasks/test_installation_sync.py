@@ -37,16 +37,12 @@ def test_sync_creates_repositories(db: Session, org: Organization) -> None:
         "app.workers.tasks.installation_sync._fetch_installation_repositories",
         return_value=fake_repos,
     ):
-        result = _sync_installation_repositories_impl(
-            org.installation_id, str(org.id)
-        )
+        result = _sync_installation_repositories_impl(org.installation_id, str(org.id))
 
     assert result["status"] == "done"
     assert result["synced"] == 2
 
-    repos = db.exec(
-        select(Repository).where(Repository.org_id == org.id)
-    ).all()
+    repos = db.exec(select(Repository).where(Repository.org_id == org.id)).all()
     by_id = {r.github_repo_id: r for r in repos}
     assert by_id[gh_id1].full_name == "owner/repo-a"
     assert by_id[gh_id1].default_branch == "main"
@@ -79,9 +75,7 @@ def test_sync_is_idempotent_and_reenables(db: Session, org: Organization) -> Non
         # Re-run — should not create duplicates.
         _sync_installation_repositories_impl(org.installation_id, str(org.id))
 
-    repos = db.exec(
-        select(Repository).where(Repository.github_repo_id == gh_id)
-    ).all()
+    repos = db.exec(select(Repository).where(Repository.github_repo_id == gh_id)).all()
     assert len(repos) == 1
     assert repos[0].full_name == "owner/new-name"
     assert repos[0].enabled is True

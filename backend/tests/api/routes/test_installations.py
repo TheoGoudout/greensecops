@@ -70,9 +70,7 @@ def test_sync_links_all_installations(
     assert org1.github_org_id == acc1
 
     # Owner membership for the caller on both orgs.
-    user = db.exec(
-        select(User).where(User.email == settings.EMAIL_TEST_USER)
-    ).first()
+    user = db.exec(select(User).where(User.email == settings.EMAIL_TEST_USER)).first()
     assert user is not None
     for org in (org1, org2):
         member = db.get(OrgMember, (org.id, user.id))

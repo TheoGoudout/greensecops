@@ -52,7 +52,5 @@ async def sync_installations(
         _enqueue_installation_sync(inst.installation_id, str(org.id))
         orgs.append(OrganizationPublic.model_validate(org, from_attributes=True))
 
-    logger.info(
-        "Linked %d installation(s) for user %s", len(orgs), current_user.id
-    )
+    logger.info("Linked %d installation(s) for user %s", len(orgs), current_user.id)
     return orgs

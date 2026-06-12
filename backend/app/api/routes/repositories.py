@@ -11,9 +11,7 @@ router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 def _user_org_ids(session: SessionDep, user: User) -> set[uuid.UUID]:
     return set(
-        session.exec(
-            select(OrgMember.org_id).where(OrgMember.user_id == user.id)
-        ).all()
+        session.exec(select(OrgMember.org_id).where(OrgMember.user_id == user.id)).all()
     )
 
 

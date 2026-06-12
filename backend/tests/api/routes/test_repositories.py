@@ -274,9 +274,7 @@ def test_list_repositories_scoped_to_user_orgs(
     normal_user_token_headers: dict[str, str],
     db: Session,
 ) -> None:
-    user = db.exec(
-        select(User).where(User.email == settings.EMAIL_TEST_USER)
-    ).first()
+    user = db.exec(select(User).where(User.email == settings.EMAIL_TEST_USER)).first()
     assert user is not None
 
     my_org, my_repo = _make_org_with_repo(db, "mine")
