@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
     GITHUB_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/github/callback"
+    # Dev only: public tunnel base URL (e.g. ngrok) for webhook delivery to localhost
+    GITHUB_WEBHOOK_URL: str | None = None
 
     # LLM
     DEFAULT_LLM_PROVIDER: str = "openai"
