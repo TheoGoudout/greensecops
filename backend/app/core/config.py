@@ -103,7 +103,10 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
-    GITHUB_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/github/callback"
+    # OAuth callback is handled by the frontend popup; GitHub redirects there and
+    # the frontend exchanges the code via the API. Must match the GitHub OAuth
+    # App callback URL and the frontend VITE_GITHUB_CLIENT_ID's redirect_uri.
+    GITHUB_OAUTH_REDIRECT_URI: str = "http://localhost:5173/auth/github/callback"
     # Dev only: public tunnel base URL (e.g. ngrok) for webhook delivery to localhost
     GITHUB_WEBHOOK_URL: str | None = None
 
