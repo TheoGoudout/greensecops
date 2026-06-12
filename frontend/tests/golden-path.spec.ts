@@ -180,4 +180,39 @@ test.describe("GitHub OAuth login button", () => {
     // redirects authenticated users to /dashboard.
     await expect(page).toHaveURL("/dashboard")
   })
+
+  test("GitHub OAuth popup error keeps the user on the login page", async ({
+    page,
+  }) => {
+    let exchangeCalled = false
+    await page.route("**/api/v1/auth/github/callback**", (route) => {
+      exchangeCalled = true
+      route.fulfill({ json: { access_token: "test-jwt-token" } })
+    })
+
+    // Simulate the user denying access: the popup lands on the callback with an
+    // `error` param instead of a code. The opener should surface an error and
+    // must NOT exchange anything or sign the user in.
+    await page.addInitScript(() => {
+      const realOpen = window.open.bind(window)
+      window.open = ((url: string, target?: string, features?: string) => {
+        const authorize = new URL(url)
+        const redirectUri =
+          authorize.searchParams.get("redirect_uri") ??
+          `${location.origin}/auth/github/callback`
+        const callbackUrl = `${redirectUri}?error=access_denied&error_description=The+user+denied+access`
+        return realOpen(callbackUrl, target, features)
+      }) as typeof window.open
+    })
+
+    await page.goto("/login")
+    await page.getByTestId("github-oauth-btn").click()
+
+    await expect(page.getByText("The user denied access")).toBeVisible()
+    await expect(page).toHaveURL("/login")
+    expect(exchangeCalled).toBe(false)
+    expect(
+      await page.evaluate(() => localStorage.getItem("access_token")),
+    ).toBeNull()
+  })
 })
