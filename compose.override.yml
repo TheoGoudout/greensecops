@@ -132,6 +132,7 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         - VITE_API_URL=http://localhost:8000
+        - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
         - NODE_ENV=development
 
   playwright:
