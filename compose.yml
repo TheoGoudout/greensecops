@@ -164,7 +164,7 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         - VITE_API_URL=https://${SERVICE_FQDN_BACKEND}
-        - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
+        - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
         - NODE_ENV=production
 
 volumes:

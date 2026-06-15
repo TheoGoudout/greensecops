@@ -70,71 +70,81 @@ function Login() {
 
   return (
     <AuthLayout>
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-col gap-4"
-        >
-          <FormField
-            control={form.control}
-            name="username"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input
-                    data-testid="email-input"
-                    placeholder="user@example.com"
-                    type="email"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage className="text-xs" />
-              </FormItem>
-            )}
-          />
+      <div className="flex flex-col gap-6">
+        <GitHubOAuthButton />
 
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
-                <FormControl>
-                  <PasswordInput
-                    data-testid="password-input"
-                    placeholder="Password"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage className="text-xs" />
-              </FormItem>
-            )}
-          />
+        <div className="relative flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
 
-          <LoadingButton
-            type="submit"
-            loading={loginMutation.isPending}
-            className="w-full"
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
           >
-            Log In
-          </LoadingButton>
-        </form>
-      </Form>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <RouterLink to="/signup" className="text-primary hover:underline">
-          Sign up
-        </RouterLink>
-        {" · "}
-        <RouterLink
-          to="/recover-password"
-          className="text-primary hover:underline"
-        >
-          Forgot your password?
-        </RouterLink>
-      </p>
-      <GitHubOAuthButton />
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      data-testid="email-input"
+                      placeholder="user@example.com"
+                      type="email"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <PasswordInput
+                      data-testid="password-input"
+                      placeholder="Password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )}
+            />
+
+            <RouterLink
+              to="/recover-password"
+              className="text-xs text-muted-foreground hover:text-foreground self-end -mt-2"
+            >
+              Forgot your password?
+            </RouterLink>
+
+            <LoadingButton
+              type="submit"
+              loading={loginMutation.isPending}
+              className="w-full"
+            >
+              Log In
+            </LoadingButton>
+          </form>
+        </Form>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <RouterLink to="/signup" className="text-primary hover:underline">
+            Sign up
+          </RouterLink>
+        </p>
+      </div>
     </AuthLayout>
   )
 }
