@@ -43,7 +43,11 @@ export function GitHubOAuthButton() {
           return
         }
       }
-      showErrorToast("GitHub sign in failed. Please try again.")
+      // Surface the provider's error_description (e.g. "The user denied access")
+      // when the error is a plain Error thrown from the OAuth callback URL.
+      showErrorToast(
+        error.message || "GitHub sign in failed. Please try again.",
+      )
     },
   })
 
