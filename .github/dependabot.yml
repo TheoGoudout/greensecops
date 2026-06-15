@@ -58,9 +58,6 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
-    ignore:
-      - dependency-name: "python"
-        versions: ["*a*", "*b*", "*rc*"]
     groups:
       docker:
         patterns:
