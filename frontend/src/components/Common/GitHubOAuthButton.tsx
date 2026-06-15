@@ -1,4 +1,4 @@
-import { useGitHubLogin } from "@react-oauth/github"
+import { OAuthError, OAuthErrorCode, useGitHubLogin } from "@react-oauth/github"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { FaGithub } from "react-icons/fa"
@@ -12,9 +12,9 @@ export function GitHubOAuthButton() {
   const { showErrorToast } = useCustomToast()
 
   const { initiateGitHubLogin, isLoading } = useGitHubLogin({
-    clientId: import.meta.env.VITE_GITHUB_CLIENT_ID,
-    // Must match the GitHub OAuth App callback URL and the backend's
-    // GITHUB_OAUTH_REDIRECT_URI (GitHub validates the redirect_uri on exchange).
+    clientId: import.meta.env.VITE_GITHUB_OAUTH_CLIENT_ID,
+    // Must match the GitHub OAuth App "Authorization callback URL".
+    // Set that URL in your GitHub OAuth App settings to this frontend route.
     redirectUri: `${window.location.origin}/auth/github/callback`,
     scope: "read:user user:email",
     onSuccess: async ({ code, state }) => {
@@ -28,9 +28,22 @@ export function GitHubOAuthButton() {
       }
     },
     onError: (error) => {
-      showErrorToast(
-        error.message || "GitHub sign in failed. Please try again.",
-      )
+      if (OAuthError.isOAuthError(error)) {
+        if (error.code === OAuthErrorCode.POPUP_CLOSED) return
+        if (error.code === OAuthErrorCode.POPUP_BLOCKED) {
+          showErrorToast(
+            "Popup blocked. Allow popups for this site and try again.",
+          )
+          return
+        }
+        if (error.code === OAuthErrorCode.STATE_MISMATCH) {
+          showErrorToast(
+            "Sign in failed: security check failed. Please try again.",
+          )
+          return
+        }
+      }
+      showErrorToast("GitHub sign in failed. Please try again.")
     },
   })
 
