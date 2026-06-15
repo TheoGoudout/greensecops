@@ -58,6 +58,11 @@ jobs:
       SERVICE_FQDN_FRONTEND: localhost:5173
       SERVICE_FQDN_ADMINER: localhost:8080
       SERVICE_FQDN_FLOWER: localhost:5555
+      # Plain vars required by compose.override.yml (override takes precedence
+      # over compose.yml Coolify vars, so these must be set explicitly in CI).
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: testpassword
+      SECRET_KEY: changethischangethischangethischangethischangethischangethischanget
     strategy:
       matrix:
         shardIndex: [1, 2, 3, 4]
