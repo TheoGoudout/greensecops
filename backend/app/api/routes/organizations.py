@@ -1,4 +1,7 @@
+import functools
+import json
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
@@ -16,36 +19,7 @@ from app.models import (
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
-_PROVIDER_CATALOG: list[dict] = [
-    {
-        "id": "openai",
-        "name": "OpenAI",
-        "default_model": "gpt-4o-mini",
-        "models": ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
-    },
-    {
-        "id": "anthropic",
-        "name": "Anthropic",
-        "default_model": "claude-haiku-4-5-20251001",
-        "models": [
-            "claude-haiku-4-5-20251001",
-            "claude-sonnet-4-6",
-            "claude-opus-4-7",
-        ],
-    },
-    {
-        "id": "gemini",
-        "name": "Google Gemini",
-        "default_model": "gemini-1.5-flash",
-        "models": ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"],
-    },
-    {
-        "id": "ollama",
-        "name": "Ollama (self-hosted)",
-        "default_model": "llama3.2",
-        "models": [],
-    },
-]
+_DEFAULT_CONFIG = Path(__file__).parent.parent.parent / "config" / "ai_providers.json"
 
 _KEY_ENV: dict[str, str | None] = {
     "openai": app_settings.OPENAI_API_KEY,
@@ -55,10 +29,16 @@ _KEY_ENV: dict[str, str | None] = {
 }
 
 
+@functools.lru_cache(maxsize=1)
+def _load_provider_catalog() -> list[dict]:
+    config_path = app_settings.AI_PROVIDERS_CONFIG
+    path = Path(config_path) if config_path else _DEFAULT_CONFIG
+    with path.open() as f:
+        return json.load(f)["providers"]
+
+
 def _is_available(provider_id: str) -> bool:
     val = _KEY_ENV.get(provider_id)
-    if provider_id == "ollama":
-        return bool(val)
     return bool(val)
 
 
@@ -66,17 +46,19 @@ def _is_available(provider_id: str) -> bool:
 def list_ai_providers(
     current_user: CurrentUser,  # noqa: ARG001
 ) -> AIProvidersPublic:
-    """Return all LLM providers with availability status and per-provider default model."""
+    """Return only available LLM providers with per-provider default model."""
+    catalog = _load_provider_catalog()
     return AIProvidersPublic(
         providers=[
             AIProviderInfo(
                 id=p["id"],
                 name=p["name"],
-                available=_is_available(p["id"]),
+                available=True,
                 default_model=p["default_model"],
                 models=p["models"],
             )
-            for p in _PROVIDER_CATALOG
+            for p in catalog
+            if _is_available(p["id"])
         ]
     )
 

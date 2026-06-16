@@ -569,7 +569,14 @@ export const NewPasswordSchema = {
 export const OrganizationAIUpdateSchema = {
     properties: {
         default_llm_provider: {
-            '$ref': '#/components/schemas/LLMProvider'
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/LLMProvider'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         default_llm_model: {
             anyOf: [
@@ -584,7 +591,6 @@ export const OrganizationAIUpdateSchema = {
         }
     },
     type: 'object',
-    required: ['default_llm_provider'],
     title: 'OrganizationAIUpdate'
 } as const;
 
@@ -603,7 +609,14 @@ export const OrganizationPublicSchema = {
             '$ref': '#/components/schemas/UserTier'
         },
         default_llm_provider: {
-            '$ref': '#/components/schemas/LLMProvider'
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/LLMProvider'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         default_llm_model: {
             anyOf: [
@@ -633,7 +646,7 @@ export const OrganizationPublicSchema = {
         }
     },
     type: 'object',
-    required: ['id', 'name', 'tier', 'default_llm_provider', 'fix_delivery_mode'],
+    required: ['id', 'name', 'tier', 'fix_delivery_mode'],
     title: 'OrganizationPublic'
 } as const;
 

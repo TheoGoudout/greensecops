@@ -24,8 +24,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 function OrgAICard({ org }: { org: OrganizationPublic }) {
   const queryClient = useQueryClient()
-  const [provider, setProvider] = useState<LLMProvider>(
-    org.default_llm_provider,
+  const [provider, setProvider] = useState<LLMProvider | null>(
+    org.default_llm_provider ?? null,
   )
   const [model, setModel] = useState<string>(org.default_llm_model ?? "")
 
@@ -58,8 +58,13 @@ function OrgAICard({ org }: { org: OrganizationPublic }) {
   const defaultModel = selectedProviderInfo?.default_model ?? ""
   const modelOptions = selectedProviderInfo?.models ?? []
 
-  const handleProviderChange = (val: LLMProvider) => {
-    setProvider(val)
+  const handleProviderChange = (val: string) => {
+    if (!val) {
+      setProvider(null)
+      setModel("")
+      return
+    }
+    setProvider(val as LLMProvider)
     const info = providersData?.providers.find((p) => p.id === val)
     setModel(info?.default_model ?? "")
   }
@@ -76,27 +81,33 @@ function OrgAICard({ org }: { org: OrganizationPublic }) {
       <CardContent className="flex flex-col gap-4">
         <div className="grid gap-2">
           <Label htmlFor={`provider-${org.id}`}>Provider</Label>
-          <Select
-            value={provider}
-            onValueChange={(v) => handleProviderChange(v as LLMProvider)}
-          >
+          <Select value={provider ?? ""} onValueChange={handleProviderChange}>
             <SelectTrigger id={`provider-${org.id}`}>
-              <SelectValue placeholder="Select provider" />
+              <SelectValue placeholder="First available provider" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="">First available provider</SelectItem>
               {providersData?.providers.map((p) => (
-                <SelectItem key={p.id} value={p.id} disabled={!p.available}>
+                <SelectItem key={p.id} value={p.id}>
                   {p.name}
-                  {!p.available && " (no API key configured)"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            Only providers with a configured API key are shown.
+          </p>
         </div>
 
         <div className="grid gap-2">
           <Label htmlFor={`model-${org.id}`}>Model</Label>
-          {modelOptions.length > 0 ? (
+          {provider === null ? (
+            <Input
+              id={`model-${org.id}`}
+              disabled
+              placeholder="Set a provider first"
+            />
+          ) : modelOptions.length > 0 ? (
             <Select value={model || defaultModel} onValueChange={setModel}>
               <SelectTrigger id={`model-${org.id}`}>
                 <SelectValue placeholder={`Default: ${defaultModel}`} />
@@ -118,9 +129,12 @@ function OrgAICard({ org }: { org: OrganizationPublic }) {
               placeholder={defaultModel || "e.g. llama3.2"}
             />
           )}
-          <p className="text-xs text-muted-foreground">
-            Leave blank to use the provider default ({defaultModel || "—"}).
-          </p>
+          {provider !== null && (
+            <p className="text-xs text-muted-foreground">
+              Leave blank to use the provider default
+              {defaultModel ? ` (${defaultModel})` : ""}.
+            </p>
+          )}
         </div>
 
         <Button

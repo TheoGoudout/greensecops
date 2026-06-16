@@ -542,7 +542,7 @@ export class LoginService {
 export class OrganizationsService {
     /**
      * List Ai Providers
-     * Return all LLM providers with availability status and per-provider default model.
+     * Return only available LLM providers with per-provider default model.
      * @returns AIProvidersPublic Successful Response
      * @throws ApiError
      */

@@ -109,7 +109,7 @@ export type NewPassword = {
 };
 
 export type OrganizationAIUpdate = {
-    default_llm_provider: LLMProvider;
+    default_llm_provider?: (LLMProvider | null);
     default_llm_model?: (string | null);
 };
 
@@ -117,7 +117,7 @@ export type OrganizationPublic = {
     id: string;
     name: string;
     tier: UserTier;
-    default_llm_provider: LLMProvider;
+    default_llm_provider?: (LLMProvider | null);
     default_llm_model?: (string | null);
     fix_delivery_mode: FixDeliveryMode;
     created_at?: (string | null);

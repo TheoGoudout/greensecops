@@ -162,7 +162,7 @@ class Organization(SQLModel, table=True):
     installation_id: int | None = Field(default=None, unique=True, index=True)
     name: str = Field(max_length=255, index=True)
     tier: UserTier = Field(default=UserTier.free)
-    default_llm_provider: LLMProvider = Field(default=LLMProvider.openai)
+    default_llm_provider: LLMProvider | None = Field(default=None)
     default_llm_model: str | None = Field(default=None, max_length=255)
     fix_delivery_mode: FixDeliveryMode = Field(default=FixDeliveryMode.pr)
     created_at: datetime | None = Field(
@@ -409,14 +409,14 @@ class OrganizationPublic(SQLModel):
     id: uuid.UUID
     name: str
     tier: UserTier
-    default_llm_provider: LLMProvider
+    default_llm_provider: LLMProvider | None = None
     default_llm_model: str | None = None
     fix_delivery_mode: FixDeliveryMode
     created_at: datetime | None = None
 
 
 class OrganizationAIUpdate(SQLModel):
-    default_llm_provider: LLMProvider
+    default_llm_provider: LLMProvider | None = None
     default_llm_model: str | None = None
 
 
