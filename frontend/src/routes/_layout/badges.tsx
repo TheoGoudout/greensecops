@@ -15,11 +15,11 @@ export const Route = createFileRoute("/_layout/badges")({
   }),
 })
 
-const API_BASE = "https://api.greensecops.io"
+const API_BASE = import.meta.env.VITE_API_URL
 
 function badgeSvgUrl(repo: RepositoryPublic): string {
   const [owner, name] = repo.full_name.split("/")
-  return `${API_BASE}/${owner}/${name}/${repo.default_branch}.svg`
+  return `${API_BASE}/api/v1/badges/${owner}/${name}/${repo.default_branch}.svg`
 }
 
 function badgeMarkdown(repo: RepositoryPublic): string {
