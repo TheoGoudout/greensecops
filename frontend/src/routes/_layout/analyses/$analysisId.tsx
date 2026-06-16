@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { AlertCircle, ArrowLeft } from "lucide-react"
+import { AlertCircle, ArrowLeft, ExternalLink } from "lucide-react"
 import type { IssueCategory, IssuePublic } from "@/client"
 import { AnalysesService, IssuesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { GenerateFixButton } from "@/components/GenerateFixButton"
 import { GradeBadge } from "@/components/GradeBadge"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -90,7 +91,7 @@ function AnalysisDetail() {
       ) : analysis ? (
         <Card>
           <CardContent className="pt-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Grade</p>
                 <GradeBadge
@@ -116,6 +117,14 @@ function AnalysisDetail() {
                 <p className="text-xs text-muted-foreground mb-1">Branch</p>
                 <p className="text-sm font-medium font-mono">
                   {analysis.branch ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Workflow file
+                </p>
+                <p className="text-xs font-mono text-muted-foreground truncate">
+                  {analysis.workflow_file_path ?? "—"}
                 </p>
               </div>
             </div>
@@ -151,29 +160,60 @@ function AnalysisDetail() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y">
-                    {grouped![cat].map((issue) => (
-                      <div
-                        key={issue.id}
-                        className="px-6 py-3 flex items-start gap-3"
-                      >
-                        <SeverityChip
-                          severity={issue.severity}
-                          className="mt-0.5 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-sm">{issue.message}</p>
-                          {issue.line_start !== null && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Line {issue.line_start}
-                              {issue.line_end &&
-                              issue.line_end !== issue.line_start
-                                ? `–${issue.line_end}`
-                                : ""}
-                            </p>
-                          )}
+                    {grouped![cat].map((issue) => {
+                      const githubUrl =
+                        analysis?.repo_full_name &&
+                        analysis?.workflow_file_path &&
+                        issue.line_start != null
+                          ? `https://github.com/${analysis.repo_full_name}/blob/${analysis?.branch ?? "main"}/${analysis.workflow_file_path}#L${issue.line_start}${issue.line_end && issue.line_end !== issue.line_start ? `-L${issue.line_end}` : ""}`
+                          : null
+
+                      return (
+                        <div
+                          key={issue.id}
+                          className="px-6 py-3 flex items-start gap-3"
+                        >
+                          <SeverityChip
+                            severity={issue.severity}
+                            className="mt-0.5 shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm">{issue.message}</p>
+                            {issue.line_start !== null && (
+                              <div className="mt-0.5">
+                                {githubUrl ? (
+                                  <a
+                                    href={githubUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    Line {issue.line_start}
+                                    {issue.line_end &&
+                                    issue.line_end !== issue.line_start
+                                      ? `–${issue.line_end}`
+                                      : ""}
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">
+                                    Line {issue.line_start}
+                                    {issue.line_end &&
+                                    issue.line_end !== issue.line_start
+                                      ? `–${issue.line_end}`
+                                      : ""}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <GenerateFixButton
+                            issueId={issue.id}
+                            fixStatus={issue.fix_status}
+                          />
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </CardContent>
               </Card>

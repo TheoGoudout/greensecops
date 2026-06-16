@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Wand2 } from "lucide-react"
 import { useState } from "react"
 import type { IssueCategory, IssueSeverity } from "@/client"
-import { FixesService, IssuesService } from "@/client"
+import { IssuesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { GenerateFixButton } from "@/components/GenerateFixButton"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -42,48 +42,27 @@ const SEVERITIES: Array<{ value: IssueSeverity | "all"; label: string }> = [
   { value: "info", label: "Info" },
 ]
 
-function GenerateFixButton({ issueId }: { issueId: string }) {
-  const queryClient = useQueryClient()
-  const mutation = useMutation({
-    mutationFn: () => FixesService.triggerFixGeneration({ issueId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["fixes"] })
-    },
-  })
-
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="gap-1.5 shrink-0"
-      onClick={() => mutation.mutate()}
-      disabled={mutation.isPending || mutation.isSuccess}
-    >
-      <Wand2 className="h-3.5 w-3.5" />
-      {mutation.isPending
-        ? "Generating…"
-        : mutation.isSuccess
-          ? "Queued"
-          : "Generate fix"}
-    </Button>
-  )
-}
+const PAGE_SIZE = 50
 
 function Issues() {
   const [category, setCategory] = useState<IssueCategory | "all">("all")
   const [severity, setSeverity] = useState<IssueSeverity | "all">("all")
+  const [unfixed, setUnfixed] = useState(false)
+  const [page, setPage] = useState(0)
 
   const {
     data: issues,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["issues", { category, severity }],
+    queryKey: ["issues", { category, severity, unfixed, page }],
     queryFn: () =>
       IssuesService.listIssues({
         category: category === "all" ? undefined : category,
         severity: severity === "all" ? undefined : severity,
-        limit: 200,
+        unfixed: unfixed || undefined,
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
       }),
   })
 
@@ -99,7 +78,10 @@ function Issues() {
       <div className="flex flex-wrap gap-3">
         <Select
           value={category}
-          onValueChange={(v) => setCategory(v as IssueCategory | "all")}
+          onValueChange={(v) => {
+            setCategory(v as IssueCategory | "all")
+            setPage(0)
+          }}
         >
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -115,7 +97,10 @@ function Issues() {
 
         <Select
           value={severity}
-          onValueChange={(v) => setSeverity(v as IssueSeverity | "all")}
+          onValueChange={(v) => {
+            setSeverity(v as IssueSeverity | "all")
+            setPage(0)
+          }}
         >
           <SelectTrigger className="w-44">
             <SelectValue />
@@ -128,6 +113,17 @@ function Issues() {
             ))}
           </SelectContent>
         </Select>
+
+        <Button
+          variant={unfixed ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            setUnfixed((v) => !v)
+            setPage(0)
+          }}
+        >
+          Open only
+        </Button>
       </div>
 
       <Card>
@@ -174,13 +170,36 @@ function Issues() {
                       </p>
                     )}
                   </div>
-                  <GenerateFixButton issueId={issue.id} />
+                  <GenerateFixButton
+                    issueId={issue.id}
+                    fixStatus={issue.fix_status}
+                  />
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPage((p) => p - 1)}
+          disabled={page === 0}
+        >
+          Previous
+        </Button>
+        <span className="text-xs text-muted-foreground">Page {page + 1}</span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPage((p) => p + 1)}
+          disabled={!issues || issues.length < PAGE_SIZE}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   )
 }
