@@ -8,14 +8,14 @@ import rego.v1
 _total_steps := sum([count(job.steps) | some _, job in input.jobs])
 
 violations contains violation if {
-    total := _total_steps
-    total > 20
-    violation := {
-        "rule": "workflow_too_complex",
-        "severity": "info",
-        "category": "maintainability",
-        "job": null,
-        "message": sprintf("Workflow has %v total steps across all jobs (threshold: 20). Consider splitting into smaller, focused workflows.", [total]),
-        "context": null,
-    }
+	total := _total_steps
+	total > 20
+	violation := {
+		"rule": "workflow_too_complex",
+		"severity": "info",
+		"category": "maintainability",
+		"job": null,
+		"message": sprintf("Workflow has %v total steps across all jobs (threshold: 20). Consider splitting into smaller, focused workflows.", [total]),
+		"context": null,
+	}
 }

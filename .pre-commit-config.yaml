@@ -84,6 +84,23 @@ repos:
         exclude: ^action/src/client/
         pass_filenames: false
 
+  # OPA: format and validate rego policies (via Docker)
+  - repo: local
+    hooks:
+      - id: opa-fmt
+        name: OPA policy format
+        entry: bash -c 'docker run --rm -v "$(pwd)/backend/app/rules:/policies" openpolicyagent/opa:latest-static fmt --write /policies'
+        language: system
+        files: ^backend/app/rules/.*\.rego$
+        pass_filenames: false
+
+      - id: opa-check
+        name: OPA policy check
+        entry: bash -c 'docker run --rm -v "$(pwd)/backend/app/rules:/policies:ro" openpolicyagent/opa:latest-static check /policies'
+        language: system
+        files: ^backend/app/rules/.*\.rego$
+        pass_filenames: false
+
   # Conventional commits enforcement
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
