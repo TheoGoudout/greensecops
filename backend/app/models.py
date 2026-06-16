@@ -427,6 +427,8 @@ class AnalysisPublic(SQLModel):
     id: uuid.UUID
     repo_id: uuid.UUID
     workflow_file_id: uuid.UUID
+    workflow_file_path: str | None = None
+    repo_full_name: str | None = None
     content_hash: str
     status: AnalysisStatus
     score: float | None = None
@@ -450,6 +452,8 @@ class IssuePublic(SQLModel):
     message: str
     context: str | None = None
     created_at: datetime | None = None
+    fix_id: uuid.UUID | None = None
+    fix_status: FixStatus | None = None
 
 
 class FixPublic(SQLModel):

@@ -17,6 +17,28 @@ export const AnalysisPublicSchema = {
             format: 'uuid',
             title: 'Workflow File Id'
         },
+        workflow_file_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Workflow File Path'
+        },
+        repo_full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Full Name'
+        },
         content_hash: {
             type: 'string',
             title: 'Content Hash'
@@ -422,6 +444,28 @@ export const IssuePublicSchema = {
                 }
             ],
             title: 'Created At'
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         }
     },
     type: 'object',

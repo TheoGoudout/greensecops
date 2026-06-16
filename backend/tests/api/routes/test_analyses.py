@@ -201,6 +201,26 @@ def test_get_analysis_found(
     assert body["status"] == "completed"
 
 
+def test_get_analysis_includes_workflow_path(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    completed_analysis: Analysis,
+    workflow_file: WorkflowFile,
+    repo: Repository,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/analyses/{completed_analysis.id}",
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflow_file_path"] == workflow_file.path
+    assert body["repo_full_name"] == repo.full_name
+
+
 def test_get_analysis_not_found(
     client: TestClient,
     superuser_token_headers: dict[str, str],

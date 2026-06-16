@@ -4,6 +4,8 @@ export type AnalysisPublic = {
     id: string;
     repo_id: string;
     workflow_file_id: string;
+    workflow_file_path?: (string | null);
+    repo_full_name?: (string | null);
     content_hash: string;
     status: AnalysisStatus;
     score?: (number | null);
@@ -76,6 +78,8 @@ export type IssuePublic = {
     message: string;
     context?: (string | null);
     created_at?: (string | null);
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
 };
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -282,8 +286,10 @@ export type BillingStripeWebhookResponse = ({
 });
 
 export type FixesListFixesData = {
+    analysisId?: (string | null);
     issueId?: (string | null);
     limit?: number;
+    repoId?: (string | null);
     skip?: number;
     status?: (FixStatus | null);
 };
@@ -301,6 +307,14 @@ export type FixesRejectFixData = {
 };
 
 export type FixesRejectFixResponse = (void);
+
+export type FixesTriggerFixGenerationForRepoData = {
+    repoId: string;
+};
+
+export type FixesTriggerFixGenerationForRepoResponse = ({
+    [key: string]: (number);
+});
 
 export type FixesTriggerFixGenerationData = {
     issueId: string;
@@ -330,8 +344,10 @@ export type IssuesListIssuesData = {
     analysisId?: (string | null);
     category?: (IssueCategory | null);
     limit?: number;
+    repoId?: (string | null);
     severity?: (IssueSeverity | null);
     skip?: number;
+    unfixed?: boolean;
 };
 
 export type IssuesListIssuesResponse = (Array<IssuePublic>);

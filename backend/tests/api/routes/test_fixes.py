@@ -233,6 +233,25 @@ def test_list_fixes_filter_by_status(
     assert any(f["id"] == str(ready_fix.id) for f in data)
 
 
+def test_list_fixes_filter_by_repo_id(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    ready_fix: Fix,
+    repo: Repository,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/fixes/",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert any(f["id"] == str(ready_fix.id) for f in data)
+
+
 # ─── GET /fixes/{id} ──────────────────────────────────────────────────────────
 
 
@@ -267,6 +286,53 @@ def test_get_fix_not_found(
     # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Fix not found"
+
+
+# ─── POST /fixes/generate-for-repo/{repo_id} ─────────────────────────────────
+
+
+def test_generate_fixes_for_repo_queues_tasks(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    # Act
+    with patch(
+        "app.workers.tasks.fix_generation.run_fix_generation.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert
+    assert response.status_code == 202
+    body = response.json()
+    assert body["queued"] >= 1
+    mock_delay.assert_called()
+
+
+def test_generate_fixes_for_repo_skips_already_fixed(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    ready_fix: Fix,
+    repo: Repository,
+) -> None:
+    # Arrange — ready_fix.issue already has an active fix
+    with patch(
+        "app.workers.tasks.fix_generation.run_fix_generation.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert — the already-fixed issue should not be re-queued
+    assert response.status_code == 202
+    # ready_fix issue excluded; only remaining unfixed issues (if any) are queued
+    for call_args in mock_delay.call_args_list:
+        assert call_args.kwargs.get("issue_id") != str(ready_fix.issue_id)
 
 
 # ─── POST /fixes/generate/{issue_id} ─────────────────────────────────────────
