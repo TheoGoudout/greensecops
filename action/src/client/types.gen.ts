@@ -38,6 +38,7 @@ export type BillingSubscriptionPublic = {
     tier: UserTier;
     analyses_used: number;
     fixes_used: number;
+    repos_used?: number;
     period_start?: (string | null);
     period_end?: (string | null);
 };

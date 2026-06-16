@@ -502,6 +502,7 @@ class BillingSubscriptionPublic(SQLModel):
     tier: UserTier
     analyses_used: int
     fixes_used: int
+    repos_used: int = 0
     period_start: datetime | None = None
     period_end: datetime | None = None
 

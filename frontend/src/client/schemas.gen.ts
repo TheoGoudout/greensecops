@@ -199,6 +199,11 @@ export const BillingSubscriptionPublicSchema = {
             type: 'integer',
             title: 'Fixes Used'
         },
+        repos_used: {
+            type: 'integer',
+            title: 'Repos Used',
+            default: 0
+        },
         period_start: {
             anyOf: [
                 {
