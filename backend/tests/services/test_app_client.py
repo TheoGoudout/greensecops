@@ -48,97 +48,93 @@ def app_client() -> GitHubAppClient:
 # ─── list_installation_repositories ──────────────────────────────────────────
 
 
+def _make_repo(repo_id: int, full_name: str, default_branch: str | None) -> MagicMock:
+    repo = MagicMock()
+    repo.id = repo_id
+    repo.full_name = full_name
+    repo.default_branch = default_branch
+    return repo
+
+
+def _mock_integration(repos: list[MagicMock]) -> MagicMock:
+    mock_installation = MagicMock()
+    mock_installation.get_repos.return_value = repos
+    mock_integration = MagicMock()
+    mock_integration.get_app_installation.return_value = mock_installation
+    return mock_integration
+
+
 def test_list_installation_repositories_paginates(
     app_client: GitHubAppClient,
 ) -> None:
-    page1 = FakeResponse(
-        {
-            "total_count": 150,
-            "repositories": [
-                {"id": i, "full_name": f"o/r{i}", "default_branch": "main"}
-                for i in range(100)
-            ],
-        }
-    )
-    page2 = FakeResponse(
-        {
-            "total_count": 150,
-            "repositories": [
-                {"id": i, "full_name": f"o/r{i}", "default_branch": "dev"}
-                for i in range(100, 150)
-            ],
-        }
-    )
-    factory, _ = _fake_async_client(get_responses=[page1, page2])
+    repos = [_make_repo(i, f"o/r{i}", "main") for i in range(100)] + [
+        _make_repo(i, f"o/r{i}", "dev") for i in range(100, 150)
+    ]
 
-    with (
-        patch.object(app_client, "get_installation_token", AsyncMock(return_value="t")),
-        patch("app.services.github.app_client.httpx.AsyncClient", factory),
+    with patch.object(
+        app_client, "_get_integration", return_value=_mock_integration(repos)
     ):
-        repos = asyncio.run(app_client.list_installation_repositories(123))
+        result = asyncio.run(app_client.list_installation_repositories(123))
 
-    assert len(repos) == 150
-    assert repos[0].github_repo_id == 0
-    assert repos[-1].full_name == "o/r149"
-    assert repos[-1].default_branch == "dev"
+    assert len(result) == 150
+    assert result[0].github_repo_id == 0
+    assert result[-1].full_name == "o/r149"
+    assert result[-1].default_branch == "dev"
 
 
 def test_list_installation_repositories_default_branch_fallback(
     app_client: GitHubAppClient,
 ) -> None:
-    resp = FakeResponse(
-        {
-            "total_count": 1,
-            "repositories": [{"id": 7, "full_name": "o/r", "default_branch": None}],
-        }
-    )
-    factory, _ = _fake_async_client(get_responses=[resp])
+    repos = [_make_repo(7, "o/r", None)]
 
-    with (
-        patch.object(app_client, "get_installation_token", AsyncMock(return_value="t")),
-        patch("app.services.github.app_client.httpx.AsyncClient", factory),
+    with patch.object(
+        app_client, "_get_integration", return_value=_mock_integration(repos)
     ):
-        repos = asyncio.run(app_client.list_installation_repositories(1))
+        result = asyncio.run(app_client.list_installation_repositories(1))
 
-    assert repos[0].default_branch == "main"
+    assert result[0].default_branch == "main"
 
 
 def test_list_installation_repositories_empty(
     app_client: GitHubAppClient,
 ) -> None:
-    resp = FakeResponse({"total_count": 0, "repositories": []})
-    factory, _ = _fake_async_client(get_responses=[resp])
-
-    with (
-        patch.object(app_client, "get_installation_token", AsyncMock(return_value="t")),
-        patch("app.services.github.app_client.httpx.AsyncClient", factory),
+    with patch.object(
+        app_client, "_get_integration", return_value=_mock_integration([])
     ):
-        repos = asyncio.run(app_client.list_installation_repositories(1))
+        result = asyncio.run(app_client.list_installation_repositories(1))
 
-    assert repos == []
+    assert result == []
 
 
 # ─── list_user_installations ─────────────────────────────────────────────────
 
 
+def _make_user_installation(
+    inst_id: int, account_id: int, login: str, acc_type: str
+) -> MagicMock:
+    account = MagicMock()
+    account.id = account_id
+    account.login = login
+    account.type = acc_type
+    inst = MagicMock()
+    inst.id = inst_id
+    inst.account = account
+    return inst
+
+
 def test_list_user_installations_maps_accounts(
     app_client: GitHubAppClient,
 ) -> None:
-    resp = FakeResponse(
-        {
-            "total_count": 2,
-            "installations": [
-                {"id": 100, "account": {"id": 1, "login": "alice", "type": "User"}},
-                {
-                    "id": 200,
-                    "account": {"id": 2, "login": "acme", "type": "Organization"},
-                },
-            ],
-        }
-    )
-    factory, _ = _fake_async_client(get_responses=[resp])
+    installations = [
+        _make_user_installation(100, 1, "alice", "User"),
+        _make_user_installation(200, 2, "acme", "Organization"),
+    ]
+    mock_user = MagicMock()
+    mock_user.get_installations.return_value = installations
+    mock_gh = MagicMock()
+    mock_gh.get_user.return_value = mock_user
 
-    with patch("app.services.github.app_client.httpx.AsyncClient", factory):
+    with patch("app.services.github.app_client.Github", return_value=mock_gh):
         installs = asyncio.run(app_client.list_user_installations("user-token"))
 
     assert len(installs) == 2
@@ -150,10 +146,12 @@ def test_list_user_installations_maps_accounts(
 
 
 def test_list_user_installations_empty(app_client: GitHubAppClient) -> None:
-    resp = FakeResponse({"total_count": 0, "installations": []})
-    factory, _ = _fake_async_client(get_responses=[resp])
+    mock_user = MagicMock()
+    mock_user.get_installations.return_value = []
+    mock_gh = MagicMock()
+    mock_gh.get_user.return_value = mock_user
 
-    with patch("app.services.github.app_client.httpx.AsyncClient", factory):
+    with patch("app.services.github.app_client.Github", return_value=mock_gh):
         installs = asyncio.run(app_client.list_user_installations("user-token"))
 
     assert installs == []
