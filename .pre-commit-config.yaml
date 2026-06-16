@@ -13,7 +13,8 @@ repos:
         exclude: |
             (?x)^(
                 .vscode/launch.json|
-                frontend/tsconfig.json
+                frontend/tsconfig.json|
+                action/tsconfig.json
             )$
       - id: check-toml
       - id: check-merge-conflict
