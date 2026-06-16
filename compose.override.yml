@@ -127,6 +127,12 @@ services:
     restart: "no"
     ports:
       - "5173:5173"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173/"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
     build:
       context: .
       dockerfile: frontend/Dockerfile
