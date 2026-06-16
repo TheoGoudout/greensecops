@@ -135,6 +135,16 @@ services:
         - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
         - NODE_ENV=development
 
+  landing:
+    restart: "no"
+    ports:
+      - "3001:80"
+    build:
+      context: .
+      dockerfile: landing/Dockerfile
+    environment:
+      APP_URL: ${FRONTEND_HOST:-http://localhost:5173}
+
   playwright:
     build:
       context: .

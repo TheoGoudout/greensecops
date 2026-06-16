@@ -167,6 +167,12 @@ services:
         - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
         - NODE_ENV=production
 
+  landing:
+    image: greensecops/landing:${TAG:-latest}
+    restart: always
+    environment:
+      - APP_URL=${FRONTEND_HOST:-https://app.greensecops.io}
+
 volumes:
   app-db-data:
   app-redis-data:
