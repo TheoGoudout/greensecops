@@ -7,33 +7,33 @@ import rego.v1
 # attacks via mutable tags or branches.
 
 _is_first_party(uses) if {
-    startswith(uses, "actions/")
+	startswith(uses, "actions/")
 }
 
 _is_first_party(uses) if {
-    startswith(uses, "github/")
+	startswith(uses, "github/")
 }
 
 _is_sha_pinned(uses) if {
-    parts := split(uses, "@")
-    count(parts) == 2
-    ref := parts[1]
-    regex.match(`^[0-9a-f]{40}$`, ref)
+	parts := split(uses, "@")
+	count(parts) == 2
+	ref := parts[1]
+	regex.match(`^[0-9a-f]{40}$`, ref)
 }
 
 violations contains violation if {
-    some job_name, job in input.jobs
-    some step in job.steps
-    uses := step.uses
-    uses != null
-    not _is_first_party(uses)
-    not _is_sha_pinned(uses)
-    violation := {
-        "rule": "untrusted_actions",
-        "severity": "high",
-        "category": "security",
-        "job": job_name,
-        "message": sprintf("Step in job '%v' uses third-party action '%v' without a full SHA pin. Pin to a commit SHA to prevent supply-chain attacks.", [job_name, uses]),
-        "context": uses,
-    }
+	some job_name, job in input.jobs
+	some step in job.steps
+	uses := step.uses
+	uses != null
+	not _is_first_party(uses)
+	not _is_sha_pinned(uses)
+	violation := {
+		"rule": "untrusted_actions",
+		"severity": "high",
+		"category": "security",
+		"job": job_name,
+		"message": sprintf("Step in job '%v' uses third-party action '%v' without a full SHA pin. Pin to a commit SHA to prevent supply-chain attacks.", [job_name, uses]),
+		"context": uses,
+	}
 }
