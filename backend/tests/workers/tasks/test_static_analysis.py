@@ -265,6 +265,17 @@ def test_duplicate_detection_skips_second_run(
     # _evaluate should NOT have been called for the duplicate
     mock_eval.assert_not_called()
 
+    # A skipped Analysis record must exist with current timestamps and copied grade
+    skipped = db.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.skipped)
+    ).first()
+    assert skipped is not None
+    assert skipped.grade == "A+++"
+    assert skipped.completed_at is not None
+    assert skipped.created_at is not None
+
 
 @dataclass
 class _FakeFile:

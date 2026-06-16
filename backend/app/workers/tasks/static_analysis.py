@@ -52,7 +52,27 @@ def _run_static_analysis_impl(
                 logger.info(
                     "Skipping duplicate for %s (hash=%s)", path, content_hash[:8]
                 )
-                results.append({"path": path, "status": "skipped_duplicate"})
+                skipped = Analysis(
+                    repo_id=repo.id,
+                    workflow_file_id=existing.workflow_file_id,
+                    content_hash=content_hash,
+                    status=AnalysisStatus.skipped,
+                    score=existing.score,
+                    grade=existing.grade,
+                    triggered_by=AnalysisTrigger(trigger),
+                    branch=branch or repo.default_branch,
+                    commit_sha=commit_sha or None,
+                    completed_at=datetime.now(timezone.utc),
+                )
+                session.add(skipped)
+                session.commit()
+                results.append(
+                    {
+                        "path": path,
+                        "status": "skipped_duplicate",
+                        "analysis_id": str(skipped.id),
+                    }
+                )
                 continue
 
             if isinstance(wf, WorkflowFile):
