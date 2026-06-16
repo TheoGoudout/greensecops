@@ -20,17 +20,10 @@ export const Route = createFileRoute("/_layout/repositories/")({
 function RepoRow({ repo }: { repo: RepositoryPublic }) {
   const queryClient = useQueryClient()
 
-  const { data: analyses } = useQuery({
-    queryKey: ["analyses", repo.id, "latest"],
-    queryFn: () =>
-      AnalysesService.listAnalyses({
-        repoId: repo.id,
-        limit: 1,
-        status: "completed",
-      }),
+  const { data: gradeSummary } = useQuery({
+    queryKey: ["repositories", repo.id, "grade-summary"],
+    queryFn: () => RepositoriesService.getRepoGradeSummary({ repoId: repo.id }),
   })
-
-  const latest = analyses?.[0] ?? null
 
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
@@ -65,17 +58,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
         {repo.default_branch}
       </span>
       <div>
-        {latest ? (
-          <Link
-            to="/analyses/$analysisId"
-            params={{ analysisId: latest.id }}
-            className="hover:opacity-80 transition-opacity"
-          >
-            <GradeBadge grade={latest.grade ?? null} />
-          </Link>
-        ) : (
-          <GradeBadge grade={null} />
-        )}
+        <GradeBadge grade={gradeSummary?.grade ?? null} />
       </div>
       <div className="flex items-center gap-2">
         <Switch

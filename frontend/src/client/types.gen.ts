@@ -111,6 +111,13 @@ export type PrivateUserCreate = {
     is_verified?: boolean;
 };
 
+export type RepoGradeSummary = {
+    repo_id: string;
+    avg_score: (number | null);
+    grade: (string | null);
+    workflow_count: number;
+};
+
 export type RepositoryPublic = {
     id: string;
     full_name: string;
@@ -404,6 +411,12 @@ export type RepositoriesGetRepositoryData = {
 };
 
 export type RepositoriesGetRepositoryResponse = (RepositoryPublic);
+
+export type RepositoriesGetRepoGradeSummaryData = {
+    repoId: string;
+};
+
+export type RepositoriesGetRepoGradeSummaryResponse = (RepoGradeSummary);
 
 export type RepositoriesToggleRepositoryData = {
     enabled: boolean;

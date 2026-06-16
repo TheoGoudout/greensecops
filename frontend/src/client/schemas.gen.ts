@@ -578,6 +578,45 @@ export const PrivateUserCreateSchema = {
     title: 'PrivateUserCreate'
 } as const;
 
+export const RepoGradeSummarySchema = {
+    properties: {
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        avg_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        workflow_count: {
+            type: 'integer',
+            title: 'Workflow Count'
+        }
+    },
+    type: 'object',
+    required: ['repo_id', 'avg_score', 'grade', 'workflow_count'],
+    title: 'RepoGradeSummary'
+} as const;
+
 export const RepositoryPublicSchema = {
     properties: {
         id: {

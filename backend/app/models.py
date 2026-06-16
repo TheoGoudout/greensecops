@@ -510,3 +510,10 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class RepoGradeSummary(SQLModel):
+    repo_id: uuid.UUID
+    avg_score: float | None
+    grade: str | None
+    workflow_count: int
