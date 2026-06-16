@@ -41,7 +41,7 @@ def _sync_installation_repositories_impl(
     }
 
 
-@celery_app.task(name="installation_sync.run", bind=True, max_retries=3)
+@celery_app.task(bind=True, max_retries=3)
 def sync_installation_repositories(
     self: object,  # noqa: ARG001
     installation_id: int,
