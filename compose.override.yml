@@ -126,14 +126,27 @@ services:
   frontend:
     restart: "no"
     ports:
-      - "5173:80"
+      - "5173:5173"
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args:
-        - VITE_API_URL=http://localhost:8000
-        - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
-        - NODE_ENV=development
+      target: dev-stage
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
+    develop:
+      watch:
+        - path: ./frontend/src
+          action: sync
+          target: /app/frontend/src
+        - path: ./frontend/public
+          action: sync
+          target: /app/frontend/public
+        - path: ./frontend/package.json
+          action: rebuild
+        - path: ./bun.lock
+          action: rebuild
 
   landing:
     restart: "no"
