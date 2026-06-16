@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { ArrowLeft, GitBranch, Play, Zap } from "lucide-react"
-import { useState } from "react"
+import { ArrowLeft, GitBranch, GitPullRequest, Play, Zap } from "lucide-react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { FixStatus } from "@/client"
 import {
@@ -135,6 +135,28 @@ function RepositoryDetail() {
     ? [...new Set(analyses.map((a) => a.branch).filter(Boolean) as string[])]
     : []
 
+  const prBranches = useMemo(() => {
+    if (!analyses || !repo) return []
+    const nonDefault = analyses.filter(
+      (a) => a.branch && a.branch !== repo.default_branch,
+    )
+    const byBranch = new Map<string, (typeof nonDefault)[0]>()
+    for (const a of nonDefault) {
+      const existing = byBranch.get(a.branch!)
+      if (
+        !existing ||
+        new Date(a.created_at!).getTime() >
+          new Date(existing.created_at!).getTime()
+      ) {
+        byBranch.set(a.branch!, a)
+      }
+    }
+    return [...byBranch.values()].sort(
+      (a, b) =>
+        new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime(),
+    )
+  }, [analyses, repo])
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -192,6 +214,15 @@ function RepositoryDetail() {
             {fixes?.length ? (
               <span className="ml-1.5 text-xs bg-muted px-1.5 py-0.5 rounded-full">
                 {fixes.length}
+              </span>
+            ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="pull-requests">
+            <GitPullRequest className="h-3.5 w-3.5 mr-1" />
+            Pull Requests
+            {prBranches.length > 0 ? (
+              <span className="ml-1.5 text-xs bg-muted px-1.5 py-0.5 rounded-full">
+                {prBranches.length}
               </span>
             ) : null}
           </TabsTrigger>
@@ -454,6 +485,76 @@ function RepositoryDetail() {
                             : "—"}
                         </span>
                       </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pull-requests" className="flex flex-col gap-4 mt-4">
+          <Card>
+            <CardContent className="p-0">
+              {analysesLoading ? (
+                <div className="flex flex-col gap-2 p-6">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : prBranches.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-6 text-center">
+                  No non-default branch analyses found. Run an analysis on a
+                  feature branch to see PR status here.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-[1fr_12rem_7rem_5rem_9rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                    <span>Branch</span>
+                    <span>Workflow</span>
+                    <span className="text-center">Status</span>
+                    <span className="text-center">Grade</span>
+                    <span className="text-right">Date</span>
+                  </div>
+                  <div className="divide-y">
+                    {prBranches.map((a) => (
+                      <Link
+                        key={a.id}
+                        to="/analyses/$analysisId"
+                        params={{ analysisId: a.id }}
+                        className="grid grid-cols-[1fr_12rem_7rem_5rem_9rem] items-center px-6 py-3 gap-4 hover:bg-muted/40 transition-colors"
+                      >
+                        <span className="text-xs font-mono truncate flex items-center gap-1.5">
+                          <GitPullRequest className="h-3 w-3 text-muted-foreground shrink-0" />
+                          {a.branch}
+                        </span>
+                        <span className="text-xs font-mono text-muted-foreground truncate">
+                          {a.workflow_file_path
+                            ? a.workflow_file_path.split("/").pop()
+                            : "—"}
+                        </span>
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize text-center ${statusColor(a.status)}`}
+                        >
+                          {a.status}
+                        </span>
+                        <div className="flex justify-center">
+                          <GradeBadge grade={a.grade ?? null} />
+                        </div>
+                        <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap text-right">
+                          {a.created_at
+                            ? new Date(a.created_at).toLocaleDateString(
+                                undefined,
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )
+                            : "—"}
+                        </span>
+                      </Link>
                     ))}
                   </div>
                 </>
