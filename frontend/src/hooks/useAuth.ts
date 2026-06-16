@@ -48,8 +48,19 @@ const useAuth = () => {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: () => {
-      navigate({ to: "/" })
       showSuccessToast("Welcome back, nice to see you again!")
+      const pending = sessionStorage.getItem("pending_installation")
+      if (pending) {
+        sessionStorage.removeItem("pending_installation")
+        try {
+          const params = JSON.parse(pending) as Record<string, unknown>
+          navigate({ to: "/auth/github/app-callback", search: params })
+          return
+        } catch {
+          // malformed entry — fall through to default redirect
+        }
+      }
+      navigate({ to: "/" })
     },
     onError: handleError.bind(showErrorToast),
   })

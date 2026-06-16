@@ -1,6 +1,7 @@
 import uuid
 from typing import Any
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
@@ -134,11 +135,10 @@ def upsert_repository(
     default_branch: str,
 ) -> Repository:
     """Upsert a repository by its unique github_repo_id; (re)enables it."""
-    repo = session.exec(
-        select(Repository).where(Repository.github_repo_id == github_repo_id)
-    ).first()
-    if repo is None:
-        repo = Repository(
+    stmt = (
+        pg_insert(Repository)
+        .values(
+            id=uuid.uuid4(),
             org_id=org_id,
             github_repo_id=github_repo_id,
             full_name=full_name,
@@ -146,15 +146,20 @@ def upsert_repository(
             default_branch=default_branch,
             enabled=True,
         )
-    else:
-        repo.org_id = org_id
-        repo.full_name = full_name
-        repo.installation_id = installation_id
-        repo.default_branch = default_branch
-        repo.enabled = True
-    session.add(repo)
+        .on_conflict_do_update(
+            index_elements=["github_repo_id"],
+            set_={
+                "org_id": org_id,
+                "full_name": full_name,
+                "installation_id": installation_id,
+                "default_branch": default_branch,
+                "enabled": True,
+            },
+        )
+        .returning(Repository)
+    )
+    repo = session.exec(stmt).one()  # type: ignore[arg-type]
     session.commit()
-    session.refresh(repo)
     return repo
 
 

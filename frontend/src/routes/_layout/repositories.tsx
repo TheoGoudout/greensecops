@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { GitBranch } from "lucide-react"
+import { GitBranch, Play } from "lucide-react"
+import { toast } from "sonner"
 import type { RepositoryPublic } from "@/client"
 import { AnalysesService, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -39,8 +40,19 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
     },
   })
 
+  const triggerMutation = useMutation({
+    mutationFn: () => AnalysesService.triggerAnalysis({ repoId: repo.id }),
+    onSuccess: () => {
+      toast.success(`Analysis queued for ${repo.full_name}`)
+      queryClient.invalidateQueries({ queryKey: ["analyses", repo.id] })
+    },
+    onError: () => {
+      toast.error(`Failed to trigger analysis for ${repo.full_name}`)
+    },
+  })
+
   return (
-    <div className="grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-6 py-4 gap-4">
+    <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-6 py-4 gap-4">
       <Link
         to="/repositories/$repoId"
         params={{ repoId: repo.id }}
@@ -75,6 +87,15 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
           {repo.enabled ? "Enabled" : "Disabled"}
         </span>
       </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Trigger analysis"
+        onClick={() => triggerMutation.mutate()}
+        disabled={triggerMutation.isPending}
+      >
+        <Play className="h-4 w-4" />
+      </Button>
     </div>
   )
 }
@@ -128,11 +149,12 @@ function Repositories() {
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 <span>Repository</span>
                 <span>Default branch</span>
                 <span>Latest grade</span>
                 <span>Analysis</span>
+                <span className="w-8" />
               </div>
               <div className="divide-y">
                 {repos.map((repo) => (

@@ -25,7 +25,7 @@ import { Route as LayoutBadgesRouteImport } from './routes/_layout/badges'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as AuthGithubAppCallbackRouteImport } from './routes/auth/github/app-callback'
-import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories_/$repoId'
+import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 
 const SignupRoute = SignupRouteImport.update({
@@ -109,9 +109,9 @@ const AuthGithubAppCallbackRoute = AuthGithubAppCallbackRouteImport.update({
 } as any)
 const LayoutRepositoriesRepoIdRoute =
   LayoutRepositoriesRepoIdRouteImport.update({
-    id: '/repositories_/$repoId',
-    path: '/repositories/$repoId',
-    getParentRoute: () => LayoutRoute,
+    id: '/$repoId',
+    path: '/$repoId',
+    getParentRoute: () => LayoutRepositoriesRoute,
   } as any)
 const LayoutAnalysesAnalysisIdRoute =
   LayoutAnalysesAnalysisIdRouteImport.update({
@@ -131,7 +131,7 @@ export interface FileRoutesByFullPath {
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/issues': typeof LayoutIssuesRoute
-  '/repositories': typeof LayoutRepositoriesRoute
+  '/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
@@ -149,7 +149,7 @@ export interface FileRoutesByTo {
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/issues': typeof LayoutIssuesRoute
-  '/repositories': typeof LayoutRepositoriesRoute
+  '/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
@@ -170,12 +170,12 @@ export interface FileRoutesById {
   '/_layout/billing': typeof LayoutBillingRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/issues': typeof LayoutIssuesRoute
-  '/_layout/repositories': typeof LayoutRepositoriesRoute
+  '/_layout/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/_layout/rules': typeof LayoutRulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
-  '/_layout/repositories_/$repoId': typeof LayoutRepositoriesRepoIdRoute
+  '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
 }
@@ -235,7 +235,7 @@ export interface FileRouteTypes {
     | '/_layout/settings'
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
-    | '/_layout/repositories_/$repoId'
+    | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
   fileRoutesById: FileRoutesById
@@ -364,12 +364,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGithubAppCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_layout/repositories_/$repoId': {
-      id: '/_layout/repositories_/$repoId'
-      path: '/repositories/$repoId'
+    '/_layout/repositories/$repoId': {
+      id: '/_layout/repositories/$repoId'
+      path: '/$repoId'
       fullPath: '/repositories/$repoId'
       preLoaderRoute: typeof LayoutRepositoriesRepoIdRouteImport
-      parentRoute: typeof LayoutRoute
+      parentRoute: typeof LayoutRepositoriesRoute
     }
     '/_layout/analyses/$analysisId': {
       id: '/_layout/analyses/$analysisId'
@@ -381,18 +381,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface LayoutRepositoriesRouteChildren {
+  LayoutRepositoriesRepoIdRoute: typeof LayoutRepositoriesRepoIdRoute
+}
+
+const LayoutRepositoriesRouteChildren: LayoutRepositoriesRouteChildren = {
+  LayoutRepositoriesRepoIdRoute: LayoutRepositoriesRepoIdRoute,
+}
+
+const LayoutRepositoriesRouteWithChildren =
+  LayoutRepositoriesRoute._addFileChildren(LayoutRepositoriesRouteChildren)
+
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutBadgesRoute: typeof LayoutBadgesRoute
   LayoutBillingRoute: typeof LayoutBillingRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutIssuesRoute: typeof LayoutIssuesRoute
-  LayoutRepositoriesRoute: typeof LayoutRepositoriesRoute
+  LayoutRepositoriesRoute: typeof LayoutRepositoriesRouteWithChildren
   LayoutRulesRoute: typeof LayoutRulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutAnalysesAnalysisIdRoute: typeof LayoutAnalysesAnalysisIdRoute
-  LayoutRepositoriesRepoIdRoute: typeof LayoutRepositoriesRepoIdRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -401,12 +411,11 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutBillingRoute: LayoutBillingRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutIssuesRoute: LayoutIssuesRoute,
-  LayoutRepositoriesRoute: LayoutRepositoriesRoute,
+  LayoutRepositoriesRoute: LayoutRepositoriesRouteWithChildren,
   LayoutRulesRoute: LayoutRulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutAnalysesAnalysisIdRoute: LayoutAnalysesAnalysisIdRoute,
-  LayoutRepositoriesRepoIdRoute: LayoutRepositoriesRepoIdRoute,
 }
 
 const LayoutRouteWithChildren =

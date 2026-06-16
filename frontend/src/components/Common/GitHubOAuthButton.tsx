@@ -22,6 +22,17 @@ export function GitHubOAuthButton() {
         const token = await AuthService.githubCallback({ code, state })
         localStorage.setItem("access_token", token.access_token)
         await queryClient.invalidateQueries({ queryKey: ["currentUser"] })
+        const pending = sessionStorage.getItem("pending_installation")
+        if (pending) {
+          sessionStorage.removeItem("pending_installation")
+          try {
+            const params = JSON.parse(pending) as Record<string, unknown>
+            navigate({ to: "/auth/github/app-callback", search: params })
+            return
+          } catch {
+            // malformed entry — fall through to default redirect
+          }
+        }
         navigate({ to: "/" })
       } catch {
         showErrorToast("GitHub sign in failed. Please try again.")

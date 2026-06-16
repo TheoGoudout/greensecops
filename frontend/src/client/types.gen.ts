@@ -318,6 +318,8 @@ export type FixesTriggerFixDeliveryResponse = ({
     [key: string]: (string);
 });
 
+export type InstallationsListInstallationsResponse = (Array<OrganizationPublic>);
+
 export type InstallationsSyncInstallationsData = {
     requestBody: InstallationSyncRequest;
 };

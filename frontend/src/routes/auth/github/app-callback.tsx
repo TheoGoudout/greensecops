@@ -3,6 +3,9 @@ import { CheckCircle, Loader2, XCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { z } from "zod"
 import { InstallationsService } from "@/client"
+import { isLoggedIn } from "@/hooks/useAuth"
+
+export const PENDING_INSTALLATION_KEY = "pending_installation"
 
 const searchSchema = z.object({
   installation_id: z.coerce.number().optional(),
@@ -41,6 +44,16 @@ function GitHubAppCallback() {
   // ownership is linked and repositories are queued for sync.
   useEffect(() => {
     if (!shouldSync || !code) return
+    // Must be authenticated — /installations/sync is a protected endpoint.
+    // Store params so login page can redirect back to complete the sync.
+    if (!isLoggedIn()) {
+      sessionStorage.setItem(
+        PENDING_INSTALLATION_KEY,
+        JSON.stringify({ code, installation_id, setup_action }),
+      )
+      navigate({ to: "/login" })
+      return
+    }
     let cancelled = false
     InstallationsService.syncInstallations({ requestBody: { code } })
       .then(() => {
@@ -52,7 +65,7 @@ function GitHubAppCallback() {
     return () => {
       cancelled = true
     }
-  }, [shouldSync, code])
+  }, [shouldSync, code, installation_id, setup_action, navigate])
 
   // Redirect once we are no longer actively syncing.
   useEffect(() => {
@@ -62,6 +75,17 @@ function GitHubAppCallback() {
     }, 2500)
     return () => clearTimeout(timer)
   }, [navigate, syncState])
+
+  const doneTitle =
+    setup_action === "delete"
+      ? "GitHub App uninstalled"
+      : "GitHub App installed"
+  const doneBody =
+    setup_action === "delete"
+      ? "The app has been removed from your account."
+      : setup_action === "update"
+        ? "Installation updated successfully."
+        : "Installation complete. Your repositories will appear shortly."
 
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -77,12 +101,8 @@ function GitHubAppCallback() {
         ) : syncState === "done" ? (
           <>
             <CheckCircle className="h-12 w-12 text-green-500" />
-            <h2 className="text-lg font-semibold">GitHub App installed</h2>
-            <p className="text-sm text-muted-foreground">
-              {setup_action === "update"
-                ? "Installation updated successfully."
-                : "Installation complete. Your repositories will appear shortly."}
-            </p>
+            <h2 className="text-lg font-semibold">{doneTitle}</h2>
+            <p className="text-sm text-muted-foreground">{doneBody}</p>
           </>
         ) : (
           <>
