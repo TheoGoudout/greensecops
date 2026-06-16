@@ -1,14 +1,46 @@
+import json
+from pathlib import Path
+
 from app.core.config import settings
 from app.models import LLMProvider
 from app.services.llm.base import BaseLLMProvider
+
+_KEY_MAP: dict[str, str | None] = {
+    "openai": settings.OPENAI_API_KEY,
+    "anthropic": settings.ANTHROPIC_API_KEY,
+    "gemini": settings.GOOGLE_API_KEY,
+    "ollama": settings.OLLAMA_BASE_URL,
+}
+
+
+def get_first_available_provider() -> tuple[str, str]:
+    """Return (provider_id, default_model) for the first provider with credentials configured."""
+    config_path = settings.AI_PROVIDERS_CONFIG
+    path = (
+        Path(config_path)
+        if config_path
+        else Path(__file__).parent.parent.parent / "config" / "ai_providers.json"
+    )
+    with path.open() as f:
+        catalog: list[dict] = json.load(f)["providers"]
+    for p in catalog:
+        if bool(_KEY_MAP.get(p["id"])):
+            return p["id"], p["default_model"]
+    raise RuntimeError(
+        "No LLM provider is configured. Set at least one of: "
+        "OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OLLAMA_BASE_URL."
+    )
 
 
 def get_provider(
     provider: str | None = None,
     model: str | None = None,
 ) -> BaseLLMProvider:
-    """Resolve the LLM provider from config. Falls back to global default."""
-    resolved_provider = provider or settings.DEFAULT_LLM_PROVIDER
+    """Resolve the LLM provider. Falls back to first available provider with credentials."""
+    if not provider:
+        provider, fallback_model = get_first_available_provider()
+        model = model or fallback_model
+    resolved_provider = provider
     resolved_model = model or settings.DEFAULT_LLM_MODEL
 
     if resolved_provider == LLMProvider.openai:

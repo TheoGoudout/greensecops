@@ -287,7 +287,7 @@ export class FixesService {
 
     /**
      * Trigger Fix Generation For Repo
-     * Queue fix generation for every unfixed issue in a repository.
+     * Queue a single batch fix generation call per workflow file for all issues in a repo.
      * @param data The data for the request.
      * @param data.repoId
      * @returns number Successful Response

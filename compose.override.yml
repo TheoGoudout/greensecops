@@ -128,10 +128,10 @@ services:
     ports:
       - "5173:5173"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173/"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5173/ > /dev/null 2>&1 || exit 1"]
       interval: 10s
-      retries: 5
-      start_period: 30s
+      retries: 12
+      start_period: 60s
       timeout: 5s
     build:
       context: .

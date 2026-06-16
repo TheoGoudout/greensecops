@@ -1,12 +1,16 @@
 import uuid
+from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlmodel import select
+from sqlmodel import delete, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import Analysis, Fix, FixPublic, FixStatus, Issue
 from app.workers.tasks.fix_delivery import deliver_fix
-from app.workers.tasks.fix_generation import run_fix_generation
+from app.workers.tasks.fix_generation import (
+    run_batch_fix_generation,
+    run_fix_generation,
+)
 
 router = APIRouter(prefix="/fixes", tags=["fixes"])
 
@@ -57,16 +61,35 @@ def trigger_fix_generation_for_repo(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
 ) -> dict[str, int]:
-    """Queue fix generation for every unfixed issue in a repository."""
-    active_fix_issue_ids = select(Fix.issue_id).where(Fix.status != FixStatus.rejected)
+    """Queue a single batch fix generation call per workflow file for all issues in a repo."""
     issues = session.exec(
         select(Issue)
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
-        .where(~Issue.id.in_(active_fix_issue_ids))  # type: ignore[attr-defined]
     ).all()
+
+    if not issues:
+        return {"queued": 0}
+
+    issue_ids = [i.id for i in issues]
+
+    # Discard existing non-delivered fixes to allow fresh retry
+    session.exec(
+        delete(Fix).where(
+            Fix.issue_id.in_(issue_ids),  # type: ignore[attr-defined]
+            Fix.status != FixStatus.delivered,
+        )
+    )
+    session.commit()
+
+    # Group by analysis_id → one LLM call per workflow file
+    by_analysis: dict[uuid.UUID, list[Issue]] = defaultdict(list)
     for issue in issues:
-        run_fix_generation.delay(issue_id=str(issue.id))
+        by_analysis[issue.analysis_id].append(issue)
+
+    for group in by_analysis.values():
+        run_batch_fix_generation.delay(issue_ids=[str(i.id) for i in group])
+
     return {"queued": len(issues)}
 
 
@@ -76,11 +99,19 @@ def trigger_fix_generation(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
 ) -> dict[str, str]:
-    from app.models import Issue
-
     issue = session.get(Issue, issue_id)
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
+
+    # Discard existing non-delivered fix to allow retry
+    session.exec(
+        delete(Fix).where(
+            Fix.issue_id == issue_id,
+            Fix.status != FixStatus.delivered,
+        )
+    )
+    session.commit()
+
     run_fix_generation.delay(issue_id=str(issue_id))
     return {"status": "queued", "issue_id": str(issue_id)}
 
