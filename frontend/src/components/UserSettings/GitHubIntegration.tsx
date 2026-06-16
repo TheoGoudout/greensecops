@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query"
+import { Building2, ExternalLink, Plus } from "lucide-react"
+import { InstallationsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import useAuth from "@/hooks/useAuth"
 
@@ -18,7 +21,12 @@ const GITHUB_APP_NAME = import.meta.env.VITE_GITHUB_APP_NAME as string
 const GitHubIntegration = () => {
   const { user: currentUser } = useAuth()
 
-  const installUrl = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new`
+  const { data: installations = [] } = useQuery({
+    queryKey: ["installations"],
+    queryFn: InstallationsService.listInstallations,
+  })
+
+  const addOrgUrl = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new`
 
   return (
     <div className="max-w-md">
@@ -40,22 +48,50 @@ const GitHubIntegration = () => {
           )}
         </div>
 
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium">GitHub App installation</p>
-          <p className="text-sm text-muted-foreground">
-            Install the GreenSecOps GitHub App on your repositories to enable
-            automated analysis.
-          </p>
-          <div className="pt-2">
-            <Button variant="outline" className="gap-2" asChild>
-              <a href={installUrl} target="_blank" rel="noopener noreferrer">
-                <GithubIcon className="h-4 w-4" />
-                {currentUser?.github_username
-                  ? "Manage GitHub App installation"
-                  : "Install GitHub App"}
-              </a>
-            </Button>
-          </div>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-medium">Organizations</p>
+
+          {installations.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {installations.map((org) => (
+                <li
+                  key={org.id}
+                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-mono">{org.name}</span>
+                  </div>
+                  <a
+                    href={`https://github.com/apps/${GITHUB_APP_NAME}/installations/new`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Manage on GitHub"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No organizations connected. Install the GitHub App to get started.
+            </p>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 self-start"
+            asChild
+          >
+            <a href={addOrgUrl} target="_blank" rel="noopener noreferrer">
+              <GithubIcon className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" />
+              Add organization
+            </a>
+          </Button>
         </div>
       </div>
     </div>

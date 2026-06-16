@@ -2,11 +2,12 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlmodel import select
 
 from app import crud
 from app.api.deps import CurrentUser, GitHubAppClientDep, SessionDep
 from app.api.routes.webhooks import _enqueue_installation_sync
-from app.models import OrganizationPublic
+from app.models import Organization, OrganizationPublic, OrgMember
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,22 @@ router = APIRouter(prefix="/installations", tags=["installations"])
 
 class InstallationSyncRequest(BaseModel):
     code: str
+
+
+@router.get("/", response_model=list[OrganizationPublic])
+def list_installations(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[OrganizationPublic]:
+    """List all GitHub App installations linked to the current user."""
+    orgs = session.exec(
+        select(Organization)
+        .join(OrgMember, OrgMember.org_id == Organization.id)  # type: ignore[arg-type]
+        .where(OrgMember.user_id == current_user.id)
+    ).all()
+    return [
+        OrganizationPublic.model_validate(org, from_attributes=True) for org in orgs
+    ]
 
 
 @router.post("/sync", response_model=list[OrganizationPublic])
