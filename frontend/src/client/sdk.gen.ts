@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesGetRepoGradeSummaryData, RepositoriesGetRepoGradeSummaryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesGetRepoGradeSummaryData, RepositoriesGetRepoGradeSummaryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -532,6 +532,57 @@ export class LoginService {
             path: {
                 email: data.email
             },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class OrganizationsService {
+    /**
+     * List Ai Providers
+     * Return all LLM providers with availability status and per-provider default model.
+     * @returns AIProvidersPublic Successful Response
+     * @throws ApiError
+     */
+    public static listAiProviders(): CancelablePromise<OrganizationsListAiProvidersResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/organizations/ai-providers'
+        });
+    }
+
+    /**
+     * List My Organizations
+     * Return all organizations the current user belongs to.
+     * @returns OrganizationPublic Successful Response
+     * @throws ApiError
+     */
+    public static listMyOrganizations(): CancelablePromise<OrganizationsListMyOrganizationsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/organizations/'
+        });
+    }
+
+    /**
+     * Update Org Ai Preferences
+     * @param data The data for the request.
+     * @param data.orgId
+     * @param data.requestBody
+     * @returns OrganizationPublic Successful Response
+     * @throws ApiError
+     */
+    public static updateOrgAiPreferences(data: OrganizationsUpdateOrgAiPreferencesData): CancelablePromise<OrganizationsUpdateOrgAiPreferencesResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/organizations/{org_id}/ai-preferences',
+            path: {
+                org_id: data.orgId
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }

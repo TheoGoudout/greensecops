@@ -9,6 +9,7 @@ from app.api.routes import (
     installations,
     issues,
     login,
+    organizations,
     private,
     repositories,
     rules,
@@ -25,6 +26,7 @@ api_router.include_router(users.router)
 api_router.include_router(utils.router)
 api_router.include_router(github_oauth.router)
 api_router.include_router(installations.router)
+api_router.include_router(organizations.router)
 api_router.include_router(repositories.router)
 api_router.include_router(analyses.router)
 api_router.include_router(issues.router)

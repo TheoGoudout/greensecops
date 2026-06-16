@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 
+import AISettings from "@/components/UserSettings/AISettings"
 import ChangePassword from "@/components/UserSettings/ChangePassword"
 import DeleteAccount from "@/components/UserSettings/DeleteAccount"
 import GitHubIntegration from "@/components/UserSettings/GitHubIntegration"
@@ -15,6 +16,7 @@ const tabsConfig = [
     title: "Integrations",
     component: GitHubIntegration,
   },
+  { value: "ai", title: "AI", component: AISettings },
   { value: "danger-zone", title: "Danger zone", component: DeleteAccount },
 ]
 

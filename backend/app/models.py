@@ -410,8 +410,26 @@ class OrganizationPublic(SQLModel):
     name: str
     tier: UserTier
     default_llm_provider: LLMProvider
+    default_llm_model: str | None = None
     fix_delivery_mode: FixDeliveryMode
     created_at: datetime | None = None
+
+
+class OrganizationAIUpdate(SQLModel):
+    default_llm_provider: LLMProvider
+    default_llm_model: str | None = None
+
+
+class AIProviderInfo(SQLModel):
+    id: str
+    name: str
+    available: bool
+    default_model: str
+    models: list[str]
+
+
+class AIProvidersPublic(SQLModel):
+    providers: list[AIProviderInfo]
 
 
 class RepositoryPublic(SQLModel):
