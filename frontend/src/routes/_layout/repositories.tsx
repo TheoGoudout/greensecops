@@ -41,7 +41,13 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
 
   return (
     <div className="grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-6 py-4 gap-4">
-      <span className="text-sm font-medium truncate">{repo.full_name}</span>
+      <Link
+        to="/repositories/$repoId"
+        params={{ repoId: repo.id }}
+        className="text-sm font-medium truncate hover:underline"
+      >
+        {repo.full_name}
+      </Link>
       <span className="inline-flex items-center gap-1 text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded-md w-fit">
         <GitBranch className="h-3 w-3" />
         {repo.default_branch}
