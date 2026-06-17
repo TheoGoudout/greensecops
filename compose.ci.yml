@@ -1,0 +1,14 @@
+# CI-only overrides: expose service ports to the host runner so health-check
+# curls in test-docker-compose.yml can reach them at localhost.
+# This file is intentionally separate from compose.override.yml so CI tests
+# the production images (Nginx frontend, no dev-stage) while still being able
+# to probe the services from outside the Docker network.
+services:
+
+  backend:
+    ports:
+      - "8000:8000"
+
+  frontend:
+    ports:
+      - "80:80"
