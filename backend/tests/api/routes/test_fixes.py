@@ -330,6 +330,7 @@ def test_generate_fixes_for_repo_replaces_existing_fixes(
     assert response.status_code == 202
     assert response.json()["queued"] >= 1
     mock_delay.assert_called()
+    db.expire_all()  # clear identity map so get() hits the DB
     assert db.get(Fix, fix_id) is None
 
 
