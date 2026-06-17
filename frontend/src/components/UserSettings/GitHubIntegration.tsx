@@ -1,9 +1,9 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { Building2, ExternalLink, Plus } from "lucide-react"
-import { useCallback } from "react"
 import { InstallationsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import useAuth from "@/hooks/useAuth"
+import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
 
 const GithubIcon = ({ className }: { className?: string }) => (
   <svg
@@ -21,29 +21,12 @@ const GITHUB_APP_NAME = import.meta.env.VITE_GITHUB_APP_NAME as string
 
 const GitHubIntegration = () => {
   const { user: currentUser } = useAuth()
-  const queryClient = useQueryClient()
+  const { openInstallPopup } = useGitHubAppInstall()
 
   const { data: installations = [] } = useQuery({
     queryKey: ["installations"],
     queryFn: InstallationsService.listInstallations,
   })
-
-  const addOrgUrl = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new`
-
-  const openInstallPopup = useCallback(() => {
-    const popup = window.open(
-      addOrgUrl,
-      "github-app-install",
-      "popup,width=1024,height=768",
-    )
-    if (!popup) return
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(timer)
-        queryClient.invalidateQueries({ queryKey: ["installations"] })
-      }
-    }, 500)
-  }, [addOrgUrl, queryClient])
 
   return (
     <div className="max-w-md">
