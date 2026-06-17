@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
 
 export const Route = createFileRoute("/_layout/repositories/")({
   component: Repositories,
@@ -84,6 +85,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
 }
 
 function Repositories() {
+  const { openInstallPopup } = useGitHubAppInstall()
   const {
     data: repos,
     isLoading,
@@ -102,15 +104,9 @@ function Repositories() {
             Manage which repositories GreenSecOps analyses
           </p>
         </div>
-        <Button variant="outline" className="gap-2" asChild>
-          <a
-            href={`https://github.com/apps/${import.meta.env.VITE_GITHUB_APP_NAME}/installations/new`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <GitBranch className="h-4 w-4" />
-            Install GitHub App
-          </a>
+        <Button variant="outline" className="gap-2" onClick={openInstallPopup}>
+          <GitBranch className="h-4 w-4" />
+          Install GitHub App
         </Button>
       </div>
 
