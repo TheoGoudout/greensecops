@@ -199,18 +199,24 @@ def run_batch_fix_generation(
         }
 
 
-async def _generate_batch_fix(
-    workflow_content: str,
-    issues: list,
-    provider_str: str,
-    model_str: str,
-) -> object:
+def _configure_langchain() -> None:
+    # Configure LangSmith tracing via env vars (already set from settings)
     from app.core.config import settings
 
     if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
         os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+        os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGCHAIN_ENDPOINT
+
+
+async def _generate_batch_fix(
+    workflow_content: str,
+    issues: list,
+    provider_str: str,
+    model_str: str,
+) -> object:
+    _configure_langchain()
 
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_batch_fix_prompt
@@ -233,13 +239,7 @@ async def _generate_fix(
     provider_str: str,
     model_str: str,
 ) -> object:
-    # Configure LangSmith tracing via env vars (already set from settings)
-    from app.core.config import settings
-
-    if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
-        os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+    _configure_langchain()
 
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_fix_prompt

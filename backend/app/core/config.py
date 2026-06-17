@@ -121,6 +121,7 @@ class Settings(BaseSettings):
 
     # LangSmith
     LANGCHAIN_TRACING_V2: bool = False
+    LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGCHAIN_API_KEY: str | None = None
     LANGCHAIN_PROJECT: str = "greensecops"
 
