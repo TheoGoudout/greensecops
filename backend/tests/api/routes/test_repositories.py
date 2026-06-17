@@ -8,12 +8,16 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
+    Analysis,
+    AnalysisStatus,
+    AnalysisTrigger,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
     User,
     UserTier,
+    WorkflowFile,
 )
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -324,3 +328,107 @@ def test_toggle_repository_cross_org_returns_404(
     assert response.status_code == 404
     db.refresh(other_repo)
     assert other_repo.enabled is True
+
+
+# ─── Grade fields on list / get endpoints ─────────────────────────────────────
+
+
+def _make_workflow_file(
+    db: Session, repo: Repository, path: str = ".github/workflows/ci.yml"
+) -> WorkflowFile:
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=path,
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    return wf
+
+
+def _make_completed_analysis(
+    db: Session, repo: Repository, wf: WorkflowFile, score: float, grade: str
+) -> Analysis:
+    a = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        score=score,
+        grade=grade,
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+def test_list_repositories_grade_null_without_analyses(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    org: Organization,
+) -> None:
+    # Arrange — repo exists but has no completed analyses
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/",
+        params={"org_id": str(org.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    repo_data = next(r for r in data if r["id"] == str(repo.id))
+    assert repo_data["avg_score"] is None
+    assert repo_data["grade"] is None
+
+
+def test_list_repositories_grade_populated(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    org: Organization,
+) -> None:
+    # Arrange — two workflow files with scores 80 and 60 → avg 70 → grade B
+    wf1 = _make_workflow_file(db, repo, ".github/workflows/ci.yml")
+    wf2 = _make_workflow_file(db, repo, ".github/workflows/deploy.yml")
+    _make_completed_analysis(db, repo, wf1, score=80.0, grade="B")
+    _make_completed_analysis(db, repo, wf2, score=60.0, grade="C")
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/",
+        params={"org_id": str(org.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    repo_data = next(r for r in data if r["id"] == str(repo.id))
+    assert repo_data["avg_score"] == 70.0
+    assert repo_data["grade"] == "B"
+
+
+def test_get_repository_grade_populated(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — one workflow file with score 92 → grade A+
+    wf = _make_workflow_file(db, repo)
+    _make_completed_analysis(db, repo, wf, score=92.0, grade="A+")
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["avg_score"] == 92.0
+    assert body["grade"] == "A+"

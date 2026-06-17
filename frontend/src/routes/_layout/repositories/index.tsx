@@ -21,11 +21,6 @@ export const Route = createFileRoute("/_layout/repositories/")({
 function RepoRow({ repo }: { repo: RepositoryPublic }) {
   const queryClient = useQueryClient()
 
-  const { data: gradeSummary } = useQuery({
-    queryKey: ["repositories", repo.id, "grade-summary"],
-    queryFn: () => RepositoriesService.getRepoGradeSummary({ repoId: repo.id }),
-  })
-
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
       RepositoriesService.toggleRepository({ repoId: repo.id, enabled }),
@@ -59,7 +54,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
         {repo.default_branch}
       </span>
       <div>
-        <GradeBadge grade={gradeSummary?.grade ?? null} />
+        <GradeBadge grade={repo.grade ?? null} />
       </div>
       <div className="flex items-center gap-2">
         <Switch
