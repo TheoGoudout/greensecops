@@ -16,6 +16,8 @@ export default defineConfig({
     port: 5173,
     watch: {
       usePolling: true,
+      ignored: ["**/node_modules/**", "**/.git/**"],
+      interval: 1000,
     },
   },
   plugins: [
