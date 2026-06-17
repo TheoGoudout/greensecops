@@ -2,11 +2,22 @@ import logging
 
 import stripe
 from fastapi import APIRouter, Header, HTTPException, Request
-from sqlmodel import select
+from sqlmodel import func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
-from app.models import BillingSubscription, BillingSubscriptionPublic, User, UserTier
+from app.models import (
+    Analysis,
+    AnalysisStatus,
+    BillingSubscription,
+    BillingSubscriptionPublic,
+    Fix,
+    Issue,
+    OrgMember,
+    Repository,
+    User,
+    UserTier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +36,69 @@ _TIER_LIMITS: dict[str, dict[str, int | None]] = {
 def get_subscription(
     session: SessionDep,
     current_user: CurrentUser,
-) -> BillingSubscription:
+) -> BillingSubscriptionPublic:
     sub = session.exec(
         select(BillingSubscription).where(
             BillingSubscription.user_id == current_user.id
         )
     ).first()
     if not sub:
-        # Auto-create free tier subscription
         sub = BillingSubscription(user_id=current_user.id, tier=UserTier.free)
         session.add(sub)
         session.commit()
         session.refresh(sub)
-    return sub
+
+    org_ids = list(
+        session.exec(
+            select(OrgMember.org_id).where(OrgMember.user_id == current_user.id)
+        ).all()
+    )
+    repo_ids = list(
+        session.exec(
+            select(Repository.id).where(
+                Repository.org_id.in_(org_ids),  # type: ignore[attr-defined]
+                Repository.enabled == True,  # noqa: E712
+            )
+        ).all()
+    )
+
+    analyses_used: int = (
+        session.exec(
+            select(func.count(Analysis.id)).where(
+                Analysis.repo_id.in_(repo_ids),  # type: ignore[attr-defined]
+                Analysis.status == AnalysisStatus.completed,
+            )
+        ).one()
+        or 0
+    )
+
+    issue_ids = list(
+        session.exec(
+            select(Issue.id)
+            .join(Analysis)
+            .where(
+                Analysis.repo_id.in_(repo_ids)  # type: ignore[attr-defined]
+            )
+        ).all()
+    )
+    fixes_used: int = (
+        session.exec(
+            select(func.count(Fix.id)).where(
+                Fix.issue_id.in_(issue_ids)  # type: ignore[attr-defined]
+            )
+        ).one()
+        or 0
+    )
+
+    return BillingSubscriptionPublic(
+        id=sub.id,
+        tier=sub.tier,
+        analyses_used=analyses_used,
+        fixes_used=fixes_used,
+        repos_used=len(repo_ids),
+        period_start=sub.period_start,
+        period_end=sub.period_end,
+    )
 
 
 @router.get("/limits")

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing — GreenSecOps</title>
+  <meta name="description" content="GreenSecOps plans for every team — from solo projects to large organisations. Free forever for open source." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+
+<header>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="container">
+      <div class="nav__inner">
+        <a href="./index.html" class="nav__logo" aria-label="GreenSecOps home">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" fill="#1a7a4a" opacity="0.15"/>
+            <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#1a7a4a" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+            <circle cx="12" cy="9.5" r="1.5" fill="#1a7a4a"/>
+          </svg>
+          GreenSecOps
+        </a>
+        <div class="nav__links">
+          <a href="./pricing.html" class="nav__link" aria-current="page">Pricing</a>
+          <a href="${APP_URL}/login" class="btn btn--ghost btn--sm">Sign In</a>
+          <a href="${APP_URL}/signup" class="btn btn--primary btn--sm">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main>
+
+<!-- HERO -->
+<section class="pricing-hero" aria-labelledby="pricing-page-heading">
+  <div class="container container--narrow">
+    <div class="section__label" style="display:inline-block; margin-bottom:1rem;">Pricing</div>
+    <h1 class="section__heading" id="pricing-page-heading" style="font-size: clamp(2rem, 4vw, 3rem);">Simple, transparent pricing</h1>
+    <p class="section__sub" style="margin: 0.875rem auto 0;">All plans include the full five-pillar analysis engine. No hidden limits, no per-seat fees.</p>
+  </div>
+</section>
+
+<!-- PRICING CARDS -->
+<section class="section" aria-labelledby="plans-heading">
+  <div class="container">
+    <h2 class="sr-only" id="plans-heading">Available plans</h2>
+    <div class="pricing-full-grid">
+      <!-- Free -->
+      <div class="pricing-card">
+        <div class="pricing-card__tier">Free</div>
+        <div class="pricing-card__price">
+          <span class="pricing-card__amount">$0</span>
+          <span class="pricing-card__period">/mo</span>
+        </div>
+        <p class="pricing-card__desc">Personal projects and evaluation. No credit card required.</p>
+        <ul class="pricing-card__features">
+          <li class="pricing-card__feature">5 repositories</li>
+          <li class="pricing-card__feature">25 analyses / month</li>
+          <li class="pricing-card__feature">Full five-pillar grading</li>
+          <li class="pricing-card__feature">Issue breakdown &amp; detail</li>
+          <li class="pricing-card__feature">Dashboard &amp; history</li>
+        </ul>
+        <div class="pricing-card__cta">
+          <a href="${APP_URL}/signup" class="btn btn--outline" style="width:100%;justify-content:center;">Start for free</a>
+        </div>
+      </div>
+
+      <!-- Starter -->
+      <div class="pricing-card">
+        <div class="pricing-card__tier">Starter</div>
+        <div class="pricing-card__price">
+          <span class="pricing-card__amount">$19</span>
+          <span class="pricing-card__period">/mo</span>
+        </div>
+        <p class="pricing-card__desc">Small teams and growing solo developers.</p>
+        <ul class="pricing-card__features">
+          <li class="pricing-card__feature">20 repositories</li>
+          <li class="pricing-card__feature">200 analyses / month</li>
+          <li class="pricing-card__feature">50 AI fix generations / month</li>
+          <li class="pricing-card__feature">Pull request integration</li>
+          <li class="pricing-card__feature">Email notifications</li>
+        </ul>
+        <div class="pricing-card__cta">
+          <a href="${APP_URL}/signup" class="btn btn--outline" style="width:100%;justify-content:center;">Start Starter</a>
+        </div>
+      </div>
+
+      <!-- Pro (featured) -->
+      <div class="pricing-card pricing-card--featured">
+        <div class="pricing-card__tier">Pro</div>
+        <div class="pricing-card__price">
+          <span class="pricing-card__amount">$79</span>
+          <span class="pricing-card__period">/mo</span>
+        </div>
+        <p class="pricing-card__desc">Growing teams that need higher limits and faster support.</p>
+        <ul class="pricing-card__features">
+          <li class="pricing-card__feature">100 repositories</li>
+          <li class="pricing-card__feature">1,000 analyses / month</li>
+          <li class="pricing-card__feature">500 AI fix generations / month</li>
+          <li class="pricing-card__feature">PR integration with auto-fix proposals</li>
+          <li class="pricing-card__feature">Priority email support</li>
+        </ul>
+        <div class="pricing-card__cta">
+          <a href="${APP_URL}/signup" class="btn btn--primary" style="width:100%;justify-content:center;">Start Pro</a>
+        </div>
+      </div>
+
+      <!-- Ultimate -->
+      <div class="pricing-card">
+        <div class="pricing-card__tier">Ultimate</div>
+        <div class="pricing-card__price">
+          <span class="pricing-card__amount">$299</span>
+          <span class="pricing-card__period">/mo</span>
+        </div>
+        <p class="pricing-card__desc">Large organisations with unlimited need.</p>
+        <ul class="pricing-card__features">
+          <li class="pricing-card__feature">Unlimited repositories</li>
+          <li class="pricing-card__feature">Unlimited analyses</li>
+          <li class="pricing-card__feature">Unlimited AI fix generations</li>
+          <li class="pricing-card__feature">Dedicated support channel</li>
+          <li class="pricing-card__feature">Custom integrations on request</li>
+        </ul>
+        <div class="pricing-card__cta">
+          <a href="${APP_URL}/signup" class="btn btn--outline" style="width:100%;justify-content:center;">Start Ultimate</a>
+        </div>
+      </div>
+
+      <!-- Open Source -->
+      <div class="pricing-card pricing-card--oss">
+        <div class="pricing-card__tier" style="color: var(--primary);">Open Source</div>
+        <div class="pricing-card__price">
+          <span class="pricing-card__amount" style="color: var(--primary);">Free</span>
+        </div>
+        <p class="pricing-card__desc">For qualifying public open-source projects. Apply with your repository link.</p>
+        <ul class="pricing-card__features">
+          <li class="pricing-card__feature">Unlimited public repositories</li>
+          <li class="pricing-card__feature">500 analyses / month</li>
+          <li class="pricing-card__feature">200 AI fix generations / month</li>
+          <li class="pricing-card__feature">OSS badge for your README</li>
+          <li class="pricing-card__feature">Community support</li>
+        </ul>
+        <div class="pricing-card__cta">
+          <a href="${APP_URL}/signup" class="btn btn--outline" style="width:100%;justify-content:center; border-color: var(--green-500); color: var(--green-700);">Apply for OSS plan</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature comparison table -->
+    <div class="section__header">
+      <div class="section__label">Feature Comparison</div>
+      <h2 class="section__heading" style="font-size: 1.75rem;">Everything, side by side</h2>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="comparison-table" aria-label="Feature comparison across plans">
+        <thead>
+          <tr>
+            <th scope="col">Feature</th>
+            <th scope="col">Free</th>
+            <th scope="col">Starter</th>
+            <th scope="col">Pro</th>
+            <th scope="col">Ultimate</th>
+            <th scope="col">Open Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="section-row">
+            <td colspan="6">Limits</td>
+          </tr>
+          <tr>
+            <td>Repositories</td>
+            <td>5</td>
+            <td>20</td>
+            <td>100</td>
+            <td>Unlimited</td>
+            <td>Unlimited (public)</td>
+          </tr>
+          <tr>
+            <td>Analyses / month</td>
+            <td>25</td>
+            <td>200</td>
+            <td>1,000</td>
+            <td>Unlimited</td>
+            <td>500</td>
+          </tr>
+          <tr>
+            <td>AI fix generations / month</td>
+            <td class="dash">—</td>
+            <td>50</td>
+            <td>500</td>
+            <td>Unlimited</td>
+            <td>200</td>
+          </tr>
+
+          <tr class="section-row">
+            <td colspan="6">Analysis</td>
+          </tr>
+          <tr>
+            <td>Five-pillar grading (A+++ to F)</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Security analysis</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Reliability analysis</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Performance analysis</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Energy efficiency analysis</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Maintainability analysis</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Per-issue detail &amp; remediation advice</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+
+          <tr class="section-row">
+            <td colspan="6">AI Fixes</td>
+          </tr>
+          <tr>
+            <td>AI-generated fix patches</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>One-click PR creation</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+
+          <tr class="section-row">
+            <td colspan="6">Integrations</td>
+          </tr>
+          <tr>
+            <td>GitHub App integration</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Pull request status checks</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Email notifications</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+
+          <tr class="section-row">
+            <td colspan="6">Support</td>
+          </tr>
+          <tr>
+            <td>Community support</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Priority email support</td>
+            <td class="dash">—</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="dash">—</td>
+          </tr>
+          <tr>
+            <td>Dedicated support channel</td>
+            <td class="dash">—</td>
+            <td class="dash">—</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+            <td class="dash">—</td>
+          </tr>
+          <tr>
+            <td>OSS badge for README</td>
+            <td class="dash">—</td>
+            <td class="dash">—</td>
+            <td class="dash">—</td>
+            <td class="dash">—</td>
+            <td class="check">✓</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section section--alt" aria-labelledby="faq-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">FAQ</div>
+      <h2 class="section__heading" id="faq-heading">Questions, answered</h2>
+    </div>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-item__q">Does GreenSecOps ever store my source code?</div>
+        <p class="faq-item__a">No. GreenSecOps reads workflow files (<code>.github/workflows/*.yml</code>) via the GitHub API using the permissions you grant. Your application source code is never requested, downloaded, or stored. Workflow content is processed in memory and only the resulting analysis record is persisted in our database.</p>
+      </div>
+      <div class="faq-item">
+        <div class="faq-item__q">How does billing work? Can I cancel at any time?</div>
+        <p class="faq-item__a">Subscriptions are billed monthly via Stripe and renew automatically. You can cancel at any time from the billing page. When you cancel, your plan remains active until the end of the current billing period and then downgrades to Free. We do not offer prorated refunds for partial months, but we will consider refund requests for exceptional circumstances — contact <a href="mailto:support@greensecops.io">support@greensecops.io</a>.</p>
+      </div>
+      <div class="faq-item">
+        <div class="faq-item__q">What counts as an "analysis"?</div>
+        <p class="faq-item__a">One analysis corresponds to one workflow file being graded. If a push changes three workflow files, that consumes three analyses. If the file content is identical to the previous analysis (same SHA), the cached result is returned and no quota is consumed.</p>
+      </div>
+      <div class="faq-item">
+        <div class="faq-item__q">What AI model is used for fixes?</div>
+        <p class="faq-item__a">GreenSecOps uses frontier large language models (including OpenAI GPT-4 and Anthropic Claude) to generate fix suggestions. The specific model is chosen based on the issue category and complexity. You always review the proposed patch before it is committed to any pull request.</p>
+      </div>
+      <div class="faq-item">
+        <div class="faq-item__q">How do I qualify for the Open Source plan?</div>
+        <p class="faq-item__a">Your project must be publicly hosted on GitHub under an OSI-approved open-source licence, actively maintained (at least one commit in the past 90 days), and not commercially backed in a way that makes it ineligible for free-tier benefits. We review applications within 5 business days.</p>
+      </div>
+      <div class="faq-item">
+        <div class="faq-item__q">Do you offer annual billing or volume discounts?</div>
+        <p class="faq-item__a">Annual billing and volume pricing for very large organisations are available — contact <a href="mailto:sales@greensecops.io">sales@greensecops.io</a> to discuss your needs.</p>
+      </div>
+      <div class="faq-item">
+        <div class="faq-item__q">Which GitHub plans are supported?</div>
+        <p class="faq-item__a">GreenSecOps works with all GitHub plans — Free, Pro, Teams, and Enterprise Cloud. We use the public GitHub Apps API and standard OAuth; no GitHub Enterprise Server support at this time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" aria-labelledby="pricing-cta-heading">
+  <div class="container">
+    <h2 class="cta__headline" id="pricing-cta-heading">Ready to grade your first workflow?</h2>
+    <p class="cta__sub">Install the GitHub App and get your first report in under 2 minutes — completely free.</p>
+    <div class="cta__actions">
+      <a href="${APP_URL}/signup" class="btn btn--white btn--lg">Start for Free</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <a href="./index.html" class="footer__logo" aria-label="GreenSecOps home">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" fill="#1a7a4a" opacity="0.15"/>
+          <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#1a7a4a" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+          <circle cx="12" cy="9.5" r="1.5" fill="#1a7a4a"/>
+        </svg>
+        GreenSecOps
+      </a>
+      <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
+      <nav class="footer__links" aria-label="Footer navigation">
+        <a href="./pricing.html" class="footer__link">Pricing</a>
+        <a href="./privacy.html" class="footer__link">Privacy</a>
+        <a href="./terms.html" class="footer__link">Terms</a>
+        <a href="${APP_URL}" class="footer__link">App</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

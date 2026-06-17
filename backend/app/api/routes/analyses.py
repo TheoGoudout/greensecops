@@ -15,6 +15,27 @@ from app.workers.tasks.static_analysis import run_static_analysis
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
 
+def _to_analysis_public(analysis: Analysis) -> AnalysisPublic:
+    return AnalysisPublic(
+        id=analysis.id,
+        repo_id=analysis.repo_id,
+        workflow_file_id=analysis.workflow_file_id,
+        workflow_file_path=(
+            analysis.workflow_file.path if analysis.workflow_file else None
+        ),
+        repo_full_name=(analysis.repository.full_name if analysis.repository else None),
+        content_hash=analysis.content_hash,
+        status=analysis.status,
+        score=analysis.score,
+        grade=analysis.grade,
+        triggered_by=analysis.triggered_by,
+        branch=analysis.branch,
+        commit_sha=analysis.commit_sha,
+        created_at=analysis.created_at,
+        completed_at=analysis.completed_at,
+    )
+
+
 @router.get("/", response_model=list[AnalysisPublic])
 def list_analyses(
     session: SessionDep,
@@ -25,7 +46,7 @@ def list_analyses(
     status: AnalysisStatus | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
-) -> list[Analysis]:
+) -> list[AnalysisPublic]:
     query = select(Analysis)
     if repo_id:
         query = query.where(Analysis.repo_id == repo_id)
@@ -36,7 +57,7 @@ def list_analyses(
     if status:
         query = query.where(Analysis.status == status)
     query = query.order_by(Analysis.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
-    return list(session.exec(query).all())
+    return [_to_analysis_public(a) for a in session.exec(query).all()]
 
 
 @router.get("/{analysis_id}", response_model=AnalysisPublic)
@@ -44,11 +65,11 @@ def get_analysis(
     analysis_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
-) -> Analysis:
+) -> AnalysisPublic:
     analysis = session.get(Analysis, analysis_id)
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    return analysis
+    return _to_analysis_public(analysis)
 
 
 @router.post("/trigger/{repo_id}", status_code=202)

@@ -11,6 +11,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    host: true,
+    port: 5173,
+    watch: {
+      usePolling: true,
+      ignored: ["**/node_modules/**", "**/.git/**"],
+      interval: 1000,
+    },
+  },
   plugins: [
     tanstackRouter({
       target: "react",

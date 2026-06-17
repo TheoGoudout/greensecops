@@ -168,7 +168,7 @@ function Billing() {
                 />
                 <UsageBar
                   label="Repositories"
-                  used={0}
+                  used={subscription?.repos_used ?? 0}
                   limit={limitsData?.limits.repos ?? null}
                 />
                 <Button

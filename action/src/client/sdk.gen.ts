@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesGetRepoGradeSummaryData, RepositoriesGetRepoGradeSummaryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -219,6 +219,8 @@ export class FixesService {
      * List Fixes
      * @param data The data for the request.
      * @param data.issueId
+     * @param data.analysisId
+     * @param data.repoId
      * @param data.status
      * @param data.skip
      * @param data.limit
@@ -231,6 +233,8 @@ export class FixesService {
             url: '/api/v1/fixes/',
             query: {
                 issue_id: data.issueId,
+                analysis_id: data.analysisId,
+                repo_id: data.repoId,
                 status: data.status,
                 skip: data.skip,
                 limit: data.limit
@@ -274,6 +278,27 @@ export class FixesService {
             url: '/api/v1/fixes/{fix_id}',
             path: {
                 fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Fix Generation For Repo
+     * Queue a single batch fix generation call per workflow file for all issues in a repo.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static triggerFixGenerationForRepo(data: FixesTriggerFixGenerationForRepoData): CancelablePromise<FixesTriggerFixGenerationForRepoResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/generate-for-repo/{repo_id}',
+            path: {
+                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'
@@ -368,8 +393,10 @@ export class IssuesService {
      * List Issues
      * @param data The data for the request.
      * @param data.analysisId
+     * @param data.repoId
      * @param data.category
      * @param data.severity
+     * @param data.unfixed
      * @param data.skip
      * @param data.limit
      * @returns IssuePublic Successful Response
@@ -381,8 +408,10 @@ export class IssuesService {
             url: '/api/v1/issues/',
             query: {
                 analysis_id: data.analysisId,
+                repo_id: data.repoId,
                 category: data.category,
                 severity: data.severity,
+                unfixed: data.unfixed,
                 skip: data.skip,
                 limit: data.limit
             },
@@ -510,6 +539,57 @@ export class LoginService {
     }
 }
 
+export class OrganizationsService {
+    /**
+     * List Ai Providers
+     * Return only available LLM providers with per-provider default model.
+     * @returns AIProvidersPublic Successful Response
+     * @throws ApiError
+     */
+    public static listAiProviders(): CancelablePromise<OrganizationsListAiProvidersResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/organizations/ai-providers'
+        });
+    }
+
+    /**
+     * List My Organizations
+     * Return all organizations the current user belongs to.
+     * @returns OrganizationPublic Successful Response
+     * @throws ApiError
+     */
+    public static listMyOrganizations(): CancelablePromise<OrganizationsListMyOrganizationsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/organizations/'
+        });
+    }
+
+    /**
+     * Update Org Ai Preferences
+     * @param data The data for the request.
+     * @param data.orgId
+     * @param data.requestBody
+     * @returns OrganizationPublic Successful Response
+     * @throws ApiError
+     */
+    public static updateOrgAiPreferences(data: OrganizationsUpdateOrgAiPreferencesData): CancelablePromise<OrganizationsUpdateOrgAiPreferencesResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/organizations/{org_id}/ai-preferences',
+            path: {
+                org_id: data.orgId
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
 export class PrivateService {
     /**
      * Create User
@@ -570,6 +650,27 @@ export class RepositoriesService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/repositories/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Repo Grade Summary
+     * Return aggregate grade across all workflow files' latest completed analyses.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns RepoGradeSummary Successful Response
+     * @throws ApiError
+     */
+    public static getRepoGradeSummary(data: RepositoriesGetRepoGradeSummaryData): CancelablePromise<RepositoriesGetRepoGradeSummaryResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/repositories/{repo_id}/grade-summary',
             path: {
                 repo_id: data.repoId
             },

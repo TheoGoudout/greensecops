@@ -233,6 +233,25 @@ def test_list_fixes_filter_by_status(
     assert any(f["id"] == str(ready_fix.id) for f in data)
 
 
+def test_list_fixes_filter_by_repo_id(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    ready_fix: Fix,
+    repo: Repository,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/fixes/",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert any(f["id"] == str(ready_fix.id) for f in data)
+
+
 # ─── GET /fixes/{id} ──────────────────────────────────────────────────────────
 
 
@@ -267,6 +286,52 @@ def test_get_fix_not_found(
     # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Fix not found"
+
+
+# ─── POST /fixes/generate-for-repo/{repo_id} ─────────────────────────────────
+
+
+def test_generate_fixes_for_repo_queues_tasks(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    # Act
+    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert
+    assert response.status_code == 202
+    body = response.json()
+    assert body["queued"] >= 1
+    mock_delay.assert_called()
+
+
+def test_generate_fixes_for_repo_replaces_existing_fixes(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    ready_fix: Fix,
+    repo: Repository,
+    db: Session,
+) -> None:
+    # Arrange — ready_fix.issue already has a ready fix
+    fix_id = ready_fix.id
+    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert — existing non-delivered fix deleted, new task queued
+    assert response.status_code == 202
+    assert response.json()["queued"] >= 1
+    mock_delay.assert_called()
+    db.expire_all()  # clear identity map so get() hits the DB
+    assert db.get(Fix, fix_id) is None
 
 
 # ─── POST /fixes/generate/{issue_id} ─────────────────────────────────────────

@@ -162,7 +162,7 @@ class Organization(SQLModel, table=True):
     installation_id: int | None = Field(default=None, unique=True, index=True)
     name: str = Field(max_length=255, index=True)
     tier: UserTier = Field(default=UserTier.free)
-    default_llm_provider: LLMProvider = Field(default=LLMProvider.openai)
+    default_llm_provider: LLMProvider | None = Field(default=None)
     default_llm_model: str | None = Field(default=None, max_length=255)
     fix_delivery_mode: FixDeliveryMode = Field(default=FixDeliveryMode.pr)
     created_at: datetime | None = Field(
@@ -409,9 +409,27 @@ class OrganizationPublic(SQLModel):
     id: uuid.UUID
     name: str
     tier: UserTier
-    default_llm_provider: LLMProvider
+    default_llm_provider: LLMProvider | None = None
+    default_llm_model: str | None = None
     fix_delivery_mode: FixDeliveryMode
     created_at: datetime | None = None
+
+
+class OrganizationAIUpdate(SQLModel):
+    default_llm_provider: LLMProvider | None = None
+    default_llm_model: str | None = None
+
+
+class AIProviderInfo(SQLModel):
+    id: str
+    name: str
+    available: bool
+    default_model: str
+    models: list[str]
+
+
+class AIProvidersPublic(SQLModel):
+    providers: list[AIProviderInfo]
 
 
 class RepositoryPublic(SQLModel):
@@ -427,6 +445,8 @@ class AnalysisPublic(SQLModel):
     id: uuid.UUID
     repo_id: uuid.UUID
     workflow_file_id: uuid.UUID
+    workflow_file_path: str | None = None
+    repo_full_name: str | None = None
     content_hash: str
     status: AnalysisStatus
     score: float | None = None
@@ -450,6 +470,8 @@ class IssuePublic(SQLModel):
     message: str
     context: str | None = None
     created_at: datetime | None = None
+    fix_id: uuid.UUID | None = None
+    fix_status: FixStatus | None = None
 
 
 class FixPublic(SQLModel):
@@ -480,6 +502,7 @@ class BillingSubscriptionPublic(SQLModel):
     tier: UserTier
     analyses_used: int
     fixes_used: int
+    repos_used: int = 0
     period_start: datetime | None = None
     period_end: datetime | None = None
 
@@ -506,3 +529,10 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class RepoGradeSummary(SQLModel):
+    repo_id: uuid.UUID
+    avg_score: float | None
+    grade: str | None
+    workflow_count: int

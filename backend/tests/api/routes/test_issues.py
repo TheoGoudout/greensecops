@@ -238,6 +238,65 @@ def test_list_issues_filter_by_severity(
     assert any(i["id"] == str(issue.id) for i in data)
 
 
+def test_list_issues_filter_by_repo_id(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert any(i["id"] == str(issue.id) for i in data)
+
+
+def test_list_issues_unfixed_filter(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    analysis: Analysis,
+) -> None:
+    # Act — issue with no fix should appear when unfixed=true
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={"analysis_id": str(analysis.id), "unfixed": "true"},
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert any(i["id"] == str(issue.id) for i in data)
+
+
+def test_list_issues_includes_fix_status(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    analysis: Analysis,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={"analysis_id": str(analysis.id)},
+        headers=superuser_token_headers,
+    )
+
+    # Assert — fix_id and fix_status present (null when no fix exists)
+    assert response.status_code == 200
+    data = response.json()
+    found = next(i for i in data if i["id"] == str(issue.id))
+    assert found["fix_id"] is None
+    assert found["fix_status"] is None
+
+
 # ─── GET /issues/{id} ─────────────────────────────────────────────────────────
 
 

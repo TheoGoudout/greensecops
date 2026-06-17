@@ -23,6 +23,7 @@ import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutBillingRouteImport } from './routes/_layout/billing'
 import { Route as LayoutBadgesRouteImport } from './routes/_layout/badges'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutRepositoriesIndexRouteImport } from './routes/_layout/repositories/index'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as AuthGithubAppCallbackRouteImport } from './routes/auth/github/app-callback'
 import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
@@ -97,6 +98,11 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutRepositoriesIndexRoute = LayoutRepositoriesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LayoutRepositoriesRoute,
+} as any)
 const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
   id: '/auth/github/callback',
   path: '/auth/github/callback',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/repositories/': typeof LayoutRepositoriesIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -149,7 +156,6 @@ export interface FileRoutesByTo {
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/issues': typeof LayoutIssuesRoute
-  '/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
@@ -157,6 +163,7 @@ export interface FileRoutesByTo {
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/repositories': typeof LayoutRepositoriesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,6 +185,7 @@ export interface FileRoutesById {
   '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/_layout/repositories/': typeof LayoutRepositoriesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,6 +207,7 @@ export interface FileRouteTypes {
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
+    | '/repositories/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -210,7 +219,6 @@ export interface FileRouteTypes {
     | '/billing'
     | '/dashboard'
     | '/issues'
-    | '/repositories'
     | '/rules'
     | '/settings'
     | '/'
@@ -218,6 +226,7 @@ export interface FileRouteTypes {
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
+    | '/repositories'
   id:
     | '__root__'
     | '/_layout'
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
+    | '/_layout/repositories/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -350,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/repositories/': {
+      id: '/_layout/repositories/'
+      path: '/'
+      fullPath: '/repositories/'
+      preLoaderRoute: typeof LayoutRepositoriesIndexRouteImport
+      parentRoute: typeof LayoutRepositoriesRoute
+    }
     '/auth/github/callback': {
       id: '/auth/github/callback'
       path: '/auth/github/callback'
@@ -383,10 +400,12 @@ declare module '@tanstack/react-router' {
 
 interface LayoutRepositoriesRouteChildren {
   LayoutRepositoriesRepoIdRoute: typeof LayoutRepositoriesRepoIdRoute
+  LayoutRepositoriesIndexRoute: typeof LayoutRepositoriesIndexRoute
 }
 
 const LayoutRepositoriesRouteChildren: LayoutRepositoriesRouteChildren = {
   LayoutRepositoriesRepoIdRoute: LayoutRepositoriesRepoIdRoute,
+  LayoutRepositoriesIndexRoute: LayoutRepositoriesIndexRoute,
 }
 
 const LayoutRepositoriesRouteWithChildren =
