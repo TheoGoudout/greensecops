@@ -17,6 +17,41 @@ from app.models import (
     WorkflowFile,
 )
 
+# ─── helpers ──────────────────────────────────────────────────────────────────
+
+
+def _add_workflow_analysis(
+    db: Session,
+    repo: Repository,
+    path: str,
+    score: float,
+    grade: str,
+    branch: str = "main",
+) -> None:
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=path,
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    db.add(
+        Analysis(
+            repo_id=repo.id,
+            workflow_file_id=wf.id,
+            content_hash=wf.content_hash,
+            status=AnalysisStatus.completed,
+            score=score,
+            grade=grade,
+            triggered_by=AnalysisTrigger.manual,
+            branch=branch,
+        )
+    )
+    db.commit()
+
+
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -189,4 +224,47 @@ def test_json_badge_with_grade(
     assert body["schemaVersion"] == 1
     assert body["message"] == "A+"
     assert "color" in body
+    assert body.get("cacheSeconds") == 300
+
+
+# ─── Multi-workflow average grade ─────────────────────────────────────────────
+
+
+def test_svg_badge_avg_grade_across_workflow_files(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — workflow files with scores 80 and 60 → avg 70 → grade B
+    # A naive "most-recent analysis" approach would show whichever ran last;
+    # the correct behaviour averages latest analysis per workflow file.
+    _add_workflow_analysis(db, repo, ".github/workflows/ci.yml", score=80.0, grade="B")
+    _add_workflow_analysis(
+        db, repo, ".github/workflows/deploy.yml", score=60.0, grade="C"
+    )
+    owner, repo_name = repo.full_name.split("/", 1)
+
+    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.svg")
+
+    assert response.status_code == 200
+    assert b"B" in response.content
+
+
+def test_json_badge_avg_grade_across_workflow_files(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — same scenario as SVG test above
+    _add_workflow_analysis(db, repo, ".github/workflows/ci.yml", score=80.0, grade="B")
+    _add_workflow_analysis(
+        db, repo, ".github/workflows/deploy.yml", score=60.0, grade="C"
+    )
+    owner, repo_name = repo.full_name.split("/", 1)
+
+    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.json")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["message"] == "B"
     assert body.get("cacheSeconds") == 300

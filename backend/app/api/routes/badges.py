@@ -1,10 +1,13 @@
+import uuid
+
 from fastapi import APIRouter
 from fastapi.responses import Response
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.api.deps import SessionDep
 from app.models import Analysis, AnalysisStatus, Repository
 from app.services.badge_renderer import render_badge, render_unknown_badge
+from app.services.scoring import score_to_grade
 
 router = APIRouter(prefix="/badges", tags=["badges"])
 
@@ -12,6 +15,35 @@ _CACHE_HEADERS = {
     "Cache-Control": "max-age=300, s-maxage=300",
     "Content-Type": "image/svg+xml",
 }
+
+
+def _avg_grade_for_branch(
+    session: Session, repo_id: uuid.UUID, branch: str
+) -> str | None:
+    """Average grade across latest completed analysis per workflow file on a branch."""
+    analyses = session.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo_id)
+        .where(Analysis.branch == branch)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
+        .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
+    ).all()
+
+    seen: set[uuid.UUID] = set()
+    latest_per_file: list[Analysis] = []
+    for a in analyses:
+        if a.workflow_file_id not in seen:
+            seen.add(a.workflow_file_id)
+            latest_per_file.append(a)
+
+    if not latest_per_file:
+        return None
+
+    avg = sum(a.score for a in latest_per_file if a.score is not None) / len(  # type: ignore[arg-type]
+        latest_per_file
+    )
+    return score_to_grade(avg)
 
 
 @router.get("/{owner}/{repo}/{branch}.svg", response_class=Response)
@@ -33,15 +65,7 @@ def get_badge(
             headers=_CACHE_HEADERS,
         )
 
-    latest = session.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == db_repo.id)
-        .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
-    ).first()
-
-    grade = latest.grade if latest and latest.grade else None
+    grade = _avg_grade_for_branch(session, db_repo.id, branch)
     svg = render_badge(grade) if grade else render_unknown_badge()
 
     return Response(content=svg, headers=_CACHE_HEADERS)
@@ -69,15 +93,9 @@ def get_badge_json(
             "color": "lightgrey",
         }
 
-    latest = session.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == db_repo.id)
-        .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
-    ).first()
+    grade = _avg_grade_for_branch(session, db_repo.id, branch)
 
-    if not latest or not latest.grade:
+    if not grade:
         return {
             "schemaVersion": 1,
             "label": "GreenSecOps",
@@ -87,11 +105,11 @@ def get_badge_json(
 
     from app.services.badge_renderer import _GRADE_COLORS
 
-    color = _GRADE_COLORS.get(latest.grade, "#9CA3AF").lstrip("#")
+    color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {
         "schemaVersion": 1,
         "label": "GreenSecOps",
-        "message": latest.grade,
+        "message": grade,
         "color": color,
         "cacheSeconds": 300,
     }

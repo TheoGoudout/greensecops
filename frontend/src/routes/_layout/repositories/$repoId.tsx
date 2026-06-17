@@ -80,12 +80,7 @@ function RepositoryDetail() {
     queryFn: () => RepositoriesService.getRepository({ repoId }),
   })
 
-  const { data: latestAnalyses } = useQuery({
-    queryKey: ["analyses", repoId, "latest"],
-    queryFn: () =>
-      AnalysesService.listAnalyses({ repoId, limit: 1, status: "completed" }),
-  })
-  const currentGrade = latestAnalyses?.[0]?.grade ?? null
+  const currentGrade = repo?.grade ?? null
 
   const { data: analyses, isLoading: analysesLoading } = useQuery({
     queryKey: ["analyses", repoId, branch],
