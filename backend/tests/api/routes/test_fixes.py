@@ -298,9 +298,7 @@ def test_generate_fixes_for_repo_queues_tasks(
     repo: Repository,
 ) -> None:
     # Act
-    with patch(
-        "app.workers.tasks.fix_generation.run_fix_generation.delay"
-    ) as mock_delay:
+    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
@@ -313,26 +311,26 @@ def test_generate_fixes_for_repo_queues_tasks(
     mock_delay.assert_called()
 
 
-def test_generate_fixes_for_repo_skips_already_fixed(
+def test_generate_fixes_for_repo_replaces_existing_fixes(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     ready_fix: Fix,
     repo: Repository,
+    db: Session,
 ) -> None:
-    # Arrange — ready_fix.issue already has an active fix
-    with patch(
-        "app.workers.tasks.fix_generation.run_fix_generation.delay"
-    ) as mock_delay:
+    # Arrange — ready_fix.issue already has a ready fix
+    fix_id = ready_fix.id
+    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
         )
 
-    # Assert — the already-fixed issue should not be re-queued
+    # Assert — existing non-delivered fix deleted, new task queued
     assert response.status_code == 202
-    # ready_fix issue excluded; only remaining unfixed issues (if any) are queued
-    for call_args in mock_delay.call_args_list:
-        assert call_args.kwargs.get("issue_id") != str(ready_fix.issue_id)
+    assert response.json()["queued"] >= 1
+    mock_delay.assert_called()
+    assert db.get(Fix, fix_id) is None
 
 
 # ─── POST /fixes/generate/{issue_id} ─────────────────────────────────────────
