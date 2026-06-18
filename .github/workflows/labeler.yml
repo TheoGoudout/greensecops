@@ -1,16 +1,13 @@
 name: Labels
-on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers]
+true:
+  pull_request_target:
     types:
-      - opened
-      - synchronize
-      - reopened
-      # For label-checker
-      - labeled
-      - unlabeled
-
+    - opened
+    - synchronize
+    - reopened
+    - labeled
+    - unlabeled
 permissions: {}
-
 jobs:
   labeler:
     permissions:
@@ -20,19 +17,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-    - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213 # v6.1.0
-      if: ${{ github.event.action != 'labeled' && github.event.action != 'unlabeled' }}
+    - &id001
+      name: GreenSecOps Telemetry
+      uses: greensecops/greensecops-action@v1
+      with:
+        greensecops_url: ${{ vars.GREENSECOPS_URL }}
+    - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213
+      if: ${{ github.event.action != 'labeled' && github.event.action != 'unlabeled'
+        }}
     - run: echo "Done adding labels"
-  # Run this after labeler applied labels
   check-labels:
     needs:
-      - labeler
+    - labeler
     permissions:
       pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5 # v1.6.65
-        with:
-          one_of: breaking,security,feature,bug,refactor,upgrade,docs,lang-all,internal
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
+    - *id001
+    - uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
+      with:
+        one_of: breaking,security,feature,bug,refactor,upgrade,docs,lang-all,internal
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
