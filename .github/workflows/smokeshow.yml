@@ -9,6 +9,7 @@ permissions: {}
 
 jobs:
   smokeshow:
+    name: Upload coverage report
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
