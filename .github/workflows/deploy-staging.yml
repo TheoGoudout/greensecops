@@ -1,20 +1,16 @@
 name: Deploy to Staging
-
-on:
+true:
   push:
     branches:
-      - master
-
+    - master
 permissions: {}
-
 jobs:
   deploy:
     environment: staging
-    # Do not deploy in the main repository, only in user projects
     if: github.repository_owner != 'fastapi'
     runs-on:
-      - self-hosted
-      - staging
+    - self-hosted
+    - staging
     env:
       ENVIRONMENT: staging
       DOMAIN: ${{ secrets.DOMAIN_STAGING }}
@@ -29,9 +25,15 @@ jobs:
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-      - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} build
-      - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} up -d
+    - name: GreenSecOps Telemetry
+      uses: greensecops/greensecops-action@v1
+      with:
+        greensecops_url: ${{ vars.GREENSECOPS_URL }}
+    - name: Checkout
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        persist-credentials: false
+    - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING
+        }} build
+    - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING
+        }} up -d
