@@ -8,6 +8,8 @@
     "build": "ncc build src/pre.ts -o dist/pre --minify --no-source-map-register && ncc build src/main.ts -o dist/main --minify --no-source-map-register && ncc build src/post.ts -o dist/post --minify --no-source-map-register && ncc build src/daemon.ts -o dist/daemon --minify --no-source-map-register",
     "typecheck": "tsc --noEmit",
     "lint": "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
     "generate-client": "openapi-ts"
   },
   "dependencies": {
