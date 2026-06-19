@@ -70,6 +70,7 @@ export type FixPublic = {
     llm_model: string;
     status: FixStatus;
     diff?: (string | null);
+    diff_patch?: (string | null);
     pr_url?: (string | null);
     pr_state?: (string | null);
     comment_url?: (string | null);

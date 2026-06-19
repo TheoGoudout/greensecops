@@ -376,6 +376,17 @@ export const FixPublicSchema = {
             ],
             title: 'Diff'
         },
+        diff_patch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Diff Patch'
+        },
         pr_url: {
             anyOf: [
                 {

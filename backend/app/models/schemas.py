@@ -113,6 +113,7 @@ class FixPublic(SQLModel):
     llm_model: str
     status: FixStatus
     diff: str | None = None
+    diff_patch: str | None = None
     pr_url: str | None = None
     pr_state: str | None = None
     comment_url: str | None = None
