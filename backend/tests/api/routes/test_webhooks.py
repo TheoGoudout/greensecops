@@ -8,10 +8,25 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import Organization, Repository, UserTier
+from app.models import (
+    Analysis,
+    AnalysisStatus,
+    AnalysisTrigger,
+    Fix,
+    FixStatus,
+    Issue,
+    IssueCategory,
+    IssueSeverity,
+    LLMProvider,
+    Organization,
+    Repository,
+    Rule,
+    UserTier,
+    WorkflowFile,
+)
 
 WEBHOOK_URL = f"{settings.API_V1_STR}/webhooks/github"
 
@@ -644,20 +659,6 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db: Session,
     org: Organization,
 ) -> None:
-    from app.models import (
-        Analysis,
-        AnalysisStatus,
-        AnalysisTrigger,
-        Fix,
-        FixStatus,
-        Issue,
-        IssueCategory,
-        IssueSeverity,
-        LLMProvider,
-        Rule,
-        WorkflowFile,
-    )
-
     repo = Repository(
         org_id=org.id,
         github_repo_id=int(uuid.uuid4().int % 10**9),
@@ -738,20 +739,6 @@ def test_github_webhook_pull_request_closed_not_merged(
     db: Session,
     org: Organization,
 ) -> None:
-    from app.models import (
-        Analysis,
-        AnalysisStatus,
-        AnalysisTrigger,
-        Fix,
-        FixStatus,
-        Issue,
-        IssueCategory,
-        IssueSeverity,
-        LLMProvider,
-        Rule,
-        WorkflowFile,
-    )
-
     repo = Repository(
         org_id=org.id,
         github_repo_id=int(uuid.uuid4().int % 10**9),
@@ -870,12 +857,9 @@ def test_enqueue_static_analysis_calls_celery_task() -> None:
     from unittest.mock import MagicMock
 
     from app.api.routes.webhooks import _enqueue_static_analysis
-    from app.models import AnalysisTrigger
 
     mock_task = MagicMock()
-    with patch(
-        "app.workers.tasks.static_analysis.run_static_analysis", mock_task
-    ):
+    with patch("app.workers.tasks.static_analysis.run_static_analysis", mock_task):
         _enqueue_static_analysis(
             repo_id="abc-123",
             branch="main",
@@ -891,9 +875,6 @@ def test_enqueue_installation_sync_calls_celery_task() -> None:
     from app.api.routes.webhooks import _enqueue_installation_sync
 
     mock_task = MagicMock()
-    with patch(
-        "app.workers.tasks.installation_sync.sync_installation_repositories",
-        mock_task,
-    ):
+    with patch("app.workers.tasks.installation_sync.sync_installation_repositories", mock_task):
         _enqueue_installation_sync(12345, "org-id-str")
     mock_task.delay.assert_called_once()
