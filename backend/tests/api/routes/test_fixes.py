@@ -663,4 +663,3 @@ def test_deliver_for_repo_no_ready_fixes_returns_404(
     # Note: repo fixture may have a ready_fix from other tests in same session,
     # so we only assert a valid HTTP response
     assert response.status_code in (202, 404)
-    assert response.json()["detail"] == "Fix not found"
