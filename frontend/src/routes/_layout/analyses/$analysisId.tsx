@@ -10,6 +10,7 @@ import { SeverityChip } from "@/components/SeverityChip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
 
 export const Route = createFileRoute("/_layout/analyses/$analysisId")({
   component: AnalysisDetail,
@@ -18,19 +19,11 @@ export const Route = createFileRoute("/_layout/analyses/$analysisId")({
   }),
 })
 
-const CATEGORIES: IssueCategory[] = [
-  "energy",
-  "reliability",
-  "security",
-  "performance",
-  "maintainability",
-]
-
 function groupByCategory(
   issues: IssuePublic[],
 ): Record<IssueCategory, IssuePublic[]> {
   const groups = Object.fromEntries(
-    CATEGORIES.map((c) => [c, [] as IssuePublic[]]),
+    ISSUE_CATEGORIES.map((c) => [c, [] as IssuePublic[]]),
   ) as Record<IssueCategory, IssuePublic[]>
   for (const issue of issues) {
     groups[issue.category].push(issue)
@@ -73,7 +66,9 @@ function AnalysisDetail() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <Link
-          to="/repositories"
+          to={analysis?.repo_id ? "/repositories/$repoId" : "/repositories"}
+          params={analysis?.repo_id ? { repoId: analysis.repo_id } : undefined}
+          search={analysis?.repo_id ? { tab: "analyses" } : undefined}
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -147,78 +142,78 @@ function AnalysisDetail() {
             </CardContent>
           </Card>
         ) : (
-          CATEGORIES.filter((cat) => grouped && grouped[cat].length > 0).map(
-            (cat) => (
-              <Card key={cat}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <CategoryIcon category={cat} withLabel />
-                    <span className="text-muted-foreground font-normal">
-                      ({grouped![cat].length})
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {grouped![cat].map((issue) => {
-                      const githubUrl =
-                        analysis?.repo_full_name &&
-                        analysis?.workflow_file_path &&
-                        issue.line_start != null
-                          ? `https://github.com/${analysis.repo_full_name}/blob/${analysis?.branch ?? "main"}/${analysis.workflow_file_path}#L${issue.line_start}${issue.line_end && issue.line_end !== issue.line_start ? `-L${issue.line_end}` : ""}`
-                          : null
+          ISSUE_CATEGORIES.filter(
+            (cat) => grouped && grouped[cat].length > 0,
+          ).map((cat) => (
+            <Card key={cat}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CategoryIcon category={cat} withLabel />
+                  <span className="text-muted-foreground font-normal">
+                    ({grouped![cat].length})
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {grouped![cat].map((issue) => {
+                    const githubUrl =
+                      analysis?.repo_full_name &&
+                      analysis?.workflow_file_path &&
+                      issue.line_start != null
+                        ? `https://github.com/${analysis.repo_full_name}/blob/${analysis?.branch ?? "main"}/${analysis.workflow_file_path}#L${issue.line_start}${issue.line_end && issue.line_end !== issue.line_start ? `-L${issue.line_end}` : ""}`
+                        : null
 
-                      return (
-                        <div
-                          key={issue.id}
-                          className="px-6 py-3 flex items-start gap-3"
-                        >
-                          <SeverityChip
-                            severity={issue.severity}
-                            className="mt-0.5 shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm">{issue.message}</p>
-                            {issue.line_start !== null && (
-                              <div className="mt-0.5">
-                                {githubUrl ? (
-                                  <a
-                                    href={githubUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                                  >
-                                    Line {issue.line_start}
-                                    {issue.line_end &&
-                                    issue.line_end !== issue.line_start
-                                      ? `–${issue.line_end}`
-                                      : ""}
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground">
-                                    Line {issue.line_start}
-                                    {issue.line_end &&
-                                    issue.line_end !== issue.line_start
-                                      ? `–${issue.line_end}`
-                                      : ""}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <GenerateFixButton
-                            issueId={issue.id}
-                            fixStatus={issue.fix_status}
-                          />
+                    return (
+                      <div
+                        key={issue.id}
+                        className="px-6 py-3 flex items-start gap-3"
+                      >
+                        <SeverityChip
+                          severity={issue.severity}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm">{issue.message}</p>
+                          {issue.line_start !== null && (
+                            <div className="mt-0.5">
+                              {githubUrl ? (
+                                <a
+                                  href={githubUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  Line {issue.line_start}
+                                  {issue.line_end &&
+                                  issue.line_end !== issue.line_start
+                                    ? `–${issue.line_end}`
+                                    : ""}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  Line {issue.line_start}
+                                  {issue.line_end &&
+                                  issue.line_end !== issue.line_start
+                                    ? `–${issue.line_end}`
+                                    : ""}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            ),
-          )
+                        <GenerateFixButton
+                          issueId={issue.id}
+                          fixStatus={issue.fix_status}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          ))
         )}
       </div>
     </div>

@@ -12,6 +12,27 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
+    """Return (provider_str, model_str), cascading repo → org → first available."""
+    provider_str = repo.llm_provider.value if repo.llm_provider else None
+    model_str = repo.llm_model
+
+    if not provider_str and repo.organization:
+        org = repo.organization
+        provider_str = (
+            org.default_llm_provider.value if org.default_llm_provider else None
+        )
+        model_str = model_str or org.default_llm_model
+
+    if not provider_str:
+        from app.services.llm.catalog import get_first_available_provider
+
+        provider_str, fallback_model = get_first_available_provider()
+        model_str = model_str or fallback_model
+
+    return provider_str, model_str or "gpt-4o-mini"
+
+
 @celery_app.task(name="fix_generation.run", bind=True, max_retries=3)
 def run_fix_generation(
     self: object,  # noqa: ARG001
@@ -35,23 +56,7 @@ def run_fix_generation(
             return {"status": "error", "detail": "repository_not_found"}
 
         rule = issue.rule
-
-        # Determine LLM provider (repo → org → first available)
-        provider_str = repo.llm_provider.value if repo.llm_provider else None
-        model_str = repo.llm_model
-
-        if not provider_str and repo.organization:
-            org = repo.organization
-            provider_str = (
-                org.default_llm_provider.value if org.default_llm_provider else None
-            )
-            model_str = model_str or org.default_llm_model
-
-        if not provider_str:
-            from app.services.llm.catalog import get_first_available_provider
-
-            provider_str, fallback_model = get_first_available_provider()
-            model_str = model_str or fallback_model
+        provider_str, model_str = _resolve_llm_provider(repo)
 
         # Create Fix record in generating state
         fix = Fix(
@@ -126,23 +131,9 @@ def run_batch_fix_generation(
         if not repo:
             return {"status": "error", "detail": "repository_not_found"}
 
-        provider_str = repo.llm_provider.value if repo.llm_provider else None
-        model_str = repo.llm_model
-        if not provider_str and repo.organization:
-            org = repo.organization
-            provider_str = (
-                org.default_llm_provider.value if org.default_llm_provider else None
-            )
-            model_str = model_str or org.default_llm_model
-
-        if not provider_str:
-            from app.services.llm.catalog import get_first_available_provider
-
-            provider_str, fallback_model = get_first_available_provider()
-            model_str = model_str or fallback_model
-
+        provider_str, model_str = _resolve_llm_provider(repo)
         llm_provider = LLMProvider(provider_str)
-        llm_model = model_str or "gpt-4o-mini"
+        llm_model = model_str
 
         fixes = []
         for issue in issues:

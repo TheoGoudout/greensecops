@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from typing import Annotated
+from typing import Annotated, Any, TypeVar
 
 import jwt
 import redis.asyncio as aioredis
@@ -129,3 +129,16 @@ async def verify_github_oidc_token(
 
 
 GitHubOidcClaims = Annotated[dict, Depends(verify_github_oidc_token)]
+
+_T = TypeVar("_T")
+
+
+def get_or_404(
+    session: "Session", model: type[_T], entity_id: Any, detail: str | None = None
+) -> _T:
+    obj = session.get(model, entity_id)
+    if not obj:
+        raise HTTPException(
+            status_code=404, detail=detail or f"{model.__name__} not found"
+        )
+    return obj

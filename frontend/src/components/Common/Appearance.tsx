@@ -22,6 +22,31 @@ const ICON_MAP: Record<Theme, LucideIcon> = {
   dark: Moon,
 }
 
+function ThemeMenuItems({ setTheme }: { setTheme: (theme: Theme) => void }) {
+  return (
+    <>
+      <DropdownMenuItem
+        data-testid="light-mode"
+        onClick={() => setTheme("light")}
+      >
+        <Sun className="mr-2 h-4 w-4" />
+        Light
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        data-testid="dark-mode"
+        onClick={() => setTheme("dark")}
+      >
+        <Moon className="mr-2 h-4 w-4" />
+        Dark
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setTheme("system")}>
+        <Monitor className="mr-2 h-4 w-4" />
+        System
+      </DropdownMenuItem>
+    </>
+  )
+}
+
 export const SidebarAppearance = () => {
   const { isMobile } = useSidebar()
   const { setTheme, theme } = useTheme()
@@ -42,24 +67,7 @@ export const SidebarAppearance = () => {
           align="end"
           className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
         >
-          <DropdownMenuItem
-            data-testid="light-mode"
-            onClick={() => setTheme("light")}
-          >
-            <Sun className="mr-2 h-4 w-4" />
-            Light
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            data-testid="dark-mode"
-            onClick={() => setTheme("dark")}
-          >
-            <Moon className="mr-2 h-4 w-4" />
-            Dark
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme("system")}>
-            <Monitor className="mr-2 h-4 w-4" />
-            System
-          </DropdownMenuItem>
+          <ThemeMenuItems setTheme={setTheme} />
         </DropdownMenuContent>
       </DropdownMenu>
     </SidebarMenuItem>
@@ -80,24 +88,7 @@ export const Appearance = () => {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            data-testid="light-mode"
-            onClick={() => setTheme("light")}
-          >
-            <Sun className="mr-2 h-4 w-4" />
-            Light
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            data-testid="dark-mode"
-            onClick={() => setTheme("dark")}
-          >
-            <Moon className="mr-2 h-4 w-4" />
-            Dark
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme("system")}>
-            <Monitor className="mr-2 h-4 w-4" />
-            System
-          </DropdownMenuItem>
+          <ThemeMenuItems setTheme={setTheme} />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     # OPA
     OPA_URL: str = "http://opa:8181"
 
+    # Wiki & PR messaging
+    WIKI_BASE_URL: str = "http://localhost:3001/rules"
+    GITHUB_BOT_HANDLE: str = "@greensecops"
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (

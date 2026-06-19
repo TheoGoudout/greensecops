@@ -181,6 +181,28 @@ export const AnalysisTriggerSchema = {
     title: 'AnalysisTrigger'
 } as const;
 
+export const BatchFixRequestSchema = {
+    properties: {
+        issue_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string',
+                        format: 'uuid'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Issue Ids'
+        }
+    },
+    type: 'object',
+    title: 'BatchFixRequest'
+} as const;
+
 export const BillingSubscriptionPublicSchema = {
     properties: {
         id: {
@@ -291,6 +313,30 @@ export const Body_login_login_access_tokenSchema = {
     title: 'Body_login-login_access_token'
 } as const;
 
+export const ExternalRepositoryCreateSchema = {
+    properties: {
+        full_name: {
+            type: 'string',
+            maxLength: 512,
+            title: 'Full Name'
+        },
+        installation_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Installation Id'
+        }
+    },
+    type: 'object',
+    required: ['full_name'],
+    title: 'ExternalRepositoryCreate'
+} as const;
+
 export const FixDeliveryModeSchema = {
     type: 'string',
     enum: ['pr', 'comment', 'disabled'],
@@ -330,6 +376,17 @@ export const FixPublicSchema = {
             ],
             title: 'Diff'
         },
+        diff_patch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Diff Patch'
+        },
         pr_url: {
             anyOf: [
                 {
@@ -340,6 +397,17 @@ export const FixPublicSchema = {
                 }
             ],
             title: 'Pr Url'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr State'
         },
         comment_url: {
             anyOf: [
@@ -517,6 +585,17 @@ export const IssuePublicSchema = {
                     type: 'null'
                 }
             ]
+        },
+        workflow_file_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Workflow File Path'
         }
     },
     type: 'object',
@@ -689,6 +768,11 @@ export const RepositoryPublicSchema = {
         enabled: {
             type: 'boolean',
             title: 'Enabled'
+        },
+        is_external: {
+            type: 'boolean',
+            title: 'Is External',
+            default: false
         },
         default_branch: {
             type: 'string',
@@ -1216,4 +1300,20 @@ export const ValidationErrorSchema = {
     type: 'object',
     required: ['loc', 'msg', 'type'],
     title: 'ValidationError'
+} as const;
+
+export const WorkflowDeliverRequestSchema = {
+    properties: {
+        fix_ids: {
+            items: {
+                type: 'string',
+                format: 'uuid'
+            },
+            type: 'array',
+            title: 'Fix Ids'
+        }
+    },
+    type: 'object',
+    required: ['fix_ids'],
+    title: 'WorkflowDeliverRequest'
 } as const;
