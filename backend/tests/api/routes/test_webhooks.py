@@ -634,3 +634,266 @@ def test_github_webhook_installation_repositories_removed_disables(
     assert response.status_code == 200
     db.refresh(repo)
     assert repo.enabled is False
+
+
+# ─── Pull request event ──────────────────────────────────────────────────────
+
+
+def test_github_webhook_pull_request_merged_updates_fix(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    from app.models import (
+        Analysis,
+        AnalysisStatus,
+        AnalysisTrigger,
+        Fix,
+        FixStatus,
+        Issue,
+        IssueCategory,
+        IssueSeverity,
+        LLMProvider,
+        Rule,
+        WorkflowFile,
+    )
+
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/pr-merged-{uuid.uuid4().hex[:6]}",
+        installation_id=99910,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    wf = WorkflowFile(
+        repo_id=repo.id, path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex, raw_content="on: push",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+
+    analysis = Analysis(
+        repo_id=repo.id, workflow_file_id=wf.id,
+        content_hash=wf.content_hash, status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual, branch="main",
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    rule = db.exec(select(Rule)).first()
+    if not rule:
+        rule = Rule(
+            slug=f"test-rule-{uuid.uuid4().hex[:6]}",
+            category=IssueCategory.security,
+            severity=IssueSeverity.high,
+            title="Test Rule", description="A test rule",
+        )
+        db.add(rule)
+        db.commit()
+        db.refresh(rule)
+
+    issue = Issue(
+        analysis_id=analysis.id, rule_id=rule.id,
+        severity=IssueSeverity.high, category=IssueCategory.security,
+        message="test issue",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    fix = Fix(
+        issue_id=issue.id, llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini", status=FixStatus.delivered,
+        pr_url=pr_url,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    payload = {
+        "action": "closed",
+        "pull_request": {"html_url": pr_url, "merged": True},
+    }
+
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+
+    assert response.status_code == 200
+    db.refresh(fix)
+    assert fix.pr_state == "merged"
+
+
+def test_github_webhook_pull_request_closed_not_merged(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    from app.models import (
+        Analysis,
+        AnalysisStatus,
+        AnalysisTrigger,
+        Fix,
+        FixStatus,
+        Issue,
+        IssueCategory,
+        IssueSeverity,
+        LLMProvider,
+        Rule,
+        WorkflowFile,
+    )
+
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/pr-closed-{uuid.uuid4().hex[:6]}",
+        installation_id=99911,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    wf = WorkflowFile(
+        repo_id=repo.id, path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex, raw_content="on: push",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+
+    analysis = Analysis(
+        repo_id=repo.id, workflow_file_id=wf.id,
+        content_hash=wf.content_hash, status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual, branch="main",
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+
+    issue = Issue(
+        analysis_id=analysis.id, rule_id=rule.id,
+        severity=IssueSeverity.high, category=IssueCategory.security,
+        message="test issue closed",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    fix = Fix(
+        issue_id=issue.id, llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini", status=FixStatus.delivered,
+        pr_url=pr_url,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    payload = {
+        "action": "closed",
+        "pull_request": {"html_url": pr_url, "merged": False},
+    }
+
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+
+    assert response.status_code == 200
+    db.refresh(fix)
+    assert fix.pr_state == "closed"
+
+
+def test_github_webhook_pull_request_non_closed_skipped(
+    client: TestClient,
+) -> None:
+    payload = {
+        "action": "opened",
+        "pull_request": {"html_url": "https://github.com/o/r/pull/1"},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+    assert response.status_code == 200
+
+
+def test_github_webhook_pull_request_no_pr_url_skipped(
+    client: TestClient,
+) -> None:
+    payload = {"action": "closed", "pull_request": {}}
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+    assert response.status_code == 200
+
+
+def test_github_webhook_pull_request_fix_not_found_skipped(
+    client: TestClient,
+) -> None:
+    payload = {
+        "action": "closed",
+        "pull_request": {
+            "html_url": "https://github.com/x/y/pull/99999",
+            "merged": True,
+        },
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+    assert response.status_code == 200
+
+
+# ─── Enqueue helpers ─────────────────────────────────────────────────────────
+
+
+def test_enqueue_static_analysis_calls_celery_task() -> None:
+    from unittest.mock import MagicMock
+
+    from app.api.routes.webhooks import _enqueue_static_analysis
+    from app.models import AnalysisTrigger
+
+    mock_task = MagicMock()
+    with patch(
+        "app.workers.tasks.static_analysis.run_static_analysis", mock_task
+    ):
+        _enqueue_static_analysis(
+            repo_id="abc-123",
+            branch="main",
+            commit_sha="deadbeef",
+            trigger=AnalysisTrigger.webhook_push,
+        )
+    mock_task.delay.assert_called_once()
+
+
+def test_enqueue_installation_sync_calls_celery_task() -> None:
+    from unittest.mock import MagicMock
+
+    from app.api.routes.webhooks import _enqueue_installation_sync
+
+    mock_task = MagicMock()
+    with patch(
+        "app.workers.tasks.installation_sync.sync_installation_repositories",
+        mock_task,
+    ):
+        _enqueue_installation_sync(12345, "org-id-str")
+    mock_task.delay.assert_called_once()
