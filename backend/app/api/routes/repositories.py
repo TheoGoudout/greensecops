@@ -1,13 +1,25 @@
+import time
 import uuid
 from collections import defaultdict
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from ruamel.yaml import YAML
 from sqlmodel import Session, select
 
-from app.api.deps import CurrentUser, SessionDep
+from app import crud
+from app.api.deps import (
+    CurrentUser,
+    GitHubAppClientDep,
+    SessionDep,
+    get_current_active_superuser,
+    get_or_404,
+)
+from app.api.mappers import to_repo_public
 from app.models import (
     Analysis,
     AnalysisStatus,
+    ExternalRepositoryCreate,
     OrgMember,
     Repository,
     RepositoryPublic,
@@ -15,13 +27,29 @@ from app.models import (
 )
 from app.services.scoring import score_to_grade
 
+SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
+
+_ACTION_USES_PREFIX = "greensecops/greensecops-action"
+
+
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 
-def _user_org_ids(session: SessionDep, user: User) -> set[uuid.UUID]:
+def _user_org_ids(session: Session, user: User) -> set[uuid.UUID]:
     return set(
         session.exec(select(OrgMember.org_id).where(OrgMember.user_id == user.id)).all()
     )
+
+
+def _get_repo_for_user(
+    repo_id: uuid.UUID, session: Session, current_user: User
+) -> Repository:
+    repo = get_or_404(session, Repository, repo_id)
+    if not current_user.is_superuser and repo.org_id not in _user_org_ids(
+        session, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Repository not found")
+    return repo
 
 
 def _compute_repo_grade(
@@ -86,20 +114,6 @@ def _compute_grades_batch(
     return result
 
 
-def _to_public(
-    repo: Repository, avg_score: float | None, grade: str | None
-) -> RepositoryPublic:
-    return RepositoryPublic(
-        id=repo.id,
-        full_name=repo.full_name,
-        enabled=repo.enabled,
-        default_branch=repo.default_branch,
-        created_at=repo.created_at,
-        avg_score=avg_score,
-        grade=grade,
-    )
-
-
 @router.get("/", response_model=list[RepositoryPublic])
 def list_repositories(
     session: SessionDep,
@@ -123,7 +137,79 @@ def list_repositories(
     query = query.order_by(Repository.full_name).offset(skip).limit(limit)  # type: ignore[arg-type]
     repos = list(session.exec(query).all())
     grades = _compute_grades_batch(session, [r.id for r in repos])
-    return [_to_public(r, *grades.get(r.id, (None, None))) for r in repos]
+    return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
+
+
+@router.get("/external", response_model=list[RepositoryPublic])
+def list_external_repositories(
+    session: SessionDep,
+    _superuser: SuperuserDep,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, le=200),
+) -> list[RepositoryPublic]:
+    repos = list(
+        session.exec(
+            select(Repository)
+            .where(Repository.is_external == True)  # noqa: E712
+            .order_by(Repository.full_name)  # type: ignore[arg-type]
+            .offset(skip)
+            .limit(limit)
+        ).all()
+    )
+    grades = _compute_grades_batch(session, [r.id for r in repos])
+    return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
+
+
+@router.post("/external", response_model=RepositoryPublic, status_code=201)
+async def create_external_repository(
+    body: ExternalRepositoryCreate,
+    session: SessionDep,
+    _superuser: SuperuserDep,
+    github_client: GitHubAppClientDep,
+) -> RepositoryPublic:
+    owner = body.full_name.split("/")[0]
+
+    if body.installation_id is not None:
+        repos = await github_client.list_installation_repositories(body.installation_id)
+        target = next(
+            (r for r in repos if r.full_name.lower() == body.full_name.lower()), None
+        )
+        if target is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Repository '{body.full_name}' not found in installation {body.installation_id}",
+            )
+    else:
+        try:
+            target = await github_client.fetch_public_repo_info(body.full_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    existing = session.exec(
+        select(Repository).where(Repository.github_repo_id == target.github_repo_id)
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Repository already exists")
+
+    org = crud.upsert_organization(
+        session=session,
+        github_org_id=None,
+        name=owner,
+        installation_id=None,
+    )
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=target.github_repo_id,
+        full_name=target.full_name,
+        installation_id=body.installation_id,
+        default_branch=target.default_branch,
+        enabled=True,
+        is_external=True,
+    )
+    session.add(repo)
+    session.commit()
+    session.refresh(repo)
+    return to_repo_public(repo, None, None)
 
 
 @router.get("/{repo_id}", response_model=RepositoryPublic)
@@ -132,15 +218,9 @@ def get_repository(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> RepositoryPublic:
-    repo = session.get(Repository, repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    if not current_user.is_superuser and repo.org_id not in _user_org_ids(
-        session, current_user
-    ):
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = _get_repo_for_user(repo_id, session, current_user)
     avg_score, grade, _ = _compute_repo_grade(session, repo_id)
-    return _to_public(repo, avg_score, grade)
+    return to_repo_public(repo, avg_score, grade)
 
 
 @router.patch("/{repo_id}/toggle")
@@ -150,14 +230,123 @@ def toggle_repository(
     current_user: CurrentUser,
     enabled: bool,
 ) -> dict[str, str | bool]:
-    repo = session.get(Repository, repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    if not current_user.is_superuser and repo.org_id not in _user_org_ids(
-        session, current_user
-    ):
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = _get_repo_for_user(repo_id, session, current_user)
     repo.enabled = enabled
     session.add(repo)
     session.commit()
     return {"repo_id": str(repo_id), "enabled": enabled}
+
+
+def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
+    """Parse workflow YAML to find insertion points, then insert the action step as raw text.
+
+    Uses ruamel.yaml only for parsing (to get line numbers and detect duplicates).
+    Serialization is text-based so the PR diff contains only the inserted lines.
+    Returns (new_content, was_modified).
+    """
+    yaml_rt = YAML()
+    try:
+        workflow = yaml_rt.load(raw_content)
+    except Exception:
+        return raw_content, False
+
+    if not isinstance(workflow, dict):
+        return raw_content, False
+
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict):
+        return raw_content, False
+
+    # Collect (line_index, dash_column) for each job that needs the step inserted.
+    insertions: list[tuple[int, int]] = []
+    for job in jobs.values():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list) or not steps:
+            continue
+        already_present = any(
+            isinstance(s, dict)
+            and str(s.get("uses", "")).startswith(_ACTION_USES_PREFIX)
+            for s in steps
+        )
+        if already_present:
+            continue
+        try:
+            first_step_line, first_step_val_col = steps.lc.data[0]
+        except (AttributeError, KeyError, IndexError):
+            continue
+        # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
+        insertions.append((first_step_line, first_step_val_col - 2))
+
+    if not insertions:
+        return raw_content, False
+
+    lines = raw_content.splitlines(keepends=True)
+    # Process in reverse order so earlier line numbers stay valid.
+    for line_idx, col in sorted(insertions, key=lambda x: x[0], reverse=True):
+        indent = " " * col
+        step_lines = (
+            f"{indent}- name: GreenSecOps Telemetry\n"
+            f"{indent}  uses: greensecops/greensecops-action@v1\n"
+            f"{indent}  with:\n"
+            f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL }}}}\n"
+        ).splitlines(keepends=True)
+        lines[line_idx:line_idx] = step_lines
+
+    return "".join(lines), True
+
+
+@router.post("/{repo_id}/integrate-action", status_code=202)
+async def integrate_action(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    github_client: GitHubAppClientDep,
+) -> dict[str, str]:
+    from app.services.github.fix_delivery import FixDeliveryService
+
+    repo = _get_repo_for_user(repo_id, session, current_user)
+
+    workflow_files = repo.workflow_files
+    if not workflow_files:
+        raise HTTPException(
+            status_code=404, detail="No workflow files found for this repository"
+        )
+
+    file_changes: list[tuple[str, str]] = []
+    for wf in workflow_files:
+        new_content, modified = _inject_action_into_workflow(wf.raw_content)
+        if modified:
+            file_changes.append((wf.path, new_content))
+
+    if not file_changes:
+        raise HTTPException(
+            status_code=409,
+            detail="GreenSecOps action already present in all workflow files",
+        )
+
+    if repo.installation_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Repository has no GitHub App installation — ask the repo owner to install the GreenSecOps GitHub App first",
+        )
+
+    delivery = FixDeliveryService(github_client)
+    fix_branch = f"greensecops/integrate-action-{int(time.time())}"
+    result = await delivery.deliver_workflow_action_pr(
+        installation_id=repo.installation_id,
+        full_name=repo.full_name,
+        base_branch=repo.default_branch or "main",
+        fix_branch=fix_branch,
+        file_changes=file_changes,
+        pr_title="ci: add GreenSecOps telemetry action",
+        pr_body=(
+            "This PR adds the [GreenSecOps Telemetry](https://greensecops.io) action "
+            "to your workflow files.\n\n"
+            "Set the `GREENSECOPS_URL` repository variable to your GreenSecOps instance URL."
+        ),
+    )
+    if result.error:
+        raise HTTPException(status_code=502, detail=result.error)
+    return {"pr_url": result.pr_url or ""}

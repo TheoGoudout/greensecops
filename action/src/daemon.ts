@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { refreshOidcToken, sendSample } from "./api"
+import { loadState } from "./state"
 import { getMetricsSample } from "./telemetry"
-import type { ActionState } from "./types"
 
 const STATE_FILE = path.join(
   process.env.RUNNER_TEMP ?? os.tmpdir(),
@@ -15,16 +14,8 @@ const SAMPLE_INTERVAL_MS =
 // refresh every 4 min to stay ahead of typical 5-min OIDC token TTL
 const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000
 
-function loadState(): ActionState | null {
-  try {
-    return JSON.parse(readFileSync(STATE_FILE, "utf8")) as ActionState
-  } catch {
-    return null
-  }
-}
-
 async function run(): Promise<void> {
-  const state = loadState()
+  const state = loadState(STATE_FILE)
   if (!state) {
     // pre step did not complete — exit silently, do not disrupt workflow
     process.exit(0)

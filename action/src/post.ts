@@ -1,35 +1,17 @@
-import { readFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import * as core from "@actions/core"
 import { ingestTelemetry } from "./api"
+import { killDaemon, loadState } from "./state"
 import { getMetricsSample, getRunnerSpecs } from "./telemetry"
-import type { ActionState } from "./types"
 
 const STATE_FILE = path.join(
   process.env.RUNNER_TEMP ?? os.tmpdir(),
   "greensecops-state.json",
 )
 
-function killDaemon(pid: number): void {
-  if (!pid) return
-  try {
-    process.kill(pid, "SIGTERM")
-  } catch {
-    // process already exited — not fatal
-  }
-}
-
-function loadState(): ActionState | null {
-  try {
-    return JSON.parse(readFileSync(STATE_FILE, "utf8")) as ActionState
-  } catch {
-    return null
-  }
-}
-
 async function run(): Promise<void> {
-  const state = loadState()
+  const state = loadState(STATE_FILE)
   if (!state) {
     // pre step did not run or failed — nothing to finalize
     return

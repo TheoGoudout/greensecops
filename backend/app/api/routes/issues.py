@@ -1,9 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from sqlmodel import select
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, get_or_404
+from app.api.mappers import to_issue_public
 from app.models import (
     Analysis,
     Fix,
@@ -13,26 +14,6 @@ from app.models import (
     IssuePublic,
     IssueSeverity,
 )
-
-
-def _to_issue_public(issue: Issue) -> IssuePublic:
-    fix = issue.fix
-    return IssuePublic(
-        id=issue.id,
-        analysis_id=issue.analysis_id,
-        rule_id=issue.rule_id,
-        rule_slug=issue.rule.slug if issue.rule else "",
-        severity=issue.severity,
-        category=issue.category,
-        line_start=issue.line_start,
-        line_end=issue.line_end,
-        message=issue.message,
-        context=issue.context,
-        created_at=issue.created_at,
-        fix_id=fix.id if fix else None,
-        fix_status=fix.status if fix else None,
-    )
-
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -66,7 +47,7 @@ def list_issues(
     if severity:
         query = query.where(Issue.severity == severity)
     query = query.order_by(Issue.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
-    return [_to_issue_public(issue) for issue in session.exec(query).all()]
+    return [to_issue_public(issue) for issue in session.exec(query).all()]
 
 
 @router.get("/{issue_id}", response_model=IssuePublic)
@@ -75,7 +56,4 @@ def get_issue(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
 ) -> IssuePublic:
-    issue = session.get(Issue, issue_id)
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    return _to_issue_public(issue)
+    return to_issue_public(get_or_404(session, Issue, issue_id))

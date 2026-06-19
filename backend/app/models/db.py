@@ -1,4 +1,3 @@
-import enum
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -7,86 +6,26 @@ from pydantic import EmailStr
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
+from .enums import (
+    AnalysisStatus,
+    AnalysisTrigger,
+    FixDeliveryMode,
+    FixStatus,
+    IssueCategory,
+    IssueSeverity,
+    LLMProvider,
+    OrgRole,
+    UserTier,
+)
+
 
 def get_datetime_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ─── Enums ───────────────────────────────────────────────────────────────────
-
-
-class UserTier(str, enum.Enum):
-    free = "free"
-    starter = "starter"
-    pro = "pro"
-    ultimate = "ultimate"
-    open_source = "open_source"
-
-
-class OrgRole(str, enum.Enum):
-    owner = "owner"
-    admin = "admin"
-    member = "member"
-
-
-class FixDeliveryMode(str, enum.Enum):
-    pr = "pr"
-    comment = "comment"
-    disabled = "disabled"
-
-
-class LLMProvider(str, enum.Enum):
-    openai = "openai"
-    anthropic = "anthropic"
-    gemini = "gemini"
-    ollama = "ollama"
-
-
-class AnalysisStatus(str, enum.Enum):
-    pending = "pending"
-    running = "running"
-    completed = "completed"
-    failed = "failed"
-    skipped = "skipped"  # dedup hit
-
-
-class AnalysisTrigger(str, enum.Enum):
-    webhook_push = "webhook_push"
-    webhook_workflow_run = "webhook_workflow_run"
-    manual = "manual"
-    scheduled = "scheduled"
-
-
-class IssueSeverity(str, enum.Enum):
-    critical = "critical"
-    high = "high"
-    medium = "medium"
-    low = "low"
-    info = "info"
-
-
-class IssueCategory(str, enum.Enum):
-    energy = "energy"
-    reliability = "reliability"
-    security = "security"
-    performance = "performance"
-    maintainability = "maintainability"
-
-
-class FixStatus(str, enum.Enum):
-    pending = "pending"
-    generating = "generating"
-    ready = "ready"
-    delivering = "delivering"
-    delivered = "delivered"
-    failed = "failed"
-    rejected = "rejected"
-
-
 # ─── User ────────────────────────────────────────────────────────────────────
 
 
-# Shared properties
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
@@ -94,7 +33,6 @@ class UserBase(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
-# Properties to receive via API on creation
 class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=128)
 
@@ -105,7 +43,6 @@ class UserRegister(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
-# Properties to receive via API on update, all are optional
 class UserUpdate(UserBase):
     email: EmailStr | None = Field(default=None, max_length=255)  # type: ignore[assignment]
     password: str | None = Field(default=None, min_length=8, max_length=128)
@@ -121,7 +58,6 @@ class UpdatePassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
-# Database model, database table inferred from class name
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
@@ -138,19 +74,6 @@ class User(UserBase, table=True):
     billing_subscription: Optional["BillingSubscription"] = Relationship(
         back_populates="user"
     )
-
-
-# Properties to return via API, id is always required
-class UserPublic(UserBase):
-    id: uuid.UUID
-    github_username: str | None = None
-    tier: UserTier = UserTier.free
-    created_at: datetime | None = None
-
-
-class UsersPublic(SQLModel):
-    data: list[UserPublic]
-    count: int
 
 
 # ─── Organization ────────────────────────────────────────────────────────────
@@ -201,14 +124,13 @@ class Repository(SQLModel, table=True):
         foreign_key="organization.id", nullable=False, ondelete="CASCADE"
     )
     github_repo_id: int = Field(unique=True, index=True)
-    full_name: str = Field(max_length=512, index=True)  # e.g. "owner/repo"
-    installation_id: int = Field(index=True)
+    full_name: str = Field(max_length=512, index=True)
+    installation_id: int | None = Field(default=None, index=True)
     enabled: bool = Field(default=True)
+    is_external: bool = Field(default=False)
     default_branch: str = Field(default="main", max_length=255)
-    fix_delivery_mode: FixDeliveryMode | None = Field(
-        default=None
-    )  # overrides org default
-    llm_provider: LLMProvider | None = Field(default=None)  # overrides org default
+    fix_delivery_mode: FixDeliveryMode | None = Field(default=None)
+    llm_provider: LLMProvider | None = Field(default=None)
     llm_model: str | None = Field(default=None, max_length=255)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
@@ -234,9 +156,9 @@ class WorkflowFile(SQLModel, table=True):
     repo_id: uuid.UUID = Field(
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
     )
-    path: str = Field(max_length=512)  # e.g. ".github/workflows/ci.yml"
-    content_hash: str = Field(max_length=64, index=True)  # SHA-256 hex
-    raw_content: str  # full YAML text
+    path: str = Field(max_length=512)
+    content_hash: str = Field(max_length=64, index=True)
+    raw_content: str
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -249,13 +171,13 @@ class WorkflowFile(SQLModel, table=True):
 
 class Rule(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    slug: str = Field(max_length=128, unique=True, index=True)  # e.g. "missing_timeout"
+    slug: str = Field(max_length=128, unique=True, index=True)
     category: IssueCategory
     severity: IssueSeverity
     title: str = Field(max_length=255)
     description: str = Field(max_length=2048)
     enabled: bool = Field(default=True)
-    severity_weight: float = Field(default=1.0)  # for score calculation
+    severity_weight: float = Field(default=1.0)
     issues: list["Issue"] = Relationship(back_populates="rule")
 
 
@@ -270,10 +192,10 @@ class Analysis(SQLModel, table=True):
     workflow_file_id: uuid.UUID = Field(
         foreign_key="workflow_file.id", nullable=False, ondelete="CASCADE"
     )
-    content_hash: str = Field(max_length=64, index=True)  # dedup key
+    content_hash: str = Field(max_length=64, index=True)
     status: AnalysisStatus = Field(default=AnalysisStatus.pending)
-    score: float | None = Field(default=None)  # 0-100
-    grade: str | None = Field(default=None, max_length=8)  # "A+++", "B", "F", etc.
+    score: float | None = Field(default=None)
+    grade: str | None = Field(default=None, max_length=8)
     triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
     branch: str | None = Field(default=None, max_length=255)
     commit_sha: str | None = Field(default=None, max_length=64)
@@ -303,7 +225,7 @@ class Issue(SQLModel, table=True):
     line_start: int | None = Field(default=None)
     line_end: int | None = Field(default=None)
     message: str = Field(max_length=2048)
-    context: str | None = Field(default=None, max_length=4096)  # JSON snippet from YAML
+    context: str | None = Field(default=None, max_length=4096)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -326,8 +248,9 @@ class Fix(SQLModel, table=True):
     completion_tokens: int | None = Field(default=None)
     langsmith_run_id: str | None = Field(default=None, max_length=255)
     status: FixStatus = Field(default=FixStatus.pending)
-    diff: str | None = Field(default=None)  # unified diff text
+    diff: str | None = Field(default=None)
     pr_url: str | None = Field(default=None, max_length=1024)
+    pr_state: str | None = Field(default=None, max_length=32)
     comment_url: str | None = Field(default=None, max_length=1024)
     error_message: str | None = Field(default=None, max_length=2048)
     created_at: datetime | None = Field(
@@ -347,11 +270,9 @@ class TelemetryRun(SQLModel, table=True):
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
     )
     workflow_run_id: int = Field(index=True)
-    runner_specs: str | None = Field(
-        default=None
-    )  # JSON: vcpus, ram_gb, location, etc.
-    metrics: str | None = Field(default=None)  # JSON: cpu_pct, ram_mb, net_io, etc.
-    phase: str | None = Field(default=None, max_length=32)  # "started" | "completed"
+    runner_specs: str | None = Field(default=None)
+    metrics: str | None = Field(default=None)
+    phase: str | None = Field(default=None, max_length=32)
     collected_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -400,134 +321,3 @@ class BillingSubscription(SQLModel, table=True):
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     user: Optional["User"] = Relationship(back_populates="billing_subscription")
-
-
-# ─── Public / response schemas ────────────────────────────────────────────────
-
-
-class OrganizationPublic(SQLModel):
-    id: uuid.UUID
-    name: str
-    tier: UserTier
-    default_llm_provider: LLMProvider | None = None
-    default_llm_model: str | None = None
-    fix_delivery_mode: FixDeliveryMode
-    created_at: datetime | None = None
-
-
-class OrganizationAIUpdate(SQLModel):
-    default_llm_provider: LLMProvider | None = None
-    default_llm_model: str | None = None
-
-
-class AIProviderInfo(SQLModel):
-    id: str
-    name: str
-    available: bool
-    default_model: str
-    models: list[str]
-
-
-class AIProvidersPublic(SQLModel):
-    providers: list[AIProviderInfo]
-
-
-class RepositoryPublic(SQLModel):
-    id: uuid.UUID
-    full_name: str
-    enabled: bool
-    default_branch: str
-    tier: UserTier | None = None  # inherited from org
-    created_at: datetime | None = None
-    avg_score: float | None = None
-    grade: str | None = None
-
-
-class AnalysisPublic(SQLModel):
-    id: uuid.UUID
-    repo_id: uuid.UUID
-    workflow_file_id: uuid.UUID
-    workflow_file_path: str | None = None
-    repo_full_name: str | None = None
-    content_hash: str
-    status: AnalysisStatus
-    score: float | None = None
-    grade: str | None = None
-    triggered_by: AnalysisTrigger
-    branch: str | None = None
-    commit_sha: str | None = None
-    created_at: datetime | None = None
-    completed_at: datetime | None = None
-
-
-class IssuePublic(SQLModel):
-    id: uuid.UUID
-    analysis_id: uuid.UUID
-    rule_id: uuid.UUID
-    rule_slug: str
-    severity: IssueSeverity
-    category: IssueCategory
-    line_start: int | None = None
-    line_end: int | None = None
-    message: str
-    context: str | None = None
-    created_at: datetime | None = None
-    fix_id: uuid.UUID | None = None
-    fix_status: FixStatus | None = None
-
-
-class FixPublic(SQLModel):
-    id: uuid.UUID
-    issue_id: uuid.UUID
-    llm_provider: LLMProvider
-    llm_model: str
-    status: FixStatus
-    diff: str | None = None
-    pr_url: str | None = None
-    comment_url: str | None = None
-    created_at: datetime | None = None
-    delivered_at: datetime | None = None
-
-
-class RulePublic(SQLModel):
-    id: uuid.UUID
-    slug: str
-    category: IssueCategory
-    severity: IssueSeverity
-    title: str
-    description: str
-    enabled: bool
-
-
-class BillingSubscriptionPublic(SQLModel):
-    id: uuid.UUID
-    tier: UserTier
-    analyses_used: int
-    fixes_used: int
-    repos_used: int = 0
-    period_start: datetime | None = None
-    period_end: datetime | None = None
-
-
-# ─── Generic utility schemas ──────────────────────────────────────────────────
-
-
-# Generic message
-class Message(SQLModel):
-    message: str
-
-
-# JSON payload containing access token
-class Token(SQLModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-# Contents of JWT token
-class TokenPayload(SQLModel):
-    sub: str | None = None
-
-
-class NewPassword(SQLModel):
-    token: str
-    new_password: str = Field(min_length=8, max_length=128)

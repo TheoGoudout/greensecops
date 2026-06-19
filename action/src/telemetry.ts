@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import * as childProcess from "node:child_process"
+import * as fs from "node:fs"
 import * as os from "node:os"
 import type { MetricsSample, RunnerSpecs } from "./types"
 
@@ -18,7 +18,9 @@ export function getRunnerSpecs(): RunnerSpecs {
   }
 
   try {
-    const dfOut = execFileSync("df", ["-Pk", "/"], { encoding: "utf8" })
+    const dfOut = childProcess.execFileSync("df", ["-Pk", "/"], {
+      encoding: "utf8",
+    })
     const parts = dfOut.trim().split("\n")[1]?.split(/\s+/)
     if (parts && parts.length >= 4) {
       const totalKb = parseInt(parts[1] ?? "0", 10)
@@ -53,7 +55,9 @@ export function getMetricsSample(): MetricsSample {
   }
 
   try {
-    const dfOut = execFileSync("df", ["-Pk", "/"], { encoding: "utf8" })
+    const dfOut = childProcess.execFileSync("df", ["-Pk", "/"], {
+      encoding: "utf8",
+    })
     const parts = dfOut.trim().split("\n")[1]?.split(/\s+/)
     if (parts && parts.length >= 3) {
       const usedKb = parseInt(parts[2] ?? "0", 10)
@@ -64,7 +68,7 @@ export function getMetricsSample(): MetricsSample {
   }
 
   try {
-    const netDev = readFileSync("/proc/net/dev", "utf8")
+    const netDev = fs.readFileSync("/proc/net/dev", "utf8")
     let totalSent = 0
     let totalRecv = 0
     for (const line of netDev.split("\n").slice(2)) {

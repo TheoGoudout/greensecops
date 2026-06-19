@@ -3,9 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
 import type { IssueCategory, IssueSeverity } from "@/client"
 import { IssuesService } from "@/client"
-import { CategoryIcon } from "@/components/CategoryIcon"
-import { GenerateFixButton } from "@/components/GenerateFixButton"
-import { SeverityChip } from "@/components/SeverityChip"
+import { IssueRow } from "@/components/IssueRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -16,6 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  CATEGORY_SELECT_OPTIONS,
+  SEVERITY_SELECT_OPTIONS,
+} from "@/lib/issue-constants"
 
 export const Route = createFileRoute("/_layout/issues")({
   component: Issues,
@@ -23,24 +25,6 @@ export const Route = createFileRoute("/_layout/issues")({
     meta: [{ title: "Issues - GreenSecOps" }],
   }),
 })
-
-const CATEGORIES: Array<{ value: IssueCategory | "all"; label: string }> = [
-  { value: "all", label: "All categories" },
-  { value: "energy", label: "⚡ Energy" },
-  { value: "reliability", label: "🛡️ Reliability" },
-  { value: "security", label: "🔒 Security" },
-  { value: "performance", label: "🚀 Performance" },
-  { value: "maintainability", label: "🔧 Maintainability" },
-]
-
-const SEVERITIES: Array<{ value: IssueSeverity | "all"; label: string }> = [
-  { value: "all", label: "All severities" },
-  { value: "critical", label: "Critical" },
-  { value: "high", label: "High" },
-  { value: "medium", label: "Medium" },
-  { value: "low", label: "Low" },
-  { value: "info", label: "Info" },
-]
 
 const PAGE_SIZE = 50
 
@@ -87,7 +71,7 @@ function Issues() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CATEGORIES.map((c) => (
+            {CATEGORY_SELECT_OPTIONS.map((c) => (
               <SelectItem key={c.value} value={c.value}>
                 {c.label}
               </SelectItem>
@@ -106,7 +90,7 @@ function Issues() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {SEVERITIES.map((s) => (
+            {SEVERITY_SELECT_OPTIONS.map((s) => (
               <SelectItem key={s.value} value={s.value}>
                 {s.label}
               </SelectItem>
@@ -145,36 +129,7 @@ function Issues() {
           ) : (
             <div className="divide-y">
               {issues.map((issue) => (
-                <div
-                  key={issue.id}
-                  className="flex items-start gap-3 px-6 py-4"
-                >
-                  <CategoryIcon
-                    category={issue.category}
-                    className="mt-0.5 shrink-0 text-base"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <SeverityChip severity={issue.severity} />
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                        {issue.rule_slug}
-                      </span>
-                      <span className="text-sm">{issue.message}</span>
-                    </div>
-                    {issue.line_start !== null && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        line {issue.line_start}
-                        {issue.line_end && issue.line_end !== issue.line_start
-                          ? `–${issue.line_end}`
-                          : ""}
-                      </p>
-                    )}
-                  </div>
-                  <GenerateFixButton
-                    issueId={issue.id}
-                    fixStatus={issue.fix_status}
-                  />
-                </div>
+                <IssueRow key={issue.id} issue={issue} />
               ))}
             </div>
           )}

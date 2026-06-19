@@ -27,6 +27,7 @@ import { Route as LayoutRepositoriesIndexRouteImport } from './routes/_layout/re
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as AuthGithubAppCallbackRouteImport } from './routes/auth/github/app-callback'
 import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
+import { Route as LayoutFixesFixIdRouteImport } from './routes/_layout/fixes/$fixId'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 
 const SignupRoute = SignupRouteImport.update({
@@ -119,6 +120,11 @@ const LayoutRepositoriesRepoIdRoute =
     path: '/$repoId',
     getParentRoute: () => LayoutRepositoriesRoute,
   } as any)
+const LayoutFixesFixIdRoute = LayoutFixesFixIdRouteImport.update({
+  id: '/fixes/$fixId',
+  path: '/fixes/$fixId',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutAnalysesAnalysisIdRoute =
   LayoutAnalysesAnalysisIdRouteImport.update({
     id: '/analyses/$analysisId',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -160,6 +167,7 @@ export interface FileRoutesByTo {
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/_layout/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -204,6 +213,7 @@ export interface FileRouteTypes {
     | '/rules'
     | '/settings'
     | '/analyses/$analysisId'
+    | '/fixes/$fixId'
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
@@ -223,6 +233,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/'
     | '/analyses/$analysisId'
+    | '/fixes/$fixId'
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
@@ -244,6 +255,7 @@ export interface FileRouteTypes {
     | '/_layout/settings'
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
+    | '/_layout/fixes/$fixId'
     | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
@@ -388,6 +400,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdRouteImport
       parentRoute: typeof LayoutRepositoriesRoute
     }
+    '/_layout/fixes/$fixId': {
+      id: '/_layout/fixes/$fixId'
+      path: '/fixes/$fixId'
+      fullPath: '/fixes/$fixId'
+      preLoaderRoute: typeof LayoutFixesFixIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/analyses/$analysisId': {
       id: '/_layout/analyses/$analysisId'
       path: '/analyses/$analysisId'
@@ -422,6 +441,7 @@ interface LayoutRouteChildren {
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutAnalysesAnalysisIdRoute: typeof LayoutAnalysesAnalysisIdRoute
+  LayoutFixesFixIdRoute: typeof LayoutFixesFixIdRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -435,6 +455,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutAnalysesAnalysisIdRoute: LayoutAnalysesAnalysisIdRoute,
+  LayoutFixesFixIdRoute: LayoutFixesFixIdRoute,
 }
 
 const LayoutRouteWithChildren =
