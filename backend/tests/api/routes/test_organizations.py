@@ -45,7 +45,10 @@ def test_list_ai_providers_returns_available_only(
     org_mod._load_provider_catalog.cache_clear()
 
     with (
-        patch.dict(org_mod._KEY_ENV, {"openai": "sk-test", "anthropic": None, "gemini": None, "ollama": None}),
+        patch.dict(
+            org_mod._KEY_ENV,
+            {"openai": "sk-test", "anthropic": None, "gemini": None, "ollama": None},
+        ),
     ):
         response = client.get(
             f"{ORG_URL}/ai-providers",
@@ -67,7 +70,10 @@ def test_list_ai_providers_none_available(
 
     org_mod._load_provider_catalog.cache_clear()
 
-    with patch.dict(org_mod._KEY_ENV, {"openai": None, "anthropic": None, "gemini": None, "ollama": None}):
+    with patch.dict(
+        org_mod._KEY_ENV,
+        {"openai": None, "anthropic": None, "gemini": None, "ollama": None},
+    ):
         response = client.get(
             f"{ORG_URL}/ai-providers",
             headers=superuser_token_headers,
@@ -190,7 +196,10 @@ def test_update_org_ai_preferences_superuser_any_org(
 
     response = client.patch(
         f"{ORG_URL}/{other_org.id}/ai-preferences",
-        json={"default_llm_provider": "anthropic", "default_llm_model": "claude-sonnet"},
+        json={
+            "default_llm_provider": "anthropic",
+            "default_llm_model": "claude-sonnet",
+        },
         headers=superuser_token_headers,
     )
 

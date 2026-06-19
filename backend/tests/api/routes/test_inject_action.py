@@ -81,24 +81,13 @@ def test_inject_multiple_jobs() -> None:
 
 
 def test_inject_job_no_steps_skipped() -> None:
-    raw = (
-        "on: push\n"
-        "jobs:\n"
-        "  build:\n"
-        "    runs-on: ubuntu-latest\n"
-    )
+    raw = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
     result, modified = _inject_action_into_workflow(raw)
     assert modified is False
 
 
 def test_inject_job_empty_steps_skipped() -> None:
-    raw = (
-        "on: push\n"
-        "jobs:\n"
-        "  build:\n"
-        "    runs-on: ubuntu-latest\n"
-        "    steps: []\n"
-    )
+    raw = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: []\n"
     result, modified = _inject_action_into_workflow(raw)
     assert modified is False
 
