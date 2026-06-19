@@ -9,20 +9,15 @@ from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import (
     AnalysisTrigger,
+    Fix,
     Organization,
     Repository,
 )
-from app.services.github.app_client import GitHubAppClient
 from app.services.github.webhook_verifier import verify_webhook_signature
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
-
-
-def _get_github_app_client_sync() -> GitHubAppClient:
-    """Placeholder — replaced by proper async dep in route."""
-    raise NotImplementedError
 
 
 @router.post("/github")
@@ -60,6 +55,8 @@ async def github_webhook(
         _handle_installation_event(session, payload)
     elif event == "installation_repositories":
         _handle_installation_repositories_event(session, payload)
+    elif event == "pull_request":
+        _handle_pull_request_event(session, payload)
 
     return {"status": "accepted", "event": event}
 
@@ -187,6 +184,33 @@ def _handle_installation_event(
         # Ownership is linked by the authenticated /installations/sync endpoint
         # (the webhook has no app-session user); here we only ensure repos load.
         _enqueue_installation_sync(installation_id, str(org.id))
+
+
+def _handle_pull_request_event(
+    session: Session,
+    payload: dict[str, Any],
+) -> None:
+    if payload.get("action") != "closed":
+        return
+
+    pr = payload.get("pull_request", {})
+    pr_url = pr.get("html_url")
+    if not pr_url:
+        return
+
+    merged = pr.get("merged", False)
+    new_state = "merged" if merged else "closed"
+
+    from sqlmodel import select
+
+    fix = session.exec(select(Fix).where(Fix.pr_url == pr_url)).first()
+    if not fix:
+        return
+
+    fix.pr_state = new_state
+    session.add(fix)
+    session.commit()
+    logger.info("PR %s -> state=%s for fix %s", pr_url, new_state, fix.id)
 
 
 def _handle_installation_repositories_event(

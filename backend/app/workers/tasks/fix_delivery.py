@@ -1,12 +1,20 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from sqlmodel import Session
 
 from app.core.db import engine
-from app.models import Fix, FixDeliveryMode, FixStatus, Repository, WorkflowFile
+from app.models import (
+    Fix,
+    FixDeliveryMode,
+    FixStatus,
+    Repository,
+    WorkflowFile,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -50,6 +58,13 @@ def deliver_fix(
             logger.info("Fix delivery disabled for repo %s", repo.full_name)
             return {"status": "skipped", "reason": "delivery_disabled"}
 
+        if repo.installation_id is None:
+            logger.warning(
+                "Fix delivery skipped for external repo %s: no GitHub App installation",
+                repo.full_name,
+            )
+            return {"status": "skipped", "reason": "no_installation"}
+
         fix.status = FixStatus.delivering
         session.add(fix)
         session.commit()
@@ -73,12 +88,121 @@ def deliver_fix(
         else:
             fix.status = FixStatus.delivered
             fix.pr_url = result.pr_url
+            fix.pr_state = "open" if result.pr_url else None
             fix.comment_url = result.comment_url
             fix.delivered_at = datetime.now(timezone.utc)
 
         session.add(fix)
         session.commit()
         return {"status": fix.status.value, "fix_id": fix_id}
+
+
+@celery_app.task(name="fix_delivery.deliver_batch", bind=True, max_retries=3)
+def deliver_fixes_batch(
+    self: object,  # noqa: ARG001
+    fix_ids: list[str],
+    repo_id: str,
+    pr_branch: str,
+    pr_title: str,
+    pr_body: str,
+) -> dict[str, str]:
+    """Deliver multiple ready fixes as a single PR (one file change per workflow file)."""
+    with Session(engine) as session:
+        repo = session.get(Repository, uuid.UUID(repo_id))
+        if not repo:
+            return {"status": "error", "detail": "repository_not_found"}
+
+        fixes = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
+        fixes = [f for f in fixes if f and f.status == FixStatus.ready]
+        if not fixes:
+            return {"status": "error", "detail": "no_ready_fixes"}
+
+        # One file change per workflow file — all fixes for same file share identical diff
+        seen: dict[str, tuple[str, str]] = {}
+        base_branch = repo.default_branch or "main"
+        for fix in fixes:
+            issue = fix.issue
+            if not issue:
+                continue
+            analysis = issue.analysis
+            if not analysis:
+                continue
+            wf = session.get(WorkflowFile, analysis.workflow_file_id)
+            if not wf or wf.path in seen:
+                continue
+            seen[wf.path] = (wf.path, fix.diff or wf.raw_content)
+            base_branch = analysis.branch or repo.default_branch or "main"
+
+        if not seen:
+            return {"status": "error", "detail": "no_workflow_files"}
+
+        for fix in fixes:
+            fix.status = FixStatus.delivering
+            session.add(fix)
+        session.commit()
+
+        result = asyncio.run(
+            _deliver_batch(
+                installation_id=repo.installation_id,
+                full_name=repo.full_name,
+                base_branch=base_branch,
+                fix_branch=pr_branch,
+                file_changes=list(seen.values()),
+                pr_title=pr_title,
+                pr_body=pr_body,
+            )
+        )
+
+        now = datetime.now(timezone.utc)
+        for fix in fixes:
+            if result.error:
+                fix.status = FixStatus.failed
+                fix.error_message = result.error
+            else:
+                fix.status = FixStatus.delivered
+                fix.pr_url = result.pr_url
+                fix.pr_state = "open" if result.pr_url else None
+                fix.delivered_at = now
+            session.add(fix)
+        session.commit()
+
+        return {"status": "failed" if result.error else "ok"}
+
+
+@asynccontextmanager
+async def _delivery_service() -> AsyncGenerator[object, None]:
+    import redis.asyncio as aioredis
+
+    from app.core.config import settings
+    from app.services.github.app_client import GitHubAppClient
+    from app.services.github.fix_delivery import FixDeliveryService
+
+    r = aioredis.from_url(settings.REDIS_URL)
+    try:
+        yield FixDeliveryService(app_client=GitHubAppClient(redis_client=r))
+    finally:
+        await r.aclose()
+
+
+async def _deliver_batch(
+    installation_id: int,
+    full_name: str,
+    base_branch: str,
+    fix_branch: str,
+    file_changes: list[tuple[str, str]],
+    pr_title: str,
+    pr_body: str,
+) -> object:
+    async with _delivery_service() as svc:
+        return await svc.deliver_workflow_action_pr(
+            installation_id=installation_id,
+            full_name=full_name,
+            base_branch=base_branch,
+            fix_branch=fix_branch,
+            file_changes=file_changes,
+            pr_title=pr_title,
+            pr_body=pr_body,
+        )
 
 
 async def _deliver(
@@ -91,17 +215,7 @@ async def _deliver(
     rule_slug: str,
     delivery_mode: str,
 ) -> object:
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
-    from app.services.github.fix_delivery import FixDeliveryService
-
-    r = aioredis.from_url(settings.REDIS_URL)
-    try:
-        client = GitHubAppClient(redis_client=r)
-        svc = FixDeliveryService(app_client=client)
-
+    async with _delivery_service() as svc:
         if delivery_mode == "pr":
             fix_branch = f"greensecops/fix-{rule_slug}-{fix_id[:8]}"
             return await svc.deliver_as_pr(
@@ -114,12 +228,9 @@ async def _deliver(
                 pr_title=f"fix(ci): {rule_slug.replace('_', ' ')}",
                 pr_body=f"Automated fix generated by GreenSecOps for rule `{rule_slug}`.\n\nFix ID: `{fix_id}`",
             )
-        else:
-            return await svc.deliver_as_comment(
-                installation_id=installation_id,
-                full_name=full_name,
-                issue_number=1,
-                body=f"**GreenSecOps Fix** for `{rule_slug}`:\n\n```yaml\n{new_content}\n```",
-            )
-    finally:
-        await r.aclose()
+        return await svc.deliver_as_comment(
+            installation_id=installation_id,
+            full_name=full_name,
+            issue_number=1,
+            body=f"**GreenSecOps Fix** for `{rule_slug}`:\n\n```yaml\n{new_content}\n```",
+        )

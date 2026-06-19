@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -287,9 +287,12 @@ export class FixesService {
 
     /**
      * Trigger Fix Generation For Repo
-     * Queue a single batch fix generation call per workflow file for all issues in a repo.
+     * Queue a single batch fix generation call per workflow file for issues in a repo.
+     *
+     * When body.issue_ids is provided, only those issues are processed.
      * @param data The data for the request.
      * @param data.repoId
+     * @param data.requestBody
      * @returns number Successful Response
      * @throws ApiError
      */
@@ -300,6 +303,8 @@ export class FixesService {
             path: {
                 repo_id: data.repoId
             },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -339,6 +344,47 @@ export class FixesService {
             url: '/api/v1/fixes/{fix_id}/deliver',
             path: {
                 fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Workflow Delivery
+     * Deliver all ready fixes for one workflow file as a single PR.
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerWorkflowDelivery(data: FixesTriggerWorkflowDeliveryData): CancelablePromise<FixesTriggerWorkflowDeliveryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/deliver-for-workflow',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Repo Delivery
+     * Deliver all ready fixes for a repo as a single multi-file PR.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerRepoDelivery(data: FixesTriggerRepoDeliveryData): CancelablePromise<FixesTriggerRepoDeliveryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/deliver-for-repo/{repo_id}',
+            path: {
+                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'
@@ -640,6 +686,47 @@ export class RepositoriesService {
     }
 
     /**
+     * List External Repositories
+     * @param data The data for the request.
+     * @param data.skip
+     * @param data.limit
+     * @returns RepositoryPublic Successful Response
+     * @throws ApiError
+     */
+    public static listExternalRepositories(data: RepositoriesListExternalRepositoriesData = {}): CancelablePromise<RepositoriesListExternalRepositoriesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/repositories/external',
+            query: {
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Create External Repository
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns RepositoryPublic Successful Response
+     * @throws ApiError
+     */
+    public static createExternalRepository(data: RepositoriesCreateExternalRepositoryData): CancelablePromise<RepositoriesCreateExternalRepositoryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/repositories/external',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
      * Get Repository
      * @param data The data for the request.
      * @param data.repoId
@@ -676,6 +763,26 @@ export class RepositoriesService {
             },
             query: {
                 enabled: data.enabled
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Integrate Action
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static integrateAction(data: RepositoriesIntegrateActionData): CancelablePromise<RepositoriesIntegrateActionResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/repositories/{repo_id}/integrate-action',
+            path: {
+                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'

@@ -33,6 +33,10 @@ export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 's
 
 export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled';
 
+export type BatchFixRequest = {
+    issue_ids?: (Array<(string)> | null);
+};
+
 export type BillingSubscriptionPublic = {
     id: string;
     tier: UserTier;
@@ -52,6 +56,11 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
+export type ExternalRepositoryCreate = {
+    full_name: string;
+    installation_id?: (number | null);
+};
+
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
 export type FixPublic = {
@@ -62,6 +71,7 @@ export type FixPublic = {
     status: FixStatus;
     diff?: (string | null);
     pr_url?: (string | null);
+    pr_state?: (string | null);
     comment_url?: (string | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
@@ -93,6 +103,7 @@ export type IssuePublic = {
     created_at?: (string | null);
     fix_id?: (string | null);
     fix_status?: (FixStatus | null);
+    workflow_file_path?: (string | null);
 };
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -134,6 +145,7 @@ export type RepositoryPublic = {
     id: string;
     full_name: string;
     enabled: boolean;
+    is_external?: boolean;
     default_branch: string;
     tier?: (UserTier | null);
     created_at?: (string | null);
@@ -239,6 +251,10 @@ export type ValidationError = {
     };
 };
 
+export type WorkflowDeliverRequest = {
+    fix_ids: Array<(string)>;
+};
+
 export type AnalysesListAnalysesData = {
     branch?: (string | null);
     grade?: (string | null);
@@ -331,6 +347,7 @@ export type FixesRejectFixResponse = (void);
 
 export type FixesTriggerFixGenerationForRepoData = {
     repoId: string;
+    requestBody?: BatchFixRequest;
 };
 
 export type FixesTriggerFixGenerationForRepoResponse = ({
@@ -350,6 +367,22 @@ export type FixesTriggerFixDeliveryData = {
 };
 
 export type FixesTriggerFixDeliveryResponse = ({
+    [key: string]: (string);
+});
+
+export type FixesTriggerWorkflowDeliveryData = {
+    requestBody: WorkflowDeliverRequest;
+};
+
+export type FixesTriggerWorkflowDeliveryResponse = ({
+    [key: string]: (string);
+});
+
+export type FixesTriggerRepoDeliveryData = {
+    repoId: string;
+};
+
+export type FixesTriggerRepoDeliveryResponse = ({
     [key: string]: (string);
 });
 
@@ -431,6 +464,19 @@ export type RepositoriesListRepositoriesData = {
 
 export type RepositoriesListRepositoriesResponse = (Array<RepositoryPublic>);
 
+export type RepositoriesListExternalRepositoriesData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type RepositoriesListExternalRepositoriesResponse = (Array<RepositoryPublic>);
+
+export type RepositoriesCreateExternalRepositoryData = {
+    requestBody: ExternalRepositoryCreate;
+};
+
+export type RepositoriesCreateExternalRepositoryResponse = (RepositoryPublic);
+
 export type RepositoriesGetRepositoryData = {
     repoId: string;
 };
@@ -444,6 +490,14 @@ export type RepositoriesToggleRepositoryData = {
 
 export type RepositoriesToggleRepositoryResponse = ({
     [key: string]: (string | boolean);
+});
+
+export type RepositoriesIntegrateActionData = {
+    repoId: string;
+};
+
+export type RepositoriesIntegrateActionResponse = ({
+    [key: string]: (string);
 });
 
 export type RulesListRulesData = {
