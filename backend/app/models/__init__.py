@@ -1,3 +1,5 @@
+from sqlmodel import SQLModel
+
 from .db import (
     Analysis,
     BillingSubscription,
@@ -51,6 +53,7 @@ from .schemas import (
 )
 
 __all__ = [
+    "SQLModel",
     # db
     "get_datetime_utc",
     "UserBase",
