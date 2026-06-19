@@ -27,7 +27,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948de14949fe11 # v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version: latest
 
