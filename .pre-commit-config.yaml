@@ -30,9 +30,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^backend/
+        files: ^(backend|docs/ext)/
       - id: ruff-format
-        files: ^backend/
+        files: ^(backend|docs/ext)/
 
   # Python: mypy type checking
   - repo: local

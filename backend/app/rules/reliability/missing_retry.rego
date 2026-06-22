@@ -1,3 +1,28 @@
+# METADATA
+# title: No retry on flaky network step
+# description: Steps that download external dependencies or call external APIs have no retry logic, making the pipeline fragile to transient network failures.
+# custom:
+#   severity: low
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - run: npm install
+#             - run: curl -fsSL https://example.com/tool | bash
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: nick-fields/retry@v3
+#               with:
+#                 timeout_minutes: 5
+#                 max_attempts: 3
+#                 command: npm install
+#             - run: curl -fsSL https://example.com/tool | bash
+#     fix: |
+#       Wrap flaky network steps (curl, npm install, pip install, apt-get) with a retry action such as nick-fields/retry or add shell-level retry loops for critical downloads.
 package greensecops.reliability.missing_retry
 
 import rego.v1

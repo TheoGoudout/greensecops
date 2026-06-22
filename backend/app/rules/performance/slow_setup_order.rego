@@ -1,3 +1,27 @@
+# METADATA
+# title: Expensive steps before fast-fail checks
+# description: Long dependency installation steps run before quick lint/type-check steps. Reordering to fail fast reduces wasted compute.
+# custom:
+#   severity: low
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         ci:
+#           steps:
+#             - uses: actions/setup-node@v4
+#             - run: npm install
+#             - run: npm run lint
+#     good: |
+#       jobs:
+#         ci:
+#           steps:
+#             - uses: actions/setup-node@v4
+#             - run: npm run lint
+#             - run: npm install
+#             - run: npm test
+#     fix: |
+#       Move fast-fail steps (lint, type-check) before slow install steps so broken code is rejected before wasting time on dependency installation.
 package greensecops.performance.slow_setup_order
 
 import rego.v1

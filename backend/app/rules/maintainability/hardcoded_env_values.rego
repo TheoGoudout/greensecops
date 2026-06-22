@@ -1,3 +1,28 @@
+# METADATA
+# title: Hardcoded environment-specific values
+# description: Values like URLs, bucket names, or region names are hardcoded in the workflow instead of being referenced from repository variables or secrets.
+# custom:
+#   severity: medium
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         deploy:
+#           env:
+#             API_URL: https://api.production.example.com
+#             BUCKET: my-app-artifacts
+#           steps:
+#             - run: ./deploy.sh
+#     good: |
+#       jobs:
+#         deploy:
+#           env:
+#             API_URL: ${{ vars.API_URL }}
+#             BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+#           steps:
+#             - run: ./deploy.sh
+#     fix: |
+#       Move environment-specific values (URLs, bucket names, regions) to GitHub repository or environment variables and reference them with ${{ vars.VAR_NAME }}.
 package greensecops.maintainability.hardcoded_env_values
 
 import rego.v1

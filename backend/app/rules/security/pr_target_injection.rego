@@ -1,3 +1,30 @@
+# METADATA
+# title: pull_request_target with PR head checkout
+# description: Workflow triggers on pull_request_target and checks out the PR head ref. This grants untrusted code access to repository secrets.
+# custom:
+#   severity: critical
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       on:
+#         pull_request_target:
+#       jobs:
+#         ci:
+#           steps:
+#             - uses: actions/checkout@v4
+#               with:
+#                 ref: ${{ github.event.pull_request.head.ref }}
+#             - run: npm test
+#     good: |
+#       on:
+#         pull_request:
+#       jobs:
+#         ci:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm test
+#     fix: |
+#       Use the pull_request trigger instead of pull_request_target for CI checks. If pull_request_target is required, never check out the PR head ref in the same job as privileged operations.
 package greensecops.security.pr_target_injection
 
 import rego.v1

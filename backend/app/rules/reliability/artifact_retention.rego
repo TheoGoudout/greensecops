@@ -1,3 +1,29 @@
+# METADATA
+# title: No explicit artifact retention
+# description: Uploaded artifacts use the default 90-day retention. Set retention-days explicitly to control storage costs and data lifecycle.
+# custom:
+#   severity: low
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/upload-artifact@v4
+#               with:
+#                 name: dist
+#                 path: dist/
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/upload-artifact@v4
+#               with:
+#                 name: dist
+#                 path: dist/
+#                 retention-days: 7
+#     fix: |
+#       Add retention-days to every actions/upload-artifact step. Choose a value appropriate for the artifact's purpose (e.g. 1 day for PR previews, 30 days for release assets).
 package greensecops.reliability.artifact_retention
 
 import rego.v1

@@ -1,3 +1,29 @@
+# METADATA
+# title: Cache key never misses
+# description: Cache key does not include a hash of the lockfile, meaning the cache never invalidates when dependencies change.
+# custom:
+#   severity: medium
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/cache@v4
+#               with:
+#                 path: ~/.npm
+#                 key: ${{ runner.os }}-node
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/cache@v4
+#               with:
+#                 path: ~/.npm
+#                 key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+#                 restore-keys: ${{ runner.os }}-node-
+#     fix: |
+#       Include hashFiles() of your lockfile in the cache key so the cache invalidates when dependencies change.
 package greensecops.performance.cache_key_too_broad
 
 import rego.v1
