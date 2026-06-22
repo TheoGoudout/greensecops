@@ -173,7 +173,7 @@ services:
     image: greensecops/landing:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -189,7 +189,7 @@ services:
     image: greensecops/docs:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 10s
       retries: 5
       start_period: 10s
