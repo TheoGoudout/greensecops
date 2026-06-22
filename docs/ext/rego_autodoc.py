@@ -7,10 +7,13 @@ from typing import Any
 
 import yaml
 from sphinx.application import Sphinx
+from sphinx.util import logging
+
+logger = logging.getLogger(__name__)
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "unknown": 4}
 
-_VALID_SEVERITIES = {"critical", "high", "medium", "low"}
+_VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
 _DETECTION_LABELS = {
     "static_analysis": "Checks field presence or value in the workflow YAML.",
@@ -183,25 +186,25 @@ def _render_rules_index(categories: dict[str, list[dict[str, Any]]]) -> str:
 def _warn_rule(rule: dict[str, Any], filepath: Path, app: Sphinx) -> None:
     label = str(filepath)
     if not rule["description"]:
-        app.warn(f"rego_autodoc: {label}: missing 'description'")
+        logger.warning(f"rego_autodoc: {label}: missing 'description'")
     if rule["severity"] == "unknown":
-        app.warn(f"rego_autodoc: {label}: missing 'custom.severity'")
+        logger.warning(f"rego_autodoc: {label}: missing 'custom.severity'")
     elif rule["severity"] not in _VALID_SEVERITIES:
-        app.warn(
+        logger.warning(
             f"rego_autodoc: {label}: invalid severity '{rule['severity']}'"
             f" (must be one of: {', '.join(sorted(_VALID_SEVERITIES))})"
         )
     if not rule["detection"]:
-        app.warn(f"rego_autodoc: {label}: missing 'custom.detection'")
+        logger.warning(f"rego_autodoc: {label}: missing 'custom.detection'")
     elif rule["detection"] not in _VALID_DETECTION_METHODS:
-        app.warn(
+        logger.warning(
             f"rego_autodoc: {label}: invalid detection '{rule['detection']}'"
             f" (must be one of: {', '.join(sorted(_VALID_DETECTION_METHODS))})"
         )
     examples = rule["examples"]
     for field in ("bad", "good", "fix"):
         if not (examples.get(field) or "").strip():
-            app.warn(f"rego_autodoc: {label}: missing 'custom.examples.{field}'")
+            logger.warning(f"rego_autodoc: {label}: missing 'custom.examples.{field}'")
 
 
 def generate_rule_pages(app: Sphinx) -> None:
@@ -209,7 +212,7 @@ def generate_rule_pages(app: Sphinx) -> None:
     rules_out = Path(app.srcdir) / "rules"
 
     if not rules_base.exists():
-        app.warn(f"rego_autodoc: rules directory not found: {rules_base}")
+        logger.warning(f"rego_autodoc: rules directory not found: {rules_base}")
         return
 
     rules_out.mkdir(exist_ok=True)
@@ -220,7 +223,7 @@ def generate_rule_pages(app: Sphinx) -> None:
             continue
         info = _rule_info(rego_file, rules_base)
         if info is None:
-            app.warn(
+            logger.warning(
                 f"rego_autodoc: no METADATA in {rego_file.relative_to(rules_base)}, skipping"
             )
             continue
