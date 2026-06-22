@@ -1,3 +1,32 @@
+# METADATA
+# title: Missing name on jobs or steps
+# description: Jobs or steps are missing a name field, making CI logs harder to read and debug.
+# custom:
+#   severity: info
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       on:
+#         push:
+#           branches: [main]
+#       jobs:
+#         build:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm run build
+#     good: |
+#       name: CI
+#       on:
+#         push:
+#           branches: [main]
+#       jobs:
+#         build:
+#           name: Build application
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm run build
+#     fix: |
+#       Add a top-level name field to the workflow and a name field to each job. Descriptive names appear in the GitHub Actions UI and make CI logs easier to navigate.
 package greensecops.maintainability.missing_workflow_description
 
 import rego.v1

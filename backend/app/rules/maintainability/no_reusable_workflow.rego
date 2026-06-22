@@ -1,3 +1,32 @@
+# METADATA
+# title: Duplicated workflow blocks
+# description: Identical job definitions appear across multiple workflow files without using reusable workflows (workflow_call trigger).
+# custom:
+#   severity: medium
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         test-v1:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - uses: actions/setup-node@v4
+#             - run: npm test
+#         test-v2:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - uses: actions/setup-node@v4
+#             - run: npm test
+#     good: |
+#       jobs:
+#         test-v1:
+#           uses: ./.github/workflows/reusable-test.yml
+#           with: {node-version: 18}
+#         test-v2:
+#           uses: ./.github/workflows/reusable-test.yml
+#           with: {node-version: 20}
+#     fix: |
+#       Extract the shared job definition into a reusable workflow (on: workflow_call:) or a composite action, then call it with uses:.
 package greensecops.maintainability.no_reusable_workflow
 
 import rego.v1

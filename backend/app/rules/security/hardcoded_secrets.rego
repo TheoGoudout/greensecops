@@ -1,3 +1,28 @@
+# METADATA
+# title: Potential hardcoded secret
+# description: An environment variable name matches common secret patterns (API_KEY, TOKEN, PASSWORD, SECRET) and its value appears to be a literal string rather than a secret reference.
+# custom:
+#   severity: critical
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         deploy:
+#           env:
+#             API_KEY: "sk-prod-abc123def456"
+#             DB_PASSWORD: "MyP@ssw0rd!"
+#           steps:
+#             - run: ./deploy.sh
+#     good: |
+#       jobs:
+#         deploy:
+#           env:
+#             API_KEY: ${{ secrets.API_KEY }}
+#             DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+#           steps:
+#             - run: ./deploy.sh
+#     fix: |
+#       Store secrets in GitHub repository or environment secrets and reference them with ${{ secrets.SECRET_NAME }}. Rotate any secrets that were previously hardcoded.
 package greensecops.security.hardcoded_secrets
 
 import rego.v1

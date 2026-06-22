@@ -1,3 +1,24 @@
+# METADATA
+# title: Third-party action not pinned to SHA
+# description: A third-party action (not from actions/ or github/) is used without pinning to a full commit SHA. This is a supply-chain attack vector.
+# custom:
+#   severity: high
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: some-org/some-action@v2
+#             - uses: another/tool@main
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: some-org/some-action@a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+#             - uses: another/tool@b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3
+#     fix: |
+#       Pin third-party actions to a full 40-character commit SHA. Add a comment with the version tag for readability. Use Dependabot (ecosystem: github-actions) to keep SHA pins current.
 package greensecops.security.untrusted_actions
 
 import rego.v1

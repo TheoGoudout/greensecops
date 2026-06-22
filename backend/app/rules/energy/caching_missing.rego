@@ -1,3 +1,29 @@
+# METADATA
+# title: Missing dependency cache
+# description: No cache action detected for package manager (pip, npm, gradle, cargo, etc.). Caching dependencies dramatically reduces build time and runner energy consumption.
+# custom:
+#   severity: high
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/setup-node@v4
+#               with:
+#                 node-version: 20
+#             - run: npm install
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/setup-node@v4
+#               with:
+#                 node-version: 20
+#                 cache: npm
+#             - run: npm install
+#     fix: |
+#       Enable caching on the setup action (e.g. cache: npm on actions/setup-node) or add an explicit actions/cache step before the install step.
 package greensecops.energy.caching_missing
 
 import rego.v1

@@ -1,3 +1,25 @@
+# METADATA
+# title: continue-on-error masking failures
+# description: "continue-on-error: true is set on a step that is not explicitly intended to be optional. This can silently hide real failures."
+# custom:
+#   severity: medium
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       jobs:
+#         ci:
+#           steps:
+#             - name: Run tests
+#               run: npm test
+#               continue-on-error: true
+#     good: |
+#       jobs:
+#         ci:
+#           steps:
+#             - name: Run tests
+#               run: npm test
+#     fix: |
+#       Remove continue-on-error: true from non-optional steps. If the step is genuinely optional (e.g. coverage upload), add a comment explaining why.
 package greensecops.reliability.continue_on_error_abuse
 
 import rego.v1

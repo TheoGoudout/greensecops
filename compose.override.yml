@@ -91,7 +91,7 @@ services:
     develop:
       watch:
         - path: ./backend
-          action: sync
+          action: sync+restart
           target: /app/backend
           ignore:
             - ./backend/.venv
@@ -163,6 +163,33 @@ services:
       dockerfile: landing/Dockerfile
     environment:
       APP_URL: ${FRONTEND_HOST:-http://localhost:5173}
+      DOCS_URL: ${DOCS_URL:-http://localhost:3002}
+    develop:
+      watch:
+        - path: ./landing/assets
+          action: sync
+          target: /usr/share/nginx/html/assets
+        - path: ./landing/entrypoint.sh
+          action: sync
+          target: /docker-entrypoint-landing.sh
+        - path: ./landing/Dockerfile
+          action: rebuild
+
+  docs:
+    restart: "no"
+    ports:
+      - "3002:80"
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+      args:
+        - DOCS_BASE_URL=http://localhost:3002
+    develop:
+      watch:
+        - path: ./docs
+          action: rebuild
+        - path: ./backend/app/rules
+          action: rebuild
 
   playwright:
     build:

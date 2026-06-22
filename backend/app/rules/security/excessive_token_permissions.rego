@@ -1,3 +1,28 @@
+# METADATA
+# title: Excessive GITHUB_TOKEN permissions
+# description: "Workflow uses permissions: write-all or does not restrict token scope. The GITHUB_TOKEN should follow least privilege — declare only the permissions actually needed."
+# custom:
+#   severity: critical
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       permissions: write-all
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm run build
+#     good: |
+#       permissions: {}
+#       jobs:
+#         build:
+#           permissions:
+#             contents: read
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm run build
+#     fix: |
+#       Replace write-all with a minimal permissions block declaring only the scopes the workflow actually needs. Set permissions: {} at the workflow level and add per-job overrides.
 package greensecops.security.excessive_token_permissions
 
 import rego.v1

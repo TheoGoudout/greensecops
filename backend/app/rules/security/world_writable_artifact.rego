@@ -1,3 +1,29 @@
+# METADATA
+# title: Artifact uploaded without retention limit
+# description: Job uploads artifacts without an explicit retention-days setting. GitHub Actions artifacts are publicly readable for 90 days by default; limiting the retention window reduces the exposure of potentially sensitive build outputs.
+# custom:
+#   severity: medium
+#   detection: static_analysis
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/upload-artifact@v4
+#               with:
+#                 name: release-binary
+#                 path: dist/app
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/upload-artifact@v4
+#               with:
+#                 name: release-binary
+#                 path: dist/app
+#                 retention-days: 3
+#     fix: |
+#       Set retention-days on every actions/upload-artifact step to limit the window during which build outputs are publicly accessible. Use the shortest duration sufficient for downstream consumption.
 package greensecops.security.world_writable_artifact
 
 import rego.v1

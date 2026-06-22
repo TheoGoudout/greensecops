@@ -1,3 +1,34 @@
+# METADATA
+# title: Build artifacts not reused
+# description: Dependent jobs rebuild artifacts already produced by upstream jobs instead of downloading them via actions/download-artifact.
+# custom:
+#   severity: medium
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/upload-artifact@v4
+#               with: {name: dist, path: dist/}
+#         deploy:
+#           needs: build
+#           steps:
+#             - run: ./deploy.sh
+#     good: |
+#       jobs:
+#         build:
+#           steps:
+#             - uses: actions/upload-artifact@v4
+#               with: {name: dist, path: dist/}
+#         deploy:
+#           needs: build
+#           steps:
+#             - uses: actions/download-artifact@v4
+#               with: {name: dist}
+#             - run: ./deploy.sh
+#     fix: |
+#       Add an actions/download-artifact step in the dependent job to consume the artifact produced by the upstream job.
 package greensecops.energy.artifact_reuse
 
 import rego.v1

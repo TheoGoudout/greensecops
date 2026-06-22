@@ -1,3 +1,26 @@
+# METADATA
+# title: Oversized runner for job complexity
+# description: Job uses a large runner (8+ vCPUs) but contains only lightweight steps like linting or unit tests. Downsize to a standard runner to reduce cost and carbon footprint.
+# custom:
+#   severity: medium
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         test:
+#           runs-on: ubuntu-latest-8-cores
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm test
+#     good: |
+#       jobs:
+#         test:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm test
+#     fix: |
+#       Downsize the runner to ubuntu-latest or a 2-core equivalent. Reserve large runners for compilation, model training, or other parallelizable compute tasks.
 package greensecops.energy.runner_sizing
 
 import rego.v1

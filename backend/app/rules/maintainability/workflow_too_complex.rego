@@ -1,3 +1,29 @@
+# METADATA
+# title: Workflow exceeds complexity threshold
+# description: Workflow has more than 20 steps across jobs without using reusable workflows or composite actions to reduce complexity.
+# custom:
+#   severity: low
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         lint:
+#           steps: []   # 6 steps
+#         test:
+#           steps: []   # 8 steps
+#         build:
+#           steps: []   # 7 steps
+#         # total: 21 steps — exceeds threshold
+#     good: |
+#       # ci.yml — lint + test only
+#       jobs:
+#         lint:
+#           steps: []
+#         test:
+#           steps: []
+#       # release.yml — build + deploy only (separate file)
+#     fix: |
+#       Split the workflow into smaller, focused workflows (e.g. ci.yml for lint/test, release.yml for build/deploy). Extract repeated job logic into reusable workflows.
 package greensecops.maintainability.workflow_too_complex
 
 import rego.v1

@@ -1,3 +1,26 @@
+# METADATA
+# title: Large runner without justification
+# description: A GPU or large runner is used but no compute-intensive steps (model training, heavy compilation) are present.
+# custom:
+#   severity: low
+#   detection: pattern_matching
+#   examples:
+#     bad: |
+#       jobs:
+#         lint:
+#           runs-on: ubuntu-latest-gpu
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm run lint
+#     good: |
+#       jobs:
+#         lint:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - uses: actions/checkout@v4
+#             - run: npm run lint
+#     fix: |
+#       Replace the GPU or large runner with a standard runner (ubuntu-latest) for lightweight tasks. Reserve large runners for compute-intensive workloads like model training or heavy compilation.
 package greensecops.energy.large_runner_justification
 
 import rego.v1

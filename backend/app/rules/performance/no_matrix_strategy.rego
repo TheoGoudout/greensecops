@@ -1,3 +1,44 @@
+# METADATA
+# title: Duplicated jobs without matrix strategy
+# description: Multiple nearly-identical jobs differ only in a parameter (OS, Node version, etc.) but do not use a matrix strategy.
+# custom:
+#   severity: low
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         test-node-18:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - uses: actions/setup-node@v4
+#               with: {node-version: 18}
+#             - run: npm test
+#         test-node-20:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - uses: actions/setup-node@v4
+#               with: {node-version: 20}
+#             - run: npm test
+#         test-node-22:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - uses: actions/setup-node@v4
+#               with: {node-version: 22}
+#             - run: npm test
+#     good: |
+#       jobs:
+#         test:
+#           runs-on: ubuntu-latest
+#           strategy:
+#             matrix:
+#               node-version: [18, 20, 22]
+#           steps:
+#             - uses: actions/setup-node@v4
+#               with:
+#                 node-version: ${{ matrix.node-version }}
+#             - run: npm test
+#     fix: |
+#       Replace duplicate jobs with a single job using strategy.matrix to iterate over the varying parameter.
 package greensecops.performance.no_matrix_strategy
 
 import rego.v1

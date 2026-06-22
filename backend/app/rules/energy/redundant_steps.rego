@@ -1,3 +1,40 @@
+# METADATA
+# title: Redundant steps across jobs
+# description: Identical setup steps (checkout, dependency install) are duplicated across jobs without using reusable workflows or job outputs.
+# custom:
+#   severity: medium
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         test:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - uses: actions/setup-node@v4
+#             - run: npm test
+#         lint:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - uses: actions/setup-node@v4
+#             - run: npm run lint
+#         build:
+#           steps:
+#             - uses: actions/checkout@v4
+#             - uses: actions/setup-node@v4
+#             - run: npm run build
+#     good: |
+#       jobs:
+#         test:
+#           uses: ./.github/workflows/reusable-node.yml
+#           with: {script: npm test}
+#         lint:
+#           uses: ./.github/workflows/reusable-node.yml
+#           with: {script: npm run lint}
+#         build:
+#           uses: ./.github/workflows/reusable-node.yml
+#           with: {script: npm run build}
+#     fix: |
+#       Extract shared setup into a reusable workflow or composite action so the checkout and setup steps run once rather than being duplicated across jobs.
 package greensecops.energy.redundant_steps
 
 import rego.v1

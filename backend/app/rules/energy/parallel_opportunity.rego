@@ -1,3 +1,40 @@
+# METADATA
+# title: Sequential jobs without dependency
+# description: Multiple jobs run sequentially but have no dependency on each other. Running them in parallel would reduce total pipeline duration and energy use.
+# custom:
+#   severity: low
+#   detection: heuristic
+#   examples:
+#     bad: |
+#       jobs:
+#         lint:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm run lint
+#         test:
+#           needs: lint
+#           steps:
+#             - run: npm test
+#         build:
+#           needs: test
+#           steps:
+#             - run: npm run build
+#     good: |
+#       jobs:
+#         lint:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm run lint
+#         test:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm test
+#         build:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm run build
+#     fix: |
+#       Remove unnecessary needs: dependencies between jobs that do not share outputs. GitHub Actions runs independent jobs in parallel by default.
 package greensecops.energy.parallel_opportunity
 
 import rego.v1

@@ -173,6 +173,22 @@ services:
     restart: always
     environment:
       - APP_URL=${FRONTEND_HOST:-https://app.greensecops.io}
+      - DOCS_URL=${DOCS_URL:-https://docs.greensecops.io}
+
+  docs:
+    image: greensecops/docs:${TAG:-latest}
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+      args:
+        - DOCS_BASE_URL=${DOCS_URL:-https://docs.greensecops.io}
 
 volumes:
   app-db-data:
