@@ -171,9 +171,12 @@ services:
   landing:
     image: greensecops/landing:${TAG:-latest}
     restart: always
+    build:
+      context: .
+      dockerfile: landing/Dockerfile
     environment:
-      - APP_URL=${FRONTEND_HOST:-https://app.greensecops.io}
-      - DOCS_URL=${DOCS_URL:-https://docs.greensecops.io}
+      - APP_URL=https://${SERVICE_FQDN_FRONTEND}
+      - DOCS_URL=https://${SERVICE_FQDN_DOCS}
 
   docs:
     image: greensecops/docs:${TAG:-latest}
@@ -188,7 +191,7 @@ services:
       context: .
       dockerfile: docs/Dockerfile
       args:
-        - DOCS_BASE_URL=${DOCS_URL:-https://docs.greensecops.io}
+        - DOCS_BASE_URL=https://${SERVICE_FQDN_DOCS}
 
 volumes:
   app-db-data:

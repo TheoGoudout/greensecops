@@ -158,9 +158,6 @@ services:
     restart: "no"
     ports:
       - "3001:80"
-    build:
-      context: .
-      dockerfile: landing/Dockerfile
     environment:
       APP_URL: ${FRONTEND_HOST:-http://localhost:5173}
       DOCS_URL: ${DOCS_URL:-http://localhost:3002}
