@@ -14,7 +14,7 @@ html_title = "GreenSecOps Rules"
 html_baseurl = os.environ.get("DOCS_BASE_URL", "")
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_favicon = "favicon.png"
+html_favicon = "_static/favicon.png"
 html_theme_options = {
     "light_logo": "logo-mark.png",
     "dark_logo": "logo-mark-dark.png",
