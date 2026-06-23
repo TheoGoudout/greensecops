@@ -259,6 +259,27 @@ def test_trigger_analysis_success(
     assert body["status"] == "queued"
     assert body["repo_id"] == str(repo.id)
     mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs.get("force") is False
+
+
+def test_trigger_analysis_force_bypasses_dedup(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    # Act
+    with patch(
+        "app.workers.tasks.static_analysis.run_static_analysis.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/analyses/trigger/{repo.id}",
+            params={"force": "true"},
+            headers=superuser_token_headers,
+        )
+
+    # Assert
+    assert response.status_code == 202
+    assert mock_delay.call_args.kwargs.get("force") is True
 
 
 def test_trigger_analysis_repo_not_found(

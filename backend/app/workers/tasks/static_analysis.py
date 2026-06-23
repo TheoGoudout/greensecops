@@ -29,6 +29,7 @@ def _run_static_analysis_impl(
     commit_sha: str = "",
     trigger: str = "manual",
     workflow_file_id: str | None = None,
+    force: bool = False,
 ) -> dict[str, str | int]:
     with Session(engine) as session:
         repo = session.get(Repository, uuid.UUID(repo_id))
@@ -48,7 +49,7 @@ def _run_static_analysis_impl(
             content_hash = compute_content_hash(content)
 
             duplicate, existing = is_duplicate(session, content_hash)
-            if duplicate and existing:
+            if not force and duplicate and existing:
                 logger.info(
                     "Skipping duplicate for %s (hash=%s)", path, content_hash[:8]
                 )
@@ -186,6 +187,7 @@ def run_static_analysis(
     commit_sha: str = "",
     trigger: str = "manual",
     workflow_file_id: str | None = None,
+    force: bool = False,
 ) -> dict[str, str | int]:
     return _run_static_analysis_impl(
         repo_id=repo_id,
@@ -193,6 +195,7 @@ def run_static_analysis(
         commit_sha=commit_sha,
         trigger=trigger,
         workflow_file_id=workflow_file_id,
+        force=force,
     )
 
 

@@ -61,6 +61,7 @@ export class AnalysesService {
      * @param data The data for the request.
      * @param data.repoId
      * @param data.branch
+     * @param data.force
      * @returns string Successful Response
      * @throws ApiError
      */
@@ -72,7 +73,8 @@ export class AnalysesService {
                 repo_id: data.repoId
             },
             query: {
-                branch: data.branch
+                branch: data.branch,
+                force: data.force
             },
             errors: {
                 422: 'Validation Error'
@@ -290,8 +292,10 @@ export class FixesService {
      * Queue a single batch fix generation call per workflow file for issues in a repo.
      *
      * When body.issue_ids is provided, only those issues are processed.
+     * When force=True, delivered fixes are also discarded and regenerated.
      * @param data The data for the request.
      * @param data.repoId
+     * @param data.force
      * @param data.requestBody
      * @returns number Successful Response
      * @throws ApiError
@@ -302,6 +306,9 @@ export class FixesService {
             url: '/api/v1/fixes/generate-for-repo/{repo_id}',
             path: {
                 repo_id: data.repoId
+            },
+            query: {
+                force: data.force
             },
             body: data.requestBody,
             mediaType: 'application/json',
@@ -315,6 +322,7 @@ export class FixesService {
      * Trigger Fix Generation
      * @param data The data for the request.
      * @param data.issueId
+     * @param data.force
      * @returns string Successful Response
      * @throws ApiError
      */
@@ -324,6 +332,9 @@ export class FixesService {
             url: '/api/v1/fixes/generate/{issue_id}',
             path: {
                 issue_id: data.issueId
+            },
+            query: {
+                force: data.force
             },
             errors: {
                 422: 'Validation Error'
@@ -335,6 +346,7 @@ export class FixesService {
      * Trigger Fix Delivery
      * @param data The data for the request.
      * @param data.fixId
+     * @param data.force
      * @returns string Successful Response
      * @throws ApiError
      */
@@ -345,6 +357,9 @@ export class FixesService {
             path: {
                 fix_id: data.fixId
             },
+            query: {
+                force: data.force
+            },
             errors: {
                 422: 'Validation Error'
             }
@@ -354,8 +369,11 @@ export class FixesService {
     /**
      * Trigger Workflow Delivery
      * Deliver all ready fixes for one workflow file as a single PR.
+     *
+     * When force=True, fixes in any status are included (not just ready).
      * @param data The data for the request.
      * @param data.requestBody
+     * @param data.force
      * @returns string Successful Response
      * @throws ApiError
      */
@@ -363,6 +381,9 @@ export class FixesService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/fixes/deliver-for-workflow',
+            query: {
+                force: data.force
+            },
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -374,8 +395,11 @@ export class FixesService {
     /**
      * Trigger Repo Delivery
      * Deliver all ready fixes for a repo as a single multi-file PR.
+     *
+     * When force=True, fixes in any status are included (not just ready).
      * @param data The data for the request.
      * @param data.repoId
+     * @param data.force
      * @returns string Successful Response
      * @throws ApiError
      */
@@ -385,6 +409,9 @@ export class FixesService {
             url: '/api/v1/fixes/deliver-for-repo/{repo_id}',
             path: {
                 repo_id: data.repoId
+            },
+            query: {
+                force: data.force
             },
             errors: {
                 422: 'Validation Error'

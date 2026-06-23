@@ -55,11 +55,13 @@ def trigger_analysis(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
     branch: str | None = None,
+    force: bool = False,
 ) -> dict[str, str]:
     repo = get_or_404(session, Repository, repo_id)
     run_static_analysis.delay(
         repo_id=str(repo_id),
         branch=branch or repo.default_branch,
         trigger="manual",
+        force=force,
     )
     return {"status": "queued", "repo_id": str(repo_id)}

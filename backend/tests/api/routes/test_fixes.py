@@ -470,7 +470,7 @@ def test_deliver_fix_queues_task(
     body = response.json()
     assert body["status"] == "queued"
     assert body["fix_id"] == str(ready_fix.id)
-    mock_delay.assert_called_once_with(fix_id=str(ready_fix.id))
+    mock_delay.assert_called_once_with(fix_id=str(ready_fix.id), force=False)
 
 
 def test_deliver_fix_not_ready_returns_409(
@@ -663,3 +663,96 @@ def test_deliver_for_repo_no_ready_fixes_returns_404(
     # Note: repo fixture may have a ready_fix from other tests in same session,
     # so we only assert a valid HTTP response
     assert response.status_code in (202, 404)
+
+
+# ─── Force re-run tests ───────────────────────────────────────────────────────
+
+
+def test_generate_fixes_for_repo_force_deletes_delivered(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    # Arrange — create a delivered fix that should normally be preserved
+    delivered_fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
+    )
+    db.add(delivered_fix)
+    db.commit()
+    db.refresh(delivered_fix)
+    fix_id = delivered_fix.id
+
+    # Act
+    with patch("app.api.routes.fixes.run_fix_generation.delay"):
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            params={"force": "true"},
+            headers=superuser_token_headers,
+        )
+
+    # Assert — delivered fix deleted because force=True
+    assert response.status_code == 202
+    db.expire_all()
+    assert db.get(Fix, fix_id) is None
+
+
+def test_trigger_fix_delivery_force_bypasses_status_check(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+) -> None:
+    # Arrange — a fix that is already delivered (would normally return 409)
+    delivered_fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
+    )
+    db.add(delivered_fix)
+    db.commit()
+    db.refresh(delivered_fix)
+
+    # Act
+    with patch("app.workers.tasks.fix_delivery.deliver_fix.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/{delivered_fix.id}/deliver",
+            params={"force": "true"},
+            headers=superuser_token_headers,
+        )
+
+    # Assert — 202 instead of 409, force=True forwarded to task
+    assert response.status_code == 202
+    mock_delay.assert_called_once_with(fix_id=str(delivered_fix.id), force=True)
+
+
+def test_deliver_for_workflow_force_includes_non_ready(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    pending_fix: Fix,
+) -> None:
+    # Act — pending fix would normally be excluded (no ready fixes → 404)
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
+            params={"force": "true"},
+            headers=superuser_token_headers,
+            json={"fix_ids": [str(pending_fix.id)]},
+        )
+
+    # Assert — force=True includes the pending fix
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    mock_delay.assert_called_once()
+    call_kwargs = mock_delay.call_args.kwargs
+    assert str(pending_fix.id) in call_kwargs["fix_ids"]
+    assert call_kwargs["force"] is True
