@@ -259,27 +259,44 @@ def test_trigger_analysis_success(
     assert body["status"] == "queued"
     assert body["repo_id"] == str(repo.id)
     mock_delay.assert_called_once()
-    assert mock_delay.call_args.kwargs.get("force") is False
+    assert mock_delay.call_args.kwargs.get("force") is True
 
 
-def test_trigger_analysis_force_bypasses_dedup(
+def test_trigger_analysis_force_defaults_to_true(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     repo: Repository,
 ) -> None:
-    # Act
+    # Manual trigger always forces — dedup bypass is the default
     with patch(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/analyses/trigger/{repo.id}",
-            params={"force": "true"},
             headers=superuser_token_headers,
         )
 
-    # Assert
     assert response.status_code == 202
     assert mock_delay.call_args.kwargs.get("force") is True
+
+
+def test_trigger_analysis_can_opt_out_of_force(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    # Callers can explicitly pass force=false to keep dedup active
+    with patch(
+        "app.workers.tasks.static_analysis.run_static_analysis.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/analyses/trigger/{repo.id}",
+            params={"force": "false"},
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert mock_delay.call_args.kwargs.get("force") is False
 
 
 def test_trigger_analysis_repo_not_found(

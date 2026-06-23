@@ -668,6 +668,40 @@ def test_deliver_for_repo_no_ready_fixes_returns_404(
 # ─── Force re-run tests ───────────────────────────────────────────────────────
 
 
+def test_generate_fixes_for_repo_preserves_delivered_and_skips_in_task(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    # Arrange — delivered fix must not be re-inserted (unique constraint)
+    delivered_fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
+    )
+    db.add(delivered_fix)
+    db.commit()
+    db.refresh(delivered_fix)
+    fix_id = delivered_fix.id
+
+    # Act — no force: delivered fix preserved, task queued
+    with patch("app.api.routes.fixes.run_fix_generation.delay"):
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert — delivered fix still exists (not deleted)
+    assert response.status_code == 202
+    db.expire_all()
+    assert db.get(Fix, fix_id) is not None
+    assert db.get(Fix, fix_id).status == FixStatus.delivered
+
+
 def test_generate_fixes_for_repo_force_deletes_delivered(
     client: TestClient,
     superuser_token_headers: dict[str, str],

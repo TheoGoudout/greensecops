@@ -55,7 +55,7 @@ def trigger_analysis(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
     branch: str | None = None,
-    force: bool = False,
+    force: bool = True,
 ) -> dict[str, str]:
     repo = get_or_404(session, Repository, repo_id)
     run_static_analysis.delay(

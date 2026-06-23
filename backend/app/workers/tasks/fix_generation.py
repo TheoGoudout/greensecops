@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowFile
@@ -72,6 +72,21 @@ def run_fix_generation(
 
         provider_str, model_str = _resolve_llm_provider(repo)
         llm_provider = LLMProvider(provider_str)
+
+        # Skip issues that already have a fix (unique constraint: one Fix per Issue).
+        # The API preserves delivered fixes when force=False; inserting again would
+        # violate fix_issue_id_key. When force=True the API deletes all fixes first,
+        # so this set will be empty.
+        existing_fix_issue_ids = set(
+            session.exec(
+                select(Fix.issue_id).where(  # type: ignore[arg-type]
+                    Fix.issue_id.in_([i.id for i in issues])  # type: ignore[attr-defined]
+                )
+            ).all()
+        )
+        issues = [i for i in issues if i.id not in existing_fix_issue_ids]
+        if not issues:
+            return {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
 
         fixes = []
         for issue in issues:
