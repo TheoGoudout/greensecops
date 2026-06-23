@@ -1,15 +1,22 @@
 # GreenSecOps
 
-<a href="https://github.com/fastapi/greensecops/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/fastapi/greensecops/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
-<a href="https://github.com/fastapi/greensecops/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/fastapi/greensecops/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
-<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/fastapi/greensecops" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/fastapi/greensecops.svg" alt="Coverage"></a>
+<a href="https://github.com/TheoGoudout/greensecops/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/TheoGoudout/greensecops/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
+<a href="https://github.com/TheoGoudout/greensecops/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/TheoGoudout/greensecops/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
+<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/TheoGoudout/greensecops" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/TheoGoudout/greensecops.svg" alt="Coverage"></a>
 
-## Technology Stack and Features
+GreenSecOps analyzes GitHub Actions workflows and automatically delivers fixes as pull requests. It evaluates every workflow file against a set of Rego rules across five axes — energy efficiency, reliability, security, performance, and maintainability — then uses an LLM to generate and open PRs with targeted improvements.
+
+## Technology Stack
 
 - ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
   - 🧰 [SQLModel](https://sqlmodel.tiangolo.com) for the Python SQL database interactions (ORM).
   - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
   - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
+  - 🔴 [Redis](https://redis.io) as the Celery broker and cache.
+  - ⚙️ [Celery](https://docs.celeryq.dev) for async task processing (analysis, fix generation, fix delivery).
+- 🔍 [Open Policy Agent (OPA)](https://www.openpolicyagent.org) for evaluating Rego rules against workflow files.
+- 🤖 [LangChain](https://python.langchain.com) for LLM-powered fix generation, with support for OpenAI, Anthropic, Google Gemini, and Ollama.
+- 🐙 GitHub App integration for webhook delivery, PR creation, and repository access.
 - 🚀 [React](https://react.dev) for the frontend.
   - 💃 Using TypeScript, hooks, [Vite](https://vitejs.dev), and other parts of a modern frontend stack.
   - 🎨 [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com) for the frontend components.
@@ -18,193 +25,46 @@
   - 🦇 Dark mode support.
 - 🐋 [Docker Compose](https://www.docker.com) for development and production.
 - 🔒 Secure password hashing by default.
-- 🔑 JWT (JSON Web Token) authentication.
+- 🔑 JWT and GitHub OAuth authentication.
 - 📫 Email based password recovery.
 - 📬 [Mailcatcher](https://mailcatcher.me) for local email testing during development.
 - ✅ Tests with [Pytest](https://pytest.org).
 - 📞 [Traefik](https://traefik.io) as a reverse proxy / load balancer.
-- 🚢 Deployment instructions using Docker Compose, including how to set up a frontend Traefik proxy to handle automatic HTTPS certificates.
-- 🏭 CI (continuous integration) and CD (continuous deployment) based on GitHub Actions.
+- 🚢 Deployment instructions using Docker Compose, including how to set up a Traefik proxy with automatic HTTPS certificates.
+- 🏭 CI/CD based on GitHub Actions.
 
-### Dashboard Login
+## How It Works
 
-[![API docs](img/login.png)](https://github.com/fastapi/greensecops)
+1. **GitHub App installation** — users install the GitHub App on their organization or repository. A webhook event triggers repository synchronization and queues a static analysis job.
+2. **Static analysis** — a Celery worker fetches the repository's workflow files and evaluates them through OPA, producing a list of issues across the five axes.
+3. **Fix generation** — another Celery task passes the issues and workflow content to an LLM (via LangChain), which produces patched workflow YAML.
+4. **Fix delivery** — the fix is delivered as a GitHub PR or an inline comment on the repository, depending on configuration.
+5. **Dynamic analysis** (optional) — the companion [GitHub Action](./action/README.md) can be added to any workflow to capture runtime telemetry (CPU, RAM, disk, network) and send it back to GreenSecOps for enriched analysis.
 
-### Dashboard - Admin
+## Configure
 
-[![API docs](img/dashboard.png)](https://github.com/fastapi/greensecops)
+Copy `.env.example` to `.env` and fill in the required values. At minimum, set:
 
-### Dashboard - Items
-
-[![API docs](img/dashboard-items.png)](https://github.com/fastapi/greensecops)
-
-### Dashboard - Dark Mode
-
-[![API docs](img/dashboard-dark.png)](https://github.com/fastapi/greensecops)
-
-### Interactive API Documentation
-
-[![API docs](img/docs.png)](https://github.com/fastapi/greensecops)
-
-## How To Use It
-
-You can **just fork or clone** this repository and use it as is.
-
-✨ It just works. ✨
-
-### How to Use a Private Repository
-
-If you want to have a private repository, GitHub won't allow you to simply fork it as it doesn't allow changing the visibility of forks.
-
-But you can do the following:
-
-- Create a new GitHub repo, for example `my-full-stack`.
-- Clone this repository manually, set the name with the name of the project you want to use, for example `my-full-stack`:
-
-```bash
-git clone git@github.com:fastapi/greensecops.git my-full-stack
-```
-
-- Enter into the new directory:
-
-```bash
-cd my-full-stack
-```
-
-- Set the new origin to your new repository, copy it from the GitHub interface, for example:
-
-```bash
-git remote set-url origin git@github.com:octocat/my-full-stack.git
-```
-
-- Add this repo as another "remote" to allow you to get updates later:
-
-```bash
-git remote add upstream git@github.com:fastapi/greensecops.git
-```
-
-- Push the code to your new repository:
-
-```bash
-git push -u origin master
-```
-
-### Update From the Original Template
-
-After cloning the repository, and after doing changes, you might want to get the latest changes from this original template.
-
-- Make sure you added the original repository as a remote, you can check it with:
-
-```bash
-git remote -v
-
-origin    git@github.com:octocat/my-full-stack.git (fetch)
-origin    git@github.com:octocat/my-full-stack.git (push)
-upstream    git@github.com:fastapi/greensecops.git (fetch)
-upstream    git@github.com:fastapi/greensecops.git (push)
-```
-
-- Pull the latest changes without merging:
-
-```bash
-git pull --no-commit upstream master
-```
-
-This will download the latest changes from this template without committing them, that way you can check everything is right before committing.
-
-- If there are conflicts, solve them in your editor.
-
-- Once you are done, commit the changes:
-
-```bash
-git merge --continue
-```
-
-### Configure
-
-You can then update configs in the `.env` files to customize your configurations.
-
-Before deploying it, make sure you change at least the values for:
-
-- `SECRET_KEY`
+- `SECRET_KEY` — sign JWTs (`openssl rand -hex 32`)
 - `FIRST_SUPERUSER_PASSWORD`
 - `POSTGRES_PASSWORD`
+- `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- At least one LLM provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or a running Ollama instance via `OLLAMA_BASE_URL`)
 
-You can (and should) pass these as environment variables from secrets.
-
-Read the [deployment.md](./deployment.md) docs for more details.
+Read the [deployment.md](./deployment.md) docs for the full list of environment variables and secrets.
 
 ### Generate Secret Keys
-
-Some environment variables in the `.env` file have a default value of `changethis`.
-
-You have to change them with a secret key, to generate secret keys you can run the following command:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Copy the content and use that as password / secret key. And run that again to generate another secure key.
-
-## How To Use It - Alternative With Copier
-
-This repository also supports generating a new project using [Copier](https://copier.readthedocs.io).
-
-It will copy all the files, ask you configuration questions, and update the `.env` files with your answers.
-
-### Install Copier
-
-You can install Copier with:
+Or for hex secrets:
 
 ```bash
-pip install copier
+openssl rand -hex 32
 ```
-
-Or better, if you have [`pipx`](https://pipx.pypa.io/), you can run it with:
-
-```bash
-pipx install copier
-```
-
-**Note**: If you have `pipx`, installing copier is optional, you could run it directly.
-
-### Generate a Project With Copier
-
-Decide a name for your new project's directory, you will use it below. For example, `my-awesome-project`.
-
-Go to the directory that will be the parent of your project, and run the command with your project's name:
-
-```bash
-copier copy https://github.com/fastapi/greensecops my-awesome-project --trust
-```
-
-If you have `pipx` and you didn't install `copier`, you can run it directly:
-
-```bash
-pipx run copier copy https://github.com/fastapi/greensecops my-awesome-project --trust
-```
-
-**Note** the `--trust` option is necessary to be able to execute a [post-creation script](https://github.com/fastapi/greensecops/blob/master/.copier/update_dotenv.py) that updates your `.env` files.
-
-### Input Variables
-
-Copier will ask you for some data, you might want to have at hand before generating the project.
-
-But don't worry, you can just update any of that in the `.env` files afterwards.
-
-The input variables, with their default values (some auto generated) are:
-
-- `project_name`: (default: `"FastAPI Project"`) The name of the project, shown to API users (in .env).
-- `stack_name`: (default: `"fastapi-project"`) The name of the stack used for Docker Compose labels and project name (no spaces, no periods) (in .env).
-- `secret_key`: (default: `"changethis"`) The secret key for the project, used for security, stored in .env, you can generate one with the method above.
-- `first_superuser`: (default: `"admin@example.com"`) The email of the first superuser (in .env).
-- `first_superuser_password`: (default: `"changethis"`) The password of the first superuser (in .env).
-- `smtp_host`: (default: "") The SMTP server host to send emails, you can set it later in .env.
-- `smtp_user`: (default: "") The SMTP server user to send emails, you can set it later in .env.
-- `smtp_password`: (default: "") The SMTP server password to send emails, you can set it later in .env.
-- `emails_from_email`: (default: `"info@example.com"`) The email account to send emails from, you can set it later in .env.
-- `postgres_password`: (default: `"changethis"`) The password for the PostgreSQL database, stored in .env, you can generate one with the method above.
-- `sentry_dsn`: (default: "") The DSN for Sentry, if you are using it, you can set it later in .env.
 
 ## Backend Development
 
@@ -230,4 +90,4 @@ Check the file [release-notes.md](./release-notes.md).
 
 ## License
 
-The GreenSecOps is licensed under the terms of the MIT license.
+GreenSecOps is licensed under the terms of the MIT license.

@@ -4,7 +4,7 @@ Thank you for your interest in contributing to the GreenSecOps! 🙇
 
 ## Discussions First
 
-For **big changes** (new features, architectural changes, significant refactoring), please start by opening a [GitHub Discussion](https://github.com/fastapi/greensecops/discussions) first. This allows the community and maintainers to provide feedback on the approach before you invest significant time in implementation.
+For **big changes** (new features, architectural changes, significant refactoring), please start by opening a [GitHub Discussion](https://github.com/TheoGoudout/greensecops/discussions) first. This allows the community and maintainers to provide feedback on the approach before you invest significant time in implementation.
 
 For small, straightforward changes, you can go directly to a Pull Request without starting a discussion first. This includes:
 
@@ -14,7 +14,7 @@ For small, straightforward changes, you can go directly to a Pull Request withou
 - Minor code improvements (e.g., removing unused code)
 
 Note that PRs from non-team members are not allowed to modify `pyproject.toml` or `uv.lock`, to prevent supply chain risk.
-If you would like to add a new dependency, create a new [Discussion](https://github.com/fastapi/greensecops/discussions) to explain why.
+If you would like to add a new dependency, create a new [Discussion](https://github.com/TheoGoudout/greensecops/discussions) to explain why.
 
 ## Developing
 
@@ -65,4 +65,4 @@ You have amazing tools at hand, use them wisely to help effectively.
 
 ## Questions?
 
-If you have questions about contributing, feel free to open a [GitHub Discussion](https://github.com/fastapi/greensecops/discussions).
+If you have questions about contributing, feel free to open a [GitHub Discussion](https://github.com/TheoGoudout/greensecops/discussions).

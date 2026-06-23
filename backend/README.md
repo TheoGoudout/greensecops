@@ -1,4 +1,4 @@
-# FastAPI Project - Backend
+# GreenSecOps - Backend
 
 ## Requirements
 
@@ -27,7 +27,11 @@ $ source .venv/bin/activate
 
 Make sure your editor is using the correct Python virtual environment, with the interpreter at `backend/.venv/bin/python`.
 
-Modify or add SQLModel models for data and SQL tables in `./backend/app/models.py`, API endpoints in `./backend/app/api/`, CRUD (Create, Read, Update, Delete) utils in `./backend/app/crud.py`.
+Modify or add SQLModel models for data and SQL tables in `./backend/app/models/` (one file per domain: `user.py`, `repository.py`, `analysis.py`, `issue.py`, `fix.py`, `rule.py`, etc.), API endpoints in `./backend/app/api/routes/`, CRUD (Create, Read, Update, Delete) utils in `./backend/app/crud.py`.
+
+Celery tasks are in `./backend/app/workers/tasks/` — `static_analysis.py` runs OPA against workflow files, `fix_generation.py` calls the configured LLM, and `fix_delivery.py` opens GitHub PRs or comments.
+
+OPA Rego rules are in `./backend/app/rules/`, organized by axis: `energy/`, `reliability/`, `security/`, `performance/`, `maintainability/`.
 
 ## VS Code
 

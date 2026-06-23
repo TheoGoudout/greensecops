@@ -1,4 +1,4 @@
-# FastAPI Project - Development
+# GreenSecOps - Development
 
 ## Docker Compose
 
@@ -10,15 +10,21 @@ docker compose watch
 
 * Now you can open your browser and interact with these URLs:
 
-Frontend, built with Docker, with routes handled based on the path: <http://localhost:5173>
+Frontend (React dashboard): <http://localhost:5173>
 
-Backend, JSON based web API based on OpenAPI: <http://localhost:8000>
+Landing page: <http://localhost:3001>
 
-Automatic interactive documentation with Swagger UI (from the OpenAPI backend): <http://localhost:8000/docs>
+Sphinx docs: <http://localhost:3002>
+
+Backend API (JSON/OpenAPI): <http://localhost:8000>
+
+Automatic interactive documentation with Swagger UI: <http://localhost:8000/docs>
 
 Adminer, database web administration: <http://localhost:8080>
 
-Traefik UI, to see how the routes are being handled by the proxy: <http://localhost:8090>
+Flower, Celery task monitoring: <http://localhost:5555>
+
+OPA, Open Policy Agent REST API: <http://localhost:8181>
 
 **Note**: The first time you start your stack, it might take a minute for it to be ready. While the backend waits for the database to be ready and configures everything. You can check the logs to monitor it.
 
@@ -79,33 +85,29 @@ cd backend
 fastapi dev app/main.py
 ```
 
-## Docker Compose in `localhost.tiangolo.com`
+## Docker Compose with Subdomain Routing
 
 When you start the Docker Compose stack, it uses `localhost` by default, with different ports for each service (backend, frontend, adminer, etc).
 
-When you deploy it to production (or staging), it will deploy each service in a different subdomain, like `api.example.com` for the backend and `dashboard.example.com` for the frontend.
+When deployed to production or staging, each service runs on its own subdomain, like `api.example.com` for the backend and `dashboard.example.com` for the frontend.
 
 In the guide about [deployment](deployment.md) you can read about Traefik, the configured proxy. That's the component in charge of transmitting traffic to each service based on the subdomain.
 
-If you want to test that it's all working locally, you can edit the local `.env` file, and change:
+If you want to test subdomain routing locally, edit the `.env` file and set `DOMAIN` to any wildcard-resolvable domain pointing to `127.0.0.1`. For example, `localhost.tiangolo.com` is a public domain pre-configured to resolve `*.localhost.tiangolo.com` to `127.0.0.1`:
 
 ```dotenv
 DOMAIN=localhost.tiangolo.com
 ```
 
-That will be used by the Docker Compose files to configure the base domain for the services.
+Traefik will then route `api.localhost.tiangolo.com` to the backend and `dashboard.localhost.tiangolo.com` to the frontend.
 
-Traefik will use this to transmit traffic at `api.localhost.tiangolo.com` to the backend, and traffic at `dashboard.localhost.tiangolo.com` to the frontend.
-
-The domain `localhost.tiangolo.com` is a special domain that is configured (with all its subdomains) to point to `127.0.0.1`. This way you can use that for your local development.
-
-After you update it, run again:
+After updating, restart the stack:
 
 ```bash
 docker compose watch
 ```
 
-When deploying, for example in production, the main Traefik is configured outside of the Docker Compose files. For local development, there's an included Traefik in `compose.override.yml`, just to let you test that the domains work as expected, for example with `api.localhost.tiangolo.com` and `dashboard.localhost.tiangolo.com`.
+When deploying to production, the main Traefik is configured outside the Docker Compose files. For local development, `compose.override.yml` includes a Traefik instance for testing subdomain routing.
 
 ## Docker Compose files and env vars
 
@@ -188,7 +190,11 @@ The production or staging URLs would use these same paths, but with your own dom
 
 Development URLs, for local development.
 
-Frontend: <http://localhost:5173>
+Frontend (dashboard): <http://localhost:5173>
+
+Landing page: <http://localhost:3001>
+
+Sphinx docs: <http://localhost:3002>
 
 Backend: <http://localhost:8000>
 
@@ -202,9 +208,11 @@ Traefik UI: <http://localhost:8090>
 
 MailCatcher: <http://localhost:1080>
 
-### Development URLs with `localhost.tiangolo.com` Configured
+Flower (Celery): <http://localhost:5555>
 
-Development URLs, for local development.
+OPA: <http://localhost:8181>
+
+### Development URLs with `localhost.tiangolo.com` Configured
 
 Frontend: <http://dashboard.localhost.tiangolo.com>
 

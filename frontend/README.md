@@ -1,6 +1,6 @@
-# FastAPI Project - Frontend
+# GreenSecOps - Frontend
 
-The frontend is built with [Vite](https://vitejs.dev/), [React](https://reactjs.org/), [TypeScript](https://www.typescriptlang.org/), [TanStack Query](https://tanstack.com/query), [TanStack Router](https://tanstack.com/router) and [Tailwind CSS](https://tailwindcss.com/).
+The frontend is built with [Vite](https://vitejs.dev/), [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [TanStack Query](https://tanstack.com/query), [TanStack Router](https://tanstack.com/router), [Tailwind CSS](https://tailwindcss.com/), and [shadcn/ui](https://ui.shadcn.com/).
 
 ## Requirements
 
@@ -78,6 +78,15 @@ VITE_API_URL=https://api.my-domain.example.com
 ```
 
 Then, when you run the frontend, it will use that URL as the base URL for the API.
+
+Two additional build-time env vars are required for GitHub integration:
+
+```env
+VITE_GITHUB_OAUTH_CLIENT_ID=your_github_oauth_client_id
+VITE_GITHUB_APP_NAME=your_github_app_slug
+```
+
+These are injected automatically by Docker Compose from `GITHUB_CLIENT_ID` and `GITHUB_APP_NAME` in the root `.env` file.
 
 ## Code Structure
 
