@@ -20,10 +20,7 @@ from app.models import (
 )
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.tasks.fix_delivery import deliver_fix, deliver_fixes_batch
-from app.workers.tasks.fix_generation import (
-    run_batch_fix_generation,
-    run_fix_generation,
-)
+from app.workers.tasks.fix_generation import run_fix_generation
 
 
 class BatchFixRequest(BaseModel):
@@ -134,7 +131,7 @@ def trigger_fix_generation_for_repo(
         by_analysis[issue.analysis_id].append(issue)
 
     for group in by_analysis.values():
-        run_batch_fix_generation.delay(issue_ids=[str(i.id) for i in group])
+        run_fix_generation.delay(issue_ids=[str(i.id) for i in group])
 
     return {"queued": len(issues)}
 
@@ -156,7 +153,7 @@ def trigger_fix_generation(
     )
     session.commit()
 
-    run_fix_generation.delay(issue_id=str(issue_id))
+    run_fix_generation.delay(issue_ids=[str(issue_id)])
     return {"status": "queued", "issue_id": str(issue_id)}
 
 
