@@ -204,6 +204,47 @@ def run_static_analysis(
     )
 
 
+# Seconds to wait between successive per-repo analyses, to spread out the
+# read-only GitHub API calls and avoid rate-limit bursts when fanning out.
+REANALYZE_STAGGER_SECONDS = 2
+
+
+def _reanalyze_all_repositories_impl() -> dict[str, str | int]:
+    """Enqueue a fresh static analysis for every enabled repository.
+
+    Used when a new version ships rules: each repo is re-analysed so the new
+    rules are applied and grades recomputed. This behaves like an internal
+    "release" event that fans out the same per-repo analysis a webhook would,
+    except ``force=True`` is required since the workflow content is unchanged
+    and would otherwise be skipped as a duplicate.
+    """
+    with Session(engine) as session:
+        repos = session.exec(
+            select(Repository).where(Repository.enabled == True)  # noqa: E712
+        ).all()
+
+    for i, repo in enumerate(repos):
+        run_static_analysis.apply_async(
+            kwargs={
+                "repo_id": str(repo.id),
+                "branch": repo.default_branch,
+                "trigger": AnalysisTrigger.release.value,
+                "force": True,
+            },
+            countdown=i * REANALYZE_STAGGER_SECONDS,
+        )
+
+    logger.info("Enqueued release re-analysis for %d enabled repos", len(repos))
+    return {"status": "queued", "repos": len(repos)}
+
+
+@celery_app.task(name="static_analysis.reanalyze_all", bind=True)
+def reanalyze_all_repositories(
+    self: object,  # noqa: ARG001
+) -> dict[str, str | int]:
+    return _reanalyze_all_repositories_impl()
+
+
 def _fetch_workflow_files(repo: Repository) -> list[object]:
     """Synchronous wrapper for async GitHubAppClient.fetch_workflow_files."""
     import redis.asyncio as aioredis
