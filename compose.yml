@@ -41,7 +41,6 @@ services:
       prestart:
         condition: service_completed_successfully
     environment: &backend-required-env
-      - DOMAIN=${DOMAIN}
       - FRONTEND_HOST=${FRONTEND_HOST:-https://${SERVICE_FQDN_FRONTEND}}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
@@ -71,11 +70,17 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - AI_PROVIDERS_CONFIG=${AI_PROVIDERS_CONFIG}
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
+      - STRIPE_PRICE_STARTER=${STRIPE_PRICE_STARTER}
+      - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
+      - STRIPE_PRICE_ULTIMATE=${STRIPE_PRICE_ULTIMATE}
       - OPA_URL=http://opa:8181
+      - DOCS_URL=${DOCS_URL:-https://${SERVICE_FQDN_DOCS}}
+      - GITHUB_BOT_HANDLE=${GITHUB_BOT_HANDLE:-@greensecops}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
       interval: 10s
@@ -198,7 +203,7 @@ services:
       context: .
       dockerfile: docs/Dockerfile
       args:
-        - DOCS_BASE_URL=https://${SERVICE_FQDN_DOCS}
+        - DOCS_BASE_URL=${DOCS_URL:-https://${SERVICE_FQDN_DOCS}}
 
 volumes:
   app-db-data:
