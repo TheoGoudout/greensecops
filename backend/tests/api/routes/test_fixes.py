@@ -317,7 +317,7 @@ def test_generate_fixes_for_repo_queues_tasks(
     repo: Repository,
 ) -> None:
     # Act
-    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
@@ -337,7 +337,7 @@ def test_generate_fixes_for_repo_with_issue_ids_filter(
     repo: Repository,
 ) -> None:
     # Act — pass issue_ids to restrict which issues get fixes generated
-    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
@@ -357,7 +357,7 @@ def test_generate_fixes_for_repo_with_nonexistent_issue_ids_returns_zero(
     repo: Repository,
 ) -> None:
     # Act — pass a random issue_id that doesn't belong to this repo
-    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
@@ -379,7 +379,7 @@ def test_generate_fixes_for_repo_replaces_existing_fixes(
 ) -> None:
     # Arrange — ready_fix.issue already has a ready fix
     fix_id = ready_fix.id
-    with patch("app.api.routes.fixes.run_batch_fix_generation.delay") as mock_delay:
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
@@ -431,7 +431,7 @@ def test_generate_fix_queues_task(
     body = response.json()
     assert body["status"] == "queued"
     assert body["issue_id"] == str(fresh_issue.id)
-    mock_delay.assert_called_once_with(issue_id=str(fresh_issue.id))
+    mock_delay.assert_called_once_with(issue_ids=[str(fresh_issue.id)])
 
 
 def test_generate_fix_issue_not_found(

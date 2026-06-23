@@ -33,114 +33,52 @@ def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
     return provider_str, model_str or "gpt-4o-mini"
 
 
+def _load_generation_context(
+    session: Session,
+    issue_ids: list[str],
+) -> tuple[list[Issue], WorkflowFile, Repository] | dict:
+    """Load and validate issues, workflow file, and repo. Returns error dict on failure."""
+    issues = [session.get(Issue, uuid.UUID(iid)) for iid in issue_ids]
+    issues = [i for i in issues if i is not None]
+    if not issues:
+        return {"status": "error", "detail": "no_issues_found"}
+
+    analysis = issues[0].analysis
+    if not analysis:
+        return {"status": "error", "detail": "analysis_not_found"}
+
+    wf_file = session.get(WorkflowFile, analysis.workflow_file_id)
+    if not wf_file:
+        return {"status": "error", "detail": "workflow_file_not_found"}
+
+    repo = session.get(Repository, analysis.repo_id)
+    if not repo:
+        return {"status": "error", "detail": "repository_not_found"}
+
+    return issues, wf_file, repo
+
+
 @celery_app.task(name="fix_generation.run", bind=True, max_retries=3)
 def run_fix_generation(
     self: object,  # noqa: ARG001
-    issue_id: str,
-) -> dict[str, str]:
-    with Session(engine) as session:
-        issue = session.get(Issue, uuid.UUID(issue_id))
-        if not issue:
-            return {"status": "error", "detail": "issue_not_found"}
-
-        analysis = issue.analysis
-        if not analysis:
-            return {"status": "error", "detail": "analysis_not_found"}
-
-        wf_file = session.get(WorkflowFile, analysis.workflow_file_id)
-        if not wf_file:
-            return {"status": "error", "detail": "workflow_file_not_found"}
-
-        repo = session.get(Repository, analysis.repo_id)
-        if not repo:
-            return {"status": "error", "detail": "repository_not_found"}
-
-        rule = issue.rule
-        provider_str, model_str = _resolve_llm_provider(repo)
-
-        # Create Fix record in generating state
-        fix = Fix(
-            issue_id=issue.id,
-            llm_provider=LLMProvider(provider_str),
-            llm_model=model_str or "gpt-4o-mini",
-            status=FixStatus.generating,
-        )
-        session.add(fix)
-        session.commit()
-        session.refresh(fix)
-
-        try:
-            result = asyncio.run(
-                _generate_fix(
-                    workflow_content=wf_file.raw_content,
-                    issue_message=issue.message,
-                    rule_slug=rule.slug if rule else "unknown",
-                    category=issue.category.value,
-                    severity=issue.severity.value,
-                    job_name=None,
-                    provider_str=fix.llm_provider.value,
-                    model_str=fix.llm_model,
-                )
-            )
-        except Exception as exc:
-            logger.exception("Fix generation failed for issue %s: %s", issue_id, exc)
-            fix.status = FixStatus.failed
-            fix.error_message = str(exc)[:2000]
-            session.add(fix)
-            session.commit()
-            return {"status": "failed", "issue_id": issue_id}
-
-        fix.diff = result.content
-        fix.prompt_tokens = result.prompt_tokens
-        fix.completion_tokens = result.completion_tokens
-        fix.langsmith_run_id = result.run_id
-        fix.status = FixStatus.ready
-        session.add(fix)
-        session.commit()
-
-        logger.info(
-            "Fix generated for issue %s: %d prompt tokens, %d completion tokens",
-            issue_id,
-            result.prompt_tokens,
-            result.completion_tokens,
-        )
-        return {"status": "ready", "fix_id": str(fix.id), "issue_id": issue_id}
-
-
-@celery_app.task(name="fix_generation.run_batch", bind=True, max_retries=3)
-def run_batch_fix_generation(
-    self: object,  # noqa: ARG001
     issue_ids: list[str],
 ) -> dict:
-    """Single LLM call to fix all issues (expected: same analysis/workflow file)."""
+    """Single LLM call to generate fixes for one or more issues in the same workflow file."""
     with Session(engine) as session:
-        issues = [session.get(Issue, uuid.UUID(iid)) for iid in issue_ids]
-        issues = [i for i in issues if i is not None]
-        if not issues:
-            return {"status": "error", "detail": "no_issues_found"}
-
-        analysis = issues[0].analysis
-        if not analysis:
-            return {"status": "error", "detail": "analysis_not_found"}
-
-        wf_file = session.get(WorkflowFile, analysis.workflow_file_id)
-        if not wf_file:
-            return {"status": "error", "detail": "workflow_file_not_found"}
-
-        repo = session.get(Repository, analysis.repo_id)
-        if not repo:
-            return {"status": "error", "detail": "repository_not_found"}
+        context = _load_generation_context(session, issue_ids)
+        if isinstance(context, dict):
+            return context
+        issues, wf_file, repo = context
 
         provider_str, model_str = _resolve_llm_provider(repo)
         llm_provider = LLMProvider(provider_str)
-        llm_model = model_str
 
         fixes = []
         for issue in issues:
             fix = Fix(
                 issue_id=issue.id,
                 llm_provider=llm_provider,
-                llm_model=llm_model,
+                llm_model=model_str,
                 status=FixStatus.generating,
             )
             session.add(fix)
@@ -151,21 +89,21 @@ def run_batch_fix_generation(
 
         try:
             result = asyncio.run(
-                _generate_batch_fix(
+                _generate_fixes(
                     workflow_content=wf_file.raw_content,
                     issues=issues,
                     provider_str=llm_provider.value,
-                    model_str=llm_model,
+                    model_str=model_str,
                 )
             )
         except Exception as exc:
-            logger.exception("Batch fix generation failed: %s", exc)
+            logger.exception("Fix generation failed for issues %s: %s", issue_ids, exc)
             for fix in fixes:
                 fix.status = FixStatus.failed
                 fix.error_message = str(exc)[:2000]
                 session.add(fix)
             session.commit()
-            return {"status": "failed"}
+            return {"status": "failed", "issue_ids": issue_ids}
 
         for fix in fixes:
             fix.diff = result.content
@@ -177,7 +115,7 @@ def run_batch_fix_generation(
         session.commit()
 
         logger.info(
-            "Batch fix generated for %d issues: %d prompt tokens, %d completion tokens",
+            "Fix generated for %d issue(s): %d prompt tokens, %d completion tokens",
             len(fixes),
             result.prompt_tokens,
             result.completion_tokens,
@@ -191,7 +129,6 @@ def run_batch_fix_generation(
 
 
 def _configure_langchain() -> None:
-    # Configure LangSmith tracing via env vars (already set from settings)
     from app.core.config import settings
 
     if settings.LANGCHAIN_TRACING_V2 and settings.LANGCHAIN_API_KEY:
@@ -201,35 +138,9 @@ def _configure_langchain() -> None:
         os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGCHAIN_ENDPOINT
 
 
-async def _generate_batch_fix(
+async def _generate_fixes(
     workflow_content: str,
     issues: list,
-    provider_str: str,
-    model_str: str,
-) -> object:
-    _configure_langchain()
-
-    from app.services.github.sha_resolver import resolve_action_shas
-    from app.services.llm.catalog import get_provider
-    from app.services.llm.fix_prompt import build_batch_fix_prompt
-
-    action_sha_map = await resolve_action_shas(workflow_content)
-    provider = get_provider(provider=provider_str, model=model_str)
-    system_prompt, user_prompt = build_batch_fix_prompt(
-        workflow_content=workflow_content,
-        issues=issues,
-        action_sha_map=action_sha_map or None,
-    )
-    return await provider.generate(system_prompt, user_prompt)
-
-
-async def _generate_fix(
-    workflow_content: str,
-    issue_message: str,
-    rule_slug: str,
-    category: str,
-    severity: str,
-    job_name: str | None,
     provider_str: str,
     model_str: str,
 ) -> object:
@@ -243,11 +154,7 @@ async def _generate_fix(
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,
-        issue_message=issue_message,
-        rule_slug=rule_slug,
-        category=category,
-        severity=severity,
-        job_name=job_name,
+        issues=issues,
         action_sha_map=action_sha_map or None,
     )
     return await provider.generate(system_prompt, user_prompt)
