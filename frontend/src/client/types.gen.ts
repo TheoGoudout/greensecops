@@ -275,6 +275,7 @@ export type AnalysesGetAnalysisResponse = (AnalysisPublic);
 
 export type AnalysesTriggerAnalysisData = {
     branch?: (string | null);
+    force?: boolean;
     repoId: string;
 };
 
@@ -347,6 +348,7 @@ export type FixesRejectFixData = {
 export type FixesRejectFixResponse = (void);
 
 export type FixesTriggerFixGenerationForRepoData = {
+    force?: boolean;
     repoId: string;
     requestBody?: BatchFixRequest;
 };
@@ -356,6 +358,7 @@ export type FixesTriggerFixGenerationForRepoResponse = ({
 });
 
 export type FixesTriggerFixGenerationData = {
+    force?: boolean;
     issueId: string;
 };
 
@@ -365,6 +368,7 @@ export type FixesTriggerFixGenerationResponse = ({
 
 export type FixesTriggerFixDeliveryData = {
     fixId: string;
+    force?: boolean;
 };
 
 export type FixesTriggerFixDeliveryResponse = ({
@@ -372,6 +376,7 @@ export type FixesTriggerFixDeliveryResponse = ({
 });
 
 export type FixesTriggerWorkflowDeliveryData = {
+    force?: boolean;
     requestBody: WorkflowDeliverRequest;
 };
 
@@ -380,6 +385,7 @@ export type FixesTriggerWorkflowDeliveryResponse = ({
 });
 
 export type FixesTriggerRepoDeliveryData = {
+    force?: boolean;
     repoId: string;
 };
 

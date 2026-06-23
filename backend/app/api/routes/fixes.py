@@ -97,10 +97,12 @@ def trigger_fix_generation_for_repo(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
     body: BatchFixRequest = BatchFixRequest(),
+    force: bool = False,
 ) -> dict[str, int]:
     """Queue a single batch fix generation call per workflow file for issues in a repo.
 
     When body.issue_ids is provided, only those issues are processed.
+    When force=True, delivered fixes are also discarded and regenerated.
     """
     query = (
         select(Issue)
@@ -116,13 +118,10 @@ def trigger_fix_generation_for_repo(
 
     issue_ids = [i.id for i in issues]
 
-    # Discard existing non-delivered fixes to allow fresh retry
-    session.exec(
-        delete(Fix).where(
-            Fix.issue_id.in_(issue_ids),  # type: ignore[attr-defined]
-            Fix.status != FixStatus.delivered,
-        )
-    )
+    delete_stmt = delete(Fix).where(Fix.issue_id.in_(issue_ids))  # type: ignore[attr-defined]
+    if not force:
+        delete_stmt = delete_stmt.where(Fix.status != FixStatus.delivered)
+    session.exec(delete_stmt)
     session.commit()
 
     # Group by analysis_id → one LLM call per workflow file
@@ -141,16 +140,14 @@ def trigger_fix_generation(
     issue_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
+    force: bool = False,
 ) -> dict[str, str]:
     get_or_404(session, Issue, issue_id)
 
-    # Discard existing non-delivered fix to allow retry
-    session.exec(
-        delete(Fix).where(
-            Fix.issue_id == issue_id,
-            Fix.status != FixStatus.delivered,
-        )
-    )
+    delete_stmt = delete(Fix).where(Fix.issue_id == issue_id)
+    if not force:
+        delete_stmt = delete_stmt.where(Fix.status != FixStatus.delivered)
+    session.exec(delete_stmt)
     session.commit()
 
     run_fix_generation.delay(issue_ids=[str(issue_id)])
@@ -162,13 +159,14 @@ def trigger_fix_delivery(
     fix_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
+    force: bool = False,
 ) -> dict[str, str]:
     fix = get_or_404(session, Fix, fix_id)
-    if fix.status != FixStatus.ready:
+    if not force and fix.status != FixStatus.ready:
         raise HTTPException(
             status_code=409, detail=f"Fix is not ready (status: {fix.status})"
         )
-    deliver_fix.delay(fix_id=str(fix_id))
+    deliver_fix.delay(fix_id=str(fix_id), force=force)
     return {"status": "queued", "fix_id": str(fix_id)}
 
 
@@ -181,10 +179,14 @@ def trigger_workflow_delivery(
     body: WorkflowDeliverRequest,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
+    force: bool = False,
 ) -> dict[str, str]:
-    """Deliver all ready fixes for one workflow file as a single PR."""
+    """Deliver all ready fixes for one workflow file as a single PR.
+
+    When force=True, fixes in any status are included (not just ready).
+    """
     fixes = [session.get(Fix, fid) for fid in body.fix_ids]
-    fixes = [f for f in fixes if f and f.status == FixStatus.ready]
+    fixes = [f for f in fixes if f and (force or f.status == FixStatus.ready)]
     if not fixes:
         raise HTTPException(status_code=404, detail="No ready fixes found")
 
@@ -223,6 +225,7 @@ def trigger_workflow_delivery(
         pr_branch=pr_branch,
         pr_title="fix(ci): apply GreenSecOps fixes for workflow",
         pr_body=pr_body,
+        force=force,
     )
     return {"status": "queued"}
 
@@ -232,18 +235,23 @@ def trigger_repo_delivery(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
+    force: bool = False,
 ) -> dict[str, str]:
-    """Deliver all ready fixes for a repo as a single multi-file PR."""
+    """Deliver all ready fixes for a repo as a single multi-file PR.
+
+    When force=True, fixes in any status are included (not just ready).
+    """
     repo = session.get(Repository, repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    query = (
+    base_query = (
         select(Fix)
         .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo_id, Fix.status == FixStatus.ready)
+        .where(Analysis.repo_id == repo_id)
     )
+    query = base_query if force else base_query.where(Fix.status == FixStatus.ready)
     fixes = list(session.exec(query).all())
     if not fixes:
         raise HTTPException(status_code=404, detail="No ready fixes found")
@@ -277,6 +285,7 @@ def trigger_repo_delivery(
         pr_branch=pr_branch,
         pr_title="fix(ci): apply all GreenSecOps fixes",
         pr_body=pr_body,
+        force=force,
     )
     return {"status": "queued"}
 

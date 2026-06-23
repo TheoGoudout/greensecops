@@ -26,12 +26,13 @@ logger = logging.getLogger(__name__)
 def deliver_fix(
     self: object,  # noqa: ARG001
     fix_id: str,
+    force: bool = False,
 ) -> dict[str, str]:
     with Session(engine) as session:
         fix = session.get(Fix, uuid.UUID(fix_id))
         if not fix:
             return {"status": "error", "detail": "fix_not_found"}
-        if fix.status != FixStatus.ready:
+        if not force and fix.status != FixStatus.ready:
             return {"status": "error", "detail": f"fix_not_ready: {fix.status}"}
 
         issue = fix.issue
@@ -125,6 +126,7 @@ def deliver_fixes_batch(
     pr_branch: str,
     pr_title: str,
     pr_body: str,
+    force: bool = False,
 ) -> dict[str, str]:
     """Deliver multiple ready fixes as a single PR (one file change per workflow file)."""
     with Session(engine) as session:
@@ -133,7 +135,7 @@ def deliver_fixes_batch(
             return {"status": "error", "detail": "repository_not_found"}
 
         fixes = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
-        fixes = [f for f in fixes if f and f.status == FixStatus.ready]
+        fixes = [f for f in fixes if f and (force or f.status == FixStatus.ready)]
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
 
