@@ -13,6 +13,7 @@ from app.models import (
     IssueCategory,
     IssuePublic,
     IssueSeverity,
+    WorkflowFile,
 )
 
 router = APIRouter(prefix="/issues", tags=["issues"])
@@ -27,6 +28,7 @@ def list_issues(
     category: IssueCategory | None = None,
     severity: IssueSeverity | None = None,
     unfixed: bool = False,
+    latest_only: bool = True,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
 ) -> list[IssuePublic]:
@@ -37,6 +39,12 @@ def list_issues(
         query = query.join(Analysis, Issue.analysis_id == Analysis.id).where(  # type: ignore[arg-type]
             Analysis.repo_id == repo_id
         )
+        if latest_only:
+            latest_ids = select(WorkflowFile.latest_analysis_id).where(
+                WorkflowFile.repo_id == repo_id,
+                WorkflowFile.latest_analysis_id.is_not(None),  # type: ignore[union-attr]
+            )
+            query = query.where(Issue.analysis_id.in_(latest_ids))  # type: ignore[attr-defined]
     if unfixed:
         active_fix_issue_ids = select(Fix.issue_id).where(
             Fix.status != FixStatus.rejected

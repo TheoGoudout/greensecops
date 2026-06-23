@@ -354,3 +354,42 @@ def test_violation_with_unknown_rule_slug_is_skipped(
     # Analysis still completes — unknown slug is logged and skipped
     assert result["status"] == "done"
     assert "completed" in str(result["results"])
+
+
+def test_completed_analysis_sets_latest_analysis_id(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    # Arrange — first run
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    db.refresh(workflow_file)
+    first_latest = workflow_file.latest_analysis_id
+    assert first_latest is not None
+
+    # Change content so the second run is not treated as a duplicate
+    workflow_file.content_hash = uuid.uuid4().hex
+    workflow_file.raw_content = f"# updated\n{workflow_file.raw_content}"
+    db.add(workflow_file)
+    db.commit()
+
+    # Act — force second run
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id), force=True)
+
+    # Assert — latest_analysis_id advanced to the newer analysis
+    db.refresh(workflow_file)
+    assert workflow_file.latest_analysis_id is not None
+    assert workflow_file.latest_analysis_id != first_latest

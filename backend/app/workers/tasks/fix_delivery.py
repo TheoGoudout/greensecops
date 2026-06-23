@@ -89,6 +89,8 @@ def deliver_fix(
             bot_handle=settings.GITHUB_BOT_HANDLE,
         )
 
+        rule_slug = issue.rule.slug if issue.rule else "fix"
+        fix_branch = fix.pr_branch or f"greensecops/fix-{rule_slug}-{fix_id[:8]}"
         result = asyncio.run(
             _deliver(
                 installation_id=repo.installation_id,
@@ -96,8 +98,8 @@ def deliver_fix(
                 base_branch=analysis.branch or repo.default_branch,
                 file_path=wf_file.path,
                 new_content=fix.diff or wf_file.raw_content,
-                fix_id=fix_id,
-                rule_slug=issue.rule.slug if issue.rule else "fix",
+                fix_branch=fix_branch,
+                rule_slug=rule_slug,
                 delivery_mode=delivery_mode.value,
                 pr_body=pr_body,
             )
@@ -109,6 +111,7 @@ def deliver_fix(
         else:
             fix.status = FixStatus.delivered
             fix.pr_url = result.pr_url
+            fix.pr_branch = fix_branch
             fix.pr_state = "open" if result.pr_url else None
             fix.comment_url = result.comment_url
             fix.delivered_at = datetime.now(timezone.utc)
@@ -183,6 +186,7 @@ def deliver_fixes_batch(
             else:
                 fix.status = FixStatus.delivered
                 fix.pr_url = result.pr_url
+                fix.pr_branch = pr_branch
                 fix.pr_state = "open" if result.pr_url else None
                 fix.delivered_at = now
             session.add(fix)
@@ -216,7 +220,7 @@ async def _deliver_batch(
     pr_body: str,
 ) -> object:
     async with _delivery_service() as svc:
-        return await svc.deliver_workflow_action_pr(
+        return await svc.update_or_create_workflow_action_pr(
             installation_id=installation_id,
             full_name=full_name,
             base_branch=base_branch,
@@ -233,15 +237,14 @@ async def _deliver(
     base_branch: str,
     file_path: str,
     new_content: str,
-    fix_id: str,
+    fix_branch: str,
     rule_slug: str,
     delivery_mode: str,
     pr_body: str,
 ) -> object:
     async with _delivery_service() as svc:
         if delivery_mode == "pr":
-            fix_branch = f"greensecops/fix-{rule_slug}-{fix_id[:8]}"
-            return await svc.deliver_as_pr(
+            return await svc.update_or_create_pr(
                 installation_id=installation_id,
                 full_name=full_name,
                 base_branch=base_branch,

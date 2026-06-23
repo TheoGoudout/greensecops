@@ -115,6 +115,7 @@ class FixPublic(SQLModel):
     diff: str | None = None
     diff_patch: str | None = None
     pr_url: str | None = None
+    pr_branch: str | None = None
     pr_state: str | None = None
     comment_url: str | None = None
     created_at: datetime | None = None

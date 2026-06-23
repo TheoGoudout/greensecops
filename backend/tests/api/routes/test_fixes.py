@@ -82,6 +82,9 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
     db.add(a)
     db.commit()
     db.refresh(a)
+    workflow_file.latest_analysis_id = a.id
+    db.add(workflow_file)
+    db.commit()
     return a
 
 
@@ -790,3 +793,109 @@ def test_deliver_for_workflow_force_includes_non_ready(
     call_kwargs = mock_delay.call_args.kwargs
     assert str(pending_fix.id) in call_kwargs["fix_ids"]
     assert call_kwargs["force"] is True
+
+
+# ─── latest_only / stable branch tests ───────────────────────────────────────
+
+
+def test_generate_fixes_for_repo_only_targets_latest_analysis(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    rule: Rule,
+    analysis: Analysis,
+    issue: Issue,
+) -> None:
+    # Arrange — create a second (old) analysis; point workflow_file at the first (analysis)
+    old_analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=workflow_file.id,
+        content_hash=uuid.uuid4().hex,
+        status=AnalysisStatus.completed,
+        score=50.0,
+        grade="D",
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(old_analysis)
+    db.commit()
+    db.refresh(old_analysis)
+    old_issue = Issue(
+        analysis_id=old_analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.medium,
+        category=IssueCategory.reliability,
+        line_start=20,
+        line_end=22,
+        message="Old analysis issue — should not be targeted",
+    )
+    db.add(old_issue)
+    db.commit()
+
+    # workflow_file.latest_analysis_id already points at `analysis` (from fixture)
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    queued_issue_ids: list[str] = []
+    for call in mock_delay.call_args_list:
+        queued_issue_ids.extend(call.kwargs.get("issue_ids", []))
+
+    assert str(issue.id) in queued_issue_ids
+    assert str(old_issue.id) not in queued_issue_ids
+
+
+def test_deliver_for_repo_uses_stable_branch_name(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    ready_fix: Fix,
+    repo: Repository,
+) -> None:
+    # Act
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/deliver-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    pr_branch = mock_delay.call_args.kwargs["pr_branch"]
+    # Stable branch is derived from repo_id prefix, not a timestamp
+    assert pr_branch == f"greensecops/fixes-{str(repo.id)[:8]}"
+
+
+def test_deliver_for_repo_reuses_existing_pr_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    ready_fix: Fix,
+    repo: Repository,
+) -> None:
+    # Arrange — simulate a previous delivery by setting pr_branch on the fix
+    existing_branch = "greensecops/fixes-previousbranch"
+    ready_fix.pr_branch = existing_branch
+    db.add(ready_fix)
+    db.commit()
+
+    # Act
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/deliver-for-repo/{repo.id}",
+            params={"force": "true"},
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    pr_branch = mock_delay.call_args.kwargs["pr_branch"]
+    # Must reuse the existing branch, not generate a new one
+    assert pr_branch == existing_branch

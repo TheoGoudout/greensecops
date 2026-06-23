@@ -293,6 +293,7 @@ export class FixesService {
      *
      * When body.issue_ids is provided, only those issues are processed.
      * When force=True, delivered fixes are also discarded and regenerated.
+     * Only issues from the latest analysis per workflow file are targeted.
      * @param data The data for the request.
      * @param data.repoId
      * @param data.force
@@ -470,6 +471,7 @@ export class IssuesService {
      * @param data.category
      * @param data.severity
      * @param data.unfixed
+     * @param data.latestOnly
      * @param data.skip
      * @param data.limit
      * @returns IssuePublic Successful Response
@@ -485,6 +487,7 @@ export class IssuesService {
                 category: data.category,
                 severity: data.severity,
                 unfixed: data.unfixed,
+                latest_only: data.latestOnly,
                 skip: data.skip,
                 limit: data.limit
             },
