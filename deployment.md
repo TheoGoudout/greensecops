@@ -1,4 +1,4 @@
-# FastAPI Project - Deployment
+# GreenSecOps - Deployment
 
 You can deploy the project using Docker Compose to a remote server.
 
@@ -12,7 +12,7 @@ But you have to configure a couple things first. 🤓
 
 * Have a remote server ready and available.
 * Configure the DNS records of your domain to point to the IP of the server you just created.
-* Configure a wildcard subdomain for your domain, so that you can have multiple subdomains for different services, e.g. `*.fastapi-project.example.com`. This will be useful for accessing different components, like `dashboard.fastapi-project.example.com`, `api.fastapi-project.example.com`, `traefik.fastapi-project.example.com`, `adminer.fastapi-project.example.com`, etc. And also for `staging`, like `dashboard.staging.fastapi-project.example.com`, `adminer.staging.fastapi-project.example.com`, etc.
+* Configure a wildcard subdomain for your domain, so that you can have multiple subdomains for different services, e.g. `*.greensecops.example.com`. This will be useful for accessing different components, like `dashboard.greensecops.example.com`, `api.greensecops.example.com`, `traefik.greensecops.example.com`, `adminer.greensecops.example.com`, etc. And also for `staging`, like `dashboard.staging.greensecops.example.com`, `adminer.staging.greensecops.example.com`, etc.
 * Install and configure [Docker](https://docs.docker.com/engine/install/) on the remote server (Docker Engine, not Docker Desktop).
 
 ## Public Traefik
@@ -78,7 +78,7 @@ echo $HASHED_PASSWORD
 * Create an environment variable with the domain name for your server, e.g.:
 
 ```bash
-export DOMAIN=fastapi-project.example.com
+export DOMAIN=greensecops.example.com
 ```
 
 * Create an environment variable with the email for Let's Encrypt, e.g.:
@@ -103,7 +103,7 @@ Now with the environment variables set and the `compose.traefik.yml` in place, y
 docker compose -f compose.traefik.yml up -d
 ```
 
-## Deploy the FastAPI Project
+## Deploy GreenSecOps
 
 Now that you have Traefik in place you can deploy your FastAPI project with Docker Compose.
 
@@ -144,7 +144,7 @@ export ENVIRONMENT=production
 Set the `DOMAIN`, by default `localhost` (for development), but when deploying you would use your own domain, for example:
 
 ```bash
-export DOMAIN=fastapi-project.example.com
+export DOMAIN=greensecops.example.com
 ```
 
 Set the `POSTGRES_PASSWORD` to something different than `changethis`:
@@ -176,7 +176,7 @@ export BACKEND_CORS_ORIGINS="https://dashboard.${DOMAIN?Variable not set},https:
 You can set several other environment variables:
 
 * `PROJECT_NAME`: The name of the project, used in the API for the docs and emails.
-* `STACK_NAME`: The name of the stack used for Docker Compose labels and project name, this should be different for `staging`, `production`, etc. You could use the same domain replacing dots with dashes, e.g. `fastapi-project-example-com` and `staging-fastapi-project-example-com`.
+* `STACK_NAME`: The name of the stack used for Docker Compose labels and project name, this should be different for `staging`, `production`, etc. You could use the same domain replacing dots with dashes, e.g. `greensecops-example-com` and `staging-greensecops-example-com`.
 * `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas.
 * `FIRST_SUPERUSER`: The email of the first superuser, this superuser will be the one that can create new users.
 * `SMTP_HOST`: The SMTP server host to send emails, this would come from your email provider (E.g. Mailgun, Sparkpost, Sendgrid, etc).
@@ -186,8 +186,20 @@ You can set several other environment variables:
 * `POSTGRES_SERVER`: The hostname of the PostgreSQL server. You can leave the default of `db`, provided by the same Docker Compose. You normally wouldn't need to change this unless you are using a third-party provider.
 * `POSTGRES_PORT`: The port of the PostgreSQL server. You can leave the default. You normally wouldn't need to change this unless you are using a third-party provider.
 * `POSTGRES_USER`: The Postgres user, you can leave the default.
-* `POSTGRES_DB`: The database name to use for this application. You can leave the default of `app`.
+* `POSTGRES_DB`: The database name to use for this application. You can leave the default of `greensecops`.
+* `REDIS_URL`: The Redis connection URL for Celery. You can leave the default of `redis://redis:6379/0`.
+* `GITHUB_APP_ID`: The numeric ID of your GitHub App.
+* `GITHUB_APP_PRIVATE_KEY`: The full PEM content of your GitHub App's private key.
+* `GITHUB_WEBHOOK_SECRET`: The secret used to verify incoming webhook payloads from GitHub.
+* `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: OAuth credentials for GitHub login.
+* `GITHUB_OAUTH_REDIRECT_URI`: The frontend callback URL for the GitHub OAuth flow (e.g. `https://dashboard.greensecops.example.com/auth/github/callback`).
+* `DEFAULT_LLM_PROVIDER`: Which LLM provider to use for fix generation. One of `openai`, `anthropic`, `gemini`, `ollama`. Default: `openai`.
+* `DEFAULT_LLM_MODEL`: The model name for the selected provider (e.g. `gpt-4o-mini`).
+* `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`: API keys for the respective LLM provider.
+* `OPA_URL`: URL of the OPA instance. You can leave the default of `http://opa:8181`.
 * `SENTRY_DSN`: The DSN for Sentry, if you are using it.
+* `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`: Enable LangSmith tracing for LLM calls.
+* `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_STARTER`, `STRIPE_PRICE_ID_PRO`: Stripe billing credentials.
 
 ## GitHub Actions Environment Variables
 
@@ -300,15 +312,41 @@ For each GitHub Environment (`staging` and `production`), configure the required
 
 The current Github Actions workflows expect these secrets:
 
+**Core**
 * `DOMAIN_PRODUCTION`
 * `DOMAIN_STAGING`
 * `STACK_NAME_PRODUCTION`
 * `STACK_NAME_STAGING`
-* `EMAILS_FROM_EMAIL`
+* `SECRET_KEY`
 * `FIRST_SUPERUSER`
 * `FIRST_SUPERUSER_PASSWORD`
 * `POSTGRES_PASSWORD`
-* `SECRET_KEY`
+* `EMAILS_FROM_EMAIL`
+
+**GitHub App**
+* `GITHUB_APP_ID`
+* `GITHUB_APP_PRIVATE_KEY` — full PEM content
+* `GITHUB_WEBHOOK_SECRET`
+* `GITHUB_CLIENT_ID`
+* `GITHUB_CLIENT_SECRET`
+* `GITHUB_OAUTH_REDIRECT_URI`
+
+**LLM providers** (at least one required)
+* `OPENAI_API_KEY`
+* `ANTHROPIC_API_KEY`
+* `GOOGLE_API_KEY`
+
+**Billing (optional)**
+* `STRIPE_SECRET_KEY`
+* `STRIPE_WEBHOOK_SECRET`
+* `STRIPE_PRICE_ID_STARTER`
+* `STRIPE_PRICE_ID_PRO`
+
+**Observability (optional)**
+* `SENTRY_DSN`
+* `LANGCHAIN_API_KEY` — enables LangSmith tracing
+
+**CI tooling**
 * `LATEST_CHANGES`
 * `SMOKESHOW_AUTH_KEY`
 
@@ -325,28 +363,34 @@ If you need to add extra environments you could use those as a starting point.
 
 ## URLs
 
-Replace `fastapi-project.example.com` with your domain.
+Replace `greensecops.example.com` with your domain.
 
 ### Main Traefik Dashboard
 
-Traefik UI: `https://traefik.fastapi-project.example.com`
+Traefik UI: `https://traefik.greensecops.example.com`
 
 ### Production
 
-Frontend: `https://dashboard.fastapi-project.example.com`
+Frontend (dashboard): `https://dashboard.greensecops.example.com`
 
-Backend API docs: `https://api.fastapi-project.example.com/docs`
+Landing page: `https://greensecops.example.com`
 
-Backend API base URL: `https://api.fastapi-project.example.com`
+Sphinx docs: `https://docs.greensecops.example.com`
 
-Adminer: `https://adminer.fastapi-project.example.com`
+Backend API docs: `https://api.greensecops.example.com/docs`
+
+Backend API base URL: `https://api.greensecops.example.com`
+
+Adminer: `https://adminer.greensecops.example.com`
+
+Flower (Celery): `https://flower.greensecops.example.com`
 
 ### Staging
 
-Frontend: `https://dashboard.staging.fastapi-project.example.com`
+Frontend (dashboard): `https://dashboard.staging.greensecops.example.com`
 
-Backend API docs: `https://api.staging.fastapi-project.example.com/docs`
+Backend API docs: `https://api.staging.greensecops.example.com/docs`
 
-Backend API base URL: `https://api.staging.fastapi-project.example.com`
+Backend API base URL: `https://api.staging.greensecops.example.com`
 
-Adminer: `https://adminer.staging.fastapi-project.example.com`
+Adminer: `https://adminer.staging.greensecops.example.com`
