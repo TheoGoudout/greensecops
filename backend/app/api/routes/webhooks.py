@@ -66,7 +66,9 @@ def _handle_push_event(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """Trigger analysis when a push touches .github/workflows/ files."""
+    """Trigger analysis when a push touches .github/workflows/ files or creates a new branch."""
+    before: str = payload.get("before", "")
+    is_new_branch = before == "0" * 40
     commits: list[dict[str, Any]] = payload.get("commits", [])
     touches_workflows = any(
         any(
@@ -75,7 +77,7 @@ def _handle_push_event(
         )
         for c in commits
     )
-    if not touches_workflows:
+    if not touches_workflows and not is_new_branch:
         return
 
     repo_payload = payload.get("repository", {})
