@@ -6,6 +6,12 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
+__pycache__
+
 # Local environment — never commit real secrets
 .env
 frontend/.env
+
+# Sphinx build output and generated rule pages
+docs/_build/
+docs/rules/

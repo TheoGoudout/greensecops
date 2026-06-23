@@ -103,12 +103,14 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
-    # OAuth callback is handled by the frontend popup; GitHub redirects there and
-    # the frontend exchanges the code via the API. Must match the GitHub OAuth
-    # App callback URL and the frontend VITE_GITHUB_CLIENT_ID's redirect_uri.
-    GITHUB_OAUTH_REDIRECT_URI: str = "http://localhost:5173/auth/github/callback"
     # Dev only: public tunnel base URL (e.g. ngrok) for webhook delivery to localhost
     GITHUB_WEBHOOK_URL: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def GITHUB_OAUTH_REDIRECT_URI(self) -> str:
+        # Must match the GitHub OAuth App "Authorization callback URL".
+        return f"{self.FRONTEND_HOST}/auth/github/callback"
 
     # LLM
     DEFAULT_LLM_PROVIDER: str = "openai"
@@ -135,8 +137,15 @@ class Settings(BaseSettings):
     # OPA
     OPA_URL: str = "http://opa:8181"
 
-    # Wiki & PR messaging
-    WIKI_BASE_URL: str = "http://localhost:3001/rules"
+    # Docs
+    DOCS_URL: str = "http://localhost:3002"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def WIKI_BASE_URL(self) -> str:
+        return f"{self.DOCS_URL}/rules"
+
+    # PR messaging
     GITHUB_BOT_HANDLE: str = "@greensecops"
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
