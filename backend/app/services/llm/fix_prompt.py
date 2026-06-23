@@ -8,7 +8,8 @@ Rules:
 - Fix ALL listed issues in one go — your output must address every issue
 - Make the minimum changes required to fix all reported issues
 - Ensure the result is valid GitHub Actions YAML syntax
-- Do not add unnecessary blank lines or reformat the entire file"""
+- Do not add unnecessary blank lines or reformat the entire file
+- When pinning an action to a commit SHA, always append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>` (e.g. `uses: actions/checkout@abc123def # v4`) — this keeps the intent readable and allows Dependabot to track updates"""
 
 BATCH_FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow in a single pass:
 
@@ -40,9 +41,10 @@ def build_batch_fix_prompt(
     )
     if action_sha_map:
         sha_block = "\n".join(
-            f"- {ref} → {sha}" for ref, sha in sorted(action_sha_map.items())
+            f"- {ref}  →  {sha} # {ref.split('@', 1)[1]}"
+            for ref, sha in sorted(action_sha_map.items())
         )
-        user_prompt += f"\n\n**Known action commit SHAs — use these exact SHAs when pinning, do not invent SHAs:**\n{sha_block}"
+        user_prompt += f"\n\n**Known action commit SHAs — use these exact replacements when pinning (SHA + tag comment), do not invent SHAs:**\n{sha_block}"
     return BATCH_FIX_SYSTEM_PROMPT, user_prompt
 
 
@@ -55,7 +57,8 @@ Rules:
 - Preserve all existing functionality
 - Make the minimum change required to fix the reported issue
 - Ensure the fix is valid GitHub Actions YAML syntax
-- Do not add unnecessary blank lines or reformat the entire file"""
+- Do not add unnecessary blank lines or reformat the entire file
+- When pinning an action to a commit SHA, always append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>` (e.g. `uses: actions/checkout@abc123def # v4`) — this keeps the intent readable and allows Dependabot to track updates"""
 
 FIX_USER_PROMPT_TEMPLATE = """Fix the following issue in this GitHub Actions workflow:
 
@@ -94,7 +97,8 @@ def build_fix_prompt(
     )
     if action_sha_map:
         sha_block = "\n".join(
-            f"- {ref} → {sha}" for ref, sha in sorted(action_sha_map.items())
+            f"- {ref}  →  {sha} # {ref.split('@', 1)[1]}"
+            for ref, sha in sorted(action_sha_map.items())
         )
-        user_prompt += f"\n\n**Known action commit SHAs — use these exact SHAs when pinning, do not invent SHAs:**\n{sha_block}"
+        user_prompt += f"\n\n**Known action commit SHAs — use these exact replacements when pinning (SHA + tag comment), do not invent SHAs:**\n{sha_block}"
     return FIX_SYSTEM_PROMPT, user_prompt
