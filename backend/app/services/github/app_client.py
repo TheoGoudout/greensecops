@@ -76,12 +76,16 @@ class GitHubAppClient:
         return Github(auth=Auth.Token(token))
 
     async def fetch_workflow_files(
-        self, installation_id: int, full_name: str
+        self, installation_id: int | None, full_name: str
     ) -> list[WorkflowFileContent]:
-        token = await self.get_installation_token(installation_id)
+        if installation_id is not None:
+            token: str | None = await self.get_installation_token(installation_id)
+        else:
+            token = None
 
         def _fetch() -> list[WorkflowFileContent]:
-            repo = Github(auth=Auth.Token(token)).get_repo(full_name)
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            repo = gh.get_repo(full_name)
             try:
                 contents = repo.get_contents(".github/workflows")
             except GithubException as exc:
@@ -106,6 +110,23 @@ class GitHubAppClient:
             return results
 
         return await asyncio.to_thread(_fetch)
+
+    async def fetch_public_repo_info(self, full_name: str) -> InstallationRepo:
+        """Fetch repo metadata via unauthenticated PyGitHub (public repos only)."""
+        from github.GithubException import UnknownObjectException
+
+        def _fetch() -> InstallationRepo:
+            repo = Github().get_repo(full_name)
+            return InstallationRepo(
+                github_repo_id=repo.id,
+                full_name=repo.full_name,
+                default_branch=repo.default_branch or "main",
+            )
+
+        try:
+            return await asyncio.to_thread(_fetch)
+        except UnknownObjectException:
+            raise ValueError(f"Repository '{full_name}' not found or is private")
 
     async def list_installation_repositories(
         self, installation_id: int

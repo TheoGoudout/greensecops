@@ -157,7 +157,7 @@ function Dashboard() {
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-[2fr_1fr_1fr_auto_auto_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+              <div className="grid grid-cols-[2fr_1fr_1fr_4rem_5rem_1.5rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
                 <span>Repository</span>
                 <span>Commit</span>
                 <span>Analyzed</span>
@@ -173,7 +173,7 @@ function Dashboard() {
                       key={analysis.id}
                       to="/analyses/$analysisId"
                       params={{ analysisId: analysis.id }}
-                      className="grid grid-cols-[2fr_1fr_1fr_auto_auto_auto] items-center px-6 py-3 gap-4 hover:bg-muted/50 transition-colors"
+                      className="grid grid-cols-[2fr_1fr_1fr_4rem_5rem_1.5rem] items-center px-6 py-3 gap-4 hover:bg-muted/50 transition-colors"
                     >
                       <span className="text-sm font-medium truncate">
                         {repo?.full_name ?? "—"}
