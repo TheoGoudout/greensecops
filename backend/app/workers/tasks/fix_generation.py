@@ -209,13 +209,16 @@ async def _generate_batch_fix(
 ) -> object:
     _configure_langchain()
 
+    from app.services.github.sha_resolver import resolve_action_shas
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_batch_fix_prompt
 
+    action_sha_map = await resolve_action_shas(workflow_content)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_batch_fix_prompt(
         workflow_content=workflow_content,
         issues=issues,
+        action_sha_map=action_sha_map or None,
     )
     return await provider.generate(system_prompt, user_prompt)
 
@@ -232,9 +235,11 @@ async def _generate_fix(
 ) -> object:
     _configure_langchain()
 
+    from app.services.github.sha_resolver import resolve_action_shas
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_fix_prompt
 
+    action_sha_map = await resolve_action_shas(workflow_content)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,
@@ -243,5 +248,6 @@ async def _generate_fix(
         category=category,
         severity=severity,
         job_name=job_name,
+        action_sha_map=action_sha_map or None,
     )
     return await provider.generate(system_prompt, user_prompt)
