@@ -1,5 +1,4 @@
 import difflib
-import time
 import uuid
 from collections import defaultdict
 
@@ -103,11 +102,17 @@ def trigger_fix_generation_for_repo(
 
     When body.issue_ids is provided, only those issues are processed.
     When force=True, delivered fixes are also discarded and regenerated.
+    Only issues from the latest analysis per workflow file are targeted.
     """
+    latest_ids = select(WorkflowFile.latest_analysis_id).where(
+        WorkflowFile.repo_id == repo_id,
+        WorkflowFile.latest_analysis_id.is_not(None),  # type: ignore[union-attr]
+    )
     query = (
         select(Issue)
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
+        .where(Issue.analysis_id.in_(latest_ids))  # type: ignore[attr-defined]
     )
     if body.issue_ids is not None:
         query = query.where(Issue.id.in_(body.issue_ids))  # type: ignore[attr-defined]
@@ -218,7 +223,18 @@ def trigger_workflow_delivery(
         frontend_host=settings.FRONTEND_HOST,
         bot_handle=settings.GITHUB_BOT_HANDLE,
     )
-    pr_branch = f"greensecops/fixes-wf-{fixes[0].id!s:.8}"
+    # Stable branch: reuse existing pr_branch if set, else derive from workflow file id.
+    existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
+    wf_id = (
+        fixes[0].issue.analysis.workflow_file_id
+        if fixes[0].issue and fixes[0].issue.analysis
+        else None
+    )
+    pr_branch = existing_branch or (
+        f"greensecops/fixes-wf-{str(wf_id)[:8]}"
+        if wf_id
+        else f"greensecops/fixes-wf-{fixes[0].id!s:.8}"
+    )
     deliver_fixes_batch.delay(
         fix_ids=[str(f.id) for f in fixes],
         repo_id=str(repo.id),
@@ -278,7 +294,8 @@ def trigger_repo_delivery(
         frontend_host=settings.FRONTEND_HOST,
         bot_handle=settings.GITHUB_BOT_HANDLE,
     )
-    pr_branch = f"greensecops/fixes-{int(time.time())}"
+    existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
+    pr_branch = existing_branch or f"greensecops/fixes-{str(repo_id)[:8]}"
     deliver_fixes_batch.delay(
         fix_ids=[str(f.id) for f in fixes],
         repo_id=str(repo_id),

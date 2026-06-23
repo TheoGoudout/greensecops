@@ -398,6 +398,17 @@ export const FixPublicSchema = {
             ],
             title: 'Pr Url'
         },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
         pr_state: {
             anyOf: [
                 {

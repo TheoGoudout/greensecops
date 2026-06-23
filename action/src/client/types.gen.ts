@@ -72,6 +72,7 @@ export type FixPublic = {
     diff?: (string | null);
     diff_patch?: (string | null);
     pr_url?: (string | null);
+    pr_branch?: (string | null);
     pr_state?: (string | null);
     comment_url?: (string | null);
     created_at?: (string | null);
@@ -405,6 +406,7 @@ export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>)
 export type IssuesListIssuesData = {
     analysisId?: (string | null);
     category?: (IssueCategory | null);
+    latestOnly?: boolean;
     limit?: number;
     repoId?: (string | null);
     severity?: (IssueSeverity | null);

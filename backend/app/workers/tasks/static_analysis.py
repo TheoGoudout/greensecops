@@ -3,7 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select, update
 
 from app.core.db import engine
 from app.models import (
@@ -155,6 +155,11 @@ def _run_static_analysis_impl(
             analysis.grade = grade
             analysis.completed_at = datetime.now(timezone.utc)
             session.add(analysis)
+            session.execute(
+                update(WorkflowFile)
+                .where(WorkflowFile.id == wf_record.id)
+                .values(latest_analysis_id=analysis.id)
+            )
             session.commit()
 
             results.append(

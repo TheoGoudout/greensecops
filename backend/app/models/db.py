@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import sqlalchemy as sa
 from pydantic import EmailStr
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
@@ -162,8 +163,21 @@ class WorkflowFile(SQLModel, table=True):
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
+    # Points to the most recent completed analysis for this file; used to scope
+    # "current" issues without deleting historical analysis records.
+    latest_analysis_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("analysis.id", use_alter=True, name="fk_wf_latest_analysis"),
+            nullable=True,
+        ),
+    )
     repository: Repository | None = Relationship(back_populates="workflow_files")
-    analyses: list["Analysis"] = Relationship(back_populates="workflow_file")
+    analyses: list["Analysis"] = Relationship(
+        back_populates="workflow_file",
+        sa_relationship_kwargs={"foreign_keys": "[Analysis.workflow_file_id]"},
+    )
 
 
 # ─── Rule ────────────────────────────────────────────────────────────────────
@@ -205,7 +219,10 @@ class Analysis(SQLModel, table=True):
     )
     completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     repository: Repository | None = Relationship(back_populates="analyses")
-    workflow_file: WorkflowFile | None = Relationship(back_populates="analyses")
+    workflow_file: WorkflowFile | None = Relationship(
+        back_populates="analyses",
+        sa_relationship_kwargs={"foreign_keys": "[Analysis.workflow_file_id]"},
+    )
     issues: list["Issue"] = Relationship(back_populates="analysis", cascade_delete=True)
 
 
@@ -250,6 +267,7 @@ class Fix(SQLModel, table=True):
     status: FixStatus = Field(default=FixStatus.pending)
     diff: str | None = Field(default=None)
     pr_url: str | None = Field(default=None, max_length=1024)
+    pr_branch: str | None = Field(default=None, max_length=255)
     pr_state: str | None = Field(default=None, max_length=32)
     comment_url: str | None = Field(default=None, max_length=1024)
     error_message: str | None = Field(default=None, max_length=2048)

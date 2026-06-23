@@ -78,6 +78,9 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
     db.add(a)
     db.commit()
     db.refresh(a)
+    workflow_file.latest_analysis_id = a.id
+    db.add(workflow_file)
+    db.commit()
     return a
 
 
@@ -332,3 +335,111 @@ def test_get_issue_not_found(
     # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Issue not found"
+
+
+def test_list_issues_latest_only_excludes_old_analysis(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    rule: Rule,
+    analysis: Analysis,
+    issue: Issue,
+) -> None:
+    # Arrange — create a newer analysis and point workflow_file at it
+    new_analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=workflow_file.id,
+        content_hash=uuid.uuid4().hex,
+        status=AnalysisStatus.completed,
+        score=90.0,
+        grade="A",
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(new_analysis)
+    db.commit()
+    db.refresh(new_analysis)
+
+    new_issue = Issue(
+        analysis_id=new_analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        line_start=5,
+        line_end=7,
+        message="New analysis issue",
+        context=None,
+    )
+    db.add(new_issue)
+
+    workflow_file.latest_analysis_id = new_analysis.id
+    db.add(workflow_file)
+    db.commit()
+
+    # Act — default latest_only=True should return only new_issue
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    ids = [i["id"] for i in response.json()]
+    assert str(new_issue.id) in ids
+    assert str(issue.id) not in ids
+
+
+def test_list_issues_latest_only_false_includes_all(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    rule: Rule,
+    analysis: Analysis,
+    issue: Issue,
+) -> None:
+    # Arrange — create a newer analysis pointing workflow_file forward
+    new_analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=workflow_file.id,
+        content_hash=uuid.uuid4().hex,
+        status=AnalysisStatus.completed,
+        score=90.0,
+        grade="A",
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(new_analysis)
+    db.commit()
+    db.refresh(new_analysis)
+
+    new_issue = Issue(
+        analysis_id=new_analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        line_start=5,
+        line_end=7,
+        message="New analysis issue",
+        context=None,
+    )
+    db.add(new_issue)
+
+    workflow_file.latest_analysis_id = new_analysis.id
+    db.add(workflow_file)
+    db.commit()
+
+    # Act — latest_only=False returns issues from all analyses
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={"repo_id": str(repo.id), "latest_only": "false"},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    ids = [i["id"] for i in response.json()]
+    assert str(new_issue.id) in ids
+    assert str(issue.id) in ids
