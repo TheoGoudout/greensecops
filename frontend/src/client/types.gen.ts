@@ -31,7 +31,7 @@ export type AnalysisPublic = {
 
 export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
-export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled';
+export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled' | 'release';
 
 export type BatchFixRequest = {
     issue_ids?: (Array<(string)> | null);
@@ -282,6 +282,10 @@ export type AnalysesTriggerAnalysisData = {
 };
 
 export type AnalysesTriggerAnalysisResponse = ({
+    [key: string]: (string);
+});
+
+export type AnalysesReanalyzeAllResponse = ({
     [key: string]: (string);
 });
 
