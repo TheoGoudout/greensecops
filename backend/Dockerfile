@@ -41,6 +41,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---- runtime ----
 FROM python:3.14.6-slim
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONUNBUFFERED=1
 
 # Place executables in the environment at the front of the path
