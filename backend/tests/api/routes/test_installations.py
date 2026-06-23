@@ -115,6 +115,35 @@ def test_sync_is_idempotent(
     assert len(orgs) == 1
 
 
+def test_sync_passes_redirect_uri_to_exchange(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    mock_client = _override_github_client([])
+
+    from app.api.deps import get_github_app_client
+    from app.main import app
+
+    app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        with patch("app.api.routes.installations._enqueue_installation_sync"):
+            response = client.post(
+                SYNC_URL,
+                json={
+                    "code": "abc",
+                    "redirect_uri": "https://example.com/auth/github/callback",
+                },
+                headers=normal_user_token_headers,
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    mock_client.exchange_oauth_code.assert_awaited_once_with(
+        "abc", redirect_uri="https://example.com/auth/github/callback"
+    )
+
+
 def test_sync_oauth_failure_returns_400(
     client: TestClient,
     normal_user_token_headers: dict[str, str],

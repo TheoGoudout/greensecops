@@ -475,6 +475,17 @@ export const InstallationSyncRequestSchema = {
         code: {
             type: 'string',
             title: 'Code'
+        },
+        redirect_uri: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Redirect Uri'
         }
     },
     type: 'object',

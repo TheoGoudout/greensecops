@@ -86,6 +86,7 @@ export type HTTPValidationError = {
 
 export type InstallationSyncRequest = {
     code: string;
+    redirect_uri?: (string | null);
 };
 
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';

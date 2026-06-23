@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
-import { Building2, ExternalLink, Plus } from "lucide-react"
+import { Building2, ExternalLink, Plus, RefreshCw } from "lucide-react"
 import { InstallationsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import useAuth from "@/hooks/useAuth"
 import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
+import { useReloadInstallations } from "@/hooks/useReloadInstallations"
 
 const GithubIcon = ({ className }: { className?: string }) => (
   <svg
@@ -22,6 +23,7 @@ const GITHUB_APP_NAME = import.meta.env.VITE_GITHUB_APP_NAME as string
 const GitHubIntegration = () => {
   const { user: currentUser } = useAuth()
   const { openInstallPopup } = useGitHubAppInstall()
+  const { reloadInstallations, isLoading: isReloading } = useReloadInstallations()
 
   const { data: installations = [] } = useQuery({
     queryKey: ["installations"],
@@ -80,16 +82,30 @@ const GitHubIntegration = () => {
             </p>
           )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 self-start"
-            onClick={openInstallPopup}
-          >
-            <GithubIcon className="h-3.5 w-3.5" />
-            <Plus className="h-3.5 w-3.5" />
-            Add organization
-          </Button>
+          <div className="flex gap-2">
+            {installations.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={reloadInstallations}
+                disabled={isReloading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isReloading ? "animate-spin" : ""}`} />
+                Reload accounts
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={openInstallPopup}
+            >
+              <GithubIcon className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" />
+              Add organization
+            </Button>
+          </div>
         </div>
       </div>
     </div>

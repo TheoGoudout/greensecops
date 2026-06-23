@@ -16,6 +16,7 @@ router = APIRouter(prefix="/installations", tags=["installations"])
 
 class InstallationSyncRequest(BaseModel):
     code: str
+    redirect_uri: str | None = None
 
 
 @router.get("/", response_model=list[OrganizationPublic])
@@ -50,7 +51,7 @@ async def sync_installations(
     re-running doubles as a "refresh my installations" action.
     """
     try:
-        user_token = await github_client.exchange_oauth_code(body.code)
+        user_token = await github_client.exchange_oauth_code(body.code, redirect_uri=body.redirect_uri)
         installations = await github_client.list_user_installations(user_token)
     except Exception as exc:
         raise HTTPException(
