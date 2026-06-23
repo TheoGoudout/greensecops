@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { html as diff2htmlString } from "diff2html"
+import "diff2html/bundles/css/diff2html.min.css"
+import { ColorSchemeType } from "diff2html/lib/types"
 import {
   ArrowLeft,
   GitBranch,
@@ -22,6 +25,7 @@ import { CategoryIcon } from "@/components/CategoryIcon"
 import { GradeBadge } from "@/components/GradeBadge"
 import { IssueRow } from "@/components/IssueRow"
 import { SeverityChip } from "@/components/SeverityChip"
+import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -36,10 +40,61 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { analysisStatusColor, fixStatusColor } from "@/lib/status-colors"
 
-type RepoTab = "analyses" | "issues" | "fixes" | "pull-requests"
+type RepoTab = "analyses" | "issues" | "fixes" | "diffs" | "pull-requests"
 type RepoDetailSearch = { branch?: string; tab?: RepoTab }
 
-const VALID_TABS: RepoTab[] = ["analyses", "issues", "fixes", "pull-requests"]
+const VALID_TABS: RepoTab[] = [
+  "analyses",
+  "issues",
+  "fixes",
+  "diffs",
+  "pull-requests",
+]
+
+function FixDiffPanel({
+  fixId,
+  resolvedTheme,
+}: {
+  fixId: string
+  resolvedTheme: string
+}) {
+  const { data: fix, isLoading } = useQuery({
+    queryKey: ["fix", fixId],
+    queryFn: () => FixesService.getFix({ fixId }),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-2 p-4">
+        {[...Array(4)].map((_, i) => (
+          <Skeleton key={i} className="h-4 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (!fix?.diff_patch) {
+    return (
+      <p className="text-xs text-muted-foreground p-4">No diff available.</p>
+    )
+  }
+
+  const diffHtml = diff2htmlString(fix.diff_patch, {
+    drawFileList: false,
+    matching: "lines",
+    outputFormat: "line-by-line",
+    colorScheme:
+      resolvedTheme === "dark" ? ColorSchemeType.DARK : ColorSchemeType.LIGHT,
+  })
+
+  return (
+    <div
+      className="diff2html-wrapper text-xs overflow-x-auto"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: diff2html renders structured patch data from the API, not raw user input
+      dangerouslySetInnerHTML={{ __html: diffHtml }}
+    />
+  )
+}
 
 export const Route = createFileRoute("/_layout/repositories/$repoId")({
   component: RepositoryDetail,
@@ -76,6 +131,7 @@ function RepositoryDetail() {
   const { branch, tab } = Route.useSearch()
   const navigate = Route.useNavigate()
   const queryClient = useQueryClient()
+  const { resolvedTheme } = useTheme()
   const [unfixed, setUnfixed] = useState(false)
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set())
   const [prStateFilter, setPrStateFilter] = useState<string>("all")
@@ -362,6 +418,14 @@ function RepositoryDetail() {
             {fixes?.length ? (
               <span className="ml-1.5 text-xs bg-muted px-1.5 py-0.5 rounded-full">
                 {fixes.length}
+              </span>
+            ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="diffs">
+            Diffs
+            {fixes?.some((f) => f.status === "ready") ? (
+              <span className="ml-1.5 text-xs bg-muted px-1.5 py-0.5 rounded-full">
+                {fixes.filter((f) => f.status === "ready").length}
               </span>
             ) : null}
           </TabsTrigger>
@@ -774,6 +838,89 @@ function RepositoryDetail() {
                   )
                 })}
             </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="diffs" className="flex flex-col gap-4 mt-4">
+          {fixesLoading ? (
+            <div className="flex flex-col gap-2">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : !fixes?.some((f) => f.status === "ready") ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                No ready fixes to preview. Generate fixes first.
+              </CardContent>
+            </Card>
+          ) : (
+            fixesByWorkflow &&
+            [...fixesByWorkflow.entries()].map(([wfPath, wfFixes]) => {
+              const readyFixes = wfFixes.filter((f) => f.status === "ready")
+              if (!readyFixes.length) return null
+              const readyFixIds = readyFixes.map((f) => f.id)
+              const isWfDelivering =
+                deliverWorkflowMutation.isPending &&
+                readyFixIds.some((id) =>
+                  deliverWorkflowMutation.variables?.includes(id),
+                )
+              return (
+                <Card key={wfPath || "__unknown__"}>
+                  <CardHeader className="pb-2 pt-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
+                        <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
+                          Workflow:
+                        </span>
+                        <span className="truncate">
+                          {workflowLabel(wfPath)}
+                        </span>
+                        <span className="text-muted-foreground font-normal text-xs shrink-0">
+                          ({readyFixes.length})
+                        </span>
+                      </CardTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5 shrink-0"
+                        onClick={() =>
+                          deliverWorkflowMutation.mutate(readyFixIds)
+                        }
+                        disabled={isWfDelivering}
+                      >
+                        <GitPullRequest className="h-3 w-3" />
+                        {isWfDelivering
+                          ? "Queuing…"
+                          : `Create PR (${readyFixIds.length} fix${readyFixIds.length !== 1 ? "es" : ""})`}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {readyFixes.map((fix) => {
+                      const issue = issueById.get(fix.issue_id)
+                      return (
+                        <div key={fix.id} className="border-t">
+                          {issue && (
+                            <div className="flex items-center gap-2 px-6 py-2 flex-wrap">
+                              <SeverityChip severity={issue.severity} />
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                {issue.rule_slug}
+                              </span>
+                              <span className="text-sm">{issue.message}</span>
+                            </div>
+                          )}
+                          <FixDiffPanel
+                            fixId={fix.id}
+                            resolvedTheme={resolvedTheme ?? "light"}
+                          />
+                        </div>
+                      )
+                    })}
+                  </CardContent>
+                </Card>
+              )
+            })
           )}
         </TabsContent>
 
