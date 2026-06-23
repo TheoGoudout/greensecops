@@ -1,10 +1,12 @@
-FROM python:3.14.6
-
-ENV PYTHONUNBUFFERED=1
+# ---- builder ----
+# Ref: https://docs.astral.sh/uv/guides/integration/docker/#multi-stage-builds
+FROM python:3.14.6-slim AS builder
 
 # Install uv
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+
+ENV PYTHONUNBUFFERED=1
 
 # Compile bytecode
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#compiling-bytecode
@@ -16,16 +18,12 @@ ENV UV_LINK_MODE=copy
 
 WORKDIR /app/
 
-# Place executables in the environment at the front of the path
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment
-ENV PATH="/app/.venv/bin:$PATH"
-
 # Install dependencies
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-workspace --package app
+    uv sync --frozen --no-install-workspace --no-dev --package app
 
 COPY ./backend/scripts /app/backend/scripts
 
@@ -38,7 +36,24 @@ COPY ./backend/app /app/backend/app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --package app
+    uv sync --frozen --no-dev --package app
+
+# ---- runtime ----
+FROM python:3.14.6-slim
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONUNBUFFERED=1
+
+# Place executables in the environment at the front of the path
+# Ref: https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment
+ENV PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app/
+
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/backend /app/backend
 
 WORKDIR /app/backend/
 
