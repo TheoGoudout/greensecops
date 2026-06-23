@@ -41,6 +41,7 @@ class AnalysisTrigger(str, enum.Enum):
     webhook_workflow_run = "webhook_workflow_run"
     manual = "manual"
     scheduled = "scheduled"
+    release = "release"
 
 
 class IssueSeverity(str, enum.Enum):

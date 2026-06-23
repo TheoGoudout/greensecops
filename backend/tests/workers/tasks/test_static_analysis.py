@@ -18,7 +18,10 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
-from app.workers.tasks.static_analysis import _run_static_analysis_impl
+from app.workers.tasks.static_analysis import (
+    _reanalyze_all_repositories_impl,
+    _run_static_analysis_impl,
+)
 
 # ─── Violation stub ──────────────────────────────────────────────────────────
 
@@ -393,3 +396,55 @@ def test_completed_analysis_sets_latest_analysis_id(
     db.refresh(workflow_file)
     assert workflow_file.latest_analysis_id is not None
     assert workflow_file.latest_analysis_id != first_latest
+
+
+# ─── reanalyze_all_repositories ──────────────────────────────────────────────
+
+
+def test_reanalyze_all_enqueues_enabled_repos_with_force_and_release_trigger(
+    db: Session, org: Organization
+) -> None:
+    # Arrange — one enabled and one disabled repo
+    enabled = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"reanalyze/enabled-{uuid.uuid4().hex[:8]}",
+        installation_id=30001,
+        default_branch="trunk",
+        enabled=True,
+    )
+    disabled = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"reanalyze/disabled-{uuid.uuid4().hex[:8]}",
+        installation_id=30002,
+        default_branch="main",
+        enabled=False,
+    )
+    db.add(enabled)
+    db.add(disabled)
+    db.commit()
+    db.refresh(enabled)
+    db.refresh(disabled)
+
+    # Act
+    with patch(
+        "app.workers.tasks.static_analysis.run_static_analysis.apply_async"
+    ) as mock_apply:
+        result = _reanalyze_all_repositories_impl()
+
+    # Assert — enabled repo enqueued with force + release trigger on its branch
+    enqueued_kwargs = [call.kwargs["kwargs"] for call in mock_apply.call_args_list]
+    enqueued_repo_ids = {kw["repo_id"] for kw in enqueued_kwargs}
+    assert str(enabled.id) in enqueued_repo_ids
+    assert str(disabled.id) not in enqueued_repo_ids
+
+    enabled_kwargs = next(
+        kw for kw in enqueued_kwargs if kw["repo_id"] == str(enabled.id)
+    )
+    assert enabled_kwargs["force"] is True
+    assert enabled_kwargs["trigger"] == "release"
+    assert enabled_kwargs["branch"] == "trunk"
+
+    assert result["status"] == "queued"
+    assert int(result["repos"]) == len(enqueued_repo_ids)

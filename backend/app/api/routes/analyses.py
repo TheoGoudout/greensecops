@@ -1,9 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import select
 
-from app.api.deps import CurrentUser, SessionDep, get_or_404
+from app.api.deps import (
+    CurrentUser,
+    SessionDep,
+    get_current_active_superuser,
+    get_or_404,
+)
 from app.api.mappers import to_analysis_public
 from app.models import (
     Analysis,
@@ -11,7 +16,10 @@ from app.models import (
     AnalysisStatus,
     Repository,
 )
-from app.workers.tasks.static_analysis import run_static_analysis
+from app.workers.tasks.static_analysis import (
+    reanalyze_all_repositories,
+    run_static_analysis,
+)
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -65,3 +73,18 @@ def trigger_analysis(
         force=force,
     )
     return {"status": "queued", "repo_id": str(repo_id)}
+
+
+@router.post(
+    "/reanalyze-all",
+    status_code=202,
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def reanalyze_all() -> dict[str, str]:
+    """Fan out a fresh static analysis across all enabled repositories.
+
+    Same mechanism used automatically when a release ships new rules; exposed
+    so operators can re-apply rules on demand without a redeploy.
+    """
+    reanalyze_all_repositories.delay()
+    return {"status": "queued"}

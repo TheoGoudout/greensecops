@@ -221,7 +221,13 @@ INITIAL_RULES: list[dict[str, object]] = [
 ]
 
 
-def _seed_rules(session: Session) -> None:
+def _seed_rules(session: Session) -> list[str]:
+    """Insert any rules from INITIAL_RULES not already present.
+
+    Returns the slugs of the rules that were newly inserted, so callers can
+    detect when a release has shipped new rules.
+    """
+    new_slugs: list[str] = []
     for rule_data in INITIAL_RULES:
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])
@@ -229,10 +235,13 @@ def _seed_rules(session: Session) -> None:
         if not existing:
             rule = Rule.model_validate(rule_data)
             session.add(rule)
+            new_slugs.append(str(rule_data["slug"]))
     session.commit()
+    return new_slugs
 
 
-def init_db(session: Session) -> None:
+def init_db(session: Session) -> list[str]:
+    """Create initial data and return the slugs of any newly seeded rules."""
     user = session.exec(
         select(User).where(User.email == settings.FIRST_SUPERUSER)
     ).first()
@@ -244,4 +253,4 @@ def init_db(session: Session) -> None:
         )
         user = crud.create_user(session=session, user_create=user_in)
 
-    _seed_rules(session)
+    return _seed_rules(session)
