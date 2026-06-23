@@ -23,7 +23,8 @@ const GITHUB_APP_NAME = import.meta.env.VITE_GITHUB_APP_NAME as string
 const GitHubIntegration = () => {
   const { user: currentUser } = useAuth()
   const { openInstallPopup } = useGitHubAppInstall()
-  const { reloadInstallations, isLoading: isReloading } = useReloadInstallations()
+  const { reloadInstallations, isLoading: isReloading } =
+    useReloadInstallations()
 
   const { data: installations = [] } = useQuery({
     queryKey: ["installations"],
@@ -91,7 +92,9 @@ const GitHubIntegration = () => {
                 onClick={reloadInstallations}
                 disabled={isReloading}
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${isReloading ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isReloading ? "animate-spin" : ""}`}
+                />
                 Reload accounts
               </Button>
             )}

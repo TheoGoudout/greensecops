@@ -51,7 +51,9 @@ async def sync_installations(
     re-running doubles as a "refresh my installations" action.
     """
     try:
-        user_token = await github_client.exchange_oauth_code(body.code, redirect_uri=body.redirect_uri)
+        user_token = await github_client.exchange_oauth_code(
+            body.code, redirect_uri=body.redirect_uri
+        )
         installations = await github_client.list_user_installations(user_token)
     except Exception as exc:
         raise HTTPException(
