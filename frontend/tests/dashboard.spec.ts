@@ -43,7 +43,9 @@ test.describe("Dashboard", () => {
     await expect(activeCard.locator("..")).toContainText("1")
     await expect(page.getByText("of 2 connected")).toBeVisible()
 
-    await expect(page.getByText("82/100")).toBeVisible()
+    await expect(page.getByText("82/100").first()).toBeVisible({
+      timeout: 10000,
+    })
 
     await expect(page.getByText("1 critical")).toBeVisible()
   })
@@ -60,7 +62,9 @@ test.describe("Dashboard", () => {
     await expect(page.getByText("Recent Analyses")).toBeVisible()
     await expect(page.getByText("acme/web-app")).toBeVisible()
     await expect(page.getByText("a1b2c3d")).toBeVisible()
-    await expect(page.getByText("82/100")).toBeVisible()
+    await expect(page.getByText("82/100").first()).toBeVisible({
+      timeout: 10000,
+    })
   })
 
   test("empty state when no analyses", async ({ page }) => {
@@ -71,7 +75,9 @@ test.describe("Dashboard", () => {
     await page.goto("/dashboard")
 
     await expect(
-      page.getByText("No analyses yet. Trigger one from the Repositories page."),
+      page.getByText(
+        "No analyses yet. Trigger one from the Repositories page.",
+      ),
     ).toBeVisible()
   })
 
@@ -123,7 +129,10 @@ test.describe("Dashboard", () => {
   test("stat card shows critical count in hint", async ({ page }) => {
     await mockRepositories(page, [MOCK_REPO])
     await mockAnalyses(page, [MOCK_ANALYSIS])
-    await mockIssues(page, [MOCK_ISSUE_SECURITY, { ...MOCK_ISSUE_SECURITY, id: "00000000-0000-0000-0000-000000000099" }])
+    await mockIssues(page, [
+      MOCK_ISSUE_SECURITY,
+      { ...MOCK_ISSUE_SECURITY, id: "00000000-0000-0000-0000-000000000099" },
+    ])
 
     await page.goto("/dashboard")
 

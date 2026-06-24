@@ -72,7 +72,7 @@ test.describe("Golden Path — Extended", () => {
     expect(analysisTriggered).toBe(true)
     await expect(page.getByText("Analysis queued")).toBeVisible()
 
-    await page.getByText("acme/web-app").click()
+    await page.getByText("acme/web-app").first().click()
     await expect(page).toHaveURL(new RegExp(`/repositories/${MOCK_REPO.id}`))
 
     await page.getByText("ci.yml").first().click()
@@ -110,13 +110,13 @@ test.describe("Golden Path — Extended", () => {
     await page.route("**/api/v1/fixes/**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
-      if (method === "POST" && url.includes("/repo/") && url.includes("/generate")) {
+      if (method === "POST" && url.includes("generate-for-repo")) {
         batchFixCalled = true
         route.fulfill({
           status: 202,
           json: { queued: 2, skipped: 0 },
         })
-      } else if (method === "POST" && url.includes("/repo/") && url.includes("/deliver")) {
+      } else if (method === "POST" && url.includes("deliver-for-repo")) {
         deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })
       } else if (method === "POST") {
@@ -164,10 +164,8 @@ test.describe("Golden Path — Extended", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
-    await page
-      .getByRole("button", { name: "Integrate action" })
-      .click()
+    await page.getByRole("button", { name: "Integrate action" }).click()
 
-    await expect(page.getByText("PR opened")).toBeVisible()
+    await expect(page.getByText("PR opened").first()).toBeVisible()
   })
 })

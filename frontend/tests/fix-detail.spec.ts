@@ -61,12 +61,8 @@ test.describe("Fix Detail", () => {
 
     await page.goto(`/fixes/${MOCK_FIX_READY.id}`)
 
-    await expect(
-      page.getByRole("button", { name: "Reject" }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole("button", { name: "Create PR" }),
-    ).toBeVisible()
+    await expect(page.getByRole("button", { name: "Reject" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Create PR" })).toBeVisible()
   })
 
   test("reject calls API and shows toast", async ({ page }) => {

@@ -40,7 +40,9 @@ test.describe("Repositories", () => {
     await page.goto("/repositories")
 
     await expect(
-      page.getByText("No repositories found. Install the GitHub App to get started."),
+      page.getByText(
+        "No repositories found. Install the GitHub App to get started.",
+      ),
     ).toBeVisible()
   })
 
@@ -89,9 +91,7 @@ test.describe("Repositories", () => {
 
     await page.goto("/repositories")
 
-    await page
-      .getByRole("button", { name: "Trigger analysis" })
-      .click()
+    await page.getByRole("button", { name: "Trigger analysis" }).click()
 
     expect(triggerCalled).toBe(true)
     await expect(page.getByText("Analysis queued")).toBeVisible()
@@ -104,9 +104,7 @@ test.describe("Repositories", () => {
 
     await page.getByText("acme/web-app").click()
 
-    await expect(page).toHaveURL(
-      new RegExp(`/repositories/${MOCK_REPO.id}`),
-    )
+    await expect(page).toHaveURL(new RegExp(`/repositories/${MOCK_REPO.id}`))
   })
 
   test("Install GitHub App button is visible", async ({ page }) => {

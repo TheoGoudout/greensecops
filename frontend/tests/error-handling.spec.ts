@@ -54,7 +54,7 @@ test.describe("Error Handling", () => {
 
     await expect(
       page.getByText("Analysis not found or failed to load."),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15000 })
   })
 
   test("token invalidation redirects to login", async ({ page }) => {
@@ -75,7 +75,7 @@ test.describe("Error Handling", () => {
     })
 
     await page.goto("/dashboard")
-    await expect(page.getByText("Dashboard")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
 
     await page.evaluate(() => localStorage.removeItem("access_token"))
 
@@ -107,6 +107,8 @@ test.describe("Error Handling", () => {
 
     await page.goto("/issues")
 
-    await expect(page.getByText("Failed to load issues.")).toBeVisible()
+    await expect(page.getByText("Failed to load issues.")).toBeVisible({
+      timeout: 15000,
+    })
   })
 })

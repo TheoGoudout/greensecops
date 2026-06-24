@@ -70,7 +70,7 @@ test.describe("Repository Detail", () => {
       page.route("**/api/v1/fixes/**", (route) => {
         const url = route.request().url()
         const method = route.request().method()
-        if (method === "POST" && url.includes("/repo/")) {
+        if (method === "POST" && url.includes("for-repo")) {
           route.fulfill({
             status: 202,
             json: { queued: issues.length, skipped: 0 },
@@ -186,9 +186,7 @@ test.describe("Repository Detail", () => {
 
     await expect(page.getByText("ready").first()).toBeVisible()
     await expect(page.getByText("delivered").first()).toBeVisible()
-    await expect(
-      page.getByRole("link", { name: "View PR" }),
-    ).toBeVisible()
+    await expect(page.getByRole("link", { name: "View PR" })).toBeVisible()
   })
 
   test("Fixes tab Create PR for all workflows button", async ({ page }) => {
@@ -205,7 +203,7 @@ test.describe("Repository Detail", () => {
     await page.route("**/api/v1/fixes/**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
-      if (method === "POST" && url.includes("/repo/")) {
+      if (method === "POST" && url.includes("deliver-for-repo")) {
         deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })
       } else {
@@ -252,9 +250,7 @@ test.describe("Repository Detail", () => {
     await page.goto(`/repositories/${MOCK_REPO.id}?tab=diffs`)
 
     await expect(page.locator(".diff2html-wrapper")).toBeVisible()
-    await expect(
-      page.getByRole("button", { name: /Create PR/ }),
-    ).toBeVisible()
+    await expect(page.getByRole("button", { name: /Create PR/ })).toBeVisible()
   })
 
   test("Pull Requests tab shows PRs", async ({ page }) => {
@@ -265,9 +261,7 @@ test.describe("Repository Detail", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}?tab=pull-requests`)
 
-    await expect(
-      page.getByText("acme/web-app/pull/42"),
-    ).toBeVisible()
+    await expect(page.getByText("acme/web-app/pull/42")).toBeVisible()
     await expect(page.getByText("open").first()).toBeVisible()
   })
 
@@ -296,10 +290,8 @@ test.describe("Repository Detail", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
-    await page
-      .getByRole("button", { name: "Integrate action" })
-      .click()
+    await page.getByRole("button", { name: "Integrate action" }).click()
 
-    await expect(page.getByText("PR opened")).toBeVisible()
+    await expect(page.getByText("PR opened").first()).toBeVisible()
   })
 })

@@ -23,9 +23,7 @@ function setupAllMocks(page: import("@playwright/test").Page) {
 }
 
 test.describe("Navigation", () => {
-  test("superuser sees all sidebar links including Admin", async ({
-    page,
-  }) => {
+  test("superuser sees all sidebar links including Admin", async ({ page }) => {
     await mockUserMe(page, MOCK_SUPERUSER)
     await setupAllMocks(page)
 
@@ -38,12 +36,16 @@ test.describe("Navigation", () => {
       "Rules",
       "Badges",
       "Billing",
-      "Admin",
     ]) {
       await expect(
         page.locator('[data-sidebar="menu"]').getByText(label),
       ).toBeVisible()
     }
+    await expect(
+      page
+        .locator('[data-sidebar="menu"]')
+        .getByRole("link", { name: "Admin" }),
+    ).toBeVisible()
   })
 
   test("non-superuser does not see Admin link", async ({ page }) => {
@@ -56,7 +58,9 @@ test.describe("Navigation", () => {
       page.locator('[data-sidebar="menu"]').getByText("Dashboard"),
     ).toBeVisible()
     await expect(
-      page.locator('[data-sidebar="menu"]').getByText("Admin"),
+      page
+        .locator('[data-sidebar="menu"]')
+        .getByRole("link", { name: "Admin" }),
     ).not.toBeVisible()
   })
 
@@ -90,10 +94,7 @@ test.describe("Navigation", () => {
     ]
 
     for (const [label, pattern] of navLinks) {
-      await page
-        .locator('[data-sidebar="menu"]')
-        .getByText(label)
-        .click()
+      await page.locator('[data-sidebar="menu"]').getByText(label).click()
       await expect(page).toHaveURL(pattern)
     }
   })
@@ -109,9 +110,7 @@ test.describe("Navigation", () => {
     await expect(
       page.getByRole("menuitem", { name: /User Settings/i }),
     ).toBeVisible()
-    await expect(
-      page.getByRole("menuitem", { name: /Log out/i }),
-    ).toBeVisible()
+    await expect(page.getByRole("menuitem", { name: /Log out/i })).toBeVisible()
   })
 
   test("page titles are correct", async ({ page }) => {

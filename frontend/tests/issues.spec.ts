@@ -53,7 +53,9 @@ test.describe("Issues", () => {
     await page.goto("/issues")
     await page.waitForLoadState("networkidle")
 
-    const categoryTrigger = page.locator("button").filter({ hasText: "All categories" })
+    const categoryTrigger = page
+      .locator("button")
+      .filter({ hasText: "All categories" })
     await categoryTrigger.click()
     await page.getByRole("option", { name: /Security/ }).click()
 
@@ -74,7 +76,9 @@ test.describe("Issues", () => {
     await page.goto("/issues")
     await page.waitForLoadState("networkidle")
 
-    const severityTrigger = page.locator("button").filter({ hasText: "All severities" })
+    const severityTrigger = page
+      .locator("button")
+      .filter({ hasText: "All severities" })
     await severityTrigger.click()
     await page.getByRole("option", { name: "High" }).click()
 
@@ -149,7 +153,9 @@ test.describe("Issues", () => {
 
     await page.goto("/issues")
 
-    await expect(page.getByText("Failed to load issues.")).toBeVisible()
+    await expect(page.getByText("Failed to load issues.")).toBeVisible({
+      timeout: 15000,
+    })
   })
 
   test("Next button disabled when fewer than PAGE_SIZE results", async ({

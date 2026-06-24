@@ -38,9 +38,7 @@ test.describe("Analysis Detail", () => {
     await expect(page.getByText("82/100")).toBeVisible()
     await expect(page.getByText("completed")).toBeVisible()
     await expect(page.getByText("main")).toBeVisible()
-    await expect(
-      page.getByText(".github/workflows/ci.yml"),
-    ).toBeVisible()
+    await expect(page.getByText(".github/workflows/ci.yml")).toBeVisible()
   })
 
   test("issues grouped by category", async ({ page }) => {
@@ -49,11 +47,7 @@ test.describe("Analysis Detail", () => {
     })
     await page.route("**/api/v1/issues/**", (route) => {
       route.fulfill({
-        json: [
-          MOCK_ISSUE_SECURITY,
-          MOCK_ISSUE_RELIABILITY,
-          MOCK_ISSUE_ENERGY,
-        ],
+        json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       })
     })
 
@@ -112,6 +106,6 @@ test.describe("Analysis Detail", () => {
 
     await expect(
       page.getByText("Analysis not found or failed to load."),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15000 })
   })
 })

@@ -22,6 +22,13 @@ test.describe("Badges", () => {
 
   test("shows badge cards for repos", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO, MOCK_REPO_DISABLED])
+    await page.route("**/api/v1/badges/**", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="20"><text y="15">B</text></svg>',
+      })
+    })
 
     await page.goto("/badges")
 
@@ -30,11 +37,18 @@ test.describe("Badges", () => {
     await expect(page.getByText("acme/old-service")).toBeVisible()
 
     const images = page.locator("img[alt*='GreenSecOps badge']")
-    await expect(images.first()).toBeVisible()
+    await expect(images).toHaveCount(2)
   })
 
   test("badge card shows markdown snippet", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO])
+    await page.route("**/api/v1/badges/**", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="20"><text y="15">B</text></svg>',
+      })
+    })
 
     await page.goto("/badges")
 
@@ -45,6 +59,13 @@ test.describe("Badges", () => {
 
   test("copy markdown button changes to Copied", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO])
+    await page.route("**/api/v1/badges/**", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="20"><text y="15">B</text></svg>',
+      })
+    })
 
     await page.goto("/badges")
 

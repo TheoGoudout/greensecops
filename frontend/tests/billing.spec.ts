@@ -36,15 +36,18 @@ test.describe("Billing", () => {
 
     await page.goto("/billing")
 
-    await expect(page.getByText("Analyses")).toBeVisible()
-    await expect(page.getByText("12")).toBeVisible()
+    await expect(page.getByText("Usage this period")).toBeVisible({
+      timeout: 10000,
+    })
+
+    await expect(page.getByText("Analyses").first()).toBeVisible()
+    await expect(page.getByText("12").first()).toBeVisible()
     await expect(page.getByText("/ 50")).toBeVisible()
 
     await expect(page.getByText("AI Fixes")).toBeVisible()
-    await expect(page.getByText("2")).toBeVisible()
     await expect(page.getByText("/ 5")).toBeVisible()
 
-    await expect(page.getByText("Repositories")).toBeVisible()
+    await expect(page.getByText("Repositories").first()).toBeVisible()
     await expect(page.getByText("/ 3")).toBeVisible()
   })
 

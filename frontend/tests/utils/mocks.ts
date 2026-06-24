@@ -327,10 +327,7 @@ export async function mockUserMe(page: Page, user = MOCK_SUPERUSER) {
   })
 }
 
-export async function mockRepositories(
-  page: Page,
-  repos = [MOCK_REPO],
-) {
+export async function mockRepositories(page: Page, repos = [MOCK_REPO]) {
   await page.route("**/api/v1/repositories/**", (route) => {
     const url = route.request().url()
     if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
@@ -350,10 +347,7 @@ export async function mockRepositories(
   })
 }
 
-export async function mockAnalyses(
-  page: Page,
-  analyses = [MOCK_ANALYSIS],
-) {
+export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
   await page.route("**/api/v1/analyses/**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -374,11 +368,7 @@ export async function mockAnalyses(
 
 export async function mockIssues(
   page: Page,
-  issues = [
-    MOCK_ISSUE_SECURITY,
-    MOCK_ISSUE_RELIABILITY,
-    MOCK_ISSUE_ENERGY,
-  ],
+  issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
 ) {
   await page.route("**/api/v1/issues/**", (route) => {
     const url = route.request().url()

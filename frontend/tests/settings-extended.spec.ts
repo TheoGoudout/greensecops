@@ -33,9 +33,7 @@ test.describe("Settings — Integrations tab", () => {
     await page.goto("/settings")
     await page.getByRole("tab", { name: "Integrations" }).click()
 
-    await expect(
-      page.getByText("No GitHub account linked"),
-    ).toBeVisible()
+    await expect(page.getByText("No GitHub account linked")).toBeVisible()
   })
 
   test("connected GitHub username is visible", async ({ page }) => {
@@ -56,7 +54,11 @@ test.describe("Settings — Integrations tab", () => {
       route.fulfill({
         json: [
           MOCK_INSTALLATION,
-          { ...MOCK_INSTALLATION, id: "00000000-0000-0000-0000-000000000011", name: "other-org" },
+          {
+            ...MOCK_INSTALLATION,
+            id: "00000000-0000-0000-0000-000000000011",
+            name: "other-org",
+          },
         ],
       })
     })
@@ -77,9 +79,7 @@ test.describe("Settings — Integrations tab", () => {
     await page.goto("/settings")
     await page.getByRole("tab", { name: "Integrations" }).click()
 
-    await expect(
-      page.getByText("No organizations connected"),
-    ).toBeVisible()
+    await expect(page.getByText("No organizations connected")).toBeVisible()
   })
 })
 
@@ -119,7 +119,7 @@ test.describe("Settings — AI tab", () => {
     await page.getByRole("tab", { name: "AI" }).click()
 
     await expect(page.getByText("acme-org")).toBeVisible()
-    await expect(page.getByText("Provider")).toBeVisible()
+    await expect(page.getByLabel("Provider")).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Save preferences" }),
     ).toBeVisible()
@@ -178,9 +178,7 @@ test.describe("Settings — Danger zone tab", () => {
     await page.getByRole("button", { name: "Delete Account" }).click()
 
     await expect(page.getByText("Confirmation Required")).toBeVisible()
-    await expect(
-      page.getByText("permanently deleted"),
-    ).toBeVisible()
+    await expect(page.getByText("permanently deleted")).toBeVisible()
 
     await page.getByRole("button", { name: "Delete" }).click()
 

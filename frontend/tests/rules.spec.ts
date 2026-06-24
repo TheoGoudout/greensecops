@@ -22,9 +22,7 @@ test.describe("Rules", () => {
     await mockIssues(page, [])
   })
 
-  test("shows rules with slug, description, and severity", async ({
-    page,
-  }) => {
+  test("shows rules with slug, description, and severity", async ({ page }) => {
     await mockUserMe(page, MOCK_SUPERUSER)
     await mockRulesRoute(page, [
       MOCK_RULE_SECURITY,
@@ -35,9 +33,7 @@ test.describe("Rules", () => {
     await page.goto("/rules")
 
     await expect(page.getByRole("heading", { name: "Rules" })).toBeVisible()
-    await expect(
-      page.getByText("excessive_token_permissions"),
-    ).toBeVisible()
+    await expect(page.getByText("excessive_token_permissions")).toBeVisible()
     await expect(page.getByText("missing_timeout")).toBeVisible()
     await expect(page.getByText("caching_missing")).toBeVisible()
     await expect(
