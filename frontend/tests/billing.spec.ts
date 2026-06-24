@@ -45,7 +45,7 @@ test.describe("Billing", () => {
     await expect(page.getByText("/ 50")).toBeVisible()
 
     await expect(page.getByText("AI Fixes")).toBeVisible()
-    await expect(page.getByText("/ 5")).toBeVisible()
+    await expect(page.getByText("/ 5", { exact: true })).toBeVisible()
 
     await expect(page.getByText("Repositories").first()).toBeVisible()
     await expect(page.getByText("/ 3")).toBeVisible()

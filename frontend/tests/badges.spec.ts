@@ -33,8 +33,12 @@ test.describe("Badges", () => {
     await page.goto("/badges")
 
     await expect(page.getByRole("heading", { name: "Badges" })).toBeVisible()
-    await expect(page.getByText("acme/web-app")).toBeVisible()
-    await expect(page.getByText("acme/old-service")).toBeVisible()
+    await expect(
+      page.getByText("acme/web-app", { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByText("acme/old-service", { exact: true }),
+    ).toBeVisible()
 
     const images = page.locator("img[alt*='GreenSecOps badge']")
     await expect(images).toHaveCount(2)
