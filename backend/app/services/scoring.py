@@ -23,9 +23,7 @@ _GRADE_THRESHOLDS: list[tuple[float, str]] = [
 def _compute_penalty(
     violations: list[tuple[str, float]],
 ) -> float:
-    return sum(
-        _SEVERITY_PENALTY.get(sev, 5.0) * weight for sev, weight in violations
-    )
+    return sum(_SEVERITY_PENALTY.get(sev, 5.0) * weight for sev, weight in violations)
 
 
 def compute_score(
