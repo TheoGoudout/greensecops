@@ -39,7 +39,7 @@ def list_fixes(
     status: FixStatus | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
-) -> list[Fix]:
+) -> list[FixPublic]:
     query = select(Fix)
     if issue_id:
         query = query.where(Fix.issue_id == issue_id)
@@ -54,7 +54,67 @@ def list_fixes(
     if status:
         query = query.where(Fix.status == status)
     query = query.order_by(Fix.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
-    return list(session.exec(query).all())
+    fixes = list(session.exec(query).all())
+
+    # Bulk-load workflow files to compute diff_patch without N+1 queries
+    fixes_with_diff = [f for f in fixes if f.diff]
+    fix_to_wf: dict[uuid.UUID, WorkflowFile] = {}
+    if fixes_with_diff:
+        issue_ids = [f.issue_id for f in fixes_with_diff]
+        issues_map = {
+            i.id: i
+            for i in session.exec(select(Issue).where(Issue.id.in_(issue_ids))).all()  # type: ignore[arg-type]
+        }
+        analysis_ids = list(
+            {i.analysis_id for i in issues_map.values() if i.analysis_id}
+        )
+        analyses_map = {
+            a.id: a
+            for a in session.exec(
+                select(Analysis).where(Analysis.id.in_(analysis_ids))
+            ).all()  # type: ignore[arg-type]
+        }
+        wf_file_ids = list(
+            {a.workflow_file_id for a in analyses_map.values() if a.workflow_file_id}
+        )
+        wf_files_map = {
+            w.id: w
+            for w in session.exec(
+                select(WorkflowFile).where(WorkflowFile.id.in_(wf_file_ids))  # type: ignore[arg-type]
+            ).all()
+        }
+        for fix in fixes_with_diff:
+            issue = issues_map.get(fix.issue_id)
+            analysis = (
+                analyses_map.get(issue.analysis_id)
+                if issue and issue.analysis_id
+                else None
+            )
+            wf_file = (
+                wf_files_map.get(analysis.workflow_file_id)
+                if analysis and analysis.workflow_file_id
+                else None
+            )
+            if wf_file:
+                fix_to_wf[fix.id] = wf_file
+
+    result: list[FixPublic] = []
+    for fix in fixes:
+        data = FixPublic.model_validate(fix)
+        wf_file = fix_to_wf.get(fix.id)
+        if fix.diff and wf_file and wf_file.raw_content:
+            fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
+            patch = "".join(
+                difflib.unified_diff(
+                    wf_file.raw_content.splitlines(keepends=True),
+                    fixed.splitlines(keepends=True),
+                    fromfile=f"a/{wf_file.path}",
+                    tofile=f"b/{wf_file.path}",
+                )
+            )
+            data.diff_patch = patch or None
+        result.append(data)
+    return result
 
 
 @router.get("/{fix_id}", response_model=FixPublic)
