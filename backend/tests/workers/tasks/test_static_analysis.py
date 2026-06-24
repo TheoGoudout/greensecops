@@ -35,6 +35,7 @@ class FakeViolation:
     line_end: int
     message: str
     context: str | None = None
+    job: str | None = None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
