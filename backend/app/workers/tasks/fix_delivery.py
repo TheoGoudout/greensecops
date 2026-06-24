@@ -16,6 +16,8 @@ from app.models import (
     Repository,
     WorkflowFile,
 )
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.celery_app import celery_app
 
@@ -68,9 +70,13 @@ def deliver_fix(
             )
             return {"status": "skipped", "reason": "no_installation"}
 
+        org_id = str(repo.org_id)
+        repo_id_str = str(repo.id)
+
         fix.status = FixStatus.delivering
         session.add(fix)
         session.commit()
+        events_pub.publish_event(ev.fix_delivering(org_id, repo_id_str, fix_id))
 
         rule = issue.rule
         pr_body = build_pr_body(
@@ -108,6 +114,11 @@ def deliver_fix(
         if result.error:
             fix.status = FixStatus.failed
             fix.error_message = result.error
+            session.add(fix)
+            session.commit()
+            events_pub.publish_event(
+                ev.fix_delivery_failed(org_id, repo_id_str, fix_id, result.error[:200])
+            )
         else:
             fix.status = FixStatus.delivered
             fix.pr_url = result.pr_url
@@ -115,9 +126,18 @@ def deliver_fix(
             fix.pr_state = "open" if result.pr_url else None
             fix.comment_url = result.comment_url
             fix.delivered_at = datetime.now(timezone.utc)
+            session.add(fix)
+            session.commit()
+            events_pub.publish_event(
+                ev.fix_delivered(org_id, repo_id_str, fix_id, result.pr_url, fix_branch)
+            )
+            if result.pr_url:
+                events_pub.publish_event(
+                    ev.pr_opened(
+                        org_id, repo_id_str, [fix_id], result.pr_url, fix_branch
+                    )
+                )
 
-        session.add(fix)
-        session.commit()
         return {"status": fix.status.value, "fix_id": fix_id}
 
 
@@ -161,10 +181,17 @@ def deliver_fixes_batch(
         if not seen:
             return {"status": "error", "detail": "no_workflow_files"}
 
+        org_id = str(repo.org_id)
+        repo_id_str = repo_id
+
         for fix in fixes:
             fix.status = FixStatus.delivering
             session.add(fix)
         session.commit()
+        for fix in fixes:
+            events_pub.publish_event(
+                ev.fix_delivering(org_id, repo_id_str, str(fix.id))
+            )
 
         result = asyncio.run(
             _deliver_batch(
@@ -179,6 +206,7 @@ def deliver_fixes_batch(
         )
 
         now = datetime.now(timezone.utc)
+        delivered_fix_ids = []
         for fix in fixes:
             if result.error:
                 fix.status = FixStatus.failed
@@ -189,8 +217,30 @@ def deliver_fixes_batch(
                 fix.pr_branch = pr_branch
                 fix.pr_state = "open" if result.pr_url else None
                 fix.delivered_at = now
+                delivered_fix_ids.append(str(fix.id))
             session.add(fix)
         session.commit()
+
+        if result.error:
+            for fix in fixes:
+                events_pub.publish_event(
+                    ev.fix_delivery_failed(
+                        org_id, repo_id_str, str(fix.id), result.error[:200]
+                    )
+                )
+        else:
+            for fix in fixes:
+                events_pub.publish_event(
+                    ev.fix_delivered(
+                        org_id, repo_id_str, str(fix.id), result.pr_url, pr_branch
+                    )
+                )
+            if result.pr_url and delivered_fix_ids:
+                events_pub.publish_event(
+                    ev.pr_opened(
+                        org_id, repo_id_str, delivered_fix_ids, result.pr_url, pr_branch
+                    )
+                )
 
         return {"status": "failed" if result.error else "ok"}
 

@@ -7,6 +7,8 @@ from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowFile
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -88,6 +90,9 @@ def run_fix_generation(
         if not issues:
             return {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
 
+        org_id = str(repo.org_id)
+        repo_id_str = str(repo.id)
+
         fixes = []
         for issue in issues:
             fix = Fix(
@@ -101,6 +106,15 @@ def run_fix_generation(
         session.commit()
         for fix in fixes:
             session.refresh(fix)
+
+        events_pub.publish_event(
+            ev.fix_generating(
+                org_id,
+                repo_id_str,
+                fix_ids=[str(f.id) for f in fixes],
+                issue_ids=issue_ids,
+            )
+        )
 
         try:
             result = asyncio.run(
@@ -117,6 +131,11 @@ def run_fix_generation(
                 fix.status = FixStatus.failed
                 fix.error_message = str(exc)[:2000]
                 session.add(fix)
+                events_pub.publish_event(
+                    ev.fix_generation_failed(
+                        org_id, repo_id_str, str(fix.id), str(exc)[:200]
+                    )
+                )
             session.commit()
             return {"status": "failed", "issue_ids": issue_ids}
 
@@ -128,6 +147,11 @@ def run_fix_generation(
             fix.status = FixStatus.ready
             session.add(fix)
         session.commit()
+
+        for fix in fixes:
+            events_pub.publish_event(
+                ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
+            )
 
         logger.info(
             "Fix generated for %d issue(s): %d prompt tokens, %d completion tokens",

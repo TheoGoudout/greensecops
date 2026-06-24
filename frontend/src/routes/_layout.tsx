@@ -8,6 +8,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { isLoggedIn } from "@/hooks/useAuth"
+import { useRepoEvents } from "@/hooks/useRepoEvents"
 
 export const Route = createFileRoute("/_layout")({
   component: Layout,
@@ -21,6 +22,8 @@ export const Route = createFileRoute("/_layout")({
 })
 
 function Layout() {
+  useRepoEvents()
+
   return (
     <SidebarProvider>
       <AppSidebar />

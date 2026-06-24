@@ -6,6 +6,8 @@ from sqlmodel import Session
 
 from app import crud
 from app.core.db import engine
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.services.github.app_client import InstallationRepo
 from app.workers.celery_app import celery_app
 
@@ -15,6 +17,8 @@ logger = logging.getLogger(__name__)
 def _sync_installation_repositories_impl(
     installation_id: int, org_id: str
 ) -> dict[str, str | int]:
+    events_pub.publish_event(ev.installation_syncing(org_id, installation_id))
+
     repos = _fetch_installation_repositories(installation_id)
     org_uuid = uuid.UUID(org_id)
     with Session(engine) as session:
@@ -33,6 +37,11 @@ def _sync_installation_repositories_impl(
         installation_id,
         org_id,
     )
+    events_pub.publish_event(
+        ev.installation_synced(org_id, installation_id, len(repos))
+    )
+    if repos:
+        events_pub.publish_event(ev.repository_added(org_id, len(repos)))
     return {
         "status": "done",
         "installation_id": installation_id,

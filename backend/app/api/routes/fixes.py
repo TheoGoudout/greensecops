@@ -17,6 +17,8 @@ from app.models import (
     Repository,
     WorkflowFile,
 )
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.tasks.fix_delivery import deliver_fix, deliver_fixes_batch
 from app.workers.tasks.fix_generation import run_fix_generation
@@ -377,3 +379,11 @@ def reject_fix(
     fix.status = FixStatus.rejected
     session.add(fix)
     session.commit()
+
+    issue = session.get(Issue, fix.issue_id)
+    analysis = session.get(Analysis, issue.analysis_id) if issue else None
+    repo = session.get(Repository, analysis.repo_id) if analysis else None
+    if repo:
+        events_pub.publish_event(
+            ev.fix_rejected(str(repo.org_id), str(repo.id), str(fix_id))
+        )

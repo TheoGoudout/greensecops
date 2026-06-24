@@ -4,6 +4,7 @@ from app.api.routes import (
     analyses,
     badges,
     billing,
+    events,
     fixes,
     github_oauth,
     installations,
@@ -28,6 +29,7 @@ api_router.include_router(github_oauth.router)
 api_router.include_router(installations.router)
 api_router.include_router(organizations.router)
 api_router.include_router(repositories.router)
+api_router.include_router(events.router)
 api_router.include_router(analyses.router)
 api_router.include_router(issues.router)
 api_router.include_router(fixes.router)
