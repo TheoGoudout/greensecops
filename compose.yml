@@ -199,6 +199,7 @@ services:
       args:
         - VITE_API_URL=https://${SERVICE_FQDN_BACKEND}
         - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
+        - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
         - NODE_ENV=production
 
   landing:
