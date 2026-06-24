@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import type { IssuePublic } from "@/client"
+import type { FixPublic, IssuePublic } from "@/client"
 import {
   AnalysesService,
   ApiError,
@@ -51,49 +51,27 @@ const VALID_TABS: RepoTab[] = [
   "pull-requests",
 ]
 
-function FixDiffPanel({
-  fixId,
-  resolvedTheme,
-}: {
-  fixId: string
-  resolvedTheme: string
-}) {
-  const { data: fix, isLoading } = useQuery({
-    queryKey: ["fix", fixId],
-    queryFn: () => FixesService.getFix({ fixId }),
-  })
+function extractFilePath(patch: string): string {
+  const gitMatch = patch.match(/^diff --git a\/(.+?) b\/.+$/m)
+  if (gitMatch) return gitMatch[1]
+  const unifiedMatch = patch.match(/^--- a\/(.+)$/m)
+  return unifiedMatch?.[1] ?? ""
+}
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col gap-2 p-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-4 w-full" />
-        ))}
-      </div>
-    )
-  }
-
-  if (!fix?.diff_patch) {
-    return (
-      <p className="text-xs text-muted-foreground p-4">No diff available.</p>
-    )
-  }
-
-  const diffHtml = diff2htmlString(fix.diff_patch, {
-    drawFileList: false,
-    matching: "lines",
-    outputFormat: "line-by-line",
-    colorScheme:
-      resolvedTheme === "dark" ? ColorSchemeType.DARK : ColorSchemeType.LIGHT,
-  })
-
-  return (
-    <div
-      className="diff2html-wrapper text-xs overflow-x-auto"
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: diff2html renders structured patch data from the API, not raw user input
-      dangerouslySetInnerHTML={{ __html: diffHtml }}
-    />
-  )
+function combinePatchesForFile(patches: string[]): string {
+  if (patches.length === 0) return ""
+  const unique = [...new Set(patches)]
+  if (unique.length === 1) return unique[0]
+  const hunkStart = unique[0].indexOf("@@")
+  const header = hunkStart !== -1 ? unique[0].slice(0, hunkStart) : unique[0]
+  const hunks = unique
+    .map((p) => {
+      const start = p.indexOf("@@")
+      return start !== -1 ? p.slice(start) : ""
+    })
+    .filter(Boolean)
+    .join("\n")
+  return header + hunks
 }
 
 export const Route = createFileRoute("/_layout/repositories/$repoId")({
@@ -136,7 +114,11 @@ function RepositoryDetail() {
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set())
   const [prStateFilter, setPrStateFilter] = useState<string>("all")
   const [prPage, setPrPage] = useState(0)
-  const PR_PAGE_SIZE = 20
+  const [analysesPage, setAnalysesPage] = useState(0)
+  const [issuesPage, setIssuesPage] = useState(0)
+  const [fixesPage, setFixesPage] = useState(0)
+  const [diffsPage, setDiffsPage] = useState(0)
+  const PAGE_SIZE = 20
 
   const { data: repo, isLoading: repoLoading } = useQuery({
     queryKey: ["repository", repoId],
@@ -230,15 +212,6 @@ function RepositoryDetail() {
     onError: () => toast.error("Failed to queue fixes"),
   })
 
-  const deliverFixMutation = useMutation({
-    mutationFn: (fixId: string) => FixesService.triggerFixDelivery({ fixId }),
-    onSuccess: () => {
-      toast.success("PR creation queued")
-      queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
-    },
-    onError: () => toast.error("Failed to queue PR delivery"),
-  })
-
   const deliverWorkflowMutation = useMutation({
     mutationFn: (fixIds: string[]) =>
       FixesService.triggerWorkflowDelivery({
@@ -263,11 +236,6 @@ function RepositoryDetail() {
   const branches = analyses
     ? [...new Set(analyses.map((a) => a.branch).filter(Boolean) as string[])]
     : []
-
-  const issuesByWorkflow = useMemo(
-    () => (issues ? groupByWorkflowFile(issues) : null),
-    [issues],
-  )
 
   const issueById = useMemo(() => {
     const map = new Map<string, IssuePublic>()
@@ -310,10 +278,70 @@ function RepositoryDetail() {
   }, [allGsPrs, prStateFilter])
 
   const pagedGsPrs = useMemo(
-    () =>
-      filteredGsPrs.slice(prPage * PR_PAGE_SIZE, (prPage + 1) * PR_PAGE_SIZE),
+    () => filteredGsPrs.slice(prPage * PAGE_SIZE, (prPage + 1) * PAGE_SIZE),
     [filteredGsPrs, prPage],
   )
+
+  const pagedAnalyses = useMemo(
+    () =>
+      (analyses ?? []).slice(
+        analysesPage * PAGE_SIZE,
+        (analysesPage + 1) * PAGE_SIZE,
+      ),
+    [analyses, analysesPage],
+  )
+
+  const pagedIssues = useMemo(
+    () =>
+      (issues ?? []).slice(
+        issuesPage * PAGE_SIZE,
+        (issuesPage + 1) * PAGE_SIZE,
+      ),
+    [issues, issuesPage],
+  )
+
+  const pagedIssuesByWorkflow = useMemo(
+    () => groupByWorkflowFile(pagedIssues),
+    [pagedIssues],
+  )
+
+  const pagedFixes = useMemo(
+    () =>
+      (fixes ?? []).slice(fixesPage * PAGE_SIZE, (fixesPage + 1) * PAGE_SIZE),
+    [fixes, fixesPage],
+  )
+
+  const pagedFixesByWorkflow = useMemo(() => {
+    const groups = new Map<string, FixPublic[]>()
+    for (const fix of pagedFixes) {
+      const issue = issueById.get(fix.issue_id)
+      const key = issue?.workflow_file_path ?? ""
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(fix)
+    }
+    return groups
+  }, [pagedFixes, issueById])
+
+  const readyFixes = useMemo(
+    () => (fixes ?? []).filter((f) => f.status === "ready"),
+    [fixes],
+  )
+
+  const pagedReadyFixes = useMemo(
+    () => readyFixes.slice(diffsPage * PAGE_SIZE, (diffsPage + 1) * PAGE_SIZE),
+    [readyFixes, diffsPage],
+  )
+
+  const pagedReadyFixesByWorkflow = useMemo(() => {
+    const groups = new Map<string, FixPublic[]>()
+    for (const fix of pagedReadyFixes) {
+      const issue = issueById.get(fix.issue_id)
+      const key = issue?.workflow_file_path ?? ""
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(fix)
+    }
+    return groups
+  }, [pagedReadyFixes, issueById])
 
   const allSelected = !issues || issues.length === 0 || deselectedIds.size === 0
   const noneSelected = !issues || issues.every((i) => deselectedIds.has(i.id))
@@ -496,7 +524,7 @@ function RepositoryDetail() {
                     <span className="text-right">Date</span>
                   </div>
                   <div className="divide-y">
-                    {analyses.map((a) => (
+                    {pagedAnalyses.map((a) => (
                       <Link
                         key={a.id}
                         to="/analyses/$analysisId"
@@ -540,6 +568,33 @@ function RepositoryDetail() {
                       </Link>
                     ))}
                   </div>
+                  {(analyses?.length ?? 0) > PAGE_SIZE && (
+                    <div className="flex items-center justify-between px-6 py-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={analysesPage === 0}
+                        onClick={() => setAnalysesPage((p) => p - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        Page {analysesPage + 1} of{" "}
+                        {Math.ceil((analyses?.length ?? 0) / PAGE_SIZE)}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          (analysesPage + 1) * PAGE_SIZE >=
+                          (analyses?.length ?? 0)
+                        }
+                        onClick={() => setAnalysesPage((p) => p + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
@@ -554,6 +609,7 @@ function RepositoryDetail() {
               onClick={() => {
                 setUnfixed((v) => !v)
                 setDeselectedIds(new Set())
+                setIssuesPage(0)
               }}
             >
               Open only
@@ -600,8 +656,7 @@ function RepositoryDetail() {
               </CardContent>
             </Card>
           ) : (
-            issuesByWorkflow &&
-            [...issuesByWorkflow.entries()].map(([wfPath, wfIssues]) => {
+            [...pagedIssuesByWorkflow.entries()].map(([wfPath, wfIssues]) => {
               const allGroupSelected = wfIssues.every(
                 (i) => !deselectedIds.has(i.id),
               )
@@ -649,6 +704,30 @@ function RepositoryDetail() {
               )
             })
           )}
+          {(issues?.length ?? 0) > PAGE_SIZE && (
+            <div className="flex items-center justify-between py-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={issuesPage === 0}
+                onClick={() => setIssuesPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Page {issuesPage + 1} of{" "}
+                {Math.ceil((issues?.length ?? 0) / PAGE_SIZE)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={(issuesPage + 1) * PAGE_SIZE >= (issues?.length ?? 0)}
+                onClick={() => setIssuesPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="fixes" className="flex flex-col gap-4 mt-4">
@@ -682,161 +761,162 @@ function RepositoryDetail() {
                   </Button>
                 </div>
               )}
-              {fixesByWorkflow &&
-                [...fixesByWorkflow.entries()].map(([wfPath, wfFixes]) => {
-                  const readyFixIds = wfFixes
-                    .filter((f) => f.status === "ready")
-                    .map((f) => f.id)
-                  const isWfDelivering =
-                    deliverWorkflowMutation.isPending &&
-                    readyFixIds.some((id) =>
-                      deliverWorkflowMutation.variables?.includes(id),
-                    )
-                  return (
-                    <Card key={wfPath || "__unknown__"}>
-                      <CardHeader className="pb-2 pt-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
-                            <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
-                              Workflow:
-                            </span>
-                            <span className="truncate">
-                              {workflowLabel(wfPath)}
-                            </span>
-                            <span className="text-muted-foreground font-normal text-xs shrink-0">
-                              ({wfFixes.length})
-                            </span>
-                          </CardTitle>
-                          {readyFixIds.length > 0 && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs gap-1.5 shrink-0"
-                              onClick={() =>
-                                deliverWorkflowMutation.mutate(readyFixIds)
-                              }
-                              disabled={isWfDelivering}
+              {[...pagedFixesByWorkflow.entries()].map(([wfPath, wfFixes]) => {
+                const allWfReadyFixIds = (fixesByWorkflow?.get(wfPath) ?? [])
+                  .filter((f) => f.status === "ready")
+                  .map((f) => f.id)
+                const isWfDelivering =
+                  deliverWorkflowMutation.isPending &&
+                  allWfReadyFixIds.some((id) =>
+                    deliverWorkflowMutation.variables?.includes(id),
+                  )
+                return (
+                  <Card key={wfPath || "__unknown__"}>
+                    <CardHeader className="pb-2 pt-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
+                          <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
+                            Workflow:
+                          </span>
+                          <span className="truncate">
+                            {workflowLabel(wfPath)}
+                          </span>
+                          <span className="text-muted-foreground font-normal text-xs shrink-0">
+                            ({wfFixes.length})
+                          </span>
+                        </CardTitle>
+                        {allWfReadyFixIds.length > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 shrink-0"
+                            onClick={() =>
+                              deliverWorkflowMutation.mutate(allWfReadyFixIds)
+                            }
+                            disabled={isWfDelivering}
+                          >
+                            <GitPullRequest className="h-3 w-3" />
+                            {isWfDelivering
+                              ? "Queuing…"
+                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                          </Button>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="divide-y">
+                        {wfFixes.map((fix) => {
+                          const issue = issueById.get(fix.issue_id)
+                          return (
+                            <div
+                              key={fix.id}
+                              className="flex items-start gap-3 px-6 py-4"
                             >
-                              <GitPullRequest className="h-3 w-3" />
-                              {isWfDelivering
-                                ? "Queuing…"
-                                : `Create PR (${readyFixIds.length} fix${readyFixIds.length !== 1 ? "es" : ""})`}
-                            </Button>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div className="divide-y">
-                          {wfFixes.map((fix) => {
-                            const issue = issueById.get(fix.issue_id)
-                            const isDelivering =
-                              deliverFixMutation.isPending &&
-                              deliverFixMutation.variables === fix.id
-                            return (
-                              <div
-                                key={fix.id}
-                                className="flex items-start gap-3 px-6 py-4"
+                              <span
+                                className={`mt-0.5 shrink-0 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
                               >
-                                <span
-                                  className={`mt-0.5 shrink-0 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
-                                >
-                                  {fix.status}
-                                </span>
-                                {issue && (
-                                  <CategoryIcon
-                                    category={issue.category}
-                                    className="mt-0.5 shrink-0 text-base"
-                                  />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {issue && (
-                                      <SeverityChip severity={issue.severity} />
-                                    )}
-                                    {issue && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                        {issue.rule_slug}
-                                      </span>
-                                    )}
-                                    <span className="text-sm">
-                                      {issue?.message ??
-                                        `${fix.issue_id.slice(0, 8)}…`}
-                                    </span>
-                                  </div>
-                                  {issue?.line_start != null && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Line {issue.line_start}
-                                      {issue.line_end &&
-                                      issue.line_end !== issue.line_start
-                                        ? `–${issue.line_end}`
-                                        : ""}
-                                    </p>
+                                {fix.status}
+                              </span>
+                              {issue && (
+                                <CategoryIcon
+                                  category={issue.category}
+                                  className="mt-0.5 shrink-0 text-base"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {issue && (
+                                    <SeverityChip severity={issue.severity} />
                                   )}
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {fix.llm_model}
-                                  </p>
-                                </div>
-                                <div className="shrink-0 flex flex-col items-end gap-1.5">
-                                  <Link
-                                    to="/fixes/$fixId"
-                                    params={{ fixId: fix.id }}
-                                    search={{ repoId }}
-                                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-                                  >
-                                    View diff
-                                  </Link>
-                                  {fix.pr_url ? (
-                                    <a
-                                      href={fix.pr_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                                    >
-                                      <GitPullRequest className="h-3 w-3" />
-                                      View PR
-                                    </a>
-                                  ) : fix.comment_url ? (
-                                    <a
-                                      href={fix.comment_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                    >
-                                      Comment
-                                    </a>
-                                  ) : fix.status === "ready" ? (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs gap-1.5"
-                                      onClick={() =>
-                                        deliverFixMutation.mutate(fix.id)
-                                      }
-                                      disabled={isDelivering}
-                                    >
-                                      <GitPullRequest className="h-3 w-3" />
-                                      {isDelivering ? "Queuing…" : "Create PR"}
-                                    </Button>
-                                  ) : null}
-                                  <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                                    {fix.created_at
-                                      ? new Date(
-                                          fix.created_at,
-                                        ).toLocaleDateString(undefined, {
-                                          month: "short",
-                                          day: "numeric",
-                                        })
-                                      : "—"}
+                                  {issue && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                      {issue.rule_slug}
+                                    </span>
+                                  )}
+                                  <span className="text-sm">
+                                    {issue?.message ??
+                                      `${fix.issue_id.slice(0, 8)}…`}
                                   </span>
                                 </div>
+                                {issue?.line_start != null && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Line {issue.line_start}
+                                    {issue.line_end &&
+                                    issue.line_end !== issue.line_start
+                                      ? `–${issue.line_end}`
+                                      : ""}
+                                  </p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {fix.llm_model}
+                                </p>
                               </div>
-                            )
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+                              <div className="shrink-0 flex flex-col items-end gap-1.5">
+                                {fix.pr_url ? (
+                                  <a
+                                    href={fix.pr_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                                  >
+                                    <GitPullRequest className="h-3 w-3" />
+                                    View PR
+                                  </a>
+                                ) : fix.comment_url ? (
+                                  <a
+                                    href={fix.comment_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                  >
+                                    Comment
+                                  </a>
+                                ) : null}
+                                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                                  {fix.created_at
+                                    ? new Date(
+                                        fix.created_at,
+                                      ).toLocaleDateString(undefined, {
+                                        month: "short",
+                                        day: "numeric",
+                                      })
+                                    : "—"}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+              {(fixes?.length ?? 0) > PAGE_SIZE && (
+                <div className="flex items-center justify-between py-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={fixesPage === 0}
+                    onClick={() => setFixesPage((p) => p - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {fixesPage + 1} of{" "}
+                    {Math.ceil((fixes?.length ?? 0) / PAGE_SIZE)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      (fixesPage + 1) * PAGE_SIZE >= (fixes?.length ?? 0)
+                    }
+                    onClick={() => setFixesPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </TabsContent>
@@ -855,72 +935,143 @@ function RepositoryDetail() {
               </CardContent>
             </Card>
           ) : (
-            fixesByWorkflow &&
-            [...fixesByWorkflow.entries()].map(([wfPath, wfFixes]) => {
-              const readyFixes = wfFixes.filter((f) => f.status === "ready")
-              if (!readyFixes.length) return null
-              const readyFixIds = readyFixes.map((f) => f.id)
-              const isWfDelivering =
-                deliverWorkflowMutation.isPending &&
-                readyFixIds.some((id) =>
-                  deliverWorkflowMutation.variables?.includes(id),
-                )
-              return (
-                <Card key={wfPath || "__unknown__"}>
-                  <CardHeader className="pb-2 pt-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
-                        <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
-                          Workflow:
-                        </span>
-                        <span className="truncate">
-                          {workflowLabel(wfPath)}
-                        </span>
-                        <span className="text-muted-foreground font-normal text-xs shrink-0">
-                          ({readyFixes.length})
-                        </span>
-                      </CardTitle>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5 shrink-0"
-                        onClick={() =>
-                          deliverWorkflowMutation.mutate(readyFixIds)
-                        }
-                        disabled={isWfDelivering}
-                      >
-                        <GitPullRequest className="h-3 w-3" />
-                        {isWfDelivering
-                          ? "Queuing…"
-                          : `Create PR (${readyFixIds.length} fix${readyFixIds.length !== 1 ? "es" : ""})`}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {readyFixes.map((fix) => {
-                      const issue = issueById.get(fix.issue_id)
-                      return (
-                        <div key={fix.id} className="border-t">
-                          {issue && (
-                            <div className="flex items-center gap-2 px-6 py-2 flex-wrap">
-                              <SeverityChip severity={issue.severity} />
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                {issue.rule_slug}
-                              </span>
-                              <span className="text-sm">{issue.message}</span>
-                            </div>
-                          )}
-                          <FixDiffPanel
-                            fixId={fix.id}
-                            resolvedTheme={resolvedTheme ?? "light"}
-                          />
+            <>
+              {[...pagedReadyFixesByWorkflow.entries()].map(
+                ([wfPath, wfFixes]) => {
+                  const allWfReadyFixIds = (fixesByWorkflow?.get(wfPath) ?? [])
+                    .filter((f) => f.status === "ready")
+                    .map((f) => f.id)
+                  const isWfDelivering =
+                    deliverWorkflowMutation.isPending &&
+                    allWfReadyFixIds.some((id) =>
+                      deliverWorkflowMutation.variables?.includes(id),
+                    )
+
+                  const fileGroups = new Map<
+                    string,
+                    { fixes: FixPublic[]; patch: string }
+                  >()
+                  for (const fix of wfFixes) {
+                    if (!fix.diff_patch) continue
+                    const filePath = extractFilePath(fix.diff_patch) || fix.id
+                    if (!fileGroups.has(filePath))
+                      fileGroups.set(filePath, { fixes: [], patch: "" })
+                    fileGroups.get(filePath)!.fixes.push(fix)
+                  }
+                  for (const entry of fileGroups.values()) {
+                    const patches = entry.fixes
+                      .map((f) => f.diff_patch)
+                      .filter(Boolean) as string[]
+                    entry.patch = combinePatchesForFile(patches)
+                  }
+
+                  return (
+                    <Card key={wfPath || "__unknown__"}>
+                      <CardHeader className="pb-2 pt-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
+                            <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
+                              Workflow:
+                            </span>
+                            <span className="truncate">
+                              {workflowLabel(wfPath)}
+                            </span>
+                            <span className="text-muted-foreground font-normal text-xs shrink-0">
+                              ({allWfReadyFixIds.length})
+                            </span>
+                          </CardTitle>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 shrink-0"
+                            onClick={() =>
+                              deliverWorkflowMutation.mutate(allWfReadyFixIds)
+                            }
+                            disabled={isWfDelivering}
+                          >
+                            <GitPullRequest className="h-3 w-3" />
+                            {isWfDelivering
+                              ? "Queuing…"
+                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                          </Button>
                         </div>
-                      )
-                    })}
-                  </CardContent>
-                </Card>
-              )
-            })
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        {[...fileGroups.values()].map((group, i) => {
+                          const diffHtml = group.patch
+                            ? diff2htmlString(group.patch, {
+                                drawFileList: false,
+                                matching: "lines",
+                                outputFormat: "line-by-line",
+                                colorScheme:
+                                  resolvedTheme === "dark"
+                                    ? ColorSchemeType.DARK
+                                    : ColorSchemeType.LIGHT,
+                              })
+                            : null
+                          return (
+                            <div key={i} className="border-t">
+                              {group.fixes.map((fix) => {
+                                const issue = issueById.get(fix.issue_id)
+                                return issue ? (
+                                  <div
+                                    key={fix.id}
+                                    className="flex items-center gap-2 px-6 py-2 flex-wrap"
+                                  >
+                                    <SeverityChip severity={issue.severity} />
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                      {issue.rule_slug}
+                                    </span>
+                                    <span className="text-sm">
+                                      {issue.message}
+                                    </span>
+                                  </div>
+                                ) : null
+                              })}
+                              {diffHtml ? (
+                                <div
+                                  className="diff2html-wrapper text-xs overflow-x-auto"
+                                  // biome-ignore lint/security/noDangerouslySetInnerHtml: diff2html renders structured patch data from the API, not raw user input
+                                  dangerouslySetInnerHTML={{ __html: diffHtml }}
+                                />
+                              ) : (
+                                <p className="text-xs text-muted-foreground px-6 py-2">
+                                  No diff available.
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </CardContent>
+                    </Card>
+                  )
+                },
+              )}
+              {readyFixes.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between py-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={diffsPage === 0}
+                    onClick={() => setDiffsPage((p) => p - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {diffsPage + 1} of{" "}
+                    {Math.ceil(readyFixes.length / PAGE_SIZE)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={(diffsPage + 1) * PAGE_SIZE >= readyFixes.length}
+                    onClick={() => setDiffsPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -1013,7 +1164,7 @@ function RepositoryDetail() {
                       )
                     })}
                   </div>
-                  {filteredGsPrs.length > PR_PAGE_SIZE && (
+                  {filteredGsPrs.length > PAGE_SIZE && (
                     <div className="flex items-center justify-between px-6 py-3 border-t">
                       <Button
                         variant="outline"
@@ -1025,13 +1176,13 @@ function RepositoryDetail() {
                       </Button>
                       <span className="text-xs text-muted-foreground">
                         Page {prPage + 1} of{" "}
-                        {Math.ceil(filteredGsPrs.length / PR_PAGE_SIZE)}
+                        {Math.ceil(filteredGsPrs.length / PAGE_SIZE)}
                       </span>
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={
-                          (prPage + 1) * PR_PAGE_SIZE >= filteredGsPrs.length
+                          (prPage + 1) * PAGE_SIZE >= filteredGsPrs.length
                         }
                         onClick={() => setPrPage((p) => p + 1)}
                       >
