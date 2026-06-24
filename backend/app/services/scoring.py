@@ -20,14 +20,35 @@ _GRADE_THRESHOLDS: list[tuple[float, str]] = [
 ]
 
 
-def compute_score(
-    violations: list[tuple[str, float]],  # list of (severity_value, rule_weight)
+def _compute_penalty(
+    violations: list[tuple[str, float]],
 ) -> float:
-    """Compute 0–100 score. Each violation penalises based on severity * rule_weight."""
-    penalty = sum(
+    return sum(
         _SEVERITY_PENALTY.get(sev, 5.0) * weight for sev, weight in violations
     )
-    return max(0.0, 100.0 - penalty)
+
+
+def compute_score(
+    workflow_violations: list[tuple[str, float]],
+    job_violations: dict[str, list[tuple[str, float]]],
+) -> float:
+    """Compute 0-100 score normalised by number of jobs.
+
+    Each job is scored independently (100 minus its penalties, clamped to 0).
+    The workflow score is the mean of all job scores, minus workflow-level
+    penalties.
+    """
+    if job_violations:
+        job_scores = [
+            max(0.0, 100.0 - _compute_penalty(viols))
+            for viols in job_violations.values()
+        ]
+        avg_job_score = sum(job_scores) / len(job_scores)
+    else:
+        avg_job_score = 100.0
+
+    wf_penalty = _compute_penalty(workflow_violations)
+    return max(0.0, avg_job_score - wf_penalty)
 
 
 def score_to_grade(score: float) -> str:

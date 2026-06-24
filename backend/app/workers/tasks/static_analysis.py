@@ -143,7 +143,8 @@ def _run_static_analysis_impl(
                 r.slug: r for r in session.exec(select(Rule)).all()
             }
 
-            score_inputs: list[tuple[str, float]] = []
+            workflow_score_inputs: list[tuple[str, float]] = []
+            job_score_inputs: dict[str, list[tuple[str, float]]] = {}
             for v in violations:
                 rule = rule_map.get(v.rule_slug)
                 if rule is None:
@@ -160,11 +161,15 @@ def _run_static_analysis_impl(
                     context=v.context,
                 )
                 session.add(issue)
-                score_inputs.append((v.severity, rule.severity_weight))
+                pair = (v.severity, rule.severity_weight)
+                if v.job is None:
+                    workflow_score_inputs.append(pair)
+                else:
+                    job_score_inputs.setdefault(v.job, []).append(pair)
 
             from app.services.scoring import compute_score, score_to_grade
 
-            score = compute_score(score_inputs)
+            score = compute_score(workflow_score_inputs, job_score_inputs)
             grade = score_to_grade(score)
 
             analysis.status = AnalysisStatus.completed
