@@ -18,6 +18,8 @@ from app.models import (
     WorkflowFile,
 )
 from app.services.deduplication import compute_content_hash, is_duplicate
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,8 @@ def _run_static_analysis_impl(
         repo = session.get(Repository, uuid.UUID(repo_id))
         if not repo:
             return {"status": "error", "detail": "repository_not_found"}
+
+        org_id = str(repo.org_id)
 
         if workflow_file_id:
             wf_record = session.get(WorkflowFile, uuid.UUID(workflow_file_id))
@@ -67,6 +71,9 @@ def _run_static_analysis_impl(
                 )
                 session.add(skipped)
                 session.commit()
+                events_pub.publish_event(
+                    ev.analysis_skipped(org_id, repo_id, str(skipped.id))
+                )
                 results.append(
                     {
                         "path": path,
@@ -109,6 +116,11 @@ def _run_static_analysis_impl(
             )
             session.add(analysis)
             session.flush()
+            events_pub.publish_event(
+                ev.analysis_started(
+                    org_id, repo_id, str(analysis.id), branch or repo.default_branch
+                )
+            )
 
             try:
                 violations = asyncio.run(_evaluate(content))
@@ -119,6 +131,11 @@ def _run_static_analysis_impl(
                 analysis.completed_at = datetime.now(timezone.utc)
                 session.add(analysis)
                 session.commit()
+                events_pub.publish_event(
+                    ev.analysis_failed(
+                        org_id, repo_id, str(analysis.id), str(exc)[:200]
+                    )
+                )
                 results.append({"path": path, "status": "failed"})
                 continue
 
@@ -161,6 +178,11 @@ def _run_static_analysis_impl(
                 .values(latest_analysis_id=analysis.id)
             )
             session.commit()
+            events_pub.publish_event(
+                ev.analysis_completed(
+                    org_id, repo_id, str(analysis.id), score, grade, len(violations)
+                )
+            )
 
             results.append(
                 {

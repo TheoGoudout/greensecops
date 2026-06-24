@@ -25,6 +25,8 @@ from app.models import (
     RepositoryPublic,
     User,
 )
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.services.scoring import score_to_grade
 
 SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
@@ -234,6 +236,9 @@ def toggle_repository(
     repo.enabled = enabled
     session.add(repo)
     session.commit()
+    events_pub.publish_event(
+        ev.repository_toggled(str(repo.org_id), str(repo_id), enabled)
+    )
     return {"repo_id": str(repo_id), "enabled": enabled}
 
 
@@ -349,4 +354,10 @@ async def integrate_action(
     )
     if result.error:
         raise HTTPException(status_code=502, detail=result.error)
+    if result.pr_url:
+        events_pub.publish_event(
+            ev.repository_action_pr_opened(
+                str(repo.org_id), str(repo_id), result.pr_url
+            )
+        )
     return {"pr_url": result.pr_url or ""}

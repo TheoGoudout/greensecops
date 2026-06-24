@@ -8,11 +8,15 @@ from app import crud
 from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import (
+    Analysis,
     AnalysisTrigger,
     Fix,
+    Issue,
     Organization,
     Repository,
 )
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.services.github.webhook_verifier import verify_webhook_signature
 
 logger = logging.getLogger(__name__)
@@ -177,12 +181,23 @@ def _handle_installation_event(
             len(repos),
             installation_id,
         )
+        if repos:
+            org_id = str(repos[0].org_id)
+            events_pub.publish_event(
+                ev.installation_deleted(org_id, installation_id, len(repos))
+            )
+            events_pub.publish_event(
+                ev.repository_disabled(org_id, [str(r.id) for r in repos])
+            )
         return
 
     if action in ("created", "unsuspend", "new_permissions_accepted"):
         org = _upsert_org_from_installation(session, installation)
         if org is None:
             return
+        events_pub.publish_event(
+            ev.installation_created(str(org.id), installation_id, org.name)
+        )
         # Ownership is linked by the authenticated /installations/sync endpoint
         # (the webhook has no app-session user); here we only ensure repos load.
         _enqueue_installation_sync(installation_id, str(org.id))
@@ -214,6 +229,14 @@ def _handle_pull_request_event(
     session.commit()
     logger.info("PR %s -> state=%s for fix %s", pr_url, new_state, fix.id)
 
+    issue = session.get(Issue, fix.issue_id)
+    analysis = session.get(Analysis, issue.analysis_id) if issue else None
+    repo = session.get(Repository, analysis.repo_id) if analysis else None
+    if repo:
+        events_pub.publish_event(
+            ev.pr_closed(str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged)
+        )
+
 
 def _handle_installation_repositories_event(
     session: Session,
@@ -241,6 +264,13 @@ def _handle_installation_repositories_event(
         logger.info(
             "Disabled %d removed repos for installation %s", count, installation_id
         )
+        org = _upsert_org_from_installation(session, installation)
+        if org and count:
+            events_pub.publish_event(
+                ev.repository_disabled(
+                    str(org.id), [str(gid) for gid in github_repo_ids]
+                )
+            )
 
 
 def _upsert_org_from_installation(
