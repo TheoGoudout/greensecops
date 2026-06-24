@@ -62,8 +62,16 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
                     # Policy not loaded yet — skip silently
                     continue
                 response.raise_for_status()
-                result = response.json().get("result", {})
-                raw_violations: list[dict[str, Any]] = result.get("violations", [])
+                data = response.json()
+                if "result" not in data:
+                    logger.error(
+                        "OPA package %s is undefined — policy not loaded in OPA",
+                        package_path,
+                    )
+                    continue
+                raw_violations: list[dict[str, Any]] = data["result"].get(
+                    "violations", []
+                )
                 for v in raw_violations:
                     violations.append(
                         OpaViolation(
