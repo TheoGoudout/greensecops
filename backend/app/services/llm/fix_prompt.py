@@ -9,7 +9,8 @@ Rules:
 - Make the minimum changes required to fix all reported issues
 - Ensure the result is valid GitHub Actions YAML syntax
 - Do not add unnecessary blank lines or reformat the entire file
-- When pinning an action to a commit SHA, always append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>` (e.g. `uses: actions/checkout@abc123def # v4`) — this keeps the intent readable and allows Dependabot to track updates"""
+- When pinning an action to a commit SHA, always append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>` (e.g. `uses: actions/checkout@abc123def # v4`) — this keeps the intent readable and allows Dependabot to track updates
+- CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek` — these tools compare git refs and require full history to resolve the base ref"""
 
 FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow in a single pass:
 

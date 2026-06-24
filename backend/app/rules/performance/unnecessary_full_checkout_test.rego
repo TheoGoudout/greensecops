@@ -54,3 +54,25 @@ test_no_violation_no_checkout_step if {
 	violations := unnecessary_full_checkout.violations with input as {"jobs": {"build": {"steps": [{"run": "echo hello"}]}}}
 	count(violations) == 0
 }
+
+test_no_violation_fetch_depth_zero_with_prek_from_ref if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"pre-commit": {"steps": [
+		{
+			"uses": "actions/checkout@v4",
+			"with": {"fetch-depth": 0},
+		},
+		{"run": "uvx prek run --from-ref origin/main --to-ref HEAD"},
+	]}}}
+	count(violations) == 0
+}
+
+test_no_violation_fetch_depth_zero_with_precommit_from_ref if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"lint": {"steps": [
+		{
+			"uses": "actions/checkout@v4",
+			"with": {"fetch-depth": 0},
+		},
+		{"run": "pre-commit run --from-ref origin/main --to-ref HEAD"},
+	]}}}
+	count(violations) == 0
+}
