@@ -33,9 +33,7 @@ test.describe("Badges", () => {
     await page.goto("/badges")
 
     await expect(page.getByRole("heading", { name: "Badges" })).toBeVisible()
-    await expect(
-      page.getByText("acme/web-app", { exact: true }),
-    ).toBeVisible()
+    await expect(page.getByText("acme/web-app", { exact: true })).toBeVisible()
     await expect(
       page.getByText("acme/old-service", { exact: true }),
     ).toBeVisible()
