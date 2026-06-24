@@ -33,6 +33,7 @@ RUN bun install
 COPY ./frontend /app/frontend
 ARG VITE_API_URL
 ARG VITE_GITHUB_OAUTH_CLIENT_ID
+ARG VITE_GITHUB_APP_NAME
 
 RUN bun run build
 
