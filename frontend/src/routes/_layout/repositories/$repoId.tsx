@@ -237,11 +237,6 @@ function RepositoryDetail() {
     ? [...new Set(analyses.map((a) => a.branch).filter(Boolean) as string[])]
     : []
 
-  const _issuesByWorkflow = useMemo(
-    () => (issues ? groupByWorkflowFile(issues) : null),
-    [issues],
-  )
-
   const issueById = useMemo(() => {
     const map = new Map<string, IssuePublic>()
     for (const issue of allIssues ?? []) map.set(issue.id, issue)
