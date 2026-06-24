@@ -1,11 +1,5 @@
 import { expect, test } from "@playwright/test"
-import {
-  MOCK_ANALYSIS,
-  MOCK_USER,
-  mockBilling,
-  mockEvents,
-  mockUserMe,
-} from "./utils/mocks"
+import { MOCK_USER, mockBilling, mockEvents, mockUserMe } from "./utils/mocks"
 
 test.describe("Error Handling", () => {
   test("404 for unknown route shows not-found", async ({ page }) => {

@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test"
 import {
   MOCK_ANALYSIS,
-  MOCK_ANALYSIS_PENDING,
   MOCK_FIX_DELIVERED,
   MOCK_FIX_READY,
   MOCK_ISSUE_ENERGY,

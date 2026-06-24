@@ -4,7 +4,6 @@ import {
   MOCK_FIX_READY,
   MOCK_ISSUE_RELIABILITY,
   MOCK_ISSUE_SECURITY,
-  MOCK_ISSUE_WITH_FIX,
   MOCK_REPO,
   mockBilling,
   mockEvents,
@@ -106,7 +105,6 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let batchFixCalled = false
-    let deliverCalled = false
     await page.route("**/api/v1/fixes/**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
@@ -116,11 +114,7 @@ test.describe("Golden Path — Extended", () => {
           status: 202,
           json: { queued: 2, skipped: 0 },
         })
-      } else if (method === "POST" && url.includes("deliver-for-repo")) {
-        deliverCalled = true
-        route.fulfill({ json: { status: "delivering" } })
       } else if (method === "POST") {
-        deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })
       } else {
         route.fulfill({ json: [MOCK_FIX_READY] })
