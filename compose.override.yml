@@ -116,6 +116,8 @@ services:
     restart: "no"
     ports:
       - "8181:8181"
+    volumes:
+      - ./backend/app/rules:/policies:ro
 
   mailcatcher:
     image: schickling/mailcatcher

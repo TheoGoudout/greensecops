@@ -181,8 +181,6 @@ services:
       - --addr=0.0.0.0:8181
       - --log-level=info
       - /policies
-    volumes:
-      - ./backend/app/rules:/policies:ro
 
   frontend:
     image: greensecops/frontend:${TAG:-latest}
