@@ -25,6 +25,16 @@ const handleApiError = (error: Error) => {
   }
 }
 const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && [401, 403].includes(error.status)) {
+          return false
+        }
+        return failureCount < 3
+      },
+    },
+  },
   queryCache: new QueryCache({
     onError: handleApiError,
   }),
