@@ -67,9 +67,13 @@ function GitHubAppCallback() {
     }
   }, [shouldSync, code, installation_id, setup_action, navigate])
 
-  // Redirect once we are no longer actively syncing.
+  // Close popup or redirect once we are no longer actively syncing.
   useEffect(() => {
     if (syncState === "syncing") return
+    if (window.opener) {
+      const timer = setTimeout(() => window.close(), 1500)
+      return () => clearTimeout(timer)
+    }
     const timer = setTimeout(() => {
       navigate({ to: "/repositories" })
     }, 2500)
