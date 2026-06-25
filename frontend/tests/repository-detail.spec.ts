@@ -251,7 +251,9 @@ test.describe("Repository Detail", () => {
     await page.getByRole("tab", { name: "Diffs" }).click()
 
     await expect(page.locator(".diff2html-wrapper")).toBeVisible()
-    await expect(page.getByRole("button", { name: /Create PR/ })).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Create PR (1 fix)" }),
+    ).toBeVisible()
   })
 
   test("Pull Requests tab shows PRs", async ({ page }) => {
