@@ -36,8 +36,8 @@ function PullRequestsPage() {
   })
 
   const syncMutation = useMutation({
-    mutationFn: () => FixesService.syncPrStatus({ repoId }),
-    onSuccess: (data) => {
+    mutationFn: () => FixesService.syncPrStatuses({ repoId }),
+    onSuccess: (data: Record<string, number>) => {
       if (data.updated > 0) {
         queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
       }
