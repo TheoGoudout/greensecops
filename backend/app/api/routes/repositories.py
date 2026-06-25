@@ -270,8 +270,7 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
             continue
         action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
         already_present = any(
-            isinstance(s, dict)
-            and str(s.get("uses", "")).startswith(action_prefix)
+            isinstance(s, dict) and str(s.get("uses", "")).startswith(action_prefix)
             for s in steps
         )
         if already_present:
@@ -311,9 +310,7 @@ async def _inject_badge_via_llm(
     from app.services.llm.badge_prompt import build_badge_prompt
     from app.services.llm.catalog import get_provider
 
-    provider_str = (
-        repo.llm_provider.value if repo.llm_provider else None
-    )
+    provider_str = repo.llm_provider.value if repo.llm_provider else None
     model_str = repo.llm_model
     if not provider_str and repo.organization:
         org = repo.organization

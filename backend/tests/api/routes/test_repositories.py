@@ -432,3 +432,154 @@ def test_get_repository_grade_populated(
     body = response.json()
     assert body["avg_score"] == 92.0
     assert body["grade"] == "A+"
+
+
+# ─── GET /repositories/external ─────────────────────────────────────────────
+
+
+def test_list_external_repositories_empty(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/external",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_list_external_repositories_returns_external_only(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+) -> None:
+    ext_repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"ext-owner/ext-{uuid.uuid4().hex[:8]}",
+        installation_id=None,
+        enabled=True,
+        is_external=True,
+    )
+    normal_repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"normal-owner/normal-{uuid.uuid4().hex[:8]}",
+        installation_id=55555,
+        enabled=True,
+        is_external=False,
+    )
+    db.add(ext_repo)
+    db.add(normal_repo)
+    db.commit()
+    db.refresh(ext_repo)
+    db.refresh(normal_repo)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/external",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    ids = {r["id"] for r in response.json()}
+    assert str(ext_repo.id) in ids
+    assert str(normal_repo.id) not in ids
+
+
+# ─── POST /repositories/{id}/integrate-action ───────────────────────────────
+
+
+def test_integrate_action_no_workflow_files(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/integrate-action",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 404
+    assert "No workflow files" in response.json()["detail"]
+
+
+def test_integrate_action_no_installation(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+) -> None:
+    repo_no_install = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/no-install-{uuid.uuid4().hex[:8]}",
+        installation_id=None,
+        enabled=True,
+    )
+    db.add(repo_no_install)
+    db.commit()
+    db.refresh(repo_no_install)
+    wf = WorkflowFile(
+        repo_id=repo_no_install.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n",
+    )
+    db.add(wf)
+    db.commit()
+
+    response = client.post(
+        f"{settings.API_V1_STR}/repositories/{repo_no_install.id}/integrate-action",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 400
+    assert "no GitHub App installation" in response.json()["detail"]
+
+
+def test_integrate_action_already_present(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    repo_with_install = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/already-int-{uuid.uuid4().hex[:8]}",
+        installation_id=99999,
+        enabled=True,
+    )
+    db.add(repo_with_install)
+    db.commit()
+    db.refresh(repo_with_install)
+    wf = WorkflowFile(
+        repo_id=repo_with_install.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content=(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n"
+            f"      - uses: {settings.GITHUB_ACTION_REF}\n"
+        ),
+    )
+    db.add(wf)
+    db.commit()
+
+    mock_client = AsyncMock()
+    mock_client.get_installation_token = AsyncMock(side_effect=Exception("skip badge"))
+
+    from app.api.deps import get_github_app_client
+    from app.main import app as fastapi_app
+
+    fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
+            headers=superuser_token_headers,
+        )
+    finally:
+        fastapi_app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert "already present" in response.json()["detail"]
