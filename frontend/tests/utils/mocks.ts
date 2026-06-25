@@ -206,6 +206,13 @@ export const MOCK_FIX_READY = {
   comment_url: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "Job 'test' has no timeout-minutes set.",
+  line_start: 30,
+  line_end: 30,
+  workflow_file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_FIX_DELIVERED = {
@@ -222,6 +229,13 @@ export const MOCK_FIX_DELIVERED = {
   comment_url: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: "2024-01-02T10:03:00Z",
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "Job 'build' has no timeout-minutes set.",
+  line_start: 12,
+  line_end: 12,
+  workflow_file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_FIX_PENDING = {
@@ -238,6 +252,13 @@ export const MOCK_FIX_PENDING = {
   comment_url: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
+  rule_slug: "excessive_token_permissions",
+  severity: "critical" as const,
+  category: "security" as const,
+  message: "Workflow uses overly permissive token permissions.",
+  line_start: 5,
+  line_end: 5,
+  workflow_file_path: ".github/workflows/ci.yml",
 }
 
 // ── Rules ──────────────────────────────────────────────────────────────

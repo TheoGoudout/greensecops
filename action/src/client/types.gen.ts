@@ -77,6 +77,13 @@ export type FixPublic = {
     comment_url?: (string | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
+    rule_slug?: (string | null);
+    severity?: (IssueSeverity | null);
+    category?: (IssueCategory | null);
+    message?: (string | null);
+    line_start?: (number | null);
+    line_end?: (number | null);
+    workflow_file_path?: (string | null);
 };
 
 export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected';

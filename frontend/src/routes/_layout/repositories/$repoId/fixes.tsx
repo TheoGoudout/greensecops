@@ -140,7 +140,9 @@ function FixesPage() {
               <GitPullRequest className="h-4 w-4" />
               {deliverRepoMutation.isPending
                 ? "Queuing…"
-                : "Create PR for all workflows"}
+                : fixes.some((f) => f.pr_url)
+                  ? "Update PR for all workflows"
+                  : "Create PR for all workflows"}
             </Button>
           )}
         </div>
@@ -161,9 +163,11 @@ function FixesPage() {
           ) : (
             <>
               {[...pagedFixesByWorkflow.entries()].map(([wfPath, wfFixes]) => {
-                const allWfReadyFixIds = (fixesByWorkflow?.get(wfPath) ?? [])
+                const allWfFixes = fixesByWorkflow?.get(wfPath) ?? []
+                const allWfReadyFixIds = allWfFixes
                   .filter((f) => f.status === "ready")
                   .map((f) => f.id)
+                const hasExistingPr = allWfFixes.some((f) => f.pr_url)
                 const isWfDelivering =
                   deliverWorkflowMutation.isPending &&
                   allWfReadyFixIds.some((id) =>
@@ -197,7 +201,7 @@ function FixesPage() {
                             <GitPullRequest className="h-3 w-3" />
                             {isWfDelivering
                               ? "Queuing…"
-                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                              : `${hasExistingPr ? "Update" : "Create"} PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
                           </Button>
                         )}
                       </div>
@@ -206,6 +210,16 @@ function FixesPage() {
                       <div className="divide-y">
                         {wfFixes.map((fix) => {
                           const issue = issueById.get(fix.issue_id)
+                          const severity = fix.severity ?? issue?.severity
+                          const category = fix.category ?? issue?.category
+                          const ruleSlug = fix.rule_slug ?? issue?.rule_slug
+                          const message =
+                            fix.message ??
+                            issue?.message ??
+                            `${fix.issue_id.slice(0, 8)}…`
+                          const lineStart =
+                            fix.line_start ?? issue?.line_start
+                          const lineEnd = fix.line_end ?? issue?.line_end
                           return (
                             <div
                               key={fix.id}
@@ -216,33 +230,29 @@ function FixesPage() {
                               >
                                 {fix.status}
                               </span>
-                              {issue && (
+                              {category && (
                                 <CategoryIcon
-                                  category={issue.category}
+                                  category={category}
                                   className="mt-0.5 shrink-0 text-base"
                                 />
                               )}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  {issue && (
-                                    <SeverityChip severity={issue.severity} />
+                                  {severity && (
+                                    <SeverityChip severity={severity} />
                                   )}
-                                  {issue && (
+                                  {ruleSlug && (
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                      {issue.rule_slug}
+                                      {ruleSlug}
                                     </span>
                                   )}
-                                  <span className="text-sm">
-                                    {issue?.message ??
-                                      `${fix.issue_id.slice(0, 8)}…`}
-                                  </span>
+                                  <span className="text-sm">{message}</span>
                                 </div>
-                                {issue?.line_start != null && (
+                                {lineStart != null && (
                                   <p className="text-xs text-muted-foreground mt-0.5">
-                                    Line {issue.line_start}
-                                    {issue.line_end &&
-                                    issue.line_end !== issue.line_start
-                                      ? `–${issue.line_end}`
+                                    Line {lineStart}
+                                    {lineEnd && lineEnd !== lineStart
+                                      ? `–${lineEnd}`
                                       : ""}
                                   </p>
                                 )}
@@ -337,9 +347,11 @@ function FixesPage() {
             <>
               {[...pagedReadyFixesByWorkflow.entries()].map(
                 ([wfPath, wfFixes]) => {
-                  const allWfReadyFixIds = (fixesByWorkflow?.get(wfPath) ?? [])
+                  const allWfFixes = fixesByWorkflow?.get(wfPath) ?? []
+                  const allWfReadyFixIds = allWfFixes
                     .filter((f) => f.status === "ready")
                     .map((f) => f.id)
+                  const hasExistingPr = allWfFixes.some((f) => f.pr_url)
                   const isWfDelivering =
                     deliverWorkflowMutation.isPending &&
                     allWfReadyFixIds.some((id) =>
@@ -391,7 +403,7 @@ function FixesPage() {
                             <GitPullRequest className="h-3 w-3" />
                             {isWfDelivering
                               ? "Queuing…"
-                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                              : `${hasExistingPr ? "Update" : "Create"} PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
                           </Button>
                         </div>
                       </CardHeader>
@@ -412,18 +424,22 @@ function FixesPage() {
                             <div key={i} className="border-t">
                               {group.fixes.map((fix) => {
                                 const issue = issueById.get(fix.issue_id)
-                                return issue ? (
+                                const severity =
+                                  fix.severity ?? issue?.severity
+                                const ruleSlug =
+                                  fix.rule_slug ?? issue?.rule_slug
+                                const message =
+                                  fix.message ?? issue?.message
+                                return severity && ruleSlug && message ? (
                                   <div
                                     key={fix.id}
                                     className="flex items-center gap-2 px-6 py-2 flex-wrap"
                                   >
-                                    <SeverityChip severity={issue.severity} />
+                                    <SeverityChip severity={severity} />
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                      {issue.rule_slug}
+                                      {ruleSlug}
                                     </span>
-                                    <span className="text-sm">
-                                      {issue.message}
-                                    </span>
+                                    <span className="text-sm">{message}</span>
                                   </div>
                                 ) : null
                               })}
