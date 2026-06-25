@@ -98,9 +98,13 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("issues page loads and shows issue with severity", async ({ page }) => {
-    await page.goto("/issues")
-    await expect(page).toHaveURL("/issues")
+  test("repo issues page loads and shows issue with severity", async ({
+    page,
+  }) => {
+    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await expect(page).toHaveURL(
+      new RegExp(`/repositories/${MOCK_REPO.id}/issues`),
+    )
     await expect(page.getByText("missing_timeout")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
@@ -119,7 +123,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       route.fulfill({ json: { ...MOCK_FIX, status: "rejected" } })
     })
 
-    await page.goto("/issues")
+    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
     await expect(page.getByText("missing_timeout")).toBeVisible()
     expect(rejectCalled).toBe(false)
   })

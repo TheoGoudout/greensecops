@@ -32,7 +32,6 @@ test.describe("Navigation", () => {
     for (const label of [
       "Dashboard",
       "Repositories",
-      "Issues",
       "Rules",
       "Badges",
       "Billing",
@@ -86,7 +85,6 @@ test.describe("Navigation", () => {
 
     const navLinks: Array<[string, RegExp]> = [
       ["Repositories", /\/repositories/],
-      ["Issues", /\/issues/],
       ["Rules", /\/rules/],
       ["Badges", /\/badges/],
       ["Billing", /\/billing/],
@@ -120,7 +118,6 @@ test.describe("Navigation", () => {
     const pages: Array<[string, string]> = [
       ["/dashboard", "Dashboard - GreenSecOps"],
       ["/repositories", "Repositories - GreenSecOps"],
-      ["/issues", "Issues - GreenSecOps"],
       ["/rules", "Rules - GreenSecOps"],
       ["/badges", "Badges - GreenSecOps"],
       ["/billing", "Billing - GreenSecOps"],

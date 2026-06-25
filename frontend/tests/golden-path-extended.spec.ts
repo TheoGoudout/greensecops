@@ -121,7 +121,7 @@ test.describe("Golden Path — Extended", () => {
       }
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
 
     const fixBtn = page.getByRole("button", { name: /Fix selected/ })
     await expect(fixBtn).toBeVisible()
@@ -129,7 +129,7 @@ test.describe("Golden Path — Extended", () => {
     expect(batchFixCalled).toBe(true)
     await expect(page.getByText(/Queued 2 fix/)).toBeVisible()
 
-    await page.getByRole("tab", { name: /Fixes/ }).click()
+    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
     await expect(page.getByText("ready").first()).toBeVisible()
   })
 

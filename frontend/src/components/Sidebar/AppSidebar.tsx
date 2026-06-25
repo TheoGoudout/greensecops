@@ -1,10 +1,10 @@
+import { Link as RouterLink, useRouterState } from "@tanstack/react-router"
 import {
   Award,
   CreditCard,
   GitBranch,
   LayoutDashboard,
   ListChecks,
-  ShieldAlert,
   Users,
 } from "lucide-react"
 
@@ -15,26 +15,87 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
-import { type Item, Main } from "./Main"
+import { NavGroup, type NavItem } from "./NavGroup"
 import { User } from "./User"
 
-const baseItems: Item[] = [
-  { icon: LayoutDashboard, title: "Dashboard", path: "/dashboard" },
-  { icon: GitBranch, title: "Repositories", path: "/repositories" },
-  { icon: ShieldAlert, title: "Issues", path: "/issues" },
-  { icon: ListChecks, title: "Rules", path: "/rules" },
-  { icon: Award, title: "Badges", path: "/badges" },
-  { icon: CreditCard, title: "Billing", path: "/billing" },
-]
+const repoSubItems = [
+  { title: "Analyses", segment: "analyses" },
+  { title: "Issues", segment: "issues" },
+  { title: "Fixes", segment: "fixes" },
+  { title: "Pull Requests", segment: "pull-requests" },
+] as const
+
+function RepoSubNav({ repoId }: { repoId: string }) {
+  const { isMobile, setOpenMobile } = useSidebar()
+  const currentPath = useRouterState({
+    select: (s) => s.location.pathname,
+  })
+
+  const handleClick = () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }
+
+  return (
+    <SidebarMenuSub>
+      {repoSubItems.map((item) => {
+        const href = `/repositories/${repoId}/${item.segment}`
+        const isActive = currentPath.startsWith(href)
+        return (
+          <SidebarMenuSubItem key={item.segment}>
+            <SidebarMenuSubButton asChild isActive={isActive}>
+              <RouterLink
+                to={`/repositories/$repoId/${item.segment}`}
+                params={{ repoId }}
+                onClick={handleClick}
+              >
+                {item.title}
+              </RouterLink>
+            </SidebarMenuSubButton>
+          </SidebarMenuSubItem>
+        )
+      })}
+    </SidebarMenuSub>
+  )
+}
 
 export function AppSidebar() {
   const { user: currentUser } = useAuth()
+  const currentPath = useRouterState({
+    select: (s) => s.location.pathname,
+  })
 
-  const items = currentUser?.is_superuser
-    ? [...baseItems, { icon: Users, title: "Admin", path: "/admin" }]
-    : baseItems
+  const repoIdMatch = currentPath.match(/^\/repositories\/([^/]+)\/.+$/)
+  const currentRepoId = repoIdMatch?.[1] ?? null
+
+  const analysisItems: NavItem[] = [
+    { icon: LayoutDashboard, title: "Dashboard", path: "/dashboard" },
+    {
+      icon: GitBranch,
+      title: "Repositories",
+      path: "/repositories",
+      children: currentRepoId ? (
+        <RepoSubNav repoId={currentRepoId} />
+      ) : undefined,
+    },
+  ]
+
+  const configItems: NavItem[] = [
+    { icon: ListChecks, title: "Rules", path: "/rules" },
+    { icon: Award, title: "Badges", path: "/badges" },
+    { icon: CreditCard, title: "Billing", path: "/billing" },
+  ]
+
+  if (currentUser?.is_superuser) {
+    configItems.push({ icon: Users, title: "Admin", path: "/admin" })
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -42,7 +103,8 @@ export function AppSidebar() {
         <Logo variant="responsive" />
       </SidebarHeader>
       <SidebarContent>
-        <Main items={items} />
+        <NavGroup label="CI/CD Analysis" items={analysisItems} />
+        <NavGroup label="Configuration" items={configItems} />
       </SidebarContent>
       <SidebarFooter>
         <SidebarAppearance />

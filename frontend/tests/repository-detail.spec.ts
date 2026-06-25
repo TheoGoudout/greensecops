@@ -118,7 +118,7 @@ test.describe("Repository Detail", () => {
   test("Issues tab shows issues grouped by workflow", async ({ page }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
 
     await expect(page.getByText("Workflow:")).toBeVisible()
     await expect(page.getByText("ci.yml")).toBeVisible()
@@ -155,7 +155,7 @@ test.describe("Repository Detail", () => {
       }
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
 
     const fixBtn = page.getByRole("button", { name: /Fix selected/ })
     await expect(fixBtn).toBeVisible()
@@ -168,7 +168,7 @@ test.describe("Repository Detail", () => {
   test("Issues tab empty state", async ({ page }) => {
     await setupRepoMocks(page, { issues: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
 
     await expect(page.getByText("No issues found.")).toBeVisible()
   })
@@ -181,7 +181,7 @@ test.describe("Repository Detail", () => {
       fixes: [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=fixes`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
 
     await expect(page.getByText("ready").first()).toBeVisible()
     await expect(page.getByText("delivered").first()).toBeVisible()
@@ -210,7 +210,7 @@ test.describe("Repository Detail", () => {
       }
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=fixes`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
 
     const btn = page.getByRole("button", {
       name: "Create PR for all workflows",
@@ -225,7 +225,7 @@ test.describe("Repository Detail", () => {
   test("Fixes tab empty state", async ({ page }) => {
     await setupRepoMocks(page, { fixes: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=fixes`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
 
     await expect(page.getByText("No fixes yet.")).toBeVisible()
   })
@@ -233,7 +233,8 @@ test.describe("Repository Detail", () => {
   test("Diffs tab empty state", async ({ page }) => {
     await setupRepoMocks(page, { fixes: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=diffs`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
+    await page.getByRole("tab", { name: "Diffs" }).click()
 
     await expect(
       page.getByText("No ready fixes to preview. Generate fixes first."),
@@ -246,10 +247,13 @@ test.describe("Repository Detail", () => {
       fixes: [MOCK_FIX_READY],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=diffs`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
+    await page.getByRole("tab", { name: "Diffs" }).click()
 
     await expect(page.locator(".diff2html-wrapper")).toBeVisible()
-    await expect(page.getByRole("button", { name: /Create PR/ })).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Create PR (1 fix)" }),
+    ).toBeVisible()
   })
 
   test("Pull Requests tab shows PRs", async ({ page }) => {
@@ -258,7 +262,7 @@ test.describe("Repository Detail", () => {
       fixes: [MOCK_FIX_DELIVERED],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=pull-requests`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
 
     await expect(page.getByText("acme/web-app/pull/42")).toBeVisible()
     await expect(page.getByText("open").first()).toBeVisible()
@@ -267,7 +271,7 @@ test.describe("Repository Detail", () => {
   test("Pull Requests tab empty state", async ({ page }) => {
     await setupRepoMocks(page, { fixes: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}?tab=pull-requests`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
 
     await expect(
       page.getByText("No GreenSecOps-created PRs yet."),
