@@ -15,6 +15,7 @@ from app.api.deps import (
     get_or_404,
 )
 from app.api.mappers import to_repo_public
+from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
@@ -29,8 +30,6 @@ from app.services.events import schemas as ev
 from app.services.scoring import score_to_grade
 
 SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
-
-_ACTION_USES_PREFIX = "greensecops/greensecops-action"
 
 
 router = APIRouter(prefix="/repositories", tags=["repositories"])
@@ -269,9 +268,10 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps:
             continue
+        action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
         already_present = any(
             isinstance(s, dict)
-            and str(s.get("uses", "")).startswith(_ACTION_USES_PREFIX)
+            and str(s.get("uses", "")).startswith(action_prefix)
             for s in steps
         )
         if already_present:
@@ -291,8 +291,8 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     for line_idx, col in sorted(insertions, key=lambda x: x[0], reverse=True):
         indent = " " * col
         step_lines = (
-            f"{indent}- name: GreenSecOps Telemetry\n"
-            f"{indent}  uses: greensecops/greensecops-action@v1\n"
+            f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
+            f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
             f"{indent}  with:\n"
             f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL }}}}\n"
         ).splitlines(keepends=True)
@@ -301,20 +301,36 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     return "".join(lines), True
 
 
-_BADGE_MARKER = "<!-- greensecops-badge -->"
+async def _inject_badge_via_llm(
+    readme_content: str, badge_markdown: str, repo: Repository
+) -> str | None:
+    """Use the LLM to intelligently place a badge in README content.
 
+    Returns the modified README content, or None on failure.
+    """
+    from app.services.llm.badge_prompt import build_badge_prompt
+    from app.services.llm.catalog import get_provider
 
-def _inject_badge_into_readme(
-    raw_content: str, badge_url: str, link_url: str
-) -> tuple[str, bool]:
-    """Prepend a GreenSecOps badge to README content if not already present."""
-    if _BADGE_MARKER in raw_content:
-        return raw_content, False
-    badge_line = (
-        f"{_BADGE_MARKER}\n"
-        f"[![GreenSecOps]({badge_url})]({link_url})\n\n"
+    provider_str = (
+        repo.llm_provider.value if repo.llm_provider else None
     )
-    return badge_line + raw_content, True
+    model_str = repo.llm_model
+    if not provider_str and repo.organization:
+        org = repo.organization
+        provider_str = (
+            org.default_llm_provider.value if org.default_llm_provider else None
+        )
+        model_str = model_str or org.default_llm_model
+    if not provider_str:
+        from app.services.llm.catalog import get_first_available_provider
+
+        provider_str, fallback_model = get_first_available_provider()
+        model_str = model_str or fallback_model
+
+    provider = get_provider(provider=provider_str, model=model_str)
+    system_prompt, user_prompt = build_badge_prompt(readme_content, badge_markdown)
+    result = await provider.generate(system_prompt, user_prompt)
+    return result.content
 
 
 @router.post("/{repo_id}/integrate-action", status_code=202)
@@ -324,11 +340,15 @@ async def integrate_action(
     current_user: CurrentUser,
     github_client: GitHubAppClientDep,
 ) -> dict[str, str]:
+    import logging
+
     from github import Auth, Github
     from github.GithubException import GithubException
 
-    from app.core.config import settings
     from app.services.github.fix_delivery import FixDeliveryService
+
+    logger = logging.getLogger(__name__)
+    app_name = settings.PROJECT_NAME
 
     repo = _get_repo_for_user(repo_id, session, current_user)
 
@@ -341,7 +361,7 @@ async def integrate_action(
     if repo.installation_id is None:
         raise HTTPException(
             status_code=400,
-            detail="Repository has no GitHub App installation — ask the repo owner to install the GreenSecOps GitHub App first",
+            detail=f"Repository has no GitHub App installation — ask the repo owner to install the {app_name} GitHub App first",
         )
 
     file_changes: list[tuple[str, str]] = []
@@ -364,33 +384,37 @@ async def integrate_action(
                 f"/badges/{owner}/{name}/{branch}.svg"
             )
             link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
-            new_readme, badge_added = _inject_badge_into_readme(
-                readme_content, badge_url, link_url
-            )
-            if badge_added:
-                file_changes.append((readme_file.path, new_readme))
+            badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
+
+            if badge_url not in readme_content:
+                new_readme = await _inject_badge_via_llm(
+                    readme_content, badge_markdown, repo
+                )
+                if new_readme and badge_url in new_readme:
+                    badge_added = True
+                    file_changes.append((readme_file.path, new_readme))
         except GithubException:
             pass
     except Exception:
-        pass
+        logger.exception("Badge injection failed for repo %s", repo.full_name)
 
     if not file_changes:
         raise HTTPException(
             status_code=409,
-            detail="GreenSecOps action already present in all workflow files and badge already in README",
+            detail=f"{app_name} action already present in all workflow files and badge already in README",
         )
 
     delivery = FixDeliveryService(github_client)
     fix_branch = "greensecops/integrate-action"
 
     pr_body_parts = [
-        "This PR adds the [GreenSecOps Telemetry](https://greensecops.io) action "
+        f"This PR adds the [{app_name} Telemetry]({settings.APP_URL}) action "
         "to your workflow files.\n\n"
         "Set the `GREENSECOPS_URL` repository variable to your GreenSecOps instance URL.",
     ]
     if badge_added:
         pr_body_parts.append(
-            "\n\n---\n\nA GreenSecOps grade badge has been added to your README."
+            f"\n\n---\n\nA {app_name} grade badge has been added to your README."
         )
 
     result = await delivery.update_or_create_workflow_action_pr(
@@ -399,7 +423,7 @@ async def integrate_action(
         base_branch=repo.default_branch or "main",
         fix_branch=fix_branch,
         file_changes=file_changes,
-        pr_title="ci: add GreenSecOps telemetry action",
+        pr_title=f"ci: add {app_name} telemetry action",
         pr_body="".join(pr_body_parts),
     )
     if result.error:

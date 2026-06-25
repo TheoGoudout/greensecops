@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
     BACKEND_HOST: str = "http://localhost:8000"
+    APP_URL: str = "https://greensecops.io"
+    GITHUB_ACTION_REF: str = "greensecops/greensecops-action@v1"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     BACKEND_CORS_ORIGINS: Annotated[

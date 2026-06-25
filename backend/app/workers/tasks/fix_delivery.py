@@ -93,6 +93,8 @@ def deliver_fix(
             wiki_base_url=settings.WIKI_BASE_URL,
             frontend_host=settings.FRONTEND_HOST,
             bot_handle=settings.GITHUB_BOT_HANDLE,
+            app_name=settings.PROJECT_NAME,
+            app_url=settings.APP_URL,
         )
 
         rule_slug = issue.rule.slug if issue.rule else "fix"
@@ -308,5 +310,5 @@ async def _deliver(
             installation_id=installation_id,
             full_name=full_name,
             issue_number=1,
-            body=f"**GreenSecOps Fix** for `{rule_slug}`:\n\n```yaml\n{new_content}\n```",
+            body=f"**{settings.PROJECT_NAME} Fix** for `{rule_slug}`:\n\n```yaml\n{new_content}\n```",
         )

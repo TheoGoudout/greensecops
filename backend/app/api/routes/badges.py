@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.api.deps import SessionDep
+from app.core.config import settings
 from app.models import Analysis, AnalysisStatus, Repository
 from app.services.badge_renderer import render_badge, render_unknown_badge
 from app.services.scoring import score_to_grade
@@ -88,7 +89,7 @@ def get_badge_json(
     if not db_repo:
         return {
             "schemaVersion": 1,
-            "label": "GreenSecOps",
+            "label": settings.PROJECT_NAME,
             "message": "not configured",
             "color": "lightgrey",
         }
@@ -98,7 +99,7 @@ def get_badge_json(
     if not grade:
         return {
             "schemaVersion": 1,
-            "label": "GreenSecOps",
+            "label": settings.PROJECT_NAME,
             "message": "pending",
             "color": "lightgrey",
         }
