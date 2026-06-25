@@ -602,6 +602,7 @@ function RepositoryDetail() {
         </TabsContent>
 
         <TabsContent value="issues" className="flex flex-col gap-4 mt-4">
+          {!!issues?.length && (
           <div className="flex items-center gap-3 flex-wrap">
             <Button
               variant={unfixed ? "default" : "outline"}
@@ -642,6 +643,7 @@ function RepositoryDetail() {
                   : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
             </Button>
           </div>
+          )}
 
           {issuesLoading ? (
             <div className="flex flex-col gap-2">

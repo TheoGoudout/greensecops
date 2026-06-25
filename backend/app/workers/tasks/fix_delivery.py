@@ -96,7 +96,7 @@ def deliver_fix(
         )
 
         rule_slug = issue.rule.slug if issue.rule else "fix"
-        fix_branch = fix.pr_branch or f"greensecops/fix-{rule_slug}-{fix_id[:8]}"
+        fix_branch = fix.pr_branch or f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
         result = asyncio.run(
             _deliver(
                 installation_id=repo.installation_id,

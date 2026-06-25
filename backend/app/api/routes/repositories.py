@@ -1,4 +1,3 @@
-import time
 import uuid
 from collections import defaultdict
 from typing import Annotated
@@ -302,6 +301,22 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     return "".join(lines), True
 
 
+_BADGE_MARKER = "<!-- greensecops-badge -->"
+
+
+def _inject_badge_into_readme(
+    raw_content: str, badge_url: str, link_url: str
+) -> tuple[str, bool]:
+    """Prepend a GreenSecOps badge to README content if not already present."""
+    if _BADGE_MARKER in raw_content:
+        return raw_content, False
+    badge_line = (
+        f"{_BADGE_MARKER}\n"
+        f"[![GreenSecOps]({badge_url})]({link_url})\n\n"
+    )
+    return badge_line + raw_content, True
+
+
 @router.post("/{repo_id}/integrate-action", status_code=202)
 async def integrate_action(
     repo_id: uuid.UUID,
@@ -309,6 +324,10 @@ async def integrate_action(
     current_user: CurrentUser,
     github_client: GitHubAppClientDep,
 ) -> dict[str, str]:
+    from github import Auth, Github
+    from github.GithubException import GithubException
+
+    from app.core.config import settings
     from app.services.github.fix_delivery import FixDeliveryService
 
     repo = _get_repo_for_user(repo_id, session, current_user)
@@ -319,38 +338,69 @@ async def integrate_action(
             status_code=404, detail="No workflow files found for this repository"
         )
 
-    file_changes: list[tuple[str, str]] = []
-    for wf in workflow_files:
-        new_content, modified = _inject_action_into_workflow(wf.raw_content)
-        if modified:
-            file_changes.append((wf.path, new_content))
-
-    if not file_changes:
-        raise HTTPException(
-            status_code=409,
-            detail="GreenSecOps action already present in all workflow files",
-        )
-
     if repo.installation_id is None:
         raise HTTPException(
             status_code=400,
             detail="Repository has no GitHub App installation — ask the repo owner to install the GreenSecOps GitHub App first",
         )
 
+    file_changes: list[tuple[str, str]] = []
+    for wf in workflow_files:
+        new_content, modified = _inject_action_into_workflow(wf.raw_content)
+        if modified:
+            file_changes.append((wf.path, new_content))
+
+    badge_added = False
+    try:
+        token = await github_client.get_installation_token(repo.installation_id)
+        gh_repo = Github(auth=Auth.Token(token)).get_repo(repo.full_name)
+        branch = repo.default_branch or "main"
+        try:
+            readme_file = gh_repo.get_readme(ref=branch)
+            readme_content = readme_file.decoded_content.decode("utf-8")
+            owner, name = repo.full_name.split("/", 1)
+            badge_url = (
+                f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
+                f"/badges/{owner}/{name}/{branch}.svg"
+            )
+            link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
+            new_readme, badge_added = _inject_badge_into_readme(
+                readme_content, badge_url, link_url
+            )
+            if badge_added:
+                file_changes.append((readme_file.path, new_readme))
+        except GithubException:
+            pass
+    except Exception:
+        pass
+
+    if not file_changes:
+        raise HTTPException(
+            status_code=409,
+            detail="GreenSecOps action already present in all workflow files and badge already in README",
+        )
+
     delivery = FixDeliveryService(github_client)
-    fix_branch = f"greensecops/integrate-action-{int(time.time())}"
-    result = await delivery.deliver_workflow_action_pr(
+    fix_branch = "greensecops/integrate-action"
+
+    pr_body_parts = [
+        "This PR adds the [GreenSecOps Telemetry](https://greensecops.io) action "
+        "to your workflow files.\n\n"
+        "Set the `GREENSECOPS_URL` repository variable to your GreenSecOps instance URL.",
+    ]
+    if badge_added:
+        pr_body_parts.append(
+            "\n\n---\n\nA GreenSecOps grade badge has been added to your README."
+        )
+
+    result = await delivery.update_or_create_workflow_action_pr(
         installation_id=repo.installation_id,
         full_name=repo.full_name,
         base_branch=repo.default_branch or "main",
         fix_branch=fix_branch,
         file_changes=file_changes,
         pr_title="ci: add GreenSecOps telemetry action",
-        pr_body=(
-            "This PR adds the [GreenSecOps Telemetry](https://greensecops.io) action "
-            "to your workflow files.\n\n"
-            "Set the `GREENSECOPS_URL` repository variable to your GreenSecOps instance URL."
-        ),
+        pr_body="".join(pr_body_parts),
     )
     if result.error:
         raise HTTPException(status_code=502, detail=result.error)
