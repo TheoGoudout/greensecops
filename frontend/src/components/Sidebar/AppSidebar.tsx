@@ -21,7 +21,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
-import { type NavItem, NavGroup } from "./NavGroup"
+import { NavGroup, type NavItem } from "./NavGroup"
 import { User } from "./User"
 
 const repoSubItems = [
