@@ -284,6 +284,8 @@ def trigger_workflow_delivery(
         wiki_base_url=settings.WIKI_BASE_URL,
         frontend_host=settings.FRONTEND_HOST,
         bot_handle=settings.GITHUB_BOT_HANDLE,
+        app_name=settings.PROJECT_NAME,
+        app_url=settings.APP_URL,
     )
     # Stable branch: reuse existing pr_branch if set, else derive from workflow file id.
     existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
@@ -301,7 +303,7 @@ def trigger_workflow_delivery(
         fix_ids=[str(f.id) for f in fixes],
         repo_id=str(repo.id),
         pr_branch=pr_branch,
-        pr_title="fix(ci): apply GreenSecOps fixes for workflow",
+        pr_title=f"fix(ci): apply {settings.PROJECT_NAME} fixes for workflow",
         pr_body=pr_body,
         force=force,
     )
@@ -355,6 +357,8 @@ def trigger_repo_delivery(
         wiki_base_url=settings.WIKI_BASE_URL,
         frontend_host=settings.FRONTEND_HOST,
         bot_handle=settings.GITHUB_BOT_HANDLE,
+        app_name=settings.PROJECT_NAME,
+        app_url=settings.APP_URL,
     )
     existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
     pr_branch = existing_branch or f"greensecops/fixes-{str(repo_id)[:8]}"
@@ -362,7 +366,7 @@ def trigger_repo_delivery(
         fix_ids=[str(f.id) for f in fixes],
         repo_id=str(repo_id),
         pr_branch=pr_branch,
-        pr_title="fix(ci): apply all GreenSecOps fixes",
+        pr_title=f"fix(ci): apply all {settings.PROJECT_NAME} fixes",
         pr_body=pr_body,
         force=force,
     )

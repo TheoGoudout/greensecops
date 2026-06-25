@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from github import Auth, Github
 from github.GithubException import GithubException
 
+from app.core.config import settings
 from app.services.github.app_client import GitHubAppClient
 
 
@@ -159,7 +160,7 @@ class FixDeliveryService:
                         pr = open_prs[0]
                         pr.edit(body=pr_body)
                         pr.create_issue_comment(
-                            "GreenSecOps re-analyzed this workflow. Fixes have been updated."
+                            f"{settings.PROJECT_NAME} re-analyzed this workflow. Fixes have been updated."
                         )
                         return pr.html_url
 
@@ -222,7 +223,7 @@ class FixDeliveryService:
                     if file_sha:
                         repo.update_file(
                             path=fp,
-                            message=f"ci: add GreenSecOps telemetry to {fp}",
+                            message=f"ci: add {settings.PROJECT_NAME} telemetry to {fp}",
                             content=encoded,
                             sha=file_sha,
                             branch=fix_branch,
@@ -230,7 +231,7 @@ class FixDeliveryService:
                     else:
                         repo.create_file(
                             path=fp,
-                            message=f"ci: add GreenSecOps telemetry to {fp}",
+                            message=f"ci: add {settings.PROJECT_NAME} telemetry to {fp}",
                             content=encoded,
                             branch=fix_branch,
                         )
@@ -247,7 +248,7 @@ class FixDeliveryService:
                         pr = open_prs[0]
                         pr.edit(body=pr_body)
                         pr.create_issue_comment(
-                            "GreenSecOps re-analyzed this workflow. Fixes have been updated."
+                            f"{settings.PROJECT_NAME} re-analyzed this workflow. Fixes have been updated."
                         )
                         return pr.html_url
 
@@ -302,7 +303,7 @@ class FixDeliveryService:
                     if file_sha:
                         repo.update_file(
                             path=file_path,
-                            message=f"ci: add GreenSecOps telemetry to {file_path}",
+                            message=f"ci: add {settings.PROJECT_NAME} telemetry to {file_path}",
                             content=encoded,
                             sha=file_sha,
                             branch=fix_branch,
@@ -310,7 +311,7 @@ class FixDeliveryService:
                     else:
                         repo.create_file(
                             path=file_path,
-                            message=f"ci: add GreenSecOps telemetry to {file_path}",
+                            message=f"ci: add {settings.PROJECT_NAME} telemetry to {file_path}",
                             content=encoded,
                             branch=fix_branch,
                         )

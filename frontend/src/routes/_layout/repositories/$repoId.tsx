@@ -604,46 +604,48 @@ function RepositoryDetail() {
         </TabsContent>
 
         <TabsContent value="issues" className="flex flex-col gap-4 mt-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              variant={unfixed ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setUnfixed((v) => !v)
-                setDeselectedIds(new Set())
-                setIssuesPage(0)
-              }}
-            >
-              Open only
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={allSelected ? deselectAll : selectAll}
-              disabled={!issues?.length}
-            >
-              {allSelected ? "Deselect all" : "Select all"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => batchFixMutation.mutate()}
-              disabled={
-                batchFixMutation.isPending ||
-                batchFixMutation.isSuccess ||
-                noneSelected
-              }
-            >
-              <Zap className="h-4 w-4" />
-              {batchFixMutation.isPending
-                ? "Queuing…"
-                : batchFixMutation.isSuccess
-                  ? "Queued"
-                  : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
-            </Button>
-          </div>
+          {!!issues?.length && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                variant={unfixed ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setUnfixed((v) => !v)
+                  setDeselectedIds(new Set())
+                  setIssuesPage(0)
+                }}
+              >
+                Open only
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={allSelected ? deselectAll : selectAll}
+                disabled={!issues?.length}
+              >
+                {allSelected ? "Deselect all" : "Select all"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => batchFixMutation.mutate()}
+                disabled={
+                  batchFixMutation.isPending ||
+                  batchFixMutation.isSuccess ||
+                  noneSelected
+                }
+              >
+                <Zap className="h-4 w-4" />
+                {batchFixMutation.isPending
+                  ? "Queuing…"
+                  : batchFixMutation.isSuccess
+                    ? "Queued"
+                    : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
+              </Button>
+            </div>
+          )}
 
           {issuesLoading ? (
             <div className="flex flex-col gap-2">

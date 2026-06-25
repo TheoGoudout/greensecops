@@ -109,3 +109,10 @@ def test_inject_mixed_jobs_some_already_present() -> None:
     result, modified = _inject_action_into_workflow(raw)
     assert modified is True
     assert result.count("greensecops/greensecops-action@v1") == 2
+
+
+def test_inject_job_value_not_dict_skipped() -> None:
+    raw = "on: push\njobs:\n  build: some-reusable-workflow\n"
+    result, modified = _inject_action_into_workflow(raw)
+    assert modified is False
+    assert result == raw
