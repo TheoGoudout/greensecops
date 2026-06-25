@@ -24,9 +24,7 @@ import {
   workflowLabel,
 } from "@/lib/workflow-utils"
 
-export const Route = createFileRoute(
-  "/_layout/repositories/$repoId/fixes",
-)({
+export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
   component: FixesPage,
   head: () => ({
     meta: [{ title: "Fixes - GreenSecOps" }],

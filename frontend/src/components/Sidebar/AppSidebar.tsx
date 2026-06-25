@@ -72,9 +72,7 @@ export function AppSidebar() {
     select: (s) => s.location.pathname,
   })
 
-  const repoIdMatch = currentPath.match(
-    /^\/repositories\/([^/]+)\/.+$/,
-  )
+  const repoIdMatch = currentPath.match(/^\/repositories\/([^/]+)\/.+$/)
   const currentRepoId = repoIdMatch?.[1] ?? null
 
   const analysisItems: NavItem[] = [

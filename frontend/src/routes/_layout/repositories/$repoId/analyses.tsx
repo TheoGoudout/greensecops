@@ -18,9 +18,7 @@ import { PAGE_SIZE } from "@/lib/workflow-utils"
 
 type AnalysesSearch = { branch?: string }
 
-export const Route = createFileRoute(
-  "/_layout/repositories/$repoId/analyses",
-)({
+export const Route = createFileRoute("/_layout/repositories/$repoId/analyses")({
   component: AnalysesPage,
   validateSearch: (search: Record<string, unknown>): AnalysesSearch => ({
     branch: typeof search.branch === "string" ? search.branch : undefined,
@@ -51,8 +49,7 @@ function AnalysesPage() {
     : []
 
   const paged = useMemo(
-    () =>
-      (analyses ?? []).slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    () => (analyses ?? []).slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
     [analyses, page],
   )
 
@@ -176,9 +173,7 @@ function AnalysesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={
-                      (page + 1) * PAGE_SIZE >= (analyses?.length ?? 0)
-                    }
+                    disabled={(page + 1) * PAGE_SIZE >= (analyses?.length ?? 0)}
                     onClick={() => setPage((p) => p + 1)}
                   >
                     Next

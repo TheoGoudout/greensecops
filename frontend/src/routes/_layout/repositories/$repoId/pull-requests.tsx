@@ -162,8 +162,7 @@ function PullRequestsPage() {
                     Previous
                   </Button>
                   <span className="text-xs text-muted-foreground">
-                    Page {page + 1} of{" "}
-                    {Math.ceil(filtered.length / PAGE_SIZE)}
+                    Page {page + 1} of {Math.ceil(filtered.length / PAGE_SIZE)}
                   </span>
                   <Button
                     variant="outline"

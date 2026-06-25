@@ -15,9 +15,7 @@ import {
   workflowLabel,
 } from "@/lib/workflow-utils"
 
-export const Route = createFileRoute(
-  "/_layout/repositories/$repoId/issues",
-)({
+export const Route = createFileRoute("/_layout/repositories/$repoId/issues")({
   component: IssuesPage,
   head: () => ({
     meta: [{ title: "Issues - GreenSecOps" }],
@@ -210,8 +208,7 @@ function IssuesPage() {
             Previous
           </Button>
           <span className="text-xs text-muted-foreground">
-            Page {page + 1} of{" "}
-            {Math.ceil((issues?.length ?? 0) / PAGE_SIZE)}
+            Page {page + 1} of {Math.ceil((issues?.length ?? 0) / PAGE_SIZE)}
           </span>
           <Button
             variant="outline"
