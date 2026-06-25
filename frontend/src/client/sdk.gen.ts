@@ -450,6 +450,26 @@ export class FixesService {
             }
         });
     }
+
+    /**
+     * Sync Pr Statuses
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static syncPrStatus(data: { repoId: string }): CancelablePromise<{ synced: number; updated: number }> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/sync-pr-status/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class InstallationsService {

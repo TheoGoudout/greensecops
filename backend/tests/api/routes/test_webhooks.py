@@ -826,6 +826,88 @@ def test_github_webhook_pull_request_closed_not_merged(
     assert fix.pr_state == "closed"
 
 
+def test_github_webhook_pull_request_reopened_updates_fix(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/pr-reopen-{uuid.uuid4().hex[:6]}",
+        installation_id=99912,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+
+    analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="test issue reopened",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_url=pr_url,
+        pr_state="closed",
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    payload = {
+        "action": "reopened",
+        "pull_request": {"html_url": pr_url},
+    }
+
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+
+    assert response.status_code == 200
+    db.refresh(fix)
+    assert fix.pr_state == "open"
+
+
 def test_github_webhook_pull_request_non_closed_skipped(
     client: TestClient,
 ) -> None:

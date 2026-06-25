@@ -207,7 +207,8 @@ def _handle_pull_request_event(
     session: Session,
     payload: dict[str, Any],
 ) -> None:
-    if payload.get("action") != "closed":
+    action = payload.get("action")
+    if action not in ("closed", "reopened"):
         return
 
     pr = payload.get("pull_request", {})
@@ -215,8 +216,12 @@ def _handle_pull_request_event(
     if not pr_url:
         return
 
-    merged = pr.get("merged", False)
-    new_state = "merged" if merged else "closed"
+    if action == "closed":
+        merged = pr.get("merged", False)
+        new_state = "merged" if merged else "closed"
+    else:
+        merged = False
+        new_state = "open"
 
     from sqlmodel import select
 
@@ -233,9 +238,22 @@ def _handle_pull_request_event(
     analysis = session.get(Analysis, issue.analysis_id) if issue else None
     repo = session.get(Repository, analysis.repo_id) if analysis else None
     if repo:
-        events_pub.publish_event(
-            ev.pr_closed(str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged)
-        )
+        if action == "closed":
+            events_pub.publish_event(
+                ev.pr_closed(
+                    str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged
+                )
+            )
+        else:
+            events_pub.publish_event(
+                ev.pr_opened(
+                    str(repo.org_id),
+                    str(repo.id),
+                    [str(fix.id)],
+                    pr_url,
+                    fix.pr_branch or "",
+                )
+            )
 
 
 def _handle_installation_repositories_event(
