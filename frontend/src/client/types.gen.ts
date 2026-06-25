@@ -401,6 +401,14 @@ export type FixesTriggerRepoDeliveryResponse = ({
     [key: string]: (string);
 });
 
+export type FixesSyncPrStatusesData = {
+    repoId: string;
+};
+
+export type FixesSyncPrStatusesResponse = ({
+    [key: string]: (number);
+});
+
 export type InstallationsListInstallationsResponse = (Array<OrganizationPublic>);
 
 export type InstallationsSyncInstallationsData = {

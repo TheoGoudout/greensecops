@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeAllResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeAllResponse, AuthGithubLoginResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerFixGenerationData, FixesTriggerFixGenerationResponse, FixesTriggerFixDeliveryData, FixesTriggerFixDeliveryResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -444,6 +444,26 @@ export class FixesService {
             },
             query: {
                 force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Sync Pr Statuses
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static syncPrStatuses(data: FixesSyncPrStatusesData): CancelablePromise<FixesSyncPrStatusesResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/sync-pr-status/{repo_id}',
+            path: {
+                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'

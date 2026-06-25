@@ -46,8 +46,7 @@ function PullRequestsPage() {
 
   useEffect(() => {
     syncMutation.mutate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoId])
+  }, [syncMutation.mutate])
 
   const allGsPrs = useMemo(() => {
     if (!fixes) return []
