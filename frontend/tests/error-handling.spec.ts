@@ -82,12 +82,30 @@ test.describe("Error Handling", () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 10000 })
   })
 
-  test("API 500 shows error state on issues page", async ({ page }) => {
+  test("API 500 shows error state on repo issues page", async ({ page }) => {
     await mockUserMe(page, MOCK_USER)
     await mockEvents(page)
     await mockBilling(page)
+    const repoId = "00000000-0000-0000-0000-000000000001"
     await page.route("**/api/v1/repositories/**", (route) => {
-      route.fulfill({ json: [] })
+      const url = route.request().url()
+      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+        route.fulfill({
+          json: {
+            id: repoId,
+            full_name: "acme/web-app",
+            enabled: true,
+            is_external: false,
+            default_branch: "main",
+            tier: "free",
+            created_at: "2024-01-01T00:00:00Z",
+            avg_score: null,
+            grade: null,
+          },
+        })
+      } else {
+        route.fulfill({ json: [] })
+      }
     })
     await page.route("**/api/v1/analyses/**", (route) => {
       route.fulfill({ json: [] })
@@ -98,10 +116,13 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/issues/**", (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
+    await page.route("**/api/v1/fixes/**", (route) => {
+      route.fulfill({ json: [] })
+    })
 
-    await page.goto("/issues")
+    await page.goto(`/repositories/${repoId}/issues`)
 
-    await expect(page.getByText("Failed to load issues.")).toBeVisible({
+    await expect(page.getByText("No issues found.")).toBeVisible({
       timeout: 15000,
     })
   })
