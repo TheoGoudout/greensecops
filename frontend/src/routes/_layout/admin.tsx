@@ -90,9 +90,9 @@ function ExternalReposTab() {
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-[1fr_8rem_8rem_9rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+              <div className="grid grid-cols-[1fr_8rem_9rem] sm:grid-cols-[1fr_8rem_8rem_9rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
                 <span>Repository</span>
-                <span>Default branch</span>
+                <span className="hidden sm:block">Default branch</span>
                 <span className="text-center">Enabled</span>
                 <span className="text-right">Added</span>
               </div>
@@ -100,12 +100,12 @@ function ExternalReposTab() {
                 {repos.map((repo) => (
                   <div
                     key={repo.id}
-                    className="grid grid-cols-[1fr_8rem_8rem_9rem] items-center px-6 py-3 gap-4"
+                    className="grid grid-cols-[1fr_8rem_9rem] sm:grid-cols-[1fr_8rem_8rem_9rem] items-center px-6 py-3 gap-4"
                   >
                     <span className="text-xs font-mono truncate">
                       {repo.full_name}
                     </span>
-                    <span className="text-xs font-mono text-muted-foreground">
+                    <span className="hidden sm:block text-xs font-mono text-muted-foreground">
                       {repo.default_branch}
                     </span>
                     <span className="text-center text-xs text-muted-foreground">

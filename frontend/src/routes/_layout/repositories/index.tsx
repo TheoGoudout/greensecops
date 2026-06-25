@@ -41,7 +41,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   })
 
   return (
-    <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-6 py-4 gap-4">
+    <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-6 py-4 gap-4">
       <Link
         to="/repositories/$repoId"
         params={{ repoId: repo.id }}
@@ -49,11 +49,11 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
       >
         {repo.full_name}
       </Link>
-      <span className="inline-flex items-center gap-1 text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded-md w-fit">
+      <span className="hidden sm:inline-flex items-center gap-1 text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded-md w-fit">
         <GitBranch className="h-3 w-3" />
         {repo.default_branch}
       </span>
-      <div>
+      <div className="hidden sm:block">
         <GradeBadge grade={repo.grade ?? null} />
       </div>
       <div className="flex items-center gap-2">
@@ -92,7 +92,7 @@ function Repositories() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Repositories</h1>
           <p className="text-muted-foreground">
@@ -123,10 +123,10 @@ function Repositories() {
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 <span>Repository</span>
-                <span>Default branch</span>
-                <span>Latest grade</span>
+                <span className="hidden sm:block">Default branch</span>
+                <span className="hidden sm:block">Latest grade</span>
                 <span>Analysis</span>
                 <span className="w-8" />
               </div>
