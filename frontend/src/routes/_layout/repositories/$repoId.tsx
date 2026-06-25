@@ -365,7 +365,7 @@ function RepositoryDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link
             to="/repositories"
@@ -431,7 +431,7 @@ function RepositoryDetail() {
           })
         }
       >
-        <TabsList>
+        <TabsList className="w-full overflow-x-auto justify-start">
           <TabsTrigger value="analyses">Analyses</TabsTrigger>
           <TabsTrigger value="issues">
             Issues
@@ -515,58 +515,60 @@ function RepositoryDetail() {
                 </p>
               ) : (
                 <>
-                  <div className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
-                    <span>Branch</span>
-                    <span>Workflow</span>
-                    <span>Triggered by</span>
-                    <span className="text-center">Status</span>
-                    <span className="text-center">Grade</span>
-                    <span className="text-right">Date</span>
-                  </div>
-                  <div className="divide-y">
-                    {pagedAnalyses.map((a) => (
-                      <Link
-                        key={a.id}
-                        to="/analyses/$analysisId"
-                        params={{ analysisId: a.id }}
-                        className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] items-center px-6 py-3 gap-4 hover:bg-muted/40 transition-colors"
-                      >
-                        <span className="text-xs font-mono truncate">
-                          {a.branch ?? "—"}
-                        </span>
-                        <span className="text-xs font-mono text-muted-foreground truncate">
-                          {a.workflow_file_path
-                            ? a.workflow_file_path.split("/").pop()
-                            : "—"}
-                        </span>
-                        <span className="text-xs text-muted-foreground capitalize">
-                          {a.triggered_by.replace(/_/g, " ")}
-                        </span>
-                        <div className="flex justify-center">
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${analysisStatusColor(a.status)}`}
-                          >
-                            {a.status}
+                  <div className="overflow-x-auto">
+                    <div className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] min-w-[44rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                      <span>Branch</span>
+                      <span>Workflow</span>
+                      <span>Triggered by</span>
+                      <span className="text-center">Status</span>
+                      <span className="text-center">Grade</span>
+                      <span className="text-right">Date</span>
+                    </div>
+                    <div className="divide-y">
+                      {pagedAnalyses.map((a) => (
+                        <Link
+                          key={a.id}
+                          to="/analyses/$analysisId"
+                          params={{ analysisId: a.id }}
+                          className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] min-w-[44rem] items-center px-6 py-3 gap-4 hover:bg-muted/40 transition-colors"
+                        >
+                          <span className="text-xs font-mono truncate">
+                            {a.branch ?? "—"}
                           </span>
-                        </div>
-                        <div className="flex justify-center">
-                          <GradeBadge grade={a.grade ?? null} />
-                        </div>
-                        <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap text-right">
-                          {a.created_at
-                            ? new Date(a.created_at).toLocaleDateString(
-                                undefined,
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                },
-                              )
-                            : "—"}
-                        </span>
-                      </Link>
-                    ))}
+                          <span className="text-xs font-mono text-muted-foreground truncate">
+                            {a.workflow_file_path
+                              ? a.workflow_file_path.split("/").pop()
+                              : "—"}
+                          </span>
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {a.triggered_by.replace(/_/g, " ")}
+                          </span>
+                          <div className="flex justify-center">
+                            <span
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${analysisStatusColor(a.status)}`}
+                            >
+                              {a.status}
+                            </span>
+                          </div>
+                          <div className="flex justify-center">
+                            <GradeBadge grade={a.grade ?? null} />
+                          </div>
+                          <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap text-right">
+                            {a.created_at
+                              ? new Date(a.created_at).toLocaleDateString(
+                                  undefined,
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )
+                              : "—"}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                   {(analyses?.length ?? 0) > PAGE_SIZE && (
                     <div className="flex items-center justify-between px-6 py-3 border-t">
@@ -1114,7 +1116,7 @@ function RepositoryDetail() {
                 </p>
               ) : (
                 <>
-                  <div className="grid grid-cols-[1fr_6rem_8rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                  <div className="grid grid-cols-[1fr_6rem_8rem] items-center px-4 sm:px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
                     <span>Pull Request</span>
                     <span className="text-center">State</span>
                     <span className="text-right">Date</span>
@@ -1131,7 +1133,7 @@ function RepositoryDetail() {
                       return (
                         <div
                           key={fix.pr_url}
-                          className="grid grid-cols-[1fr_6rem_8rem] items-center px-6 py-3 gap-4"
+                          className="grid grid-cols-[1fr_6rem_8rem] items-center px-4 sm:px-6 py-3 gap-4"
                         >
                           <a
                             href={fix.pr_url!}
