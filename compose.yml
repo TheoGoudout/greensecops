@@ -170,7 +170,7 @@ services:
       dockerfile: opa/Dockerfile
     restart: always
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8181/health"]
+      test: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
       interval: 10s
       timeout: 5s
       retries: 5
