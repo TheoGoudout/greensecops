@@ -17,7 +17,11 @@ from app.models import (
     Rule,
     WorkflowFile,
 )
-from app.services.deduplication import compute_content_hash, is_duplicate
+from app.services.deduplication import (
+    compute_content_hash,
+    compute_issue_fingerprint,
+    is_duplicate,
+)
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
@@ -150,17 +154,44 @@ def _run_static_analysis_impl(
                 if rule is None:
                     logger.warning("Unknown rule slug: %s", v.rule_slug)
                     continue
-                issue = Issue(
-                    analysis_id=analysis.id,
-                    rule_id=rule.id,
-                    severity=IssueSeverity(v.severity),
-                    category=IssueCategory(v.category),
-                    line_start=v.line_start,
-                    line_end=v.line_end,
-                    message=v.message,
-                    context=v.context,
+
+                fingerprint = compute_issue_fingerprint(
+                    wf_record.id, rule.id, v.job, v.step
                 )
-                session.add(issue)
+                existing_issue = session.exec(
+                    select(Issue).where(
+                        Issue.workflow_file_id == wf_record.id,
+                        Issue.fingerprint == fingerprint,
+                    )
+                ).first()
+
+                if existing_issue:
+                    existing_issue.analysis_id = analysis.id
+                    existing_issue.job = v.job
+                    existing_issue.step = v.step
+                    existing_issue.line_start = v.line_start
+                    existing_issue.line_end = v.line_end
+                    existing_issue.message = v.message
+                    existing_issue.context = v.context
+                    session.add(existing_issue)
+                    issue = existing_issue
+                else:
+                    issue = Issue(
+                        analysis_id=analysis.id,
+                        workflow_file_id=wf_record.id,
+                        rule_id=rule.id,
+                        job=v.job,
+                        step=v.step,
+                        fingerprint=fingerprint,
+                        severity=IssueSeverity(v.severity),
+                        category=IssueCategory(v.category),
+                        line_start=v.line_start,
+                        line_end=v.line_end,
+                        message=v.message,
+                        context=v.context,
+                    )
+                    session.add(issue)
+
                 pair = (v.severity, rule.severity_weight)
                 if v.job is None:
                     workflow_score_inputs.append(pair)
