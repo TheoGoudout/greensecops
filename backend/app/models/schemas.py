@@ -120,6 +120,13 @@ class FixPublic(SQLModel):
     comment_url: str | None = None
     created_at: datetime | None = None
     delivered_at: datetime | None = None
+    rule_slug: str | None = None
+    severity: IssueSeverity | None = None
+    category: IssueCategory | None = None
+    message: str | None = None
+    line_start: int | None = None
+    line_end: int | None = None
+    workflow_file_path: str | None = None
 
 
 class RulePublic(SQLModel):

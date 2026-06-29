@@ -454,6 +454,81 @@ export const FixPublicSchema = {
                 }
             ],
             title: 'Delivered At'
+        },
+        rule_slug: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Rule Slug'
+        },
+        severity: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/IssueSeverity'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        category: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/IssueCategory'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Message'
+        },
+        line_start: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line Start'
+        },
+        line_end: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line End'
+        },
+        workflow_file_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Workflow File Path'
         }
     },
     type: 'object',

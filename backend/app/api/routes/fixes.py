@@ -16,6 +16,7 @@ from app.models import (
     FixStatus,
     Issue,
     Repository,
+    Rule,
     WorkflowFile,
 )
 from app.services.events import publisher as events_pub
@@ -62,52 +63,74 @@ def list_fixes(
     query = query.order_by(Fix.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
     fixes = list(session.exec(query).all())
 
-    # Bulk-load workflow files to compute diff_patch without N+1 queries
-    fixes_with_diff = [f for f in fixes if f.diff]
-    fix_to_wf: dict[uuid.UUID, WorkflowFile] = {}
-    if fixes_with_diff:
-        issue_ids = [f.issue_id for f in fixes_with_diff]
+    # Bulk-load issues, analyses, workflow files, and rules for ALL fixes
+    # so we can populate both diff_patch and the denormalized display fields.
+    all_issue_ids = [f.issue_id for f in fixes]
+    issues_map: dict[uuid.UUID, Issue] = {}
+    analyses_map: dict[uuid.UUID, Analysis] = {}
+    wf_files_map: dict[uuid.UUID, WorkflowFile] = {}
+    rules_map: dict[uuid.UUID, Rule] = {}
+
+    if all_issue_ids:
         issues_map = {
             i.id: i
-            for i in session.exec(select(Issue).where(Issue.id.in_(issue_ids))).all()  # type: ignore[arg-type]
+            for i in session.exec(
+                select(Issue).where(Issue.id.in_(all_issue_ids))
+            ).all()  # type: ignore[arg-type]
         }
         analysis_ids = list(
             {i.analysis_id for i in issues_map.values() if i.analysis_id}
         )
-        analyses_map = {
-            a.id: a
-            for a in session.exec(
-                select(Analysis).where(Analysis.id.in_(analysis_ids))
-            ).all()  # type: ignore[arg-type]
-        }
+        if analysis_ids:
+            analyses_map = {
+                a.id: a
+                for a in session.exec(
+                    select(Analysis).where(Analysis.id.in_(analysis_ids))
+                ).all()  # type: ignore[arg-type]
+            }
         wf_file_ids = list(
             {a.workflow_file_id for a in analyses_map.values() if a.workflow_file_id}
         )
-        wf_files_map = {
-            w.id: w
-            for w in session.exec(
-                select(WorkflowFile).where(WorkflowFile.id.in_(wf_file_ids))  # type: ignore[arg-type]
-            ).all()
-        }
-        for fix in fixes_with_diff:
-            issue = issues_map.get(fix.issue_id)
-            analysis = (
-                analyses_map.get(issue.analysis_id)
-                if issue and issue.analysis_id
-                else None
-            )
-            wf_file = (
-                wf_files_map.get(analysis.workflow_file_id)
-                if analysis and analysis.workflow_file_id
-                else None
-            )
-            if wf_file:
-                fix_to_wf[fix.id] = wf_file
+        if wf_file_ids:
+            wf_files_map = {
+                w.id: w
+                for w in session.exec(
+                    select(WorkflowFile).where(WorkflowFile.id.in_(wf_file_ids))  # type: ignore[arg-type]
+                ).all()
+            }
+        rule_ids = list({i.rule_id for i in issues_map.values() if i.rule_id})
+        if rule_ids:
+            rules_map = {
+                r.id: r
+                for r in session.exec(
+                    select(Rule).where(Rule.id.in_(rule_ids))  # type: ignore[arg-type]
+                ).all()
+            }
 
     result: list[FixPublic] = []
     for fix in fixes:
         data = FixPublic.model_validate(fix)
-        wf_file = fix_to_wf.get(fix.id)
+        issue = issues_map.get(fix.issue_id)
+        analysis = (
+            analyses_map.get(issue.analysis_id) if issue and issue.analysis_id else None
+        )
+        wf_file = (
+            wf_files_map.get(analysis.workflow_file_id)
+            if analysis and analysis.workflow_file_id
+            else None
+        )
+
+        if issue:
+            rule = rules_map.get(issue.rule_id) if issue.rule_id else None
+            data.rule_slug = rule.slug if rule else None
+            data.severity = issue.severity
+            data.category = issue.category
+            data.message = issue.message
+            data.line_start = issue.line_start
+            data.line_end = issue.line_end
+        if wf_file:
+            data.workflow_file_path = wf_file.path
+
         if fix.diff and wf_file and wf_file.raw_content:
             fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
             patch = "".join(
@@ -132,26 +155,35 @@ def get_fix(
     fix = get_or_404(session, Fix, fix_id)
     data = FixPublic.model_validate(fix)
 
-    if fix.diff:
-        issue = session.get(Issue, fix.issue_id)
-        analysis = session.get(Analysis, issue.analysis_id) if issue else None
-        wf_file = (
-            session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
-        )
-        if wf_file and wf_file.raw_content:
-            original = wf_file.raw_content
-            fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
-            original_lines = original.splitlines(keepends=True)
-            fixed_lines = fixed.splitlines(keepends=True)
-            patch = "".join(
-                difflib.unified_diff(
-                    original_lines,
-                    fixed_lines,
-                    fromfile=f"a/{wf_file.path}",
-                    tofile=f"b/{wf_file.path}",
-                )
+    issue = session.get(Issue, fix.issue_id)
+    analysis = session.get(Analysis, issue.analysis_id) if issue else None
+    wf_file = session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
+
+    if issue:
+        rule = session.get(Rule, issue.rule_id) if issue.rule_id else None
+        data.rule_slug = rule.slug if rule else None
+        data.severity = issue.severity
+        data.category = issue.category
+        data.message = issue.message
+        data.line_start = issue.line_start
+        data.line_end = issue.line_end
+    if wf_file:
+        data.workflow_file_path = wf_file.path
+
+    if fix.diff and wf_file and wf_file.raw_content:
+        original = wf_file.raw_content
+        fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
+        original_lines = original.splitlines(keepends=True)
+        fixed_lines = fixed.splitlines(keepends=True)
+        patch = "".join(
+            difflib.unified_diff(
+                original_lines,
+                fixed_lines,
+                fromfile=f"a/{wf_file.path}",
+                tofile=f"b/{wf_file.path}",
             )
-            data.diff_patch = patch or None
+        )
+        data.diff_patch = patch or None
 
     return data
 
@@ -291,13 +323,23 @@ def trigger_workflow_delivery(
         app_name=settings.PROJECT_NAME,
         app_url=settings.APP_URL,
     )
-    # Stable branch: reuse existing pr_branch if set, else derive from workflow file id.
+    # Stable branch: reuse existing pr_branch from current or previously delivered fixes.
     existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
     wf_id = (
         fixes[0].issue.analysis.workflow_file_id
         if fixes[0].issue and fixes[0].issue.analysis
         else None
     )
+    if not existing_branch and wf_id:
+        existing_branch = session.exec(
+            select(Fix.pr_branch)
+            .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
+            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+            .where(Analysis.workflow_file_id == wf_id)
+            .where(Fix.pr_branch.is_not(None))  # type: ignore[union-attr]
+            .order_by(Fix.delivered_at.desc())  # type: ignore[arg-type]
+            .limit(1)
+        ).first()
     pr_branch = existing_branch or (
         f"greensecops/fixes-wf-{str(wf_id)[:8]}"
         if wf_id
@@ -365,6 +407,16 @@ def trigger_repo_delivery(
         app_url=settings.APP_URL,
     )
     existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
+    if not existing_branch:
+        existing_branch = session.exec(
+            select(Fix.pr_branch)
+            .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
+            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+            .where(Analysis.repo_id == repo_id)
+            .where(Fix.pr_branch.is_not(None))  # type: ignore[union-attr]
+            .order_by(Fix.delivered_at.desc())  # type: ignore[arg-type]
+            .limit(1)
+        ).first()
     pr_branch = existing_branch or f"greensecops/fixes-{str(repo_id)[:8]}"
     deliver_fixes_batch.delay(
         fix_ids=[str(f.id) for f in fixes],

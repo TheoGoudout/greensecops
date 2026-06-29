@@ -42,12 +42,14 @@ export function combinePatchesForFile(patches: string[]): string {
 
 export function groupFixesByWorkflow(
   fixes: FixPublic[],
-  issueById: Map<string, IssuePublic>,
+  issueById?: Map<string, IssuePublic>,
 ): Map<string, FixPublic[]> {
   const groups = new Map<string, FixPublic[]>()
   for (const fix of fixes) {
-    const issue = issueById.get(fix.issue_id)
-    const key = issue?.workflow_file_path ?? ""
+    const key =
+      fix.workflow_file_path ??
+      issueById?.get(fix.issue_id)?.workflow_file_path ??
+      ""
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(fix)
   }
