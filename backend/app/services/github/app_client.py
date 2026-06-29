@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,6 +11,17 @@ from github import Auth, Github, GithubIntegration
 from github.GithubException import GithubException
 
 from app.core.config import settings
+
+_PR_URL_RE = re.compile(
+    r"https://github\.com/(?P<full_name>[^/]+/[^/]+)/pull/(?P<number>\d+)"
+)
+
+
+def parse_pr_url(pr_url: str) -> tuple[str, int] | None:
+    m = _PR_URL_RE.match(pr_url)
+    if m:
+        return m.group("full_name"), int(m.group("number"))
+    return None
 
 
 @dataclass
@@ -74,6 +86,20 @@ class GitHubAppClient:
 
     def get_installation_github(self, token: str) -> Github:
         return Github(auth=Auth.Token(token))
+
+    async def get_pr_state(
+        self, installation_id: int, full_name: str, pr_number: int
+    ) -> str:
+        token = await self.get_installation_token(installation_id)
+
+        def _fetch() -> str:
+            repo = Github(auth=Auth.Token(token)).get_repo(full_name)
+            pr = repo.get_pull(pr_number)
+            if pr.merged:
+                return "merged"
+            return pr.state
+
+        return await asyncio.to_thread(_fetch)
 
     async def fetch_workflow_files(
         self, installation_id: int | None, full_name: str

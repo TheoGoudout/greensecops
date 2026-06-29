@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { GitPullRequest } from "lucide-react"
-import { useMemo, useState } from "react"
+import { GitPullRequest, RefreshCw } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { FixesService } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -26,6 +26,7 @@ export const Route = createFileRoute(
 
 function PullRequestsPage() {
   const { repoId } = Route.useParams()
+  const queryClient = useQueryClient()
   const [stateFilter, setStateFilter] = useState<string>("all")
   const [page, setPage] = useState(0)
 
@@ -33,6 +34,19 @@ function PullRequestsPage() {
     queryKey: ["fixes", "repo", repoId],
     queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
   })
+
+  const syncMutation = useMutation({
+    mutationFn: () => FixesService.syncPrStatuses({ repoId }),
+    onSuccess: (data: Record<string, number>) => {
+      if (data.updated > 0) {
+        queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+      }
+    },
+  })
+
+  useEffect(() => {
+    syncMutation.mutate()
+  }, [syncMutation.mutate])
 
   const allGsPrs = useMemo(() => {
     if (!fixes) return []
@@ -81,9 +95,22 @@ function PullRequestsPage() {
             <SelectItem value="merged">Merged</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">
-          {filtered.length} PR{filtered.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={syncMutation.isPending}
+            onClick={() => syncMutation.mutate()}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`}
+            />
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {filtered.length} PR{filtered.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
       <Card>
         <CardContent className="p-0">

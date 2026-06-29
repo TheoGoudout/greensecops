@@ -1,7 +1,7 @@
 """Tests for the /api/v1/fixes/ endpoints."""
 
 import uuid
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -899,3 +899,225 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
     pr_branch = mock_delay.call_args.kwargs["pr_branch"]
     # Must reuse the existing branch, not generate a new one
     assert pr_branch == existing_branch
+
+
+# ─── POST /fixes/sync-pr-status/{repo_id} ───────────────────────────────────
+
+
+def _make_open_pr_fix(
+    db: Session, issue: Issue, pr_url: str, pr_branch: str = "greensecops/fix"
+) -> Fix:
+    fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_url=pr_url,
+        pr_branch=pr_branch,
+        pr_state="open",
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    return fix
+
+
+def test_sync_pr_status_no_open_prs(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["synced"] == 0
+    assert data["updated"] == 0
+
+
+def test_sync_pr_status_updates_merged_pr(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="sync merged test",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr_url = f"https://github.com/{repo.full_name}/pull/101"
+    fix = _make_open_pr_fix(db, issue, pr_url)
+
+    from app.api.deps import get_github_app_client
+    from app.main import app as fastapi_app
+
+    mock_client = AsyncMock()
+    mock_client.get_pr_state = AsyncMock(return_value="merged")
+    fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+            headers=superuser_token_headers,
+        )
+    finally:
+        fastapi_app.dependency_overrides.pop(get_github_app_client, None)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["synced"] == 1
+    assert data["updated"] == 1
+
+    db.refresh(fix)
+    assert fix.pr_state == "merged"
+
+
+def test_sync_pr_status_updates_closed_pr(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="sync closed test",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr_url = f"https://github.com/{repo.full_name}/pull/102"
+    fix = _make_open_pr_fix(db, issue, pr_url)
+
+    from app.api.deps import get_github_app_client
+    from app.main import app as fastapi_app
+
+    mock_client = AsyncMock()
+    mock_client.get_pr_state = AsyncMock(return_value="closed")
+    fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+            headers=superuser_token_headers,
+        )
+    finally:
+        fastapi_app.dependency_overrides.pop(get_github_app_client, None)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["updated"] == 1
+
+    db.refresh(fix)
+    assert fix.pr_state == "closed"
+
+
+def test_sync_pr_status_skips_already_closed(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.medium,
+        category=IssueCategory.reliability,
+        message="already closed test",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_url=f"https://github.com/{repo.full_name}/pull/103",
+        pr_state="closed",
+    )
+    db.add(fix)
+    db.commit()
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["synced"] == 0
+    assert data["updated"] == 0
+
+
+def test_sync_pr_status_handles_github_error(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="github error test",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr_url = f"https://github.com/{repo.full_name}/pull/104"
+    fix = _make_open_pr_fix(db, issue, pr_url)
+
+    from app.api.deps import get_github_app_client
+    from app.main import app as fastapi_app
+
+    mock_client = AsyncMock()
+    mock_client.get_pr_state = AsyncMock(side_effect=Exception("API error"))
+    fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+            headers=superuser_token_headers,
+        )
+    finally:
+        fastapi_app.dependency_overrides.pop(get_github_app_client, None)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["synced"] == 1
+    assert data["updated"] == 0
+
+    db.refresh(fix)
+    assert fix.pr_state == "open"
+
+
+def test_sync_pr_status_repo_not_found(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{uuid.uuid4()}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 404

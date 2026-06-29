@@ -1,4 +1,5 @@
 import difflib
+import logging
 import uuid
 from collections import defaultdict
 
@@ -6,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import delete, select
 
-from app.api.deps import CurrentUser, SessionDep, get_or_404
+from app.api.deps import CurrentUser, GitHubAppClientDep, SessionDep, get_or_404
 from app.core.config import settings
 from app.models import (
     Analysis,
@@ -19,9 +20,12 @@ from app.models import (
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github.app_client import parse_pr_url
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.tasks.fix_delivery import deliver_fix, deliver_fixes_batch
 from app.workers.tasks.fix_generation import run_fix_generation
+
+logger = logging.getLogger(__name__)
 
 
 class BatchFixRequest(BaseModel):
@@ -391,3 +395,68 @@ def reject_fix(
         events_pub.publish_event(
             ev.fix_rejected(str(repo.org_id), str(repo.id), str(fix_id))
         )
+
+
+@router.post("/sync-pr-status/{repo_id}")
+async def sync_pr_statuses(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,  # noqa: ARG001
+    github_client: GitHubAppClientDep,
+) -> dict[str, int]:
+    repo = session.get(Repository, repo_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    query = (
+        select(Fix)
+        .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
+        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        .where(Analysis.repo_id == repo_id)
+        .where(Fix.pr_url.is_not(None))  # type: ignore[union-attr]
+        .where(Fix.pr_state == "open")
+    )
+    fixes = list(session.exec(query).all())
+    if not fixes:
+        return {"synced": 0, "updated": 0}
+
+    pr_to_fixes: dict[str, list[Fix]] = {}
+    for fix in fixes:
+        pr_to_fixes.setdefault(fix.pr_url, []).append(fix)  # type: ignore[arg-type]
+
+    updated = 0
+    for pr_url, url_fixes in pr_to_fixes.items():
+        parsed = parse_pr_url(pr_url)
+        if not parsed or not repo.installation_id:
+            continue
+        full_name, pr_number = parsed
+        try:
+            new_state = await github_client.get_pr_state(
+                repo.installation_id, full_name, pr_number
+            )
+        except Exception:
+            logger.warning("Failed to fetch PR state for %s", pr_url, exc_info=True)
+            continue
+
+        if new_state == "open":
+            continue
+
+        for fix in url_fixes:
+            fix.pr_state = new_state
+            session.add(fix)
+        updated += len(url_fixes)
+
+        events_pub.publish_event(
+            ev.pr_closed(
+                str(repo.org_id),
+                str(repo.id),
+                str(url_fixes[0].id),
+                pr_url,
+                new_state == "merged",
+            )
+        )
+
+    if updated:
+        session.commit()
+
+    return {"synced": len(pr_to_fixes), "updated": updated}
