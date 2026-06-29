@@ -164,7 +164,7 @@ services:
       - FLOWER_PORT=5555
 
   opa:
-    image: openpolicyagent/opa:${TAG:-latest}
+    image: greensecops/opa:${TAG:-latest}
     build:
       context: .
       dockerfile: opa/Dockerfile

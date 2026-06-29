@@ -118,6 +118,10 @@ services:
       - "8181:8181"
     volumes:
       - ./backend/app/rules:/policies:ro
+    develop:
+      watch:
+        - path: ./opa/Dockerfile
+          action: rebuild
 
   mailcatcher:
     image: schickling/mailcatcher
