@@ -15,7 +15,6 @@ from app.models import (
     FixPublic,
     FixStatus,
     Issue,
-    PullRequest,
     Repository,
     Rule,
     WorkflowFile,
@@ -132,9 +131,7 @@ def list_fixes(
         if wf_file:
             data.workflow_file_path = wf_file.path
 
-        if fix.patch:
-            data.diff_patch = fix.patch
-        elif fix.diff and wf_file and wf_file.raw_content:
+        if fix.diff and wf_file and wf_file.raw_content:
             fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
             patch = "".join(
                 difflib.unified_diff(
@@ -145,7 +142,6 @@ def list_fixes(
                 )
             )
             data.diff_patch = patch or None
-        data.patch = fix.patch
         result.append(data)
     return result
 
@@ -174,10 +170,7 @@ def get_fix(
     if wf_file:
         data.workflow_file_path = wf_file.path
 
-    data.patch = fix.patch
-    if fix.patch:
-        data.diff_patch = fix.patch
-    elif fix.diff and wf_file and wf_file.raw_content:
+    if fix.diff and wf_file and wf_file.raw_content:
         original = wf_file.raw_content
         fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
         original_lines = original.splitlines(keepends=True)
@@ -504,13 +497,6 @@ async def sync_pr_statuses(
             fix.pr_state = new_state
             session.add(fix)
         updated += len(url_fixes)
-
-        pr_record = session.exec(
-            select(PullRequest).where(PullRequest.pr_url == pr_url)
-        ).first()
-        if pr_record:
-            pr_record.pr_state = new_state
-            session.add(pr_record)
 
         events_pub.publish_event(
             ev.pr_closed(

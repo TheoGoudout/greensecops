@@ -355,18 +355,6 @@ export const FixPublicSchema = {
             format: 'uuid',
             title: 'Issue Id'
         },
-        pr_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Id'
-        },
         llm_provider: {
             '$ref': '#/components/schemas/LLMProvider'
         },
@@ -387,17 +375,6 @@ export const FixPublicSchema = {
                 }
             ],
             title: 'Diff'
-        },
-        patch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Patch'
         },
         diff_patch: {
             anyOf: [

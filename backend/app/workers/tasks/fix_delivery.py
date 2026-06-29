@@ -13,7 +13,6 @@ from app.models import (
     Fix,
     FixDeliveryMode,
     FixStatus,
-    PullRequest,
     Repository,
     WorkflowFile,
 )
@@ -125,20 +124,10 @@ def deliver_fix(
                 ev.fix_delivery_failed(org_id, repo_id_str, fix_id, result.error[:200])
             )
         else:
-            pr_state = "open" if result.pr_url else None
-            pr = _upsert_pull_request(
-                session,
-                repo_id=repo.id,
-                pr_branch=fix_branch,
-                pr_url=result.pr_url,
-                pr_state=pr_state,
-                comment_url=result.comment_url,
-            )
             fix.status = FixStatus.delivered
-            fix.pr_id = pr.id
             fix.pr_url = result.pr_url
             fix.pr_branch = fix_branch
-            fix.pr_state = pr_state
+            fix.pr_state = "open" if result.pr_url else None
             fix.comment_url = result.comment_url
             fix.delivered_at = datetime.now(timezone.utc)
             session.add(fix)
@@ -222,25 +211,12 @@ def deliver_fixes_batch(
 
         now = datetime.now(timezone.utc)
         delivered_fix_ids = []
-
-        pr = None
-        if not result.error and result.pr_url:
-            pr = _upsert_pull_request(
-                session,
-                repo_id=repo.id,
-                pr_branch=pr_branch,
-                pr_url=result.pr_url,
-                pr_state="open",
-                comment_url=None,
-            )
-
         for fix in fixes:
             if result.error:
                 fix.status = FixStatus.failed
                 fix.error_message = result.error
             else:
                 fix.status = FixStatus.delivered
-                fix.pr_id = pr.id if pr else None
                 fix.pr_url = result.pr_url
                 fix.pr_branch = pr_branch
                 fix.pr_state = "open" if result.pr_url else None
@@ -271,47 +247,6 @@ def deliver_fixes_batch(
                 )
 
         return {"status": "failed" if result.error else "ok"}
-
-
-def _upsert_pull_request(
-    session: object,
-    repo_id: object,
-    pr_branch: str,
-    pr_url: str | None,
-    pr_state: str | None,
-    comment_url: str | None,
-) -> PullRequest:
-    """Find or create a PullRequest row for (repo_id, pr_branch).
-
-    Updates pr_url/pr_state/updated_at on every call so the record stays current.
-    """
-    from sqlmodel import Session
-    from sqlmodel import select as sql_select
-
-    assert isinstance(session, Session)
-    pr = session.exec(
-        sql_select(PullRequest).where(
-            PullRequest.repo_id == repo_id,
-            PullRequest.pr_branch == pr_branch,
-        )
-    ).first()
-    now = datetime.now(timezone.utc)
-    if pr:
-        pr.pr_url = pr_url or pr.pr_url
-        pr.pr_state = pr_state or pr.pr_state
-        pr.comment_url = comment_url or pr.comment_url
-        pr.updated_at = now
-    else:
-        pr = PullRequest(
-            repo_id=repo_id,
-            pr_branch=pr_branch,
-            pr_url=pr_url,
-            pr_state=pr_state,
-            comment_url=comment_url,
-        )
-    session.add(pr)
-    session.flush()
-    return pr
 
 
 @asynccontextmanager

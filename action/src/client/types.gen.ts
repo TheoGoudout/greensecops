@@ -66,12 +66,10 @@ export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 export type FixPublic = {
     id: string;
     issue_id: string;
-    pr_id?: (string | null);
     llm_provider: LLMProvider;
     llm_model: string;
     status: FixStatus;
     diff?: (string | null);
-    patch?: (string | null);
     diff_patch?: (string | null);
     pr_url?: (string | null);
     pr_branch?: (string | null);
