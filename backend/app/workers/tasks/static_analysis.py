@@ -165,8 +165,27 @@ def _run_static_analysis_impl(
                     )
                 ).first()
 
+                # Legacy fallback: issues created before migration 0009 were
+                # backfilled with job=step=None. If OPA now returns job/step,
+                # the fingerprints won't match. Find the old null-job issue and
+                # upgrade it in-place so Fix associations are preserved.
+                if not existing_issue and (v.job is not None or v.step is not None):
+                    legacy_fp = compute_issue_fingerprint(
+                        wf_record.id, rule.id, None, None
+                    )
+                    if legacy_fp != fingerprint:
+                        existing_issue = session.exec(
+                            select(Issue).where(
+                                Issue.workflow_file_id == wf_record.id,
+                                Issue.fingerprint == legacy_fp,
+                                Issue.job.is_(None),  # type: ignore[union-attr]
+                                Issue.step.is_(None),  # type: ignore[union-attr]
+                            )
+                        ).first()
+
                 if existing_issue:
                     existing_issue.analysis_id = analysis.id
+                    existing_issue.fingerprint = fingerprint
                     existing_issue.job = v.job
                     existing_issue.step = v.step
                     existing_issue.line_start = v.line_start
