@@ -36,6 +36,7 @@ class FakeViolation:
     message: str
     context: str | None = None
     job: str | None = None
+    step: str | None = None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
