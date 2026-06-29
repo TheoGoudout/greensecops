@@ -70,7 +70,9 @@ def list_fixes(
     if all_issue_ids:
         issues_map = {
             i.id: i
-            for i in session.exec(select(Issue).where(Issue.id.in_(all_issue_ids))).all()  # type: ignore[arg-type]
+            for i in session.exec(
+                select(Issue).where(Issue.id.in_(all_issue_ids))
+            ).all()  # type: ignore[arg-type]
         }
         analysis_ids = list(
             {i.analysis_id for i in issues_map.values() if i.analysis_id}
@@ -92,9 +94,7 @@ def list_fixes(
                     select(WorkflowFile).where(WorkflowFile.id.in_(wf_file_ids))  # type: ignore[arg-type]
                 ).all()
             }
-        rule_ids = list(
-            {i.rule_id for i in issues_map.values() if i.rule_id}
-        )
+        rule_ids = list({i.rule_id for i in issues_map.values() if i.rule_id})
         if rule_ids:
             rules_map = {
                 r.id: r
@@ -108,9 +108,7 @@ def list_fixes(
         data = FixPublic.model_validate(fix)
         issue = issues_map.get(fix.issue_id)
         analysis = (
-            analyses_map.get(issue.analysis_id)
-            if issue and issue.analysis_id
-            else None
+            analyses_map.get(issue.analysis_id) if issue and issue.analysis_id else None
         )
         wf_file = (
             wf_files_map.get(analysis.workflow_file_id)
@@ -155,9 +153,7 @@ def get_fix(
 
     issue = session.get(Issue, fix.issue_id)
     analysis = session.get(Analysis, issue.analysis_id) if issue else None
-    wf_file = (
-        session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
-    )
+    wf_file = session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
 
     if issue:
         rule = session.get(Rule, issue.rule_id) if issue.rule_id else None

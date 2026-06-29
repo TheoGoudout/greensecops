@@ -174,59 +174,59 @@ function FixDetail() {
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-4 w-48" />
             </div>
-          ) : (() => {
-            const severity = issue?.severity ?? fix?.severity
-            const category = issue?.category ?? fix?.category
-            const ruleSlug = issue?.rule_slug ?? fix?.rule_slug
-            const message = issue?.message ?? fix?.message
-            const lineStart = issue?.line_start ?? fix?.line_start
-            const lineEnd = issue?.line_end ?? fix?.line_end
-            const wfPath =
-              issue?.workflow_file_path ?? fix?.workflow_file_path
-            return severity && category && message ? (
-              <div className="flex items-start gap-3">
-                <CategoryIcon
-                  category={category}
-                  className="mt-0.5 shrink-0 text-base"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <SeverityChip severity={severity} />
-                    {ruleSlug && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                        {ruleSlug}
-                      </span>
+          ) : (
+            (() => {
+              const severity = issue?.severity ?? fix?.severity
+              const category = issue?.category ?? fix?.category
+              const ruleSlug = issue?.rule_slug ?? fix?.rule_slug
+              const message = issue?.message ?? fix?.message
+              const lineStart = issue?.line_start ?? fix?.line_start
+              const lineEnd = issue?.line_end ?? fix?.line_end
+              const wfPath =
+                issue?.workflow_file_path ?? fix?.workflow_file_path
+              return severity && category && message ? (
+                <div className="flex items-start gap-3">
+                  <CategoryIcon
+                    category={category}
+                    className="mt-0.5 shrink-0 text-base"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <SeverityChip severity={severity} />
+                      {ruleSlug && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                          {ruleSlug}
+                        </span>
+                      )}
+                      {fix && (
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
+                        >
+                          {fix.status}
+                        </span>
+                      )}
+                      <span className="text-sm">{message}</span>
+                    </div>
+                    {lineStart != null && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Line {lineStart}
+                        {lineEnd && lineEnd !== lineStart ? `–${lineEnd}` : ""}
+                      </p>
                     )}
-                    {fix && (
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
-                      >
-                        {fix.status}
-                      </span>
+                    {wfPath && (
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        {wfPath}
+                      </p>
                     )}
-                    <span className="text-sm">{message}</span>
                   </div>
-                  {lineStart != null && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Line {lineStart}
-                      {lineEnd && lineEnd !== lineStart
-                        ? `–${lineEnd}`
-                        : ""}
-                    </p>
-                  )}
-                  {wfPath && (
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                      {wfPath}
-                    </p>
-                  )}
                 </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Issue details unavailable.
-              </p>
-            )
-          })()}
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Issue details unavailable.
+                </p>
+              )
+            })()
+          )}
         </CardContent>
       </Card>
 

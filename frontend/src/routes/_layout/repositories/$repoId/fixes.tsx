@@ -217,8 +217,7 @@ function FixesPage() {
                             fix.message ??
                             issue?.message ??
                             `${fix.issue_id.slice(0, 8)}…`
-                          const lineStart =
-                            fix.line_start ?? issue?.line_start
+                          const lineStart = fix.line_start ?? issue?.line_start
                           const lineEnd = fix.line_end ?? issue?.line_end
                           return (
                             <div
@@ -424,12 +423,10 @@ function FixesPage() {
                             <div key={i} className="border-t">
                               {group.fixes.map((fix) => {
                                 const issue = issueById.get(fix.issue_id)
-                                const severity =
-                                  fix.severity ?? issue?.severity
+                                const severity = fix.severity ?? issue?.severity
                                 const ruleSlug =
                                   fix.rule_slug ?? issue?.rule_slug
-                                const message =
-                                  fix.message ?? issue?.message
+                                const message = fix.message ?? issue?.message
                                 return severity && ruleSlug && message ? (
                                   <div
                                     key={fix.id}
