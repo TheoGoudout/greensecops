@@ -50,6 +50,7 @@ violations contains violation if {
 		"severity": "high",
 		"category": "reliability",
 		"job": job_name,
+		"step": uses,
 		"message": sprintf("Step in job '%v' uses a mutable ref '%v'. Pin to a full commit SHA for reproducibility and supply-chain safety.", [job_name, uses]),
 		"context": uses,
 	}
