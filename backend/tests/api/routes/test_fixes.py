@@ -107,6 +107,7 @@ def rule(db: Session) -> Rule:
 def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
     i = Issue(
         analysis_id=analysis.id,
+        workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.medium,
         category=IssueCategory.reliability,
@@ -155,6 +156,7 @@ def db_issue_for_pending(db: Session, analysis: Analysis, rule: Rule) -> Issue:
     """A second issue for the pending fix fixture (avoids unique constraint on issue_id)."""
     i = Issue(
         analysis_id=analysis.id,
+        workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.low,
         category=IssueCategory.reliability,
@@ -831,6 +833,7 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
 
     old_issue = Issue(
         analysis_id=old_analysis.id,
+        workflow_file_id=old_analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.medium,
         category=IssueCategory.reliability,
