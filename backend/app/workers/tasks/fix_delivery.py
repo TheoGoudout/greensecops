@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.db import engine
@@ -99,8 +99,11 @@ def deliver_fix(
         )
 
         rule_slug = issue.rule.slug if issue.rule else "fix"
+        existing_pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
         fix_branch = (
-            fix.pr_branch or f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
+            existing_pr.pr_branch
+            if existing_pr
+            else f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
         )
         result = asyncio.run(
             _deliver(
@@ -125,22 +128,33 @@ def deliver_fix(
                 ev.fix_delivery_failed(org_id, repo_id_str, fix_id, result.error[:200])
             )
         else:
-            pr_state = "open" if result.pr_url else None
-            pr = _upsert_pull_request(
-                session,
-                repo_id=repo.id,
-                pr_branch=fix_branch,
-                pr_url=result.pr_url,
-                pr_state=pr_state,
-                comment_url=result.comment_url,
-            )
             fix.status = FixStatus.delivered
-            fix.pr_id = pr.id
-            fix.pr_url = result.pr_url
-            fix.pr_branch = fix_branch
-            fix.pr_state = pr_state
-            fix.comment_url = result.comment_url
             fix.delivered_at = datetime.now(timezone.utc)
+            if result.pr_url:
+                pr = session.exec(
+                    select(PullRequest).where(
+                        PullRequest.repo_id == repo.id,
+                        PullRequest.pr_branch == fix_branch,
+                    )
+                ).first()
+                if pr is None:
+                    pr = PullRequest(
+                        repo_id=repo.id,
+                        pr_branch=fix_branch,
+                        pr_url=result.pr_url,
+                        pr_state="open",
+                        comment_url=result.comment_url,
+                    )
+                    session.add(pr)
+                    session.flush()
+                else:
+                    pr.pr_url = result.pr_url
+                    pr.pr_state = "open"
+                    pr.comment_url = result.comment_url
+                    pr.updated_at = datetime.now(timezone.utc)
+                    session.add(pr)
+                    session.flush()
+                fix.pr_id = pr.id
             session.add(fix)
             session.commit()
             events_pub.publish_event(
@@ -222,17 +236,29 @@ def deliver_fixes_batch(
 
         now = datetime.now(timezone.utc)
         delivered_fix_ids = []
-
-        pr = None
+        pr: PullRequest | None = None
         if not result.error and result.pr_url:
-            pr = _upsert_pull_request(
-                session,
-                repo_id=repo.id,
-                pr_branch=pr_branch,
-                pr_url=result.pr_url,
-                pr_state="open",
-                comment_url=None,
-            )
+            pr = session.exec(
+                select(PullRequest).where(
+                    PullRequest.repo_id == repo.id,
+                    PullRequest.pr_branch == pr_branch,
+                )
+            ).first()
+            if pr is None:
+                pr = PullRequest(
+                    repo_id=repo.id,
+                    pr_branch=pr_branch,
+                    pr_url=result.pr_url,
+                    pr_state="open",
+                )
+                session.add(pr)
+                session.flush()
+            else:
+                pr.pr_url = result.pr_url
+                pr.pr_state = "open"
+                pr.updated_at = now
+                session.add(pr)
+                session.flush()
 
         for fix in fixes:
             if result.error:
@@ -241,9 +267,6 @@ def deliver_fixes_batch(
             else:
                 fix.status = FixStatus.delivered
                 fix.pr_id = pr.id if pr else None
-                fix.pr_url = result.pr_url
-                fix.pr_branch = pr_branch
-                fix.pr_state = "open" if result.pr_url else None
                 fix.delivered_at = now
                 delivered_fix_ids.append(str(fix.id))
             session.add(fix)
@@ -271,47 +294,6 @@ def deliver_fixes_batch(
                 )
 
         return {"status": "failed" if result.error else "ok"}
-
-
-def _upsert_pull_request(
-    session: object,
-    repo_id: object,
-    pr_branch: str,
-    pr_url: str | None,
-    pr_state: str | None,
-    comment_url: str | None,
-) -> PullRequest:
-    """Find or create a PullRequest row for (repo_id, pr_branch).
-
-    Updates pr_url/pr_state/updated_at on every call so the record stays current.
-    """
-    from sqlmodel import Session
-    from sqlmodel import select as sql_select
-
-    assert isinstance(session, Session)
-    pr = session.exec(
-        sql_select(PullRequest).where(
-            PullRequest.repo_id == repo_id,
-            PullRequest.pr_branch == pr_branch,
-        )
-    ).first()
-    now = datetime.now(timezone.utc)
-    if pr:
-        pr.pr_url = pr_url or pr.pr_url
-        pr.pr_state = pr_state or pr.pr_state
-        pr.comment_url = comment_url or pr.comment_url
-        pr.updated_at = now
-    else:
-        pr = PullRequest(
-            repo_id=repo_id,
-            pr_branch=pr_branch,
-            pr_url=pr_url,
-            pr_state=pr_state,
-            comment_url=comment_url,
-        )
-    session.add(pr)
-    session.flush()
-    return pr
 
 
 @asynccontextmanager

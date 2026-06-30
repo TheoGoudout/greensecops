@@ -7,13 +7,13 @@ from app.api.deps import CurrentUser, SessionDep, get_or_404
 from app.api.mappers import to_issue_public
 from app.models import (
     Analysis,
+    AnalysisStatus,
     Fix,
     FixStatus,
     Issue,
     IssueCategory,
     IssuePublic,
     IssueSeverity,
-    WorkflowFile,
 )
 
 router = APIRouter(prefix="/issues", tags=["issues"])
@@ -40,11 +40,19 @@ def list_issues(
             Analysis.repo_id == repo_id
         )
         if latest_only:
-            latest_ids = select(WorkflowFile.latest_analysis_id).where(
-                WorkflowFile.repo_id == repo_id,
-                WorkflowFile.latest_analysis_id.is_not(None),  # type: ignore[union-attr]
+            latest_analysis_subq = (
+                select(Analysis.id)
+                .where(Analysis.workflow_file_id == Issue.workflow_file_id)
+                .where(Analysis.status == AnalysisStatus.completed)
+                .order_by(
+                    Analysis.completed_at.desc().nulls_last(),
+                    Analysis.created_at.desc(),
+                )  # type: ignore[union-attr]
+                .limit(1)
+                .correlate(Issue)
+                .scalar_subquery()
             )
-            query = query.where(Issue.analysis_id.in_(latest_ids))  # type: ignore[attr-defined]
+            query = query.where(Issue.analysis_id == latest_analysis_subq)
     if unfixed:
         active_fix_issue_ids = select(Fix.issue_id).where(
             Fix.status != FixStatus.rejected

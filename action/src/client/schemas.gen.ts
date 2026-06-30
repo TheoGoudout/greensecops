@@ -377,17 +377,6 @@ export const FixPublicSchema = {
         status: {
             '$ref': '#/components/schemas/FixStatus'
         },
-        diff: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Diff'
-        },
         patch: {
             anyOf: [
                 {

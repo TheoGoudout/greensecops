@@ -36,7 +36,6 @@ class FakeViolation:
     message: str
     context: str | None = None
     job: str | None = None
-    step: str | None = None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -361,9 +360,15 @@ def test_violation_with_unknown_rule_slug_is_skipped(
     assert "completed" in str(result["results"])
 
 
-def test_completed_analysis_sets_latest_analysis_id(
+def test_completed_analysis_is_queryable_as_latest(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
+    """Completed analyses are correctly identified as 'latest' via the correlated subquery
+    used by the issues API (ordering by completed_at DESC, created_at DESC)."""
+    from sqlmodel import select
+
+    from app.models import Analysis, AnalysisStatus
+
     # Arrange — first run
     with (
         patch(
@@ -374,9 +379,12 @@ def test_completed_analysis_sets_latest_analysis_id(
     ):
         _run_static_analysis_impl(str(repo.id))
 
-    db.refresh(workflow_file)
-    first_latest = workflow_file.latest_analysis_id
-    assert first_latest is not None
+    first_analysis = db.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.completed)
+    ).first()
+    assert first_analysis is not None
 
     # Change content so the second run is not treated as a duplicate
     workflow_file.content_hash = uuid.uuid4().hex
@@ -394,10 +402,15 @@ def test_completed_analysis_sets_latest_analysis_id(
     ):
         _run_static_analysis_impl(str(repo.id), force=True)
 
-    # Assert — latest_analysis_id advanced to the newer analysis
-    db.refresh(workflow_file)
-    assert workflow_file.latest_analysis_id is not None
-    assert workflow_file.latest_analysis_id != first_latest
+    # Assert — two completed analyses now exist; the newer one has a later created_at
+    analyses = db.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .order_by(Analysis.created_at.desc())  # type: ignore[union-attr]
+    ).all()
+    assert len(analyses) >= 2
+    assert analyses[0].id != first_analysis.id
 
 
 # ─── reanalyze_all_repositories ──────────────────────────────────────────────

@@ -22,6 +22,7 @@ from app.models import (
     IssueSeverity,
     LLMProvider,
     Organization,
+    PullRequest,
     Repository,
     Rule,
     UserTier,
@@ -717,12 +718,21 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.refresh(issue)
 
     pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-test-merged",
+        pr_url=pr_url,
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
     fix = Fix(
         issue_id=issue.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        pr_url=pr_url,
+        pr_id=pr.id,
     )
     db.add(fix)
     db.commit()
@@ -741,8 +751,8 @@ def test_github_webhook_pull_request_merged_updates_fix(
         )
 
     assert response.status_code == 200
-    db.refresh(fix)
-    assert fix.pr_state == "merged"
+    db.refresh(pr)
+    assert pr.pr_state == "merged"
 
 
 def test_github_webhook_pull_request_closed_not_merged(
@@ -798,12 +808,21 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.refresh(issue)
 
     pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-test-closed",
+        pr_url=pr_url,
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
     fix = Fix(
         issue_id=issue.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        pr_url=pr_url,
+        pr_id=pr.id,
     )
     db.add(fix)
     db.commit()
@@ -822,8 +841,8 @@ def test_github_webhook_pull_request_closed_not_merged(
         )
 
     assert response.status_code == 200
-    db.refresh(fix)
-    assert fix.pr_state == "closed"
+    db.refresh(pr)
+    assert pr.pr_state == "closed"
 
 
 def test_github_webhook_pull_request_reopened_updates_fix(
@@ -879,13 +898,21 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.refresh(issue)
 
     pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-test-reopen",
+        pr_url=pr_url,
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
     fix = Fix(
         issue_id=issue.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        pr_url=pr_url,
-        pr_state="closed",
+        pr_id=pr.id,
     )
     db.add(fix)
     db.commit()
@@ -904,8 +931,8 @@ def test_github_webhook_pull_request_reopened_updates_fix(
         )
 
     assert response.status_code == 200
-    db.refresh(fix)
-    assert fix.pr_state == "open"
+    db.refresh(pr)
+    assert pr.pr_state == "open"
 
 
 def test_github_webhook_pull_request_non_closed_skipped(

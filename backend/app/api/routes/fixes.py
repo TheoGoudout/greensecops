@@ -5,12 +5,14 @@ from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func  # noqa: F401
 from sqlmodel import delete, select
 
 from app.api.deps import CurrentUser, GitHubAppClientDep, SessionDep, get_or_404
 from app.core.config import settings
 from app.models import (
     Analysis,
+    AnalysisStatus,
     Fix,
     FixPublic,
     FixStatus,
@@ -108,6 +110,17 @@ def list_fixes(
                 ).all()
             }
 
+    # Bulk-load PullRequest rows
+    pr_ids = list({f.pr_id for f in fixes if f.pr_id})
+    prs_map: dict[uuid.UUID, PullRequest] = {}
+    if pr_ids:
+        prs_map = {
+            pr.id: pr
+            for pr in session.exec(
+                select(PullRequest).where(PullRequest.id.in_(pr_ids))  # type: ignore[arg-type]
+            ).all()
+        }
+
     result: list[FixPublic] = []
     for fix in fixes:
         data = FixPublic.model_validate(fix)
@@ -132,6 +145,13 @@ def list_fixes(
         if wf_file:
             data.workflow_file_path = wf_file.path
 
+        pr = prs_map.get(fix.pr_id) if fix.pr_id else None
+        if pr:
+            data.pr_url = pr.pr_url
+            data.pr_branch = pr.pr_branch
+            data.pr_state = pr.pr_state
+            data.comment_url = pr.comment_url
+
         if fix.patch:
             data.diff_patch = fix.patch
         elif fix.diff and wf_file and wf_file.raw_content:
@@ -145,7 +165,6 @@ def list_fixes(
                 )
             )
             data.diff_patch = patch or None
-        data.patch = fix.patch
         result.append(data)
     return result
 
@@ -174,7 +193,13 @@ def get_fix(
     if wf_file:
         data.workflow_file_path = wf_file.path
 
-    data.patch = fix.patch
+    pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
+    if pr:
+        data.pr_url = pr.pr_url
+        data.pr_branch = pr.pr_branch
+        data.pr_state = pr.pr_state
+        data.comment_url = pr.comment_url
+
     if fix.patch:
         data.diff_patch = fix.patch
     elif fix.diff and wf_file and wf_file.raw_content:
@@ -209,15 +234,20 @@ def trigger_fix_generation_for_repo(
     When force=True, delivered fixes are also discarded and regenerated.
     Only issues from the latest analysis per workflow file are targeted.
     """
-    latest_ids = select(WorkflowFile.latest_analysis_id).where(
-        WorkflowFile.repo_id == repo_id,
-        WorkflowFile.latest_analysis_id.is_not(None),  # type: ignore[union-attr]
+    latest_analysis_subq = (
+        select(Analysis.id)
+        .where(Analysis.workflow_file_id == Issue.workflow_file_id)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
+        .limit(1)
+        .correlate(Issue)
+        .scalar_subquery()
     )
     query = (
         select(Issue)
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
-        .where(Issue.analysis_id.in_(latest_ids))  # type: ignore[attr-defined]
+        .where(Issue.analysis_id == latest_analysis_subq)
     )
     if body.issue_ids is not None:
         query = query.where(Issue.id.in_(body.issue_ids))  # type: ignore[attr-defined]
@@ -330,21 +360,21 @@ def trigger_workflow_delivery(
         app_name=settings.PROJECT_NAME,
         app_url=settings.APP_URL,
     )
-    # Stable branch: reuse existing pr_branch from current or previously delivered fixes.
-    existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
+    # Stable branch: reuse existing pr_branch from PullRequest table.
     wf_id = (
         fixes[0].issue.analysis.workflow_file_id
         if fixes[0].issue and fixes[0].issue.analysis
         else None
     )
-    if not existing_branch and wf_id:
+    existing_branch: str | None = None
+    if wf_id:
         existing_branch = session.exec(
-            select(Fix.pr_branch)
+            select(PullRequest.pr_branch)
+            .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
             .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
             .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
             .where(Analysis.workflow_file_id == wf_id)
-            .where(Fix.pr_branch.is_not(None))  # type: ignore[union-attr]
-            .order_by(Fix.delivered_at.desc())  # type: ignore[arg-type]
+            .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
             .limit(1)
         ).first()
     pr_branch = existing_branch or (
@@ -413,17 +443,15 @@ def trigger_repo_delivery(
         app_name=settings.PROJECT_NAME,
         app_url=settings.APP_URL,
     )
-    existing_branch = next((f.pr_branch for f in fixes if f.pr_branch), None)
-    if not existing_branch:
-        existing_branch = session.exec(
-            select(Fix.pr_branch)
-            .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-            .where(Analysis.repo_id == repo_id)
-            .where(Fix.pr_branch.is_not(None))  # type: ignore[union-attr]
-            .order_by(Fix.delivered_at.desc())  # type: ignore[arg-type]
-            .limit(1)
-        ).first()
+    existing_branch = session.exec(
+        select(PullRequest.pr_branch)
+        .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
+        .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
+        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        .where(Analysis.repo_id == repo_id)
+        .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
+        .limit(1)
+    ).first()
     pr_branch = existing_branch or f"greensecops/fixes-{str(repo_id)[:8]}"
     deliver_fixes_batch.delay(
         fix_ids=[str(f.id) for f in fixes],
@@ -467,25 +495,24 @@ async def sync_pr_statuses(
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    query = (
-        select(Fix)
-        .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo_id)
-        .where(Fix.pr_url.is_not(None))  # type: ignore[union-attr]
-        .where(Fix.pr_state == "open")
+    open_prs = list(
+        session.exec(
+            select(PullRequest)
+            .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
+            .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
+            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+            .where(Analysis.repo_id == repo_id)
+            .where(PullRequest.pr_url.is_not(None))  # type: ignore[union-attr]
+            .where(PullRequest.pr_state == "open")
+        ).all()
     )
-    fixes = list(session.exec(query).all())
-    if not fixes:
+    if not open_prs:
         return {"synced": 0, "updated": 0}
 
-    pr_to_fixes: dict[str, list[Fix]] = {}
-    for fix in fixes:
-        pr_to_fixes.setdefault(fix.pr_url, []).append(fix)  # type: ignore[arg-type]
-
     updated = 0
-    for pr_url, url_fixes in pr_to_fixes.items():
-        parsed = parse_pr_url(pr_url)
+    for pr_record in open_prs:
+        pr_url = pr_record.pr_url
+        parsed = parse_pr_url(pr_url)  # type: ignore[arg-type]
         if not parsed or not repo.installation_id:
             continue
         full_name, pr_number = parsed
@@ -500,24 +527,19 @@ async def sync_pr_statuses(
         if new_state == "open":
             continue
 
-        for fix in url_fixes:
-            fix.pr_state = new_state
-            session.add(fix)
-        updated += len(url_fixes)
+        pr_record.pr_state = new_state
+        session.add(pr_record)
+        updated += 1
 
-        pr_record = session.exec(
-            select(PullRequest).where(PullRequest.pr_url == pr_url)
-        ).first()
-        if pr_record:
-            pr_record.pr_state = new_state
-            session.add(pr_record)
-
+        pr_fixes = list(
+            session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all()
+        )
         events_pub.publish_event(
             ev.pr_closed(
                 str(repo.org_id),
                 str(repo.id),
-                str(url_fixes[0].id),
-                pr_url,
+                str(pr_fixes[0].id) if pr_fixes else str(pr_record.id),
+                pr_url,  # type: ignore[arg-type]
                 new_state == "merged",
             )
         )
@@ -525,4 +547,4 @@ async def sync_pr_statuses(
     if updated:
         session.commit()
 
-    return {"synced": len(pr_to_fixes), "updated": updated}
+    return {"synced": len(open_prs), "updated": updated}

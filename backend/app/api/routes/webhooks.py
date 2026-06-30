@@ -13,6 +13,7 @@ from app.models import (
     Fix,
     Issue,
     Organization,
+    PullRequest,
     Repository,
 )
 from app.services.events import publisher as events_pub
@@ -225,35 +226,41 @@ def _handle_pull_request_event(
 
     from sqlmodel import select
 
-    fix = session.exec(select(Fix).where(Fix.pr_url == pr_url)).first()
-    if not fix:
+    pr_record = session.exec(
+        select(PullRequest).where(PullRequest.pr_url == pr_url)
+    ).first()
+    if not pr_record:
         return
 
-    fix.pr_state = new_state
-    session.add(fix)
+    pr_record.pr_state = new_state
+    session.add(pr_record)
     session.commit()
-    logger.info("PR %s -> state=%s for fix %s", pr_url, new_state, fix.id)
+    logger.info("PR %s -> state=%s for PR record %s", pr_url, new_state, pr_record.id)
 
-    issue = session.get(Issue, fix.issue_id)
-    analysis = session.get(Analysis, issue.analysis_id) if issue else None
-    repo = session.get(Repository, analysis.repo_id) if analysis else None
-    if repo:
-        if action == "closed":
-            events_pub.publish_event(
-                ev.pr_closed(
-                    str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged
+    # Notify for all fixes associated with this PR
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    fix = pr_fixes[0] if pr_fixes else None
+    if fix:
+        issue = session.get(Issue, fix.issue_id)
+        analysis = session.get(Analysis, issue.analysis_id) if issue else None
+        repo = session.get(Repository, analysis.repo_id) if analysis else None
+        if repo:
+            if action == "closed":
+                events_pub.publish_event(
+                    ev.pr_closed(
+                        str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged
+                    )
                 )
-            )
-        else:
-            events_pub.publish_event(
-                ev.pr_opened(
-                    str(repo.org_id),
-                    str(repo.id),
-                    [str(fix.id)],
-                    pr_url,
-                    fix.pr_branch or "",
+            else:
+                events_pub.publish_event(
+                    ev.pr_opened(
+                        str(repo.org_id),
+                        str(repo.id),
+                        [str(fix.id)],
+                        pr_url,
+                        pr_record.pr_branch,
+                    )
                 )
-            )
 
 
 def _handle_installation_repositories_event(

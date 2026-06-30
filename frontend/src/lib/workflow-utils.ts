@@ -26,7 +26,11 @@ export function extractFilePath(patch: string): string {
 
 export function combinePatchesForFile(patches: string[]): string {
   if (patches.length === 0) return ""
-  const unique = [...new Set(patches)]
+  const validPatches = patches.filter(
+    (p) => p.includes("@@") || p.startsWith("---"),
+  )
+  if (validPatches.length === 0) return ""
+  const unique = [...new Set(validPatches)]
   if (unique.length === 1) return unique[0]
   const hunkStart = unique[0].indexOf("@@")
   const header = hunkStart !== -1 ? unique[0].slice(0, hunkStart) : unique[0]

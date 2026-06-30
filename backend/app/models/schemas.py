@@ -113,7 +113,6 @@ class FixPublic(SQLModel):
     llm_provider: LLMProvider
     llm_model: str
     status: FixStatus
-    diff: str | None = None
     patch: str | None = None
     diff_patch: str | None = None
     pr_url: str | None = None
@@ -140,7 +139,6 @@ class PullRequestPublic(SQLModel):
     comment_url: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    fix_count: int = 0
 
 
 class RulePublic(SQLModel):

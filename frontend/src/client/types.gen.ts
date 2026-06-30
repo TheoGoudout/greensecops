@@ -70,7 +70,6 @@ export type FixPublic = {
     llm_provider: LLMProvider;
     llm_model: string;
     status: FixStatus;
-    diff?: (string | null);
     patch?: (string | null);
     diff_patch?: (string | null);
     pr_url?: (string | null);
