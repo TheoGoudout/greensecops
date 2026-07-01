@@ -52,6 +52,7 @@ from .schemas import (
     TokenPayload,
     UserPublic,
     UsersPublic,
+    WorkflowFilePublic,
 )
 
 __all__ = [
@@ -106,4 +107,5 @@ __all__ = [
     "Token",
     "TokenPayload",
     "NewPassword",
+    "WorkflowFilePublic",
 ]

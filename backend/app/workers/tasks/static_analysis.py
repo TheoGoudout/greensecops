@@ -3,6 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from ruamel.yaml import YAML as RuamelYAML
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, select
 
@@ -28,6 +29,51 @@ from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_line_numbers(violations: list, raw_content: str) -> None:
+    """Populate line_start/line_end on violations using ruamel.yaml node positions."""
+    ryaml = RuamelYAML()
+    try:
+        doc = ryaml.load(raw_content)
+    except Exception:
+        return
+    if not isinstance(doc, dict):
+        return
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return
+    for v in violations:
+        if v.job is None:
+            continue
+        job = jobs.get(v.job)
+        if job is None:
+            continue
+        if v.step is None:
+            # Job-level: point to the job key line
+            try:
+                line = jobs.lc.key(v.job)[0] + 1  # ruamel lc is 0-indexed
+                v.line_start = line
+                v.line_end = line
+            except Exception:
+                pass
+            continue
+        # Step-level: find the step with matching 'uses'
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for i, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses")
+            if uses == v.step:
+                try:
+                    line = steps.lc.value(i)[0] + 1  # line of the step mapping
+                    v.line_start = line
+                    v.line_end = line
+                except Exception:
+                    pass
+                break
 
 
 def _run_static_analysis_impl(
@@ -161,6 +207,8 @@ def _run_static_analysis_impl(
                     batch_any_failed = True
                 results.append({"path": path, "status": "failed"})
                 continue
+
+            _enrich_line_numbers(violations, content)
 
             rule_map: dict[str, Rule] = {
                 r.slug: r for r in session.exec(select(Rule)).all()

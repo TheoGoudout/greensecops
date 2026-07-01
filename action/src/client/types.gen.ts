@@ -266,6 +266,12 @@ export type WorkflowDeliverRequest = {
     fix_ids: Array<(string)>;
 };
 
+export type WorkflowFilePublic = {
+    id: string;
+    path: string;
+    raw_content?: (string | null);
+};
+
 export type AnalysesListAnalysesData = {
     branch?: (string | null);
     grade?: (string | null);
@@ -518,6 +524,12 @@ export type RepositoriesGetRepositoryData = {
 };
 
 export type RepositoriesGetRepositoryResponse = (RepositoryPublic);
+
+export type RepositoriesListWorkflowFilesData = {
+    repoId: string;
+};
+
+export type RepositoriesListWorkflowFilesResponse = (Array<WorkflowFilePublic>);
 
 export type RepositoriesToggleRepositoryData = {
     enabled: boolean;

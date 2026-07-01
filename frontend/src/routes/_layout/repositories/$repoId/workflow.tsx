@@ -1,0 +1,94 @@
+import { useQuery } from "@tanstack/react-query"
+import { createFileRoute } from "@tanstack/react-router"
+import { useMemo } from "react"
+import type { FixPublic, IssuePublic } from "@/client"
+import { FixesService, IssuesService, RepositoriesService } from "@/client"
+import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { WorkflowFileViewer } from "@/components/WorkflowFileViewer"
+
+export const Route = createFileRoute("/_layout/repositories/$repoId/workflow")({
+  component: WorkflowPage,
+  head: () => ({
+    meta: [{ title: "Workflow - GreenSecOps" }],
+  }),
+})
+
+function WorkflowPage() {
+  const { repoId } = Route.useParams()
+
+  const { data: workflowFiles, isLoading: wfLoading } = useQuery({
+    queryKey: ["workflow-files", repoId],
+    queryFn: () => RepositoriesService.listWorkflowFiles({ repoId }),
+  })
+
+  const { data: issues } = useQuery({
+    queryKey: ["issues", "repo", repoId, { unfixed: false }],
+    queryFn: () => IssuesService.listIssues({ repoId, limit: 200 }),
+  })
+
+  const { data: fixes } = useQuery({
+    queryKey: ["fixes", "repo", repoId],
+    queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
+  })
+
+  const issuesByPath = useMemo(() => {
+    const map = new Map<string, IssuePublic[]>()
+    for (const issue of issues ?? []) {
+      const path = issue.workflow_file_path ?? ""
+      const list = map.get(path) ?? []
+      list.push(issue)
+      map.set(path, list)
+    }
+    return map
+  }, [issues])
+
+  const fixesByPath = useMemo(() => {
+    const map = new Map<string, FixPublic[]>()
+    for (const fix of fixes ?? []) {
+      const path = fix.workflow_file_path ?? ""
+      const list = map.get(path) ?? []
+      list.push(fix)
+      map.set(path, list)
+    }
+    return map
+  }, [fixes])
+
+  if (wfLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        {[...Array(2)].map((_, i) => (
+          <Skeleton key={i} className="h-48 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (!workflowFiles?.length) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground text-sm">
+          No workflow files found. Run an analysis first.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {workflowFiles.map((wf) => {
+        const fileIssues = issuesByPath.get(wf.path) ?? []
+        const fileFixes = fixesByPath.get(wf.path) ?? []
+        return (
+          <WorkflowFileViewer
+            key={wf.id}
+            path={wf.path}
+            rawContent={wf.raw_content ?? ""}
+            issues={fileIssues}
+            fixes={fileFixes}
+          />
+        )
+      })}
+    </div>
+  )
+}

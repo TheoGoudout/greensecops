@@ -1426,3 +1426,31 @@ export const WorkflowDeliverRequestSchema = {
     required: ['fix_ids'],
     title: 'WorkflowDeliverRequest'
 } as const;
+
+export const WorkflowFilePublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        raw_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Raw Content'
+        }
+    },
+    type: 'object',
+    required: ['id', 'path'],
+    title: 'WorkflowFilePublic'
+} as const;

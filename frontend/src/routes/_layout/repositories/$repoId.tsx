@@ -25,6 +25,7 @@ const navItems = [
   { label: "Issues", to: "issues" },
   { label: "Fixes", to: "fixes" },
   { label: "Pull Requests", to: "pull-requests" },
+  { label: "Workflow", to: "workflow" },
 ] as const
 
 function RepositoryLayout() {

@@ -24,6 +24,8 @@ from app.models import (
     Repository,
     RepositoryPublic,
     User,
+    WorkflowFile,
+    WorkflowFilePublic,
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
@@ -221,6 +223,22 @@ def get_repository(
     repo = _get_repo_for_user(repo_id, session, current_user)
     avg_score, grade, _ = _compute_repo_grade(session, repo_id)
     return to_repo_public(repo, avg_score, grade)
+
+
+@router.get("/{repo_id}/workflow-files", response_model=list[WorkflowFilePublic])
+def list_workflow_files(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,  # noqa: ARG001
+) -> list[WorkflowFilePublic]:
+    repo = _get_repo_for_user(repo_id, session, current_user)
+    wf_files = session.exec(
+        select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
+    ).all()
+    return [
+        WorkflowFilePublic(id=wf.id, path=wf.path, raw_content=wf.raw_content)
+        for wf in wf_files
+    ]
 
 
 @router.patch("/{repo_id}/toggle")

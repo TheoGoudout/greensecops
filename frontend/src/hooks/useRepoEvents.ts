@@ -1,10 +1,54 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
+import { toast } from "sonner"
 import { type SSEEventData, useSSE } from "./useSSE"
 
+function invalidateRepoQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  repoId: string,
+) {
+  qc.invalidateQueries({ queryKey: ["repositories"] })
+  qc.invalidateQueries({ queryKey: ["repository", repoId] })
+}
+
+function invalidateAnalysisQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  repoId: string,
+  analysisId?: string,
+) {
+  qc.invalidateQueries({ queryKey: ["analyses", "recent"] })
+  qc.invalidateQueries({ queryKey: ["analyses", repoId] })
+  if (analysisId) {
+    qc.invalidateQueries({ queryKey: ["analysis", analysisId] })
+  }
+}
+
+function invalidateIssueQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  repoId: string,
+  analysisId?: string,
+) {
+  qc.invalidateQueries({ queryKey: ["issues", "open"] })
+  qc.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
+  if (analysisId) {
+    qc.invalidateQueries({ queryKey: ["issues", analysisId] })
+  }
+}
+
+function invalidateFixQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  repoId: string,
+  fixId?: string,
+) {
+  qc.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+  if (fixId) {
+    qc.invalidateQueries({ queryKey: ["fix", fixId] })
+  }
+}
+
 /**
- * Subscribes to SSE and invalidates TanStack Query caches when the server
- * emits events for repos, analyses, fixes, PRs, or installations.
+ * Subscribes to SSE and invalidates TanStack Query caches + shows toasts
+ * when the server emits events for repos, analyses, fixes, PRs, or installations.
  *
  * Mount once at the authenticated layout level — covers all child routes.
  */
@@ -15,52 +59,200 @@ export function useRepoEvents(): void {
     (data: SSEEventData) => {
       const repoId = data.repo_id as string | undefined
       const orgId = data.org_id as string | undefined
+      const analysisId = data.analysis_id as string | undefined
+      const fixId = data.fix_id as string | undefined
+      const fixIds = data.fix_ids as string[] | undefined
 
       switch (data.event) {
         case "analysis.queued":
         case "analysis.started":
-        case "analysis.completed":
-        case "analysis.failed":
+          if (repoId) {
+            invalidateRepoQueries(queryClient, repoId)
+            invalidateAnalysisQueries(queryClient, repoId, analysisId)
+          }
+          break
+
+        case "analysis.completed": {
+          if (repoId) {
+            invalidateRepoQueries(queryClient, repoId)
+            invalidateAnalysisQueries(queryClient, repoId, analysisId)
+            invalidateIssueQueries(queryClient, repoId, analysisId)
+          }
+          const grade = data.grade as string | undefined
+          const score = data.score as number | undefined
+          const issuesCount = data.issues_count as number | undefined
+          if (grade !== undefined && score !== undefined) {
+            toast.success("Analysis complete", {
+              description: `Grade ${grade} · Score ${Math.round(score)} · ${issuesCount ?? 0} issue${issuesCount === 1 ? "" : "s"}`,
+            })
+          }
+          break
+        }
+
+        case "analysis.failed": {
+          if (repoId) {
+            invalidateRepoQueries(queryClient, repoId)
+            invalidateAnalysisQueries(queryClient, repoId, analysisId)
+          }
+          const error = data.error as string | undefined
+          toast.error("Analysis failed", {
+            description: error ?? "Unknown error",
+          })
+          break
+        }
+
         case "analysis.skipped":
           if (repoId) {
-            queryClient.invalidateQueries({ queryKey: ["analyses", repoId] })
-            queryClient.invalidateQueries({
-              queryKey: ["issues", "repo", repoId],
-            })
-            queryClient.invalidateQueries({ queryKey: ["repositories"] })
-            queryClient.invalidateQueries({
-              queryKey: ["repository", repoId],
-            })
+            invalidateAnalysisQueries(queryClient, repoId, analysisId)
           }
           break
 
         case "fix.generating":
-        case "fix.ready":
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId)
+          }
+          break
+
+        case "fix.ready": {
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId, fixId)
+            if (fixIds) {
+              for (const id of fixIds) {
+                queryClient.invalidateQueries({ queryKey: ["fix", id] })
+              }
+            }
+          }
+          const count = fixIds?.length ?? (fixId ? 1 : 0)
+          toast.success(count > 1 ? `${count} fixes ready` : "Fix ready", {
+            description: "Review and deliver from the Fixes tab",
+          })
+          break
+        }
+
         case "fix.delivering":
-        case "fix.delivered":
-        case "fix.failed":
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId, fixId)
+            if (fixIds) {
+              for (const id of fixIds) {
+                queryClient.invalidateQueries({ queryKey: ["fix", id] })
+              }
+            }
+          }
+          break
+
+        case "fix.delivered": {
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId, fixId)
+            if (fixIds) {
+              for (const id of fixIds) {
+                queryClient.invalidateQueries({ queryKey: ["fix", id] })
+              }
+            }
+          }
+          const prUrl = data.pr_url as string | undefined
+          if (prUrl) {
+            toast.success("Fix delivered", {
+              description: "Pull request created",
+              action: {
+                label: "View PR",
+                onClick: () => window.open(prUrl, "_blank"),
+              },
+            })
+          } else {
+            toast.success("Fix delivered")
+          }
+          break
+        }
+
+        case "fix.failed": {
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId, fixId)
+          }
+          const failErr = data.error as string | undefined
+          toast.error("Fix failed", {
+            description: failErr ?? "Unknown error",
+          })
+          break
+        }
+
         case "fix.rejected":
           if (repoId) {
-            queryClient.invalidateQueries({
-              queryKey: ["fixes", "repo", repoId],
-            })
+            invalidateFixQueries(queryClient, repoId, fixId)
           }
           break
 
-        case "pr.opened":
-        case "pr.updated":
-        case "pr.closed":
-        case "pr.merged":
+        case "pr.opened": {
           if (repoId) {
-            queryClient.invalidateQueries({
-              queryKey: ["fixes", "repo", repoId],
+            invalidateFixQueries(queryClient, repoId)
+          }
+          const openedUrl = data.pr_url as string | undefined
+          if (openedUrl) {
+            toast.info("Pull request opened", {
+              action: {
+                label: "View PR",
+                onClick: () => window.open(openedUrl, "_blank"),
+              },
             })
           }
           break
+        }
+
+        case "pr.updated":
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId)
+          }
+          break
+
+        case "pr.merged":
+        case "pr.closed": {
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId)
+          }
+          const merged = data.event === "pr.merged"
+          const closedUrl = data.pr_url as string | undefined
+          toast.info(merged ? "Pull request merged" : "Pull request closed", {
+            ...(closedUrl && {
+              action: {
+                label: "View PR",
+                onClick: () => window.open(closedUrl, "_blank"),
+              },
+            }),
+          })
+          break
+        }
 
         case "installation.syncing":
-        case "installation.synced":
+          break
+
+        case "installation.synced": {
+          queryClient.invalidateQueries({ queryKey: ["installations"] })
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          if (orgId) {
+            queryClient.invalidateQueries({
+              queryKey: ["organizations", orgId],
+            })
+          }
+          const repoCount = data.repo_count as number | undefined
+          toast.success("Installation synced", {
+            description:
+              repoCount !== undefined
+                ? `${repoCount} repositor${repoCount === 1 ? "y" : "ies"} synced`
+                : undefined,
+          })
+          break
+        }
+
         case "installation.created":
+          queryClient.invalidateQueries({ queryKey: ["installations"] })
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          if (orgId) {
+            queryClient.invalidateQueries({
+              queryKey: ["organizations", orgId],
+            })
+          }
+          toast.success("GitHub App installed")
+          break
+
         case "installation.deleted":
           queryClient.invalidateQueries({ queryKey: ["installations"] })
           queryClient.invalidateQueries({ queryKey: ["repositories"] })
@@ -72,21 +264,28 @@ export function useRepoEvents(): void {
           break
 
         case "repository.added":
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          break
+
         case "repository.disabled":
-        case "repository.toggled":
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          break
+
+        case "repository.toggled": {
           queryClient.invalidateQueries({ queryKey: ["repositories"] })
           if (repoId) {
-            queryClient.invalidateQueries({
-              queryKey: ["repository", repoId],
-            })
+            queryClient.invalidateQueries({ queryKey: ["repository", repoId] })
+          }
+          const enabled = data.enabled as boolean | undefined
+          if (enabled !== undefined) {
+            toast.info(enabled ? "Repository enabled" : "Repository disabled")
           }
           break
+        }
 
         case "repository.action_pr_opened":
           if (repoId) {
-            queryClient.invalidateQueries({
-              queryKey: ["repository", repoId],
-            })
+            queryClient.invalidateQueries({ queryKey: ["repository", repoId] })
           }
           break
       }

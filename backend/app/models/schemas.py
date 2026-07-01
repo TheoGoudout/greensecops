@@ -130,6 +130,12 @@ class FixPublic(SQLModel):
     workflow_file_path: str | None = None
 
 
+class WorkflowFilePublic(SQLModel):
+    id: uuid.UUID
+    path: str
+    raw_content: str | None = None
+
+
 class PullRequestPublic(SQLModel):
     id: uuid.UUID
     repo_id: uuid.UUID
