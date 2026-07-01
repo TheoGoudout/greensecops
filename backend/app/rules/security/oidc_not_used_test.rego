@@ -17,10 +17,14 @@ test_violation_aws_static_creds_in_workflow_env if {
 }
 
 test_violation_gcp_sa_key_in_job_env if {
-	violations := oidc_not_used.violations with input as {"jobs": {"deploy": {
-		"env": {"GCP_SA_KEY": "${{ secrets.GCP_KEY }}"},
-		"steps": [],
-	}}}
+	violations := oidc_not_used.violations with input as {
+		"jobs": {
+			"deploy": {
+				"env": {"GCP_SA_KEY": "${{ secrets.GCP_KEY }}"},
+				"steps": [],
+			},
+		},
+	}
 	count(violations) == 1
 	some v in violations
 	v.job == "deploy"

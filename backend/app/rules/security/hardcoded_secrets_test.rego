@@ -23,10 +23,14 @@ test_no_violation_secret_ref if {
 }
 
 test_violation_token_in_job_env if {
-	violations := hardcoded_secrets.violations with input as {"jobs": {"deploy": {
-		"env": {"TOKEN": "hardcoded-token-value"},
-		"steps": [],
-	}}}
+	violations := hardcoded_secrets.violations with input as {
+		"jobs": {
+			"deploy": {
+				"env": {"TOKEN": "hardcoded-token-value"},
+				"steps": [],
+			},
+		},
+	}
 	count(violations) == 1
 	some v in violations
 	v.job == "deploy"
