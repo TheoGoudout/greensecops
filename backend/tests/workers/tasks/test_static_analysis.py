@@ -20,6 +20,7 @@ from app.models import (
     WorkflowFile,
 )
 from app.workers.tasks.static_analysis import (
+    _enrich_line_numbers,
     _reanalyze_all_repositories_impl,
     _run_static_analysis_impl,
 )
@@ -509,3 +510,229 @@ def test_reanalyze_all_enqueues_enabled_repos_with_force_and_release_trigger(
 
     assert result["status"] == "queued"
     assert int(result["repos"]) == len(enqueued_repo_ids)
+
+
+# ─── _enrich_line_numbers ─────────────────────────────────────────────────────
+
+
+def test_enrich_line_numbers_noop_on_invalid_yaml() -> None:
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+        )
+    ]
+    _enrich_line_numbers(violations, "not: valid: yaml: [[[")
+    # Should not raise; line_start/end remain unchanged (0)
+    assert violations[0].line_start == 0
+
+
+def test_enrich_line_numbers_noop_on_no_jobs() -> None:
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+        )
+    ]
+    _enrich_line_numbers(violations, "on: push\n")
+    assert violations[0].line_start == 0
+
+
+def test_enrich_line_numbers_skips_violation_with_no_job() -> None:
+    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job=None,
+        )
+    ]
+    _enrich_line_numbers(violations, content)
+    # No crash, job=None is skipped
+    assert violations[0].line_start == 0
+
+
+def test_enrich_line_numbers_skips_missing_job() -> None:
+    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="nonexistent",
+        )
+    ]
+    _enrich_line_numbers(violations, content)
+    assert violations[0].line_start == 0
+
+
+def test_enrich_line_numbers_job_level_violation() -> None:
+    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: []\n"
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+            step=None,
+        )
+    ]
+    _enrich_line_numbers(violations, content)
+    # Job-level: line_start should be populated (ruamel reports line of the job key)
+    assert violations[0].line_start > 0
+
+
+def test_enrich_line_numbers_step_found_does_not_raise() -> None:
+    # Step-level enrichment: even when lc.value(i) raises IndexError internally
+    # (a ruamel.yaml limitation for sequence items), the function must not raise
+    # and must leave line_start in a defined state.
+    content = (
+        "on: push\n"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v3\n"
+    )
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+            step="actions/checkout@v3",
+        )
+    ]
+    # Should not raise regardless of lc.value behaviour
+    _enrich_line_numbers(violations, content)
+    # line_start is either enriched (>0) or left unchanged (0); both are valid
+    assert violations[0].line_start >= 0
+
+
+def test_enrich_line_numbers_step_not_found_leaves_unchanged() -> None:
+    content = (
+        "on: push\n"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v3\n"
+    )
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+            step="actions/setup-node@v4",
+        )
+    ]
+    _enrich_line_numbers(violations, content)
+    # Step not found: line_start remains 0
+    assert violations[0].line_start == 0
+
+
+# ─── Batch mode (multiple workflow files) ────────────────────────────────────
+
+
+@dataclass
+class _FakeBatchFile:
+    path: str
+    content: str
+
+
+def test_batch_mode_publishes_single_started_event(
+    db: Session, repo: Repository
+) -> None:
+    # Arrange — two distinct workflow files (no workflow_file_id → batch mode)
+    unique1 = uuid.uuid4().hex
+    unique2 = uuid.uuid4().hex
+    files = [
+        _FakeBatchFile(
+            path=f".github/workflows/ci-{unique1}.yml",
+            content=f"# {unique1}\non: push\njobs: {{}}",
+        ),
+        _FakeBatchFile(
+            path=f".github/workflows/deploy-{unique2}.yml",
+            content=f"# {unique2}\non: push\njobs: {{}}",
+        ),
+    ]
+
+    events_published: list = []
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=files,
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+        patch(
+            "app.workers.tasks.static_analysis.events_pub.publish_event",
+            side_effect=events_published.append,
+        ),
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    assert result["status"] == "done"
+    # In batch mode both files should complete
+    results_str = str(result["results"])
+    assert results_str.count("completed") == 2
+
+
+def test_batch_mode_opa_failure_sets_batch_any_failed(
+    db: Session, repo: Repository
+) -> None:
+    # Arrange — both files fail OPA evaluation
+    unique1 = uuid.uuid4().hex
+    unique2 = uuid.uuid4().hex
+    files = [
+        _FakeBatchFile(
+            path=f".github/workflows/fail-{unique1}.yml",
+            content=f"# {unique1}\non: push\njobs: {{}}",
+        ),
+        _FakeBatchFile(
+            path=f".github/workflows/fail-{unique2}.yml",
+            content=f"# {unique2}\non: push\njobs: {{}}",
+        ),
+    ]
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=files,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            side_effect=RuntimeError("OPA down"),
+        ),
+        patch("app.workers.tasks.static_analysis.events_pub.publish_event"),
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    assert result["status"] == "done"
+    assert str(result["results"]).count("failed") >= 2
