@@ -3,6 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, select
 
 from app.core.db import engine
@@ -157,21 +158,37 @@ def _run_static_analysis_impl(
                 fingerprint = compute_issue_fingerprint(
                     wf_record.id, rule.id, v.job, v.step
                 )
-                issue = Issue(
-                    analysis_id=analysis.id,
-                    workflow_file_id=wf_record.id,
-                    rule_id=rule.id,
-                    job=v.job,
-                    step=v.step,
-                    fingerprint=fingerprint,
-                    severity=IssueSeverity(v.severity),
-                    category=IssueCategory(v.category),
-                    line_start=v.line_start,
-                    line_end=v.line_end,
-                    message=v.message,
-                    context=v.context,
+                stmt = (
+                    pg_insert(Issue)
+                    .values(
+                        id=uuid.uuid4(),
+                        analysis_id=analysis.id,
+                        workflow_file_id=wf_record.id,
+                        rule_id=rule.id,
+                        job=v.job,
+                        step=v.step,
+                        fingerprint=fingerprint,
+                        severity=IssueSeverity(v.severity),
+                        category=IssueCategory(v.category),
+                        line_start=v.line_start,
+                        line_end=v.line_end,
+                        message=v.message,
+                        context=v.context,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_issue_wf_fingerprint",
+                        set_={
+                            "analysis_id": analysis.id,
+                            "severity": IssueSeverity(v.severity),
+                            "line_start": v.line_start,
+                            "line_end": v.line_end,
+                            "message": v.message,
+                            "context": v.context,
+                        },
+                    )
                 )
-                session.add(issue)
+                session.execute(stmt)
                 pair = (v.severity, rule.severity_weight)
                 if v.job is None:
                     workflow_score_inputs.append(pair)
