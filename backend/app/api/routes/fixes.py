@@ -269,8 +269,19 @@ def trigger_fix_generation_for_repo(
     for issue in issues:
         by_analysis[issue.analysis_id].append(issue)
 
+    repo = session.get(Repository, repo_id)
+    if repo:
+        events_pub.publish_event(
+            ev.fix_generating(
+                str(repo.org_id),
+                str(repo_id),
+                fix_ids=[],
+                issue_ids=[str(i.id) for i in issues],
+            )
+        )
+
     for group in by_analysis.values():
-        run_fix_generation.delay(issue_ids=[str(i.id) for i in group])
+        run_fix_generation.delay(issue_ids=[str(i.id) for i in group], batch_mode=True)
 
     return {"queued": len(issues)}
 

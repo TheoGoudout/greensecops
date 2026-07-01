@@ -7,14 +7,14 @@ export type SSEEventData = {
 
 type SSEHandler = (data: SSEEventData) => void
 
-const SSE_URL = "/api/v1/events/stream"
+const SSE_BASE_URL = `${import.meta.env.VITE_API_URL}/api/v1/events/stream`
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 
 /**
- * Opens a persistent SSE connection using fetch + ReadableStream.
- * Uses Authorization header (unlike native EventSource).
- * Reconnects with exponential backoff on disconnect.
+ * Opens a persistent SSE connection using native EventSource.
+ * Token is passed as ?token= query param (EventSource cannot set custom headers).
+ * Reconnects with exponential backoff on disconnect or error.
  */
 export function useSSE(onEvent: SSEHandler): void {
   const onEventRef = useRef(onEvent)
@@ -24,70 +24,48 @@ export function useSSE(onEvent: SSEHandler): void {
     const token = localStorage.getItem("access_token")
     if (!token) return
 
-    let aborted = false
-    const controller = new AbortController()
+    let closed = false
     let reconnectDelay = RECONNECT_BASE_MS
+    let es: EventSource | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
 
-    async function connect(): Promise<void> {
+    function connect(): void {
       const currentToken = localStorage.getItem("access_token")
-      if (!currentToken || aborted) return
+      if (!currentToken || closed) return
 
-      try {
-        const response = await fetch(SSE_URL, {
-          headers: { Authorization: `Bearer ${currentToken}` },
-          signal: controller.signal,
-        })
+      const url = `${SSE_BASE_URL}?token=${encodeURIComponent(currentToken)}`
+      es = new EventSource(url)
 
-        if (!response.ok || !response.body) {
-          throw new Error(`SSE connect failed: ${response.status}`)
-        }
-
+      es.onopen = () => {
         reconnectDelay = RECONNECT_BASE_MS
+      }
 
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-
-          // SSE frames are separated by double newline
-          const frames = buffer.split("\n\n")
-          buffer = frames.pop() ?? ""
-
-          for (const frame of frames) {
-            if (!frame.trim() || frame.startsWith(":")) continue
-            const dataLine = frame
-              .split("\n")
-              .find((l) => l.startsWith("data:"))
-            if (!dataLine) continue
-            try {
-              const payload = JSON.parse(
-                dataLine.slice(5).trim(),
-              ) as SSEEventData
-              onEventRef.current(payload)
-            } catch {
-              // malformed JSON — skip
-            }
-          }
+      es.onmessage = (e: MessageEvent<string>) => {
+        try {
+          const payload = JSON.parse(e.data) as SSEEventData
+          onEventRef.current(payload)
+        } catch {
+          // malformed JSON — skip
         }
-      } catch (err) {
-        if (aborted) return
-        if (err instanceof DOMException && err.name === "AbortError") return
-        await new Promise((resolve) => setTimeout(resolve, reconnectDelay))
-        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
-        if (!aborted) void connect()
+      }
+
+      es.onerror = () => {
+        es?.close()
+        es = null
+        if (closed) return
+        retryTimer = setTimeout(() => {
+          reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
+          if (!closed) connect()
+        }, reconnectDelay)
       }
     }
 
-    void connect()
+    connect()
 
     return () => {
-      aborted = true
-      controller.abort()
+      closed = true
+      if (retryTimer !== null) clearTimeout(retryTimer)
+      es?.close()
     }
   }, [])
 }

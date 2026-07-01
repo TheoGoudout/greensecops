@@ -106,6 +106,7 @@ def _handle_push_event(
         branch=branch,
         commit_sha=commit_sha,
         trigger=AnalysisTrigger.webhook_push,
+        org_id=str(repo.org_id),
     )
 
 
@@ -137,6 +138,7 @@ def _handle_workflow_run_event(
         _enqueue_static_analysis,
         repo_id=str(repo.id),
         branch=branch,
+        org_id=str(repo.org_id),
         commit_sha=commit_sha,
         trigger=AnalysisTrigger.webhook_workflow_run,
     )
@@ -325,7 +327,10 @@ def _enqueue_static_analysis(
     branch: str,
     commit_sha: str,
     trigger: AnalysisTrigger,
+    org_id: str = "",
 ) -> None:
+    from app.services.events import publisher as events_pub
+    from app.services.events import schemas as ev
     from app.workers.tasks.static_analysis import run_static_analysis
 
     run_static_analysis.delay(
@@ -334,6 +339,10 @@ def _enqueue_static_analysis(
         commit_sha=commit_sha,
         trigger=trigger.value,
     )
+    if org_id:
+        events_pub.publish_event(
+            ev.analysis_queued(org_id, repo_id, branch, trigger.value)
+        )
 
 
 def _enqueue_installation_sync(installation_id: int, org_id: str) -> None:

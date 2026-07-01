@@ -12,7 +12,7 @@ class SSEEvent:
     def to_wire(self) -> str:
         """Serialize to SSE wire format."""
         payload = {"event": self.event, **self.data}
-        return f"event: {self.event}\ndata: {json.dumps(payload)}\n\n"
+        return f"data: {json.dumps(payload)}\n\n"
 
 
 # ─── Analysis ────────────────────────────────────────────────────────────────
@@ -96,6 +96,14 @@ def fix_ready(org_id: str, repo_id: str, fix_id: str, issue_id: str) -> SSEEvent
     )
 
 
+def fix_ready_batch(org_id: str, repo_id: str, fix_ids: list[str]) -> SSEEvent:
+    return SSEEvent(
+        event="fix.ready",
+        org_id=org_id,
+        data={"repo_id": repo_id, "fix_ids": fix_ids},
+    )
+
+
 def fix_generation_failed(
     org_id: str, repo_id: str, fix_id: str, error: str
 ) -> SSEEvent:
@@ -117,6 +125,14 @@ def fix_delivering(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
     )
 
 
+def fix_delivering_batch(org_id: str, repo_id: str, fix_ids: list[str]) -> SSEEvent:
+    return SSEEvent(
+        event="fix.delivering",
+        org_id=org_id,
+        data={"repo_id": repo_id, "fix_ids": fix_ids},
+    )
+
+
 def fix_delivered(
     org_id: str, repo_id: str, fix_id: str, pr_url: str | None, pr_branch: str
 ) -> SSEEvent:
@@ -126,6 +142,21 @@ def fix_delivered(
         data={
             "repo_id": repo_id,
             "fix_id": fix_id,
+            "pr_url": pr_url,
+            "pr_branch": pr_branch,
+        },
+    )
+
+
+def fix_delivered_batch(
+    org_id: str, repo_id: str, fix_ids: list[str], pr_url: str | None, pr_branch: str
+) -> SSEEvent:
+    return SSEEvent(
+        event="fix.delivered",
+        org_id=org_id,
+        data={
+            "repo_id": repo_id,
+            "fix_ids": fix_ids,
             "pr_url": pr_url,
             "pr_branch": pr_branch,
         },

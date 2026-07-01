@@ -338,6 +338,10 @@ export type BillingStripeWebhookResponse = ({
     [key: string]: (string);
 });
 
+export type EventsStreamEventsData = {
+    token?: (string | null);
+};
+
 export type EventsStreamEventsResponse = (unknown);
 
 export type FixesListFixesData = {

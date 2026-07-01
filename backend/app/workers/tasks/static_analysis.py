@@ -51,7 +51,20 @@ def _run_static_analysis_impl(
         else:
             workflow_files_to_analyse = _fetch_workflow_files(repo)
 
+        is_batch = workflow_file_id is None and len(workflow_files_to_analyse) > 1
+        effective_branch = branch or repo.default_branch
+
+        if is_batch:
+            events_pub.publish_event(
+                ev.analysis_started(org_id, repo_id, "", effective_branch)
+            )
+
         results: list[dict[str, str | int]] = []
+        batch_total_issues = 0
+        batch_last_score: float = 100.0
+        batch_last_grade: str = "A"
+        batch_any_failed = False
+
         for wf in workflow_files_to_analyse:
             content = wf.raw_content if isinstance(wf, WorkflowFile) else wf.content
             path = wf.path
@@ -70,15 +83,16 @@ def _run_static_analysis_impl(
                     score=existing.score,
                     grade=existing.grade,
                     triggered_by=AnalysisTrigger(trigger),
-                    branch=branch or repo.default_branch,
+                    branch=effective_branch,
                     commit_sha=commit_sha or None,
                     completed_at=datetime.now(timezone.utc),
                 )
                 session.add(skipped)
                 session.commit()
-                events_pub.publish_event(
-                    ev.analysis_skipped(org_id, repo_id, str(skipped.id))
-                )
+                if not is_batch:
+                    events_pub.publish_event(
+                        ev.analysis_skipped(org_id, repo_id, str(skipped.id))
+                    )
                 results.append(
                     {
                         "path": path,
@@ -116,16 +130,17 @@ def _run_static_analysis_impl(
                 content_hash=content_hash,
                 status=AnalysisStatus.running,
                 triggered_by=AnalysisTrigger(trigger),
-                branch=branch or repo.default_branch,
+                branch=effective_branch,
                 commit_sha=commit_sha or None,
             )
             session.add(analysis)
             session.flush()
-            events_pub.publish_event(
-                ev.analysis_started(
-                    org_id, repo_id, str(analysis.id), branch or repo.default_branch
+            if not is_batch:
+                events_pub.publish_event(
+                    ev.analysis_started(
+                        org_id, repo_id, str(analysis.id), effective_branch
+                    )
                 )
-            )
 
             try:
                 violations = asyncio.run(_evaluate(content))
@@ -136,11 +151,14 @@ def _run_static_analysis_impl(
                 analysis.completed_at = datetime.now(timezone.utc)
                 session.add(analysis)
                 session.commit()
-                events_pub.publish_event(
-                    ev.analysis_failed(
-                        org_id, repo_id, str(analysis.id), str(exc)[:200]
+                if not is_batch:
+                    events_pub.publish_event(
+                        ev.analysis_failed(
+                            org_id, repo_id, str(analysis.id), str(exc)[:200]
+                        )
                     )
-                )
+                else:
+                    batch_any_failed = True
                 results.append({"path": path, "status": "failed"})
                 continue
 
@@ -206,11 +224,17 @@ def _run_static_analysis_impl(
             analysis.completed_at = datetime.now(timezone.utc)
             session.add(analysis)
             session.commit()
-            events_pub.publish_event(
-                ev.analysis_completed(
-                    org_id, repo_id, str(analysis.id), score, grade, len(violations)
+
+            if not is_batch:
+                events_pub.publish_event(
+                    ev.analysis_completed(
+                        org_id, repo_id, str(analysis.id), score, grade, len(violations)
+                    )
                 )
-            )
+            else:
+                batch_total_issues += len(violations)
+                batch_last_score = score
+                batch_last_grade = grade
 
             results.append(
                 {
@@ -230,6 +254,28 @@ def _run_static_analysis_impl(
                 grade,
                 len(violations),
             )
+
+        if is_batch:
+            all_failed = batch_any_failed and not any(
+                r.get("status") == "completed" for r in results
+            )
+            if all_failed:
+                events_pub.publish_event(
+                    ev.analysis_failed(
+                        org_id, repo_id, "", "one or more workflow analyses failed"
+                    )
+                )
+            else:
+                events_pub.publish_event(
+                    ev.analysis_completed(
+                        org_id,
+                        repo_id,
+                        "",
+                        batch_last_score,
+                        batch_last_grade,
+                        batch_total_issues,
+                    )
+                )
 
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 

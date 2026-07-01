@@ -3,7 +3,7 @@ from typing import Annotated, Any, TypeVar
 
 import jwt
 import redis.asyncio as aioredis
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError
@@ -38,6 +38,11 @@ reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
 )
 
+_optional_oauth2 = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/login/access-token",
+    auto_error=False,
+)
+
 
 def get_db() -> Generator[Session, None, None]:
     with Session(engine) as session:
@@ -68,6 +73,42 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_current_user_sse(
+    session: SessionDep,
+    token_param: str | None = Query(default=None, alias="token"),
+    token_header: str | None = Depends(_optional_oauth2),
+) -> User:
+    """Auth for SSE endpoint: accepts token from ?token= query param or Authorization header.
+
+    Native EventSource cannot set custom headers, so the JWT is passed as a query param.
+    """
+    token = token_param or token_header
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
+        )
+        token_data = TokenPayload(**payload)
+    except (InvalidTokenError, ValidationError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials",
+        )
+    user = session.get(User, token_data.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return user
+
+
+CurrentUserSSE = Annotated[User, Depends(get_current_user_sse)]
 
 
 def get_current_active_superuser(current_user: CurrentUser) -> User:

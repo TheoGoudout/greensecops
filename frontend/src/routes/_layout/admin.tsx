@@ -23,11 +23,14 @@ function getUsersQueryOptions() {
 export const Route = createFileRoute("/_layout/admin")({
   component: Admin,
   beforeLoad: async () => {
-    const user = await UsersService.readUserMe()
-    if (!user.is_superuser) {
-      throw redirect({
-        to: "/",
-      })
+    try {
+      const user = await UsersService.readUserMe()
+      if (!user.is_superuser) {
+        throw redirect({ to: "/" })
+      }
+    } catch (e) {
+      if (e && typeof e === "object" && "to" in e) throw e
+      throw redirect({ to: "/" })
     }
   },
   head: () => ({

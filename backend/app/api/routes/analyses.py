@@ -16,6 +16,8 @@ from app.models import (
     AnalysisStatus,
     Repository,
 )
+from app.services.events import publisher as events_pub
+from app.services.events import schemas as ev
 from app.workers.tasks.static_analysis import (
     reanalyze_all_repositories,
     run_static_analysis,
@@ -66,11 +68,15 @@ def trigger_analysis(
     force: bool = True,
 ) -> dict[str, str]:
     repo = get_or_404(session, Repository, repo_id)
+    effective_branch = branch or repo.default_branch
     run_static_analysis.delay(
         repo_id=str(repo_id),
-        branch=branch or repo.default_branch,
+        branch=effective_branch,
         trigger="manual",
         force=force,
+    )
+    events_pub.publish_event(
+        ev.analysis_queued(str(repo.org_id), str(repo_id), effective_branch, "manual")
     )
     return {"status": "queued", "repo_id": str(repo_id)}
 

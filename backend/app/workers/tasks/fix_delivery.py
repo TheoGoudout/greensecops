@@ -217,10 +217,9 @@ def deliver_fixes_batch(
             fix.status = FixStatus.delivering
             session.add(fix)
         session.commit()
-        for fix in fixes:
-            events_pub.publish_event(
-                ev.fix_delivering(org_id, repo_id_str, str(fix.id))
-            )
+        events_pub.publish_event(
+            ev.fix_delivering_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
+        )
 
         result = asyncio.run(
             _deliver_batch(
@@ -273,19 +272,20 @@ def deliver_fixes_batch(
         session.commit()
 
         if result.error:
-            for fix in fixes:
-                events_pub.publish_event(
-                    ev.fix_delivery_failed(
-                        org_id, repo_id_str, str(fix.id), result.error[:200]
-                    )
+            events_pub.publish_event(
+                ev.fix_delivery_failed(
+                    org_id,
+                    repo_id_str,
+                    fix_ids[0] if fix_ids else "",
+                    result.error[:200],
                 )
+            )
         else:
-            for fix in fixes:
-                events_pub.publish_event(
-                    ev.fix_delivered(
-                        org_id, repo_id_str, str(fix.id), result.pr_url, pr_branch
-                    )
+            events_pub.publish_event(
+                ev.fix_delivered_batch(
+                    org_id, repo_id_str, delivered_fix_ids, result.pr_url, pr_branch
                 )
+            )
             if result.pr_url and delivered_fix_ids:
                 events_pub.publish_event(
                     ev.pr_opened(

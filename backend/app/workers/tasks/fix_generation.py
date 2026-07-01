@@ -65,6 +65,7 @@ def _load_generation_context(
 def run_fix_generation(
     self: object,  # noqa: ARG001
     issue_ids: list[str],
+    batch_mode: bool = False,
 ) -> dict:
     """Single LLM call to generate fixes for one or more issues in the same workflow file."""
     with Session(engine) as session:
@@ -108,14 +109,15 @@ def run_fix_generation(
         for fix in fixes:
             session.refresh(fix)
 
-        events_pub.publish_event(
-            ev.fix_generating(
-                org_id,
-                repo_id_str,
-                fix_ids=[str(f.id) for f in fixes],
-                issue_ids=issue_ids,
+        if not batch_mode:
+            events_pub.publish_event(
+                ev.fix_generating(
+                    org_id,
+                    repo_id_str,
+                    fix_ids=[str(f.id) for f in fixes],
+                    issue_ids=issue_ids,
+                )
             )
-        )
 
         try:
             result = asyncio.run(
@@ -155,10 +157,15 @@ def run_fix_generation(
             session.add(fix)
         session.commit()
 
-        for fix in fixes:
+        if batch_mode:
             events_pub.publish_event(
-                ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
+                ev.fix_ready_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
             )
+        else:
+            for fix in fixes:
+                events_pub.publish_event(
+                    ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
+                )
 
         logger.info(
             "Fix generated for %d issue(s): %d prompt tokens, %d completion tokens",

@@ -5,6 +5,7 @@ import ChangePassword from "@/components/UserSettings/ChangePassword"
 import DeleteAccount from "@/components/UserSettings/DeleteAccount"
 import GitHubIntegration from "@/components/UserSettings/GitHubIntegration"
 import UserInformation from "@/components/UserSettings/UserInformation"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import useAuth from "@/hooks/useAuth"
 
@@ -35,7 +36,16 @@ function UserSettings() {
   const { user: currentUser } = useAuth()
 
   if (!currentUser) {
-    return null
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <Skeleton className="h-10 w-full max-w-md" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
   }
 
   return (
