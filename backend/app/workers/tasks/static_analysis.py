@@ -17,7 +17,11 @@ from app.models import (
     Rule,
     WorkflowFile,
 )
-from app.services.deduplication import compute_content_hash, is_duplicate
+from app.services.deduplication import (
+    compute_content_hash,
+    compute_issue_fingerprint,
+    is_duplicate,
+)
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
@@ -150,9 +154,16 @@ def _run_static_analysis_impl(
                 if rule is None:
                     logger.warning("Unknown rule slug: %s", v.rule_slug)
                     continue
+                fingerprint = compute_issue_fingerprint(
+                    wf_record.id, rule.id, v.job, v.step
+                )
                 issue = Issue(
                     analysis_id=analysis.id,
+                    workflow_file_id=wf_record.id,
                     rule_id=rule.id,
+                    job=v.job,
+                    step=v.step,
+                    fingerprint=fingerprint,
                     severity=IssueSeverity(v.severity),
                     category=IssueCategory(v.category),
                     line_start=v.line_start,

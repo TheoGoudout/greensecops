@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
+    Issue,
     IssueCategory,
     IssueSeverity,
     Organization,
@@ -36,6 +37,7 @@ class FakeViolation:
     message: str
     context: str | None = None
     job: str | None = None
+    step: str | None = None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -198,6 +200,50 @@ def test_with_violations_creates_issues(
     assert "completed" in results_str
     # 1 issue in the result
     assert "'issues': 1" in results_str or '"issues": 1' in results_str
+
+
+def test_with_violations_sets_issue_fields(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    # Arrange — violation with job and step populated
+    violation = FakeViolation(
+        rule_slug=seeded_rule.slug,
+        severity=seeded_rule.severity.value,
+        category=seeded_rule.category.value,
+        line_start=5,
+        line_end=5,
+        message="Unpinned action",
+        job="build",
+        step="actions/checkout@v3",
+    )
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    # Assert — Issue has workflow_file_id, job, step, fingerprint set
+    analysis = db.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.completed)
+    ).first()
+    assert analysis is not None
+
+    issue = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).first()
+    assert issue is not None
+    assert issue.workflow_file_id == workflow_file.id
+    assert issue.job == "build"
+    assert issue.step == "actions/checkout@v3"
+    assert issue.fingerprint is not None
+    assert len(issue.fingerprint) == 16
 
 
 def test_opa_failure_marks_analysis_failed(
