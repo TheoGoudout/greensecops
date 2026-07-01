@@ -90,7 +90,7 @@ repos:
     hooks:
       - id: opa-fmt
         name: OPA policy format
-        entry: bash -c 'docker run --rm -v "$(pwd)/backend/app/rules:/policies" openpolicyagent/opa:latest-static fmt --write /policies'
+        entry: bash -c 'docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)/backend/app/rules:/policies" openpolicyagent/opa:latest-static fmt --write /policies'
         language: system
         files: ^backend/app/rules/.*\.rego$
         pass_filenames: false
