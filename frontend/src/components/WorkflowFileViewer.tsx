@@ -293,22 +293,6 @@ function LineRow({
 
   return (
     <>
-      <div
-        className={`flex border-l-2 ${topSeverity ? SEVERITY_BORDER[topSeverity] : "border-l-transparent"} ${lineClass}`}
-      >
-        <span className="w-10 shrink-0 select-none text-right pr-3 text-muted-foreground/50 border-r border-border py-0.5">
-          {line.lineNum ?? ""}
-        </span>
-        <span className="w-4 shrink-0 select-none text-center py-0.5 text-muted-foreground/70">
-          {prefix !== " " ? prefix : ""}
-        </span>
-        <span
-          className={`pl-2 py-0.5 whitespace-pre flex-1 ${line.type === "remove" ? "line-through opacity-60" : ""}`}
-        >
-          {line.text}
-        </span>
-      </div>
-
       {issues.map((issue) => {
         const fix = fixByIssueId.get(issue.id)
         return (
@@ -325,12 +309,28 @@ function LineRow({
             </span>
             {fix?.status === "ready" && (
               <span className="text-xs text-green-600 dark:text-green-400 shrink-0">
-                fix applied ↑
+                fix applied ↓
               </span>
             )}
           </div>
         )
       })}
+
+      <div
+        className={`flex border-l-2 ${topSeverity ? SEVERITY_BORDER[topSeverity] : "border-l-transparent"} ${lineClass}`}
+      >
+        <span className="w-10 shrink-0 select-none text-right pr-3 text-muted-foreground/50 border-r border-border py-0.5">
+          {line.lineNum ?? ""}
+        </span>
+        <span className="w-4 shrink-0 select-none text-center py-0.5 text-muted-foreground/70">
+          {prefix !== " " ? prefix : ""}
+        </span>
+        <span
+          className={`pl-2 py-0.5 whitespace-pre flex-1 ${line.type === "remove" ? "line-through opacity-60" : ""}`}
+        >
+          {line.text}
+        </span>
+      </div>
     </>
   )
 }

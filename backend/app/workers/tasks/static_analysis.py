@@ -68,11 +68,15 @@ def _enrich_line_numbers(violations: list, raw_content: str) -> None:
             uses = step.get("uses")
             if uses == v.step:
                 try:
-                    line = steps.lc.item(i)[0] + 1  # line of the step mapping
-                    v.line_start = line
-                    v.line_end = line
+                    # Point to the `uses:` key within the step, not the `-` bullet
+                    line = step.lc.key("uses")[0] + 1
                 except Exception:
-                    pass
+                    try:
+                        line = steps.lc.item(i)[0] + 1
+                    except Exception:
+                        break
+                v.line_start = line
+                v.line_end = line
                 break
 
 
