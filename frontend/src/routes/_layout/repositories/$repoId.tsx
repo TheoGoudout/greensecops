@@ -23,9 +23,9 @@ export const Route = createFileRoute("/_layout/repositories/$repoId")({
 const navItems = [
   { label: "Analyses", to: "analyses" },
   { label: "Issues", to: "issues" },
+  { label: "Workflow", to: "workflow" },
   { label: "Fixes", to: "fixes" },
   { label: "Pull Requests", to: "pull-requests" },
-  { label: "Workflow", to: "workflow" },
 ] as const
 
 function RepositoryLayout() {

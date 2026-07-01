@@ -68,7 +68,7 @@ def _enrich_line_numbers(violations: list, raw_content: str) -> None:
             uses = step.get("uses")
             if uses == v.step:
                 try:
-                    line = steps.lc.value(i)[0] + 1  # line of the step mapping
+                    line = steps.lc.item(i)[0] + 1  # line of the step mapping
                     v.line_start = line
                     v.line_end = line
                 except Exception:
