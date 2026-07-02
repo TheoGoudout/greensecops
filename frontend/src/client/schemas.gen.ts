@@ -424,13 +424,12 @@ export const FixPublicSchema = {
         pr_state: {
             anyOf: [
                 {
-                    type: 'string'
+                    '$ref': '#/components/schemas/PullRequestState'
                 },
                 {
                     type: 'null'
                 }
-            ],
-            title: 'Pr State'
+            ]
         },
         comment_url: {
             anyOf: [
@@ -863,6 +862,12 @@ export const PrivateUserCreateSchema = {
     title: 'PrivateUserCreate'
 } as const;
 
+export const PullRequestStateSchema = {
+    type: 'string',
+    enum: ['open', 'merged', 'closed'],
+    title: 'PullRequestState'
+} as const;
+
 export const RepositoryPublicSchema = {
     properties: {
         id: {
@@ -972,6 +977,12 @@ export const RulePublicSchema = {
     title: 'RulePublic'
 } as const;
 
+export const SSESignalSchema = {
+    type: 'string',
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'fix.skipped', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
+    title: 'SSESignal'
+} as const;
+
 export const SamplePayloadSchema = {
     properties: {
         workflow_run_id: {
@@ -1073,14 +1084,19 @@ export const TelemetryPayloadSchema = {
             default: {}
         },
         phase: {
-            type: 'string',
-            title: 'Phase',
+            '$ref': '#/components/schemas/TelemetryPhase',
             default: 'completed'
         }
     },
     type: 'object',
     required: ['workflow_run_id'],
     title: 'TelemetryPayload'
+} as const;
+
+export const TelemetryPhaseSchema = {
+    type: 'string',
+    enum: ['started', 'completed'],
+    title: 'TelemetryPhase'
 } as const;
 
 export const TokenSchema = {

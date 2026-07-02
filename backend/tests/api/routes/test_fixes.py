@@ -1161,3 +1161,31 @@ def test_sync_pr_status_repo_not_found(
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
+
+
+# ─── run_fix_generation task unit tests ──────────────────────────────────────
+
+
+def test_run_fix_generation_skipped_publishes_fix_skipped_event(
+    db: Session,
+    issue: Issue,
+) -> None:
+    from app.workers.tasks.fix_generation import run_fix_generation
+
+    # Arrange — issue already has a delivered fix; task should skip and fire fix.skipped
+    delivered_fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        diff="--- a\n+++ b\n",
+    )
+    db.add(delivered_fix)
+    db.commit()
+
+    with patch("app.workers.tasks.fix_generation.events_pub.publish_event") as mock_pub:
+        result = run_fix_generation(issue_ids=[str(issue.id)])
+
+    assert result == {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
+    published_events = [call.args[0].event for call in mock_pub.call_args_list]
+    assert "fix.skipped" in published_events

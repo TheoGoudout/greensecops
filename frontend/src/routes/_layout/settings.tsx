@@ -58,13 +58,15 @@ function UserSettings() {
       </div>
 
       <Tabs defaultValue="my-profile">
-        <TabsList>
-          {tabsConfig.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.title}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList>
+            {tabsConfig.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.title}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
         {tabsConfig.map((tab) => (
           <TabsContent key={tab.value} value={tab.value}>
             <tab.component />

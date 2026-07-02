@@ -111,8 +111,7 @@ def _run_static_analysis_impl(
 
         results: list[dict[str, str | int]] = []
         batch_total_issues = 0
-        batch_last_score: float = 100.0
-        batch_last_grade: str = "A"
+        batch_scores: list[float] = []
         batch_any_failed = False
 
         for wf in workflow_files_to_analyse:
@@ -285,8 +284,7 @@ def _run_static_analysis_impl(
                 )
             else:
                 batch_total_issues += len(violations)
-                batch_last_score = score
-                batch_last_grade = grade
+                batch_scores.append(score)
 
             results.append(
                 {
@@ -318,13 +316,19 @@ def _run_static_analysis_impl(
                     )
                 )
             else:
+                from app.services.scoring import score_to_grade  # noqa: PLC0415
+
+                avg_score = (
+                    sum(batch_scores) / len(batch_scores) if batch_scores else 100.0
+                )
+                avg_grade = score_to_grade(avg_score)
                 events_pub.publish_event(
                     ev.analysis_completed(
                         org_id,
                         repo_id,
                         "",
-                        batch_last_score,
-                        batch_last_grade,
+                        avg_score,
+                        avg_grade,
                         batch_total_issues,
                     )
                 )

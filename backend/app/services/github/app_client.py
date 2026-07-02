@@ -11,6 +11,7 @@ from github import Auth, Github, GithubIntegration
 from github.GithubException import GithubException
 
 from app.core.config import settings
+from app.models.enums import PullRequestState
 
 _PR_URL_RE = re.compile(
     r"https://github\.com/(?P<full_name>[^/]+/[^/]+)/pull/(?P<number>\d+)"
@@ -89,15 +90,15 @@ class GitHubAppClient:
 
     async def get_pr_state(
         self, installation_id: int, full_name: str, pr_number: int
-    ) -> str:
+    ) -> PullRequestState:
         token = await self.get_installation_token(installation_id)
 
-        def _fetch() -> str:
+        def _fetch() -> PullRequestState:
             repo = Github(auth=Auth.Token(token)).get_repo(full_name)
             pr = repo.get_pull(pr_number)
             if pr.merged:
-                return "merged"
-            return pr.state
+                return PullRequestState.merged
+            return PullRequestState(pr.state)
 
         return await asyncio.to_thread(_fetch)
 

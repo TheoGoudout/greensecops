@@ -107,6 +107,12 @@ export function useRepoEvents(): void {
           }
           break
 
+        case "fix.skipped":
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId)
+          }
+          break
+
         case "fix.generating":
           if (repoId) {
             invalidateFixQueries(queryClient, repoId)
@@ -261,6 +267,40 @@ export function useRepoEvents(): void {
               queryKey: ["organizations", orgId],
             })
           }
+          toast.info("GitHub App uninstalled")
+          break
+
+        case "installation.suspended":
+          queryClient.invalidateQueries({ queryKey: ["installations"] })
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          if (orgId) {
+            queryClient.invalidateQueries({
+              queryKey: ["organizations", orgId],
+            })
+          }
+          toast.warning("GitHub App suspended")
+          break
+
+        case "installation.unsuspended":
+          queryClient.invalidateQueries({ queryKey: ["installations"] })
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          if (orgId) {
+            queryClient.invalidateQueries({
+              queryKey: ["organizations", orgId],
+            })
+          }
+          toast.success("GitHub App unsuspended")
+          break
+
+        case "installation.updated":
+          queryClient.invalidateQueries({ queryKey: ["installations"] })
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          if (orgId) {
+            queryClient.invalidateQueries({
+              queryKey: ["organizations", orgId],
+            })
+          }
+          toast.info("GitHub App permissions updated")
           break
 
         case "repository.added":

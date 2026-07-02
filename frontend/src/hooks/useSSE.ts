@@ -1,11 +1,48 @@
 import { useEffect, useRef } from "react"
+import type { SSESignal } from "../client/types.gen"
+
+export type { SSESignal }
 
 export type SSEEventData = {
-  event: string
+  event: SSESignal
   [key: string]: unknown
 }
 
 type SSEHandler = (data: SSEEventData) => void
+
+const _SSE_SIGNALS = new Set<string>([
+  "analysis.queued",
+  "analysis.started",
+  "analysis.completed",
+  "analysis.failed",
+  "analysis.skipped",
+  "fix.skipped",
+  "fix.generating",
+  "fix.ready",
+  "fix.delivering",
+  "fix.delivered",
+  "fix.failed",
+  "fix.rejected",
+  "pr.opened",
+  "pr.updated",
+  "pr.closed",
+  "pr.merged",
+  "installation.syncing",
+  "installation.synced",
+  "installation.created",
+  "installation.deleted",
+  "installation.suspended",
+  "installation.unsuspended",
+  "installation.updated",
+  "repository.added",
+  "repository.disabled",
+  "repository.toggled",
+  "repository.action_pr_opened",
+])
+
+function isSSESignal(s: unknown): s is SSESignal {
+  return typeof s === "string" && _SSE_SIGNALS.has(s)
+}
 
 const SSE_BASE_URL = `${import.meta.env.VITE_API_URL}/api/v1/events/stream`
 const RECONNECT_BASE_MS = 1000
@@ -42,8 +79,10 @@ export function useSSE(onEvent: SSEHandler): void {
 
       es.onmessage = (e: MessageEvent<string>) => {
         try {
-          const payload = JSON.parse(e.data) as SSEEventData
-          onEventRef.current(payload)
+          const raw = JSON.parse(e.data) as Record<string, unknown>
+          if (isSSESignal(raw.event)) {
+            onEventRef.current(raw as SSEEventData)
+          }
         } catch {
           // malformed JSON — skip
         }
@@ -62,10 +101,22 @@ export function useSSE(onEvent: SSEHandler): void {
 
     connect()
 
+    function forceReconnect() {
+      if (retryTimer !== null) clearTimeout(retryTimer)
+      retryTimer = null
+      es?.close()
+      es = null
+      reconnectDelay = RECONNECT_BASE_MS
+      connect()
+    }
+
+    window.addEventListener("sse:reconnect", forceReconnect)
+
     return () => {
       closed = true
       if (retryTimer !== null) clearTimeout(retryTimer)
       es?.close()
+      window.removeEventListener("sse:reconnect", forceReconnect)
     }
   }, [])
 }

@@ -14,6 +14,7 @@ from app.models import (
     Issue,
     Organization,
     PullRequest,
+    PullRequestState,
     Repository,
 )
 from app.services.events import publisher as events_pub
@@ -180,15 +181,21 @@ def _handle_installation_event(
             repo.enabled = False
         session.commit()
         logger.info(
-            "Disabled %d repos for uninstalled installation %s",
+            "Disabled %d repos for %s installation %s",
             len(repos),
+            action,
             installation_id,
         )
         if repos:
             org_id = str(repos[0].org_id)
-            events_pub.publish_event(
-                ev.installation_deleted(org_id, installation_id, len(repos))
-            )
+            if action == "deleted":
+                events_pub.publish_event(
+                    ev.installation_deleted(org_id, installation_id, len(repos))
+                )
+            else:
+                events_pub.publish_event(
+                    ev.installation_suspended(org_id, installation_id, len(repos))
+                )
             events_pub.publish_event(
                 ev.repository_disabled(org_id, [str(r.id) for r in repos])
             )
@@ -198,9 +205,18 @@ def _handle_installation_event(
         org = _upsert_org_from_installation(session, installation)
         if org is None:
             return
-        events_pub.publish_event(
-            ev.installation_created(str(org.id), installation_id, org.name)
-        )
+        if action == "created":
+            events_pub.publish_event(
+                ev.installation_created(str(org.id), installation_id, org.name)
+            )
+        elif action == "unsuspend":
+            events_pub.publish_event(
+                ev.installation_unsuspended(str(org.id), installation_id, org.name)
+            )
+        else:
+            events_pub.publish_event(
+                ev.installation_updated(str(org.id), installation_id, org.name)
+            )
         # Ownership is linked by the authenticated /installations/sync endpoint
         # (the webhook has no app-session user); here we only ensure repos load.
         _enqueue_installation_sync(installation_id, str(org.id))
@@ -221,10 +237,10 @@ def _handle_pull_request_event(
 
     if action == "closed":
         merged = pr.get("merged", False)
-        new_state = "merged" if merged else "closed"
+        new_state = PullRequestState.merged if merged else PullRequestState.closed
     else:
         merged = False
-        new_state = "open"
+        new_state = PullRequestState.open
 
     from sqlmodel import select
 

@@ -986,6 +986,93 @@ def test_github_webhook_pull_request_fix_not_found_skipped(
 # ─── Enqueue helpers ─────────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize(
+    ("action", "expected_event"),
+    [
+        ("deleted", "installation.deleted"),
+        ("suspend", "installation.suspended"),
+    ],
+)
+def test_github_webhook_installation_disable_publishes_correct_event(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+    action: str,
+    expected_event: str,
+) -> None:
+    installation_id = int(uuid.uuid4().int % 10**6) + 800000
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/event-repo-{uuid.uuid4().hex[:6]}",
+        installation_id=installation_id,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    payload = {"action": action, "installation": {"id": installation_id}}
+
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.events_pub.publish_event") as mock_pub,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "installation"},
+        )
+
+    assert response.status_code == 200
+    published_events = [call.args[0].event for call in mock_pub.call_args_list]
+    assert expected_event in published_events
+
+
+@pytest.mark.parametrize(
+    ("action", "expected_event"),
+    [
+        ("created", "installation.created"),
+        ("unsuspend", "installation.unsuspended"),
+        ("new_permissions_accepted", "installation.updated"),
+    ],
+)
+def test_github_webhook_installation_activate_publishes_correct_event(
+    client: TestClient,
+    db: Session,
+    action: str,
+    expected_event: str,
+) -> None:
+    installation_id = int(uuid.uuid4().int % 10**6) + 900000
+    account_id = int(uuid.uuid4().int % 10**9)
+    login = f"event-acct-{uuid.uuid4().hex[:6]}"
+    payload = {
+        "action": action,
+        "installation": {
+            "id": installation_id,
+            "account": {"id": account_id, "login": login, "type": "Organization"},
+        },
+    }
+
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_installation_sync"),
+        patch("app.api.routes.webhooks.events_pub.publish_event") as mock_pub,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "installation"},
+        )
+
+    assert response.status_code == 200
+    published_events = [call.args[0].event for call in mock_pub.call_args_list]
+    assert expected_event in published_events
+
+
+# ─── Enqueue helpers ─────────────────────────────────────────────────────────
+
+
 def test_enqueue_static_analysis_calls_celery_task() -> None:
     from unittest.mock import MagicMock
 

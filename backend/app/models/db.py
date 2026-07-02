@@ -16,6 +16,8 @@ from .enums import (
     IssueSeverity,
     LLMProvider,
     OrgRole,
+    PullRequestState,
+    TelemetryPhase,
     UserTier,
 )
 
@@ -272,7 +274,7 @@ class PullRequest(SQLModel, table=True):
     )
     pr_branch: str = Field(max_length=255, index=True)
     pr_url: str | None = Field(default=None, max_length=1024)
-    pr_state: str | None = Field(default=None, max_length=32)
+    pr_state: PullRequestState | None = Field(default=None)
     comment_url: str | None = Field(default=None, max_length=1024)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
@@ -327,7 +329,7 @@ class TelemetryRun(SQLModel, table=True):
     workflow_run_id: int = Field(index=True)
     runner_specs: str | None = Field(default=None)
     metrics: str | None = Field(default=None)
-    phase: str | None = Field(default=None, max_length=32)
+    phase: TelemetryPhase | None = Field(default=None)
     collected_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )

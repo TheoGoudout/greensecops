@@ -1,6 +1,48 @@
+import Prism from "prismjs"
+import "prismjs/components/prism-yaml"
 import { useMemo, useState } from "react"
 import type { FixPublic, IssuePublic, IssueSeverity } from "@/client"
 import { SeverityChip } from "@/components/SeverityChip"
+
+type FlatToken = { type: string; text: string }
+
+const YAML_TOKEN_COLORS: Record<string, string> = {
+  comment: "text-slate-400 dark:text-slate-500 italic",
+  key: "text-sky-600 dark:text-sky-400",
+  string: "text-emerald-600 dark:text-emerald-400",
+  scalar: "text-emerald-600 dark:text-emerald-400",
+  number: "text-amber-600 dark:text-amber-400",
+  datetime: "text-amber-600 dark:text-amber-400",
+  boolean: "text-violet-600 dark:text-violet-400",
+  null: "text-violet-400 dark:text-violet-300",
+  tag: "text-pink-600 dark:text-pink-400",
+  important: "text-orange-600 dark:text-orange-400",
+  directive: "text-orange-600 dark:text-orange-400",
+  punctuation: "text-slate-400 dark:text-slate-500",
+}
+
+function extractText(content: Prism.Token["content"]): string {
+  if (typeof content === "string") return content
+  if (Array.isArray(content))
+    return (content as (Prism.Token | string)[])
+      .map((t) => (typeof t === "string" ? t : extractText(t.content)))
+      .join("")
+  return extractText((content as Prism.Token).content)
+}
+
+function tokenizeYamlLine(line: string): FlatToken[] {
+  if (!line) return [{ type: "plain", text: "" }]
+  try {
+    const stream = Prism.tokenize(line, Prism.languages.yaml)
+    return stream.map((t) =>
+      typeof t === "string"
+        ? { type: "plain", text: t }
+        : { type: t.type, text: extractText(t.content) },
+    )
+  } catch {
+    return [{ type: "plain", text: line }]
+  }
+}
 
 interface WorkflowFileViewerProps {
   path: string
@@ -48,7 +90,7 @@ function parsePatch(patch: string): Hunk[] {
   return hunks
 }
 
-function applyPatches(
+export function applyPatches(
   originalLines: string[],
   fixes: FixPublic[],
 ): LineEntry[] {
@@ -81,10 +123,16 @@ function applyPatches(
         if (prefix === " ") {
           next.push(...addBuf)
           addBuf.length = 0
+          // Skip past lines inserted by previous patches before consuming original line
+          while (i < entries.length && entries[i].lineNum === null)
+            next.push(entries[i++])
           next.push(entries[i++])
         } else if (prefix === "-") {
           next.push(...addBuf)
           addBuf.length = 0
+          // Skip past lines inserted by previous patches before consuming original line
+          while (i < entries.length && entries[i].lineNum === null)
+            next.push(entries[i++])
           next.push({ ...entries[i], type: "remove" })
           i++
         } else {
@@ -328,7 +376,11 @@ function LineRow({
         <span
           className={`pl-2 py-0.5 whitespace-pre flex-1 ${line.type === "remove" ? "line-through opacity-60" : ""}`}
         >
-          {line.text}
+          {tokenizeYamlLine(line.text).map((token, i) => (
+            <span key={i} className={YAML_TOKEN_COLORS[token.type] ?? ""}>
+              {token.text}
+            </span>
+          ))}
         </span>
       </div>
     </>

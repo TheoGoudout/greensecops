@@ -24,6 +24,41 @@ export function extractFilePath(patch: string): string {
   return unifiedMatch?.[1] ?? ""
 }
 
+interface ParsedHunk {
+  oldStart: number
+  oldCount: number
+  newCount: number
+  context: string
+  bodyLines: string[]
+}
+
+function parseHunkHeader(line: string): Omit<ParsedHunk, "bodyLines"> | null {
+  const match = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/)
+  if (!match) return null
+  return {
+    oldStart: parseInt(match[1], 10),
+    oldCount: match[2] !== undefined ? parseInt(match[2], 10) : 1,
+    newCount: match[4] !== undefined ? parseInt(match[4], 10) : 1,
+    context: match[5] ?? "",
+  }
+}
+
+function extractHunks(patch: string): ParsedHunk[] {
+  const hunks: ParsedHunk[] = []
+  let current: ParsedHunk | null = null
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("@@")) {
+      if (current) hunks.push(current)
+      const parsed = parseHunkHeader(line)
+      if (parsed) current = { ...parsed, bodyLines: [] }
+    } else if (current) {
+      current.bodyLines.push(line)
+    }
+  }
+  if (current) hunks.push(current)
+  return hunks
+}
+
 export function combinePatchesForFile(patches: string[]): string {
   if (patches.length === 0) return ""
   const validPatches = patches.filter(
@@ -32,16 +67,26 @@ export function combinePatchesForFile(patches: string[]): string {
   if (validPatches.length === 0) return ""
   const unique = [...new Set(validPatches)]
   if (unique.length === 1) return unique[0]
-  const hunkStart = unique[0].indexOf("@@")
-  const header = hunkStart !== -1 ? unique[0].slice(0, hunkStart) : unique[0]
-  const hunks = unique
-    .map((p) => {
-      const start = p.indexOf("@@")
-      return start !== -1 ? p.slice(start) : ""
-    })
-    .filter(Boolean)
-    .join("\n")
-  return header + hunks
+
+  const firstHunkIdx = unique[0].indexOf("@@")
+  const header = firstHunkIdx !== -1 ? unique[0].slice(0, firstHunkIdx) : ""
+
+  const allHunks = unique.flatMap(extractHunks)
+  allHunks.sort((a, b) => a.oldStart - b.oldStart)
+
+  let cumulativeDelta = 0
+  const hunkStrings: string[] = []
+
+  for (const hunk of allHunks) {
+    const adjustedNewStart = hunk.oldStart + cumulativeDelta
+    const oldCountStr = hunk.oldCount !== 1 ? `,${hunk.oldCount}` : ""
+    const newCountStr = hunk.newCount !== 1 ? `,${hunk.newCount}` : ""
+    const hunkHeader = `@@ -${hunk.oldStart}${oldCountStr} +${adjustedNewStart}${newCountStr} @@${hunk.context}`
+    hunkStrings.push([hunkHeader, ...hunk.bodyLines].join("\n"))
+    cumulativeDelta += hunk.newCount - hunk.oldCount
+  }
+
+  return header + hunkStrings.join("\n")
 }
 
 export function groupFixesByWorkflow(

@@ -29,11 +29,11 @@ import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/r
 import { Route as LayoutFixesFixIdRouteImport } from './routes/_layout/fixes/$fixId'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 import { Route as LayoutRepositoriesRepoIdIndexRouteImport } from './routes/_layout/repositories/$repoId/index'
+import { Route as LayoutRepositoriesRepoIdWorkflowRouteImport } from './routes/_layout/repositories/$repoId/workflow'
 import { Route as LayoutRepositoriesRepoIdPullRequestsRouteImport } from './routes/_layout/repositories/$repoId/pull-requests'
 import { Route as LayoutRepositoriesRepoIdIssuesRouteImport } from './routes/_layout/repositories/$repoId/issues'
 import { Route as LayoutRepositoriesRepoIdFixesRouteImport } from './routes/_layout/repositories/$repoId/fixes'
 import { Route as LayoutRepositoriesRepoIdAnalysesRouteImport } from './routes/_layout/repositories/$repoId/analyses'
-import { Route as LayoutRepositoriesRepoIdWorkflowRouteImport } from './routes/_layout/repositories/$repoId/workflow'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -137,6 +137,12 @@ const LayoutRepositoriesRepoIdIndexRoute =
     path: '/',
     getParentRoute: () => LayoutRepositoriesRepoIdRoute,
   } as any)
+const LayoutRepositoriesRepoIdWorkflowRoute =
+  LayoutRepositoriesRepoIdWorkflowRouteImport.update({
+    id: '/workflow',
+    path: '/workflow',
+    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
+  } as any)
 const LayoutRepositoriesRepoIdPullRequestsRoute =
   LayoutRepositoriesRepoIdPullRequestsRouteImport.update({
     id: '/pull-requests',
@@ -159,12 +165,6 @@ const LayoutRepositoriesRepoIdAnalysesRoute =
   LayoutRepositoriesRepoIdAnalysesRouteImport.update({
     id: '/analyses',
     path: '/analyses',
-    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
-  } as any)
-const LayoutRepositoriesRepoIdWorkflowRoute =
-  LayoutRepositoriesRepoIdWorkflowRouteImport.update({
-    id: '/workflow',
-    path: '/workflow',
     getParentRoute: () => LayoutRepositoriesRepoIdRoute,
   } as any)
 
@@ -478,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdIndexRouteImport
       parentRoute: typeof LayoutRepositoriesRepoIdRoute
     }
+    '/_layout/repositories/$repoId/workflow': {
+      id: '/_layout/repositories/$repoId/workflow'
+      path: '/workflow'
+      fullPath: '/repositories/$repoId/workflow'
+      preLoaderRoute: typeof LayoutRepositoriesRepoIdWorkflowRouteImport
+      parentRoute: typeof LayoutRepositoriesRepoIdRoute
+    }
     '/_layout/repositories/$repoId/pull-requests': {
       id: '/_layout/repositories/$repoId/pull-requests'
       path: '/pull-requests'
@@ -504,13 +511,6 @@ declare module '@tanstack/react-router' {
       path: '/analyses'
       fullPath: '/repositories/$repoId/analyses'
       preLoaderRoute: typeof LayoutRepositoriesRepoIdAnalysesRouteImport
-      parentRoute: typeof LayoutRepositoriesRepoIdRoute
-    }
-    '/_layout/repositories/$repoId/workflow': {
-      id: '/_layout/repositories/$repoId/workflow'
-      path: '/workflow'
-      fullPath: '/repositories/$repoId/workflow'
-      preLoaderRoute: typeof LayoutRepositoriesRepoIdWorkflowRouteImport
       parentRoute: typeof LayoutRepositoriesRepoIdRoute
     }
   }

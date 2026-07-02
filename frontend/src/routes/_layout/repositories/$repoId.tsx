@@ -21,11 +21,11 @@ export const Route = createFileRoute("/_layout/repositories/$repoId")({
 })
 
 const navItems = [
-  { label: "Analyses", to: "analyses" },
-  { label: "Issues", to: "issues" },
-  { label: "Workflow", to: "workflow" },
-  { label: "Fixes", to: "fixes" },
-  { label: "Pull Requests", to: "pull-requests" },
+  { label: "Analyses", shortLabel: "Analyses", to: "analyses" },
+  { label: "Issues", shortLabel: "Issues", to: "issues" },
+  { label: "Workflow", shortLabel: "Workflow", to: "workflow" },
+  { label: "Fixes", shortLabel: "Fixes", to: "fixes" },
+  { label: "Pull Requests", shortLabel: "PRs", to: "pull-requests" },
 ] as const
 
 function RepositoryLayout() {
@@ -131,7 +131,7 @@ function RepositoryLayout() {
         </div>
       </div>
 
-      <nav className="flex gap-1 border-b overflow-x-auto">
+      <nav className="flex gap-1 border-b overflow-x-auto scrollbar-none">
         {navItems.map((item) => {
           const href = `/repositories/${repoId}/${item.to}`
           const isActive = currentPath.startsWith(href)
@@ -147,7 +147,8 @@ function RepositoryLayout() {
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/50",
               )}
             >
-              {item.label}
+              <span className="sm:hidden">{item.shortLabel}</span>
+              <span className="hidden sm:inline">{item.label}</span>
             </Link>
           )
         })}

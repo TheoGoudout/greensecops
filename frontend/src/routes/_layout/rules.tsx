@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import useAuth from "@/hooks/useAuth"
+import { CATEGORY_SELECT_OPTIONS } from "@/lib/issue-constants"
 
 export const Route = createFileRoute("/_layout/rules")({
   component: Rules,
@@ -23,15 +24,6 @@ export const Route = createFileRoute("/_layout/rules")({
     meta: [{ title: "Rules - GreenSecOps" }],
   }),
 })
-
-const CATEGORIES: Array<{ value: IssueCategory | "all"; label: string }> = [
-  { value: "all", label: "All categories" },
-  { value: "energy", label: "⚡ Energy" },
-  { value: "reliability", label: "🛡️ Reliability" },
-  { value: "security", label: "🔒 Security" },
-  { value: "performance", label: "🚀 Performance" },
-  { value: "maintainability", label: "🔧 Maintainability" },
-]
 
 function RuleRow({
   rule,
@@ -117,7 +109,7 @@ function Rules() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CATEGORIES.map((c) => (
+            {CATEGORY_SELECT_OPTIONS.map((c) => (
               <SelectItem key={c.value} value={c.value}>
                 {c.label}
               </SelectItem>

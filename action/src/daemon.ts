@@ -1,13 +1,7 @@
-import * as os from "node:os"
-import * as path from "node:path"
 import { refreshOidcToken, sendSample } from "./api"
-import { loadState } from "./state"
+import { loadState, STATE_FILE } from "./state"
 import { getMetricsSample } from "./telemetry"
 
-const STATE_FILE = path.join(
-  process.env.RUNNER_TEMP ?? os.tmpdir(),
-  "greensecops-state.json",
-)
 const SAMPLE_INTERVAL_MS =
   parseInt(process.env.INPUT_SAMPLE_INTERVAL ?? "30", 10) * 1000
 
