@@ -1,16 +1,11 @@
 import { spawn } from "node:child_process"
 import { writeFileSync } from "node:fs"
-import * as os from "node:os"
 import * as path from "node:path"
 import * as core from "@actions/core"
 import { ingestTelemetry } from "./api"
+import { getGitHubContext, STATE_FILE } from "./state"
 import { getMetricsSample, getRunnerSpecs } from "./telemetry"
 import type { ActionState } from "./types"
-
-const STATE_FILE = path.join(
-  process.env.RUNNER_TEMP ?? os.tmpdir(),
-  "greensecops-state.json",
-)
 
 async function run(): Promise<void> {
   const greensecopsUrl = core
@@ -29,12 +24,7 @@ async function run(): Promise<void> {
     return
   }
 
-  const workflowRunId = parseInt(process.env.GITHUB_RUN_ID ?? "0", 10)
-  const repository = process.env.GITHUB_REPOSITORY ?? ""
-  const branch = (process.env.GITHUB_REF ?? "").replace("refs/heads/", "")
-  const commitSha = process.env.GITHUB_SHA ?? ""
-  const workflowName = process.env.GITHUB_WORKFLOW ?? ""
-
+  const ctx = getGitHubContext()
   const runnerSpecs = getRunnerSpecs()
   const initialMetrics = getMetricsSample()
 
@@ -53,8 +43,9 @@ async function run(): Promise<void> {
     daemonPid: daemon.pid ?? 0,
     greensecopsUrl,
     oidcToken,
-    workflowRunId,
-    repository,
+    workflowRunId: ctx.workflowRunId,
+    repository: ctx.repository,
+    runnerSpecs,
     startedAt: new Date().toISOString(),
   }
 
@@ -65,11 +56,11 @@ async function run(): Promise<void> {
   }
 
   const ok = await ingestTelemetry(greensecopsUrl, oidcToken, {
-    workflow_run_id: workflowRunId,
-    repository,
-    branch,
-    commit_sha: commitSha,
-    workflow_name: workflowName,
+    workflow_run_id: ctx.workflowRunId,
+    repository: ctx.repository,
+    branch: ctx.branch,
+    commit_sha: ctx.commitSha,
+    workflow_name: ctx.workflowName,
     runner_specs: runnerSpecs,
     metrics: initialMetrics,
     phase: "started",

@@ -20,6 +20,10 @@ export interface MetricsSample {
   net_bytes_recv?: number
 }
 
+import type { TelemetryPhase } from "./client/types.gen"
+
+export type { SamplePayload, TelemetryPhase } from "./client/types.gen"
+
 export interface IngestPayload {
   workflow_run_id: number
   repository: string
@@ -28,16 +32,15 @@ export interface IngestPayload {
   workflow_name: string
   runner_specs: RunnerSpecs
   metrics: MetricsSample
-  phase?: string
+  phase?: TelemetryPhase
 }
 
-export interface SamplePayload {
-  workflow_run_id: number
-  cpu_percent?: number
-  ram_used_mb?: number
-  disk_used_gb?: number
-  net_bytes_sent?: number
-  net_bytes_recv?: number
+export interface GitHubContext {
+  workflowRunId: number
+  repository: string
+  branch: string
+  commitSha: string
+  workflowName: string
 }
 
 export interface ActionState {
@@ -46,5 +49,6 @@ export interface ActionState {
   oidcToken: string
   workflowRunId: number
   repository: string
+  runnerSpecs: RunnerSpecs
   startedAt: string
 }

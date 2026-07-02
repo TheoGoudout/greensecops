@@ -1,14 +1,7 @@
-import * as os from "node:os"
-import * as path from "node:path"
 import * as core from "@actions/core"
 import { ingestTelemetry } from "./api"
-import { killDaemon, loadState } from "./state"
-import { getMetricsSample, getRunnerSpecs } from "./telemetry"
-
-const STATE_FILE = path.join(
-  process.env.RUNNER_TEMP ?? os.tmpdir(),
-  "greensecops-state.json",
-)
+import { getGitHubContext, killDaemon, loadState, STATE_FILE } from "./state"
+import { getMetricsSample } from "./telemetry"
 
 async function run(): Promise<void> {
   const state = loadState(STATE_FILE)
@@ -21,14 +14,15 @@ async function run(): Promise<void> {
 
   const finalMetrics = getMetricsSample()
   const durationMs = Date.now() - new Date(state.startedAt).getTime()
+  const ctx = getGitHubContext()
 
   const ok = await ingestTelemetry(state.greensecopsUrl, state.oidcToken, {
     workflow_run_id: state.workflowRunId,
     repository: state.repository,
-    branch: (process.env.GITHUB_REF ?? "").replace("refs/heads/", ""),
-    commit_sha: process.env.GITHUB_SHA ?? "",
-    workflow_name: process.env.GITHUB_WORKFLOW ?? "",
-    runner_specs: getRunnerSpecs(),
+    branch: ctx.branch,
+    commit_sha: ctx.commitSha,
+    workflow_name: ctx.workflowName,
+    runner_specs: state.runnerSpecs,
     metrics: {
       ...finalMetrics,
       duration_ms: durationMs,
