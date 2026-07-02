@@ -3,7 +3,9 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlmodel import Session, select, update
+from ruamel.yaml import YAML as RuamelYAML
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models import (
@@ -17,12 +19,65 @@ from app.models import (
     Rule,
     WorkflowFile,
 )
-from app.services.deduplication import compute_content_hash, is_duplicate
+from app.services.deduplication import (
+    compute_content_hash,
+    compute_issue_fingerprint,
+    is_duplicate,
+)
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_line_numbers(violations: list, raw_content: str) -> None:
+    """Populate line_start/line_end on violations using ruamel.yaml node positions."""
+    ryaml = RuamelYAML()
+    try:
+        doc = ryaml.load(raw_content)
+    except Exception:
+        return
+    if not isinstance(doc, dict):
+        return
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return
+    for v in violations:
+        if v.job is None:
+            continue
+        job = jobs.get(v.job)
+        if job is None:
+            continue
+        if v.step is None:
+            # Job-level: point to the job key line
+            try:
+                line = jobs.lc.key(v.job)[0] + 1  # ruamel lc is 0-indexed
+                v.line_start = line
+                v.line_end = line
+            except Exception:
+                pass
+            continue
+        # Step-level: find the step with matching 'uses'
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for i, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses")
+            if uses == v.step:
+                try:
+                    # Point to the `uses:` key within the step, not the `-` bullet
+                    line = step.lc.key("uses")[0] + 1
+                except Exception:
+                    try:
+                        line = steps.lc.item(i)[0] + 1
+                    except Exception:
+                        break
+                v.line_start = line
+                v.line_end = line
+                break
 
 
 def _run_static_analysis_impl(
@@ -46,7 +101,20 @@ def _run_static_analysis_impl(
         else:
             workflow_files_to_analyse = _fetch_workflow_files(repo)
 
+        is_batch = workflow_file_id is None and len(workflow_files_to_analyse) > 1
+        effective_branch = branch or repo.default_branch
+
+        if is_batch:
+            events_pub.publish_event(
+                ev.analysis_started(org_id, repo_id, "", effective_branch)
+            )
+
         results: list[dict[str, str | int]] = []
+        batch_total_issues = 0
+        batch_last_score: float = 100.0
+        batch_last_grade: str = "A"
+        batch_any_failed = False
+
         for wf in workflow_files_to_analyse:
             content = wf.raw_content if isinstance(wf, WorkflowFile) else wf.content
             path = wf.path
@@ -65,15 +133,16 @@ def _run_static_analysis_impl(
                     score=existing.score,
                     grade=existing.grade,
                     triggered_by=AnalysisTrigger(trigger),
-                    branch=branch or repo.default_branch,
+                    branch=effective_branch,
                     commit_sha=commit_sha or None,
                     completed_at=datetime.now(timezone.utc),
                 )
                 session.add(skipped)
                 session.commit()
-                events_pub.publish_event(
-                    ev.analysis_skipped(org_id, repo_id, str(skipped.id))
-                )
+                if not is_batch:
+                    events_pub.publish_event(
+                        ev.analysis_skipped(org_id, repo_id, str(skipped.id))
+                    )
                 results.append(
                     {
                         "path": path,
@@ -111,16 +180,17 @@ def _run_static_analysis_impl(
                 content_hash=content_hash,
                 status=AnalysisStatus.running,
                 triggered_by=AnalysisTrigger(trigger),
-                branch=branch or repo.default_branch,
+                branch=effective_branch,
                 commit_sha=commit_sha or None,
             )
             session.add(analysis)
             session.flush()
-            events_pub.publish_event(
-                ev.analysis_started(
-                    org_id, repo_id, str(analysis.id), branch or repo.default_branch
+            if not is_batch:
+                events_pub.publish_event(
+                    ev.analysis_started(
+                        org_id, repo_id, str(analysis.id), effective_branch
+                    )
                 )
-            )
 
             try:
                 violations = asyncio.run(_evaluate(content))
@@ -131,13 +201,18 @@ def _run_static_analysis_impl(
                 analysis.completed_at = datetime.now(timezone.utc)
                 session.add(analysis)
                 session.commit()
-                events_pub.publish_event(
-                    ev.analysis_failed(
-                        org_id, repo_id, str(analysis.id), str(exc)[:200]
+                if not is_batch:
+                    events_pub.publish_event(
+                        ev.analysis_failed(
+                            org_id, repo_id, str(analysis.id), str(exc)[:200]
+                        )
                     )
-                )
+                else:
+                    batch_any_failed = True
                 results.append({"path": path, "status": "failed"})
                 continue
+
+            _enrich_line_numbers(violations, content)
 
             rule_map: dict[str, Rule] = {
                 r.slug: r for r in session.exec(select(Rule)).all()
@@ -150,17 +225,40 @@ def _run_static_analysis_impl(
                 if rule is None:
                     logger.warning("Unknown rule slug: %s", v.rule_slug)
                     continue
-                issue = Issue(
-                    analysis_id=analysis.id,
-                    rule_id=rule.id,
-                    severity=IssueSeverity(v.severity),
-                    category=IssueCategory(v.category),
-                    line_start=v.line_start,
-                    line_end=v.line_end,
-                    message=v.message,
-                    context=v.context,
+                fingerprint = compute_issue_fingerprint(
+                    wf_record.id, rule.id, v.job, v.step
                 )
-                session.add(issue)
+                stmt = (
+                    pg_insert(Issue)
+                    .values(
+                        id=uuid.uuid4(),
+                        analysis_id=analysis.id,
+                        workflow_file_id=wf_record.id,
+                        rule_id=rule.id,
+                        job=v.job,
+                        step=v.step,
+                        fingerprint=fingerprint,
+                        severity=IssueSeverity(v.severity),
+                        category=IssueCategory(v.category),
+                        line_start=v.line_start,
+                        line_end=v.line_end,
+                        message=v.message,
+                        context=v.context,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_issue_wf_fingerprint",
+                        set_={
+                            "analysis_id": analysis.id,
+                            "severity": IssueSeverity(v.severity),
+                            "line_start": v.line_start,
+                            "line_end": v.line_end,
+                            "message": v.message,
+                            "context": v.context,
+                        },
+                    )
+                )
+                session.execute(stmt)
                 pair = (v.severity, rule.severity_weight)
                 if v.job is None:
                     workflow_score_inputs.append(pair)
@@ -177,17 +275,18 @@ def _run_static_analysis_impl(
             analysis.grade = grade
             analysis.completed_at = datetime.now(timezone.utc)
             session.add(analysis)
-            session.execute(
-                update(WorkflowFile)
-                .where(WorkflowFile.id == wf_record.id)
-                .values(latest_analysis_id=analysis.id)
-            )
             session.commit()
-            events_pub.publish_event(
-                ev.analysis_completed(
-                    org_id, repo_id, str(analysis.id), score, grade, len(violations)
+
+            if not is_batch:
+                events_pub.publish_event(
+                    ev.analysis_completed(
+                        org_id, repo_id, str(analysis.id), score, grade, len(violations)
+                    )
                 )
-            )
+            else:
+                batch_total_issues += len(violations)
+                batch_last_score = score
+                batch_last_grade = grade
 
             results.append(
                 {
@@ -207,6 +306,28 @@ def _run_static_analysis_impl(
                 grade,
                 len(violations),
             )
+
+        if is_batch:
+            all_failed = batch_any_failed and not any(
+                r.get("status") == "completed" for r in results
+            )
+            if all_failed:
+                events_pub.publish_event(
+                    ev.analysis_failed(
+                        org_id, repo_id, "", "one or more workflow analyses failed"
+                    )
+                )
+            else:
+                events_pub.publish_event(
+                    ev.analysis_completed(
+                        org_id,
+                        repo_id,
+                        "",
+                        batch_last_score,
+                        batch_last_grade,
+                        batch_total_issues,
+                    )
+                )
 
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 

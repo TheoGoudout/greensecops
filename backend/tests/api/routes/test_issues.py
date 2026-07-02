@@ -65,6 +65,8 @@ def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
 
 @pytest.fixture()
 def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Analysis:
+    from datetime import datetime, timezone
+
     a = Analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
@@ -74,13 +76,11 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
         grade="C",
         triggered_by=AnalysisTrigger.manual,
         branch="main",
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(a)
     db.commit()
     db.refresh(a)
-    workflow_file.latest_analysis_id = a.id
-    db.add(workflow_file)
-    db.commit()
     return a
 
 
@@ -105,6 +105,7 @@ def rule(db: Session) -> Rule:
 def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
     i = Issue(
         analysis_id=analysis.id,
+        workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.high,
         category=IssueCategory.security,
@@ -347,7 +348,9 @@ def test_list_issues_latest_only_excludes_old_analysis(
     analysis: Analysis,
     issue: Issue,
 ) -> None:
-    # Arrange — create a newer analysis and point workflow_file at it
+    from datetime import datetime, timezone
+
+    # Arrange — create a newer analysis with a later completed_at
     new_analysis = Analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
@@ -357,6 +360,7 @@ def test_list_issues_latest_only_excludes_old_analysis(
         grade="A",
         triggered_by=AnalysisTrigger.manual,
         branch="main",
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(new_analysis)
     db.commit()
@@ -364,6 +368,7 @@ def test_list_issues_latest_only_excludes_old_analysis(
 
     new_issue = Issue(
         analysis_id=new_analysis.id,
+        workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.high,
         category=IssueCategory.security,
@@ -373,9 +378,6 @@ def test_list_issues_latest_only_excludes_old_analysis(
         context=None,
     )
     db.add(new_issue)
-
-    workflow_file.latest_analysis_id = new_analysis.id
-    db.add(workflow_file)
     db.commit()
 
     # Act — default latest_only=True should return only new_issue
@@ -401,7 +403,9 @@ def test_list_issues_latest_only_false_includes_all(
     analysis: Analysis,
     issue: Issue,
 ) -> None:
-    # Arrange — create a newer analysis pointing workflow_file forward
+    from datetime import datetime, timezone
+
+    # Arrange — create a newer analysis with a later completed_at
     new_analysis = Analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
@@ -411,6 +415,7 @@ def test_list_issues_latest_only_false_includes_all(
         grade="A",
         triggered_by=AnalysisTrigger.manual,
         branch="main",
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(new_analysis)
     db.commit()
@@ -418,6 +423,7 @@ def test_list_issues_latest_only_false_includes_all(
 
     new_issue = Issue(
         analysis_id=new_analysis.id,
+        workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.high,
         category=IssueCategory.security,
@@ -427,9 +433,6 @@ def test_list_issues_latest_only_false_includes_all(
         context=None,
     )
     db.add(new_issue)
-
-    workflow_file.latest_analysis_id = new_analysis.id
-    db.add(workflow_file)
     db.commit()
 
     # Act — latest_only=False returns issues from all analyses

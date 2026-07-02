@@ -66,10 +66,11 @@ export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 export type FixPublic = {
     id: string;
     issue_id: string;
+    pr_id?: (string | null);
     llm_provider: LLMProvider;
     llm_model: string;
     status: FixStatus;
-    diff?: (string | null);
+    patch?: (string | null);
     diff_patch?: (string | null);
     pr_url?: (string | null);
     pr_branch?: (string | null);
@@ -265,6 +266,12 @@ export type WorkflowDeliverRequest = {
     fix_ids: Array<(string)>;
 };
 
+export type WorkflowFilePublic = {
+    id: string;
+    path: string;
+    raw_content?: (string | null);
+};
+
 export type AnalysesListAnalysesData = {
     branch?: (string | null);
     grade?: (string | null);
@@ -336,6 +343,10 @@ export type BillingStripeWebhookData = {
 export type BillingStripeWebhookResponse = ({
     [key: string]: (string);
 });
+
+export type EventsStreamEventsData = {
+    token?: (string | null);
+};
 
 export type EventsStreamEventsResponse = (unknown);
 
@@ -513,6 +524,12 @@ export type RepositoriesGetRepositoryData = {
 };
 
 export type RepositoriesGetRepositoryResponse = (RepositoryPublic);
+
+export type RepositoriesListWorkflowFilesData = {
+    repoId: string;
+};
+
+export type RepositoriesListWorkflowFilesResponse = (Array<WorkflowFilePublic>);
 
 export type RepositoriesToggleRepositoryData = {
     enabled: boolean;

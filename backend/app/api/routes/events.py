@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUserSSE, SessionDep
 from app.core.config import settings
 from app.models import OrgMember
 
@@ -38,10 +38,10 @@ async def _stream_events(
         await pubsub.subscribe(*channels)
         logger.debug("SSE subscribed to %d org channel(s)", len(channels))
 
-        last_keepalive = asyncio.get_event_loop().time()
+        last_keepalive = asyncio.get_running_loop().time()
 
         while True:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if now - last_keepalive >= _KEEPALIVE_SECONDS:
                 yield ": keepalive\n\n"
                 last_keepalive = now
@@ -74,7 +74,7 @@ async def _stream_events(
 @router.get("/stream")
 async def stream_events(
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUserSSE,
 ) -> StreamingResponse:
     """Stream real-time SSE events scoped to the authenticated user's organizations."""
     org_ids = [
@@ -89,6 +89,7 @@ async def stream_events(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
     )

@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.db import engine
@@ -13,6 +13,7 @@ from app.models import (
     Fix,
     FixDeliveryMode,
     FixStatus,
+    PullRequest,
     Repository,
     WorkflowFile,
 )
@@ -98,8 +99,11 @@ def deliver_fix(
         )
 
         rule_slug = issue.rule.slug if issue.rule else "fix"
+        existing_pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
         fix_branch = (
-            fix.pr_branch or f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
+            existing_pr.pr_branch
+            if existing_pr
+            else f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
         )
         result = asyncio.run(
             _deliver(
@@ -125,11 +129,32 @@ def deliver_fix(
             )
         else:
             fix.status = FixStatus.delivered
-            fix.pr_url = result.pr_url
-            fix.pr_branch = fix_branch
-            fix.pr_state = "open" if result.pr_url else None
-            fix.comment_url = result.comment_url
             fix.delivered_at = datetime.now(timezone.utc)
+            if result.pr_url:
+                pr = session.exec(
+                    select(PullRequest).where(
+                        PullRequest.repo_id == repo.id,
+                        PullRequest.pr_branch == fix_branch,
+                    )
+                ).first()
+                if pr is None:
+                    pr = PullRequest(
+                        repo_id=repo.id,
+                        pr_branch=fix_branch,
+                        pr_url=result.pr_url,
+                        pr_state="open",
+                        comment_url=result.comment_url,
+                    )
+                    session.add(pr)
+                    session.flush()
+                else:
+                    pr.pr_url = result.pr_url
+                    pr.pr_state = "open"
+                    pr.comment_url = result.comment_url
+                    pr.updated_at = datetime.now(timezone.utc)
+                    session.add(pr)
+                    session.flush()
+                fix.pr_id = pr.id
             session.add(fix)
             session.commit()
             events_pub.publish_event(
@@ -192,10 +217,9 @@ def deliver_fixes_batch(
             fix.status = FixStatus.delivering
             session.add(fix)
         session.commit()
-        for fix in fixes:
-            events_pub.publish_event(
-                ev.fix_delivering(org_id, repo_id_str, str(fix.id))
-            )
+        events_pub.publish_event(
+            ev.fix_delivering_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
+        )
 
         result = asyncio.run(
             _deliver_batch(
@@ -211,34 +235,57 @@ def deliver_fixes_batch(
 
         now = datetime.now(timezone.utc)
         delivered_fix_ids = []
+        pr: PullRequest | None = None
+        if not result.error and result.pr_url:
+            pr = session.exec(
+                select(PullRequest).where(
+                    PullRequest.repo_id == repo.id,
+                    PullRequest.pr_branch == pr_branch,
+                )
+            ).first()
+            if pr is None:
+                pr = PullRequest(
+                    repo_id=repo.id,
+                    pr_branch=pr_branch,
+                    pr_url=result.pr_url,
+                    pr_state="open",
+                )
+                session.add(pr)
+                session.flush()
+            else:
+                pr.pr_url = result.pr_url
+                pr.pr_state = "open"
+                pr.updated_at = now
+                session.add(pr)
+                session.flush()
+
         for fix in fixes:
             if result.error:
                 fix.status = FixStatus.failed
                 fix.error_message = result.error
             else:
                 fix.status = FixStatus.delivered
-                fix.pr_url = result.pr_url
-                fix.pr_branch = pr_branch
-                fix.pr_state = "open" if result.pr_url else None
+                fix.pr_id = pr.id if pr else None
                 fix.delivered_at = now
                 delivered_fix_ids.append(str(fix.id))
             session.add(fix)
         session.commit()
 
         if result.error:
-            for fix in fixes:
-                events_pub.publish_event(
-                    ev.fix_delivery_failed(
-                        org_id, repo_id_str, str(fix.id), result.error[:200]
-                    )
+            events_pub.publish_event(
+                ev.fix_delivery_failed(
+                    org_id,
+                    repo_id_str,
+                    fix_ids[0] if fix_ids else "",
+                    result.error[:200],
                 )
+            )
         else:
-            for fix in fixes:
-                events_pub.publish_event(
-                    ev.fix_delivered(
-                        org_id, repo_id_str, str(fix.id), result.pr_url, pr_branch
-                    )
+            events_pub.publish_event(
+                ev.fix_delivered_batch(
+                    org_id, repo_id_str, delivered_fix_ids, result.pr_url, pr_branch
                 )
+            )
             if result.pr_url and delivered_fix_ids:
                 events_pub.publish_event(
                     ev.pr_opened(

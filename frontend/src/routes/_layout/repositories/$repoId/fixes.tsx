@@ -140,9 +140,7 @@ function FixesPage() {
               <GitPullRequest className="h-4 w-4" />
               {deliverRepoMutation.isPending
                 ? "Queuing…"
-                : fixes.some((f) => f.pr_url)
-                  ? "Update PR for all workflows"
-                  : "Create PR for all workflows"}
+                : "Create PR for all workflows"}
             </Button>
           )}
         </div>
@@ -167,7 +165,6 @@ function FixesPage() {
                 const allWfReadyFixIds = allWfFixes
                   .filter((f) => f.status === "ready")
                   .map((f) => f.id)
-                const hasExistingPr = allWfFixes.some((f) => f.pr_url)
                 const isWfDelivering =
                   deliverWorkflowMutation.isPending &&
                   allWfReadyFixIds.some((id) =>
@@ -201,7 +198,7 @@ function FixesPage() {
                             <GitPullRequest className="h-3 w-3" />
                             {isWfDelivering
                               ? "Queuing…"
-                              : `${hasExistingPr ? "Update" : "Create"} PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
                           </Button>
                         )}
                       </div>
@@ -346,11 +343,9 @@ function FixesPage() {
             <>
               {[...pagedReadyFixesByWorkflow.entries()].map(
                 ([wfPath, wfFixes]) => {
-                  const allWfFixes = fixesByWorkflow?.get(wfPath) ?? []
-                  const allWfReadyFixIds = allWfFixes
+                  const allWfReadyFixIds = (fixesByWorkflow?.get(wfPath) ?? [])
                     .filter((f) => f.status === "ready")
                     .map((f) => f.id)
-                  const hasExistingPr = allWfFixes.some((f) => f.pr_url)
                   const isWfDelivering =
                     deliverWorkflowMutation.isPending &&
                     allWfReadyFixIds.some((id) =>
@@ -402,7 +397,7 @@ function FixesPage() {
                             <GitPullRequest className="h-3 w-3" />
                             {isWfDelivering
                               ? "Queuing…"
-                              : `${hasExistingPr ? "Update" : "Create"} PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
                           </Button>
                         </div>
                       </CardHeader>
@@ -423,20 +418,18 @@ function FixesPage() {
                             <div key={i} className="border-t">
                               {group.fixes.map((fix) => {
                                 const issue = issueById.get(fix.issue_id)
-                                const severity = fix.severity ?? issue?.severity
-                                const ruleSlug =
-                                  fix.rule_slug ?? issue?.rule_slug
-                                const message = fix.message ?? issue?.message
-                                return severity && ruleSlug && message ? (
+                                return issue ? (
                                   <div
                                     key={fix.id}
                                     className="flex items-center gap-2 px-6 py-2 flex-wrap"
                                   >
-                                    <SeverityChip severity={severity} />
+                                    <SeverityChip severity={issue.severity} />
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                      {ruleSlug}
+                                      {issue.rule_slug}
                                     </span>
-                                    <span className="text-sm">{message}</span>
+                                    <span className="text-sm">
+                                      {issue.message}
+                                    </span>
                                   </div>
                                 ) : null
                               })}

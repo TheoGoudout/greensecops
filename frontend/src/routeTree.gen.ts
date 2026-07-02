@@ -33,6 +33,7 @@ import { Route as LayoutRepositoriesRepoIdPullRequestsRouteImport } from './rout
 import { Route as LayoutRepositoriesRepoIdIssuesRouteImport } from './routes/_layout/repositories/$repoId/issues'
 import { Route as LayoutRepositoriesRepoIdFixesRouteImport } from './routes/_layout/repositories/$repoId/fixes'
 import { Route as LayoutRepositoriesRepoIdAnalysesRouteImport } from './routes/_layout/repositories/$repoId/analyses'
+import { Route as LayoutRepositoriesRepoIdWorkflowRouteImport } from './routes/_layout/repositories/$repoId/workflow'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -160,6 +161,12 @@ const LayoutRepositoriesRepoIdAnalysesRoute =
     path: '/analyses',
     getParentRoute: () => LayoutRepositoriesRepoIdRoute,
   } as any)
+const LayoutRepositoriesRepoIdWorkflowRoute =
+  LayoutRepositoriesRepoIdWorkflowRouteImport.update({
+    id: '/workflow',
+    path: '/workflow',
+    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -184,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/repositories/$repoId/fixes': typeof LayoutRepositoriesRepoIdFixesRoute
   '/repositories/$repoId/issues': typeof LayoutRepositoriesRepoIdIssuesRoute
   '/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
+  '/repositories/$repoId/workflow': typeof LayoutRepositoriesRepoIdWorkflowRoute
   '/repositories/$repoId/': typeof LayoutRepositoriesRepoIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -207,6 +215,7 @@ export interface FileRoutesByTo {
   '/repositories/$repoId/fixes': typeof LayoutRepositoriesRepoIdFixesRoute
   '/repositories/$repoId/issues': typeof LayoutRepositoriesRepoIdIssuesRoute
   '/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
+  '/repositories/$repoId/workflow': typeof LayoutRepositoriesRepoIdWorkflowRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdIndexRoute
 }
 export interface FileRoutesById {
@@ -234,6 +243,7 @@ export interface FileRoutesById {
   '/_layout/repositories/$repoId/fixes': typeof LayoutRepositoriesRepoIdFixesRoute
   '/_layout/repositories/$repoId/issues': typeof LayoutRepositoriesRepoIdIssuesRoute
   '/_layout/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
+  '/_layout/repositories/$repoId/workflow': typeof LayoutRepositoriesRepoIdWorkflowRoute
   '/_layout/repositories/$repoId/': typeof LayoutRepositoriesRepoIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/repositories/$repoId/fixes'
     | '/repositories/$repoId/issues'
     | '/repositories/$repoId/pull-requests'
+    | '/repositories/$repoId/workflow'
     | '/repositories/$repoId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/repositories/$repoId/fixes'
     | '/repositories/$repoId/issues'
     | '/repositories/$repoId/pull-requests'
+    | '/repositories/$repoId/workflow'
     | '/repositories/$repoId'
   id:
     | '__root__'
@@ -310,6 +322,7 @@ export interface FileRouteTypes {
     | '/_layout/repositories/$repoId/fixes'
     | '/_layout/repositories/$repoId/issues'
     | '/_layout/repositories/$repoId/pull-requests'
+    | '/_layout/repositories/$repoId/workflow'
     | '/_layout/repositories/$repoId/'
   fileRoutesById: FileRoutesById
 }
@@ -493,6 +506,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdAnalysesRouteImport
       parentRoute: typeof LayoutRepositoriesRepoIdRoute
     }
+    '/_layout/repositories/$repoId/workflow': {
+      id: '/_layout/repositories/$repoId/workflow'
+      path: '/workflow'
+      fullPath: '/repositories/$repoId/workflow'
+      preLoaderRoute: typeof LayoutRepositoriesRepoIdWorkflowRouteImport
+      parentRoute: typeof LayoutRepositoriesRepoIdRoute
+    }
   }
 }
 
@@ -501,6 +521,7 @@ interface LayoutRepositoriesRepoIdRouteChildren {
   LayoutRepositoriesRepoIdFixesRoute: typeof LayoutRepositoriesRepoIdFixesRoute
   LayoutRepositoriesRepoIdIssuesRoute: typeof LayoutRepositoriesRepoIdIssuesRoute
   LayoutRepositoriesRepoIdPullRequestsRoute: typeof LayoutRepositoriesRepoIdPullRequestsRoute
+  LayoutRepositoriesRepoIdWorkflowRoute: typeof LayoutRepositoriesRepoIdWorkflowRoute
   LayoutRepositoriesRepoIdIndexRoute: typeof LayoutRepositoriesRepoIdIndexRoute
 }
 
@@ -512,6 +533,8 @@ const LayoutRepositoriesRepoIdRouteChildren: LayoutRepositoriesRepoIdRouteChildr
     LayoutRepositoriesRepoIdIssuesRoute: LayoutRepositoriesRepoIdIssuesRoute,
     LayoutRepositoriesRepoIdPullRequestsRoute:
       LayoutRepositoriesRepoIdPullRequestsRoute,
+    LayoutRepositoriesRepoIdWorkflowRoute:
+      LayoutRepositoriesRepoIdWorkflowRoute,
     LayoutRepositoriesRepoIdIndexRoute: LayoutRepositoriesRepoIdIndexRoute,
   }
 

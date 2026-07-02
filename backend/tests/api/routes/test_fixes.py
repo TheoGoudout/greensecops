@@ -19,6 +19,7 @@ from app.models import (
     IssueSeverity,
     LLMProvider,
     Organization,
+    PullRequest,
     Repository,
     Rule,
     UserTier,
@@ -82,9 +83,6 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
     db.add(a)
     db.commit()
     db.refresh(a)
-    workflow_file.latest_analysis_id = a.id
-    db.add(workflow_file)
-    db.commit()
     return a
 
 
@@ -109,6 +107,7 @@ def rule(db: Session) -> Rule:
 def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
     i = Issue(
         analysis_id=analysis.id,
+        workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.medium,
         category=IssueCategory.reliability,
@@ -157,6 +156,7 @@ def db_issue_for_pending(db: Session, analysis: Analysis, rule: Rule) -> Issue:
     """A second issue for the pending fix fixture (avoids unique constraint on issue_id)."""
     i = Issue(
         analysis_id=analysis.id,
+        workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.low,
         category=IssueCategory.reliability,
@@ -808,7 +808,9 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
     analysis: Analysis,
     issue: Issue,
 ) -> None:
-    # Arrange — create a second (old) analysis; point workflow_file at the first (analysis)
+    # Arrange — create a second (old) analysis with an older completed_at
+    from datetime import datetime, timezone
+
     old_analysis = Analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
@@ -818,12 +820,20 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
         grade="D",
         triggered_by=AnalysisTrigger.manual,
         branch="main",
+        completed_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
     )
     db.add(old_analysis)
     db.commit()
     db.refresh(old_analysis)
+
+    # Give the current analysis a newer completed_at
+    analysis.completed_at = datetime.now(timezone.utc)
+    db.add(analysis)
+    db.commit()
+
     old_issue = Issue(
         analysis_id=old_analysis.id,
+        workflow_file_id=old_analysis.workflow_file_id,
         rule_id=rule.id,
         severity=IssueSeverity.medium,
         category=IssueCategory.reliability,
@@ -833,8 +843,6 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
     )
     db.add(old_issue)
     db.commit()
-
-    # workflow_file.latest_analysis_id already points at `analysis` (from fixture)
 
     with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
@@ -878,10 +886,22 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
     db: Session,
     ready_fix: Fix,
     repo: Repository,
+    analysis: Analysis,
+    issue: Issue,
 ) -> None:
-    # Arrange — simulate a previous delivery by setting pr_branch on the fix
+    # Arrange — simulate a previous delivery by creating a PullRequest record
+    # and linking the fix to it via pr_id
     existing_branch = "greensecops/fixes-previousbranch"
-    ready_fix.pr_branch = existing_branch
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=existing_branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/99",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    ready_fix.pr_id = pr.id
     db.add(ready_fix)
     db.commit()
 
@@ -905,21 +925,32 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
 
 
 def _make_open_pr_fix(
-    db: Session, issue: Issue, pr_url: str, pr_branch: str = "greensecops/fix"
-) -> Fix:
+    db: Session,
+    repo: Repository,
+    issue: Issue,
+    pr_url: str,
+    pr_branch: str = "greensecops/fix",
+) -> tuple[Fix, PullRequest]:
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=pr_branch,
+        pr_url=pr_url,
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
     fix = Fix(
         issue_id=issue.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        pr_url=pr_url,
-        pr_branch=pr_branch,
-        pr_state="open",
+        pr_id=pr.id,
     )
     db.add(fix)
     db.commit()
     db.refresh(fix)
-    return fix
+    return fix, pr
 
 
 def test_sync_pr_status_no_open_prs(
@@ -957,7 +988,7 @@ def test_sync_pr_status_updates_merged_pr(
     db.refresh(issue)
 
     pr_url = f"https://github.com/{repo.full_name}/pull/101"
-    fix = _make_open_pr_fix(db, issue, pr_url)
+    _fix, pr = _make_open_pr_fix(db, repo, issue, pr_url)
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
@@ -978,8 +1009,8 @@ def test_sync_pr_status_updates_merged_pr(
     assert data["synced"] == 1
     assert data["updated"] == 1
 
-    db.refresh(fix)
-    assert fix.pr_state == "merged"
+    db.refresh(pr)
+    assert pr.pr_state == "merged"
 
 
 def test_sync_pr_status_updates_closed_pr(
@@ -1002,7 +1033,7 @@ def test_sync_pr_status_updates_closed_pr(
     db.refresh(issue)
 
     pr_url = f"https://github.com/{repo.full_name}/pull/102"
-    fix = _make_open_pr_fix(db, issue, pr_url)
+    _fix, pr = _make_open_pr_fix(db, repo, issue, pr_url)
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
@@ -1022,8 +1053,8 @@ def test_sync_pr_status_updates_closed_pr(
     data = response.json()
     assert data["updated"] == 1
 
-    db.refresh(fix)
-    assert fix.pr_state == "closed"
+    db.refresh(pr)
+    assert pr.pr_state == "closed"
 
 
 def test_sync_pr_status_skips_already_closed(
@@ -1045,13 +1076,22 @@ def test_sync_pr_status_skips_already_closed(
     db.commit()
     db.refresh(issue)
 
+    # PR is already closed — should not be included in sync query
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-closed",
+        pr_url=f"https://github.com/{repo.full_name}/pull/103",
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
     fix = Fix(
         issue_id=issue.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        pr_url=f"https://github.com/{repo.full_name}/pull/103",
-        pr_state="closed",
+        pr_id=pr.id,
     )
     db.add(fix)
     db.commit()
@@ -1087,7 +1127,7 @@ def test_sync_pr_status_handles_github_error(
     db.refresh(issue)
 
     pr_url = f"https://github.com/{repo.full_name}/pull/104"
-    fix = _make_open_pr_fix(db, issue, pr_url)
+    _fix, pr = _make_open_pr_fix(db, repo, issue, pr_url)
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
@@ -1108,8 +1148,8 @@ def test_sync_pr_status_handles_github_error(
     assert data["synced"] == 1
     assert data["updated"] == 0
 
-    db.refresh(fix)
-    assert fix.pr_state == "open"
+    db.refresh(pr)
+    assert pr.pr_state == "open"
 
 
 def test_sync_pr_status_repo_not_found(

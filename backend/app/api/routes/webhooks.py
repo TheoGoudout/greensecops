@@ -13,6 +13,7 @@ from app.models import (
     Fix,
     Issue,
     Organization,
+    PullRequest,
     Repository,
 )
 from app.services.events import publisher as events_pub
@@ -105,6 +106,7 @@ def _handle_push_event(
         branch=branch,
         commit_sha=commit_sha,
         trigger=AnalysisTrigger.webhook_push,
+        org_id=str(repo.org_id),
     )
 
 
@@ -136,6 +138,7 @@ def _handle_workflow_run_event(
         _enqueue_static_analysis,
         repo_id=str(repo.id),
         branch=branch,
+        org_id=str(repo.org_id),
         commit_sha=commit_sha,
         trigger=AnalysisTrigger.webhook_workflow_run,
     )
@@ -225,35 +228,41 @@ def _handle_pull_request_event(
 
     from sqlmodel import select
 
-    fix = session.exec(select(Fix).where(Fix.pr_url == pr_url)).first()
-    if not fix:
+    pr_record = session.exec(
+        select(PullRequest).where(PullRequest.pr_url == pr_url)
+    ).first()
+    if not pr_record:
         return
 
-    fix.pr_state = new_state
-    session.add(fix)
+    pr_record.pr_state = new_state
+    session.add(pr_record)
     session.commit()
-    logger.info("PR %s -> state=%s for fix %s", pr_url, new_state, fix.id)
+    logger.info("PR %s -> state=%s for PR record %s", pr_url, new_state, pr_record.id)
 
-    issue = session.get(Issue, fix.issue_id)
-    analysis = session.get(Analysis, issue.analysis_id) if issue else None
-    repo = session.get(Repository, analysis.repo_id) if analysis else None
-    if repo:
-        if action == "closed":
-            events_pub.publish_event(
-                ev.pr_closed(
-                    str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged
+    # Notify for all fixes associated with this PR
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    fix = pr_fixes[0] if pr_fixes else None
+    if fix:
+        issue = session.get(Issue, fix.issue_id)
+        analysis = session.get(Analysis, issue.analysis_id) if issue else None
+        repo = session.get(Repository, analysis.repo_id) if analysis else None
+        if repo:
+            if action == "closed":
+                events_pub.publish_event(
+                    ev.pr_closed(
+                        str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged
+                    )
                 )
-            )
-        else:
-            events_pub.publish_event(
-                ev.pr_opened(
-                    str(repo.org_id),
-                    str(repo.id),
-                    [str(fix.id)],
-                    pr_url,
-                    fix.pr_branch or "",
+            else:
+                events_pub.publish_event(
+                    ev.pr_opened(
+                        str(repo.org_id),
+                        str(repo.id),
+                        [str(fix.id)],
+                        pr_url,
+                        pr_record.pr_branch,
+                    )
                 )
-            )
 
 
 def _handle_installation_repositories_event(
@@ -318,7 +327,10 @@ def _enqueue_static_analysis(
     branch: str,
     commit_sha: str,
     trigger: AnalysisTrigger,
+    org_id: str = "",
 ) -> None:
+    from app.services.events import publisher as events_pub
+    from app.services.events import schemas as ev
     from app.workers.tasks.static_analysis import run_static_analysis
 
     run_static_analysis.delay(
@@ -327,6 +339,10 @@ def _enqueue_static_analysis(
         commit_sha=commit_sha,
         trigger=trigger.value,
     )
+    if org_id:
+        events_pub.publish_event(
+            ev.analysis_queued(org_id, repo_id, branch, trigger.value)
+        )
 
 
 def _enqueue_installation_sync(installation_id: int, org_id: str) -> None:

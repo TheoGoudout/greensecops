@@ -4,7 +4,7 @@ from typing import Optional
 
 import sqlalchemy as sa
 from pydantic import EmailStr
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from .enums import (
@@ -146,6 +146,9 @@ class Repository(SQLModel, table=True):
     telemetry_runs: list["TelemetryRun"] = Relationship(
         back_populates="repository", cascade_delete=True
     )
+    pull_requests: list["PullRequest"] = Relationship(
+        back_populates="repository", cascade_delete=True
+    )
 
 
 # ─── WorkflowFile ─────────────────────────────────────────────────────────────
@@ -163,20 +166,9 @@ class WorkflowFile(SQLModel, table=True):
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
-    # Points to the most recent completed analysis for this file; used to scope
-    # "current" issues without deleting historical analysis records.
-    latest_analysis_id: uuid.UUID | None = Field(
-        default=None,
-        sa_column=sa.Column(
-            sa.UUID,
-            sa.ForeignKey("analysis.id", use_alter=True, name="fk_wf_latest_analysis"),
-            nullable=True,
-        ),
-    )
     repository: Repository | None = Relationship(back_populates="workflow_files")
     analyses: list["Analysis"] = Relationship(
         back_populates="workflow_file",
-        sa_relationship_kwargs={"foreign_keys": "[Analysis.workflow_file_id]"},
     )
 
 
@@ -221,7 +213,6 @@ class Analysis(SQLModel, table=True):
     repository: Repository | None = Relationship(back_populates="analyses")
     workflow_file: WorkflowFile | None = Relationship(
         back_populates="analyses",
-        sa_relationship_kwargs={"foreign_keys": "[Analysis.workflow_file_id]"},
     )
     issues: list["Issue"] = Relationship(back_populates="analysis", cascade_delete=True)
 
@@ -230,13 +221,28 @@ class Analysis(SQLModel, table=True):
 
 
 class Issue(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "workflow_file_id", "fingerprint", name="uq_issue_wf_fingerprint"
+        ),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     analysis_id: uuid.UUID = Field(
         foreign_key="analysis.id", nullable=False, ondelete="CASCADE"
     )
+    workflow_file_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="workflow_file.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     rule_id: uuid.UUID = Field(
         foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
     )
+    job: str | None = Field(default=None, max_length=255)
+    step: str | None = Field(default=None, max_length=255)
+    fingerprint: str | None = Field(default=None, max_length=16, index=True)
     severity: IssueSeverity
     category: IssueCategory
     line_start: int | None = Field(default=None)
@@ -251,6 +257,31 @@ class Issue(SQLModel, table=True):
     fix: Optional["Fix"] = Relationship(back_populates="issue")
 
 
+# ─── PullRequest ──────────────────────────────────────────────────────────────
+
+
+class PullRequest(SQLModel, table=True):
+    __tablename__ = "pull_request"
+    __table_args__ = (
+        UniqueConstraint("repo_id", "pr_branch", name="uq_pr_repo_branch"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    pr_branch: str = Field(max_length=255, index=True)
+    pr_url: str | None = Field(default=None, max_length=1024)
+    pr_state: str | None = Field(default=None, max_length=32)
+    comment_url: str | None = Field(default=None, max_length=1024)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    updated_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    repository: Repository | None = Relationship(back_populates="pull_requests")
+    fixes: list["Fix"] = Relationship(back_populates="pull_request")
+
+
 # ─── Fix ─────────────────────────────────────────────────────────────────────
 
 
@@ -259,6 +290,14 @@ class Fix(SQLModel, table=True):
     issue_id: uuid.UUID = Field(
         foreign_key="issue.id", unique=True, nullable=False, ondelete="CASCADE"
     )
+    pr_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("pull_request.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
     llm_provider: LLMProvider
     llm_model: str = Field(max_length=255)
     prompt_tokens: int | None = Field(default=None)
@@ -266,16 +305,14 @@ class Fix(SQLModel, table=True):
     langsmith_run_id: str | None = Field(default=None, max_length=255)
     status: FixStatus = Field(default=FixStatus.pending)
     diff: str | None = Field(default=None)
-    pr_url: str | None = Field(default=None, max_length=1024)
-    pr_branch: str | None = Field(default=None, max_length=255)
-    pr_state: str | None = Field(default=None, max_length=32)
-    comment_url: str | None = Field(default=None, max_length=1024)
+    patch: str | None = Field(default=None)
     error_message: str | None = Field(default=None, max_length=2048)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     issue: Issue | None = Relationship(back_populates="fix")
+    pull_request: Optional["PullRequest"] = Relationship(back_populates="fixes")
 
 
 # ─── TelemetryRun ─────────────────────────────────────────────────────────────

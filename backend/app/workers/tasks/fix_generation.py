@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import uuid
@@ -64,6 +65,7 @@ def _load_generation_context(
 def run_fix_generation(
     self: object,  # noqa: ARG001
     issue_ids: list[str],
+    batch_mode: bool = False,
 ) -> dict:
     """Single LLM call to generate fixes for one or more issues in the same workflow file."""
     with Session(engine) as session:
@@ -107,14 +109,15 @@ def run_fix_generation(
         for fix in fixes:
             session.refresh(fix)
 
-        events_pub.publish_event(
-            ev.fix_generating(
-                org_id,
-                repo_id_str,
-                fix_ids=[str(f.id) for f in fixes],
-                issue_ids=issue_ids,
+        if not batch_mode:
+            events_pub.publish_event(
+                ev.fix_generating(
+                    org_id,
+                    repo_id_str,
+                    fix_ids=[str(f.id) for f in fixes],
+                    issue_ids=issue_ids,
+                )
             )
-        )
 
         try:
             result = asyncio.run(
@@ -139,8 +142,14 @@ def run_fix_generation(
             session.commit()
             return {"status": "failed", "issue_ids": issue_ids}
 
+        full_content, patches = _parse_llm_response(result.content)
+
         for fix in fixes:
-            fix.diff = result.content
+            issue = session.get(Issue, fix.issue_id)
+            fix.diff = full_content or result.content
+            fix.patch = (
+                patches.get(issue.fingerprint) if issue and issue.fingerprint else None
+            )
             fix.prompt_tokens = result.prompt_tokens
             fix.completion_tokens = result.completion_tokens
             fix.langsmith_run_id = result.run_id
@@ -148,10 +157,15 @@ def run_fix_generation(
             session.add(fix)
         session.commit()
 
-        for fix in fixes:
+        if batch_mode:
             events_pub.publish_event(
-                ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
+                ev.fix_ready_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
             )
+        else:
+            for fix in fixes:
+                events_pub.publish_event(
+                    ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
+                )
 
         logger.info(
             "Fix generated for %d issue(s): %d prompt tokens, %d completion tokens",
@@ -165,6 +179,24 @@ def run_fix_generation(
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
         }
+
+
+def _parse_llm_response(content: str) -> tuple[str, dict[str, str]]:
+    """Parse LLM JSON response into (full_content, {fingerprint: diff}).
+
+    Falls back to treating full content as the diff when JSON is invalid.
+    """
+    try:
+        data = json.loads(content)
+        full_content = data.get("full_content") or ""
+        patches = {
+            item["fingerprint"]: item["diff"]
+            for item in data.get("fixes", [])
+            if "fingerprint" in item and "diff" in item
+        }
+        return full_content, patches
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return content, {}
 
 
 def _configure_langchain() -> None:

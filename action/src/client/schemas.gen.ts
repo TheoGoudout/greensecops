@@ -355,6 +355,18 @@ export const FixPublicSchema = {
             format: 'uuid',
             title: 'Issue Id'
         },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
         llm_provider: {
             '$ref': '#/components/schemas/LLMProvider'
         },
@@ -365,7 +377,7 @@ export const FixPublicSchema = {
         status: {
             '$ref': '#/components/schemas/FixStatus'
         },
-        diff: {
+        patch: {
             anyOf: [
                 {
                     type: 'string'
@@ -374,7 +386,7 @@ export const FixPublicSchema = {
                     type: 'null'
                 }
             ],
-            title: 'Diff'
+            title: 'Patch'
         },
         diff_patch: {
             anyOf: [
@@ -1413,4 +1425,32 @@ export const WorkflowDeliverRequestSchema = {
     type: 'object',
     required: ['fix_ids'],
     title: 'WorkflowDeliverRequest'
+} as const;
+
+export const WorkflowFilePublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        raw_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Raw Content'
+        }
+    },
+    type: 'object',
+    required: ['id', 'path'],
+    title: 'WorkflowFilePublic'
 } as const;

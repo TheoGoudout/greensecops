@@ -4,26 +4,42 @@ import data.greensecops.performance.cache_key_too_broad
 import rego.v1
 
 test_violation_cache_key_without_hashfiles if {
-	violations := cache_key_too_broad.violations with input as {"jobs": {"build": {"steps": [{
-		"uses": "actions/cache@v4",
-		"with": {
-			"path": "~/.npm",
-			"key": "node-modules-${{ runner.os }}",
+	violations := cache_key_too_broad.violations with input as {
+		"jobs": {
+			"build": {
+				"steps": [
+					{
+						"uses": "actions/cache@v4",
+						"with": {
+							"path": "~/.npm",
+							"key": "node-modules-${{ runner.os }}",
+						},
+					},
+				],
+			},
 		},
-	}]}}}
+	}
 	count(violations) == 1
 	some v in violations
 	v.rule == "cache_key_too_broad"
 }
 
 test_no_violation_cache_key_with_hashfiles if {
-	violations := cache_key_too_broad.violations with input as {"jobs": {"build": {"steps": [{
-		"uses": "actions/cache@v4",
-		"with": {
-			"path": "~/.npm",
-			"key": "node-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}",
+	violations := cache_key_too_broad.violations with input as {
+		"jobs": {
+			"build": {
+				"steps": [
+					{
+						"uses": "actions/cache@v4",
+						"with": {
+							"path": "~/.npm",
+							"key": "node-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}",
+						},
+					},
+				],
+			},
 		},
-	}]}}}
+	}
 	count(violations) == 0
 }
 

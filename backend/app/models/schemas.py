@@ -109,10 +109,11 @@ class IssuePublic(SQLModel):
 class FixPublic(SQLModel):
     id: uuid.UUID
     issue_id: uuid.UUID
+    pr_id: uuid.UUID | None = None
     llm_provider: LLMProvider
     llm_model: str
     status: FixStatus
-    diff: str | None = None
+    patch: str | None = None
     diff_patch: str | None = None
     pr_url: str | None = None
     pr_branch: str | None = None
@@ -127,6 +128,23 @@ class FixPublic(SQLModel):
     line_start: int | None = None
     line_end: int | None = None
     workflow_file_path: str | None = None
+
+
+class WorkflowFilePublic(SQLModel):
+    id: uuid.UUID
+    path: str
+    raw_content: str | None = None
+
+
+class PullRequestPublic(SQLModel):
+    id: uuid.UUID
+    repo_id: uuid.UUID
+    pr_branch: str
+    pr_url: str | None = None
+    pr_state: str | None = None
+    comment_url: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class RulePublic(SQLModel):

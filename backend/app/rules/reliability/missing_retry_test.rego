@@ -11,10 +11,16 @@ test_violation_curl_without_retry if {
 }
 
 test_no_violation_network_step_with_retry_action if {
-	violations := missing_retry.violations with input as {"jobs": {"fetch": {"steps": [
-		{"run": "npm install"},
-		{"uses": "nick-fields/retry@v2", "with": {"command": "npm install"}},
-	]}}}
+	violations := missing_retry.violations with input as {
+		"jobs": {
+			"fetch": {
+				"steps": [
+					{"run": "npm install"},
+					{"uses": "nick-fields/retry@v2", "with": {"command": "npm install"}},
+				],
+			},
+		},
+	}
 	count(violations) == 0
 }
 

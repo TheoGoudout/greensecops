@@ -7,6 +7,7 @@ from .db import (
     Issue,
     Organization,
     OrgMember,
+    PullRequest,
     Repository,
     Rule,
     TelemetryMetricSample,
@@ -44,12 +45,14 @@ from .schemas import (
     NewPassword,
     OrganizationAIUpdate,
     OrganizationPublic,
+    PullRequestPublic,
     RepositoryPublic,
     RulePublic,
     Token,
     TokenPayload,
     UserPublic,
     UsersPublic,
+    WorkflowFilePublic,
 )
 
 __all__ = [
@@ -70,6 +73,7 @@ __all__ = [
     "Rule",
     "Analysis",
     "Issue",
+    "PullRequest",
     "Fix",
     "TelemetryRun",
     "TelemetryMetricSample",
@@ -96,10 +100,12 @@ __all__ = [
     "AnalysisPublic",
     "IssuePublic",
     "FixPublic",
+    "PullRequestPublic",
     "RulePublic",
     "BillingSubscriptionPublic",
     "Message",
     "Token",
     "TokenPayload",
     "NewPassword",
+    "WorkflowFilePublic",
 ]

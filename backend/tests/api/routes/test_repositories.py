@@ -487,6 +487,66 @@ def test_list_external_repositories_returns_external_only(
     assert str(normal_repo.id) not in ids
 
 
+# ─── GET /repositories/{id}/workflow-files ───────────────────────────────────
+
+
+def test_list_workflow_files_empty(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    # Arrange — repo has no workflow files
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_workflow_files_returns_files(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — add a workflow file to the repo
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    paths = [f["path"] for f in data]
+    assert ".github/workflows/ci.yml" in paths
+
+
+def test_list_workflow_files_not_found(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}/workflow-files",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 404
+
+
 # ─── POST /repositories/{id}/integrate-action ───────────────────────────────
 
 
