@@ -57,10 +57,20 @@ function GitHubAppCallback() {
     let cancelled = false
     InstallationsService.syncInstallations({ requestBody: { code } })
       .then(() => {
-        if (!cancelled) setSyncState("done")
+        if (cancelled) return
+        setSyncState("done")
+        window.opener?.postMessage(
+          { type: "github-app-installed" },
+          window.location.origin,
+        )
       })
       .catch(() => {
-        if (!cancelled) setSyncState("error")
+        if (cancelled) return
+        setSyncState("error")
+        window.opener?.postMessage(
+          { type: "github-app-install-failed" },
+          window.location.origin,
+        )
       })
     return () => {
       cancelled = true
