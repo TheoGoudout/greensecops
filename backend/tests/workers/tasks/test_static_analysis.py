@@ -658,6 +658,70 @@ def test_enrich_line_numbers_step_not_found_leaves_unchanged() -> None:
     assert violations[0].line_start == 0
 
 
+def test_enrich_line_numbers_noop_when_yaml_is_not_a_dict() -> None:
+    """YAML that parses to a list (not a dict) is a no-op."""
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+        )
+    ]
+    _enrich_line_numbers(violations, "- item1\n- item2\n")
+    assert violations[0].line_start == 0
+
+
+def test_enrich_line_numbers_skips_non_list_steps() -> None:
+    """Job whose `steps` value is not a list is skipped without error."""
+    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: string_value\n"
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+            step="actions/checkout@v3",
+        )
+    ]
+    _enrich_line_numbers(violations, content)
+    assert violations[0].line_start == 0
+
+
+def test_enrich_line_numbers_skips_non_dict_step_entry() -> None:
+    """A step list entry that is not a dict (e.g. a plain string) is skipped."""
+    content = (
+        "on: push\n"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: echo hello\n"
+        "      - uses: actions/checkout@v3\n"
+    )
+    violations = [
+        FakeViolation(
+            rule_slug="test",
+            severity="low",
+            category="energy",
+            line_start=0,
+            line_end=0,
+            message="m",
+            job="build",
+            step="actions/checkout@v3",
+        )
+    ]
+    _enrich_line_numbers(violations, content)
+    # The checkout step IS a dict and should be enriched
+    assert violations[0].line_start > 0
+
+
 # ─── Batch mode (multiple workflow files) ────────────────────────────────────
 
 
