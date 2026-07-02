@@ -190,7 +190,10 @@ function SignUp() {
 
           <div className="text-center text-sm">
             Already have an account?{" "}
-            <RouterLink to="/login" className="underline underline-offset-4">
+            <RouterLink
+              to="/login"
+              className="text-accent underline underline-offset-4"
+            >
               Log in
             </RouterLink>
           </div>
