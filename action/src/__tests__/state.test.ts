@@ -1,10 +1,25 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test"
 import * as fs from "node:fs"
-import { killDaemon, loadState } from "../state"
+import { getGitHubContext, killDaemon, loadState } from "../state"
 
 afterEach(() => {
   mock.restore()
+  delete process.env.GITHUB_RUN_ID
+  delete process.env.GITHUB_REPOSITORY
+  delete process.env.GITHUB_REF
+  delete process.env.GITHUB_SHA
+  delete process.env.GITHUB_WORKFLOW
 })
+
+const FAKE_RUNNER_SPECS = {
+  os: "Linux",
+  arch: "x64",
+  runner_name: "runner-1",
+  platform: "linux",
+  node_version: "v20",
+  vcpus: 2,
+  ram_total_gb: 8,
+}
 
 const FAKE_STATE = {
   daemonPid: 12345,
@@ -12,6 +27,7 @@ const FAKE_STATE = {
   oidcToken: "token-abc",
   workflowRunId: 99,
   repository: "owner/repo",
+  runnerSpecs: FAKE_RUNNER_SPECS,
   startedAt: "2024-01-01T00:00:00.000Z",
 }
 
@@ -68,5 +84,41 @@ describe("killDaemon", () => {
     })
 
     expect(() => killDaemon(99999)).not.toThrow()
+  })
+})
+
+describe("getGitHubContext", () => {
+  it("reads all fields from environment", () => {
+    process.env.GITHUB_RUN_ID = "42"
+    process.env.GITHUB_REPOSITORY = "owner/repo"
+    process.env.GITHUB_REF = "refs/heads/main"
+    process.env.GITHUB_SHA = "abc123"
+    process.env.GITHUB_WORKFLOW = "CI"
+
+    const ctx = getGitHubContext()
+
+    expect(ctx.workflowRunId).toBe(42)
+    expect(ctx.repository).toBe("owner/repo")
+    expect(ctx.branch).toBe("main")
+    expect(ctx.commitSha).toBe("abc123")
+    expect(ctx.workflowName).toBe("CI")
+  })
+
+  it("strips refs/heads/ prefix from branch", () => {
+    process.env.GITHUB_REF = "refs/heads/feat/my-feature"
+
+    const ctx = getGitHubContext()
+
+    expect(ctx.branch).toBe("feat/my-feature")
+  })
+
+  it("defaults to empty strings and 0 when env vars are absent", () => {
+    const ctx = getGitHubContext()
+
+    expect(ctx.workflowRunId).toBe(0)
+    expect(ctx.repository).toBe("")
+    expect(ctx.branch).toBe("")
+    expect(ctx.commitSha).toBe("")
+    expect(ctx.workflowName).toBe("")
   })
 })
