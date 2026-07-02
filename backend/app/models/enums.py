@@ -68,3 +68,14 @@ class FixStatus(str, enum.Enum):
     delivered = "delivered"
     failed = "failed"
     rejected = "rejected"
+
+
+class PullRequestState(str, enum.Enum):
+    open = "open"
+    merged = "merged"
+    closed = "closed"
+
+
+class TelemetryPhase(str, enum.Enum):
+    started = "started"
+    completed = "completed"

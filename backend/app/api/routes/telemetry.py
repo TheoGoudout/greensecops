@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from app.api.deps import GitHubOidcClaims, SessionDep
-from app.models import Repository, TelemetryMetricSample, TelemetryRun
+from app.models import Repository, TelemetryMetricSample, TelemetryPhase, TelemetryRun
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class TelemetryPayload(BaseModel):
     workflow_name: str = ""
     runner_specs: dict[str, Any] = {}
     metrics: dict[str, Any] = {}
-    phase: str = "completed"
+    phase: TelemetryPhase = TelemetryPhase.completed
 
 
 class SamplePayload(BaseModel):

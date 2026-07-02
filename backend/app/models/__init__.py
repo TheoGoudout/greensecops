@@ -31,6 +31,8 @@ from .enums import (
     IssueSeverity,
     LLMProvider,
     OrgRole,
+    PullRequestState,
+    TelemetryPhase,
     UserTier,
 )
 from .schemas import (
@@ -88,6 +90,8 @@ __all__ = [
     "IssueSeverity",
     "IssueCategory",
     "FixStatus",
+    "PullRequestState",
+    "TelemetryPhase",
     # schemas
     "UserPublic",
     "UsersPublic",

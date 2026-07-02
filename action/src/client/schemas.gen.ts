@@ -424,13 +424,12 @@ export const FixPublicSchema = {
         pr_state: {
             anyOf: [
                 {
-                    type: 'string'
+                    '$ref': '#/components/schemas/PullRequestState'
                 },
                 {
                     type: 'null'
                 }
-            ],
-            title: 'Pr State'
+            ]
         },
         comment_url: {
             anyOf: [
@@ -863,6 +862,12 @@ export const PrivateUserCreateSchema = {
     title: 'PrivateUserCreate'
 } as const;
 
+export const PullRequestStateSchema = {
+    type: 'string',
+    enum: ['open', 'merged', 'closed'],
+    title: 'PullRequestState'
+} as const;
+
 export const RepositoryPublicSchema = {
     properties: {
         id: {
@@ -1073,14 +1078,19 @@ export const TelemetryPayloadSchema = {
             default: {}
         },
         phase: {
-            type: 'string',
-            title: 'Phase',
+            '$ref': '#/components/schemas/TelemetryPhase',
             default: 'completed'
         }
     },
     type: 'object',
     required: ['workflow_run_id'],
     title: 'TelemetryPayload'
+} as const;
+
+export const TelemetryPhaseSchema = {
+    type: 'string',
+    enum: ['started', 'completed'],
+    title: 'TelemetryPhase'
 } as const;
 
 export const TokenSchema = {

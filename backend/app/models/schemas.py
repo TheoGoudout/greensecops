@@ -12,6 +12,7 @@ from .enums import (
     IssueCategory,
     IssueSeverity,
     LLMProvider,
+    PullRequestState,
     UserTier,
 )
 
@@ -117,7 +118,7 @@ class FixPublic(SQLModel):
     diff_patch: str | None = None
     pr_url: str | None = None
     pr_branch: str | None = None
-    pr_state: str | None = None
+    pr_state: PullRequestState | None = None
     comment_url: str | None = None
     created_at: datetime | None = None
     delivered_at: datetime | None = None
@@ -141,7 +142,7 @@ class PullRequestPublic(SQLModel):
     repo_id: uuid.UUID
     pr_branch: str
     pr_url: str | None = None
-    pr_state: str | None = None
+    pr_state: PullRequestState | None = None
     comment_url: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

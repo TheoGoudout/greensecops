@@ -1,12 +1,7 @@
 import type { IssueCategory, IssueSeverity } from "@/client"
+import { IssueCategorySchema } from "@/client/schemas.gen"
 
-export const ISSUE_CATEGORIES: IssueCategory[] = [
-  "energy",
-  "reliability",
-  "security",
-  "performance",
-  "maintainability",
-]
+export const ISSUE_CATEGORIES: IssueCategory[] = [...IssueCategorySchema.enum]
 
 export const CATEGORY_SELECT_OPTIONS: Array<{
   value: IssueCategory | "all"

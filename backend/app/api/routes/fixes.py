@@ -18,6 +18,7 @@ from app.models import (
     FixStatus,
     Issue,
     PullRequest,
+    PullRequestState,
     Repository,
     Rule,
     WorkflowFile,
@@ -514,7 +515,7 @@ async def sync_pr_statuses(
             .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
             .where(Analysis.repo_id == repo_id)
             .where(PullRequest.pr_url.is_not(None))  # type: ignore[union-attr]
-            .where(PullRequest.pr_state == "open")
+            .where(PullRequest.pr_state == PullRequestState.open)
         ).all()
     )
     if not open_prs:
@@ -535,7 +536,7 @@ async def sync_pr_statuses(
             logger.warning("Failed to fetch PR state for %s", pr_url, exc_info=True)
             continue
 
-        if new_state == "open":
+        if new_state == PullRequestState.open:
             continue
 
         pr_record.pr_state = new_state

@@ -74,7 +74,7 @@ export type FixPublic = {
     diff_patch?: (string | null);
     pr_url?: (string | null);
     pr_branch?: (string | null);
-    pr_state?: (string | null);
+    pr_state?: (PullRequestState | null);
     comment_url?: (string | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
@@ -152,6 +152,8 @@ export type PrivateUserCreate = {
     is_verified?: boolean;
 };
 
+export type PullRequestState = 'open' | 'merged' | 'closed';
+
 export type RepositoryPublic = {
     id: string;
     full_name: string;
@@ -194,8 +196,10 @@ export type TelemetryPayload = {
     metrics?: {
         [key: string]: unknown;
     };
-    phase?: string;
+    phase?: TelemetryPhase;
 };
+
+export type TelemetryPhase = 'started' | 'completed';
 
 export type Token = {
     access_token: string;
