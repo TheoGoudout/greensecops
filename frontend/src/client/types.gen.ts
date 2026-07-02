@@ -185,6 +185,8 @@ export type SamplePayload = {
     net_bytes_recv?: (number | null);
 };
 
+export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'fix.skipped' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened';
+
 export type TelemetryPayload = {
     workflow_run_id: number;
     branch?: string;
@@ -347,6 +349,8 @@ export type BillingStripeWebhookData = {
 export type BillingStripeWebhookResponse = ({
     [key: string]: (string);
 });
+
+export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
 export type EventsStreamEventsData = {
     token?: (string | null);

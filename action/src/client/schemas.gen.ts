@@ -977,6 +977,12 @@ export const RulePublicSchema = {
     title: 'RulePublic'
 } as const;
 
+export const SSESignalSchema = {
+    type: 'string',
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'fix.skipped', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
+    title: 'SSESignal'
+} as const;
+
 export const SamplePayloadSchema = {
     properties: {
         workflow_run_id: {

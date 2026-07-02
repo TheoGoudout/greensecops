@@ -90,6 +90,7 @@ def run_fix_generation(
         )
         issues = [i for i in issues if i.id not in existing_fix_issue_ids]
         if not issues:
+            events_pub.publish_event(ev.fix_skipped(str(repo.org_id), str(repo.id)))
             return {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
 
         org_id = str(repo.org_id)

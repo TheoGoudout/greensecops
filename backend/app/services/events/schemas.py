@@ -2,10 +2,12 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.models.enums import SSESignal
+
 
 @dataclass
 class SSEEvent:
-    event: str
+    event: SSESignal
     org_id: str  # routing key — published to events:org:{org_id}
     data: dict[str, Any] = field(default_factory=dict)
 
@@ -20,7 +22,7 @@ class SSEEvent:
 
 def analysis_queued(org_id: str, repo_id: str, branch: str, trigger: str) -> SSEEvent:
     return SSEEvent(
-        event="analysis.queued",
+        event=SSESignal.analysis_queued,
         org_id=org_id,
         data={"repo_id": repo_id, "branch": branch, "trigger": trigger},
     )
@@ -30,7 +32,7 @@ def analysis_started(
     org_id: str, repo_id: str, analysis_id: str, branch: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="analysis.started",
+        event=SSESignal.analysis_started,
         org_id=org_id,
         data={"repo_id": repo_id, "analysis_id": analysis_id, "branch": branch},
     )
@@ -45,7 +47,7 @@ def analysis_completed(
     issues_count: int,
 ) -> SSEEvent:
     return SSEEvent(
-        event="analysis.completed",
+        event=SSESignal.analysis_completed,
         org_id=org_id,
         data={
             "repo_id": repo_id,
@@ -61,7 +63,7 @@ def analysis_failed(
     org_id: str, repo_id: str, analysis_id: str, error: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="analysis.failed",
+        event=SSESignal.analysis_failed,
         org_id=org_id,
         data={"repo_id": repo_id, "analysis_id": analysis_id, "error": error},
     )
@@ -69,7 +71,7 @@ def analysis_failed(
 
 def analysis_skipped(org_id: str, repo_id: str, analysis_id: str) -> SSEEvent:
     return SSEEvent(
-        event="analysis.skipped",
+        event=SSESignal.analysis_skipped,
         org_id=org_id,
         data={"repo_id": repo_id, "analysis_id": analysis_id},
     )
@@ -78,11 +80,19 @@ def analysis_skipped(org_id: str, repo_id: str, analysis_id: str) -> SSEEvent:
 # ─── Fix generation ──────────────────────────────────────────────────────────
 
 
+def fix_skipped(org_id: str, repo_id: str) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.fix_skipped,
+        org_id=org_id,
+        data={"repo_id": repo_id},
+    )
+
+
 def fix_generating(
     org_id: str, repo_id: str, fix_ids: list[str], issue_ids: list[str]
 ) -> SSEEvent:
     return SSEEvent(
-        event="fix.generating",
+        event=SSESignal.fix_generating,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_ids": fix_ids, "issue_ids": issue_ids},
     )
@@ -90,7 +100,7 @@ def fix_generating(
 
 def fix_ready(org_id: str, repo_id: str, fix_id: str, issue_id: str) -> SSEEvent:
     return SSEEvent(
-        event="fix.ready",
+        event=SSESignal.fix_ready,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id, "issue_id": issue_id},
     )
@@ -98,7 +108,7 @@ def fix_ready(org_id: str, repo_id: str, fix_id: str, issue_id: str) -> SSEEvent
 
 def fix_ready_batch(org_id: str, repo_id: str, fix_ids: list[str]) -> SSEEvent:
     return SSEEvent(
-        event="fix.ready",
+        event=SSESignal.fix_ready,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_ids": fix_ids},
     )
@@ -108,7 +118,7 @@ def fix_generation_failed(
     org_id: str, repo_id: str, fix_id: str, error: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="fix.failed",
+        event=SSESignal.fix_failed,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id, "error": error},
     )
@@ -119,7 +129,7 @@ def fix_generation_failed(
 
 def fix_delivering(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
     return SSEEvent(
-        event="fix.delivering",
+        event=SSESignal.fix_delivering,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id},
     )
@@ -127,7 +137,7 @@ def fix_delivering(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
 
 def fix_delivering_batch(org_id: str, repo_id: str, fix_ids: list[str]) -> SSEEvent:
     return SSEEvent(
-        event="fix.delivering",
+        event=SSESignal.fix_delivering,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_ids": fix_ids},
     )
@@ -137,7 +147,7 @@ def fix_delivered(
     org_id: str, repo_id: str, fix_id: str, pr_url: str | None, pr_branch: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="fix.delivered",
+        event=SSESignal.fix_delivered,
         org_id=org_id,
         data={
             "repo_id": repo_id,
@@ -152,7 +162,7 @@ def fix_delivered_batch(
     org_id: str, repo_id: str, fix_ids: list[str], pr_url: str | None, pr_branch: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="fix.delivered",
+        event=SSESignal.fix_delivered,
         org_id=org_id,
         data={
             "repo_id": repo_id,
@@ -165,7 +175,7 @@ def fix_delivered_batch(
 
 def fix_delivery_failed(org_id: str, repo_id: str, fix_id: str, error: str) -> SSEEvent:
     return SSEEvent(
-        event="fix.failed",
+        event=SSESignal.fix_failed,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id, "error": error},
     )
@@ -173,7 +183,7 @@ def fix_delivery_failed(org_id: str, repo_id: str, fix_id: str, error: str) -> S
 
 def fix_rejected(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
     return SSEEvent(
-        event="fix.rejected",
+        event=SSESignal.fix_rejected,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id},
     )
@@ -186,7 +196,7 @@ def pr_opened(
     org_id: str, repo_id: str, fix_ids: list[str], pr_url: str, pr_branch: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="pr.opened",
+        event=SSESignal.pr_opened,
         org_id=org_id,
         data={
             "repo_id": repo_id,
@@ -201,7 +211,7 @@ def pr_updated(
     org_id: str, repo_id: str, fix_ids: list[str], pr_url: str, pr_branch: str
 ) -> SSEEvent:
     return SSEEvent(
-        event="pr.updated",
+        event=SSESignal.pr_updated,
         org_id=org_id,
         data={
             "repo_id": repo_id,
@@ -216,7 +226,7 @@ def pr_closed(
     org_id: str, repo_id: str, fix_id: str, pr_url: str, merged: bool
 ) -> SSEEvent:
     return SSEEvent(
-        event="pr.merged" if merged else "pr.closed",
+        event=SSESignal.pr_merged if merged else SSESignal.pr_closed,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id, "pr_url": pr_url},
     )
@@ -227,7 +237,7 @@ def pr_closed(
 
 def installation_syncing(org_id: str, installation_id: int) -> SSEEvent:
     return SSEEvent(
-        event="installation.syncing",
+        event=SSESignal.installation_syncing,
         org_id=org_id,
         data={"org_id": org_id, "installation_id": installation_id},
     )
@@ -235,7 +245,7 @@ def installation_syncing(org_id: str, installation_id: int) -> SSEEvent:
 
 def installation_synced(org_id: str, installation_id: int, repo_count: int) -> SSEEvent:
     return SSEEvent(
-        event="installation.synced",
+        event=SSESignal.installation_synced,
         org_id=org_id,
         data={
             "org_id": org_id,
@@ -247,7 +257,7 @@ def installation_synced(org_id: str, installation_id: int, repo_count: int) -> S
 
 def installation_created(org_id: str, installation_id: int, org_name: str) -> SSEEvent:
     return SSEEvent(
-        event="installation.created",
+        event=SSESignal.installation_created,
         org_id=org_id,
         data={
             "org_id": org_id,
@@ -261,7 +271,7 @@ def installation_deleted(
     org_id: str, installation_id: int, repos_disabled: int
 ) -> SSEEvent:
     return SSEEvent(
-        event="installation.deleted",
+        event=SSESignal.installation_deleted,
         org_id=org_id,
         data={
             "org_id": org_id,
@@ -271,9 +281,49 @@ def installation_deleted(
     )
 
 
+def installation_suspended(
+    org_id: str, installation_id: int, repos_disabled: int
+) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.installation_suspended,
+        org_id=org_id,
+        data={
+            "org_id": org_id,
+            "installation_id": installation_id,
+            "repos_disabled": repos_disabled,
+        },
+    )
+
+
+def installation_unsuspended(
+    org_id: str, installation_id: int, org_name: str
+) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.installation_unsuspended,
+        org_id=org_id,
+        data={
+            "org_id": org_id,
+            "installation_id": installation_id,
+            "org_name": org_name,
+        },
+    )
+
+
+def installation_updated(org_id: str, installation_id: int, org_name: str) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.installation_updated,
+        org_id=org_id,
+        data={
+            "org_id": org_id,
+            "installation_id": installation_id,
+            "org_name": org_name,
+        },
+    )
+
+
 def repository_added(org_id: str, repo_count: int) -> SSEEvent:
     return SSEEvent(
-        event="repository.added",
+        event=SSESignal.repository_added,
         org_id=org_id,
         data={"org_id": org_id, "repo_count": repo_count},
     )
@@ -281,7 +331,7 @@ def repository_added(org_id: str, repo_count: int) -> SSEEvent:
 
 def repository_disabled(org_id: str, repo_ids: list[str]) -> SSEEvent:
     return SSEEvent(
-        event="repository.disabled",
+        event=SSESignal.repository_disabled,
         org_id=org_id,
         data={"org_id": org_id, "repo_ids": repo_ids},
     )
@@ -289,7 +339,7 @@ def repository_disabled(org_id: str, repo_ids: list[str]) -> SSEEvent:
 
 def repository_toggled(org_id: str, repo_id: str, enabled: bool) -> SSEEvent:
     return SSEEvent(
-        event="repository.toggled",
+        event=SSESignal.repository_toggled,
         org_id=org_id,
         data={"org_id": org_id, "repo_id": repo_id, "enabled": enabled},
     )
@@ -297,7 +347,7 @@ def repository_toggled(org_id: str, repo_id: str, enabled: bool) -> SSEEvent:
 
 def repository_action_pr_opened(org_id: str, repo_id: str, pr_url: str) -> SSEEvent:
     return SSEEvent(
-        event="repository.action_pr_opened",
+        event=SSESignal.repository_action_pr_opened,
         org_id=org_id,
         data={"org_id": org_id, "repo_id": repo_id, "pr_url": pr_url},
     )

@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from app.api.deps import CurrentUserSSE, SessionDep
 from app.core.config import settings
-from app.models import OrgMember
+from app.models import OrgMember, SSESignal
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,12 @@ async def _stream_events(
             await r.aclose()
         except Exception:
             pass
+
+
+@router.get("/signals", response_model=list[SSESignal])
+async def get_sse_signals() -> list[SSESignal]:
+    """Return all valid SSE signal types. Exposes SSESignal enum in OpenAPI for frontend codegen."""
+    return list(SSESignal)
 
 
 @router.get("/stream")

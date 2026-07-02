@@ -32,6 +32,7 @@ from .enums import (
     LLMProvider,
     OrgRole,
     PullRequestState,
+    SSESignal,
     TelemetryPhase,
     UserTier,
 )
@@ -91,6 +92,7 @@ __all__ = [
     "IssueCategory",
     "FixStatus",
     "PullRequestState",
+    "SSESignal",
     "TelemetryPhase",
     # schemas
     "UserPublic",
