@@ -9,6 +9,8 @@ permissions: {}
 
 jobs:
   deploy:
+    name: Deploy to Staging
+    timeout-minutes: 30
     environment: staging
     # Do not deploy in the main repository, only in user projects
     if: github.repository_owner != 'fastapi'
