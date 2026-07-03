@@ -8,6 +8,7 @@ permissions: {}
 
 jobs:
   main:
+    name: Check for merge conflicts
     permissions:
       contents: read
       pull-requests: write
