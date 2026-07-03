@@ -15,6 +15,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL }}
       - uses: actions/checkout@v7.0.0
 
       - uses: astral-sh/setup-uv@v7
@@ -44,5 +48,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL }}
       - uses: actions/deploy-pages@v5
         id: deployment
