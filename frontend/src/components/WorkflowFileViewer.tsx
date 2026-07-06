@@ -1,3 +1,4 @@
+import { applyPatch, diffLines } from "diff"
 import Prism from "prismjs"
 import "prismjs/components/prism-yaml"
 import { useMemo, useState } from "react"
@@ -47,6 +48,7 @@ function tokenizeYamlLine(line: string): FlatToken[] {
 interface WorkflowFileViewerProps {
   path: string
   rawContent: string
+  fullContent?: string
   issues: IssuePublic[]
   fixes: FixPublic[]
 }
@@ -68,81 +70,61 @@ interface LineEntry {
   type: "normal" | "remove" | "add"
 }
 
-type PatchLine = { prefix: "+" | "-" | " "; text: string }
-type Hunk = { oldStart: number; lines: PatchLine[] }
-
-function parsePatch(patch: string): Hunk[] {
-  const hunks: Hunk[] = []
-  let cur: Hunk | null = null
-  for (const line of patch.split("\n")) {
-    const m = line.match(/^@@ -(\d+)(?:,\d+)? /)
-    if (m) {
-      if (cur) hunks.push(cur)
-      cur = { oldStart: Number(m[1]), lines: [] }
-    } else if (cur && line.length > 0 && " +-".includes(line[0])) {
-      cur.lines.push({
-        prefix: line[0] as PatchLine["prefix"],
-        text: line.slice(1),
-      })
-    }
-  }
-  if (cur) hunks.push(cur)
-  return hunks
-}
-
 export function applyPatches(
   originalLines: string[],
   fixes: FixPublic[],
+  fullContent?: string,
 ): LineEntry[] {
-  let entries: LineEntry[] = originalLines.map((text, i) => ({
-    key: i,
-    lineNum: i + 1,
-    text,
-    type: "normal" as const,
-  }))
+  const originalText = originalLines.join("\n")
+  let currentText: string
 
-  let nextKey = originalLines.length
-
-  for (const fix of fixes) {
-    if (!fix.diff_patch) continue
-    const hunks = parsePatch(fix.diff_patch)
-    const next: LineEntry[] = []
-    let i = 0
-
-    for (const hunk of hunks) {
-      const startI = entries.findIndex(
-        (e, j) => j >= i && e.lineNum === hunk.oldStart,
-      )
-      if (startI === -1) continue
-
-      next.push(...entries.slice(i, startI))
-      i = startI
-
-      const addBuf: LineEntry[] = []
-      for (const { prefix, text } of hunk.lines) {
-        if (prefix === " ") {
-          next.push(...addBuf)
-          addBuf.length = 0
-          // Skip past lines inserted by previous patches before consuming original line
-          while (i < entries.length && entries[i].lineNum === null)
-            next.push(entries[i++])
-          next.push(entries[i++])
-        } else if (prefix === "-") {
-          next.push(...addBuf)
-          addBuf.length = 0
-          // Skip past lines inserted by previous patches before consuming original line
-          while (i < entries.length && entries[i].lineNum === null)
-            next.push(entries[i++])
-          next.push({ ...entries[i], type: "remove" })
-          i++
-        } else {
-          addBuf.push({ key: nextKey++, lineNum: null, text, type: "add" })
-        }
+  if (
+    fullContent !== undefined &&
+    fixes.some((f) => f.status === "ready" && f.diff_patch)
+  ) {
+    currentText = fullContent
+  } else {
+    currentText = originalText
+    for (const fix of fixes) {
+      if (!fix.diff_patch) continue
+      try {
+        const result = applyPatch(currentText, fix.diff_patch, {
+          fuzzFactor: 5,
+        })
+        if (result !== false) currentText = result
+      } catch (err) {
+        console.warn("Patch could not be applied", err, fix.diff_patch)
       }
-      next.push(...addBuf)
     }
-    next.push(...entries.slice(i))
-    entries = next
+  }
+
+  const changes = diffLines(originalText, currentText)
+  const entries: LineEntry[] = []
+  let origLineNum = 1
+  let key = 0
+
+  for (const change of changes) {
+    const lines = change.value.split("\n")
+    if (lines[lines.length - 1] === "") lines.pop()
+    for (const text of lines) {
+      if (change.removed) {
+        entries.push({
+          key: key++,
+          lineNum: origLineNum++,
+          text,
+          type: "remove",
+        })
+      } else if (change.added) {
+        entries.push({ key: key++, lineNum: null, text, type: "add" })
+      } else {
+        entries.push({
+          key: key++,
+          lineNum: origLineNum++,
+          text,
+          type: "normal",
+        })
+      }
+    }
   }
 
   return entries
@@ -155,6 +137,7 @@ type Segment =
 export function WorkflowFileViewer({
   path,
   rawContent,
+  fullContent,
   issues,
   fixes,
 }: WorkflowFileViewerProps) {
@@ -166,8 +149,8 @@ export function WorkflowFileViewer({
     [fixes],
   )
   const displayLines = useMemo(
-    () => applyPatches(originalLines, readyFixes),
-    [originalLines, readyFixes],
+    () => applyPatches(originalLines, readyFixes, fullContent ?? undefined),
+    [originalLines, readyFixes, fullContent],
   )
 
   const issuesByOrigLine = useMemo(() => {
