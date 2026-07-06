@@ -237,11 +237,12 @@ async def _generate_fixes(
 ) -> object:
     _configure_langchain()
 
-    from app.services.github.sha_resolver import resolve_action_shas
+    from app.services.github.sha_resolver import resolve_action_shas, resolve_extra_shas
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_fix_prompt
 
     action_sha_map = await resolve_action_shas(workflow_content)
+    action_sha_map = await resolve_extra_shas(action_sha_map)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,

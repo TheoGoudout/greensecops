@@ -5,9 +5,11 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.github.sha_resolver import (
+    WELL_KNOWN_ACTIONS,
     _parse_action_refs,
     _resolve_ref_to_sha,
     resolve_action_shas,
+    resolve_extra_shas,
 )
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -166,3 +168,50 @@ def test_resolve_action_shas_skips_unresolvable_action() -> None:
         result = asyncio.run(resolve_action_shas(workflow))
 
     assert result == {}
+
+
+# ─── resolve_extra_shas ───────────────────────────────────────────────────────
+
+
+def test_resolve_extra_shas_adds_well_known_actions() -> None:
+    responses = [
+        FakeResponse({"object": {"sha": f"sha_{i:040d}", "type": "commit"}})
+        for i in range(len(WELL_KNOWN_ACTIONS))
+    ]
+    factory = _fake_async_client_ctx(*responses)
+
+    with patch("app.services.github.sha_resolver.httpx.AsyncClient", factory):
+        result = asyncio.run(resolve_extra_shas({}))
+
+    for repo, ref in WELL_KNOWN_ACTIONS:
+        assert f"{repo}@{ref}" in result
+
+
+def test_resolve_extra_shas_skips_already_resolved() -> None:
+    existing = {"actions/cache@v4": "a" * 40}
+    remaining = [
+        (repo, ref)
+        for repo, ref in WELL_KNOWN_ACTIONS
+        if f"{repo}@{ref}" not in existing
+    ]
+    responses = [
+        FakeResponse({"object": {"sha": f"sha_{i:040d}", "type": "commit"}})
+        for i in range(len(remaining))
+    ]
+    factory = _fake_async_client_ctx(*responses)
+
+    with patch("app.services.github.sha_resolver.httpx.AsyncClient", factory):
+        result = asyncio.run(resolve_extra_shas(existing))
+
+    assert result["actions/cache@v4"] == "a" * 40
+    assert len(result) == len(WELL_KNOWN_ACTIONS)
+
+
+def test_resolve_extra_shas_returns_existing_when_all_resolved() -> None:
+    existing = {f"{repo}@{ref}": "a" * 40 for repo, ref in WELL_KNOWN_ACTIONS}
+
+    with patch("app.services.github.sha_resolver.httpx.AsyncClient") as mock_client:
+        result = asyncio.run(resolve_extra_shas(existing))
+
+    mock_client.assert_not_called()
+    assert result == existing

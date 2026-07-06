@@ -24,6 +24,7 @@ Rules for <full_content>:
 - Preserve the trailing newline at the end of the file
 - Ensure the result is valid GitHub Actions YAML syntax
 - When pinning an action to a commit SHA, append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>`
+- CRITICAL: Only use SHAs from the "Known action commit SHAs" section. If you add an action whose SHA is NOT listed there, use its tag reference (e.g., `uses: actions/cache@v4`) — do NOT invent or guess a SHA.
 - CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`
 
 Rules for each <fix>:
