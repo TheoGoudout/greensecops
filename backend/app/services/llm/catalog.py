@@ -1,9 +1,12 @@
+import functools
 import json
 from pathlib import Path
 
 from app.core.config import settings
 from app.models import LLMProvider
 from app.services.llm.base import BaseLLMProvider
+
+_DEFAULT_CONFIG = Path(__file__).parent.parent.parent / "config" / "ai_providers.json"
 
 _KEY_MAP: dict[str, str | None] = {
     "openai": settings.OPENAI_API_KEY,
@@ -13,17 +16,17 @@ _KEY_MAP: dict[str, str | None] = {
 }
 
 
+@functools.lru_cache(maxsize=1)
+def load_provider_catalog() -> list[dict]:
+    config_path = settings.AI_PROVIDERS_CONFIG
+    path = Path(config_path) if config_path else _DEFAULT_CONFIG
+    with path.open() as f:
+        return json.load(f)["providers"]
+
+
 def get_first_available_provider() -> tuple[str, str]:
     """Return (provider_id, default_model) for the first provider with credentials configured."""
-    config_path = settings.AI_PROVIDERS_CONFIG
-    path = (
-        Path(config_path)
-        if config_path
-        else Path(__file__).parent.parent.parent / "config" / "ai_providers.json"
-    )
-    with path.open() as f:
-        catalog: list[dict] = json.load(f)["providers"]
-    for p in catalog:
+    for p in load_provider_catalog():
         if bool(_KEY_MAP.get(p["id"])):
             return p["id"], p["default_model"]
     raise RuntimeError(

@@ -1,4 +1,3 @@
-import difflib
 import logging
 import uuid
 from collections import defaultdict
@@ -153,19 +152,7 @@ def list_fixes(
             data.pr_state = pr.pr_state
             data.comment_url = pr.comment_url
 
-        if fix.patch:
-            data.diff_patch = fix.patch
-        elif fix.diff and wf_file and wf_file.raw_content:
-            fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
-            patch = "".join(
-                difflib.unified_diff(
-                    wf_file.raw_content.splitlines(keepends=True),
-                    fixed.splitlines(keepends=True),
-                    fromfile=f"a/{wf_file.path}",
-                    tofile=f"b/{wf_file.path}",
-                )
-            )
-            data.diff_patch = patch or None
+        data.diff_patch = fix.patch or None
         result.append(data)
     return result
 
@@ -201,22 +188,7 @@ def get_fix(
         data.pr_state = pr.pr_state
         data.comment_url = pr.comment_url
 
-    if fix.patch:
-        data.diff_patch = fix.patch
-    elif fix.diff and wf_file and wf_file.raw_content:
-        original = wf_file.raw_content
-        fixed = fix.diff if fix.diff.endswith("\n") else fix.diff + "\n"
-        original_lines = original.splitlines(keepends=True)
-        fixed_lines = fixed.splitlines(keepends=True)
-        patch = "".join(
-            difflib.unified_diff(
-                original_lines,
-                fixed_lines,
-                fromfile=f"a/{wf_file.path}",
-                tofile=f"b/{wf_file.path}",
-            )
-        )
-        data.diff_patch = patch or None
+    data.diff_patch = fix.patch or None
 
     return data
 
@@ -494,6 +466,60 @@ def reject_fix(
         events_pub.publish_event(
             ev.fix_rejected(str(repo.org_id), str(repo.id), str(fix_id))
         )
+
+
+@router.post("/regenerate-for-pr/{pr_id}", status_code=202)
+def regenerate_fixes_for_pr(
+    pr_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,  # noqa: ARG001
+) -> dict[str, int]:
+    """Delete delivered fixes for a closed PR and re-trigger generation.
+
+    Only valid when pr_state == closed. Merged PRs are not touched because
+    the code changes were already applied.
+    """
+    pr = get_or_404(session, PullRequest, pr_id)
+    if pr.pr_state != PullRequestState.closed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"PR is not closed (state: {pr.pr_state})",
+        )
+
+    fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_id)).all())
+    if not fixes:
+        return {"queued": 0}
+
+    by_analysis: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+    for fix in fixes:
+        issue = session.get(Issue, fix.issue_id)
+        if issue and issue.analysis_id:
+            by_analysis[issue.analysis_id].append(issue.id)
+
+    fix_ids_to_delete = [fix.id for fix in fixes]
+    session.exec(delete(Fix).where(Fix.id.in_(fix_ids_to_delete)))  # type: ignore[attr-defined]
+    session.commit()
+
+    all_issue_ids = [iid for ids in by_analysis.values() for iid in ids]
+
+    repo = session.get(Repository, pr.repo_id)
+    if repo:
+        events_pub.publish_event(
+            ev.fix_generating(
+                str(repo.org_id),
+                str(repo.id),
+                fix_ids=[],
+                issue_ids=[str(iid) for iid in all_issue_ids],
+            )
+        )
+
+    for issue_ids in by_analysis.values():
+        run_fix_generation.delay(
+            issue_ids=[str(iid) for iid in issue_ids],
+            batch_mode=True,
+        )
+
+    return {"queued": len(all_issue_ids)}
 
 
 @router.post("/sync-pr-status/{repo_id}")

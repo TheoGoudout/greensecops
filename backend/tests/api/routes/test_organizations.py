@@ -42,11 +42,11 @@ def test_list_ai_providers_returns_available_only(
 ) -> None:
     import app.api.routes.organizations as org_mod
 
-    org_mod._load_provider_catalog.cache_clear()
+    org_mod.load_provider_catalog.cache_clear()
 
     with (
         patch.dict(
-            org_mod._KEY_ENV,
+            org_mod._KEY_MAP,
             {"openai": "sk-test", "anthropic": None, "gemini": None, "ollama": None},
         ),
     ):
@@ -68,10 +68,10 @@ def test_list_ai_providers_none_available(
 ) -> None:
     import app.api.routes.organizations as org_mod
 
-    org_mod._load_provider_catalog.cache_clear()
+    org_mod.load_provider_catalog.cache_clear()
 
     with patch.dict(
-        org_mod._KEY_ENV,
+        org_mod._KEY_MAP,
         {"openai": None, "anthropic": None, "gemini": None, "ollama": None},
     ):
         response = client.get(

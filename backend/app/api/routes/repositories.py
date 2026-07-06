@@ -236,7 +236,12 @@ def list_workflow_files(
         select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
     ).all()
     return [
-        WorkflowFilePublic(id=wf.id, path=wf.path, raw_content=wf.raw_content)
+        WorkflowFilePublic(
+            id=wf.id,
+            path=wf.path,
+            raw_content=wf.raw_content,
+            last_full_content=wf.last_full_content,
+        )
         for wf in wf_files
     ]
 

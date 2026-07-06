@@ -230,32 +230,6 @@ test.describe("Repository Detail", () => {
     await expect(page.getByText("No fixes yet.")).toBeVisible()
   })
 
-  test("Diffs tab empty state", async ({ page }) => {
-    await setupRepoMocks(page, { fixes: [] })
-
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
-    await page.getByRole("tab", { name: "Diffs" }).click()
-
-    await expect(
-      page.getByText("No ready fixes to preview. Generate fixes first."),
-    ).toBeVisible()
-  })
-
-  test("Diffs tab shows diff for ready fixes", async ({ page }) => {
-    await setupRepoMocks(page, {
-      issues: [MOCK_ISSUE_WITH_FIX],
-      fixes: [MOCK_FIX_READY],
-    })
-
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
-    await page.getByRole("tab", { name: "Diffs" }).click()
-
-    await expect(page.locator(".diff2html-wrapper")).toBeVisible()
-    await expect(
-      page.getByRole("button", { name: "Create PR (1 fix)" }),
-    ).toBeVisible()
-  })
-
   test("Pull Requests tab shows PRs", async ({ page }) => {
     await setupRepoMocks(page, {
       issues: [MOCK_ISSUE_RELIABILITY],

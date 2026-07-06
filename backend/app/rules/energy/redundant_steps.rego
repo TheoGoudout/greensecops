@@ -67,6 +67,7 @@ violations contains violation if {
 		"severity": "low",
 		"category": "energy",
 		"job": job_name,
+		"step": uses,
 		"message": sprintf("Action '%v' is used in %v jobs. Consider consolidating or sharing results to avoid redundant work.", [base, count(jobs_using)]),
 		"context": uses,
 	}

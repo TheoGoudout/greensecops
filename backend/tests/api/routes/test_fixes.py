@@ -1189,3 +1189,107 @@ def test_run_fix_generation_skipped_publishes_fix_skipped_event(
     assert result == {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
     published_events = [call.args[0].event for call in mock_pub.call_args_list]
     assert "fix.skipped" in published_events
+
+
+# ─── regenerate-for-pr tests ─────────────────────────────────────────────────
+
+
+def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="regen test issue",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-regen-test",
+        pr_url=f"https://github.com/{repo.full_name}/pull/200",
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    fix = Fix(
+        issue_id=issue.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_id=pr.id,
+    )
+    db.add(fix)
+    db.commit()
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/regenerate-for-pr/{pr.id}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    mock_delay.assert_called_once()
+
+    db.expire_all()
+    from sqlmodel import select as sql_select
+
+    remaining = db.exec(sql_select(Fix).where(Fix.pr_id == pr.id)).all()
+    assert remaining == []
+
+
+def test_regenerate_for_pr_rejects_open_pr(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="regen open pr test",
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    _fix, pr = _make_open_pr_fix(
+        db,
+        repo,
+        issue,
+        f"https://github.com/{repo.full_name}/pull/201",
+        pr_branch="greensecops/fix-regen-open",
+    )
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/regenerate-for-pr/{pr.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 409
+
+
+def test_regenerate_for_pr_not_found(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/regenerate-for-pr/{uuid.uuid4()}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 404

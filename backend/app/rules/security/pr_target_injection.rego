@@ -58,6 +58,7 @@ violations contains violation if {
 		"severity": "critical",
 		"category": "security",
 		"job": job_name,
+		"step": step.uses,
 		"message": sprintf("Job '%v' triggers on pull_request_target and checks out the PR head ref. This allows untrusted code to run with write access. See GitHub Security Lab advisory.", [job_name]),
 		"context": "pull_request_target + checkout head ref",
 	}

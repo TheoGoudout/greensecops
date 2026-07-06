@@ -122,6 +122,10 @@ export function useRepoEvents(): void {
         case "fix.ready": {
           if (repoId) {
             invalidateFixQueries(queryClient, repoId, fixId)
+            invalidateIssueQueries(queryClient, repoId)
+            queryClient.invalidateQueries({
+              queryKey: ["workflow-files", repoId],
+            })
             if (fixIds) {
               for (const id of fixIds) {
                 queryClient.invalidateQueries({ queryKey: ["fix", id] })

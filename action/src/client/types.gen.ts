@@ -70,7 +70,6 @@ export type FixPublic = {
     llm_provider: LLMProvider;
     llm_model: string;
     status: FixStatus;
-    patch?: (string | null);
     diff_patch?: (string | null);
     pr_url?: (string | null);
     pr_branch?: (string | null);
@@ -276,6 +275,7 @@ export type WorkflowFilePublic = {
     id: string;
     path: string;
     raw_content?: (string | null);
+    last_full_content?: (string | null);
 };
 
 export type AnalysesListAnalysesData = {
@@ -425,6 +425,14 @@ export type FixesTriggerRepoDeliveryData = {
 
 export type FixesTriggerRepoDeliveryResponse = ({
     [key: string]: (string);
+});
+
+export type FixesRegenerateFixesForPrData = {
+    prId: string;
+};
+
+export type FixesRegenerateFixesForPrResponse = ({
+    [key: string]: (number);
 });
 
 export type FixesSyncPrStatusesData = {

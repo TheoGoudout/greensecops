@@ -377,17 +377,6 @@ export const FixPublicSchema = {
         status: {
             '$ref': '#/components/schemas/FixStatus'
         },
-        patch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Patch'
-        },
         diff_patch: {
             anyOf: [
                 {
@@ -1464,6 +1453,17 @@ export const WorkflowFilePublicSchema = {
                 }
             ],
             title: 'Raw Content'
+        },
+        last_full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Full Content'
         }
     },
     type: 'object',

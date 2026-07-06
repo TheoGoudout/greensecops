@@ -43,6 +43,7 @@ violations contains violation if {
 		"severity": "medium",
 		"category": "performance",
 		"job": job_name,
+		"step": step.uses,
 		"message": sprintf("Step in job '%v' uses actions/cache with key '%v' that does not include hashFiles(). Add hashFiles() to invalidate the cache when dependencies change.", [job_name, key]),
 		"context": key,
 	}

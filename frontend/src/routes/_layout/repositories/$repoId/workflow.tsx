@@ -84,6 +84,7 @@ function WorkflowPage() {
             key={wf.id}
             path={wf.path}
             rawContent={wf.raw_content ?? ""}
+            fullContent={wf.last_full_content ?? undefined}
             issues={fileIssues}
             fixes={fileFixes}
           />

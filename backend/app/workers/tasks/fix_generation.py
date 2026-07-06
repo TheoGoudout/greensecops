@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 import uuid
@@ -11,6 +10,7 @@ from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowF
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
+from app.workers.patch_utils import normalize_patch, restore_trailing_whitespace
 
 logger = logging.getLogger(__name__)
 
@@ -144,13 +144,21 @@ def run_fix_generation(
             return {"status": "failed", "issue_ids": issue_ids}
 
         full_content, patches = _parse_llm_response(result.content)
+        patches = {fp: normalize_patch(diff) for fp, diff in patches.items()}
+
+        if full_content:
+            full_content = restore_trailing_whitespace(
+                wf_file.raw_content, full_content
+            )
+            wf_file.last_full_content = full_content
+            session.add(wf_file)
 
         for fix in fixes:
             issue = session.get(Issue, fix.issue_id)
-            fix.diff = full_content or result.content
-            fix.patch = (
+            patch = (
                 patches.get(issue.fingerprint) if issue and issue.fingerprint else None
             )
+            fix.patch = patch
             fix.prompt_tokens = result.prompt_tokens
             fix.completion_tokens = result.completion_tokens
             fix.langsmith_run_id = result.run_id
@@ -183,21 +191,32 @@ def run_fix_generation(
 
 
 def _parse_llm_response(content: str) -> tuple[str, dict[str, str]]:
-    """Parse LLM JSON response into (full_content, {fingerprint: diff}).
+    """Parse LLM XML-delimited response into (full_content, {fingerprint: diff})."""
+    import re
 
-    Falls back to treating full content as the diff when JSON is invalid.
-    """
-    try:
-        data = json.loads(content)
-        full_content = data.get("full_content") or ""
-        patches = {
-            item["fingerprint"]: item["diff"]
-            for item in data.get("fixes", [])
-            if "fingerprint" in item and "diff" in item
-        }
-        return full_content, patches
-    except (json.JSONDecodeError, TypeError, AttributeError):
-        return content, {}
+    full_content_match = re.search(
+        r"<full_content>\n?(.*?)\n?</full_content>", content, re.DOTALL
+    )
+    full_content = full_content_match.group(1) if full_content_match else ""
+
+    patches = {
+        m.group(1): m.group(2)
+        for m in re.finditer(
+            r'<fix fingerprint="([^"]+)">\n?(.*?)\n?</fix>', content, re.DOTALL
+        )
+    }
+
+    if not full_content:
+        logger.warning(
+            "LLM response missing <full_content> block. First 500 chars: %r",
+            content[:500],
+        )
+    logger.info(
+        "Parsed LLM response: full_content=%d chars, %d patches",
+        len(full_content),
+        len(patches),
+    )
+    return full_content, patches
 
 
 def _configure_langchain() -> None:
@@ -218,11 +237,12 @@ async def _generate_fixes(
 ) -> object:
     _configure_langchain()
 
-    from app.services.github.sha_resolver import resolve_action_shas
+    from app.services.github.sha_resolver import resolve_action_shas, resolve_extra_shas
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_fix_prompt
 
     action_sha_map = await resolve_action_shas(workflow_content)
+    action_sha_map = await resolve_extra_shas(action_sha_map)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,

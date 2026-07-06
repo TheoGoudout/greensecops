@@ -1,14 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { html as diff2htmlString } from "diff2html"
-import { ColorSchemeType } from "diff2html/lib/types"
-import "diff2html/bundles/css/diff2html.min.css"
 import { AlertCircle, ArrowLeft, GitPullRequest } from "lucide-react"
 import { toast } from "sonner"
 import { FixesService, IssuesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
-import { useTheme } from "@/components/theme-provider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -45,7 +41,6 @@ function FixDetail() {
   const { fixId } = Route.useParams()
   const { repoId } = Route.useSearch()
   const queryClient = useQueryClient()
-  const { resolvedTheme } = useTheme()
 
   const {
     data: fix,
@@ -79,18 +74,6 @@ function FixDetail() {
     },
     onError: () => toast.error("Failed to reject fix"),
   })
-
-  const diffHtml = fix?.diff_patch
-    ? diff2htmlString(fix.diff_patch, {
-        drawFileList: false,
-        matching: "lines",
-        outputFormat: "line-by-line",
-        colorScheme:
-          resolvedTheme === "dark"
-            ? ColorSchemeType.DARK
-            : ColorSchemeType.LIGHT,
-      })
-    : null
 
   if (fixError) {
     return (
@@ -226,36 +209,6 @@ function FixDetail() {
                 </p>
               )
             })()
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Diff
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 overflow-hidden rounded-b-lg">
-          {fixLoading ? (
-            <div className="flex flex-col gap-2 p-6">
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} className="h-5 w-full" />
-              ))}
-            </div>
-          ) : diffHtml ? (
-            <div
-              className="diff2html-wrapper text-xs overflow-x-auto"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: diff2html renders structured patch data from the API, not raw user input
-              dangerouslySetInnerHTML={{ __html: diffHtml }}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground p-6 text-center">
-              No diff available yet.{" "}
-              {fix?.status === "pending" || fix?.status === "generating"
-                ? "Fix is still being generated."
-                : ""}
-            </p>
           )}
         </CardContent>
       </Card>

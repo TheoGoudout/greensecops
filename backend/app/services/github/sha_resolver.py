@@ -8,6 +8,15 @@ logger = logging.getLogger(__name__)
 
 _ACTION_USE_RE = re.compile(r"uses:\s+([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)@([^\s#]+)")
 
+# Actions commonly introduced by the LLM when fixing workflows.
+# Pre-resolving their SHAs prevents the LLM from inventing hashes.
+WELL_KNOWN_ACTIONS: list[tuple[str, str]] = [
+    ("actions/cache", "v4"),
+    ("actions/cache", "v3"),
+    ("actions/upload-artifact", "v4"),
+    ("actions/download-artifact", "v4"),
+]
+
 
 def _parse_action_refs(workflow_content: str) -> set[tuple[str, str]]:
     refs: set[tuple[str, str]] = set()
@@ -41,6 +50,29 @@ async def _resolve_ref_to_sha(
         except Exception as exc:
             logger.warning("Failed to resolve SHA for %s@%s: %s", repo, ref, exc)
     return None
+
+
+async def resolve_extra_shas(existing_map: dict[str, str]) -> dict[str, str]:
+    """Extend existing_map with SHAs for well-known actions not already resolved."""
+    needed = [
+        (repo, ref)
+        for repo, ref in WELL_KNOWN_ACTIONS
+        if f"{repo}@{ref}" not in existing_map
+    ]
+    if not needed:
+        return existing_map
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    result = dict(existing_map)
+    async with httpx.AsyncClient(headers=headers) as client:
+        for repo, ref in needed:
+            sha = await _resolve_ref_to_sha(client, repo, ref)
+            if sha:
+                result[f"{repo}@{ref}"] = sha
+    return result
 
 
 async def resolve_action_shas(workflow_content: str) -> dict[str, str]:

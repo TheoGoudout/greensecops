@@ -42,6 +42,7 @@ violations contains violation if {
 		"severity": "low",
 		"category": "reliability",
 		"job": job_name,
+		"step": step.uses,
 		"message": sprintf("Step in job '%v' uploads an artifact without setting 'retention-days'. Set an explicit retention period to control storage costs.", [job_name]),
 		"context": step.uses,
 	}

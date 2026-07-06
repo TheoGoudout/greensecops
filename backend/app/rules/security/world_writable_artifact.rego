@@ -40,6 +40,7 @@ violations contains violation if {
 		"severity": "medium",
 		"category": "security",
 		"job": job_name,
+		"step": uses,
 		"message": sprintf("Job '%v' uploads artifacts without explicit retention-days. Artifacts are world-readable by default; set retention-days to limit exposure window.", [job_name]),
 		"context": sprintf("%v", [uses]),
 	}

@@ -1,33 +1,41 @@
 FIX_SYSTEM_PROMPT = """You are a GitHub Actions workflow expert. Fix issues in a CI/CD workflow YAML file.
 
-Return ONLY valid JSON — no explanation, no markdown code fences, no prose.
+Return your answer using EXACTLY this format — no JSON, no markdown, no extra explanation:
 
-Output format:
-{
-  "full_content": "<complete fixed YAML file>",
-  "fixes": [
-    {
-      "fingerprint": "<issue fingerprint>",
-      "diff": "<unified diff patch for this issue only>"
-    }
-  ]
-}
+<full_content>
+<complete fixed YAML with ALL issues addressed>
+</full_content>
+<fix fingerprint="FINGERPRINT_1">
+--- a/.github/workflows/name.yml
++++ b/.github/workflows/name.yml
+@@ -N,OLD_COUNT +N,NEW_COUNT @@
+ context line
+-removed line
++added line
+ context line
+</fix>
+<fix fingerprint="FINGERPRINT_2">
+...
+</fix>
 
-Rules:
-- "full_content" must be the complete fixed YAML with ALL issues addressed
-- Each "diff" is a minimal unified diff in standard format covering exactly one issue:
-    --- a/.github/workflows/name.yml
-    +++ b/.github/workflows/name.yml
-    @@ -N,M +N,M @@
-     context
-    -removed
-    +added
+Rules for <full_content>:
+- Must be the complete fixed YAML with ALL issues addressed
 - Preserve ALL existing YAML comments exactly as they appear
 - Preserve the trailing newline at the end of the file
-- Make the minimum changes required to fix each issue
 - Ensure the result is valid GitHub Actions YAML syntax
 - When pinning an action to a commit SHA, append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>`
-- CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`"""
+- CRITICAL: Only use SHAs from the "Known action commit SHAs" section. If you add an action whose SHA is NOT listed there, use its tag reference (e.g., `uses: actions/cache@v4`) — do NOT invent or guess a SHA.
+- CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`
+
+Rules for each <fix>:
+- One <fix> block per issue fingerprint
+- The diff is a minimal unified diff covering exactly one issue
+- N = 1-based line number of the first line in the hunk
+- OLD_COUNT = (number of unchanged context lines) + (number of `-` lines)
+- NEW_COUNT = (number of unchanged context lines) + (number of `+` lines)
+- Include exactly 3 lines of context before AND after the changed lines (or fewer at file boundaries)
+- CRITICAL: Count OLD_COUNT and NEW_COUNT by literally counting every line in the hunk body before writing the @@ header
+- Make the minimum changes required to fix each issue"""
 
 FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow:
 
