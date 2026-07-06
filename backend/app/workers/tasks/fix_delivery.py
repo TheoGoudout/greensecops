@@ -21,6 +21,7 @@ from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.celery_app import celery_app
+from app.workers.patch_utils import apply_patch
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,11 @@ def deliver_fix(
                 full_name=repo.full_name,
                 base_branch=analysis.branch or repo.default_branch,
                 file_path=wf_file.path,
-                new_content=fix.diff or wf_file.raw_content,
+                new_content=(
+                    apply_patch(wf_file.raw_content, fix.patch)
+                    if fix.patch
+                    else wf_file.raw_content
+                ),
                 fix_branch=fix_branch,
                 rule_slug=rule_slug,
                 delivery_mode=delivery_mode.value,
@@ -204,7 +209,7 @@ def deliver_fixes_batch(
             wf = session.get(WorkflowFile, analysis.workflow_file_id)
             if not wf or wf.path in seen:
                 continue
-            seen[wf.path] = (wf.path, fix.diff or wf.raw_content)
+            seen[wf.path] = (wf.path, wf.last_full_content or wf.raw_content)
             base_branch = analysis.branch or repo.default_branch or "main"
 
         if not seen:

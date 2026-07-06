@@ -1,13 +1,9 @@
-import functools
-import json
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
 from app.api.deps import CurrentUser, SessionDep
-from app.core.config import settings as app_settings
 from app.models import (
     AIProviderInfo,
     AIProvidersPublic,
@@ -16,29 +12,13 @@ from app.models import (
     OrganizationPublic,
     OrgMember,
 )
+from app.services.llm.catalog import _KEY_MAP, load_provider_catalog
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
-_DEFAULT_CONFIG = Path(__file__).parent.parent.parent / "config" / "ai_providers.json"
-
-_KEY_ENV: dict[str, str | None] = {
-    "openai": app_settings.OPENAI_API_KEY,
-    "anthropic": app_settings.ANTHROPIC_API_KEY,
-    "gemini": app_settings.GOOGLE_API_KEY,
-    "ollama": app_settings.OLLAMA_BASE_URL,
-}
-
-
-@functools.lru_cache(maxsize=1)
-def _load_provider_catalog() -> list[dict]:
-    config_path = app_settings.AI_PROVIDERS_CONFIG
-    path = Path(config_path) if config_path else _DEFAULT_CONFIG
-    with path.open() as f:
-        return json.load(f)["providers"]
-
 
 def _is_available(provider_id: str) -> bool:
-    val = _KEY_ENV.get(provider_id)
+    val = _KEY_MAP.get(provider_id)
     return bool(val)
 
 
@@ -47,7 +27,7 @@ def list_ai_providers(
     current_user: CurrentUser,  # noqa: ARG001
 ) -> AIProvidersPublic:
     """Return only available LLM providers with per-provider default model."""
-    catalog = _load_provider_catalog()
+    catalog = load_provider_catalog()
     return AIProvidersPublic(
         providers=[
             AIProviderInfo(

@@ -427,6 +427,14 @@ export type FixesTriggerRepoDeliveryResponse = ({
     [key: string]: (string);
 });
 
+export type FixesRegenerateFixesForPrData = {
+    prId: string;
+};
+
+export type FixesRegenerateFixesForPrResponse = ({
+    [key: string]: (number);
+});
+
 export type FixesSyncPrStatusesData = {
     repoId: string;
 };
