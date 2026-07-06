@@ -165,6 +165,7 @@ class WorkflowFile(SQLModel, table=True):
     path: str = Field(max_length=512)
     content_hash: str = Field(max_length=64, index=True)
     raw_content: str
+    last_full_content: str | None = Field(default=None)
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -306,7 +307,6 @@ class Fix(SQLModel, table=True):
     completion_tokens: int | None = Field(default=None)
     langsmith_run_id: str | None = Field(default=None, max_length=255)
     status: FixStatus = Field(default=FixStatus.pending)
-    diff: str | None = Field(default=None)
     patch: str | None = Field(default=None)
     error_message: str | None = Field(default=None, max_length=2048)
     created_at: datetime | None = Field(

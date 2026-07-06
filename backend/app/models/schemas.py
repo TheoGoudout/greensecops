@@ -114,7 +114,6 @@ class FixPublic(SQLModel):
     llm_provider: LLMProvider
     llm_model: str
     status: FixStatus
-    patch: str | None = None
     diff_patch: str | None = None
     pr_url: str | None = None
     pr_branch: str | None = None
@@ -135,6 +134,7 @@ class WorkflowFilePublic(SQLModel):
     id: uuid.UUID
     path: str
     raw_content: str | None = None
+    last_full_content: str | None = None
 
 
 class PullRequestPublic(SQLModel):
