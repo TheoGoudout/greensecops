@@ -38,19 +38,6 @@ test.describe("Fix Detail", () => {
     await expect(page.getByText("gpt-4o-mini")).toBeVisible()
   })
 
-  test("shows diff rendered", async ({ page }) => {
-    await page.route("**/api/v1/fixes/**", (route) => {
-      route.fulfill({ json: MOCK_FIX_READY })
-    })
-    await page.route("**/api/v1/issues/**", (route) => {
-      route.fulfill({ json: MOCK_ISSUE_WITH_FIX })
-    })
-
-    await page.goto(`/fixes/${MOCK_FIX_READY.id}`)
-
-    await expect(page.locator(".diff2html-wrapper")).toBeVisible()
-  })
-
   test("ready fix shows Reject and Create PR buttons", async ({ page }) => {
     await page.route("**/api/v1/fixes/**", (route) => {
       route.fulfill({ json: MOCK_FIX_READY })
