@@ -44,6 +44,7 @@ violations contains violation if {
 		"severity": "low",
 		"category": "performance",
 		"job": job_name,
+		"step": uses,
 		"message": sprintf("Job '%v' uses fetch-depth: 0 but no git history commands found. Remove fetch-depth: 0 to speed up checkout.", [job_name]),
 		"context": "fetch-depth: 0",
 	}

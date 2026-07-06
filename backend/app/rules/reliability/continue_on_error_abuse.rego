@@ -37,6 +37,7 @@ violations contains violation if {
 		"severity": "medium",
 		"category": "reliability",
 		"job": job_name,
+		"step": object.get(step, "uses", null),
 		"message": sprintf("Step '%v' in job '%v' uses continue-on-error: true. Failures will be silently ignored, masking real problems.", [step_name, job_name]),
 		"context": "continue-on-error: true",
 	}

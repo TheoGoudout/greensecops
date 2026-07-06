@@ -28,24 +28,49 @@ package greensecops.energy.caching_missing
 
 import rego.v1
 
-_has_cache_action(steps) if {
-	some step in steps
-	uses := step.uses
-	contains(uses, "actions/cache")
+# Maps action name (without @version) to the with: key that enables built-in caching.
+_setup_action_cache_keys := {
+	"actions/setup-node": "cache",
+	"actions/setup-python": "cache",
+	"actions/setup-java": "cache",
+	"actions/setup-go": "cache",
+	"actions/setup-dotnet": "cache",
+	"astral-sh/setup-uv": "enable-cache",
+}
+
+_action_name(uses) := split(uses, "@")[0] if {
+	is_string(uses)
+}
+
+_is_known_setup_action(uses) if {
+	_setup_action_cache_keys[_action_name(uses)]
 }
 
 _has_cache_action(steps) if {
 	some step in steps
-	uses := step.uses
-	startswith(uses, "actions/setup-")
-	step["with"].cache
+	contains(step.uses, "actions/cache")
+}
+
+_has_cache_action(steps) if {
+	some step in steps
+	cache_key := _setup_action_cache_keys[_action_name(step.uses)]
+	step["with"][cache_key]
 }
 
 _uses_package_manager(steps) if {
 	some step in steps
 	run := step.run
-	some pm in ["npm ", "yarn ", "pip ", "pip3 ", "poetry ", "gradle ", "cargo ", "mvn ", "pnpm ", "bun "]
+	some pm in ["npm ", "yarn ", "pip ", "pip3 ", "poetry ", "gradle ", "cargo ", "mvn ", "pnpm ", "bun ", "uv "]
 	contains(run, pm)
+}
+
+_has_setup_step(steps) if {
+	some step in steps
+	_is_known_setup_action(step.uses)
+}
+
+_first_setup_uses(steps) := steps[i].uses if {
+	i := min({j | _is_known_setup_action(steps[j].uses)})
 }
 
 violations contains violation if {
@@ -53,12 +78,31 @@ violations contains violation if {
 	steps := job.steps
 	_uses_package_manager(steps)
 	not _has_cache_action(steps)
+	setup_uses := _first_setup_uses(steps)
+	cache_key := _setup_action_cache_keys[_action_name(setup_uses)]
 	violation := {
 		"rule": "caching_missing",
 		"severity": "high",
 		"category": "energy",
 		"job": job_name,
-		"message": sprintf("Job '%v' installs dependencies without caching. Add actions/cache or use setup-* with cache: true.", [job_name]),
+		"step": setup_uses,
+		"message": sprintf("Job '%v' installs dependencies without caching. Add '%v:' to %v.", [job_name, cache_key, setup_uses]),
+		"context": null,
+	}
+}
+
+violations contains violation if {
+	some job_name, job in input.jobs
+	steps := job.steps
+	_uses_package_manager(steps)
+	not _has_cache_action(steps)
+	not _has_setup_step(steps)
+	violation := {
+		"rule": "caching_missing",
+		"severity": "high",
+		"category": "energy",
+		"job": job_name,
+		"message": sprintf("Job '%v' installs dependencies without caching. Add an actions/cache step before the install step.", [job_name]),
 		"context": null,
 	}
 }

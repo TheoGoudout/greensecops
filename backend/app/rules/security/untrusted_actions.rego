@@ -54,6 +54,7 @@ violations contains violation if {
 		"severity": "high",
 		"category": "security",
 		"job": job_name,
+		"step": uses,
 		"message": sprintf("Step in job '%v' uses third-party action '%v' without a full SHA pin. Pin to a commit SHA to prevent supply-chain attacks.", [job_name, uses]),
 		"context": uses,
 	}
