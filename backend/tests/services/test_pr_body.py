@@ -169,3 +169,89 @@ def test_build_pr_body_unknown_severity_has_empty_emoji() -> None:
     )
 
     assert "Unknown-Level" in body
+
+
+# ─── Multi-category tests (redis-py / celery scenario) ───────────────────────
+# Issues reflect violations found in the real redis-py and celery workflows:
+# security (untrusted_actions not in current POLICY_PACKAGES, so using
+# excessive_token_permissions) and reliability (missing_timeout, unpinned_actions).
+
+
+@pytest.fixture()
+def redis_py_issues() -> list[IssueInfo]:
+    """Five issues mirroring what would be found in the redis-py integration workflow."""
+    return [
+        IssueInfo(
+            rule_slug="unpinned_actions",
+            rule_title="Action Not Pinned to SHA",
+            category="reliability",
+            severity="high",
+            message="Job 'lint' uses actions/checkout@v7 — mutable tag",
+        ),
+        IssueInfo(
+            rule_slug="missing_timeout",
+            rule_title="Missing Job Timeout",
+            category="reliability",
+            severity="high",
+            message="Job 'dependency-audit' has no timeout-minutes configured",
+        ),
+        IssueInfo(
+            rule_slug="missing_timeout",
+            rule_title="Missing Job Timeout",
+            category="reliability",
+            severity="high",
+            message="Job 'lint' has no timeout-minutes configured",
+        ),
+        IssueInfo(
+            rule_slug="missing_timeout",
+            rule_title="Missing Job Timeout",
+            category="reliability",
+            severity="high",
+            message="Job 'build-and-test-package' has no timeout-minutes configured",
+        ),
+        IssueInfo(
+            rule_slug="excessive_token_permissions",
+            rule_title="Excessive Token Permissions",
+            category="security",
+            severity="critical",
+            message="Workflow grants write-all GITHUB_TOKEN permissions",
+        ),
+    ]
+
+
+def test_pr_body_multi_category_renders_both_categories(
+    redis_py_issues: list[IssueInfo],
+) -> None:
+    """PR body with reliability and security issues renders content from both categories."""
+    body = build_pr_body(
+        issues=redis_py_issues,
+        fix_ids=[f"fix-{i}" for i in range(5)],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    # Both category names must appear (case-insensitive check via title-cased strings)
+    body_lower = body.lower()
+    assert "reliability" in body_lower
+    assert "security" in body_lower
+
+    # Rule titles from both categories appear
+    assert "Action Not Pinned to SHA" in body or "action not pinned" in body_lower
+    assert "Excessive Token Permissions" in body or "excessive token" in body_lower
+
+
+def test_pr_body_all_five_issue_messages_present(
+    redis_py_issues: list[IssueInfo],
+) -> None:
+    """All five issue messages are present in the PR body markdown."""
+    body = build_pr_body(
+        issues=redis_py_issues,
+        fix_ids=[f"fix-{i}" for i in range(5)],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    for issue in redis_py_issues:
+        assert issue.message in body, f"Expected message not found: {issue.message!r}"
