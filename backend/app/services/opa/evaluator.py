@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -8,6 +9,27 @@ import yaml
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Rego rules live at app/rules/<category>/<name>.rego and each declares
+# package greensecops.<category>.<name> exposing `violations`.
+_RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
+
+
+def _discover_policy_packages() -> list[str]:
+    """Enumerate every OPA package path from the shipped Rego rule files.
+
+    Deriving this from the filesystem (rather than a hand-maintained list)
+    guarantees that every rule which is seeded and shown as enabled is also
+    actually evaluated — the two can no longer silently drift apart.
+    """
+    if not _RULES_DIR.is_dir():
+        return []
+    packages = sorted(
+        f"greensecops/{rego.parent.name}/{rego.stem}"
+        for rego in _RULES_DIR.glob("*/*.rego")
+        if not rego.name.endswith("_test.rego")
+    )
+    return packages
 
 
 @dataclass
@@ -23,8 +45,10 @@ class OpaViolation:
     context: str | None = None
 
 
-# All registered policy packages to evaluate against
-POLICY_PACKAGES = [
+# All registered policy packages to evaluate against, discovered from the
+# shipped Rego rule files so no rule is left unevaluated. Falls back to the
+# core set if the rules directory is unavailable at runtime.
+POLICY_PACKAGES = _discover_policy_packages() or [
     "greensecops/energy/caching_missing",
     "greensecops/energy/runner_sizing",
     "greensecops/reliability/missing_timeout",

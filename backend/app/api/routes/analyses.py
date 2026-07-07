@@ -6,8 +6,10 @@ from sqlmodel import select
 from app.api.deps import (
     CurrentUser,
     SessionDep,
+    authorize_repo,
     get_current_active_superuser,
     get_or_404,
+    user_org_ids,
 )
 from app.api.mappers import to_analysis_public
 from app.models import (
@@ -29,7 +31,7 @@ router = APIRouter(prefix="/analyses", tags=["analyses"])
 @router.get("/", response_model=list[AnalysisPublic])
 def list_analyses(
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
     grade: str | None = None,
@@ -38,6 +40,14 @@ def list_analyses(
     limit: int = Query(default=50, le=200),
 ) -> list[AnalysisPublic]:
     query = select(Analysis)
+    if not current_user.is_superuser:
+        query = query.where(
+            Analysis.repo_id.in_(  # type: ignore[attr-defined]
+                select(Repository.id).where(
+                    Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
+                )
+            )
+        )
     if repo_id:
         query = query.where(Analysis.repo_id == repo_id)
     if branch:
@@ -54,20 +64,28 @@ def list_analyses(
 def get_analysis(
     analysis_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
 ) -> AnalysisPublic:
-    return to_analysis_public(get_or_404(session, Analysis, analysis_id))
+    analysis = get_or_404(session, Analysis, analysis_id)
+    if not current_user.is_superuser:
+        authorize_repo(
+            session, current_user, analysis.repo_id, detail="Analysis not found"
+        )
+    return to_analysis_public(analysis)
 
 
 @router.post("/trigger/{repo_id}", status_code=202)
 def trigger_analysis(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     branch: str | None = None,
     force: bool = True,
 ) -> dict[str, str]:
-    repo = get_or_404(session, Repository, repo_id)
+    repo = authorize_repo(session, current_user, repo_id)
+    from app.api.routes.billing import enforce_quota
+
+    enforce_quota(session, current_user, "analyses")
     effective_branch = branch or repo.default_branch
     run_static_analysis.delay(
         repo_id=str(repo_id),

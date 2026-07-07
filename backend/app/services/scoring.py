@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.models import IssueSeverity
 
 _SEVERITY_PENALTY: dict[str, float] = {
@@ -54,3 +56,25 @@ def score_to_grade(score: float) -> str:
         if score >= threshold:
             return grade
     return "F"
+
+
+def average_latest_scores(analyses: list[Any]) -> tuple[float | None, int]:
+    """Average the score of the latest analysis per workflow file.
+
+    ``analyses`` must be ordered by (workflow_file_id, created_at desc) so the
+    first row seen for each workflow file is its most recent. Returns
+    (avg_score, workflow_file_count); avg_score is None when there are no scores.
+    Shared by the repository- and badge-grade endpoints to keep one definition
+    of "a repo's grade".
+    """
+    seen: set[Any] = set()
+    scores: list[float] = []
+    for a in analyses:
+        if a.workflow_file_id in seen:
+            continue
+        seen.add(a.workflow_file_id)
+        if a.score is not None:
+            scores.append(a.score)
+    if not scores:
+        return None, 0
+    return sum(scores) / len(scores), len(scores)

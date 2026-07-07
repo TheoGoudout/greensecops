@@ -129,6 +129,25 @@ def test_github_webhook_valid_signature_accepted(client: TestClient) -> None:
     assert response.json()["status"] == "accepted"
 
 
+def test_github_webhook_no_secret_fails_closed_in_production(
+    client: TestClient,
+) -> None:
+    # Outside local dev, an unconfigured webhook secret must reject the request
+    # rather than processing an unverified payload.
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch.object(settings, "ENVIRONMENT", "production"),
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            content=json.dumps({"action": "push"}).encode(),
+            headers={"Content-Type": "application/json", "X-GitHub-Event": "push"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Webhook secret not configured"
+
+
 def test_github_webhook_no_secret_skips_verification(client: TestClient) -> None:
     # Arrange — no secret configured
     with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):

@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -10,6 +11,19 @@ from app.models import User
 
 LOGIN_URL = f"{settings.API_V1_STR}/auth/github/login"
 CALLBACK_URL = f"{settings.API_V1_STR}/auth/github/callback"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_oauth_cookies(client: TestClient):
+    """Each OAuth attempt is an independent browser session.
+
+    The module-scoped client otherwise persists the gh_oauth_state cookie set by
+    the /login redirect into later popup-flow callback tests (which legitimately
+    carry no such cookie in production).
+    """
+    client.cookies.clear()
+    yield
+    client.cookies.clear()
 
 
 # ─── /login ──────────────────────────────────────────────────────────────────
@@ -60,6 +74,32 @@ def test_github_callback_missing_client_secret_returns_503(
         response = client.get(CALLBACK_URL, params={"code": "somecode"})
 
     assert response.status_code == 503
+
+
+# ─── /callback — CSRF state validation (server-initiated flow) ───────────────
+
+
+def test_github_callback_state_mismatch_returns_400(client: TestClient) -> None:
+    # A state cookie present but not matching the returned state → rejected.
+    client.cookies.set("gh_oauth_state", "the-real-state")
+    with (
+        patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
+        patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
+    ):
+        response = client.get(
+            CALLBACK_URL,
+            params={"code": "somecode", "state": "attacker-state"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid OAuth state"
+
+
+def test_github_login_sets_state_cookie(client: TestClient) -> None:
+    with patch.object(settings, "GITHUB_CLIENT_ID", "test-client-id"):
+        response = client.get(LOGIN_URL, follow_redirects=False)
+    assert response.status_code in (302, 307)
+    assert "gh_oauth_state" in response.cookies
 
 
 # ─── /callback — OAuth exchange failure ──────────────────────────────────────

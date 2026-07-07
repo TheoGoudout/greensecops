@@ -106,6 +106,34 @@ def deliver_fix(
             if existing_pr
             else f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
         )
+        # Comment delivery needs a real PR/issue to comment on. Resolve it from
+        # the fix's associated pull request instead of assuming issue #1.
+        comment_issue_number: int | None = None
+        if (
+            delivery_mode == FixDeliveryMode.comment
+            and existing_pr
+            and existing_pr.pr_url
+        ):
+            from app.services.github.app_client import parse_pr_url
+
+            parsed = parse_pr_url(existing_pr.pr_url)
+            comment_issue_number = parsed[1] if parsed else None
+        if delivery_mode == FixDeliveryMode.comment and comment_issue_number is None:
+            logger.warning(
+                "Comment delivery for fix %s has no associated pull request; "
+                "skipping to avoid commenting on the wrong issue",
+                fix_id,
+            )
+            fix.status = FixStatus.failed
+            fix.error_message = "comment delivery requires an existing pull request"
+            session.add(fix)
+            session.commit()
+            events_pub.publish_event(
+                ev.fix_delivery_failed(
+                    org_id, repo_id_str, fix_id, "no_pull_request_for_comment"
+                )
+            )
+            return {"status": "failed", "fix_id": fix_id}
         result = asyncio.run(
             _deliver(
                 installation_id=repo.installation_id,
@@ -121,6 +149,7 @@ def deliver_fix(
                 rule_slug=rule_slug,
                 delivery_mode=delivery_mode.value,
                 pr_body=pr_body,
+                comment_issue_number=comment_issue_number,
             )
         )
 
@@ -347,6 +376,7 @@ async def _deliver(
     rule_slug: str,
     delivery_mode: str,
     pr_body: str,
+    comment_issue_number: int | None = None,
 ) -> object:
     async with _delivery_service() as svc:
         if delivery_mode == "pr":
@@ -360,9 +390,15 @@ async def _deliver(
                 pr_title=f"fix(ci): {rule_slug.replace('_', ' ')}",
                 pr_body=pr_body,
             )
+        if comment_issue_number is None:
+            from app.services.github.fix_delivery import FixDeliveryResult
+
+            return FixDeliveryResult(
+                error="comment delivery requires an existing pull request"
+            )
         return await svc.deliver_as_comment(
             installation_id=installation_id,
             full_name=full_name,
-            issue_number=1,
+            issue_number=comment_issue_number,
             body=f"**{settings.PROJECT_NAME} Fix** for `{rule_slug}`:\n\n```yaml\n{new_content}\n```",
         )

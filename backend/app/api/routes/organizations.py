@@ -11,6 +11,7 @@ from app.models import (
     OrganizationAIUpdate,
     OrganizationPublic,
     OrgMember,
+    OrgRole,
 )
 from app.services.llm.catalog import _KEY_MAP, load_provider_catalog
 
@@ -82,8 +83,16 @@ def update_org_ai_preferences(
             OrgMember.org_id == org_id, OrgMember.user_id == current_user.id
         )
     ).first()
-    if not current_user.is_superuser and not member:
-        raise HTTPException(status_code=403, detail="Not a member of this organization")
+    if not current_user.is_superuser:
+        if not member:
+            raise HTTPException(
+                status_code=403, detail="Not a member of this organization"
+            )
+        if member.role not in (OrgRole.owner, OrgRole.admin):
+            raise HTTPException(
+                status_code=403,
+                detail="Only organization owners or admins can change AI settings",
+            )
     org.default_llm_provider = body.default_llm_provider
     org.default_llm_model = body.default_llm_model
     session.add(org)

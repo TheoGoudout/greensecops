@@ -4,12 +4,21 @@ Add this action to your workflow to enable dynamic analysis with runtime telemet
 
 ## Usage
 
+This action authenticates with **GitHub OIDC** — no API token or secret is
+required. Your job must grant `id-token: write` permission.
+
 ```yaml
-- name: GreenSecOps Telemetry
-  uses: theogoudout/greensecops@main
-  with:
-    greensecops_url: https://app.greensecops.io
-    api_token: ${{ secrets.GREENSECOPS_TOKEN }}
+jobs:
+  build:
+    permissions:
+      id-token: write # required for GreenSecOps OIDC authentication
+    steps:
+      # ... your build steps ...
+      - name: GreenSecOps Telemetry
+        uses: theogoudout/greensecops@main
+        with:
+          greensecops_url: https://app.greensecops.io
+          # sample_interval: "30"  # optional, seconds between samples
 ```
 
 Add it as the **last step** in your job to capture accurate resource usage.
