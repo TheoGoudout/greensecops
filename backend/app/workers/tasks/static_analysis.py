@@ -3,10 +3,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+import redis as redis_sync
 from ruamel.yaml import YAML as RuamelYAML
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
@@ -29,6 +31,10 @@ from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+class WorkflowFetchError(Exception):
+    """Raised when workflow files cannot be fetched from GitHub (transient)."""
 
 
 def _enrich_line_numbers(violations: list, raw_content: str) -> None:
@@ -80,6 +86,119 @@ def _enrich_line_numbers(violations: list, raw_content: str) -> None:
                 break
 
 
+def _register_rule_from_violation(session: Session, violation: object) -> Rule | None:
+    """Auto-register a Rule for a violation whose slug has no DB row yet.
+
+    A newly shipped rego rule then works end-to-end without also having to be
+    added to the seed list; previously its violations were silently dropped.
+    """
+    slug = violation.rule_slug
+    try:
+        category = IssueCategory(violation.category)
+        severity = IssueSeverity(violation.severity)
+    except ValueError:
+        logger.warning(
+            "Cannot auto-register rule %s: invalid category/severity (%s/%s)",
+            slug,
+            violation.category,
+            violation.severity,
+        )
+        return None
+
+    stmt = (
+        pg_insert(Rule)
+        .values(
+            id=uuid.uuid4(),
+            slug=slug,
+            category=category,
+            severity=severity,
+            title=slug.replace("_", " ").capitalize(),
+            description=(violation.message or slug)[:2048],
+            enabled=True,
+            severity_weight=1.0,
+        )
+        .on_conflict_do_nothing(index_elements=["slug"])
+    )
+    session.execute(stmt)
+    rule = session.exec(select(Rule).where(Rule.slug == slug)).first()
+    if rule is not None:
+        logger.info("Auto-registered new rule '%s' from OPA violation", slug)
+    return rule
+
+
+def _resolve_stale_issues(
+    session: Session,
+    workflow_file_id: uuid.UUID,
+    seen_fingerprints: set[str],
+) -> None:
+    """Resolve open issues of a workflow file not reported by the latest run.
+
+    Covers issues the user fixed manually, and issues of rules that were
+    removed or disabled since the previous analysis.
+    """
+    now = datetime.now(timezone.utc)
+    open_issues = session.exec(
+        select(Issue)
+        .where(Issue.workflow_file_id == workflow_file_id)
+        .where(col(Issue.resolved_at).is_(None))
+    ).all()
+    stale = [i for i in open_issues if i.fingerprint not in seen_fingerprints]
+    for issue in stale:
+        issue.resolved_at = now
+        session.add(issue)
+    if stale:
+        session.commit()
+        logger.info(
+            "Resolved %d stale issue(s) for workflow file %s",
+            len(stale),
+            workflow_file_id,
+        )
+
+
+def _resolve_issues_for_missing_files(
+    session: Session,
+    repo: Repository,
+    fetched_paths: set[str],
+) -> None:
+    """Resolve open issues of workflow files that no longer exist in the repo."""
+    now = datetime.now(timezone.utc)
+    wf_rows = session.exec(
+        select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
+    ).all()
+    resolved = 0
+    for wf in wf_rows:
+        if wf.path in fetched_paths:
+            continue
+        open_issues = session.exec(
+            select(Issue)
+            .where(Issue.workflow_file_id == wf.id)
+            .where(col(Issue.resolved_at).is_(None))
+        ).all()
+        for issue in open_issues:
+            issue.resolved_at = now
+            session.add(issue)
+            resolved += 1
+    if resolved:
+        session.commit()
+        logger.info(
+            "Resolved %d issue(s) for deleted workflow files in repo %s",
+            resolved,
+            repo.full_name,
+        )
+
+
+def _count_open_issues(session: Session, workflow_file_id: uuid.UUID | None) -> int:
+    if workflow_file_id is None:
+        return 0
+    return len(
+        session.exec(
+            select(Issue)
+            .where(Issue.workflow_file_id == workflow_file_id)
+            .where(col(Issue.resolved_at).is_(None))
+        ).all()
+    )
+
+
 def _run_static_analysis_impl(
     repo_id: str,
     branch: str = "",
@@ -94,15 +213,50 @@ def _run_static_analysis_impl(
             return {"status": "error", "detail": "repository_not_found"}
 
         org_id = str(repo.org_id)
+        effective_branch = branch or repo.default_branch
 
         if workflow_file_id:
-            wf_record = session.get(WorkflowFile, uuid.UUID(workflow_file_id))
-            workflow_files_to_analyse = [wf_record] if wf_record else []
+            wf = session.get(WorkflowFile, uuid.UUID(workflow_file_id))
+            if wf is None:
+                return {"status": "error", "detail": "workflow_file_not_found"}
+            workflow_files_to_analyse: list[object] = [wf]
         else:
-            workflow_files_to_analyse = _fetch_workflow_files(repo)
+            try:
+                workflow_files_to_analyse = _fetch_workflow_files(
+                    repo, ref=commit_sha or branch or None
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Failed to fetch workflow files for %s: %s", repo.full_name, exc
+                )
+                events_pub.publish_event(
+                    ev.analysis_failed(
+                        org_id,
+                        repo_id,
+                        "",
+                        f"could not fetch workflow files: {exc}"[:200],
+                    )
+                )
+                raise WorkflowFetchError(str(exc)) from exc
+
+            # Workflow files deleted/renamed since the last run: resolve their
+            # open issues so they stop showing up as current findings.
+            fetched_paths = {f.path for f in workflow_files_to_analyse}
+            _resolve_issues_for_missing_files(session, repo, fetched_paths)
+
+        if not workflow_files_to_analyse:
+            # Terminal signal — without it the UI shows "queued" forever for
+            # repositories that have no .github/workflows directory.
+            from app.services.scoring import score_to_grade
+
+            events_pub.publish_event(
+                ev.analysis_completed(
+                    org_id, repo_id, "", 100.0, score_to_grade(100.0), 0
+                )
+            )
+            return {"status": "no_workflow_files", "repo_id": repo_id, "results": "[]"}
 
         is_batch = workflow_file_id is None and len(workflow_files_to_analyse) > 1
-        effective_branch = branch or repo.default_branch
 
         if is_batch:
             events_pub.publish_event(
@@ -119,34 +273,29 @@ def _run_static_analysis_impl(
             path = wf.path
             content_hash = compute_content_hash(content)
 
-            duplicate, existing = is_duplicate(session, content_hash)
+            duplicate, existing = is_duplicate(session, content_hash, repo.id)
             if not force and duplicate and existing:
                 logger.info(
                     "Skipping duplicate for %s (hash=%s)", path, content_hash[:8]
                 )
-                skipped = Analysis(
-                    repo_id=repo.id,
-                    workflow_file_id=existing.workflow_file_id,
-                    content_hash=content_hash,
-                    status=AnalysisStatus.skipped,
-                    score=existing.score,
-                    grade=existing.grade,
-                    triggered_by=AnalysisTrigger(trigger),
-                    branch=effective_branch,
-                    commit_sha=commit_sha or None,
-                    completed_at=datetime.now(timezone.utc),
-                )
-                session.add(skipped)
-                session.commit()
+                # Reference the prior analysis instead of inserting a new
+                # `skipped` row: webhook-heavy repos (e.g. workflow_run events)
+                # would otherwise accumulate one row per CI run.
                 if not is_batch:
                     events_pub.publish_event(
-                        ev.analysis_skipped(org_id, repo_id, str(skipped.id))
+                        ev.analysis_skipped(org_id, repo_id, str(existing.id))
+                    )
+                else:
+                    if existing.score is not None:
+                        batch_scores.append(existing.score)
+                    batch_total_issues += _count_open_issues(
+                        session, existing.workflow_file_id
                     )
                 results.append(
                     {
                         "path": path,
                         "status": "skipped_duplicate",
-                        "analysis_id": str(skipped.id),
+                        "analysis_id": str(existing.id),
                     }
                 )
                 continue
@@ -217,16 +366,24 @@ def _run_static_analysis_impl(
                 r.slug: r for r in session.exec(select(Rule)).all()
             }
 
+            seen_fingerprints: set[str] = set()
+            issue_count = 0
             workflow_score_inputs: list[tuple[str, float]] = []
             job_score_inputs: dict[str, list[tuple[str, float]]] = {}
             for v in violations:
                 rule = rule_map.get(v.rule_slug)
                 if rule is None:
-                    logger.warning("Unknown rule slug: %s", v.rule_slug)
+                    rule = _register_rule_from_violation(session, v)
+                    if rule is None:
+                        continue
+                    rule_map[v.rule_slug] = rule
+                if not rule.enabled:
                     continue
                 fingerprint = compute_issue_fingerprint(
                     wf_record.id, rule.id, v.job, v.step
                 )
+                seen_fingerprints.add(fingerprint)
+                issue_count += 1
                 stmt = (
                     pg_insert(Issue)
                     .values(
@@ -254,6 +411,8 @@ def _run_static_analysis_impl(
                             "line_end": v.line_end,
                             "message": v.message,
                             "context": v.context,
+                            # A recurring violation reopens a resolved issue.
+                            "resolved_at": None,
                         },
                     )
                 )
@@ -276,14 +435,16 @@ def _run_static_analysis_impl(
             session.add(analysis)
             session.commit()
 
+            _resolve_stale_issues(session, wf_record.id, seen_fingerprints)
+
             if not is_batch:
                 events_pub.publish_event(
                     ev.analysis_completed(
-                        org_id, repo_id, str(analysis.id), score, grade, len(violations)
+                        org_id, repo_id, str(analysis.id), score, grade, issue_count
                     )
                 )
             else:
-                batch_total_issues += len(violations)
+                batch_total_issues += issue_count
                 batch_scores.append(score)
 
             results.append(
@@ -293,7 +454,7 @@ def _run_static_analysis_impl(
                     "analysis_id": str(analysis.id),
                     "score": round(score, 1),
                     "grade": grade,
-                    "issues": len(violations),
+                    "issues": issue_count,
                 }
             )
             logger.info(
@@ -302,7 +463,7 @@ def _run_static_analysis_impl(
                 path,
                 score,
                 grade,
-                len(violations),
+                issue_count,
             )
 
         if is_batch:
@@ -336,9 +497,14 @@ def _run_static_analysis_impl(
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 
 
+# How long a single repo analysis may hold the per-repo lock before it is
+# considered dead and the lock expires on its own.
+ANALYSIS_LOCK_TTL_SECONDS = 600
+
+
 @celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
 def run_static_analysis(
-    self: object,  # noqa: ARG001
+    self,  # noqa: ANN001
     repo_id: str,
     branch: str = "",
     commit_sha: str = "",
@@ -346,14 +512,29 @@ def run_static_analysis(
     workflow_file_id: str | None = None,
     force: bool = False,
 ) -> dict[str, str | int]:
-    return _run_static_analysis_impl(
-        repo_id=repo_id,
-        branch=branch,
-        commit_sha=commit_sha,
-        trigger=trigger,
-        workflow_file_id=workflow_file_id,
-        force=force,
-    )
+    # Per-repo lock: concurrent analyses of the same repo race on
+    # WorkflowFile.raw_content updates and duplicate Analysis rows.
+    lock_key = f"greensecops:lock:static_analysis:{repo_id}"
+    r = redis_sync.Redis.from_url(settings.REDIS_URL)
+    try:
+        if not r.set(lock_key, "1", nx=True, ex=ANALYSIS_LOCK_TTL_SECONDS):
+            raise self.retry(countdown=15, max_retries=40)
+        try:
+            return _run_static_analysis_impl(
+                repo_id=repo_id,
+                branch=branch,
+                commit_sha=commit_sha,
+                trigger=trigger,
+                workflow_file_id=workflow_file_id,
+                force=force,
+            )
+        except WorkflowFetchError as exc:
+            # Transient GitHub failure (rate limit, network): back off and retry.
+            raise self.retry(exc=exc, countdown=30 * (2**self.request.retries))
+        finally:
+            r.delete(lock_key)
+    finally:
+        r.close()
 
 
 # Seconds to wait between successive per-repo analyses, to spread out the
@@ -361,27 +542,29 @@ def run_static_analysis(
 REANALYZE_STAGGER_SECONDS = 2
 
 
-def _reanalyze_all_repositories_impl() -> dict[str, str | int]:
+def _reanalyze_all_repositories_impl(force: bool = True) -> dict[str, str | int]:
     """Enqueue a fresh static analysis for every enabled repository.
 
     Used when a new version ships rules: each repo is re-analysed so the new
     rules are applied and grades recomputed. This behaves like an internal
-    "release" event that fans out the same per-repo analysis a webhook would,
-    except ``force=True`` is required since the workflow content is unchanged
-    and would otherwise be skipped as a duplicate.
+    "release" event that fans out the same per-repo analysis a webhook would.
+    ``force=True`` bypasses content dedup (needed when rules changed but the
+    workflow content did not); the nightly reconciliation run passes
+    ``force=False`` so unchanged repos stay cheap.
     """
     with Session(engine) as session:
         repos = session.exec(
             select(Repository).where(Repository.enabled == True)  # noqa: E712
         ).all()
 
+    trigger = AnalysisTrigger.release if force else AnalysisTrigger.scheduled
     for i, repo in enumerate(repos):
         run_static_analysis.apply_async(
             kwargs={
                 "repo_id": str(repo.id),
                 "branch": repo.default_branch,
-                "trigger": AnalysisTrigger.release.value,
-                "force": True,
+                "trigger": trigger.value,
+                "force": force,
             },
             countdown=i * REANALYZE_STAGGER_SECONDS,
         )
@@ -393,15 +576,15 @@ def _reanalyze_all_repositories_impl() -> dict[str, str | int]:
 @celery_app.task(name="static_analysis.reanalyze_all", bind=True)
 def reanalyze_all_repositories(
     self: object,  # noqa: ARG001
+    force: bool = True,
 ) -> dict[str, str | int]:
-    return _reanalyze_all_repositories_impl()
+    return _reanalyze_all_repositories_impl(force=force)
 
 
-def _fetch_workflow_files(repo: Repository) -> list[object]:
+def _fetch_workflow_files(repo: Repository, ref: str | None = None) -> list[object]:
     """Synchronous wrapper for async GitHubAppClient.fetch_workflow_files."""
     import redis.asyncio as aioredis
 
-    from app.core.config import settings
     from app.services.github.app_client import GitHubAppClient
 
     async def _fetch() -> list[object]:
@@ -409,7 +592,9 @@ def _fetch_workflow_files(repo: Repository) -> list[object]:
         try:
             client = GitHubAppClient(redis_client=r)
             return list(
-                await client.fetch_workflow_files(repo.installation_id, repo.full_name)
+                await client.fetch_workflow_files(
+                    repo.installation_id, repo.full_name, ref=ref
+                )
             )
         finally:
             await r.aclose()

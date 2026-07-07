@@ -5,7 +5,7 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func  # noqa: F401
-from sqlmodel import delete, select
+from sqlmodel import col, delete, select
 
 from app.api.deps import CurrentUser, GitHubAppClientDep, SessionDep, get_or_404
 from app.core.config import settings
@@ -221,6 +221,7 @@ def trigger_fix_generation_for_repo(
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
         .where(Issue.analysis_id == latest_analysis_subq)
+        .where(col(Issue.resolved_at).is_(None))
     )
     if body.issue_ids is not None:
         query = query.where(Issue.id.in_(body.issue_ids))  # type: ignore[attr-defined]

@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Query
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404
 from app.api.mappers import to_issue_public
@@ -29,10 +29,13 @@ def list_issues(
     severity: IssueSeverity | None = None,
     unfixed: bool = False,
     latest_only: bool = True,
+    include_resolved: bool = False,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
 ) -> list[IssuePublic]:
     query = select(Issue)
+    if not include_resolved:
+        query = query.where(col(Issue.resolved_at).is_(None))
     if analysis_id:
         query = query.where(Issue.analysis_id == analysis_id)
     if repo_id:

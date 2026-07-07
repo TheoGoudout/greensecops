@@ -255,6 +255,7 @@ class Issue(SQLModel, table=True):
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
+    resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     analysis: Analysis | None = Relationship(back_populates="issues")
     rule: Rule | None = Relationship(back_populates="issues")
     fix: Optional["Fix"] = Relationship(back_populates="issue")
@@ -308,6 +309,7 @@ class Fix(SQLModel, table=True):
     langsmith_run_id: str | None = Field(default=None, max_length=255)
     status: FixStatus = Field(default=FixStatus.pending)
     patch: str | None = Field(default=None)
+    comment_url: str | None = Field(default=None, max_length=1024)
     error_message: str | None = Field(default=None, max_length=2048)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
