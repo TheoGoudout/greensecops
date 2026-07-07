@@ -33,9 +33,14 @@ def test_sync_creates_repositories(db: Session, org: Organization) -> None:
     ]
     assert org.installation_id is not None
 
-    with patch(
-        "app.workers.tasks.installation_sync._fetch_installation_repositories",
-        return_value=fake_repos,
+    with (
+        patch(
+            "app.workers.tasks.installation_sync._fetch_installation_repositories",
+            return_value=fake_repos,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis.run_static_analysis.apply_async"
+        ) as mock_enqueue,
     ):
         result = _sync_installation_repositories_impl(org.installation_id, str(org.id))
 
@@ -48,6 +53,12 @@ def test_sync_creates_repositories(db: Session, org: Organization) -> None:
     assert by_id[gh_id1].default_branch == "main"
     assert by_id[gh_id2].default_branch == "develop"
     assert all(r.enabled for r in repos)
+
+    # Never-analyzed repos get an initial analysis queued.
+    enqueued_repo_ids = {
+        call.kwargs["kwargs"]["repo_id"] for call in mock_enqueue.call_args_list
+    }
+    assert {str(r.id) for r in repos} <= enqueued_repo_ids
 
 
 def test_sync_is_idempotent_and_reenables(db: Session, org: Organization) -> None:
@@ -67,9 +78,12 @@ def test_sync_is_idempotent_and_reenables(db: Session, org: Organization) -> Non
     db.commit()
 
     fake_repos = [InstallationRepo(gh_id, "owner/new-name", "main")]
-    with patch(
-        "app.workers.tasks.installation_sync._fetch_installation_repositories",
-        return_value=fake_repos,
+    with (
+        patch(
+            "app.workers.tasks.installation_sync._fetch_installation_repositories",
+            return_value=fake_repos,
+        ),
+        patch("app.workers.tasks.static_analysis.run_static_analysis.apply_async"),
     ):
         _sync_installation_repositories_impl(org.installation_id, str(org.id))
         # Re-run — should not create duplicates.

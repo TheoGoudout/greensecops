@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -12,6 +13,7 @@ celery_app = Celery(
         "app.workers.tasks.fix_generation",
         "app.workers.tasks.fix_delivery",
         "app.workers.tasks.installation_sync",
+        "app.workers.tasks.maintenance",
     ],
 )
 
@@ -30,6 +32,25 @@ celery_app.conf.update(
         "dynamic_analysis.*": {"queue": "analysis"},
         "fix_generation.*": {"queue": "fixes"},
         "fix_delivery.*": {"queue": "fixes"},
+        "maintenance.*": {"queue": "analysis"},
         "app.workers.tasks.installation_sync.*": {"queue": "analysis"},
+    },
+    beat_schedule={
+        # Fail analyses/fixes stuck in transient states after worker crashes.
+        "sweep-stuck-states": {
+            "task": "maintenance.sweep_stuck_states",
+            "schedule": crontab(minute=5),  # hourly
+        },
+        # Recover PR open/closed/merged transitions from missed webhooks.
+        "sync-open-pr-states": {
+            "task": "maintenance.sync_open_pr_states",
+            "schedule": crontab(minute=35, hour="*/6"),
+        },
+        # Nightly reconciliation pass; content dedup keeps unchanged repos cheap.
+        "nightly-reanalysis": {
+            "task": "static_analysis.reanalyze_all",
+            "schedule": crontab(minute=17, hour=3),
+            "kwargs": {"force": False},
+        },
     },
 )
