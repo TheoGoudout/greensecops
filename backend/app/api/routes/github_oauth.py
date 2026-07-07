@@ -48,7 +48,9 @@ async def github_callback(
     github_client: GitHubAppClientDep,
     response: Response,
     state: str | None = None,
-    state_cookie: str | None = Cookie(default=None, alias=_STATE_COOKIE),
+    state_cookie: str | None = Cookie(
+        default=None, alias=_STATE_COOKIE, include_in_schema=False
+    ),
 ) -> Token:
     if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="GitHub OAuth not configured")

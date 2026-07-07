@@ -28,6 +28,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
         assert f"greensecops/security/{slug}" in packages
     assert set(POLICY_PACKAGES) == set(packages)
 
+
 _SIMPLE_WORKFLOW = """
 name: CI
 on: [push]

@@ -54,6 +54,7 @@ def test_enforce_quota_unlimited_tier(db: Session) -> None:
     # ultimate has None (unlimited) for fixes → never blocks.
     billing.enforce_quota(db, user, "fixes")  # must not raise
 
+
 # ─── GET /billing/subscription ───────────────────────────────────────────────
 
 
