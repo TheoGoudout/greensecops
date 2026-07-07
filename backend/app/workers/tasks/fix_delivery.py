@@ -14,11 +14,13 @@ from app.models import (
     FixDeliveryMode,
     FixStatus,
     PullRequest,
+    PullRequestState,
     Repository,
     WorkflowFile,
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github.fix_delivery import STALE_CONTENT_ERROR_CODE
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.celery_app import celery_app
 from app.workers.patch_utils import apply_patch
@@ -106,8 +108,53 @@ def deliver_fix(
             if existing_pr
             else f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
         )
-        # Comment delivery needs a real PR/issue to comment on. Resolve it from
-        # the fix's associated pull request instead of assuming issue #1.
+
+        # A PR the user closed without merging is a rejection signal: do not
+        # re-open it on the next delivery unless explicitly forced.
+        branch_pr = session.exec(
+            select(PullRequest).where(
+                PullRequest.repo_id == repo.id,
+                PullRequest.pr_branch == fix_branch,
+            )
+        ).first()
+        if (
+            not force
+            and delivery_mode == FixDeliveryMode.pr
+            and branch_pr is not None
+            and branch_pr.pr_state == PullRequestState.closed
+        ):
+            fix.status = FixStatus.rejected
+            session.add(fix)
+            session.commit()
+            events_pub.publish_event(ev.fix_rejected(org_id, repo_id_str, fix_id))
+            logger.info(
+                "Skipping delivery for fix %s: PR on branch %s was closed by user",
+                fix_id,
+                fix_branch,
+            )
+            return {"status": "skipped", "reason": "pr_previously_closed"}
+
+        new_content = wf_file.raw_content
+        if fix.patch:
+            patched = apply_patch(wf_file.raw_content, fix.patch)
+            if patched is None:
+                fix.status = FixStatus.failed
+                fix.error_message = (
+                    "Generated patch no longer applies to the workflow file"
+                )
+                session.add(fix)
+                session.commit()
+                events_pub.publish_event(
+                    ev.fix_delivery_failed(
+                        org_id, repo_id_str, fix_id, fix.error_message
+                    )
+                )
+                return {"status": "failed", "fix_id": fix_id}
+            new_content = patched
+
+        # Comment delivery prefers the fix's associated pull request; when
+        # there is none, the delivery service falls back to a dedicated
+        # find-or-create issue instead of assuming issue #1 exists.
         comment_issue_number: int | None = None
         if (
             delivery_mode == FixDeliveryMode.comment
@@ -118,37 +165,20 @@ def deliver_fix(
 
             parsed = parse_pr_url(existing_pr.pr_url)
             comment_issue_number = parsed[1] if parsed else None
-        if delivery_mode == FixDeliveryMode.comment and comment_issue_number is None:
-            logger.warning(
-                "Comment delivery for fix %s has no associated pull request; "
-                "skipping to avoid commenting on the wrong issue",
-                fix_id,
-            )
-            fix.status = FixStatus.failed
-            fix.error_message = "comment delivery requires an existing pull request"
-            session.add(fix)
-            session.commit()
-            events_pub.publish_event(
-                ev.fix_delivery_failed(
-                    org_id, repo_id_str, fix_id, "no_pull_request_for_comment"
-                )
-            )
-            return {"status": "failed", "fix_id": fix_id}
+
         result = asyncio.run(
             _deliver(
                 installation_id=repo.installation_id,
                 full_name=repo.full_name,
                 base_branch=analysis.branch or repo.default_branch,
                 file_path=wf_file.path,
-                new_content=(
-                    apply_patch(wf_file.raw_content, fix.patch)
-                    if fix.patch
-                    else wf_file.raw_content
-                ),
+                new_content=new_content,
+                expected_base_content=wf_file.raw_content,
                 fix_branch=fix_branch,
                 rule_slug=rule_slug,
                 delivery_mode=delivery_mode.value,
                 pr_body=pr_body,
+                force=force,
                 comment_issue_number=comment_issue_number,
             )
         )
@@ -161,9 +191,22 @@ def deliver_fix(
             events_pub.publish_event(
                 ev.fix_delivery_failed(org_id, repo_id_str, fix_id, result.error[:200])
             )
+            if result.error_code == STALE_CONTENT_ERROR_CODE:
+                # The workflow changed upstream since analysis: re-analyse so
+                # fresh issues/fixes are generated against current content.
+                from app.workers.tasks.static_analysis import run_static_analysis
+
+                run_static_analysis.delay(
+                    repo_id=repo_id_str,
+                    branch=analysis.branch or repo.default_branch,
+                    trigger="manual",
+                    force=True,
+                )
         else:
             fix.status = FixStatus.delivered
             fix.delivered_at = datetime.now(timezone.utc)
+            if result.comment_url:
+                fix.comment_url = result.comment_url
             if result.pr_url:
                 pr = session.exec(
                     select(PullRequest).where(
@@ -225,8 +268,38 @@ def deliver_fixes_batch(
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
 
+        org_id = str(repo.org_id)
+        repo_id_str = repo_id
+
+        # A PR the user closed without merging is a rejection signal: do not
+        # re-open it on the next delivery unless explicitly forced.
+        branch_pr = session.exec(
+            select(PullRequest).where(
+                PullRequest.repo_id == repo.id,
+                PullRequest.pr_branch == pr_branch,
+            )
+        ).first()
+        if (
+            not force
+            and branch_pr is not None
+            and branch_pr.pr_state == PullRequestState.closed
+        ):
+            for fix in fixes:
+                fix.status = FixStatus.rejected
+                session.add(fix)
+            session.commit()
+            events_pub.publish_event(
+                ev.fix_rejected(org_id, repo_id_str, str(fixes[0].id))
+            )
+            logger.info(
+                "Skipping batch delivery: PR on branch %s was closed by user",
+                pr_branch,
+            )
+            return {"status": "skipped", "reason": "pr_previously_closed"}
+
         # One file change per workflow file — all fixes for same file share identical diff
         seen: dict[str, tuple[str, str]] = {}
+        expected_base_contents: dict[str, str] = {}
         base_branch = repo.default_branch or "main"
         for fix in fixes:
             issue = fix.issue
@@ -239,13 +312,11 @@ def deliver_fixes_batch(
             if not wf or wf.path in seen:
                 continue
             seen[wf.path] = (wf.path, wf.last_full_content or wf.raw_content)
+            expected_base_contents[wf.path] = wf.raw_content
             base_branch = analysis.branch or repo.default_branch or "main"
 
         if not seen:
             return {"status": "error", "detail": "no_workflow_files"}
-
-        org_id = str(repo.org_id)
-        repo_id_str = repo_id
 
         for fix in fixes:
             fix.status = FixStatus.delivering
@@ -264,6 +335,8 @@ def deliver_fixes_batch(
                 file_changes=list(seen.values()),
                 pr_title=pr_title,
                 pr_body=pr_body,
+                expected_base_contents=expected_base_contents,
+                force=force,
             )
         )
 
@@ -314,6 +387,15 @@ def deliver_fixes_batch(
                     result.error[:200],
                 )
             )
+            if result.error_code == STALE_CONTENT_ERROR_CODE:
+                from app.workers.tasks.static_analysis import run_static_analysis
+
+                run_static_analysis.delay(
+                    repo_id=repo_id_str,
+                    branch=base_branch,
+                    trigger="manual",
+                    force=True,
+                )
         else:
             events_pub.publish_event(
                 ev.fix_delivered_batch(
@@ -353,6 +435,8 @@ async def _deliver_batch(
     file_changes: list[tuple[str, str]],
     pr_title: str,
     pr_body: str,
+    expected_base_contents: dict[str, str] | None = None,
+    force: bool = False,
 ) -> object:
     async with _delivery_service() as svc:
         return await svc.update_or_create_workflow_action_pr(
@@ -363,6 +447,8 @@ async def _deliver_batch(
             file_changes=file_changes,
             pr_title=pr_title,
             pr_body=pr_body,
+            expected_base_contents=expected_base_contents,
+            override_user_commits=force,
         )
 
 
@@ -376,6 +462,8 @@ async def _deliver(
     rule_slug: str,
     delivery_mode: str,
     pr_body: str,
+    expected_base_content: str | None = None,
+    force: bool = False,
     comment_issue_number: int | None = None,
 ) -> object:
     async with _delivery_service() as svc:
@@ -389,16 +477,15 @@ async def _deliver(
                 new_content=new_content,
                 pr_title=f"fix(ci): {rule_slug.replace('_', ' ')}",
                 pr_body=pr_body,
-            )
-        if comment_issue_number is None:
-            from app.services.github.fix_delivery import FixDeliveryResult
-
-            return FixDeliveryResult(
-                error="comment delivery requires an existing pull request"
+                expected_base_content=expected_base_content,
+                override_user_commits=force,
             )
         return await svc.deliver_as_comment(
             installation_id=installation_id,
             full_name=full_name,
             issue_number=comment_issue_number,
-            body=f"**{settings.PROJECT_NAME} Fix** for `{rule_slug}`:\n\n```yaml\n{new_content}\n```",
+            body=(
+                f"**{settings.PROJECT_NAME} Fix** for `{rule_slug}` "
+                f"(`{file_path}`):\n\n```yaml\n{new_content}\n```"
+            ),
         )

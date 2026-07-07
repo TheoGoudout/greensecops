@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from sqlmodel import Session
 
 from app import crud
@@ -26,13 +26,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
+async def _is_duplicate_delivery(delivery_id: str | None) -> bool:
+    """Redis-backed webhook delivery dedup (GitHub redelivers on retries).
+
+    Fails open: when Redis is unavailable, processing a duplicate is safer
+    than dropping a genuine event.
+    """
+    if not delivery_id:
+        return False
+    import redis.asyncio as aioredis
+
+    try:
+        r = aioredis.from_url(settings.REDIS_URL)
+        try:
+            fresh = await r.set(
+                f"greensecops:webhook_delivery:{delivery_id}",
+                "1",
+                nx=True,
+                ex=24 * 3600,
+            )
+        finally:
+            await r.aclose()
+        return not fresh
+    except Exception:
+        logger.warning("Webhook delivery dedup unavailable", exc_info=True)
+        return False
+
+
 @router.post("/github")
 async def github_webhook(
     request: Request,
     session: SessionDep,
-    background_tasks: BackgroundTasks,
     x_hub_signature_256: Annotated[str | None, Header()] = None,
     x_github_event: Annotated[str | None, Header()] = None,
+    x_github_delivery: Annotated[str | None, Header()] = None,
 ) -> dict[str, str]:
     payload_bytes = await request.body()
 
@@ -60,18 +87,26 @@ async def github_webhook(
     event = x_github_event or "unknown"
     logger.info("Received GitHub webhook event: %s", event)
 
+    if await _is_duplicate_delivery(x_github_delivery):
+        logger.info("Skipping duplicate webhook delivery %s", x_github_delivery)
+        return {"status": "duplicate", "event": event}
+
+    # Handlers enqueue work synchronously so an enqueue failure surfaces as a
+    # 500 in GitHub's webhook log (a lost 200 would silently drop the event).
     if event == "push":
-        _handle_push_event(session, payload, background_tasks)
+        _handle_push_event(session, payload)
     elif event == "workflow_run":
-        _handle_workflow_run_event(session, payload, background_tasks)
+        _handle_workflow_run_event(session, payload)
     elif event == "issue_comment":
-        _handle_issue_comment_event(session, payload, background_tasks)
+        _handle_issue_comment_event(session, payload)
     elif event == "installation":
         _handle_installation_event(session, payload)
     elif event == "installation_repositories":
         _handle_installation_repositories_event(session, payload)
     elif event == "pull_request":
         _handle_pull_request_event(session, payload)
+    elif event == "repository":
+        _handle_repository_event(session, payload)
 
     return {"status": "accepted", "event": event}
 
@@ -79,7 +114,6 @@ async def github_webhook(
 def _handle_push_event(
     session: Session,
     payload: dict[str, Any],
-    background_tasks: BackgroundTasks,
 ) -> None:
     """Trigger analysis when a push touches .github/workflows/ files or creates a new branch."""
     before: str = payload.get("before", "")
@@ -110,8 +144,7 @@ def _handle_push_event(
 
     branch = payload.get("ref", "").removeprefix("refs/heads/")
     commit_sha = payload.get("after", "")
-    background_tasks.add_task(
-        _enqueue_static_analysis,
+    _enqueue_static_analysis(
         repo_id=str(repo.id),
         branch=branch,
         commit_sha=commit_sha,
@@ -123,7 +156,6 @@ def _handle_push_event(
 def _handle_workflow_run_event(
     session: Session,
     payload: dict[str, Any],
-    background_tasks: BackgroundTasks,
 ) -> None:
     if payload.get("action") != "completed":
         return
@@ -144,8 +176,7 @@ def _handle_workflow_run_event(
     workflow_run = payload.get("workflow_run", {})
     branch = workflow_run.get("head_branch", "")
     commit_sha = workflow_run.get("head_sha", "")
-    background_tasks.add_task(
-        _enqueue_static_analysis,
+    _enqueue_static_analysis(
         repo_id=str(repo.id),
         branch=branch,
         org_id=str(repo.org_id),
@@ -155,18 +186,105 @@ def _handle_workflow_run_event(
 
 
 def _handle_issue_comment_event(
-    session: Session,  # noqa: ARG001
+    session: Session,
     payload: dict[str, Any],
-    background_tasks: BackgroundTasks,  # noqa: ARG001
 ) -> None:
-    """Handle /greensecops commands in PR comments."""
+    """Handle /greensecops commands in issue and PR comments."""
     if payload.get("action") != "created":
         return
     body: str = payload.get("comment", {}).get("body", "")
-    if not body.strip().startswith("/greensecops"):
+    stripped = body.strip()
+    if not stripped.startswith("/greensecops"):
         return
-    # Future: parse commands like /greensecops fix, /greensecops ignore
     logger.info("Received GreenSecOps command comment: %s", body[:100])
+
+    command = stripped.removeprefix("/greensecops").strip().split()
+    if not command or command[0] != "reanalyze":
+        # Other commands (fix, ignore, ...) are not implemented yet.
+        return
+
+    github_repo_id = payload.get("repository", {}).get("id")
+    if not github_repo_id:
+        return
+
+    from sqlmodel import select
+
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if not repo or not repo.enabled:
+        return
+
+    _enqueue_static_analysis(
+        repo_id=str(repo.id),
+        branch=repo.default_branch,
+        commit_sha="",
+        trigger=AnalysisTrigger.manual,
+        org_id=str(repo.org_id),
+        force=True,
+    )
+
+
+def _handle_repository_event(
+    session: Session,
+    payload: dict[str, Any],
+) -> None:
+    """Keep repository metadata in sync (rename, transfer, default branch, deletion).
+
+    Without this, ``full_name``/``default_branch`` go stale and later fix
+    deliveries fail when resolving the repo or its base branch.
+    """
+    action = payload.get("action")
+    repo_payload = payload.get("repository", {})
+    github_repo_id = repo_payload.get("id")
+    if not github_repo_id:
+        return
+
+    from sqlmodel import select
+
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if not repo:
+        return
+
+    if action in ("deleted", "archived"):
+        repo.enabled = False
+        session.add(repo)
+        session.commit()
+        logger.info("Disabled repo %s after %s event", repo.full_name, action)
+        events_pub.publish_event(
+            ev.repository_disabled(str(repo.org_id), [str(repo.id)])
+        )
+        return
+
+    if action == "unarchived":
+        repo.enabled = True
+        session.add(repo)
+        session.commit()
+        logger.info("Re-enabled repo %s after unarchive", repo.full_name)
+        return
+
+    if action in ("renamed", "transferred", "edited"):
+        changed = False
+        new_full_name = repo_payload.get("full_name")
+        if new_full_name and new_full_name != repo.full_name:
+            logger.info("Repo renamed: %s -> %s", repo.full_name, new_full_name)
+            repo.full_name = new_full_name
+            changed = True
+        new_default_branch = repo_payload.get("default_branch")
+        if new_default_branch and new_default_branch != repo.default_branch:
+            logger.info(
+                "Repo %s default branch: %s -> %s",
+                repo.full_name,
+                repo.default_branch,
+                new_default_branch,
+            )
+            repo.default_branch = new_default_branch
+            changed = True
+        if changed:
+            session.add(repo)
+            session.commit()
 
 
 def _handle_installation_event(
@@ -353,6 +471,7 @@ def _enqueue_static_analysis(
     commit_sha: str,
     trigger: AnalysisTrigger,
     org_id: str = "",
+    force: bool = False,
 ) -> None:
     from app.services.events import publisher as events_pub
     from app.services.events import schemas as ev
@@ -363,6 +482,7 @@ def _enqueue_static_analysis(
         branch=branch,
         commit_sha=commit_sha,
         trigger=trigger.value,
+        force=force,
     )
     if org_id:
         events_pub.publish_event(

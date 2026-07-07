@@ -2,8 +2,13 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import pytest
+
 from app.services.opa.evaluator import (
     POLICY_PACKAGES,
+    OpaUnavailableError,
+    WorkflowParseError,
     _discover_policy_packages,
     evaluate_workflow,
     parse_workflow_yaml,
@@ -135,3 +140,32 @@ def test_evaluate_workflow_logs_error_when_policy_undefined(caplog: Any) -> None
 
     assert violations == []
     assert any("undefined" in rec.message for rec in caplog.records)
+
+
+def test_evaluate_workflow_raises_on_unparseable_yaml() -> None:
+    # Broken YAML must not silently produce a perfect score
+    with pytest.raises(WorkflowParseError):
+        asyncio.run(evaluate_workflow("{ invalid: yaml: content: [}"))
+
+
+def test_evaluate_workflow_raises_when_opa_unreachable() -> None:
+    # A connection failure must surface, not be swallowed into zero violations
+    async def _post(url: str, **_kwargs: Any) -> MagicMock:
+        raise httpx.ConnectError("connection refused")
+
+    client = AsyncMock()
+    client.post = _post
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=cm),
+        pytest.raises(OpaUnavailableError),
+    ):
+        asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
+
+
+def test_discover_policy_packages_excludes_test_files() -> None:
+    packages = _discover_policy_packages()
+    assert not any(pkg.endswith("_test") for pkg in packages)

@@ -1119,3 +1119,219 @@ def test_enqueue_installation_sync_calls_celery_task() -> None:
     ):
         _enqueue_installation_sync(12345, "org-id-str")
     mock_task.delay.assert_called_once()
+
+
+# ─── Repository event ─────────────────────────────────────────────────────────
+
+
+def test_github_webhook_repository_renamed_updates_full_name(
+    client: TestClient, db: Session, enabled_repo: Repository
+) -> None:
+    new_name = f"owner/renamed-{uuid.uuid4().hex[:8]}"
+    payload = {
+        "action": "renamed",
+        "repository": {
+            "id": enabled_repo.github_repo_id,
+            "full_name": new_name,
+            "default_branch": "main",
+        },
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+        )
+
+    assert response.status_code == 200
+    db.refresh(enabled_repo)
+    assert enabled_repo.full_name == new_name
+
+
+def test_github_webhook_repository_default_branch_change(
+    client: TestClient, db: Session, enabled_repo: Repository
+) -> None:
+    payload = {
+        "action": "edited",
+        "changes": {"default_branch": {"from": "main"}},
+        "repository": {
+            "id": enabled_repo.github_repo_id,
+            "full_name": enabled_repo.full_name,
+            "default_branch": "develop",
+        },
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+        )
+
+    assert response.status_code == 200
+    db.refresh(enabled_repo)
+    assert enabled_repo.default_branch == "develop"
+
+
+def test_github_webhook_repository_deleted_disables_repo(
+    client: TestClient, db: Session, enabled_repo: Repository
+) -> None:
+    payload = {
+        "action": "deleted",
+        "repository": {
+            "id": enabled_repo.github_repo_id,
+            "full_name": enabled_repo.full_name,
+        },
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+        )
+
+    assert response.status_code == 200
+    db.refresh(enabled_repo)
+    assert enabled_repo.enabled is False
+
+
+def test_github_webhook_repository_archived_disables_and_unarchived_reenables(
+    client: TestClient, db: Session, enabled_repo: Repository
+) -> None:
+    base = {
+        "repository": {
+            "id": enabled_repo.github_repo_id,
+            "full_name": enabled_repo.full_name,
+        },
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        client.post(
+            WEBHOOK_URL,
+            json={"action": "archived", **base},
+            headers={"X-GitHub-Event": "repository"},
+        )
+        db.refresh(enabled_repo)
+        assert enabled_repo.enabled is False
+
+        client.post(
+            WEBHOOK_URL,
+            json={"action": "unarchived", **base},
+            headers={"X-GitHub-Event": "repository"},
+        )
+        db.refresh(enabled_repo)
+        assert enabled_repo.enabled is True
+
+
+def test_github_webhook_repository_unknown_repo_skipped(client: TestClient) -> None:
+    payload = {
+        "action": "renamed",
+        "repository": {"id": 987654321, "full_name": "ghost/repo"},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+        )
+    assert response.status_code == 200
+
+
+# ─── /greensecops commands ────────────────────────────────────────────────────
+
+
+def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
+    client: TestClient, enabled_repo: Repository
+) -> None:
+    payload = {
+        "action": "created",
+        "comment": {"body": "/greensecops reanalyze"},
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_static_analysis") as enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
+        )
+
+    assert response.status_code == 200
+    enqueue.assert_called_once()
+    assert enqueue.call_args.kwargs["repo_id"] == str(enabled_repo.id)
+    assert enqueue.call_args.kwargs["force"] is True
+
+
+def test_github_webhook_unknown_command_is_ignored(
+    client: TestClient, enabled_repo: Repository
+) -> None:
+    payload = {
+        "action": "created",
+        "comment": {"body": "/greensecops do-something-else"},
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_static_analysis") as enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
+        )
+
+    assert response.status_code == 200
+    enqueue.assert_not_called()
+
+
+# ─── Delivery dedup ───────────────────────────────────────────────────────────
+
+
+def test_github_webhook_duplicate_delivery_skipped(client: TestClient) -> None:
+    from unittest.mock import AsyncMock
+
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.api.routes.webhooks._is_duplicate_delivery",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json={"action": "created"},
+            headers={
+                "X-GitHub-Event": "push",
+                "X-GitHub-Delivery": "dup-delivery-id",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "duplicate"
+
+
+def test_is_duplicate_delivery_without_id_is_false() -> None:
+    import asyncio
+
+    from app.api.routes.webhooks import _is_duplicate_delivery
+
+    assert asyncio.run(_is_duplicate_delivery(None)) is False
+    assert asyncio.run(_is_duplicate_delivery("")) is False
+
+
+def test_is_duplicate_delivery_uses_redis_setnx() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.api.routes.webhooks import _is_duplicate_delivery
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+
+    # Fresh delivery: SET NX succeeds → not a duplicate
+    fake_redis.set = AsyncMock(return_value=True)
+    with patch("redis.asyncio.from_url", return_value=fake_redis):
+        assert asyncio.run(_is_duplicate_delivery("delivery-1")) is False
+
+    # Redelivery: SET NX fails → duplicate
+    fake_redis.set = AsyncMock(return_value=None)
+    with patch("redis.asyncio.from_url", return_value=fake_redis):
+        assert asyncio.run(_is_duplicate_delivery("delivery-1")) is True
+    fake_redis.aclose.assert_awaited()
+
+
+def test_is_duplicate_delivery_fails_open_on_redis_error() -> None:
+    import asyncio
+
+    from app.api.routes.webhooks import _is_duplicate_delivery
+
+    with patch("redis.asyncio.from_url", side_effect=RuntimeError("redis down")):
+        assert asyncio.run(_is_duplicate_delivery("delivery-2")) is False

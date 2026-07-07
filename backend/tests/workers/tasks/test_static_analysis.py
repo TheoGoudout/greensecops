@@ -108,20 +108,28 @@ def test_repo_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
     assert result["detail"] == "repository_not_found"
 
 
-def test_no_workflow_files_returns_done_with_empty_results(
+def test_no_workflow_files_returns_terminal_status_and_event(
     db: Session, repo: Repository
 ) -> None:
     # Arrange — _fetch_workflow_files returns empty list
-    with patch(
-        "app.workers.tasks.static_analysis._fetch_workflow_files", return_value=[]
+    events_published: list = []
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files", return_value=[]
+        ),
+        patch(
+            "app.workers.tasks.static_analysis.events_pub.publish_event",
+            side_effect=events_published.append,
+        ),
     ):
         result = _run_static_analysis_impl(str(repo.id))
 
-    # Assert
-    assert result["status"] == "done"
+    # Assert — terminal status so the UI does not hang on "queued"
+    assert result["status"] == "no_workflow_files"
     assert result["repo_id"] == str(repo.id)
-    # results string should represent empty list
     assert "[]" in str(result["results"])
+    # A terminal (completed) event must have been published
+    assert len(events_published) == 1
 
 
 def test_with_workflow_file_id_skips_fetch(
@@ -316,16 +324,21 @@ def test_duplicate_detection_skips_second_run(
     # _evaluate should NOT have been called for the duplicate
     mock_eval.assert_not_called()
 
-    # A skipped Analysis record must exist with current timestamps and copied grade
+    # No new `skipped` Analysis rows accumulate: the result references the
+    # prior completed analysis instead.
     skipped = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
         .where(Analysis.status == AnalysisStatus.skipped)
+    ).all()
+    assert skipped == []
+    completed = db.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.completed)
     ).first()
-    assert skipped is not None
-    assert skipped.grade == "A+++"
-    assert skipped.completed_at is not None
-    assert skipped.created_at is not None
+    assert completed is not None
+    assert str(completed.id) in second_results_str
 
 
 @dataclass
@@ -378,14 +391,52 @@ def test_non_workflow_file_updates_existing_record(
     assert "completed" in str(result["results"])
 
 
-def test_violation_with_unknown_rule_slug_is_skipped(
+def test_violation_with_unknown_rule_slug_auto_registers_rule(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
     # Arrange — violation with a slug that does not exist in seeded rules
+    # (e.g. a newly shipped rego rule not present in the seed list)
+    new_slug = f"brand_new_rule_{uuid.uuid4().hex[:8]}"
     violation = FakeViolation(
-        rule_slug="no-such-rule-slug",
+        rule_slug=new_slug,
         severity=IssueSeverity.low.value,
         category=IssueCategory.energy.value,
+        line_start=1,
+        line_end=1,
+        message="fresh violation",
+    )
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    # Analysis completes and the rule is auto-registered with an issue attached
+    assert result["status"] == "done"
+    results_str = str(result["results"])
+    assert "completed" in results_str
+    assert "'issues': 1" in results_str
+
+    rule = db.exec(select(Rule).where(Rule.slug == new_slug)).first()
+    assert rule is not None
+    assert rule.enabled is True
+    issue = db.exec(select(Issue).where(Issue.rule_id == rule.id)).first()
+    assert issue is not None
+
+
+def test_violation_with_invalid_category_is_skipped(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    violation = FakeViolation(
+        rule_slug=f"broken_rule_{uuid.uuid4().hex[:8]}",
+        severity="not-a-severity",
+        category="not-a-category",
         line_start=1,
         line_end=1,
         message="ghost violation",
@@ -402,9 +453,162 @@ def test_violation_with_unknown_rule_slug_is_skipped(
     ):
         result = _run_static_analysis_impl(str(repo.id))
 
-    # Analysis still completes — unknown slug is logged and skipped
+    # Analysis still completes — the malformed violation is logged and skipped
     assert result["status"] == "done"
-    assert "completed" in str(result["results"])
+    results_str = str(result["results"])
+    assert "completed" in results_str
+    assert "'issues': 0" in results_str
+
+
+def test_disabled_rule_violations_are_ignored(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    # Arrange — a disabled rule
+    disabled_rule = Rule(
+        slug=f"disabled_rule_{uuid.uuid4().hex[:8]}",
+        category=IssueCategory.energy,
+        severity=IssueSeverity.low,
+        title="Disabled rule",
+        description="d",
+        enabled=False,
+    )
+    db.add(disabled_rule)
+    db.commit()
+    db.refresh(disabled_rule)
+
+    violation = FakeViolation(
+        rule_slug=disabled_rule.slug,
+        severity=IssueSeverity.low.value,
+        category=IssueCategory.energy.value,
+        line_start=1,
+        line_end=1,
+        message="should be ignored",
+    )
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    assert result["status"] == "done"
+    results_str = str(result["results"])
+    assert "completed" in results_str
+    assert "'issues': 0" in results_str
+    issue = db.exec(select(Issue).where(Issue.rule_id == disabled_rule.id)).first()
+    assert issue is None
+
+
+def test_stale_issue_is_resolved_when_violation_disappears(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    violation = FakeViolation(
+        rule_slug=seeded_rule.slug,
+        severity=seeded_rule.severity.value,
+        category=seeded_rule.category.value,
+        line_start=1,
+        line_end=1,
+        message="will be fixed manually",
+        job="build",
+    )
+
+    # First run — creates the issue
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    issue = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).first()
+    assert issue is not None
+    db.refresh(issue)
+    assert issue.resolved_at is None
+
+    # Second run (forced) — the violation is gone (user fixed it manually)
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id), force=True)
+
+    db.refresh(issue)
+    assert issue.resolved_at is not None
+
+    # Third run — the violation reappears: the issue is reopened
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id), force=True)
+
+    db.refresh(issue)
+    assert issue.resolved_at is None
+
+
+def test_issues_of_deleted_workflow_files_are_resolved(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    violation = FakeViolation(
+        rule_slug=seeded_rule.slug,
+        severity=seeded_rule.severity.value,
+        category=seeded_rule.category.value,
+        line_start=1,
+        line_end=1,
+        message="workflow will be deleted",
+        job="build",
+    )
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    issue = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).first()
+    assert issue is not None
+
+    # The workflow file disappears from the repo (deleted or renamed)
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    assert result["status"] == "no_workflow_files"
+    db.refresh(issue)
+    assert issue.resolved_at is not None
 
 
 def test_completed_analysis_is_queryable_as_latest(
@@ -800,3 +1004,128 @@ def test_batch_mode_opa_failure_sets_batch_any_failed(
 
     assert result["status"] == "done"
     assert str(result["results"]).count("failed") >= 2
+
+
+# ─── Celery task wrapper (per-repo lock) ─────────────────────────────────────
+
+
+def test_run_static_analysis_task_acquires_and_releases_lock(
+    db: Session,  # noqa: ARG001
+    repo: Repository,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from app.workers.tasks.static_analysis import run_static_analysis
+
+    fake_redis = MagicMock()
+    fake_redis.set.return_value = True
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            return_value=fake_redis,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._run_static_analysis_impl",
+            return_value={"status": "done"},
+        ) as impl,
+    ):
+        result = run_static_analysis.apply(kwargs={"repo_id": str(repo.id)})
+
+    assert result.get() == {"status": "done"}
+    impl.assert_called_once()
+    fake_redis.delete.assert_called_once()
+    fake_redis.close.assert_called_once()
+
+
+def test_run_static_analysis_task_retries_while_locked(
+    db: Session,  # noqa: ARG001
+    repo: Repository,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from app.workers.tasks.static_analysis import run_static_analysis
+
+    fake_redis = MagicMock()
+    # Lock held on the first attempt, free on the eager retry.
+    fake_redis.set.side_effect = [False, True]
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            return_value=fake_redis,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._run_static_analysis_impl",
+            return_value={"status": "done"},
+        ) as impl,
+    ):
+        result = run_static_analysis.apply(kwargs={"repo_id": str(repo.id)})
+
+    assert result.get() == {"status": "done"}
+    impl.assert_called_once()
+
+
+def test_run_static_analysis_task_retries_on_fetch_error(
+    db: Session,  # noqa: ARG001
+    repo: Repository,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from app.workers.tasks.static_analysis import (
+        WorkflowFetchError,
+        run_static_analysis,
+    )
+
+    fake_redis = MagicMock()
+    fake_redis.set.return_value = True
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            return_value=fake_redis,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._run_static_analysis_impl",
+            side_effect=[WorkflowFetchError("rate limited"), {"status": "done"}],
+        ) as impl,
+    ):
+        result = run_static_analysis.apply(kwargs={"repo_id": str(repo.id)})
+
+    assert result.get() == {"status": "done"}
+    assert impl.call_count == 2
+
+
+# ─── Async fetch/evaluate wrappers ───────────────────────────────────────────
+
+
+def test_fetch_workflow_files_passes_ref(repo: Repository) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.workers.tasks.static_analysis import _fetch_workflow_files
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+    fetch_mock = AsyncMock(return_value=[])
+    with (
+        patch("redis.asyncio.from_url", return_value=fake_redis),
+        patch(
+            "app.services.github.app_client.GitHubAppClient.fetch_workflow_files",
+            new=fetch_mock,
+        ),
+    ):
+        result = _fetch_workflow_files(repo, ref="feature-x")
+
+    assert result == []
+    assert fetch_mock.call_args.kwargs["ref"] == "feature-x"
+    fake_redis.aclose.assert_awaited()
+
+
+def test_evaluate_delegates_to_opa_evaluator() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.workers.tasks.static_analysis import _evaluate
+
+    with patch(
+        "app.services.opa.evaluator.evaluate_workflow",
+        new=AsyncMock(return_value=[]),
+    ):
+        assert asyncio.run(_evaluate("on: push")) == []

@@ -10,6 +10,15 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+class WorkflowParseError(Exception):
+    """Raised when a workflow file is not a parseable YAML mapping."""
+
+
+class OpaUnavailableError(Exception):
+    """Raised when the OPA service cannot be reached or returns an error."""
+
+
 # Rego rules live at app/rules/<category>/<name>.rego and each declares
 # package greensecops.<category>.<name> exposing `violations`.
 _RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
@@ -74,7 +83,7 @@ def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
 async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
     parsed = parse_workflow_yaml(raw_content)
     if parsed is None:
-        return []
+        raise WorkflowParseError("Workflow file is not a valid YAML mapping")
 
     violations: list[OpaViolation] = []
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -87,30 +96,32 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
                     continue
                 response.raise_for_status()
                 data = response.json()
-                if "result" not in data:
-                    logger.error(
-                        "OPA package %s is undefined — policy not loaded in OPA",
-                        package_path,
-                    )
-                    continue
-                raw_violations: list[dict[str, Any]] = data["result"].get(
-                    "violations", []
-                )
-                for v in raw_violations:
-                    violations.append(
-                        OpaViolation(
-                            rule_slug=v.get("rule", "unknown"),
-                            severity=v.get("severity", "medium"),
-                            category=v.get("category", "reliability"),
-                            message=v.get("message", ""),
-                            job=v.get("job"),
-                            step=v.get("step"),
-                            line_start=v.get("line_start"),
-                            line_end=v.get("line_end"),
-                            context=v.get("context"),
-                        )
-                    )
             except httpx.HTTPError as exc:
-                logger.warning("OPA evaluation failed for %s: %s", package_path, exc)
+                # A perfect score must not be reported just because OPA is
+                # down: surface the outage so the analysis is marked failed.
+                raise OpaUnavailableError(
+                    f"OPA evaluation failed for {package_path}: {exc}"
+                ) from exc
+            if "result" not in data:
+                logger.error(
+                    "OPA package %s is undefined — policy not loaded in OPA",
+                    package_path,
+                )
+                continue
+            raw_violations: list[dict[str, Any]] = data["result"].get("violations", [])
+            for v in raw_violations:
+                violations.append(
+                    OpaViolation(
+                        rule_slug=v.get("rule", "unknown"),
+                        severity=v.get("severity", "medium"),
+                        category=v.get("category", "reliability"),
+                        message=v.get("message", ""),
+                        job=v.get("job"),
+                        step=v.get("step"),
+                        line_start=v.get("line_start"),
+                        line_end=v.get("line_end"),
+                        context=v.get("context"),
+                    )
+                )
 
     return violations

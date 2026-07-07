@@ -103,8 +103,13 @@ class GitHubAppClient:
         return await asyncio.to_thread(_fetch)
 
     async def fetch_workflow_files(
-        self, installation_id: int | None, full_name: str
+        self, installation_id: int | None, full_name: str, ref: str | None = None
     ) -> list[WorkflowFileContent]:
+        """Fetch workflow files at ``ref`` (branch or commit SHA).
+
+        When ``ref`` is empty the repository's default branch is used, so an
+        analysis triggered for a feature branch sees that branch's content.
+        """
         if installation_id is not None:
             token: str | None = await self.get_installation_token(installation_id)
         else:
@@ -114,7 +119,10 @@ class GitHubAppClient:
             gh = Github(auth=Auth.Token(token)) if token is not None else Github()
             repo = gh.get_repo(full_name)
             try:
-                contents = repo.get_contents(".github/workflows")
+                if ref:
+                    contents = repo.get_contents(".github/workflows", ref=ref)
+                else:
+                    contents = repo.get_contents(".github/workflows")
             except GithubException as exc:
                 if exc.status == 404:
                     return []

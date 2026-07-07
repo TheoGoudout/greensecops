@@ -102,6 +102,7 @@ class IssuePublic(SQLModel):
     message: str
     context: str | None = None
     created_at: datetime | None = None
+    resolved_at: datetime | None = None
     fix_id: uuid.UUID | None = None
     fix_status: FixStatus | None = None
     workflow_file_path: str | None = None

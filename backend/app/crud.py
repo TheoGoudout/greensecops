@@ -158,7 +158,7 @@ def upsert_repository(
         )
         .returning(Repository)
     )
-    repo = session.exec(stmt).one()  # type: ignore[arg-type]
+    repo = session.scalars(stmt).one()
     session.commit()
     return repo
 

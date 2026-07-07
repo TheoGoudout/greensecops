@@ -47,6 +47,13 @@ def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
         provider_str, fallback_model = get_first_available_provider()
         model_str = model_str or fallback_model
 
+    if not model_str:
+        # Use the provider's own catalog default — an OpenAI model name
+        # handed to anthropic/gemini/ollama would fail at request time.
+        from app.services.llm.catalog import get_default_model
+
+        model_str = get_default_model(provider_str)
+
     return provider_str, model_str or "gpt-4o-mini"
 
 
@@ -176,6 +183,8 @@ def run_fix_generation(
                 )
                 full_content = ""
 
+        ready_fixes: list[Fix] = []
+        failed_fixes: list[Fix] = []
         for fix in fixes:
             issue = session.get(Issue, fix.issue_id)
             patch = (
@@ -195,33 +204,51 @@ def run_fix_generation(
             fix.prompt_tokens = result.prompt_tokens
             fix.completion_tokens = result.completion_tokens
             fix.langsmith_run_id = result.run_id
+            # A fix with neither a working patch nor a valid full rewrite must
+            # not be marked ready: delivery would push the unchanged file and
+            # fail with an opaque GitHub 422.
             if patch is None and not full_content:
                 fix.status = FixStatus.failed
                 fix.error_message = "LLM produced no applicable, valid fix"
+                failed_fixes.append(fix)
             else:
                 fix.status = FixStatus.ready
+                ready_fixes.append(fix)
             session.add(fix)
         session.commit()
 
-        if batch_mode:
+        for fix in failed_fixes:
             events_pub.publish_event(
-                ev.fix_ready_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
+                ev.fix_generation_failed(
+                    org_id, repo_id_str, str(fix.id), fix.error_message or "no patch"
+                )
             )
+        if batch_mode:
+            if ready_fixes:
+                events_pub.publish_event(
+                    ev.fix_ready_batch(
+                        org_id, repo_id_str, [str(f.id) for f in ready_fixes]
+                    )
+                )
         else:
-            for fix in fixes:
+            for fix in ready_fixes:
                 events_pub.publish_event(
                     ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
                 )
 
         logger.info(
-            "Fix generated for %d issue(s): %d prompt tokens, %d completion tokens",
+            "Fix generation for %d issue(s): %d ready, %d failed, "
+            "%d prompt tokens, %d completion tokens",
             len(fixes),
+            len(ready_fixes),
+            len(failed_fixes),
             result.prompt_tokens,
             result.completion_tokens,
         )
         return {
-            "status": "ready",
-            "fix_count": len(fixes),
+            "status": "ready" if ready_fixes else "failed",
+            "fix_count": len(ready_fixes),
+            "failed_count": len(failed_fixes),
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
         }

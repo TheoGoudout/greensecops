@@ -111,6 +111,7 @@ export type IssuePublic = {
     message: string;
     context?: (string | null);
     created_at?: (string | null);
+    resolved_at?: (string | null);
     fix_id?: (string | null);
     fix_status?: (FixStatus | null);
     workflow_file_path?: (string | null);
@@ -458,6 +459,7 @@ export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>)
 export type IssuesListIssuesData = {
     analysisId?: (string | null);
     category?: (IssueCategory | null);
+    includeResolved?: boolean;
     latestOnly?: boolean;
     limit?: number;
     repoId?: (string | null);
@@ -671,6 +673,7 @@ export type UtilsTestEmailResponse = (Message);
 export type UtilsHealthCheckResponse = (boolean);
 
 export type WebhooksGithubWebhookData = {
+    xGithubDelivery?: (string | null);
     xGithubEvent?: (string | null);
     xHubSignature256?: (string | null);
 };

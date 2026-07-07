@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
 from app.api.mappers import to_issue_public
@@ -30,10 +30,13 @@ def list_issues(
     severity: IssueSeverity | None = None,
     unfixed: bool = False,
     latest_only: bool = True,
+    include_resolved: bool = False,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
 ) -> list[IssuePublic]:
     query = select(Issue)
+    if not include_resolved:
+        query = query.where(col(Issue.resolved_at).is_(None))
     # Join Analysis once if either tenant scoping or repo filtering needs it.
     needs_analysis_join = repo_id is not None or not current_user.is_superuser
     if needs_analysis_join:

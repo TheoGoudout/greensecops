@@ -661,6 +661,18 @@ export const IssuePublicSchema = {
             ],
             title: 'Created At'
         },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
         fix_id: {
             anyOf: [
                 {
