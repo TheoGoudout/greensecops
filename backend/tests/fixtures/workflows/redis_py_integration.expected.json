@@ -1,0 +1,50 @@
+{
+  "violations": [
+    {
+      "rule_slug": "unpinned_actions",
+      "severity": "high",
+      "category": "reliability",
+      "message": "actions/checkout@v7 uses a mutable ref",
+      "job": "lint",
+      "step": "actions/checkout@v7"
+    },
+    {
+      "rule_slug": "unpinned_actions",
+      "severity": "high",
+      "category": "reliability",
+      "message": "actions/setup-python@v6 uses a mutable ref",
+      "job": "lint",
+      "step": "actions/setup-python@v6"
+    },
+    {
+      "rule_slug": "missing_timeout",
+      "severity": "high",
+      "category": "reliability",
+      "message": "Job 'dependency-audit' has no timeout-minutes configured.",
+      "job": "dependency-audit"
+    },
+    {
+      "rule_slug": "missing_timeout",
+      "severity": "high",
+      "category": "reliability",
+      "message": "Job 'lint' has no timeout-minutes configured.",
+      "job": "lint"
+    },
+    {
+      "rule_slug": "missing_timeout",
+      "severity": "high",
+      "category": "reliability",
+      "message": "Job 'build-and-test-package' has no timeout-minutes configured.",
+      "job": "build-and-test-package"
+    },
+    {
+      "rule_slug": "missing_timeout",
+      "severity": "high",
+      "category": "reliability",
+      "message": "Job 'install-package-from-commit' has no timeout-minutes configured.",
+      "job": "install-package-from-commit"
+    }
+  ],
+  "expected_issue_count": 6,
+  "grade_not": "A+++"
+}
