@@ -192,3 +192,107 @@ def test_normalize_patch_no_hunks() -> None:
     patch = "some header\nmore lines\n"
     result = normalize_patch(patch)
     assert result == patch
+
+
+# ─── YAML-realistic patch tests ──────────────────────────────────────────────
+# Snippets derived from the encode/httpx and celery/celery workflow files.
+
+_CHECKOUT_SHA = "11bd71901bbe5b1630ceea73d27597364c9af683"
+_SETUP_PYTHON_SHA = "ece7cb06caefa5fff74198d8649806c4678c61a1"
+
+# Minimal steps block representative of httpx_test_suite.yml
+_HTTPX_STEPS = (
+    "    steps:\n"
+    '      - uses: "actions/checkout@v4"\n'
+    '      - uses: "actions/setup-python@v6"\n'
+    "        with:\n"
+    '          python-version: "3.11"\n'
+    '      - name: "Run tests"\n'
+    '        run: "scripts/test"\n'
+)
+
+
+def test_pin_single_action_ref_in_yaml() -> None:
+    """apply_patch replaces a single mutable action ref with a full SHA."""
+    clean_diff = (
+        "--- a/.github/workflows/test-suite.yml\n"
+        "+++ b/.github/workflows/test-suite.yml\n"
+        "@@ -2,1 +2,1 @@\n"
+        '-      - uses: "actions/checkout@v4"\n'
+        f'+      - uses: "actions/checkout@{_CHECKOUT_SHA}"  # v4\n'
+    )
+    result = apply_patch(_HTTPX_STEPS, clean_diff)
+    assert result is not None
+    assert _CHECKOUT_SHA in result
+    assert "checkout@v4" not in result
+    # Non-targeted lines are preserved as-is
+    assert "setup-python@v6" in result
+
+
+def test_multi_hunk_pins_two_actions_in_yaml() -> None:
+    """Two-hunk diff pins checkout and setup-python in separate hunks."""
+    diff = (
+        "--- a/.github/workflows/test-suite.yml\n"
+        "+++ b/.github/workflows/test-suite.yml\n"
+        "@@ -2,1 +2,1 @@\n"
+        '-      - uses: "actions/checkout@v4"\n'
+        f'+      - uses: "actions/checkout@{_CHECKOUT_SHA}"  # v4\n'
+        "@@ -3,1 +3,1 @@\n"
+        '-      - uses: "actions/setup-python@v6"\n'
+        f'+      - uses: "actions/setup-python@{_SETUP_PYTHON_SHA}"  # v6\n'
+    )
+    result = apply_patch(_HTTPX_STEPS, diff)
+    assert result is not None
+    assert _CHECKOUT_SHA in result
+    assert _SETUP_PYTHON_SHA in result
+    assert "checkout@v4" not in result
+    assert "setup-python@v6" not in result
+
+
+def test_yaml_indentation_preserved_after_patch() -> None:
+    """Two-space YAML indentation is preserved through a targeted line replacement."""
+    original = (
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v7\n"
+        "      - run: make test\n"
+    )
+    clean_diff = (
+        "--- a/ci.yml\n"
+        "+++ b/ci.yml\n"
+        "@@ -5,1 +5,1 @@\n"
+        "-      - uses: actions/checkout@v7\n"
+        f"+      - uses: actions/checkout@{_CHECKOUT_SHA}  # v7\n"
+    )
+    result = apply_patch(original, clean_diff)
+    assert result is not None
+    # 6-space indentation preserved for the patched line
+    assert f"      - uses: actions/checkout@{_CHECKOUT_SHA}" in result
+    # Other lines with their exact indentation preserved
+    assert "  build:\n" in result
+    assert "    runs-on: ubuntu-latest\n" in result
+
+
+def test_normalize_then_apply_roundtrip_llm_yaml_diff() -> None:
+    """normalize_patch corrects wrong LLM hunk counts; apply_patch then succeeds."""
+    # LLM emits wrong counts: header says 1,1 but body has 2 old and 2 new lines
+    llm_diff = (
+        "--- a/.github/workflows/test-suite.yml\n"
+        "+++ b/.github/workflows/test-suite.yml\n"
+        "@@ -2,1 +2,1 @@\n"
+        '-      - uses: "actions/checkout@v4"\n'
+        '-      - uses: "actions/setup-python@v6"\n'
+        f'+      - uses: "actions/checkout@{_CHECKOUT_SHA}"  # v4\n'
+        f'+      - uses: "actions/setup-python@{_SETUP_PYTHON_SHA}"  # v6\n'
+    )
+    normalized = normalize_patch(llm_diff)
+    assert "@@ -2,2 +2,2 @@" in normalized
+
+    result = apply_patch(_HTTPX_STEPS, normalized)
+    assert result is not None, "Normalized patch should apply cleanly"
+    assert _CHECKOUT_SHA in result
+    assert _SETUP_PYTHON_SHA in result
+    assert "checkout@v4" not in result
+    assert "setup-python@v6" not in result

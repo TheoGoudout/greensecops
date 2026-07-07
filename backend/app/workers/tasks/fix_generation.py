@@ -19,6 +19,16 @@ from app.workers.patch_utils import (
 logger = logging.getLogger(__name__)
 
 
+def _is_valid_workflow_yaml(content: str) -> bool:
+    """True if ``content`` parses as a YAML mapping (a plausible workflow file)."""
+    import yaml  # type: ignore[import-untyped]
+
+    try:
+        return isinstance(yaml.safe_load(content), dict)
+    except yaml.YAMLError:
+        return False
+
+
 def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
     """Return (provider_str, model_str), cascading repo → org → first available."""
     provider_str = repo.llm_provider.value if repo.llm_provider else None
@@ -161,8 +171,17 @@ def run_fix_generation(
             full_content = restore_trailing_whitespace(
                 wf_file.raw_content, full_content
             )
-            wf_file.last_full_content = full_content
-            session.add(wf_file)
+            # Only trust the LLM's full rewrite if it is still valid workflow YAML;
+            # otherwise a later batch delivery would push a corrupt file.
+            if _is_valid_workflow_yaml(full_content):
+                wf_file.last_full_content = full_content
+                session.add(wf_file)
+            else:
+                logger.warning(
+                    "LLM full_content for wf %s is not valid YAML; discarding",
+                    wf_file.id,
+                )
+                full_content = ""
 
         ready_fixes: list[Fix] = []
         failed_fixes: list[Fix] = []
@@ -171,20 +190,28 @@ def run_fix_generation(
             patch = (
                 patches.get(issue.fingerprint) if issue and issue.fingerprint else None
             )
+            # Validate the patch actually applies and yields valid YAML before
+            # marking the fix ready. A patch that fails here is not deliverable.
+            if patch is not None:
+                patched = apply_patch(wf_file.raw_content, patch)
+                if patched is None or not _is_valid_workflow_yaml(patched):
+                    logger.warning(
+                        "LLM patch for fix %s is invalid (does not apply or bad YAML)",
+                        fix.id,
+                    )
+                    patch = None
+            fix.patch = patch
             fix.prompt_tokens = result.prompt_tokens
             fix.completion_tokens = result.completion_tokens
             fix.langsmith_run_id = result.run_id
-
-            # A fix without a working patch must not be marked ready: delivery
-            # would push the unchanged file and fail with an opaque GitHub 422.
-            error = _validate_patch(wf_file.raw_content, patch)
-            if error:
-                fix.patch = patch
+            # A fix with neither a working patch nor a valid full rewrite must
+            # not be marked ready: delivery would push the unchanged file and
+            # fail with an opaque GitHub 422.
+            if patch is None and not full_content:
                 fix.status = FixStatus.failed
-                fix.error_message = error
+                fix.error_message = "LLM produced no applicable, valid fix"
                 failed_fixes.append(fix)
             else:
-                fix.patch = patch
                 fix.status = FixStatus.ready
                 ready_fixes.append(fix)
             session.add(fix)
@@ -225,20 +252,6 @@ def run_fix_generation(
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
         }
-
-
-def _validate_patch(original_content: str, patch: str | None) -> str | None:
-    """Return an error message when a generated patch is unusable, else None."""
-    if not patch:
-        return "LLM response contained no patch for this issue"
-    patched = apply_patch(original_content, patch)
-    if patched is None:
-        return "Generated patch does not apply to the workflow file"
-    from app.services.opa.evaluator import parse_workflow_yaml
-
-    if parse_workflow_yaml(patched) is None:
-        return "Patched workflow is not valid YAML"
-    return None
 
 
 def _parse_llm_response(content: str) -> tuple[str, dict[str, str]]:

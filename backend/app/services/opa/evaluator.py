@@ -10,10 +10,6 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Directory bundling the rego policies shipped with the backend image
-# (also copied into the OPA image, see opa/Dockerfile).
-RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
-
 
 class WorkflowParseError(Exception):
     """Raised when a workflow file is not a parseable YAML mapping."""
@@ -21,6 +17,28 @@ class WorkflowParseError(Exception):
 
 class OpaUnavailableError(Exception):
     """Raised when the OPA service cannot be reached or returns an error."""
+
+
+# Rego rules live at app/rules/<category>/<name>.rego and each declares
+# package greensecops.<category>.<name> exposing `violations`.
+_RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
+
+
+def _discover_policy_packages() -> list[str]:
+    """Enumerate every OPA package path from the shipped Rego rule files.
+
+    Deriving this from the filesystem (rather than a hand-maintained list)
+    guarantees that every rule which is seeded and shown as enabled is also
+    actually evaluated — the two can no longer silently drift apart.
+    """
+    if not _RULES_DIR.is_dir():
+        return []
+    packages = sorted(
+        f"greensecops/{rego.parent.name}/{rego.stem}"
+        for rego in _RULES_DIR.glob("*/*.rego")
+        if not rego.name.endswith("_test.rego")
+    )
+    return packages
 
 
 @dataclass
@@ -36,24 +54,19 @@ class OpaViolation:
     context: str | None = None
 
 
-def discover_policy_packages() -> list[str]:
-    """Discover policy packages by scanning the bundled rego rules.
-
-    Each ``<category>/<name>.rego`` (tests excluded) maps to the OPA package
-    ``greensecops/<category>/<name>``, so a newly added rule is evaluated
-    without having to be registered in a hardcoded list.
-    """
-    packages = [
-        f"greensecops/{path.parent.name}/{path.stem}"
-        for path in sorted(RULES_DIR.glob("*/*.rego"))
-        if not path.stem.endswith("_test")
-    ]
-    if not packages:
-        logger.error("No rego rules found under %s", RULES_DIR)
-    return packages
-
-
-POLICY_PACKAGES = discover_policy_packages()
+# All registered policy packages to evaluate against, discovered from the
+# shipped Rego rule files so no rule is left unevaluated. Falls back to the
+# core set if the rules directory is unavailable at runtime.
+POLICY_PACKAGES = _discover_policy_packages() or [
+    "greensecops/energy/caching_missing",
+    "greensecops/energy/runner_sizing",
+    "greensecops/reliability/missing_timeout",
+    "greensecops/reliability/unpinned_actions",
+    "greensecops/security/excessive_token_permissions",
+    "greensecops/security/pr_target_injection",
+    "greensecops/performance/unnecessary_full_checkout",
+    "greensecops/maintainability/missing_workflow_description",
+]
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:

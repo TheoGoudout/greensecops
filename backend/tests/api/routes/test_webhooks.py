@@ -129,6 +129,25 @@ def test_github_webhook_valid_signature_accepted(client: TestClient) -> None:
     assert response.json()["status"] == "accepted"
 
 
+def test_github_webhook_no_secret_fails_closed_in_production(
+    client: TestClient,
+) -> None:
+    # Outside local dev, an unconfigured webhook secret must reject the request
+    # rather than processing an unverified payload.
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch.object(settings, "ENVIRONMENT", "production"),
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            content=json.dumps({"action": "push"}).encode(),
+            headers={"Content-Type": "application/json", "X-GitHub-Event": "push"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Webhook secret not configured"
+
+
 def test_github_webhook_no_secret_skips_verification(client: TestClient) -> None:
     # Arrange — no secret configured
     with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
@@ -1277,3 +1296,42 @@ def test_github_webhook_duplicate_delivery_skipped(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "duplicate"
+
+
+def test_is_duplicate_delivery_without_id_is_false() -> None:
+    import asyncio
+
+    from app.api.routes.webhooks import _is_duplicate_delivery
+
+    assert asyncio.run(_is_duplicate_delivery(None)) is False
+    assert asyncio.run(_is_duplicate_delivery("")) is False
+
+
+def test_is_duplicate_delivery_uses_redis_setnx() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.api.routes.webhooks import _is_duplicate_delivery
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+
+    # Fresh delivery: SET NX succeeds → not a duplicate
+    fake_redis.set = AsyncMock(return_value=True)
+    with patch("redis.asyncio.from_url", return_value=fake_redis):
+        assert asyncio.run(_is_duplicate_delivery("delivery-1")) is False
+
+    # Redelivery: SET NX fails → duplicate
+    fake_redis.set = AsyncMock(return_value=None)
+    with patch("redis.asyncio.from_url", return_value=fake_redis):
+        assert asyncio.run(_is_duplicate_delivery("delivery-1")) is True
+    fake_redis.aclose.assert_awaited()
+
+
+def test_is_duplicate_delivery_fails_open_on_redis_error() -> None:
+    import asyncio
+
+    from app.api.routes.webhooks import _is_duplicate_delivery
+
+    with patch("redis.asyncio.from_url", side_effect=RuntimeError("redis down")):
+        assert asyncio.run(_is_duplicate_delivery("delivery-2")) is False

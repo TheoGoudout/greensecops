@@ -63,12 +63,21 @@ async def github_webhook(
 ) -> dict[str, str]:
     payload_bytes = await request.body()
 
-    # Verify signature when secret is configured
-    if settings.GITHUB_WEBHOOK_SECRET:
-        if not verify_webhook_signature(
-            payload_bytes, x_hub_signature_256, settings.GITHUB_WEBHOOK_SECRET
-        ):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    # Fail closed: a webhook secret must be configured outside local dev, and the
+    # signature must verify. Never process an unsigned/unverified webhook, which
+    # could otherwise forge installations, disable repos or enqueue analyses.
+    if not settings.GITHUB_WEBHOOK_SECRET:
+        if settings.ENVIRONMENT == "local":
+            logger.warning(
+                "GITHUB_WEBHOOK_SECRET is not set — skipping signature verification "
+                "(allowed only in local environment)"
+            )
+        else:
+            raise HTTPException(status_code=503, detail="Webhook secret not configured")
+    elif not verify_webhook_signature(
+        payload_bytes, x_hub_signature_256, settings.GITHUB_WEBHOOK_SECRET
+    ):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     try:
         payload: dict[str, Any] = await request.json()

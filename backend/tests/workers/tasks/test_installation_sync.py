@@ -93,3 +93,24 @@ def test_sync_is_idempotent_and_reenables(db: Session, org: Organization) -> Non
     assert len(repos) == 1
     assert repos[0].full_name == "owner/new-name"
     assert repos[0].enabled is True
+
+
+def test_fetch_installation_repositories_uses_app_client() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.workers.tasks.installation_sync import _fetch_installation_repositories
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+    repos = [InstallationRepo(1, "owner/repo", "main")]
+    with (
+        patch("redis.asyncio.from_url", return_value=fake_redis),
+        patch(
+            "app.services.github.app_client.GitHubAppClient.list_installation_repositories",
+            new=AsyncMock(return_value=repos),
+        ),
+    ):
+        result = _fetch_installation_repositories(42)
+
+    assert result == repos
+    fake_redis.aclose.assert_awaited()

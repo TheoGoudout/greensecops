@@ -1004,3 +1004,128 @@ def test_batch_mode_opa_failure_sets_batch_any_failed(
 
     assert result["status"] == "done"
     assert str(result["results"]).count("failed") >= 2
+
+
+# ─── Celery task wrapper (per-repo lock) ─────────────────────────────────────
+
+
+def test_run_static_analysis_task_acquires_and_releases_lock(
+    db: Session,  # noqa: ARG001
+    repo: Repository,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from app.workers.tasks.static_analysis import run_static_analysis
+
+    fake_redis = MagicMock()
+    fake_redis.set.return_value = True
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            return_value=fake_redis,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._run_static_analysis_impl",
+            return_value={"status": "done"},
+        ) as impl,
+    ):
+        result = run_static_analysis.apply(kwargs={"repo_id": str(repo.id)})
+
+    assert result.get() == {"status": "done"}
+    impl.assert_called_once()
+    fake_redis.delete.assert_called_once()
+    fake_redis.close.assert_called_once()
+
+
+def test_run_static_analysis_task_retries_while_locked(
+    db: Session,  # noqa: ARG001
+    repo: Repository,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from app.workers.tasks.static_analysis import run_static_analysis
+
+    fake_redis = MagicMock()
+    # Lock held on the first attempt, free on the eager retry.
+    fake_redis.set.side_effect = [False, True]
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            return_value=fake_redis,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._run_static_analysis_impl",
+            return_value={"status": "done"},
+        ) as impl,
+    ):
+        result = run_static_analysis.apply(kwargs={"repo_id": str(repo.id)})
+
+    assert result.get() == {"status": "done"}
+    impl.assert_called_once()
+
+
+def test_run_static_analysis_task_retries_on_fetch_error(
+    db: Session,  # noqa: ARG001
+    repo: Repository,
+) -> None:
+    from unittest.mock import MagicMock
+
+    from app.workers.tasks.static_analysis import (
+        WorkflowFetchError,
+        run_static_analysis,
+    )
+
+    fake_redis = MagicMock()
+    fake_redis.set.return_value = True
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            return_value=fake_redis,
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._run_static_analysis_impl",
+            side_effect=[WorkflowFetchError("rate limited"), {"status": "done"}],
+        ) as impl,
+    ):
+        result = run_static_analysis.apply(kwargs={"repo_id": str(repo.id)})
+
+    assert result.get() == {"status": "done"}
+    assert impl.call_count == 2
+
+
+# ─── Async fetch/evaluate wrappers ───────────────────────────────────────────
+
+
+def test_fetch_workflow_files_passes_ref(repo: Repository) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.workers.tasks.static_analysis import _fetch_workflow_files
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+    fetch_mock = AsyncMock(return_value=[])
+    with (
+        patch("redis.asyncio.from_url", return_value=fake_redis),
+        patch(
+            "app.services.github.app_client.GitHubAppClient.fetch_workflow_files",
+            new=fetch_mock,
+        ),
+    ):
+        result = _fetch_workflow_files(repo, ref="feature-x")
+
+    assert result == []
+    assert fetch_mock.call_args.kwargs["ref"] == "feature-x"
+    fake_redis.aclose.assert_awaited()
+
+
+def test_evaluate_delegates_to_opa_evaluator() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.workers.tasks.static_analysis import _evaluate
+
+    with patch(
+        "app.services.opa.evaluator.evaluate_workflow",
+        new=AsyncMock(return_value=[]),
+    ):
+        assert asyncio.run(_evaluate("on: push")) == []

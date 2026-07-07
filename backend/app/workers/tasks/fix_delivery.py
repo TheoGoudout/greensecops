@@ -152,6 +152,20 @@ def deliver_fix(
                 return {"status": "failed", "fix_id": fix_id}
             new_content = patched
 
+        # Comment delivery prefers the fix's associated pull request; when
+        # there is none, the delivery service falls back to a dedicated
+        # find-or-create issue instead of assuming issue #1 exists.
+        comment_issue_number: int | None = None
+        if (
+            delivery_mode == FixDeliveryMode.comment
+            and existing_pr
+            and existing_pr.pr_url
+        ):
+            from app.services.github.app_client import parse_pr_url
+
+            parsed = parse_pr_url(existing_pr.pr_url)
+            comment_issue_number = parsed[1] if parsed else None
+
         result = asyncio.run(
             _deliver(
                 installation_id=repo.installation_id,
@@ -165,6 +179,7 @@ def deliver_fix(
                 delivery_mode=delivery_mode.value,
                 pr_body=pr_body,
                 force=force,
+                comment_issue_number=comment_issue_number,
             )
         )
 
@@ -449,6 +464,7 @@ async def _deliver(
     pr_body: str,
     expected_base_content: str | None = None,
     force: bool = False,
+    comment_issue_number: int | None = None,
 ) -> object:
     async with _delivery_service() as svc:
         if delivery_mode == "pr":
@@ -467,6 +483,7 @@ async def _deliver(
         return await svc.deliver_as_comment(
             installation_id=installation_id,
             full_name=full_name,
+            issue_number=comment_issue_number,
             body=(
                 f"**{settings.PROJECT_NAME} Fix** for `{rule_slug}` "
                 f"(`{file_path}`):\n\n```yaml\n{new_content}\n```"

@@ -286,12 +286,14 @@ class FixDeliveryService:
         installation_id: int,
         full_name: str,
         body: str,
+        issue_number: int | None = None,
         issue_title: str | None = None,
     ) -> FixDeliveryResult:
-        """Post the fix as a comment on a dedicated, findable issue.
+        """Post the fix as a comment on the fix's PR or a dedicated issue.
 
-        Finds an open issue with ``issue_title`` (creating it when absent)
-        instead of assuming issue #1 exists and is ours.
+        When ``issue_number`` is given (the fix's own pull request), comment
+        there. Otherwise find an open issue with ``issue_title`` (creating it
+        when absent) instead of assuming issue #1 exists and is ours.
         """
         title = issue_title or f"{settings.PROJECT_NAME} fixes"
         try:
@@ -299,6 +301,9 @@ class FixDeliveryService:
 
             def _post_comment() -> str:
                 repo = Github(auth=Auth.Token(token)).get_repo(full_name)
+                if issue_number is not None:
+                    comment = repo.get_issue(issue_number).create_comment(body)
+                    return comment.html_url
                 target = None
                 for issue in repo.get_issues(state="open")[:100]:
                     if issue.title == title and issue.pull_request is None:

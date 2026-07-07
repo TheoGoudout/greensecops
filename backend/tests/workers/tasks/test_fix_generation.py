@@ -3,7 +3,11 @@
 from types import SimpleNamespace
 
 from app.models import LLMProvider
-from app.workers.tasks.fix_generation import _resolve_llm_provider, _validate_patch
+from app.workers.patch_utils import apply_patch
+from app.workers.tasks.fix_generation import (
+    _is_valid_workflow_yaml,
+    _resolve_llm_provider,
+)
 
 _WORKFLOW = (
     "name: CI\n"
@@ -16,30 +20,24 @@ _WORKFLOW = (
 )
 
 
-def test_validate_patch_rejects_missing_patch() -> None:
-    error = _validate_patch(_WORKFLOW, None)
-    assert error is not None
-    assert "no patch" in error
-
-
-def test_validate_patch_rejects_non_applying_patch() -> None:
+def test_non_applying_patch_is_rejected() -> None:
     patch = "@@ -100,1 +100,1 @@\n-nonexistent line\n+replacement\n"
-    error = _validate_patch(_WORKFLOW, patch)
-    assert error is not None
-    assert "does not apply" in error
+    assert apply_patch(_WORKFLOW, patch) is None
 
 
-def test_validate_patch_rejects_invalid_yaml_result() -> None:
+def test_patched_invalid_yaml_is_rejected() -> None:
     # Replace the first line with structurally broken YAML
     patch = "@@ -1,1 +1,1 @@\n-name: CI\n+{ invalid: yaml: [}\n"
-    error = _validate_patch(_WORKFLOW, patch)
-    assert error is not None
-    assert "not valid YAML" in error
+    patched = apply_patch(_WORKFLOW, patch)
+    assert patched is not None
+    assert _is_valid_workflow_yaml(patched) is False
 
 
-def test_validate_patch_accepts_good_patch() -> None:
+def test_good_patch_yields_valid_yaml() -> None:
     patch = "@@ -5,1 +5,2 @@\n     runs-on: ubuntu-latest\n+    timeout-minutes: 15\n"
-    assert _validate_patch(_WORKFLOW, patch) is None
+    patched = apply_patch(_WORKFLOW, patch)
+    assert patched is not None
+    assert _is_valid_workflow_yaml(patched) is True
 
 
 def test_resolve_llm_provider_uses_provider_default_model() -> None:

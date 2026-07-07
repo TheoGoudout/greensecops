@@ -44,14 +44,17 @@ function isSSESignal(s: unknown): s is SSESignal {
   return typeof s === "string" && _SSE_SIGNALS.has(s)
 }
 
-const SSE_BASE_URL = `${import.meta.env.VITE_API_URL}/api/v1/events/stream`
+const SSE_API_BASE = `${import.meta.env.VITE_API_URL}/api/v1/events`
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 
 /**
  * Opens a persistent SSE connection using native EventSource.
- * Token is passed as ?token= query param (EventSource cannot set custom headers).
- * Reconnects with exponential backoff on disconnect or error.
+ *
+ * EventSource cannot set an Authorization header, so instead of putting the
+ * long-lived JWT in the URL, we exchange it (via a normal header-authenticated
+ * request) for a short-lived, single-use ticket and open the stream with
+ * ?ticket=. Reconnects with exponential backoff on disconnect or error.
  */
 export function useSSE(onEvent: SSEHandler): void {
   const onEventRef = useRef(onEvent)
@@ -66,11 +69,40 @@ export function useSSE(onEvent: SSEHandler): void {
     let es: EventSource | null = null
     let retryTimer: ReturnType<typeof setTimeout> | null = null
 
-    function connect(): void {
+    async function fetchTicket(authToken: string): Promise<string | null> {
+      try {
+        const res = await fetch(`${SSE_API_BASE}/ticket`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        })
+        if (!res.ok) return null
+        const data = (await res.json()) as { ticket?: string }
+        return data.ticket ?? null
+      } catch {
+        return null
+      }
+    }
+
+    function scheduleReconnect(): void {
+      if (closed) return
+      retryTimer = setTimeout(() => {
+        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
+        if (!closed) void connect()
+      }, reconnectDelay)
+    }
+
+    async function connect(): Promise<void> {
       const currentToken = localStorage.getItem("access_token")
       if (!currentToken || closed) return
 
-      const url = `${SSE_BASE_URL}?token=${encodeURIComponent(currentToken)}`
+      const ticket = await fetchTicket(currentToken)
+      if (closed) return
+      if (!ticket) {
+        scheduleReconnect()
+        return
+      }
+
+      const url = `${SSE_API_BASE}/stream?ticket=${encodeURIComponent(ticket)}`
       es = new EventSource(url)
 
       es.onopen = () => {
@@ -91,15 +123,11 @@ export function useSSE(onEvent: SSEHandler): void {
       es.onerror = () => {
         es?.close()
         es = null
-        if (closed) return
-        retryTimer = setTimeout(() => {
-          reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
-          if (!closed) connect()
-        }, reconnectDelay)
+        scheduleReconnect()
       }
     }
 
-    connect()
+    void connect()
 
     function forceReconnect() {
       if (retryTimer !== null) clearTimeout(retryTimer)
@@ -107,7 +135,7 @@ export function useSSE(onEvent: SSEHandler): void {
       es?.close()
       es = null
       reconnectDelay = RECONNECT_BASE_MS
-      connect()
+      void connect()
     }
 
     window.addEventListener("sse:reconnect", forceReconnect)

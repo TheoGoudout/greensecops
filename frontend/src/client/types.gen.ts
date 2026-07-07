@@ -353,8 +353,12 @@ export type BillingStripeWebhookResponse = ({
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
+export type EventsCreateSseTicketResponse = ({
+    [key: string]: (string | number);
+});
+
 export type EventsStreamEventsData = {
-    token?: (string | null);
+    ticket?: (string | null);
 };
 
 export type EventsStreamEventsResponse = (unknown);

@@ -1,0 +1,37 @@
+{
+  "violations": [
+    {
+      "rule_slug": "unpinned_actions",
+      "severity": "high",
+      "category": "reliability",
+      "message": "actions/checkout@v7 uses a mutable ref",
+      "job": "Unit",
+      "step": "actions/checkout@v7"
+    },
+    {
+      "rule_slug": "unpinned_actions",
+      "severity": "high",
+      "category": "reliability",
+      "message": "actions/setup-python@v6 uses a mutable ref",
+      "job": "Unit",
+      "step": "actions/setup-python@v6"
+    },
+    {
+      "rule_slug": "unpinned_actions",
+      "severity": "high",
+      "category": "reliability",
+      "message": "codecov/codecov-action@v7 uses a mutable ref",
+      "job": "Unit",
+      "step": "codecov/codecov-action@v7"
+    },
+    {
+      "rule_slug": "missing_timeout",
+      "severity": "high",
+      "category": "reliability",
+      "message": "Job 'Unit' has no timeout-minutes configured.",
+      "job": "Unit"
+    }
+  ],
+  "expected_issue_count": 4,
+  "grade_not": "A+++"
+}

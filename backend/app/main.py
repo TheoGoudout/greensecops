@@ -20,12 +20,15 @@ app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id,
 )
 
-# Set all CORS enabled origins
+# Set all CORS enabled origins.
+# A wildcard origin combined with credentials is unsafe (and rejected by
+# browsers), so disable credentials when "*" is present rather than reflecting it.
 if settings.all_cors_origins:
+    _wildcard = "*" in settings.all_cors_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.all_cors_origins,
-        allow_credentials=True,
+        allow_credentials=not _wildcard,
         allow_methods=["*"],
         allow_headers=["*"],
     )

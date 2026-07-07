@@ -8,7 +8,7 @@ from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import Analysis, AnalysisStatus, Repository
 from app.services.badge_renderer import render_badge, render_unknown_badge
-from app.services.scoring import score_to_grade
+from app.services.scoring import average_latest_scores, score_to_grade
 
 router = APIRouter(prefix="/badges", tags=["badges"])
 
@@ -31,20 +31,8 @@ def _avg_grade_for_branch(
         .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
     ).all()
 
-    seen: set[uuid.UUID] = set()
-    latest_per_file: list[Analysis] = []
-    for a in analyses:
-        if a.workflow_file_id not in seen:
-            seen.add(a.workflow_file_id)
-            latest_per_file.append(a)
-
-    if not latest_per_file:
-        return None
-
-    avg = sum(a.score for a in latest_per_file if a.score is not None) / len(  # type: ignore[arg-type]
-        latest_per_file
-    )
-    return score_to_grade(avg)
+    avg, _ = average_latest_scores(list(analyses))
+    return score_to_grade(avg) if avg is not None else None
 
 
 @router.get("/{owner}/{repo}/{branch}.svg", response_class=Response)

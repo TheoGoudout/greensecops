@@ -9,10 +9,30 @@ from app.services.opa.evaluator import (
     POLICY_PACKAGES,
     OpaUnavailableError,
     WorkflowParseError,
-    discover_policy_packages,
+    _discover_policy_packages,
     evaluate_workflow,
     parse_workflow_yaml,
 )
+
+
+def test_all_seeded_rules_are_evaluated() -> None:
+    """Every Rego rule shipped in app/rules must be an evaluated policy.
+
+    Guards against seeded rules silently never firing (the pre-fix state where
+    only 8 of 26 packages — and 2 of 6 security rules — were evaluated).
+    """
+    packages = _discover_policy_packages()
+    assert len(packages) == 26
+    # The security rules that were previously unwired must now be evaluated.
+    for slug in (
+        "hardcoded_secrets",
+        "untrusted_actions",
+        "oidc_not_used",
+        "world_writable_artifact",
+    ):
+        assert f"greensecops/security/{slug}" in packages
+    assert set(POLICY_PACKAGES) == set(packages)
+
 
 _SIMPLE_WORKFLOW = """
 name: CI
@@ -146,13 +166,6 @@ def test_evaluate_workflow_raises_when_opa_unreachable() -> None:
         asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
 
 
-def test_discover_policy_packages_covers_all_rules() -> None:
-    packages = discover_policy_packages()
-    # Every rego rule shipped in app/rules must be evaluated — including ones
-    # that used to be missing from the old hardcoded list.
-    assert "greensecops/security/hardcoded_secrets" in packages
-    assert "greensecops/reliability/unpinned_actions" in packages
-    assert len(packages) >= 25
-    # Test files are not policies
+def test_discover_policy_packages_excludes_test_files() -> None:
+    packages = _discover_policy_packages()
     assert not any(pkg.endswith("_test") for pkg in packages)
-    assert POLICY_PACKAGES == packages
