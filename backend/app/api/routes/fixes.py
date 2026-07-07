@@ -7,7 +7,14 @@ from pydantic import BaseModel
 from sqlalchemy import func  # noqa: F401
 from sqlmodel import delete, select
 
-from app.api.deps import CurrentUser, GitHubAppClientDep, SessionDep, get_or_404
+from app.api.deps import (
+    CurrentUser,
+    GitHubAppClientDep,
+    SessionDep,
+    authorize_repo,
+    get_or_404,
+    user_org_ids,
+)
 from app.core.config import settings
 from app.models import (
     Analysis,
@@ -20,6 +27,7 @@ from app.models import (
     PullRequestState,
     Repository,
     Rule,
+    User,
     WorkflowFile,
 )
 from app.services.events import publisher as events_pub
@@ -39,10 +47,27 @@ class BatchFixRequest(BaseModel):
 router = APIRouter(prefix="/fixes", tags=["fixes"])
 
 
+def _repo_id_for_fix(session: SessionDep, fix: Fix) -> uuid.UUID | None:
+    """Resolve the owning repository id for a fix (fix → issue → analysis)."""
+    issue = session.get(Issue, fix.issue_id)
+    analysis = session.get(Analysis, issue.analysis_id) if issue else None
+    return analysis.repo_id if analysis else None
+
+
+def _authorize_fix(session: SessionDep, user: User, fix: Fix) -> None:
+    """Enforce that ``user`` may act on ``fix`` via its owning repository."""
+    if user.is_superuser:
+        return
+    repo_id = _repo_id_for_fix(session, fix)
+    if repo_id is None:
+        raise HTTPException(status_code=404, detail="Fix not found")
+    authorize_repo(session, user, repo_id, detail="Fix not found")
+
+
 @router.get("/", response_model=list[FixPublic])
 def list_fixes(
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     issue_id: uuid.UUID | None = None,
     analysis_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
@@ -51,6 +76,20 @@ def list_fixes(
     limit: int = Query(default=50, le=200),
 ) -> list[FixPublic]:
     query = select(Fix)
+    if not current_user.is_superuser:
+        # Restrict to fixes whose owning repository is in one of the user's orgs.
+        allowed_issue_ids = (
+            select(Issue.id)
+            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+            .where(
+                Analysis.repo_id.in_(  # type: ignore[attr-defined]
+                    select(Repository.id).where(
+                        Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
+                    )
+                )
+            )
+        )
+        query = query.where(Fix.issue_id.in_(allowed_issue_ids))  # type: ignore[attr-defined]
     if issue_id:
         query = query.where(Fix.issue_id == issue_id)
     if analysis_id or repo_id:
@@ -161,9 +200,10 @@ def list_fixes(
 def get_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
 ) -> FixPublic:
     fix = get_or_404(session, Fix, fix_id)
+    _authorize_fix(session, current_user, fix)
     data = FixPublic.model_validate(fix)
 
     issue = session.get(Issue, fix.issue_id)
@@ -197,7 +237,7 @@ def get_fix(
 def trigger_fix_generation_for_repo(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     body: BatchFixRequest = BatchFixRequest(),
     force: bool = False,
 ) -> dict[str, int]:
@@ -207,6 +247,10 @@ def trigger_fix_generation_for_repo(
     When force=True, delivered fixes are also discarded and regenerated.
     Only issues from the latest analysis per workflow file are targeted.
     """
+    authorize_repo(session, current_user, repo_id)
+    from app.api.routes.billing import enforce_quota
+
+    enforce_quota(session, current_user, "fixes")
     latest_analysis_subq = (
         select(Analysis.id)
         .where(Analysis.workflow_file_id == Issue.workflow_file_id)
@@ -263,10 +307,20 @@ def trigger_fix_generation_for_repo(
 def trigger_fix_generation(
     issue_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     force: bool = False,
 ) -> dict[str, str]:
-    get_or_404(session, Issue, issue_id)
+    issue = get_or_404(session, Issue, issue_id)
+    if not current_user.is_superuser:
+        analysis = session.get(Analysis, issue.analysis_id)
+        if not analysis:
+            raise HTTPException(status_code=404, detail="Issue not found")
+        authorize_repo(
+            session, current_user, analysis.repo_id, detail="Issue not found"
+        )
+    from app.api.routes.billing import enforce_quota
+
+    enforce_quota(session, current_user, "fixes")
 
     delete_stmt = delete(Fix).where(Fix.issue_id == issue_id)
     if not force:
@@ -282,10 +336,11 @@ def trigger_fix_generation(
 def trigger_fix_delivery(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     force: bool = False,
 ) -> dict[str, str]:
     fix = get_or_404(session, Fix, fix_id)
+    _authorize_fix(session, current_user, fix)
     if not force and fix.status != FixStatus.ready:
         raise HTTPException(
             status_code=409, detail=f"Fix is not ready (status: {fix.status})"
@@ -302,7 +357,7 @@ class WorkflowDeliverRequest(BaseModel):
 def trigger_workflow_delivery(
     body: WorkflowDeliverRequest,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     force: bool = False,
 ) -> dict[str, str]:
     """Deliver all ready fixes for one workflow file as a single PR.
@@ -319,6 +374,12 @@ def trigger_workflow_delivery(
     repo = session.get(Repository, analysis.repo_id) if analysis else None
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    if not current_user.is_superuser:
+        authorize_repo(session, current_user, repo.id, detail="Repository not found")
+        # All fixes must belong to the same authorized repository.
+        for f in fixes:
+            if f and _repo_id_for_fix(session, f) != repo.id:
+                raise HTTPException(status_code=404, detail="No ready fixes found")
 
     issues_info = [
         IssueInfo(
@@ -381,16 +442,14 @@ def trigger_workflow_delivery(
 def trigger_repo_delivery(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     force: bool = False,
 ) -> dict[str, str]:
     """Deliver all ready fixes for a repo as a single multi-file PR.
 
     When force=True, fixes in any status are included (not just ready).
     """
-    repo = session.get(Repository, repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    authorize_repo(session, current_user, repo_id)
 
     base_query = (
         select(Fix)
@@ -452,9 +511,10 @@ def trigger_repo_delivery(
 def reject_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
 ) -> None:
     fix = get_or_404(session, Fix, fix_id)
+    _authorize_fix(session, current_user, fix)
     fix.status = FixStatus.rejected
     session.add(fix)
     session.commit()
@@ -472,7 +532,7 @@ def reject_fix(
 def regenerate_fixes_for_pr(
     pr_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
 ) -> dict[str, int]:
     """Delete delivered fixes for a closed PR and re-trigger generation.
 
@@ -480,6 +540,10 @@ def regenerate_fixes_for_pr(
     the code changes were already applied.
     """
     pr = get_or_404(session, PullRequest, pr_id)
+    if not current_user.is_superuser:
+        authorize_repo(
+            session, current_user, pr.repo_id, detail="PullRequest not found"
+        )
     if pr.pr_state != PullRequestState.closed:
         raise HTTPException(
             status_code=409,
@@ -526,12 +590,10 @@ def regenerate_fixes_for_pr(
 async def sync_pr_statuses(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     github_client: GitHubAppClientDep,
 ) -> dict[str, int]:
-    repo = session.get(Repository, repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = authorize_repo(session, current_user, repo_id)
 
     open_prs = list(
         session.exec(

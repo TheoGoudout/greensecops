@@ -55,6 +55,10 @@ WORKDIR /app/
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/backend /app/backend
 
+# Run as an unprivileged user rather than root.
+RUN useradd --create-home --uid 1000 appuser
+USER appuser
+
 WORKDIR /app/backend/
 
 CMD ["fastapi", "run", "--workers", "4", "app/main.py"]

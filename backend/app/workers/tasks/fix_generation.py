@@ -10,9 +10,23 @@ from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowF
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
-from app.workers.patch_utils import normalize_patch, restore_trailing_whitespace
+from app.workers.patch_utils import (
+    apply_patch,
+    normalize_patch,
+    restore_trailing_whitespace,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_workflow_yaml(content: str) -> bool:
+    """True if ``content`` parses as a YAML mapping (a plausible workflow file)."""
+    import yaml  # type: ignore[import-untyped]
+
+    try:
+        return isinstance(yaml.safe_load(content), dict)
+    except yaml.YAMLError:
+        return False
 
 
 def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
@@ -150,19 +164,42 @@ def run_fix_generation(
             full_content = restore_trailing_whitespace(
                 wf_file.raw_content, full_content
             )
-            wf_file.last_full_content = full_content
-            session.add(wf_file)
+            # Only trust the LLM's full rewrite if it is still valid workflow YAML;
+            # otherwise a later batch delivery would push a corrupt file.
+            if _is_valid_workflow_yaml(full_content):
+                wf_file.last_full_content = full_content
+                session.add(wf_file)
+            else:
+                logger.warning(
+                    "LLM full_content for wf %s is not valid YAML; discarding",
+                    wf_file.id,
+                )
+                full_content = ""
 
         for fix in fixes:
             issue = session.get(Issue, fix.issue_id)
             patch = (
                 patches.get(issue.fingerprint) if issue and issue.fingerprint else None
             )
+            # Validate the patch actually applies and yields valid YAML before
+            # marking the fix ready. A patch that fails here is not deliverable.
+            if patch is not None:
+                patched = apply_patch(wf_file.raw_content, patch)
+                if patched is None or not _is_valid_workflow_yaml(patched):
+                    logger.warning(
+                        "LLM patch for fix %s is invalid (does not apply or bad YAML)",
+                        fix.id,
+                    )
+                    patch = None
             fix.patch = patch
             fix.prompt_tokens = result.prompt_tokens
             fix.completion_tokens = result.completion_tokens
             fix.langsmith_run_id = result.run_id
-            fix.status = FixStatus.ready
+            if patch is None and not full_content:
+                fix.status = FixStatus.failed
+                fix.error_message = "LLM produced no applicable, valid fix"
+            else:
+                fix.status = FixStatus.ready
             session.add(fix)
         session.commit()
 

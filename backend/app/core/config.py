@@ -31,7 +31,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    # Empty by default; resolved in _resolve_secret_key: a random key is generated
+    # for local dev, but a value MUST be supplied in staging/production so that
+    # JWTs stay valid across restarts and replicas.
+    SECRET_KEY: str = ""
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
@@ -161,6 +164,20 @@ class Settings(BaseSettings):
                 warnings.warn(message, stacklevel=1)
             else:
                 raise ValueError(message)
+
+    @model_validator(mode="after")
+    def _resolve_secret_key(self) -> Self:
+        if not self.SECRET_KEY:
+            if self.ENVIRONMENT == "local":
+                # Ephemeral key is acceptable for a single local dev process.
+                self.SECRET_KEY = secrets.token_urlsafe(32)
+            else:
+                raise ValueError(
+                    "SECRET_KEY must be set in staging/production. An unset key "
+                    "would be randomly regenerated per process, invalidating all "
+                    "JWTs across restarts and replicas."
+                )
+        return self
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:

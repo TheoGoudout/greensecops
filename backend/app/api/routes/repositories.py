@@ -11,8 +11,8 @@ from app.api.deps import (
     CurrentUser,
     GitHubAppClientDep,
     SessionDep,
+    authorize_repo,
     get_current_active_superuser,
-    get_or_404,
 )
 from app.api.mappers import to_repo_public
 from app.core.config import settings
@@ -29,7 +29,7 @@ from app.models import (
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
-from app.services.scoring import score_to_grade
+from app.services.scoring import average_latest_scores, score_to_grade
 
 SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
 
@@ -37,21 +37,10 @@ SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 
-def _user_org_ids(session: Session, user: User) -> set[uuid.UUID]:
-    return set(
-        session.exec(select(OrgMember.org_id).where(OrgMember.user_id == user.id)).all()
-    )
-
-
 def _get_repo_for_user(
     repo_id: uuid.UUID, session: Session, current_user: User
 ) -> Repository:
-    repo = get_or_404(session, Repository, repo_id)
-    if not current_user.is_superuser and repo.org_id not in _user_org_ids(
-        session, current_user
-    ):
-        raise HTTPException(status_code=404, detail="Repository not found")
-    return repo
+    return authorize_repo(session, current_user, repo_id)
 
 
 def _compute_repo_grade(
@@ -66,20 +55,10 @@ def _compute_repo_grade(
         .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
     ).all()
 
-    seen: set[uuid.UUID] = set()
-    latest_per_file: list[Analysis] = []
-    for a in analyses:
-        if a.workflow_file_id not in seen:
-            seen.add(a.workflow_file_id)
-            latest_per_file.append(a)
-
-    if not latest_per_file:
+    avg, count = average_latest_scores(list(analyses))
+    if avg is None:
         return None, None, 0
-
-    avg = sum(a.score for a in latest_per_file if a.score is not None) / len(  # type: ignore[arg-type]
-        latest_per_file
-    )
-    return round(avg, 1), score_to_grade(avg), len(latest_per_file)
+    return round(avg, 1), score_to_grade(avg), count
 
 
 def _compute_grades_batch(

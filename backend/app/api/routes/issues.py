@@ -1,9 +1,9 @@
 import uuid
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select
 
-from app.api.deps import CurrentUser, SessionDep, get_or_404
+from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
 from app.api.mappers import to_issue_public
 from app.models import (
     Analysis,
@@ -14,6 +14,7 @@ from app.models import (
     IssueCategory,
     IssuePublic,
     IssueSeverity,
+    Repository,
 )
 
 router = APIRouter(prefix="/issues", tags=["issues"])
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/issues", tags=["issues"])
 @router.get("/", response_model=list[IssuePublic])
 def list_issues(
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     analysis_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
     category: IssueCategory | None = None,
@@ -33,12 +34,22 @@ def list_issues(
     limit: int = Query(default=100, le=500),
 ) -> list[IssuePublic]:
     query = select(Issue)
+    # Join Analysis once if either tenant scoping or repo filtering needs it.
+    needs_analysis_join = repo_id is not None or not current_user.is_superuser
+    if needs_analysis_join:
+        query = query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+    if not current_user.is_superuser:
+        query = query.where(
+            Analysis.repo_id.in_(  # type: ignore[attr-defined]
+                select(Repository.id).where(
+                    Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
+                )
+            )
+        )
     if analysis_id:
         query = query.where(Issue.analysis_id == analysis_id)
     if repo_id:
-        query = query.join(Analysis, Issue.analysis_id == Analysis.id).where(  # type: ignore[arg-type]
-            Analysis.repo_id == repo_id
-        )
+        query = query.where(Analysis.repo_id == repo_id)
         if latest_only:
             latest_analysis_subq = (
                 select(Analysis.id)
@@ -70,6 +81,12 @@ def list_issues(
 def get_issue(
     issue_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
 ) -> IssuePublic:
-    return to_issue_public(get_or_404(session, Issue, issue_id))
+    issue = get_or_404(session, Issue, issue_id)
+    if not current_user.is_superuser:
+        analysis = session.get(Analysis, issue.analysis_id)
+        repo = session.get(Repository, analysis.repo_id) if analysis else None
+        if not repo or repo.org_id not in user_org_ids(session, current_user):
+            raise HTTPException(status_code=404, detail="Issue not found")
+    return to_issue_public(issue)

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import secrets
 from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
@@ -7,7 +8,14 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
-from app.api.deps import CurrentUserSSE, SessionDep
+from app.api.deps import (
+    SSE_TICKET_PREFIX,
+    SSE_TICKET_TTL_SECONDS,
+    CurrentUser,
+    CurrentUserSSE,
+    RedisDep,
+    SessionDep,
+)
 from app.core.config import settings
 from app.models import OrgMember, SSESignal
 
@@ -75,6 +83,27 @@ async def _stream_events(
 async def get_sse_signals() -> list[SSESignal]:
     """Return all valid SSE signal types. Exposes SSESignal enum in OpenAPI for frontend codegen."""
     return list(SSESignal)
+
+
+@router.post("/ticket")
+async def create_sse_ticket(
+    current_user: CurrentUser,
+    redis: RedisDep,
+) -> dict[str, str | int]:
+    """Mint a short-lived, single-use ticket for the SSE stream.
+
+    EventSource cannot send an Authorization header, so the browser calls this
+    (header-authenticated) endpoint, then opens the stream with ``?ticket=``.
+    The ticket is consumed on first use and expires quickly, so it is safe to
+    place in the URL — unlike the long-lived JWT it replaces.
+    """
+    ticket = secrets.token_urlsafe(32)
+    await redis.setex(
+        f"{SSE_TICKET_PREFIX}{ticket}",
+        SSE_TICKET_TTL_SECONDS,
+        str(current_user.id),
+    )
+    return {"ticket": ticket, "expires_in": SSE_TICKET_TTL_SECONDS}
 
 
 @router.get("/stream")

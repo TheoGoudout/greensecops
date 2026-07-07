@@ -1,9 +1,59 @@
 """Tests for the /api/v1/billing/ endpoints."""
 
+import uuid
+from unittest.mock import patch
+
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.api.routes import billing
 from app.core.config import settings
+from app.models import User, UserTier
+
+
+def test_enforce_quota_superuser_exempt(db: Session) -> None:
+    user = User(
+        email=f"su-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="x",
+        is_superuser=True,
+        tier=UserTier.free,
+    )
+    # Superusers bypass quotas even with a zero limit.
+    with patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}):
+        billing.enforce_quota(db, user, "fixes")  # must not raise
+
+
+def test_enforce_quota_blocks_at_limit(db: Session) -> None:
+    user = User(
+        email=f"nu-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="x",
+        is_superuser=False,
+        tier=UserTier.free,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    # Limit of 0 → any usage (including zero) is at/over the limit.
+    with patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}):
+        with pytest.raises(HTTPException) as exc:
+            billing.enforce_quota(db, user, "fixes")
+    assert exc.value.status_code == 402
+
+
+def test_enforce_quota_unlimited_tier(db: Session) -> None:
+    user = User(
+        email=f"un-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="x",
+        is_superuser=False,
+        tier=UserTier.ultimate,
+    )
+    db.add(user)
+    db.commit()
+    # ultimate has None (unlimited) for fixes → never blocks.
+    billing.enforce_quota(db, user, "fixes")  # must not raise
+
 
 # ─── GET /billing/subscription ───────────────────────────────────────────────
 

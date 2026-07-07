@@ -4,9 +4,30 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.opa.evaluator import (
     POLICY_PACKAGES,
+    _discover_policy_packages,
     evaluate_workflow,
     parse_workflow_yaml,
 )
+
+
+def test_all_seeded_rules_are_evaluated() -> None:
+    """Every Rego rule shipped in app/rules must be an evaluated policy.
+
+    Guards against seeded rules silently never firing (the pre-fix state where
+    only 8 of 26 packages — and 2 of 6 security rules — were evaluated).
+    """
+    packages = _discover_policy_packages()
+    assert len(packages) == 26
+    # The security rules that were previously unwired must now be evaluated.
+    for slug in (
+        "hardcoded_secrets",
+        "untrusted_actions",
+        "oidc_not_used",
+        "world_writable_artifact",
+    ):
+        assert f"greensecops/security/{slug}" in packages
+    assert set(POLICY_PACKAGES) == set(packages)
+
 
 _SIMPLE_WORKFLOW = """
 name: CI

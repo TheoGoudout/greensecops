@@ -10,8 +10,8 @@ permissions: {}
 jobs:
   deploy:
     environment: staging
-    # Do not deploy in the main repository, only in user projects
-    if: github.repository_owner != 'fastapi'
+    # Only deploy from the canonical repository, never from forks.
+    if: github.repository_owner == 'TheoGoudout'
     runs-on:
       - self-hosted
       - staging

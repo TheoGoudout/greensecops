@@ -1,8 +1,9 @@
 import logging
+import uuid
 
 import stripe
 from fastapi import APIRouter, Header, HTTPException, Request
-from sqlmodel import func, select
+from sqlmodel import Session, func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
@@ -32,6 +33,77 @@ _TIER_LIMITS: dict[str, dict[str, int | None]] = {
 }
 
 
+def _user_repo_ids(session: Session, user: User) -> list[uuid.UUID]:
+    org_ids = list(
+        session.exec(select(OrgMember.org_id).where(OrgMember.user_id == user.id)).all()
+    )
+    if not org_ids:
+        return []
+    return list(
+        session.exec(
+            select(Repository.id).where(
+                Repository.org_id.in_(org_ids),  # type: ignore[attr-defined]
+                Repository.enabled == True,  # noqa: E712
+            )
+        ).all()
+    )
+
+
+def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.UUID]]:
+    """Return (analyses_used, fixes_used, repo_ids) for the user's org repos."""
+    repo_ids = _user_repo_ids(session, user)
+    if not repo_ids:
+        return 0, 0, []
+    analyses_used = (
+        session.exec(
+            select(func.count(Analysis.id)).where(
+                Analysis.repo_id.in_(repo_ids),  # type: ignore[attr-defined]
+                Analysis.status == AnalysisStatus.completed,
+            )
+        ).one()
+        or 0
+    )
+    issue_ids = list(
+        session.exec(
+            select(Issue.id).join(Analysis).where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
+        ).all()
+    )
+    fixes_used = 0
+    if issue_ids:
+        fixes_used = (
+            session.exec(
+                select(func.count(Fix.id)).where(
+                    Fix.issue_id.in_(issue_ids)  # type: ignore[attr-defined]
+                )
+            ).one()
+            or 0
+        )
+    return analyses_used, fixes_used, repo_ids
+
+
+def enforce_quota(session: Session, user: User, kind: str) -> None:
+    """Raise HTTP 402 if the user is at or over their tier limit for ``kind``.
+
+    ``kind`` is one of "analyses" or "fixes". Superusers are exempt. A ``None``
+    limit means unlimited.
+    """
+    if user.is_superuser:
+        return
+    limit = _TIER_LIMITS.get(user.tier, _TIER_LIMITS[UserTier.free]).get(kind)
+    if limit is None:
+        return
+    analyses_used, fixes_used, _ = _usage_for_user(session, user)
+    used = analyses_used if kind == "analyses" else fixes_used
+    if used >= limit:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                f"{kind.capitalize()} quota reached for the {user.tier.value} tier "
+                f"({limit}). Upgrade your plan to continue."
+            ),
+        )
+
+
 @router.get("/subscription", response_model=BillingSubscriptionPublic)
 def get_subscription(
     session: SessionDep,
@@ -48,47 +120,7 @@ def get_subscription(
         session.commit()
         session.refresh(sub)
 
-    org_ids = list(
-        session.exec(
-            select(OrgMember.org_id).where(OrgMember.user_id == current_user.id)
-        ).all()
-    )
-    repo_ids = list(
-        session.exec(
-            select(Repository.id).where(
-                Repository.org_id.in_(org_ids),  # type: ignore[attr-defined]
-                Repository.enabled == True,  # noqa: E712
-            )
-        ).all()
-    )
-
-    analyses_used: int = (
-        session.exec(
-            select(func.count(Analysis.id)).where(
-                Analysis.repo_id.in_(repo_ids),  # type: ignore[attr-defined]
-                Analysis.status == AnalysisStatus.completed,
-            )
-        ).one()
-        or 0
-    )
-
-    issue_ids = list(
-        session.exec(
-            select(Issue.id)
-            .join(Analysis)
-            .where(
-                Analysis.repo_id.in_(repo_ids)  # type: ignore[attr-defined]
-            )
-        ).all()
-    )
-    fixes_used: int = (
-        session.exec(
-            select(func.count(Fix.id)).where(
-                Fix.issue_id.in_(issue_ids)  # type: ignore[attr-defined]
-            )
-        ).one()
-        or 0
-    )
+    analyses_used, fixes_used, repo_ids = _usage_for_user(session, current_user)
 
     return BillingSubscriptionPublic(
         id=sub.id,
