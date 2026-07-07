@@ -10,7 +10,11 @@ from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowF
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
-from app.workers.patch_utils import normalize_patch, restore_trailing_whitespace
+from app.workers.patch_utils import (
+    apply_patch,
+    normalize_patch,
+    restore_trailing_whitespace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +36,13 @@ def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
 
         provider_str, fallback_model = get_first_available_provider()
         model_str = model_str or fallback_model
+
+    if not model_str:
+        # Use the provider's own catalog default — an OpenAI model name
+        # handed to anthropic/gemini/ollama would fail at request time.
+        from app.services.llm.catalog import get_default_model
+
+        model_str = get_default_model(provider_str)
 
     return provider_str, model_str or "gpt-4o-mini"
 
@@ -153,41 +164,81 @@ def run_fix_generation(
             wf_file.last_full_content = full_content
             session.add(wf_file)
 
+        ready_fixes: list[Fix] = []
+        failed_fixes: list[Fix] = []
         for fix in fixes:
             issue = session.get(Issue, fix.issue_id)
             patch = (
                 patches.get(issue.fingerprint) if issue and issue.fingerprint else None
             )
-            fix.patch = patch
             fix.prompt_tokens = result.prompt_tokens
             fix.completion_tokens = result.completion_tokens
             fix.langsmith_run_id = result.run_id
-            fix.status = FixStatus.ready
+
+            # A fix without a working patch must not be marked ready: delivery
+            # would push the unchanged file and fail with an opaque GitHub 422.
+            error = _validate_patch(wf_file.raw_content, patch)
+            if error:
+                fix.patch = patch
+                fix.status = FixStatus.failed
+                fix.error_message = error
+                failed_fixes.append(fix)
+            else:
+                fix.patch = patch
+                fix.status = FixStatus.ready
+                ready_fixes.append(fix)
             session.add(fix)
         session.commit()
 
-        if batch_mode:
+        for fix in failed_fixes:
             events_pub.publish_event(
-                ev.fix_ready_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
+                ev.fix_generation_failed(
+                    org_id, repo_id_str, str(fix.id), fix.error_message or "no patch"
+                )
             )
+        if batch_mode:
+            if ready_fixes:
+                events_pub.publish_event(
+                    ev.fix_ready_batch(
+                        org_id, repo_id_str, [str(f.id) for f in ready_fixes]
+                    )
+                )
         else:
-            for fix in fixes:
+            for fix in ready_fixes:
                 events_pub.publish_event(
                     ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
                 )
 
         logger.info(
-            "Fix generated for %d issue(s): %d prompt tokens, %d completion tokens",
+            "Fix generation for %d issue(s): %d ready, %d failed, "
+            "%d prompt tokens, %d completion tokens",
             len(fixes),
+            len(ready_fixes),
+            len(failed_fixes),
             result.prompt_tokens,
             result.completion_tokens,
         )
         return {
-            "status": "ready",
-            "fix_count": len(fixes),
+            "status": "ready" if ready_fixes else "failed",
+            "fix_count": len(ready_fixes),
+            "failed_count": len(failed_fixes),
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
         }
+
+
+def _validate_patch(original_content: str, patch: str | None) -> str | None:
+    """Return an error message when a generated patch is unusable, else None."""
+    if not patch:
+        return "LLM response contained no patch for this issue"
+    patched = apply_patch(original_content, patch)
+    if patched is None:
+        return "Generated patch does not apply to the workflow file"
+    from app.services.opa.evaluator import parse_workflow_yaml
+
+    if parse_workflow_yaml(patched) is None:
+        return "Patched workflow is not valid YAML"
+    return None
 
 
 def _parse_llm_response(content: str) -> tuple[str, dict[str, str]]:

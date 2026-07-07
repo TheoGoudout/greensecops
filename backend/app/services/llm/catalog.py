@@ -24,6 +24,14 @@ def load_provider_catalog() -> list[dict]:
         return json.load(f)["providers"]
 
 
+def get_default_model(provider_id: str) -> str | None:
+    """Return the catalog default model for a provider, or None if unknown."""
+    for p in load_provider_catalog():
+        if p["id"] == provider_id:
+            return p.get("default_model")
+    return None
+
+
 def get_first_available_provider() -> tuple[str, str]:
     """Return (provider_id, default_model) for the first provider with credentials configured."""
     for p in load_provider_catalog():
