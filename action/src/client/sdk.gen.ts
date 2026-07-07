@@ -568,6 +568,7 @@ export class IssuesService {
      * @param data.severity
      * @param data.unfixed
      * @param data.latestOnly
+     * @param data.includeResolved
      * @param data.skip
      * @param data.limit
      * @returns IssuePublic Successful Response
@@ -584,6 +585,7 @@ export class IssuesService {
                 severity: data.severity,
                 unfixed: data.unfixed,
                 latest_only: data.latestOnly,
+                include_resolved: data.includeResolved,
                 skip: data.skip,
                 limit: data.limit
             },
@@ -1295,6 +1297,7 @@ export class WebhooksService {
      * @param data The data for the request.
      * @param data.xHubSignature256
      * @param data.xGithubEvent
+     * @param data.xGithubDelivery
      * @returns string Successful Response
      * @throws ApiError
      */
@@ -1304,7 +1307,8 @@ export class WebhooksService {
             url: '/api/v1/webhooks/github',
             headers: {
                 'x-hub-signature-256': data.xHubSignature256,
-                'x-github-event': data.xGithubEvent
+                'x-github-event': data.xGithubEvent,
+                'x-github-delivery': data.xGithubDelivery
             },
             errors: {
                 422: 'Validation Error'
