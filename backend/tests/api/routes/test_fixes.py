@@ -127,9 +127,7 @@ def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
 
 
 @pytest.fixture()
-def ready_fix(
-    db: Session, workflow_file: WorkflowFile, issue: Issue
-) -> Fix:
+def ready_fix(db: Session, workflow_file: WorkflowFile, issue: Issue) -> Fix:
     f = Fix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
@@ -1222,9 +1220,7 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
 
     assert response.status_code == 202
     assert response.json()["queued"] == 1
-    mock_delay.assert_called_once_with(
-        issue_ids=[str(issue.id)], batch_mode=True
-    )
+    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
 
     db.expire_all()
     from sqlmodel import select as sql_select

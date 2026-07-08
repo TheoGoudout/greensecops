@@ -178,9 +178,7 @@ def test_full_fix_generation_stores_full_content(
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
     db.expire_all()
-    fix = db.exec(
-        select(Fix).where(Fix.workflow_file_id == workflow_file.id)
-    ).first()
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
     assert fix is not None
     assert fix.status == FixStatus.ready
     assert fix.full_content is not None
@@ -218,9 +216,7 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
     db.expire_all()
-    fix = db.exec(
-        select(Fix).where(Fix.workflow_file_id == workflow_file.id)
-    ).first()
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
     assert fix is not None
     assert fix.status == FixStatus.failed
     assert fix.full_content is None

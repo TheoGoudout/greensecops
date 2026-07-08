@@ -3,15 +3,15 @@
 Existing fix rows are discarded: fixes are now whole-file regenerations
 and must be regenerated after this migration. Pull request records are kept.
 
-Revision ID: 0017
-Revises: 0016
+Revision ID: 0018
+Revises: 0017
 Create Date: 2026-07-08
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0017"
-down_revision = "0016"
+revision = "0018"
+down_revision = "0017"
 branch_labels = None
 depends_on = None
 
