@@ -16,6 +16,7 @@ import {
   PAGE_SIZE,
   workflowLabel,
 } from "@/lib/workflow-utils"
+import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
   component: FixesPage,
@@ -59,7 +60,10 @@ function FixesPage() {
       toast.success("Workflow PR queued")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
     },
-    onError: () => toast.error("Failed to queue workflow PR"),
+    onError: (error) =>
+      toast.error("Failed to queue workflow PR", {
+        description: apiErrorDetail(error),
+      }),
   })
 
   const deliverRepoMutation = useMutation({
@@ -68,7 +72,10 @@ function FixesPage() {
       toast.success("Repo-wide PR queued")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
     },
-    onError: () => toast.error("Failed to queue repo-wide PR"),
+    onError: (error) =>
+      toast.error("Failed to queue repo-wide PR", {
+        description: apiErrorDetail(error),
+      }),
   })
 
   const regenerateMutation = useMutation({

@@ -14,6 +14,7 @@ import {
   PAGE_SIZE,
   workflowLabel,
 } from "@/lib/workflow-utils"
+import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/issues")({
   component: IssuesPage,
@@ -58,7 +59,10 @@ function IssuesPage() {
       queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
     },
-    onError: () => toast.error("Failed to queue fixes"),
+    onError: (error) =>
+      toast.error("Failed to queue fixes", {
+        description: apiErrorDetail(error),
+      }),
   })
 
   const pagedIssues = useMemo(

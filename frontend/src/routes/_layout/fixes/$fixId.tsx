@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiErrorDetail } from "@/utils"
 
 type FixDetailSearch = { repoId?: string }
 
@@ -63,7 +64,10 @@ function FixDetail() {
       toast.success("PR creation queued")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
     },
-    onError: () => toast.error("Failed to queue PR delivery"),
+    onError: (error) =>
+      toast.error("Failed to queue PR delivery", {
+        description: apiErrorDetail(error),
+      }),
   })
 
   const rejectMutation = useMutation({
