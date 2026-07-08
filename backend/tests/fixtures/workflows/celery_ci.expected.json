@@ -28,6 +28,15 @@
       "step_index": 5
     },
     {
+      "rule_slug": "unpinned_actions",
+      "severity": "high",
+      "category": "reliability",
+      "message": "codecov/codecov-action@v7 uses a mutable ref",
+      "job": "Unit",
+      "step": "codecov/codecov-action@v7",
+      "step_index": 6
+    },
+    {
       "rule_slug": "missing_timeout",
       "severity": "high",
       "category": "reliability",
@@ -35,6 +44,6 @@
       "job": "Unit"
     }
   ],
-  "expected_issue_count": 4,
+  "expected_issue_count": 5,
   "grade_not": "A+++"
 }
