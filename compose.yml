@@ -139,7 +139,7 @@ services:
         restart: true
       prestart:
         condition: service_completed_successfully
-    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler --schedule /tmp/celerybeat-schedule
     healthcheck:
       test: ["CMD-SHELL", "python -c \"from redis import Redis; Redis.from_url('redis://redis:6379/0').ping()\""]
       interval: 30s
