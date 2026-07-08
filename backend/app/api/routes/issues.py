@@ -68,10 +68,10 @@ def list_issues(
             )
             query = query.where(Issue.analysis_id == latest_analysis_subq)
     if unfixed:
-        active_fix_issue_ids = select(Fix.issue_id).where(
-            Fix.status != FixStatus.rejected
+        active_fix_ids = select(Fix.id).where(Fix.status != FixStatus.rejected)
+        query = query.where(
+            col(Issue.fix_id).is_(None) | ~col(Issue.fix_id).in_(active_fix_ids)
         )
-        query = query.where(~Issue.id.in_(active_fix_issue_ids))  # type: ignore[attr-defined]
     if category:
         query = query.where(Issue.category == category)
     if severity:

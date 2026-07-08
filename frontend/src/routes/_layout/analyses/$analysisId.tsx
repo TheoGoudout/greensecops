@@ -205,6 +205,7 @@ function AnalysisDetail() {
                         </div>
                         <GenerateFixButton
                           issueId={issue.id}
+                          repoId={analysis?.repo_id ?? ""}
                           fixStatus={issue.fix_status}
                         />
                       </div>

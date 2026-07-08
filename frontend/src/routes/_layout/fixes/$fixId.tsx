@@ -2,13 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft, GitPullRequest } from "lucide-react"
 import { toast } from "sonner"
-import { FixesService, IssuesService } from "@/client"
+import { FixesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { WorkflowFileViewer } from "@/components/WorkflowFileViewer"
 import { apiErrorDetail } from "@/utils"
 
 type FixDetailSearch = { repoId?: string }
@@ -52,14 +53,11 @@ function FixDetail() {
     queryFn: () => FixesService.getFix({ fixId }),
   })
 
-  const { data: issue, isLoading: issueLoading } = useQuery({
-    queryKey: ["issue", fix?.issue_id],
-    queryFn: () => IssuesService.getIssue({ issueId: fix!.issue_id }),
-    enabled: !!fix?.issue_id,
-  })
-
   const deliverMutation = useMutation({
-    mutationFn: () => FixesService.triggerFixDelivery({ fixId }),
+    mutationFn: () =>
+      FixesService.triggerWorkflowDelivery({
+        requestBody: { fix_id: fixId },
+      }),
     onSuccess: () => {
       toast.success("PR creation queued")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
@@ -88,6 +86,8 @@ function FixDetail() {
     )
   }
 
+  const issues = fix?.issues ?? []
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -102,7 +102,9 @@ function FixDetail() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Fix Detail</h1>
-            <p className="text-muted-foreground text-sm font-mono">{fixId}</p>
+            <p className="text-muted-foreground text-sm font-mono">
+              {fix?.workflow_file_path ?? fixId}
+            </p>
           </div>
         </div>
         {fix && (
@@ -151,71 +153,83 @@ function FixDetail() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Issue
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Issues addressed
+            </CardTitle>
+            {fix && (
+              <span
+                className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
+              >
+                {fix.status}
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {fixLoading || issueLoading ? (
+          {fixLoading ? (
             <div className="flex flex-col gap-2">
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-4 w-48" />
             </div>
+          ) : issues.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Issue details unavailable.
+            </p>
           ) : (
-            (() => {
-              const severity = issue?.severity ?? fix?.severity
-              const category = issue?.category ?? fix?.category
-              const ruleSlug = issue?.rule_slug ?? fix?.rule_slug
-              const message = issue?.message ?? fix?.message
-              const lineStart = issue?.line_start ?? fix?.line_start
-              const lineEnd = issue?.line_end ?? fix?.line_end
-              const wfPath =
-                issue?.workflow_file_path ?? fix?.workflow_file_path
-              return severity && category && message ? (
-                <div className="flex items-start gap-3">
-                  <CategoryIcon
-                    category={category}
-                    className="mt-0.5 shrink-0 text-base"
-                  />
+            <div className="flex flex-col gap-3">
+              {issues.map((issue) => (
+                <div key={issue.id} className="flex items-start gap-3">
+                  {issue.category && (
+                    <CategoryIcon
+                      category={issue.category}
+                      className="mt-0.5 shrink-0 text-base"
+                    />
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <SeverityChip severity={severity} />
-                      {ruleSlug && (
+                      {issue.severity && (
+                        <SeverityChip severity={issue.severity} />
+                      )}
+                      {issue.rule_slug && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                          {ruleSlug}
+                          {issue.rule_slug}
                         </span>
                       )}
-                      {fix && (
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
-                        >
-                          {fix.status}
-                        </span>
-                      )}
-                      <span className="text-sm">{message}</span>
+                      <span className="text-sm">{issue.message}</span>
                     </div>
-                    {lineStart != null && (
+                    {issue.line_start != null && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Line {lineStart}
-                        {lineEnd && lineEnd !== lineStart ? `–${lineEnd}` : ""}
-                      </p>
-                    )}
-                    {wfPath && (
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                        {wfPath}
+                        Line {issue.line_start}
+                        {issue.line_end && issue.line_end !== issue.line_start
+                          ? `–${issue.line_end}`
+                          : ""}
                       </p>
                     )}
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Issue details unavailable.
-                </p>
-              )
-            })()
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {fix?.error_message && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{fix.error_message}</AlertDescription>
+        </Alert>
+      )}
+
+      {fix?.base_content && (
+        <WorkflowFileViewer
+          path={fix.workflow_file_path ?? ""}
+          rawContent={fix.base_content}
+          fullContent={fix.full_content ?? undefined}
+          issues={[]}
+          fix={fix}
+        />
+      )}
 
       {fix && (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">

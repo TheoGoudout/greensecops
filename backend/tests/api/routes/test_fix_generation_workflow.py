@@ -2,8 +2,8 @@
 
 The encode/httpx test-suite workflow is used as WorkflowFile.raw_content throughout,
 replacing the trivial 'on: push\njobs: {}' stub used elsewhere.
-Tests cover _parse_llm_response (pure), generate/deliver/sync endpoints (mocked Celery
-and GitHub), and the full LLM→patch→apply roundtrip via a directly-mocked _generate_fixes.
+Tests cover the generate endpoint (mocked Celery), the full LLM→full-content
+roundtrip via a directly-mocked _generate_fixes, and PR sync (mocked GitHub).
 """
 
 from __future__ import annotations
@@ -34,18 +34,15 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
-from app.workers.patch_utils import apply_patch
-from app.workers.tasks.fix_generation import _parse_llm_response, run_fix_generation
+from app.workers.tasks.fix_generation import run_fix_generation
 
 _FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "workflows"
 _HTTPX_WORKFLOW = (_FIXTURES / "httpx_test_suite.yml").read_text()
 
 # Realistic 40-char SHA replacing actions/checkout@v4
 _CHECKOUT_SHA = "11bd71901bbe5b1630ceea73d27597364c9af683"
-# Realistic 40-char SHA replacing actions/setup-python@v6
-_SETUP_PYTHON_SHA = "ece7cb06caefa5fff74198d8649806c4678c61a1"
 
-# Fingerprint pre-seeded on the test issue so the LLM mock can target it
+# Fingerprint pre-seeded on the test issue
 _ISSUE_FINGERPRINT = "cafebabe12345678"
 
 
@@ -147,115 +144,20 @@ def issue(
     return i
 
 
-@pytest.fixture()
-def ready_fix(db: Session, issue: Issue) -> Fix:
-    diff = (
-        "--- a/.github/workflows/test-suite.yml\n"
-        "+++ b/.github/workflows/test-suite.yml\n"
-        "@@ -19,1 +19,1 @@\n"
-        '-      - uses: "actions/checkout@v4"\n'
-        f'+      - uses: "actions/checkout@{_CHECKOUT_SHA}"  # v4\n'
-    )
-    f = Fix(
-        issue_id=issue.id,
-        llm_provider=LLMProvider.openai,
-        llm_model="gpt-4o-mini",
-        status=FixStatus.ready,
-        diff=diff,
-        patch=diff,
-    )
-    db.add(f)
-    db.commit()
-    db.refresh(f)
-    return f
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# _parse_llm_response — pure function tests
+# Full LLM→full-content roundtrip (mocked _generate_fixes, no Celery broker)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_parse_llm_response_extracts_full_content() -> None:
-    """full_content block is returned as a plain string."""
-    llm_output = (
-        "<full_content>\n"
-        "name: Test Suite\non: push\njobs:\n  tests:\n    runs-on: ubuntu-latest\n"
-        "</full_content>\n"
-        f'<fix fingerprint="{_ISSUE_FINGERPRINT}">\n'
-        "--- a/test.yml\n+++ b/test.yml\n@@ -1,1 +1,1 @@\n-on: push\n+on: workflow_dispatch\n"
-        "</fix>\n"
-    )
-    full_content, patches = _parse_llm_response(llm_output)
-    assert "name: Test Suite" in full_content
-    assert _ISSUE_FINGERPRINT in patches
-    assert "@@ -1,1 +1,1 @@" in patches[_ISSUE_FINGERPRINT]
-
-
-def test_parse_llm_response_realistic_httpx_patch() -> None:
-    """Parses a multi-line YAML diff pinning both unpinned actions in the httpx workflow."""
-    patch_body = (
-        "--- a/.github/workflows/test-suite.yml\n"
-        "+++ b/.github/workflows/test-suite.yml\n"
-        "@@ -19,2 +19,2 @@\n"
-        '-      - uses: "actions/checkout@v4"\n'
-        '-      - uses: "actions/setup-python@v6"\n'
-        f'+      - uses: "actions/checkout@{_CHECKOUT_SHA}"  # v4\n'
-        f'+      - uses: "actions/setup-python@{_SETUP_PYTHON_SHA}"  # v6\n'
-    )
-    llm_output = (
-        f"<full_content>\n{_HTTPX_WORKFLOW}</full_content>\n"
-        f'<fix fingerprint="{_ISSUE_FINGERPRINT}">\n{patch_body}</fix>\n'
-    )
-    full_content, patches = _parse_llm_response(llm_output)
-    # _parse_llm_response strips the optional trailing \n before </full_content>
-    assert full_content.strip() == _HTTPX_WORKFLOW.strip()
-    assert _ISSUE_FINGERPRINT in patches
-    assert _CHECKOUT_SHA in patches[_ISSUE_FINGERPRINT]
-    assert _SETUP_PYTHON_SHA in patches[_ISSUE_FINGERPRINT]
-
-
-def test_parse_llm_response_missing_full_content_returns_empty_string() -> None:
-    llm_output = (
-        '<fix fingerprint="fp1">\n--- a/f\n+++ b/f\n@@ -1,1 +1,1 @@\n-a\n+b\n</fix>'
-    )
-    full_content, patches = _parse_llm_response(llm_output)
-    assert full_content == ""
-    assert "fp1" in patches
-
-
-def test_parse_llm_response_multiple_fix_blocks() -> None:
-    """Multiple <fix> blocks for separate issues are all extracted."""
-    llm_output = (
-        "<full_content>\ncontent\n</full_content>\n"
-        '<fix fingerprint="fp-checkout">\ndiff-checkout\n</fix>\n'
-        '<fix fingerprint="fp-timeout">\ndiff-timeout\n</fix>\n'
-    )
-    _, patches = _parse_llm_response(llm_output)
-    assert set(patches.keys()) == {"fp-checkout", "fp-timeout"}
-    assert patches["fp-checkout"] == "diff-checkout"
-    assert patches["fp-timeout"] == "diff-timeout"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Full LLM→patch→apply roundtrip (mocked _generate_fixes, no Celery broker)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def test_full_fix_generation_produces_applicable_patch(
-    db: Session, issue: Issue
+def test_full_fix_generation_stores_full_content(
+    db: Session, issue: Issue, workflow_file: WorkflowFile
 ) -> None:
-    """run_fix_generation with a mocked LLM stores a patch that apply_patch can apply."""
-    single_line_patch = (
-        "--- a/.github/workflows/test-suite.yml\n"
-        "+++ b/.github/workflows/test-suite.yml\n"
-        "@@ -19,1 +19,1 @@\n"
-        '-      - uses: "actions/checkout@v4"\n'
-        f'+      - uses: "actions/checkout@{_CHECKOUT_SHA}"  # v4\n'
+    """run_fix_generation with a mocked LLM stores one whole-file fix per workflow."""
+    fixed_workflow = _HTTPX_WORKFLOW.replace(
+        '"actions/checkout@v4"',
+        f'"actions/checkout@{_CHECKOUT_SHA}"  # v4',
     )
-    llm_response_content = (
-        f"<full_content>\n{_HTTPX_WORKFLOW}</full_content>\n"
-        f'<fix fingerprint="{_ISSUE_FINGERPRINT}">\n{single_line_patch}</fix>\n'
-    )
+    llm_response_content = f"<full_content>\n{fixed_workflow}</full_content>\n"
 
     class _FakeLLMResult:
         content = llm_response_content
@@ -276,17 +178,48 @@ def test_full_fix_generation_produces_applicable_patch(
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
     db.expire_all()
-    fix = db.exec(select(Fix).where(Fix.issue_id == issue.id)).first()
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
     assert fix is not None
     assert fix.status == FixStatus.ready
-    assert fix.patch is not None
+    assert fix.full_content is not None
+    assert _CHECKOUT_SHA in fix.full_content
+    assert 'actions/checkout@v4"' not in fix.full_content
+    assert fix.prompt_tokens == 500
 
-    patched_content = apply_patch(_HTTPX_WORKFLOW, fix.patch)
-    assert patched_content is not None, (
-        "apply_patch failed — patch does not apply cleanly"
-    )
-    assert _CHECKOUT_SHA in patched_content
-    assert "actions/checkout@v4" not in patched_content
+    # The addressed issue is linked to the workflow fix
+    db.refresh(issue)
+    assert issue.fix_id == fix.id
+
+
+def test_full_fix_generation_invalid_yaml_marks_failed(
+    db: Session, issue: Issue, workflow_file: WorkflowFile
+) -> None:
+    """A full_content response that is not valid YAML must not be stored as ready."""
+    llm_response_content = "<full_content>\n{ invalid: yaml: [}\n</full_content>\n"
+
+    class _FakeLLMResult:
+        content = llm_response_content
+        prompt_tokens = 10
+        completion_tokens = 10
+        run_id = None
+
+    with (
+        patch(
+            "app.workers.tasks.fix_generation._resolve_llm_provider",
+            return_value=("openai", "gpt-4o-mini"),
+        ),
+        patch(
+            "app.workers.tasks.fix_generation._generate_fixes",
+            new=AsyncMock(return_value=_FakeLLMResult()),
+        ),
+    ):
+        run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
+
+    db.expire_all()
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
+    assert fix is not None
+    assert fix.status == FixStatus.failed
+    assert fix.full_content is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -298,44 +231,19 @@ def test_generate_fix_queued_for_realistic_workflow_issue(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     issue: Issue,
+    repo: Repository,
 ) -> None:
-    """POST /fixes/generate/{issue_id} queues task for an issue tied to the httpx workflow."""
-    with patch(
-        "app.workers.tasks.fix_generation.run_fix_generation.delay"
-    ) as mock_delay:
+    """generate-for-repo with a single issue id queues one whole-file fix task."""
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/fixes/generate/{issue.id}",
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
+            json={"issue_ids": [str(issue.id)]},
         )
 
     assert response.status_code == 202
-    body = response.json()
-    assert body["status"] == "queued"
-    assert body["issue_id"] == str(issue.id)
-    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)])
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Deliver endpoint — mocked Celery delay
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def test_deliver_realistic_fix_queues_task(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    ready_fix: Fix,
-) -> None:
-    """POST /fixes/{id}/deliver queues deliver task for a fix tied to the httpx workflow."""
-    with patch("app.workers.tasks.fix_delivery.deliver_fix.delay") as mock_delay:
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/{ready_fix.id}/deliver",
-            headers=superuser_token_headers,
-        )
-
-    assert response.status_code == 202
-    body = response.json()
-    assert body["fix_id"] == str(ready_fix.id)
-    mock_delay.assert_called_once_with(fix_id=str(ready_fix.id), force=False)
+    assert response.json()["queued"] == 1
+    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -348,7 +256,7 @@ def test_pr_sync_marks_merged_for_realistic_workflow_fix(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    issue: Issue,
+    workflow_file: WorkflowFile,
 ) -> None:
     """PR sync updates state to merged for a PR associated with an httpx-workflow fix."""
     pr_url = f"https://github.com/{repo.full_name}/pull/42"
@@ -363,7 +271,7 @@ def test_pr_sync_marks_merged_for_realistic_workflow_fix(
     db.refresh(pr)
 
     delivered_fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,

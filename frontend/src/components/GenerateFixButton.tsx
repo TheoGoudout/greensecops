@@ -7,16 +7,22 @@ import { Button } from "@/components/ui/button"
 
 interface GenerateFixButtonProps {
   issueId: string
+  repoId: string
   fixStatus?: FixStatus | null
 }
 
 export function GenerateFixButton({
   issueId,
+  repoId,
   fixStatus,
 }: GenerateFixButtonProps) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: () => FixesService.triggerFixGeneration({ issueId }),
+    mutationFn: () =>
+      FixesService.triggerFixGenerationForRepo({
+        repoId,
+        requestBody: { issue_ids: [issueId] },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fixes"] })
       queryClient.invalidateQueries({ queryKey: ["issues"] })

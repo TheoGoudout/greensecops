@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
-from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Fix,
@@ -16,235 +15,13 @@ from app.models import (
     PullRequest,
     PullRequestState,
     Repository,
-    WorkflowFile,
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.fix_delivery import STALE_CONTENT_ERROR_CODE
-from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.celery_app import celery_app
-from app.workers.patch_utils import apply_patch
 
 logger = logging.getLogger(__name__)
-
-
-@celery_app.task(name="fix_delivery.deliver", bind=True, max_retries=3)
-def deliver_fix(
-    self: object,  # noqa: ARG001
-    fix_id: str,
-    force: bool = False,
-) -> dict[str, str]:
-    with Session(engine) as session:
-        fix = session.get(Fix, uuid.UUID(fix_id))
-        if not fix:
-            return {"status": "error", "detail": "fix_not_found"}
-        if not force and fix.status != FixStatus.ready:
-            return {"status": "error", "detail": f"fix_not_ready: {fix.status}"}
-
-        issue = fix.issue
-        if not issue:
-            return {"status": "error", "detail": "issue_not_found"}
-
-        analysis = issue.analysis
-        repo = session.get(Repository, analysis.repo_id) if analysis else None
-        if not repo:
-            return {"status": "error", "detail": "repository_not_found"}
-
-        wf_file = (
-            session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
-        )
-        if not wf_file:
-            return {"status": "error", "detail": "workflow_file_not_found"}
-
-        # Determine delivery mode (repo → org → pr)
-        delivery_mode = (
-            repo.fix_delivery_mode
-            or (repo.organization.fix_delivery_mode if repo.organization else None)
-            or FixDeliveryMode.pr
-        )
-
-        if delivery_mode == FixDeliveryMode.disabled:
-            logger.info("Fix delivery disabled for repo %s", repo.full_name)
-            return {"status": "skipped", "reason": "delivery_disabled"}
-
-        if repo.installation_id is None:
-            logger.warning(
-                "Fix delivery skipped for external repo %s: no GitHub App installation",
-                repo.full_name,
-            )
-            return {"status": "skipped", "reason": "no_installation"}
-
-        org_id = str(repo.org_id)
-        repo_id_str = str(repo.id)
-
-        fix.status = FixStatus.delivering
-        session.add(fix)
-        session.commit()
-        events_pub.publish_event(ev.fix_delivering(org_id, repo_id_str, fix_id))
-
-        rule = issue.rule
-        pr_body = build_pr_body(
-            issues=[
-                IssueInfo(
-                    rule_slug=rule.slug if rule else "fix",
-                    rule_title=rule.title if rule else "fix",
-                    category=issue.category.value if issue.category else "unknown",
-                    severity=issue.severity.value if issue.severity else "unknown",
-                    message=issue.message or "",
-                )
-            ],
-            fix_ids=[fix_id],
-            wiki_base_url=settings.WIKI_BASE_URL,
-            frontend_host=settings.FRONTEND_HOST,
-            bot_handle=settings.GITHUB_BOT_HANDLE,
-            app_name=settings.PROJECT_NAME,
-            app_url=settings.APP_URL,
-        )
-
-        rule_slug = issue.rule.slug if issue.rule else "fix"
-        existing_pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
-        fix_branch = (
-            existing_pr.pr_branch
-            if existing_pr
-            else f"greensecops/fix-{rule_slug}-{str(wf_file.id)[:8]}"
-        )
-
-        # A PR the user closed without merging is a rejection signal: do not
-        # re-open it on the next delivery unless explicitly forced.
-        branch_pr = session.exec(
-            select(PullRequest).where(
-                PullRequest.repo_id == repo.id,
-                PullRequest.pr_branch == fix_branch,
-            )
-        ).first()
-        if (
-            not force
-            and delivery_mode == FixDeliveryMode.pr
-            and branch_pr is not None
-            and branch_pr.pr_state == PullRequestState.closed
-        ):
-            fix.status = FixStatus.rejected
-            session.add(fix)
-            session.commit()
-            events_pub.publish_event(ev.fix_rejected(org_id, repo_id_str, fix_id))
-            logger.info(
-                "Skipping delivery for fix %s: PR on branch %s was closed by user",
-                fix_id,
-                fix_branch,
-            )
-            return {"status": "skipped", "reason": "pr_previously_closed"}
-
-        new_content = wf_file.raw_content
-        if fix.patch:
-            patched = apply_patch(wf_file.raw_content, fix.patch)
-            if patched is None:
-                fix.status = FixStatus.failed
-                fix.error_message = (
-                    "Generated patch no longer applies to the workflow file"
-                )
-                session.add(fix)
-                session.commit()
-                events_pub.publish_event(
-                    ev.fix_delivery_failed(
-                        org_id, repo_id_str, fix_id, fix.error_message
-                    )
-                )
-                return {"status": "failed", "fix_id": fix_id}
-            new_content = patched
-
-        # Comment delivery prefers the fix's associated pull request; when
-        # there is none, the delivery service falls back to a dedicated
-        # find-or-create issue instead of assuming issue #1 exists.
-        comment_issue_number: int | None = None
-        if (
-            delivery_mode == FixDeliveryMode.comment
-            and existing_pr
-            and existing_pr.pr_url
-        ):
-            from app.services.github.app_client import parse_pr_url
-
-            parsed = parse_pr_url(existing_pr.pr_url)
-            comment_issue_number = parsed[1] if parsed else None
-
-        result = asyncio.run(
-            _deliver(
-                installation_id=repo.installation_id,
-                full_name=repo.full_name,
-                base_branch=analysis.branch or repo.default_branch,
-                file_path=wf_file.path,
-                new_content=new_content,
-                expected_base_content=wf_file.raw_content,
-                fix_branch=fix_branch,
-                rule_slug=rule_slug,
-                delivery_mode=delivery_mode.value,
-                pr_body=pr_body,
-                force=force,
-                comment_issue_number=comment_issue_number,
-            )
-        )
-
-        if result.error:
-            fix.status = FixStatus.failed
-            fix.error_message = result.error
-            session.add(fix)
-            session.commit()
-            events_pub.publish_event(
-                ev.fix_delivery_failed(org_id, repo_id_str, fix_id, result.error[:200])
-            )
-            if result.error_code == STALE_CONTENT_ERROR_CODE:
-                # The workflow changed upstream since analysis: re-analyse so
-                # fresh issues/fixes are generated against current content.
-                from app.workers.tasks.static_analysis import run_static_analysis
-
-                run_static_analysis.delay(
-                    repo_id=repo_id_str,
-                    branch=analysis.branch or repo.default_branch,
-                    trigger="manual",
-                    force=True,
-                )
-        else:
-            fix.status = FixStatus.delivered
-            fix.delivered_at = datetime.now(timezone.utc)
-            if result.comment_url:
-                fix.comment_url = result.comment_url
-            if result.pr_url:
-                pr = session.exec(
-                    select(PullRequest).where(
-                        PullRequest.repo_id == repo.id,
-                        PullRequest.pr_branch == fix_branch,
-                    )
-                ).first()
-                if pr is None:
-                    pr = PullRequest(
-                        repo_id=repo.id,
-                        pr_branch=fix_branch,
-                        pr_url=result.pr_url,
-                        pr_state="open",
-                        comment_url=result.comment_url,
-                    )
-                    session.add(pr)
-                    session.flush()
-                else:
-                    pr.pr_url = result.pr_url
-                    pr.pr_state = "open"
-                    pr.comment_url = result.comment_url
-                    pr.updated_at = datetime.now(timezone.utc)
-                    session.add(pr)
-                    session.flush()
-                fix.pr_id = pr.id
-            session.add(fix)
-            session.commit()
-            events_pub.publish_event(
-                ev.fix_delivered(org_id, repo_id_str, fix_id, result.pr_url, fix_branch)
-            )
-            if result.pr_url:
-                events_pub.publish_event(
-                    ev.pr_opened(
-                        org_id, repo_id_str, [fix_id], result.pr_url, fix_branch
-                    )
-                )
-
-        return {"status": fix.status.value, "fix_id": fix_id}
 
 
 @celery_app.task(name="fix_delivery.deliver_batch", bind=True, max_retries=3)
@@ -257,7 +34,7 @@ def deliver_fixes_batch(
     pr_body: str,
     force: bool = False,
 ) -> dict[str, str]:
-    """Deliver multiple ready fixes as a single PR (one file change per workflow file)."""
+    """Deliver ready workflow fixes as a single PR (one file change per workflow file)."""
     with Session(engine) as session:
         repo = session.get(Repository, uuid.UUID(repo_id))
         if not repo:
@@ -267,6 +44,23 @@ def deliver_fixes_batch(
         fixes = [f for f in fixes if f and (force or f.status == FixStatus.ready)]
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
+
+        # Determine delivery mode (repo → org → pr)
+        delivery_mode = (
+            repo.fix_delivery_mode
+            or (repo.organization.fix_delivery_mode if repo.organization else None)
+            or FixDeliveryMode.pr
+        )
+        if delivery_mode == FixDeliveryMode.disabled:
+            logger.info("Fix delivery disabled for repo %s", repo.full_name)
+            return {"status": "skipped", "reason": "delivery_disabled"}
+
+        if repo.installation_id is None:
+            logger.warning(
+                "Fix delivery skipped for external repo %s: no GitHub App installation",
+                repo.full_name,
+            )
+            return {"status": "skipped", "reason": "no_installation"}
 
         org_id = str(repo.org_id)
         repo_id_str = repo_id
@@ -297,25 +91,39 @@ def deliver_fixes_batch(
             )
             return {"status": "skipped", "reason": "pr_previously_closed"}
 
-        # One file change per workflow file — all fixes for same file share identical diff
+        # One file change per workflow fix. A fix without generated content is
+        # not deliverable: pushing the unchanged file would fail with an
+        # opaque GitHub 422.
         seen: dict[str, tuple[str, str]] = {}
         expected_base_contents: dict[str, str] = {}
         base_branch = repo.default_branch or "main"
+        deliverable: list[Fix] = []
         for fix in fixes:
-            issue = fix.issue
-            if not issue:
-                continue
-            analysis = issue.analysis
-            if not analysis:
-                continue
-            wf = session.get(WorkflowFile, analysis.workflow_file_id)
+            wf = fix.workflow_file
             if not wf or wf.path in seen:
                 continue
-            seen[wf.path] = (wf.path, wf.last_full_content or wf.raw_content)
+            if not fix.full_content:
+                fix.status = FixStatus.failed
+                fix.error_message = "Fix has no generated workflow content"
+                session.add(fix)
+                events_pub.publish_event(
+                    ev.fix_delivery_failed(
+                        org_id, repo_id_str, str(fix.id), fix.error_message
+                    )
+                )
+                continue
+            seen[wf.path] = (wf.path, fix.full_content)
             expected_base_contents[wf.path] = wf.raw_content
-            base_branch = analysis.branch or repo.default_branch or "main"
+            issue = fix.issues[0] if fix.issues else None
+            analysis = issue.analysis if issue else None
+            base_branch = (
+                (analysis.branch if analysis else None) or repo.default_branch or "main"
+            )
+            deliverable.append(fix)
+        session.commit()
 
-        if not seen:
+        fixes = deliverable
+        if not fixes:
             return {"status": "error", "detail": "no_workflow_files"}
 
         for fix in fixes:
@@ -449,43 +257,4 @@ async def _deliver_batch(
             pr_body=pr_body,
             expected_base_contents=expected_base_contents,
             override_user_commits=force,
-        )
-
-
-async def _deliver(
-    installation_id: int,
-    full_name: str,
-    base_branch: str,
-    file_path: str,
-    new_content: str,
-    fix_branch: str,
-    rule_slug: str,
-    delivery_mode: str,
-    pr_body: str,
-    expected_base_content: str | None = None,
-    force: bool = False,
-    comment_issue_number: int | None = None,
-) -> object:
-    async with _delivery_service() as svc:
-        if delivery_mode == "pr":
-            return await svc.update_or_create_pr(
-                installation_id=installation_id,
-                full_name=full_name,
-                base_branch=base_branch,
-                fix_branch=fix_branch,
-                file_path=file_path,
-                new_content=new_content,
-                pr_title=f"fix(ci): {rule_slug.replace('_', ' ')}",
-                pr_body=pr_body,
-                expected_base_content=expected_base_content,
-                override_user_commits=force,
-            )
-        return await svc.deliver_as_comment(
-            installation_id=installation_id,
-            full_name=full_name,
-            issue_number=comment_issue_number,
-            body=(
-                f"**{settings.PROJECT_NAME} Fix** for `{rule_slug}` "
-                f"(`{file_path}`):\n\n```yaml\n{new_content}\n```"
-            ),
         )

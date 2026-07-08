@@ -1,21 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitPullRequest, RefreshCw } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import type { IssuePublic } from "@/client"
-import { FixesService, IssuesService } from "@/client"
+import { FixesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fixStatusColor } from "@/lib/status-colors"
-import {
-  groupFixesByWorkflow,
-  PAGE_SIZE,
-  workflowLabel,
-} from "@/lib/workflow-utils"
+import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
 import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
@@ -35,26 +30,10 @@ function FixesPage() {
     queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
   })
 
-  const { data: allIssues } = useQuery({
-    queryKey: ["issues", "repo", repoId, { unfixed: false }],
-    queryFn: () => IssuesService.listIssues({ repoId, limit: 200 }),
-  })
-
-  const issueById = useMemo(() => {
-    const map = new Map<string, IssuePublic>()
-    for (const issue of allIssues ?? []) map.set(issue.id, issue)
-    return map
-  }, [allIssues])
-
-  const fixesByWorkflow = useMemo(
-    () => (fixes ? groupFixesByWorkflow(fixes, issueById) : null),
-    [fixes, issueById],
-  )
-
   const deliverWorkflowMutation = useMutation({
-    mutationFn: (fixIds: string[]) =>
+    mutationFn: (fixId: string) =>
       FixesService.triggerWorkflowDelivery({
-        requestBody: { fix_ids: fixIds },
+        requestBody: { fix_id: fixId },
       }),
     onSuccess: () => {
       toast.success("Workflow PR queued")
@@ -79,10 +58,7 @@ function FixesPage() {
   })
 
   const regenerateMutation = useMutation({
-    mutationFn: (prIds: string[]) =>
-      Promise.all(
-        prIds.map((prId) => FixesService.regenerateFixesForPr({ prId })),
-      ),
+    mutationFn: (prId: string) => FixesService.regenerateFixesForPr({ prId }),
     onSuccess: () => {
       toast.success("Fixes queued for regeneration")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
@@ -94,11 +70,6 @@ function FixesPage() {
     () =>
       (fixes ?? []).slice(fixesPage * PAGE_SIZE, (fixesPage + 1) * PAGE_SIZE),
     [fixes, fixesPage],
-  )
-
-  const pagedFixesByWorkflow = useMemo(
-    () => groupFixesByWorkflow(pagedFixes, issueById),
-    [pagedFixes, issueById],
   )
 
   return (
@@ -135,72 +106,63 @@ function FixesPage() {
           </Card>
         ) : (
           <>
-            {[...pagedFixesByWorkflow.entries()].map(([wfPath, wfFixes]) => {
-              const allWfFixes = fixesByWorkflow?.get(wfPath) ?? []
-              const allWfReadyFixIds = allWfFixes
-                .filter((f) => f.status === "ready")
-                .map((f) => f.id)
-              const closedPrIds = [
-                ...new Set(
-                  allWfFixes
-                    .filter((f) => f.pr_state === "closed" && f.pr_id)
-                    .map((f) => f.pr_id!),
-                ),
-              ]
+            {pagedFixes.map((fix) => {
+              const issues = fix.issues ?? []
               const isWfDelivering =
                 deliverWorkflowMutation.isPending &&
-                allWfReadyFixIds.some((id) =>
-                  deliverWorkflowMutation.variables?.includes(id),
-                )
+                deliverWorkflowMutation.variables === fix.id
               const isRegenerating =
                 regenerateMutation.isPending &&
-                closedPrIds.some((id) =>
-                  regenerateMutation.variables?.includes(id),
-                )
+                regenerateMutation.variables === fix.pr_id
               return (
-                <Card key={wfPath || "__unknown__"}>
+                <Card key={fix.id}>
                   <CardHeader className="pb-2 pt-4">
                     <div className="flex items-center justify-between gap-4">
                       <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
                         <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
                           Workflow:
                         </span>
-                        <span className="truncate">
-                          {workflowLabel(wfPath)}
-                        </span>
-                        <span className="text-muted-foreground font-normal text-xs shrink-0">
-                          ({wfFixes.length})
+                        <Link
+                          to="/fixes/$fixId"
+                          params={{ fixId: fix.id }}
+                          search={{ repoId }}
+                          className="truncate hover:underline"
+                        >
+                          {workflowLabel(fix.workflow_file_path ?? "")}
+                        </Link>
+                        <span
+                          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full capitalize font-sans ${fixStatusColor(fix.status)}`}
+                        >
+                          {fix.status}
                         </span>
                       </CardTitle>
                       <div className="flex items-center gap-2 shrink-0">
-                        {closedPrIds.length > 0 && (
+                        {fix.pr_state === "closed" && fix.pr_id && (
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs gap-1.5"
                             onClick={() =>
-                              regenerateMutation.mutate(closedPrIds)
+                              regenerateMutation.mutate(fix.pr_id!)
                             }
                             disabled={isRegenerating}
                           >
                             <RefreshCw className="h-3 w-3" />
-                            {isRegenerating ? "Queuing…" : "Regenerate fixes"}
+                            {isRegenerating ? "Queuing…" : "Regenerate fix"}
                           </Button>
                         )}
-                        {allWfReadyFixIds.length > 0 && (
+                        {fix.status === "ready" && (
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs gap-1.5"
                             onClick={() =>
-                              deliverWorkflowMutation.mutate(allWfReadyFixIds)
+                              deliverWorkflowMutation.mutate(fix.id)
                             }
                             disabled={isWfDelivering}
                           >
                             <GitPullRequest className="h-3 w-3" />
-                            {isWfDelivering
-                              ? "Queuing…"
-                              : `Create PR (${allWfReadyFixIds.length} fix${allWfReadyFixIds.length !== 1 ? "es" : ""})`}
+                            {isWfDelivering ? "Queuing…" : "Create PR"}
                           </Button>
                         )}
                       </div>
@@ -208,103 +170,86 @@ function FixesPage() {
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y">
-                      {wfFixes.map((fix) => {
-                        const issue = issueById.get(fix.issue_id)
-                        const severity = fix.severity ?? issue?.severity
-                        const category = fix.category ?? issue?.category
-                        const ruleSlug = fix.rule_slug ?? issue?.rule_slug
-                        const message =
-                          fix.message ??
-                          issue?.message ??
-                          `${fix.issue_id.slice(0, 8)}…`
-                        const lineStart = fix.line_start ?? issue?.line_start
-                        const lineEnd = fix.line_end ?? issue?.line_end
-                        return (
+                      {issues.length === 0 ? (
+                        <p className="px-6 py-4 text-sm text-muted-foreground">
+                          No issue details available.
+                        </p>
+                      ) : (
+                        issues.map((issue) => (
                           <div
-                            key={fix.id}
-                            className="flex items-start gap-3 px-6 py-4"
+                            key={issue.id}
+                            className="flex items-start gap-3 px-6 py-3"
                           >
-                            <span
-                              className={`mt-0.5 shrink-0 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
-                            >
-                              {fix.status}
-                            </span>
-                            {category && (
+                            {issue.category && (
                               <CategoryIcon
-                                category={category}
+                                category={issue.category}
                                 className="mt-0.5 shrink-0 text-base"
                               />
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                {severity && (
-                                  <SeverityChip severity={severity} />
+                                {issue.severity && (
+                                  <SeverityChip severity={issue.severity} />
                                 )}
-                                {ruleSlug && (
+                                {issue.rule_slug && (
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                    {ruleSlug}
+                                    {issue.rule_slug}
                                   </span>
                                 )}
-                                <span className="text-sm">{message}</span>
+                                <span className="text-sm">{issue.message}</span>
                               </div>
-                              {lineStart != null && (
+                              {issue.line_start != null && (
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                  Line {lineStart}
-                                  {lineEnd && lineEnd !== lineStart
-                                    ? `–${lineEnd}`
+                                  Line {issue.line_start}
+                                  {issue.line_end &&
+                                  issue.line_end !== issue.line_start
+                                    ? `–${issue.line_end}`
                                     : ""}
                                 </p>
                               )}
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {fix.llm_model}
-                              </p>
-                            </div>
-                            <div className="shrink-0 flex flex-col items-end gap-1.5">
-                              {fix.pr_url ? (
-                                <a
-                                  href={fix.pr_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                                >
-                                  <GitPullRequest className="h-3 w-3" />
-                                  View PR
-                                  {fix.pr_state === "closed" && (
-                                    <span className="text-orange-500 dark:text-orange-400">
-                                      (closed)
-                                    </span>
-                                  )}
-                                  {fix.pr_state === "merged" && (
-                                    <span className="text-purple-500 dark:text-purple-400">
-                                      (merged)
-                                    </span>
-                                  )}
-                                </a>
-                              ) : fix.comment_url ? (
-                                <a
-                                  href={fix.comment_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                  Comment
-                                </a>
-                              ) : null}
-                              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                                {fix.created_at
-                                  ? new Date(fix.created_at).toLocaleDateString(
-                                      undefined,
-                                      {
-                                        month: "short",
-                                        day: "numeric",
-                                      },
-                                    )
-                                  : "—"}
-                              </span>
                             </div>
                           </div>
-                        )
-                      })}
+                        ))
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between px-6 py-3 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        {fix.llm_model}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        {fix.pr_url && (
+                          <a
+                            href={fix.pr_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                          >
+                            <GitPullRequest className="h-3 w-3" />
+                            View PR
+                            {fix.pr_state === "closed" && (
+                              <span className="text-orange-500 dark:text-orange-400">
+                                (closed)
+                              </span>
+                            )}
+                            {fix.pr_state === "merged" && (
+                              <span className="text-purple-500 dark:text-purple-400">
+                                (merged)
+                              </span>
+                            )}
+                          </a>
+                        )}
+                        <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                          {fix.created_at
+                            ? new Date(fix.created_at).toLocaleDateString(
+                                undefined,
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                },
+                              )
+                            : "—"}
+                        </span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

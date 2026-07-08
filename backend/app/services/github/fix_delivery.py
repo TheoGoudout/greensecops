@@ -15,7 +15,6 @@ USER_COMMITS_ERROR_CODE = "user_commits_on_fix_branch"
 @dataclass
 class FixDeliveryResult:
     pr_url: str | None = None
-    comment_url: str | None = None
     error: str | None = None
     error_code: str | None = None
 
@@ -179,59 +178,10 @@ def _update_or_create_open_pr(
 
 
 class FixDeliveryService:
-    """Delivers LLM-generated fixes as PRs or issue comments."""
+    """Delivers LLM-generated fixes as PRs."""
 
     def __init__(self, app_client: GitHubAppClient) -> None:
         self._app = app_client
-
-    async def update_or_create_pr(
-        self,
-        installation_id: int,
-        full_name: str,
-        base_branch: str,
-        fix_branch: str,
-        file_path: str,
-        new_content: str,
-        pr_title: str,
-        pr_body: str,
-        expected_base_content: str | None = None,
-        override_user_commits: bool = False,
-    ) -> FixDeliveryResult:
-        """Create or update a single-file fix PR.
-
-        If the branch already exists: reset it to the latest base SHA (rebase),
-        apply the new file content, then update the open PR body and post a
-        comment. If no open PR exists, create one.
-
-        Aborts (with a machine-readable ``error_code``) when the file changed
-        on the base branch since the fix was generated, or when the fix branch
-        carries user commits and ``override_user_commits`` is false.
-        """
-        try:
-            token = await self._app.get_installation_token(installation_id)
-
-            def _upsert_pr() -> str:
-                repo = Github(auth=Auth.Token(token)).get_repo(full_name)
-                base_sha = repo.get_branch(base_branch).commit.sha
-
-                _check_base_content_fresh(
-                    repo, file_path, base_branch, expected_base_content
-                )
-                branch_existed = _prepare_fix_branch(
-                    repo, fix_branch, base_sha, override_user_commits
-                )
-                _upsert_file(
-                    repo, file_path, new_content, fix_branch, f"fix(ci): {pr_title}"
-                )
-                return _update_or_create_open_pr(
-                    repo, branch_existed, fix_branch, base_branch, pr_title, pr_body
-                )
-
-            return FixDeliveryResult(pr_url=await asyncio.to_thread(_upsert_pr))
-        except _DeliveryAborted as exc:
-            return FixDeliveryResult(error=str(exc), error_code=exc.code)
-        except Exception as exc:
-            return FixDeliveryResult(error=str(exc))
 
     async def update_or_create_workflow_action_pr(
         self,
@@ -247,8 +197,13 @@ class FixDeliveryService:
     ) -> FixDeliveryResult:
         """Create or update a multi-file fix PR.
 
-        Same rebase-and-update semantics as update_or_create_pr but for
-        multiple file changes in one branch update.
+        If the branch already exists: reset it to the latest base SHA (rebase),
+        apply the new file contents, then update the open PR body and post a
+        comment. If no open PR exists, create one.
+
+        Aborts (with a machine-readable ``error_code``) when a file changed
+        on the base branch since the fix was generated, or when the fix branch
+        carries user commits and ``override_user_commits`` is false.
         """
         try:
             token = await self._app.get_installation_token(installation_id)
@@ -278,48 +233,5 @@ class FixDeliveryService:
             return FixDeliveryResult(pr_url=await asyncio.to_thread(_upsert_batch_pr))
         except _DeliveryAborted as exc:
             return FixDeliveryResult(error=str(exc), error_code=exc.code)
-        except Exception as exc:
-            return FixDeliveryResult(error=str(exc))
-
-    async def deliver_as_comment(
-        self,
-        installation_id: int,
-        full_name: str,
-        body: str,
-        issue_number: int | None = None,
-        issue_title: str | None = None,
-    ) -> FixDeliveryResult:
-        """Post the fix as a comment on the fix's PR or a dedicated issue.
-
-        When ``issue_number`` is given (the fix's own pull request), comment
-        there. Otherwise find an open issue with ``issue_title`` (creating it
-        when absent) instead of assuming issue #1 exists and is ours.
-        """
-        title = issue_title or f"{settings.PROJECT_NAME} fixes"
-        try:
-            token = await self._app.get_installation_token(installation_id)
-
-            def _post_comment() -> str:
-                repo = Github(auth=Auth.Token(token)).get_repo(full_name)
-                if issue_number is not None:
-                    comment = repo.get_issue(issue_number).create_comment(body)
-                    return comment.html_url
-                target = None
-                for issue in repo.get_issues(state="open")[:100]:
-                    if issue.title == title and issue.pull_request is None:
-                        target = issue
-                        break
-                if target is None:
-                    target = repo.create_issue(
-                        title=title,
-                        body=(
-                            f"{settings.PROJECT_NAME} posts suggested workflow "
-                            "fixes on this issue."
-                        ),
-                    )
-                comment = target.create_comment(body)
-                return comment.html_url
-
-            return FixDeliveryResult(comment_url=await asyncio.to_thread(_post_comment))
         except Exception as exc:
             return FixDeliveryResult(error=str(exc))

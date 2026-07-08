@@ -108,34 +108,40 @@ class IssuePublic(SQLModel):
     workflow_file_path: str | None = None
 
 
-class FixPublic(SQLModel):
+class FixIssueSummary(SQLModel):
     id: uuid.UUID
-    issue_id: uuid.UUID
-    pr_id: uuid.UUID | None = None
-    llm_provider: LLMProvider
-    llm_model: str
-    status: FixStatus
-    diff_patch: str | None = None
-    pr_url: str | None = None
-    pr_branch: str | None = None
-    pr_state: PullRequestState | None = None
-    comment_url: str | None = None
-    created_at: datetime | None = None
-    delivered_at: datetime | None = None
     rule_slug: str | None = None
     severity: IssueSeverity | None = None
     category: IssueCategory | None = None
     message: str | None = None
     line_start: int | None = None
     line_end: int | None = None
+
+
+class FixPublic(SQLModel):
+    id: uuid.UUID
+    workflow_file_id: uuid.UUID
     workflow_file_path: str | None = None
+    repo_id: uuid.UUID | None = None
+    pr_id: uuid.UUID | None = None
+    llm_provider: LLMProvider
+    llm_model: str
+    status: FixStatus
+    full_content: str | None = None
+    base_content: str | None = None
+    error_message: str | None = None
+    pr_url: str | None = None
+    pr_branch: str | None = None
+    pr_state: PullRequestState | None = None
+    created_at: datetime | None = None
+    delivered_at: datetime | None = None
+    issues: list[FixIssueSummary] = []
 
 
 class WorkflowFilePublic(SQLModel):
     id: uuid.UUID
     path: str
     raw_content: str | None = None
-    last_full_content: str | None = None
 
 
 class PullRequestPublic(SQLModel):

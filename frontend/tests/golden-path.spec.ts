@@ -38,13 +38,26 @@ const MOCK_ISSUE = {
 
 const MOCK_FIX = {
   id: "00000000-0000-0000-0000-000000000050",
-  issue_id: MOCK_ISSUE.id,
+  workflow_file_id: MOCK_ANALYSIS.workflow_file_id,
+  workflow_file_path: ".github/workflows/ci.yml",
+  repo_id: MOCK_REPO.id,
   llm_provider: "openai",
-  status: "pending_review",
-  diff: "--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -10,6 +10,7 @@\n jobs:\n   build:\n+    timeout-minutes: 30\n     steps:",
+  llm_model: "gpt-4o-mini",
+  status: "ready",
+  full_content: "name: CI\non: push\njobs:\n  build:\n    timeout-minutes: 30",
   pr_url: null,
-  comment_url: null,
   created_at: "2024-01-02T10:01:00Z",
+  issues: [
+    {
+      id: MOCK_ISSUE.id,
+      rule_slug: MOCK_ISSUE.rule_slug,
+      severity: MOCK_ISSUE.severity,
+      category: MOCK_ISSUE.category,
+      message: MOCK_ISSUE.message,
+      line_start: MOCK_ISSUE.line_start,
+      line_end: MOCK_ISSUE.line_end,
+    },
+  ],
 }
 
 test.describe("Golden path: repository → analysis → issue → fix", () => {

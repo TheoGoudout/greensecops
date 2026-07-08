@@ -20,6 +20,7 @@ from app.models import (
     Analysis,
     AnalysisStatus,
     Fix,
+    FixIssueSummary,
     FixPublic,
     FixStatus,
     Issue,
@@ -34,7 +35,7 @@ from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import parse_pr_url
 from app.services.pr_body import IssueInfo, build_pr_body
-from app.workers.tasks.fix_delivery import deliver_fix, deliver_fixes_batch
+from app.workers.tasks.fix_delivery import deliver_fixes_batch
 from app.workers.tasks.fix_generation import run_fix_generation
 
 logger = logging.getLogger(__name__)
@@ -48,10 +49,9 @@ router = APIRouter(prefix="/fixes", tags=["fixes"])
 
 
 def _repo_id_for_fix(session: SessionDep, fix: Fix) -> uuid.UUID | None:
-    """Resolve the owning repository id for a fix (fix → issue → analysis)."""
-    issue = session.get(Issue, fix.issue_id)
-    analysis = session.get(Analysis, issue.analysis_id) if issue else None
-    return analysis.repo_id if analysis else None
+    """Resolve the owning repository id for a fix (fix → workflow file)."""
+    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
+    return wf_file.repo_id if wf_file else None
 
 
 def _authorize_fix(session: SessionDep, user: User, fix: Fix) -> None:
@@ -64,12 +64,101 @@ def _authorize_fix(session: SessionDep, user: User, fix: Fix) -> None:
     authorize_repo(session, user, repo_id, detail="Fix not found")
 
 
+def _issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
+    """Build PR-body issue summaries from the issues each fix addresses."""
+    return [
+        IssueInfo(
+            rule_slug=issue.rule.slug if issue.rule else "fix",
+            rule_title=issue.rule.title if issue.rule else "Fix",
+            category=issue.category.value if issue.category else "unknown",
+            severity=issue.severity.value if issue.severity else "unknown",
+            message=issue.message or "",
+        )
+        for fix in fixes
+        for issue in fix.issues
+    ]
+
+
+def _fixes_to_public(session: SessionDep, fixes: list[Fix]) -> list[FixPublic]:
+    """Bulk-populate FixPublic rows (workflow file, PR, issue summaries)."""
+    fix_ids = [f.id for f in fixes]
+
+    wf_ids = list({f.workflow_file_id for f in fixes})
+    wf_map: dict[uuid.UUID, WorkflowFile] = {}
+    if wf_ids:
+        wf_map = {
+            w.id: w
+            for w in session.exec(
+                select(WorkflowFile).where(WorkflowFile.id.in_(wf_ids))  # type: ignore[attr-defined]
+            ).all()
+        }
+
+    pr_ids = list({f.pr_id for f in fixes if f.pr_id})
+    prs_map: dict[uuid.UUID, PullRequest] = {}
+    if pr_ids:
+        prs_map = {
+            pr.id: pr
+            for pr in session.exec(
+                select(PullRequest).where(PullRequest.id.in_(pr_ids))  # type: ignore[attr-defined]
+            ).all()
+        }
+
+    issues_by_fix: dict[uuid.UUID, list[Issue]] = defaultdict(list)
+    rules_map: dict[uuid.UUID, Rule] = {}
+    if fix_ids:
+        issues = list(
+            session.exec(select(Issue).where(col(Issue.fix_id).in_(fix_ids))).all()
+        )
+        for issue in issues:
+            if issue.fix_id:
+                issues_by_fix[issue.fix_id].append(issue)
+        rule_ids = list({i.rule_id for i in issues if i.rule_id})
+        if rule_ids:
+            rules_map = {
+                r.id: r
+                for r in session.exec(
+                    select(Rule).where(Rule.id.in_(rule_ids))  # type: ignore[attr-defined]
+                ).all()
+            }
+
+    result: list[FixPublic] = []
+    for fix in fixes:
+        data = FixPublic.model_validate(fix)
+        wf_file = wf_map.get(fix.workflow_file_id)
+        if wf_file:
+            data.workflow_file_path = wf_file.path
+            data.repo_id = wf_file.repo_id
+
+        pr = prs_map.get(fix.pr_id) if fix.pr_id else None
+        if pr:
+            data.pr_url = pr.pr_url
+            data.pr_branch = pr.pr_branch
+            data.pr_state = pr.pr_state
+
+        data.issues = [
+            FixIssueSummary(
+                id=issue.id,
+                rule_slug=(
+                    rules_map[issue.rule_id].slug
+                    if issue.rule_id in rules_map
+                    else None
+                ),
+                severity=issue.severity,
+                category=issue.category,
+                message=issue.message,
+                line_start=issue.line_start,
+                line_end=issue.line_end,
+            )
+            for issue in issues_by_fix.get(fix.id, [])
+        ]
+        result.append(data)
+    return result
+
+
 @router.get("/", response_model=list[FixPublic])
 def list_fixes(
     session: SessionDep,
     current_user: CurrentUser,
-    issue_id: uuid.UUID | None = None,
-    analysis_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
     status: FixStatus | None = None,
     skip: int = Query(default=0, ge=0),
@@ -78,122 +167,24 @@ def list_fixes(
     query = select(Fix)
     if not current_user.is_superuser:
         # Restrict to fixes whose owning repository is in one of the user's orgs.
-        allowed_issue_ids = (
-            select(Issue.id)
-            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-            .where(
-                Analysis.repo_id.in_(  # type: ignore[attr-defined]
-                    select(Repository.id).where(
-                        Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
-                    )
+        allowed_wf_ids = select(WorkflowFile.id).where(
+            WorkflowFile.repo_id.in_(  # type: ignore[attr-defined]
+                select(Repository.id).where(
+                    Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
                 )
             )
         )
-        query = query.where(Fix.issue_id.in_(allowed_issue_ids))  # type: ignore[attr-defined]
-    if issue_id:
-        query = query.where(Fix.issue_id == issue_id)
-    if analysis_id or repo_id:
-        query = query.join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-        if analysis_id:
-            query = query.where(Issue.analysis_id == analysis_id)
-        if repo_id:
-            query = query.join(Analysis, Issue.analysis_id == Analysis.id).where(  # type: ignore[arg-type]
-                Analysis.repo_id == repo_id
-            )
+        query = query.where(Fix.workflow_file_id.in_(allowed_wf_ids))  # type: ignore[attr-defined]
+    if repo_id:
+        query = query.join(
+            WorkflowFile,
+            Fix.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
+        ).where(WorkflowFile.repo_id == repo_id)
     if status:
         query = query.where(Fix.status == status)
-    query = query.order_by(Fix.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
+    query = query.order_by(col(Fix.created_at).desc()).offset(skip).limit(limit)
     fixes = list(session.exec(query).all())
-
-    # Bulk-load issues, analyses, workflow files, and rules for ALL fixes
-    # so we can populate both diff_patch and the denormalized display fields.
-    all_issue_ids = [f.issue_id for f in fixes]
-    issues_map: dict[uuid.UUID, Issue] = {}
-    analyses_map: dict[uuid.UUID, Analysis] = {}
-    wf_files_map: dict[uuid.UUID, WorkflowFile] = {}
-    rules_map: dict[uuid.UUID, Rule] = {}
-
-    if all_issue_ids:
-        issues_map = {
-            i.id: i
-            for i in session.exec(
-                select(Issue).where(Issue.id.in_(all_issue_ids))
-            ).all()  # type: ignore[arg-type]
-        }
-        analysis_ids = list(
-            {i.analysis_id for i in issues_map.values() if i.analysis_id}
-        )
-        if analysis_ids:
-            analyses_map = {
-                a.id: a
-                for a in session.exec(
-                    select(Analysis).where(Analysis.id.in_(analysis_ids))
-                ).all()  # type: ignore[arg-type]
-            }
-        wf_file_ids = list(
-            {a.workflow_file_id for a in analyses_map.values() if a.workflow_file_id}
-        )
-        if wf_file_ids:
-            wf_files_map = {
-                w.id: w
-                for w in session.exec(
-                    select(WorkflowFile).where(WorkflowFile.id.in_(wf_file_ids))  # type: ignore[arg-type]
-                ).all()
-            }
-        rule_ids = list({i.rule_id for i in issues_map.values() if i.rule_id})
-        if rule_ids:
-            rules_map = {
-                r.id: r
-                for r in session.exec(
-                    select(Rule).where(Rule.id.in_(rule_ids))  # type: ignore[arg-type]
-                ).all()
-            }
-
-    # Bulk-load PullRequest rows
-    pr_ids = list({f.pr_id for f in fixes if f.pr_id})
-    prs_map: dict[uuid.UUID, PullRequest] = {}
-    if pr_ids:
-        prs_map = {
-            pr.id: pr
-            for pr in session.exec(
-                select(PullRequest).where(PullRequest.id.in_(pr_ids))  # type: ignore[arg-type]
-            ).all()
-        }
-
-    result: list[FixPublic] = []
-    for fix in fixes:
-        data = FixPublic.model_validate(fix)
-        issue = issues_map.get(fix.issue_id)
-        analysis = (
-            analyses_map.get(issue.analysis_id) if issue and issue.analysis_id else None
-        )
-        wf_file = (
-            wf_files_map.get(analysis.workflow_file_id)
-            if analysis and analysis.workflow_file_id
-            else None
-        )
-
-        if issue:
-            rule = rules_map.get(issue.rule_id) if issue.rule_id else None
-            data.rule_slug = rule.slug if rule else None
-            data.severity = issue.severity
-            data.category = issue.category
-            data.message = issue.message
-            data.line_start = issue.line_start
-            data.line_end = issue.line_end
-        if wf_file:
-            data.workflow_file_path = wf_file.path
-
-        pr = prs_map.get(fix.pr_id) if fix.pr_id else None
-        if pr:
-            data.pr_url = pr.pr_url
-            data.pr_branch = pr.pr_branch
-            data.pr_state = pr.pr_state
-            data.comment_url = pr.comment_url
-
-        data.diff_patch = fix.patch or None
-        result.append(data)
-    return result
+    return _fixes_to_public(session, fixes)
 
 
 @router.get("/{fix_id}", response_model=FixPublic)
@@ -204,32 +195,11 @@ def get_fix(
 ) -> FixPublic:
     fix = get_or_404(session, Fix, fix_id)
     _authorize_fix(session, current_user, fix)
-    data = FixPublic.model_validate(fix)
+    data = _fixes_to_public(session, [fix])[0]
 
-    issue = session.get(Issue, fix.issue_id)
-    analysis = session.get(Analysis, issue.analysis_id) if issue else None
-    wf_file = session.get(WorkflowFile, analysis.workflow_file_id) if analysis else None
-
-    if issue:
-        rule = session.get(Rule, issue.rule_id) if issue.rule_id else None
-        data.rule_slug = rule.slug if rule else None
-        data.severity = issue.severity
-        data.category = issue.category
-        data.message = issue.message
-        data.line_start = issue.line_start
-        data.line_end = issue.line_end
+    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
     if wf_file:
-        data.workflow_file_path = wf_file.path
-
-    pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
-    if pr:
-        data.pr_url = pr.pr_url
-        data.pr_branch = pr.pr_branch
-        data.pr_state = pr.pr_state
-        data.comment_url = pr.comment_url
-
-    data.diff_patch = fix.patch or None
-
+        data.base_content = wf_file.raw_content
     return data
 
 
@@ -241,7 +211,7 @@ def trigger_fix_generation_for_repo(
     body: BatchFixRequest = BatchFixRequest(),
     force: bool = False,
 ) -> dict[str, int]:
-    """Queue a single batch fix generation call per workflow file for issues in a repo.
+    """Queue one whole-file fix generation per workflow file for issues in a repo.
 
     When body.issue_ids is provided, only those issues are processed.
     When force=True, delivered fixes are also discarded and regenerated.
@@ -273,31 +243,34 @@ def trigger_fix_generation_for_repo(
     if not issues:
         return {"queued": 0}
 
-    issue_ids = [i.id for i in issues]
+    # Group by workflow file → one whole-file fix (one LLM call) per file.
+    # The latest-analysis correlation above guarantees workflow_file_id is set.
+    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
+    for issue in issues:
+        by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
 
-    # Fixes already attached to the selected issues are deleted below (or kept
-    # and skipped by the worker), so they don't add to the resulting total.
+    wf_file_ids = list(by_wf_file)
+
+    # Fixes already attached to the target workflow files are deleted below
+    # (or kept and skipped by the worker), so they don't add to the total.
     existing_fix_count = session.exec(
-        select(func.count()).select_from(Fix).where(Fix.issue_id.in_(issue_ids))  # type: ignore[attr-defined]
+        select(func.count())
+        .select_from(Fix)
+        .where(col(Fix.workflow_file_id).in_(wf_file_ids))
     ).one()
     enforce_quota(
         session,
         current_user,
         "fixes",
-        requested=len(issues),
+        requested=len(by_wf_file),
         replacing=existing_fix_count,
     )
 
-    delete_stmt = delete(Fix).where(Fix.issue_id.in_(issue_ids))  # type: ignore[attr-defined]
+    delete_stmt = delete(Fix).where(col(Fix.workflow_file_id).in_(wf_file_ids))
     if not force:
-        delete_stmt = delete_stmt.where(Fix.status != FixStatus.delivered)
+        delete_stmt = delete_stmt.where(col(Fix.status) != FixStatus.delivered)
     session.exec(delete_stmt)
     session.commit()
-
-    # Group by analysis_id → one LLM call per workflow file
-    by_analysis: dict[uuid.UUID, list[Issue]] = defaultdict(list)
-    for issue in issues:
-        by_analysis[issue.analysis_id].append(issue)
 
     repo = session.get(Repository, repo_id)
     if repo:
@@ -310,65 +283,14 @@ def trigger_fix_generation_for_repo(
             )
         )
 
-    for group in by_analysis.values():
+    for group in by_wf_file.values():
         run_fix_generation.delay(issue_ids=[str(i.id) for i in group], batch_mode=True)
 
-    return {"queued": len(issues)}
-
-
-@router.post("/generate/{issue_id}", status_code=202)
-def trigger_fix_generation(
-    issue_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-    force: bool = False,
-) -> dict[str, str]:
-    issue = get_or_404(session, Issue, issue_id)
-    if not current_user.is_superuser:
-        analysis = session.get(Analysis, issue.analysis_id)
-        if not analysis:
-            raise HTTPException(status_code=404, detail="Issue not found")
-        authorize_repo(
-            session, current_user, analysis.repo_id, detail="Issue not found"
-        )
-    from app.api.routes.billing import enforce_quota
-
-    existing_fix_count = session.exec(
-        select(func.count()).select_from(Fix).where(Fix.issue_id == issue_id)
-    ).one()
-    enforce_quota(
-        session, current_user, "fixes", requested=1, replacing=existing_fix_count
-    )
-
-    delete_stmt = delete(Fix).where(Fix.issue_id == issue_id)
-    if not force:
-        delete_stmt = delete_stmt.where(Fix.status != FixStatus.delivered)
-    session.exec(delete_stmt)
-    session.commit()
-
-    run_fix_generation.delay(issue_ids=[str(issue_id)])
-    return {"status": "queued", "issue_id": str(issue_id)}
-
-
-@router.post("/{fix_id}/deliver", status_code=202)
-def trigger_fix_delivery(
-    fix_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-    force: bool = False,
-) -> dict[str, str]:
-    fix = get_or_404(session, Fix, fix_id)
-    _authorize_fix(session, current_user, fix)
-    if not force and fix.status != FixStatus.ready:
-        raise HTTPException(
-            status_code=409, detail=f"Fix is not ready (status: {fix.status})"
-        )
-    deliver_fix.delay(fix_id=str(fix_id), force=force)
-    return {"status": "queued", "fix_id": str(fix_id)}
+    return {"queued": len(by_wf_file)}
 
 
 class WorkflowDeliverRequest(BaseModel):
-    fix_ids: list[uuid.UUID]
+    fix_id: uuid.UUID
 
 
 @router.post("/deliver-for-workflow", status_code=202)
@@ -378,75 +300,39 @@ def trigger_workflow_delivery(
     current_user: CurrentUser,
     force: bool = False,
 ) -> dict[str, str]:
-    """Deliver all ready fixes for one workflow file as a single PR.
+    """Deliver one workflow file's fix as a single PR.
 
-    When force=True, fixes in any status are included (not just ready).
+    When force=True, a fix in any status is accepted (not just ready).
     """
-    fixes = [session.get(Fix, fid) for fid in body.fix_ids]
-    fixes = [f for f in fixes if f and (force or f.status == FixStatus.ready)]
-    if not fixes:
-        raise HTTPException(status_code=404, detail="No ready fixes found")
+    fix = session.get(Fix, body.fix_id)
+    if not fix or (not force and fix.status != FixStatus.ready):
+        raise HTTPException(status_code=404, detail="No ready fix found")
 
-    issue = fixes[0].issue
-    analysis = issue.analysis if issue else None
-    repo = session.get(Repository, analysis.repo_id) if analysis else None
+    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
+    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
     if not current_user.is_superuser:
         authorize_repo(session, current_user, repo.id, detail="Repository not found")
-        # All fixes must belong to the same authorized repository.
-        for f in fixes:
-            if f and _repo_id_for_fix(session, f) != repo.id:
-                raise HTTPException(status_code=404, detail="No ready fixes found")
 
-    issues_info = [
-        IssueInfo(
-            rule_slug=fix.issue.rule.slug if fix.issue and fix.issue.rule else "fix",
-            rule_title=fix.issue.rule.title if fix.issue and fix.issue.rule else "Fix",
-            category=fix.issue.category.value
-            if fix.issue and fix.issue.category
-            else "unknown",
-            severity=fix.issue.severity.value
-            if fix.issue and fix.issue.severity
-            else "unknown",
-            message=fix.issue.message or "" if fix.issue else "",
-        )
-        for fix in fixes
-        if fix.issue
-    ]
     pr_body = build_pr_body(
-        issues=issues_info,
-        fix_ids=[str(f.id) for f in fixes],
+        issues=_issues_info_for_fixes([fix]),
+        fix_ids=[str(fix.id)],
         wiki_base_url=settings.WIKI_BASE_URL,
         frontend_host=settings.FRONTEND_HOST,
         bot_handle=settings.GITHUB_BOT_HANDLE,
         app_name=settings.PROJECT_NAME,
         app_url=settings.APP_URL,
     )
-    # Stable branch: reuse existing pr_branch from PullRequest table.
-    wf_id = (
-        fixes[0].issue.analysis.workflow_file_id
-        if fixes[0].issue and fixes[0].issue.analysis
-        else None
-    )
-    existing_branch: str | None = None
-    if wf_id:
-        existing_branch = session.exec(
-            select(PullRequest.pr_branch)
-            .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
-            .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-            .where(Analysis.workflow_file_id == wf_id)
-            .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
-            .limit(1)
-        ).first()
-    pr_branch = existing_branch or (
-        f"greensecops/fixes-wf-{str(wf_id)[:8]}"
-        if wf_id
-        else f"greensecops/fixes-wf-{fixes[0].id!s:.8}"
+    # Stable branch: reuse the branch of the fix's own PR when it has one.
+    existing_pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
+    pr_branch = (
+        existing_pr.pr_branch
+        if existing_pr
+        else f"greensecops/fixes-wf-{str(fix.workflow_file_id)[:8]}"
     )
     deliver_fixes_batch.delay(
-        fix_ids=[str(f.id) for f in fixes],
+        fix_ids=[str(fix.id)],
         repo_id=str(repo.id),
         pr_branch=pr_branch,
         pr_title=f"fix(ci): apply {settings.PROJECT_NAME} fixes for workflow",
@@ -471,32 +357,16 @@ def trigger_repo_delivery(
 
     base_query = (
         select(Fix)
-        .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo_id)
+        .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .where(WorkflowFile.repo_id == repo_id)
     )
     query = base_query if force else base_query.where(Fix.status == FixStatus.ready)
     fixes = list(session.exec(query).all())
     if not fixes:
         raise HTTPException(status_code=404, detail="No ready fixes found")
 
-    issues_info = [
-        IssueInfo(
-            rule_slug=fix.issue.rule.slug if fix.issue and fix.issue.rule else "fix",
-            rule_title=fix.issue.rule.title if fix.issue and fix.issue.rule else "Fix",
-            category=fix.issue.category.value
-            if fix.issue and fix.issue.category
-            else "unknown",
-            severity=fix.issue.severity.value
-            if fix.issue and fix.issue.severity
-            else "unknown",
-            message=fix.issue.message or "" if fix.issue else "",
-        )
-        for fix in fixes
-        if fix.issue
-    ]
     pr_body = build_pr_body(
-        issues=issues_info,
+        issues=_issues_info_for_fixes(fixes),
         fix_ids=[str(f.id) for f in fixes],
         wiki_base_url=settings.WIKI_BASE_URL,
         frontend_host=settings.FRONTEND_HOST,
@@ -507,9 +377,8 @@ def trigger_repo_delivery(
     existing_branch = session.exec(
         select(PullRequest.pr_branch)
         .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
-        .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo_id)
+        .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .where(WorkflowFile.repo_id == repo_id)
         .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
         .limit(1)
     ).first()
@@ -537,9 +406,8 @@ def reject_fix(
     session.add(fix)
     session.commit()
 
-    issue = session.get(Issue, fix.issue_id)
-    analysis = session.get(Analysis, issue.analysis_id) if issue else None
-    repo = session.get(Repository, analysis.repo_id) if analysis else None
+    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
+    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
     if repo:
         events_pub.publish_event(
             ev.fix_rejected(str(repo.org_id), str(repo.id), str(fix_id))
@@ -572,17 +440,24 @@ def regenerate_fixes_for_pr(
     if not fixes:
         return {"queued": 0}
 
-    by_analysis: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+    # Regenerate the unresolved issues each fix addressed, per workflow file.
+    issue_groups: list[list[uuid.UUID]] = []
     for fix in fixes:
-        issue = session.get(Issue, fix.issue_id)
-        if issue and issue.analysis_id:
-            by_analysis[issue.analysis_id].append(issue.id)
+        issue_ids = list(
+            session.exec(
+                select(Issue.id)
+                .where(Issue.fix_id == fix.id)
+                .where(col(Issue.resolved_at).is_(None))
+            ).all()
+        )
+        if issue_ids:
+            issue_groups.append(issue_ids)
 
     fix_ids_to_delete = [fix.id for fix in fixes]
     session.exec(delete(Fix).where(Fix.id.in_(fix_ids_to_delete)))  # type: ignore[attr-defined]
     session.commit()
 
-    all_issue_ids = [iid for ids in by_analysis.values() for iid in ids]
+    all_issue_ids = [iid for ids in issue_groups for iid in ids]
 
     repo = session.get(Repository, pr.repo_id)
     if repo:
@@ -595,7 +470,7 @@ def regenerate_fixes_for_pr(
             )
         )
 
-    for issue_ids in by_analysis.values():
+    for issue_ids in issue_groups:
         run_fix_generation.delay(
             issue_ids=[str(iid) for iid in issue_ids],
             batch_mode=True,
@@ -616,10 +491,7 @@ async def sync_pr_statuses(
     open_prs = list(
         session.exec(
             select(PullRequest)
-            .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
-            .join(Issue, Fix.issue_id == Issue.id)  # type: ignore[arg-type]
-            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-            .where(Analysis.repo_id == repo_id)
+            .where(PullRequest.repo_id == repo_id)
             .where(PullRequest.pr_url.is_not(None))  # type: ignore[union-attr]
             .where(PullRequest.pr_state == PullRequestState.open)
         ).all()

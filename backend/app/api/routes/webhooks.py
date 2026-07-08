@@ -8,10 +8,8 @@ from app import crud
 from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import (
-    Analysis,
     AnalysisTrigger,
     Fix,
-    Issue,
     Organization,
     PullRequest,
     PullRequestState,
@@ -386,9 +384,7 @@ def _handle_pull_request_event(
     pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
     fix = pr_fixes[0] if pr_fixes else None
     if fix:
-        issue = session.get(Issue, fix.issue_id)
-        analysis = session.get(Analysis, issue.analysis_id) if issue else None
-        repo = session.get(Repository, analysis.repo_id) if analysis else None
+        repo = session.get(Repository, pr_record.repo_id)
         if repo:
             if action == "closed":
                 events_pub.publish_event(

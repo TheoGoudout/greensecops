@@ -3,10 +3,11 @@
 from types import SimpleNamespace
 
 from app.models import LLMProvider
-from app.workers.patch_utils import apply_patch
 from app.workers.tasks.fix_generation import (
     _is_valid_workflow_yaml,
+    _parse_llm_response,
     _resolve_llm_provider,
+    restore_trailing_whitespace,
 )
 
 _WORKFLOW = (
@@ -20,24 +21,83 @@ _WORKFLOW = (
 )
 
 
-def test_non_applying_patch_is_rejected() -> None:
-    patch = "@@ -100,1 +100,1 @@\n-nonexistent line\n+replacement\n"
-    assert apply_patch(_WORKFLOW, patch) is None
+# ─── _parse_llm_response ─────────────────────────────────────────────────────
 
 
-def test_patched_invalid_yaml_is_rejected() -> None:
-    # Replace the first line with structurally broken YAML
-    patch = "@@ -1,1 +1,1 @@\n-name: CI\n+{ invalid: yaml: [}\n"
-    patched = apply_patch(_WORKFLOW, patch)
-    assert patched is not None
-    assert _is_valid_workflow_yaml(patched) is False
+def test_parse_llm_response_extracts_full_content() -> None:
+    response = f"<full_content>\n{_WORKFLOW}</full_content>"
+    assert _parse_llm_response(response) == _WORKFLOW.rstrip("\n")
 
 
-def test_good_patch_yields_valid_yaml() -> None:
-    patch = "@@ -5,1 +5,2 @@\n     runs-on: ubuntu-latest\n+    timeout-minutes: 15\n"
-    patched = apply_patch(_WORKFLOW, patch)
-    assert patched is not None
-    assert _is_valid_workflow_yaml(patched) is True
+def test_parse_llm_response_missing_block_returns_empty() -> None:
+    assert _parse_llm_response("no delimiters here") == ""
+
+
+def test_parse_llm_response_ignores_surrounding_prose() -> None:
+    response = (
+        "Here is the fixed workflow:\n"
+        "<full_content>\nname: CI\non: push\n</full_content>\n"
+        "All issues addressed."
+    )
+    assert _parse_llm_response(response) == "name: CI\non: push"
+
+
+# ─── _is_valid_workflow_yaml ─────────────────────────────────────────────────
+
+
+def test_valid_workflow_yaml_accepted() -> None:
+    assert _is_valid_workflow_yaml(_WORKFLOW) is True
+
+
+def test_invalid_yaml_rejected() -> None:
+    assert _is_valid_workflow_yaml("{ invalid: yaml: [}") is False
+
+
+def test_non_mapping_yaml_rejected() -> None:
+    assert _is_valid_workflow_yaml("- just\n- a\n- list\n") is False
+
+
+# ─── restore_trailing_whitespace ─────────────────────────────────────────────
+
+
+def test_restore_trailing_whitespace_restores_stripped_space() -> None:
+    original = "hello   \nworld"
+    patched = "hello\nworld"
+    result = restore_trailing_whitespace(original, patched)
+    assert result == "hello   \nworld"
+
+
+def test_restore_trailing_whitespace_keeps_new_content() -> None:
+    # When stripped content differs, keep the new line
+    original = "hello\nworld"
+    patched = "hello\nuniverse"
+    result = restore_trailing_whitespace(original, patched)
+    assert result == "hello\nuniverse"
+
+
+def test_restore_trailing_whitespace_no_change_needed() -> None:
+    original = "a\nb\nc"
+    patched = "a\nb\nc"
+    result = restore_trailing_whitespace(original, patched)
+    assert result == "a\nb\nc"
+
+
+def test_restore_trailing_whitespace_new_lines_beyond_original() -> None:
+    # Extra lines in patched that have no corresponding original line are kept as-is
+    original = "a"
+    patched = "a\nb\nc"
+    result = restore_trailing_whitespace(original, patched)
+    assert result == "a\nb\nc"
+
+
+def test_restore_trailing_whitespace_tab_trailing() -> None:
+    original = "line\t\nend"
+    patched = "line\nend"
+    result = restore_trailing_whitespace(original, patched)
+    assert result == "line\t\nend"
+
+
+# ─── _resolve_llm_provider ───────────────────────────────────────────────────
 
 
 def test_resolve_llm_provider_uses_provider_default_model() -> None:

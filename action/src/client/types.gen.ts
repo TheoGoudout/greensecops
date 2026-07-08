@@ -63,27 +63,34 @@ export type ExternalRepositoryCreate = {
 
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
-export type FixPublic = {
+export type FixIssueSummary = {
     id: string;
-    issue_id: string;
-    pr_id?: (string | null);
-    llm_provider: LLMProvider;
-    llm_model: string;
-    status: FixStatus;
-    diff_patch?: (string | null);
-    pr_url?: (string | null);
-    pr_branch?: (string | null);
-    pr_state?: (PullRequestState | null);
-    comment_url?: (string | null);
-    created_at?: (string | null);
-    delivered_at?: (string | null);
     rule_slug?: (string | null);
     severity?: (IssueSeverity | null);
     category?: (IssueCategory | null);
     message?: (string | null);
     line_start?: (number | null);
     line_end?: (number | null);
+};
+
+export type FixPublic = {
+    id: string;
+    workflow_file_id: string;
     workflow_file_path?: (string | null);
+    repo_id?: (string | null);
+    pr_id?: (string | null);
+    llm_provider: LLMProvider;
+    llm_model: string;
+    status: FixStatus;
+    full_content?: (string | null);
+    base_content?: (string | null);
+    error_message?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    pr_state?: (PullRequestState | null);
+    created_at?: (string | null);
+    delivered_at?: (string | null);
+    issues?: Array<FixIssueSummary>;
 };
 
 export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected';
@@ -269,14 +276,13 @@ export type ValidationError = {
 };
 
 export type WorkflowDeliverRequest = {
-    fix_ids: Array<(string)>;
+    fix_id: string;
 };
 
 export type WorkflowFilePublic = {
     id: string;
     path: string;
     raw_content?: (string | null);
-    last_full_content?: (string | null);
 };
 
 export type AnalysesListAnalysesData = {
@@ -364,8 +370,6 @@ export type EventsStreamEventsData = {
 export type EventsStreamEventsResponse = (unknown);
 
 export type FixesListFixesData = {
-    analysisId?: (string | null);
-    issueId?: (string | null);
     limit?: number;
     repoId?: (string | null);
     skip?: number;
@@ -394,24 +398,6 @@ export type FixesTriggerFixGenerationForRepoData = {
 
 export type FixesTriggerFixGenerationForRepoResponse = ({
     [key: string]: (number);
-});
-
-export type FixesTriggerFixGenerationData = {
-    force?: boolean;
-    issueId: string;
-};
-
-export type FixesTriggerFixGenerationResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesTriggerFixDeliveryData = {
-    fixId: string;
-    force?: boolean;
-};
-
-export type FixesTriggerFixDeliveryResponse = ({
-    [key: string]: (string);
 });
 
 export type FixesTriggerWorkflowDeliveryData = {

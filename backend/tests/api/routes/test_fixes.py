@@ -28,6 +28,8 @@ from app.models import (
 )
 from tests.utils.user import authentication_token_from_email, create_random_user
 
+_FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -125,24 +127,42 @@ def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
 
 
 @pytest.fixture()
-def ready_fix(db: Session, issue: Issue) -> Fix:
+def ready_fix(db: Session, workflow_file: WorkflowFile, issue: Issue) -> Fix:
     f = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.ready,
-        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
+        full_content=_FULL_CONTENT,
     )
     db.add(f)
     db.commit()
     db.refresh(f)
+    issue.fix_id = f.id
+    db.add(issue)
+    db.commit()
     return f
 
 
 @pytest.fixture()
-def pending_fix(db: Session, db_issue_for_pending: Issue) -> Fix:
+def pending_workflow_file(db: Session, repo: Repository) -> WorkflowFile:
+    """A second workflow file (one Fix per workflow file — unique constraint)."""
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/fixes-test-pending.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    return wf
+
+
+@pytest.fixture()
+def pending_fix(db: Session, pending_workflow_file: WorkflowFile) -> Fix:
     f = Fix(
-        issue_id=db_issue_for_pending.id,
+        workflow_file_id=pending_workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.pending,
@@ -153,23 +173,43 @@ def pending_fix(db: Session, db_issue_for_pending: Issue) -> Fix:
     return f
 
 
-@pytest.fixture()
-def db_issue_for_pending(db: Session, analysis: Analysis, rule: Rule) -> Issue:
-    """A second issue for the pending fix fixture (avoids unique constraint on issue_id)."""
+def _make_wf_with_issue(
+    db: Session, repo: Repository, rule: Rule, n: int
+) -> tuple[WorkflowFile, Issue]:
+    """A workflow file with a completed analysis and one unresolved issue."""
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=f".github/workflows/quota-{n}-{uuid.uuid4().hex[:6]}.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    a = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
     i = Issue(
-        analysis_id=analysis.id,
-        workflow_file_id=analysis.workflow_file_id,
+        analysis_id=a.id,
+        workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.low,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=IssueSeverity.medium,
         category=IssueCategory.reliability,
-        line_start=20,
-        line_end=22,
-        message="Second test issue for pending fix",
+        message=f"quota issue {n}",
     )
     db.add(i)
     db.commit()
     db.refresh(i)
-    return i
+    return wf, i
 
 
 # ─── GET /fixes/ ──────────────────────────────────────────────────────────────
@@ -178,67 +218,21 @@ def db_issue_for_pending(db: Session, analysis: Analysis, rule: Rule) -> Issue:
 def test_list_fixes_empty(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
+    repo: Repository,
 ) -> None:
-    # Arrange — issue fixture exists but no fix attached yet
-    # (ready_fix fixture is not used here)
-
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/fixes/",
-        params={"issue_id": str(issue.id)},
+        params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
 
     # Assert
     assert response.status_code == 200
-    # The issue may or may not already have a fix from another test — we just
-    # verify the endpoint returns 200 with a list.
-    assert isinstance(response.json(), list)
+    assert response.json() == []
 
 
 def test_list_fixes_with_data(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    ready_fix: Fix,
-    issue: Issue,
-) -> None:
-    # Act
-    response = client.get(
-        f"{settings.API_V1_STR}/fixes/",
-        params={"issue_id": str(issue.id)},
-        headers=superuser_token_headers,
-    )
-
-    # Assert
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    ids = [f["id"] for f in data]
-    assert str(ready_fix.id) in ids
-
-
-def test_list_fixes_filter_by_status(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    ready_fix: Fix,
-    issue: Issue,
-) -> None:
-    # Act
-    response = client.get(
-        f"{settings.API_V1_STR}/fixes/",
-        params={"issue_id": str(issue.id), "status": "ready"},
-        headers=superuser_token_headers,
-    )
-
-    # Assert
-    assert response.status_code == 200
-    data = response.json()
-    assert all(f["status"] == "ready" for f in data)
-    assert any(f["id"] == str(ready_fix.id) for f in data)
-
-
-def test_list_fixes_filter_by_repo_id(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     ready_fix: Fix,
@@ -254,26 +248,58 @@ def test_list_fixes_filter_by_repo_id(
     # Assert
     assert response.status_code == 200
     data = response.json()
-    assert any(f["id"] == str(ready_fix.id) for f in data)
+    assert isinstance(data, list)
+    ids = [f["id"] for f in data]
+    assert str(ready_fix.id) in ids
 
 
-def test_list_fixes_filter_by_analysis_id(
+def test_list_fixes_filter_by_status(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     ready_fix: Fix,
-    analysis: Analysis,
+    repo: Repository,
 ) -> None:
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/fixes/",
-        params={"analysis_id": str(analysis.id)},
+        params={"repo_id": str(repo.id), "status": "ready"},
         headers=superuser_token_headers,
     )
 
     # Assert
     assert response.status_code == 200
     data = response.json()
+    assert all(f["status"] == "ready" for f in data)
     assert any(f["id"] == str(ready_fix.id) for f in data)
+
+
+def test_list_fixes_includes_issue_summaries(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    ready_fix: Fix,
+    issue: Issue,
+    rule: Rule,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/fixes/",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    # Assert — the fix carries its addressed issues and workflow path
+    assert response.status_code == 200
+    fix_data = next(f for f in response.json() if f["id"] == str(ready_fix.id))
+    assert fix_data["workflow_file_id"] == str(workflow_file.id)
+    assert fix_data["workflow_file_path"] == workflow_file.path
+    assert fix_data["repo_id"] == str(repo.id)
+    issue_ids = [i["id"] for i in fix_data["issues"]]
+    assert str(issue.id) in issue_ids
+    issue_data = next(i for i in fix_data["issues"] if i["id"] == str(issue.id))
+    assert issue_data["rule_slug"] == rule.slug
+    assert issue_data["message"] == issue.message
 
 
 # ─── GET /fixes/{id} ──────────────────────────────────────────────────────────
@@ -283,6 +309,7 @@ def test_get_fix_found(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     ready_fix: Fix,
+    workflow_file: WorkflowFile,
 ) -> None:
     # Act
     response = client.get(
@@ -295,6 +322,9 @@ def test_get_fix_found(
     body = response.json()
     assert body["id"] == str(ready_fix.id)
     assert body["status"] == "ready"
+    assert body["full_content"] == _FULL_CONTENT
+    # Detail view includes the current file content for diff rendering
+    assert body["base_content"] == workflow_file.raw_content
 
 
 def test_get_fix_not_found(
@@ -328,11 +358,41 @@ def test_generate_fixes_for_repo_queues_tasks(
             headers=superuser_token_headers,
         )
 
-    # Assert
+    # Assert — queued counts workflow files, not issues
     assert response.status_code == 202
     body = response.json()
-    assert body["queued"] >= 1
+    assert body["queued"] == 1
     mock_delay.assert_called()
+
+
+def test_generate_fixes_for_repo_one_task_per_workflow_file(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    rule: Rule,
+) -> None:
+    # Arrange — two workflow files, two issues each
+    _wf1, issue1 = _make_wf_with_issue(db, repo, rule, 1)
+    _wf2, issue2 = _make_wf_with_issue(db, repo, rule, 2)
+
+    # Act
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+            json={"issue_ids": [str(issue1.id), str(issue2.id)]},
+        )
+
+    # Assert — one generation task per workflow file
+    assert response.status_code == 202
+    assert response.json()["queued"] == 2
+    assert mock_delay.call_count == 2
+    queued_groups = [
+        set(call.kwargs["issue_ids"]) for call in mock_delay.call_args_list
+    ]
+    assert {str(issue1.id)} in queued_groups
+    assert {str(issue2.id)} in queued_groups
 
 
 def test_generate_fixes_for_repo_with_issue_ids_filter(
@@ -352,8 +412,8 @@ def test_generate_fixes_for_repo_with_issue_ids_filter(
     # Assert
     assert response.status_code == 202
     body = response.json()
-    assert body["queued"] >= 1
-    mock_delay.assert_called()
+    assert body["queued"] == 1
+    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
 
 
 def test_generate_fixes_for_repo_with_nonexistent_issue_ids_returns_zero(
@@ -380,8 +440,6 @@ def test_generate_fixes_for_repo_regeneration_allowed_at_quota(
     db: Session,
     org: Organization,
     repo: Repository,
-    workflow_file: WorkflowFile,
-    analysis: Analysis,
     rule: Rule,
 ) -> None:
     """A free-tier user at the fixes quota can still REgenerate existing fixes.
@@ -397,25 +455,11 @@ def test_generate_fixes_for_repo_regeneration_allowed_at_quota(
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
     free_fix_limit = 5
-    issues = []
     for n in range(free_fix_limit):
-        i = Issue(
-            analysis_id=analysis.id,
-            workflow_file_id=workflow_file.id,
-            rule_id=rule.id,
-            fingerprint=uuid.uuid4().hex[:16],
-            severity=IssueSeverity.medium,
-            category=IssueCategory.reliability,
-            message=f"quota issue {n}",
-        )
-        db.add(i)
-        issues.append(i)
-    db.commit()
-    for i in issues:
-        db.refresh(i)
+        wf, _issue = _make_wf_with_issue(db, repo, rule, n)
         db.add(
             Fix(
-                issue_id=i.id,
+                workflow_file_id=wf.id,
                 llm_provider=LLMProvider.openai,
                 llm_model="gpt-4o-mini",
                 status=FixStatus.ready,
@@ -441,8 +485,6 @@ def test_generate_fixes_for_repo_blocks_net_new_over_quota(
     db: Session,
     org: Organization,
     repo: Repository,
-    workflow_file: WorkflowFile,
-    analysis: Analysis,
     rule: Rule,
 ) -> None:
     """A free-tier user cannot generate more NET-NEW fixes than the quota."""
@@ -453,18 +495,7 @@ def test_generate_fixes_for_repo_blocks_net_new_over_quota(
 
     free_fix_limit = 5
     for n in range(free_fix_limit + 1):
-        db.add(
-            Issue(
-                analysis_id=analysis.id,
-                workflow_file_id=workflow_file.id,
-                rule_id=rule.id,
-                fingerprint=uuid.uuid4().hex[:16],
-                severity=IssueSeverity.medium,
-                category=IssueCategory.reliability,
-                message=f"over-quota issue {n}",
-            )
-        )
-    db.commit()
+        _make_wf_with_issue(db, repo, rule, n)
 
     # Act — no existing fixes; requesting limit+1 new ones must be rejected
     with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
@@ -486,7 +517,7 @@ def test_generate_fixes_for_repo_replaces_existing_fixes(
     repo: Repository,
     db: Session,
 ) -> None:
-    # Arrange — ready_fix.issue already has a ready fix
+    # Arrange — the workflow file already has a ready fix
     fix_id = ready_fix.id
     with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
@@ -496,123 +527,10 @@ def test_generate_fixes_for_repo_replaces_existing_fixes(
 
     # Assert — existing non-delivered fix deleted, new task queued
     assert response.status_code == 202
-    assert response.json()["queued"] >= 1
+    assert response.json()["queued"] == 1
     mock_delay.assert_called()
     db.expire_all()  # clear identity map so get() hits the DB
     assert db.get(Fix, fix_id) is None
-
-
-# ─── POST /fixes/generate/{issue_id} ─────────────────────────────────────────
-
-
-def test_generate_fix_queues_task(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    db: Session,
-    analysis: Analysis,
-    rule: Rule,
-) -> None:
-    # Arrange — create a fresh issue so no existing fix conflicts
-    fresh_issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
-        line_start=1,
-        line_end=3,
-        message="Issue for generate test",
-    )
-    db.add(fresh_issue)
-    db.commit()
-    db.refresh(fresh_issue)
-
-    # Act
-    with patch(
-        "app.workers.tasks.fix_generation.run_fix_generation.delay"
-    ) as mock_delay:
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/generate/{fresh_issue.id}",
-            headers=superuser_token_headers,
-        )
-
-    # Assert
-    assert response.status_code == 202
-    body = response.json()
-    assert body["status"] == "queued"
-    assert body["issue_id"] == str(fresh_issue.id)
-    mock_delay.assert_called_once_with(issue_ids=[str(fresh_issue.id)])
-
-
-def test_generate_fix_issue_not_found(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-) -> None:
-    # Act
-    with patch("app.workers.tasks.fix_generation.run_fix_generation.delay"):
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/generate/{uuid.uuid4()}",
-            headers=superuser_token_headers,
-        )
-
-    # Assert
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Issue not found"
-
-
-# ─── POST /fixes/{id}/deliver ─────────────────────────────────────────────────
-
-
-def test_deliver_fix_queues_task(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    ready_fix: Fix,
-) -> None:
-    # Act
-    with patch("app.workers.tasks.fix_delivery.deliver_fix.delay") as mock_delay:
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/{ready_fix.id}/deliver",
-            headers=superuser_token_headers,
-        )
-
-    # Assert
-    assert response.status_code == 202
-    body = response.json()
-    assert body["status"] == "queued"
-    assert body["fix_id"] == str(ready_fix.id)
-    mock_delay.assert_called_once_with(fix_id=str(ready_fix.id), force=False)
-
-
-def test_deliver_fix_not_ready_returns_409(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    pending_fix: Fix,
-) -> None:
-    # Act
-    with patch("app.workers.tasks.fix_delivery.deliver_fix.delay"):
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/{pending_fix.id}/deliver",
-            headers=superuser_token_headers,
-        )
-
-    # Assert
-    assert response.status_code == 409
-    assert "not ready" in response.json()["detail"].lower()
-
-
-def test_deliver_fix_not_found(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-) -> None:
-    # Act
-    with patch("app.workers.tasks.fix_delivery.deliver_fix.delay"):
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/{uuid.uuid4()}/deliver",
-            headers=superuser_token_headers,
-        )
-
-    # Assert
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Fix not found"
 
 
 # ─── DELETE /fixes/{id} ───────────────────────────────────────────────────────
@@ -658,6 +576,7 @@ def test_deliver_for_workflow_queues_batch(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     ready_fix: Fix,
+    workflow_file: WorkflowFile,
 ) -> None:
     # Act
     with patch(
@@ -666,7 +585,7 @@ def test_deliver_for_workflow_queues_batch(
         response = client.post(
             f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
             headers=superuser_token_headers,
-            json={"fix_ids": [str(ready_fix.id)]},
+            json={"fix_id": str(ready_fix.id)},
         )
 
     # Assert
@@ -674,7 +593,10 @@ def test_deliver_for_workflow_queues_batch(
     assert response.json()["status"] == "queued"
     mock_delay.assert_called_once()
     call_kwargs = mock_delay.call_args.kwargs
-    assert str(ready_fix.id) in call_kwargs["fix_ids"]
+    assert call_kwargs["fix_ids"] == [str(ready_fix.id)]
+    assert call_kwargs["pr_branch"] == (
+        f"greensecops/fixes-wf-{str(workflow_file.id)[:8]}"
+    )
 
 
 def test_deliver_for_workflow_no_ready_fixes_returns_404(
@@ -687,15 +609,15 @@ def test_deliver_for_workflow_no_ready_fixes_returns_404(
         response = client.post(
             f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
             headers=superuser_token_headers,
-            json={"fix_ids": [str(pending_fix.id)]},
+            json={"fix_id": str(pending_fix.id)},
         )
 
     # Assert
     assert response.status_code == 404
-    assert "No ready fixes" in response.json()["detail"]
+    assert "No ready fix" in response.json()["detail"]
 
 
-def test_deliver_for_workflow_empty_ids_returns_404(
+def test_deliver_for_workflow_unknown_id_returns_404(
     client: TestClient,
     superuser_token_headers: dict[str, str],
 ) -> None:
@@ -704,11 +626,47 @@ def test_deliver_for_workflow_empty_ids_returns_404(
         response = client.post(
             f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
             headers=superuser_token_headers,
-            json={"fix_ids": [str(uuid.uuid4())]},
+            json={"fix_id": str(uuid.uuid4())},
         )
 
     # Assert
     assert response.status_code == 404
+
+
+def test_deliver_for_workflow_reuses_existing_pr_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    ready_fix: Fix,
+    repo: Repository,
+) -> None:
+    # Arrange — the fix was delivered before via a PR on a custom branch
+    existing_branch = "greensecops/fixes-wf-previous"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=existing_branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/98",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    ready_fix.pr_id = pr.id
+    db.add(ready_fix)
+    db.commit()
+
+    # Act
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
+            headers=superuser_token_headers,
+            json={"fix_id": str(ready_fix.id)},
+        )
+
+    assert response.status_code == 202
+    assert mock_delay.call_args.kwargs["pr_branch"] == existing_branch
 
 
 # ─── POST /fixes/deliver-for-repo/{repo_id} ───────────────────────────────────
@@ -760,18 +718,16 @@ def test_deliver_for_repo_no_ready_fixes_returns_404(
     repo: Repository,
     pending_fix: Fix,
 ) -> None:
-    # Act - repo exists but only has a pending fix (not ready)
-    # We use a separate repo that only has the pending fix to avoid interference
+    # Act — repo only has a pending fix (not ready)
     with patch("app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"):
         response = client.post(
             f"{settings.API_V1_STR}/fixes/deliver-for-repo/{repo.id}",
             headers=superuser_token_headers,
         )
 
-    # Assert - pending_fix is not ready, so no fixes to deliver
-    # Note: repo fixture may have a ready_fix from other tests in same session,
-    # so we only assert a valid HTTP response
-    assert response.status_code in (202, 404)
+    # Assert
+    assert response.status_code == 404
+    assert "No ready fixes" in response.json()["detail"]
 
 
 # ─── Force re-run tests ───────────────────────────────────────────────────────
@@ -782,15 +738,16 @@ def test_generate_fixes_for_repo_preserves_delivered_and_skips_in_task(
     superuser_token_headers: dict[str, str],
     db: Session,
     issue: Issue,
+    workflow_file: WorkflowFile,
     repo: Repository,
 ) -> None:
-    # Arrange — delivered fix must not be re-inserted (unique constraint)
+    # Arrange — delivered fix must not be replaced (unique constraint)
     delivered_fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
+        full_content=_FULL_CONTENT,
     )
     db.add(delivered_fix)
     db.commit()
@@ -816,15 +773,16 @@ def test_generate_fixes_for_repo_force_deletes_delivered(
     superuser_token_headers: dict[str, str],
     db: Session,
     issue: Issue,
+    workflow_file: WorkflowFile,
     repo: Repository,
 ) -> None:
     # Arrange — create a delivered fix that should normally be preserved
     delivered_fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
+        full_content=_FULL_CONTENT,
     )
     db.add(delivered_fix)
     db.commit()
@@ -845,43 +803,12 @@ def test_generate_fixes_for_repo_force_deletes_delivered(
     assert db.get(Fix, fix_id) is None
 
 
-def test_trigger_fix_delivery_force_bypasses_status_check(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    db: Session,
-    issue: Issue,
-) -> None:
-    # Arrange — a fix that is already delivered (would normally return 409)
-    delivered_fix = Fix(
-        issue_id=issue.id,
-        llm_provider=LLMProvider.openai,
-        llm_model="gpt-4o-mini",
-        status=FixStatus.delivered,
-        diff="--- a/ci.yml\n+++ b/ci.yml\n@@ -1 +1 @@\n-old\n+new",
-    )
-    db.add(delivered_fix)
-    db.commit()
-    db.refresh(delivered_fix)
-
-    # Act
-    with patch("app.workers.tasks.fix_delivery.deliver_fix.delay") as mock_delay:
-        response = client.post(
-            f"{settings.API_V1_STR}/fixes/{delivered_fix.id}/deliver",
-            params={"force": "true"},
-            headers=superuser_token_headers,
-        )
-
-    # Assert — 202 instead of 409, force=True forwarded to task
-    assert response.status_code == 202
-    mock_delay.assert_called_once_with(fix_id=str(delivered_fix.id), force=True)
-
-
 def test_deliver_for_workflow_force_includes_non_ready(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     pending_fix: Fix,
 ) -> None:
-    # Act — pending fix would normally be excluded (no ready fixes → 404)
+    # Act — pending fix would normally be excluded (no ready fix → 404)
     with patch(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
@@ -889,7 +816,7 @@ def test_deliver_for_workflow_force_includes_non_ready(
             f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
             params={"force": "true"},
             headers=superuser_token_headers,
-            json={"fix_ids": [str(pending_fix.id)]},
+            json={"fix_id": str(pending_fix.id)},
         )
 
     # Assert — force=True includes the pending fix
@@ -897,7 +824,7 @@ def test_deliver_for_workflow_force_includes_non_ready(
     assert response.json()["status"] == "queued"
     mock_delay.assert_called_once()
     call_kwargs = mock_delay.call_args.kwargs
-    assert str(pending_fix.id) in call_kwargs["fix_ids"]
+    assert call_kwargs["fix_ids"] == [str(pending_fix.id)]
     assert call_kwargs["force"] is True
 
 
@@ -992,8 +919,6 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
     db: Session,
     ready_fix: Fix,
     repo: Repository,
-    analysis: Analysis,
-    issue: Issue,
 ) -> None:
     # Arrange — simulate a previous delivery by creating a PullRequest record
     # and linking the fix to it via pr_id
@@ -1033,7 +958,7 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
 def _make_open_pr_fix(
     db: Session,
     repo: Repository,
-    issue: Issue,
+    workflow_file: WorkflowFile,
     pr_url: str,
     pr_branch: str = "greensecops/fix",
 ) -> tuple[Fix, PullRequest]:
@@ -1047,7 +972,7 @@ def _make_open_pr_fix(
     db.commit()
     db.refresh(pr)
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
@@ -1079,22 +1004,10 @@ def test_sync_pr_status_updates_merged_pr(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    analysis: Analysis,
-    rule: Rule,
+    workflow_file: WorkflowFile,
 ) -> None:
-    issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
-        message="sync merged test",
-    )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-
     pr_url = f"https://github.com/{repo.full_name}/pull/101"
-    _fix, pr = _make_open_pr_fix(db, repo, issue, pr_url)
+    _fix, pr = _make_open_pr_fix(db, repo, workflow_file, pr_url)
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
@@ -1124,22 +1037,10 @@ def test_sync_pr_status_updates_closed_pr(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    analysis: Analysis,
-    rule: Rule,
+    workflow_file: WorkflowFile,
 ) -> None:
-    issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
-        message="sync closed test",
-    )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-
     pr_url = f"https://github.com/{repo.full_name}/pull/102"
-    _fix, pr = _make_open_pr_fix(db, repo, issue, pr_url)
+    _fix, pr = _make_open_pr_fix(db, repo, workflow_file, pr_url)
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
@@ -1168,20 +1069,8 @@ def test_sync_pr_status_skips_already_closed(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    analysis: Analysis,
-    rule: Rule,
+    workflow_file: WorkflowFile,
 ) -> None:
-    issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.medium,
-        category=IssueCategory.reliability,
-        message="already closed test",
-    )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-
     # PR is already closed — should not be included in sync query
     pr = PullRequest(
         repo_id=repo.id,
@@ -1193,7 +1082,7 @@ def test_sync_pr_status_skips_already_closed(
     db.commit()
     db.refresh(pr)
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
@@ -1218,22 +1107,10 @@ def test_sync_pr_status_handles_github_error(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    analysis: Analysis,
-    rule: Rule,
+    workflow_file: WorkflowFile,
 ) -> None:
-    issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
-        message="github error test",
-    )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-
     pr_url = f"https://github.com/{repo.full_name}/pull/104"
-    _fix, pr = _make_open_pr_fix(db, repo, issue, pr_url)
+    _fix, pr = _make_open_pr_fix(db, repo, workflow_file, pr_url)
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
@@ -1275,16 +1152,18 @@ def test_sync_pr_status_repo_not_found(
 def test_run_fix_generation_skipped_publishes_fix_skipped_event(
     db: Session,
     issue: Issue,
+    workflow_file: WorkflowFile,
 ) -> None:
     from app.workers.tasks.fix_generation import run_fix_generation
 
-    # Arrange — issue already has a delivered fix; task should skip and fire fix.skipped
+    # Arrange — the workflow file already has a delivered fix; task should
+    # skip and fire fix.skipped
     delivered_fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
-        diff="--- a\n+++ b\n",
+        full_content=_FULL_CONTENT,
     )
     db.add(delivered_fix)
     db.commit()
@@ -1292,7 +1171,7 @@ def test_run_fix_generation_skipped_publishes_fix_skipped_event(
     with patch("app.workers.tasks.fix_generation.events_pub.publish_event") as mock_pub:
         result = run_fix_generation(issue_ids=[str(issue.id)])
 
-    assert result == {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
+    assert result == {"status": "skipped", "detail": "workflow_file_has_existing_fix"}
     published_events = [call.args[0].event for call in mock_pub.call_args_list]
     assert "fix.skipped" in published_events
 
@@ -1305,20 +1184,9 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    analysis: Analysis,
-    rule: Rule,
+    workflow_file: WorkflowFile,
+    issue: Issue,
 ) -> None:
-    issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
-        message="regen test issue",
-    )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-regen-test",
@@ -1330,13 +1198,18 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
     db.refresh(pr)
 
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
         pr_id=pr.id,
+        full_content=_FULL_CONTENT,
     )
     db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    issue.fix_id = fix.id
+    db.add(issue)
     db.commit()
 
     with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
@@ -1347,7 +1220,7 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
 
     assert response.status_code == 202
     assert response.json()["queued"] == 1
-    mock_delay.assert_called_once()
+    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
 
     db.expire_all()
     from sqlmodel import select as sql_select
@@ -1361,24 +1234,12 @@ def test_regenerate_for_pr_rejects_open_pr(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    analysis: Analysis,
-    rule: Rule,
+    workflow_file: WorkflowFile,
 ) -> None:
-    issue = Issue(
-        analysis_id=analysis.id,
-        rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
-        message="regen open pr test",
-    )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-
     _fix, pr = _make_open_pr_fix(
         db,
         repo,
-        issue,
+        workflow_file,
         f"https://github.com/{repo.full_name}/pull/201",
         pr_branch="greensecops/fix-regen-open",
     )

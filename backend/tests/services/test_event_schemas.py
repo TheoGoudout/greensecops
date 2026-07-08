@@ -4,12 +4,13 @@ from app.models.enums import SSESignal
 from app.services.events import schemas as ev
 
 
-def test_fix_ready_batch_has_correct_event_and_org() -> None:
-    event = ev.fix_ready_batch("org-1", "repo-1", ["fix-a", "fix-b"])
+def test_fix_ready_has_correct_event_and_org() -> None:
+    event = ev.fix_ready("org-1", "repo-1", "fix-a", ["issue-a", "issue-b"])
     assert event.event == SSESignal.fix_ready
     assert event.org_id == "org-1"
     assert event.data["repo_id"] == "repo-1"
-    assert event.data["fix_ids"] == ["fix-a", "fix-b"]
+    assert event.data["fix_id"] == "fix-a"
+    assert event.data["issue_ids"] == ["issue-a", "issue-b"]
 
 
 def test_fix_delivering_batch_has_correct_event() -> None:
@@ -42,7 +43,7 @@ def test_analysis_queued_has_correct_fields() -> None:
 
 
 def test_sse_event_to_wire_format() -> None:
-    event = ev.fix_ready_batch("org-1", "repo-1", ["fix-a"])
+    event = ev.fix_ready("org-1", "repo-1", "fix-a", ["issue-a"])
     wire = event.to_wire()
     assert wire.startswith("data: ")
     assert wire.endswith("\n\n")
@@ -104,8 +105,7 @@ def test_all_sse_signals_are_valid_enum_members() -> None:
         ev.analysis_skipped("o", "r", "a-1"),
         ev.fix_skipped("o", "r"),
         ev.fix_generating("o", "r", ["f-1"], ["i-1"]),
-        ev.fix_ready("o", "r", "f-1", "i-1"),
-        ev.fix_ready_batch("o", "r", ["f-1"]),
+        ev.fix_ready("o", "r", "f-1", ["i-1"]),
         ev.fix_generation_failed("o", "r", "f-1", "err"),
         ev.fix_delivering("o", "r", "f-1"),
         ev.fix_delivering_batch("o", "r", ["f-1"]),

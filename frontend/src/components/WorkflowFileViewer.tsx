@@ -1,4 +1,4 @@
-import { applyPatch, diffLines } from "diff"
+import { diffLines } from "diff"
 import Prism from "prismjs"
 import "prismjs/components/prism-yaml"
 import { useMemo, useState } from "react"
@@ -50,7 +50,7 @@ interface WorkflowFileViewerProps {
   rawContent: string
   fullContent?: string
   issues: IssuePublic[]
-  fixes: FixPublic[]
+  fix?: FixPublic
 }
 
 const SEVERITY_BORDER: Record<IssueSeverity, string> = {
@@ -70,35 +70,13 @@ interface LineEntry {
   type: "normal" | "remove" | "add"
 }
 
-export function applyPatches(
-  originalLines: string[],
-  fixes: FixPublic[],
+export function buildDiffEntries(
+  rawContent: string,
   fullContent?: string,
 ): LineEntry[] {
-  const originalText = originalLines.join("\n")
-  let currentText: string
+  const currentText = fullContent ?? rawContent
 
-  if (
-    fullContent !== undefined &&
-    fixes.some((f) => f.status === "ready" && f.diff_patch)
-  ) {
-    currentText = fullContent
-  } else {
-    currentText = originalText
-    for (const fix of fixes) {
-      if (!fix.diff_patch) continue
-      try {
-        const result = applyPatch(currentText, fix.diff_patch, {
-          fuzzFactor: 5,
-        })
-        if (result !== false) currentText = result
-      } catch (err) {
-        console.warn("Patch could not be applied", err, fix.diff_patch)
-      }
-    }
-  }
-
-  const changes = diffLines(originalText, currentText)
+  const changes = diffLines(rawContent, currentText)
   const entries: LineEntry[] = []
   let origLineNum = 1
   let key = 0
@@ -139,18 +117,13 @@ export function WorkflowFileViewer({
   rawContent,
   fullContent,
   issues,
-  fixes,
+  fix,
 }: WorkflowFileViewerProps) {
   const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set())
 
-  const originalLines = useMemo(() => rawContent.split("\n"), [rawContent])
-  const readyFixes = useMemo(
-    () => fixes.filter((f) => f.status === "ready" && f.diff_patch),
-    [fixes],
-  )
   const displayLines = useMemo(
-    () => applyPatches(originalLines, readyFixes, fullContent ?? undefined),
-    [originalLines, readyFixes, fullContent],
+    () => buildDiffEntries(rawContent, fullContent ?? undefined),
+    [rawContent, fullContent],
   )
 
   const issuesByOrigLine = useMemo(() => {
@@ -170,11 +143,12 @@ export function WorkflowFileViewer({
     [issues],
   )
 
-  const fixByIssueId = useMemo(() => {
-    const map = new Map<string, FixPublic>()
-    for (const fix of fixes) map.set(fix.issue_id, fix)
-    return map
-  }, [fixes])
+  const fixedIssueIds = useMemo(() => {
+    if (!fix || (fix.status !== "ready" && fix.status !== "delivered")) {
+      return new Set<string>()
+    }
+    return new Set((fix.issues ?? []).map((i) => i.id))
+  }, [fix])
 
   const interestingSet = useMemo(() => {
     const set = new Set<number>()
@@ -265,7 +239,7 @@ export function WorkflowFileViewer({
                     key={line.key}
                     line={line}
                     issues={[]}
-                    fixByIssueId={fixByIssueId}
+                    fixedIssueIds={fixedIssueIds}
                   />
                 ))
             }
@@ -294,7 +268,7 @@ export function WorkflowFileViewer({
                 key={line.key}
                 line={line}
                 issues={lineIssues}
-                fixByIssueId={fixByIssueId}
+                fixedIssueIds={fixedIssueIds}
               />
             )
           })
@@ -307,11 +281,11 @@ export function WorkflowFileViewer({
 function LineRow({
   line,
   issues,
-  fixByIssueId,
+  fixedIssueIds,
 }: {
   line: LineEntry
   issues: IssuePublic[]
-  fixByIssueId: Map<string, FixPublic>
+  fixedIssueIds: Set<string>
 }) {
   const topSeverity = issues[0]?.severity ?? null
   const lineClass =
@@ -324,28 +298,25 @@ function LineRow({
 
   return (
     <>
-      {issues.map((issue) => {
-        const fix = fixByIssueId.get(issue.id)
-        return (
-          <div
-            key={issue.id}
-            className={`border-l-2 ${SEVERITY_BORDER[issue.severity]} bg-muted/40 flex items-start gap-2 px-4 py-2`}
-          >
-            <SeverityChip severity={issue.severity} />
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 shrink-0">
-              {issue.rule_slug}
+      {issues.map((issue) => (
+        <div
+          key={issue.id}
+          className={`border-l-2 ${SEVERITY_BORDER[issue.severity]} bg-muted/40 flex items-start gap-2 px-4 py-2`}
+        >
+          <SeverityChip severity={issue.severity} />
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 shrink-0">
+            {issue.rule_slug}
+          </span>
+          <span className="text-xs text-foreground flex-1">
+            {issue.message}
+          </span>
+          {fixedIssueIds.has(issue.id) && (
+            <span className="text-xs text-green-600 dark:text-green-400 shrink-0">
+              fix applied ↓
             </span>
-            <span className="text-xs text-foreground flex-1">
-              {issue.message}
-            </span>
-            {fix?.status === "ready" && (
-              <span className="text-xs text-green-600 dark:text-green-400 shrink-0">
-                fix applied ↓
-              </span>
-            )}
-          </div>
-        )
-      })}
+          )}
+        </div>
+      ))}
 
       <div
         className={`flex border-l-2 ${topSeverity ? SEVERITY_BORDER[topSeverity] : "border-l-transparent"} ${lineClass}`}
