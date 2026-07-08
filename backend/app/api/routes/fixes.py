@@ -24,6 +24,7 @@ from app.models import (
     FixPublic,
     FixStatus,
     Issue,
+    LLMProvider,
     PullRequest,
     PullRequestState,
     Repository,
@@ -36,7 +37,11 @@ from app.services.events import schemas as ev
 from app.services.github.app_client import parse_pr_url
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
-from app.workers.tasks.fix_generation import run_fix_generation
+from app.workers.tasks.fix_generation import (
+    init_fix_batch,
+    resolve_llm_provider,
+    run_fix_generation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +67,47 @@ def _authorize_fix(session: SessionDep, user: User, fix: Fix) -> None:
     if repo_id is None:
         raise HTTPException(status_code=404, detail="Fix not found")
     authorize_repo(session, user, repo_id, detail="Fix not found")
+
+
+def _create_pending_fixes(
+    session: SessionDep,
+    repo: Repository,
+    by_wf_file: dict[uuid.UUID, list[Issue]],
+) -> list[Fix]:
+    """Create a pending Fix per workflow file and link its issues.
+
+    Workflow files that still carry a fix (e.g. a delivered one kept when
+    force=False) are skipped — the unique constraint allows only one fix per
+    file, and the worker only processes pending fixes.
+    """
+    taken = set(
+        session.exec(
+            select(Fix.workflow_file_id).where(
+                col(Fix.workflow_file_id).in_(list(by_wf_file))
+            )
+        ).all()
+    )
+    provider_str, model_str = resolve_llm_provider(repo)
+    created: list[Fix] = []
+    for wf_id, issues in by_wf_file.items():
+        if wf_id in taken:
+            continue
+        fix = Fix(
+            workflow_file_id=wf_id,
+            llm_provider=LLMProvider(provider_str),
+            llm_model=model_str,
+            status=FixStatus.pending,
+        )
+        session.add(fix)
+        session.flush()
+        for issue in issues:
+            issue.fix_id = fix.id
+            session.add(issue)
+        created.append(fix)
+    session.commit()
+    for fix in created:
+        session.refresh(fix)
+    return created
 
 
 def _issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
@@ -273,20 +319,37 @@ def trigger_fix_generation_for_repo(
     session.commit()
 
     repo = session.get(Repository, repo_id)
-    if repo:
-        events_pub.publish_event(
-            ev.fix_generating(
-                str(repo.org_id),
-                str(repo_id),
-                fix_ids=[],
-                issue_ids=[str(i.id) for i in issues],
-            )
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Create a pending Fix per workflow file so the UI shows a DB-backed queued
+    # state immediately; the worker flips these to generating/ready/failed.
+    pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
+    if not pending_fixes:
+        return {"queued": 0}
+    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
+
+    events_pub.publish_event(
+        ev.fix_generating(
+            str(repo.org_id),
+            str(repo_id),
+            fix_ids=[str(f.id) for f in pending_fixes],
+            issue_ids=[
+                str(i.id) for i in issues if i.workflow_file_id in pending_wf_ids
+            ],
         )
+    )
 
-    for group in by_wf_file.values():
-        run_fix_generation.delay(issue_ids=[str(i.id) for i in group], batch_mode=True)
+    # One aggregated ready/failed notification for the whole run.
+    batch_id = uuid.uuid4().hex
+    init_fix_batch(batch_id, len(pending_wf_ids))
+    for wf_id, group in by_wf_file.items():
+        if wf_id in pending_wf_ids:
+            run_fix_generation.delay(
+                issue_ids=[str(i.id) for i in group], batch_id=batch_id
+            )
 
-    return {"queued": len(by_wf_file)}
+    return {"queued": len(pending_fixes)}
 
 
 class WorkflowDeliverRequest(BaseModel):
@@ -440,40 +503,49 @@ def regenerate_fixes_for_pr(
     if not fixes:
         return {"queued": 0}
 
-    # Regenerate the unresolved issues each fix addressed, per workflow file.
-    issue_groups: list[list[uuid.UUID]] = []
+    # Regenerate the unresolved issues each fix addressed, grouped per workflow file.
+    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
     for fix in fixes:
-        issue_ids = list(
+        wf_issues = list(
             session.exec(
-                select(Issue.id)
+                select(Issue)
                 .where(Issue.fix_id == fix.id)
                 .where(col(Issue.resolved_at).is_(None))
             ).all()
         )
-        if issue_ids:
-            issue_groups.append(issue_ids)
+        for issue in wf_issues:
+            if issue.workflow_file_id is not None:
+                by_wf_file[issue.workflow_file_id].append(issue)
 
     fix_ids_to_delete = [fix.id for fix in fixes]
     session.exec(delete(Fix).where(Fix.id.in_(fix_ids_to_delete)))  # type: ignore[attr-defined]
     session.commit()
 
-    all_issue_ids = [iid for ids in issue_groups for iid in ids]
-
     repo = session.get(Repository, pr.repo_id)
-    if repo:
-        events_pub.publish_event(
-            ev.fix_generating(
-                str(repo.org_id),
-                str(repo.id),
-                fix_ids=[],
-                issue_ids=[str(iid) for iid in all_issue_ids],
-            )
-        )
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
 
-    for issue_ids in issue_groups:
+    pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
+    if not pending_fixes:
+        return {"queued": 0}
+    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
+    all_issue_ids = [i.id for wf_id in pending_wf_ids for i in by_wf_file[wf_id]]
+
+    events_pub.publish_event(
+        ev.fix_generating(
+            str(repo.org_id),
+            str(repo.id),
+            fix_ids=[str(f.id) for f in pending_fixes],
+            issue_ids=[str(iid) for iid in all_issue_ids],
+        )
+    )
+
+    batch_id = uuid.uuid4().hex
+    init_fix_batch(batch_id, len(pending_wf_ids))
+    for wf_id in pending_wf_ids:
         run_fix_generation.delay(
-            issue_ids=[str(iid) for iid in issue_ids],
-            batch_mode=True,
+            issue_ids=[str(i.id) for i in by_wf_file[wf_id]],
+            batch_id=batch_id,
         )
 
     return {"queued": len(all_issue_ids)}

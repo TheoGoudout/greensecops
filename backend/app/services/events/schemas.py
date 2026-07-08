@@ -106,6 +106,14 @@ def fix_ready(org_id: str, repo_id: str, fix_id: str, issue_ids: list[str]) -> S
     )
 
 
+def fix_ready_batch(org_id: str, repo_id: str, fix_ids: list[str]) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.fix_ready,
+        org_id=org_id,
+        data={"repo_id": repo_id, "fix_ids": fix_ids},
+    )
+
+
 def fix_generation_failed(
     org_id: str, repo_id: str, fix_id: str, error: str
 ) -> SSEEvent:
@@ -113,6 +121,16 @@ def fix_generation_failed(
         event=SSESignal.fix_failed,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_id": fix_id, "error": error},
+    )
+
+
+def fix_generation_failed_batch(
+    org_id: str, repo_id: str, fix_ids: list[str], error: str
+) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.fix_failed,
+        org_id=org_id,
+        data={"repo_id": repo_id, "fix_ids": fix_ids, "error": error},
     )
 
 

@@ -6,12 +6,15 @@ import uuid
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowFile
+from app.models import Fix, FixStatus, Issue, Repository, WorkflowFile
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+INVALID_YAML_ERROR = "LLM returned invalid YAML"
+MISSING_CONTENT_ERROR = "LLM response missing workflow content"
 
 
 def _is_valid_workflow_yaml(content: str) -> bool:
@@ -46,7 +49,97 @@ def restore_trailing_whitespace(original: str, patched: str) -> str:
     return "\n".join(result)
 
 
-def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
+# ─── Batch coordination ──────────────────────────────────────────────────────
+# A repo-wide generation run fans out into one Celery task per workflow file.
+# A Redis counter tracks the outstanding tasks so that exactly one aggregated
+# fix.ready / fix.failed SSE event pair is published when the last one ends,
+# instead of one notification per workflow file.
+
+_BATCH_KEY_TTL = 2 * 60 * 60
+
+
+def _batch_key(batch_id: str, suffix: str) -> str:
+    return f"fixgen:batch:{batch_id}:{suffix}"
+
+
+def init_fix_batch(batch_id: str, group_count: int) -> None:
+    """Register a repo-wide generation run. Fire-and-forget — never raises."""
+    try:
+        import redis
+
+        from app.core.config import settings
+
+        client = redis.from_url(settings.REDIS_URL)
+        try:
+            client.set(
+                _batch_key(batch_id, "remaining"), group_count, ex=_BATCH_KEY_TTL
+            )
+        finally:
+            client.close()
+    except Exception:
+        logger.exception("Failed to init fix batch %s", batch_id)
+
+
+def _record_batch_result(
+    batch_id: str,
+    org_id: str,
+    repo_id: str,
+    ready_ids: list[str],
+    failed_ids: list[str],
+    error: str | None,
+) -> None:
+    """Accumulate one task's results; publish aggregate events when the batch ends.
+
+    Fail-open: if Redis is unavailable the events for this task's fixes are
+    published immediately rather than lost.
+    """
+    try:
+        import redis
+
+        from app.core.config import settings
+
+        client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            if ready_ids:
+                client.sadd(_batch_key(batch_id, "ready"), *ready_ids)
+                client.expire(_batch_key(batch_id, "ready"), _BATCH_KEY_TTL)
+            if failed_ids:
+                client.sadd(_batch_key(batch_id, "failed"), *failed_ids)
+                client.expire(_batch_key(batch_id, "failed"), _BATCH_KEY_TTL)
+            if error:
+                client.set(_batch_key(batch_id, "error"), error, ex=_BATCH_KEY_TTL)
+
+            remaining = client.decr(_batch_key(batch_id, "remaining"))
+            if remaining > 0:
+                return
+
+            all_ready = sorted(client.smembers(_batch_key(batch_id, "ready")))
+            all_failed = sorted(client.smembers(_batch_key(batch_id, "failed")))
+            batch_error = client.get(_batch_key(batch_id, "error"))
+            client.delete(
+                _batch_key(batch_id, "remaining"),
+                _batch_key(batch_id, "ready"),
+                _batch_key(batch_id, "failed"),
+                _batch_key(batch_id, "error"),
+            )
+        finally:
+            client.close()
+    except Exception:
+        logger.exception("Failed to record batch result for batch %s", batch_id)
+        all_ready, all_failed = ready_ids, failed_ids
+        batch_error = error
+
+    if all_ready:
+        events_pub.publish_event(ev.fix_ready_batch(org_id, repo_id, list(all_ready)))
+    if all_failed:
+        events_pub.publish_event(
+            ev.fix_generation_failed_batch(
+                org_id, repo_id, list(all_failed), batch_error or "generation failed"
+            )
+        )
+
+
+def resolve_llm_provider(repo: Repository) -> tuple[str, str]:
     """Return (provider_str, model_str), cascading repo → org → first available."""
     provider_str = repo.llm_provider.value if repo.llm_provider else None
     model_str = repo.llm_model
@@ -103,60 +196,61 @@ def _load_generation_context(
 def run_fix_generation(
     self: object,  # noqa: ARG001
     issue_ids: list[str],
-    batch_mode: bool = False,  # noqa: ARG001 — kept for queued-task compatibility
+    batch_id: str | None = None,
 ) -> dict:
-    """Single LLM call regenerating one workflow file to fix the given issues."""
+    """Single LLM call regenerating one workflow file to fix the given issues.
+
+    The API routes create a pending Fix row per workflow file before queuing
+    this task; it consumes that row. When ``batch_id`` is set the task is part
+    of a repo-wide run and its completion events are aggregated via Redis.
+    """
     with Session(engine) as session:
         context = _load_generation_context(session, issue_ids)
         if isinstance(context, dict):
             return context
         issues, wf_file, repo = context
 
-        provider_str, model_str = _resolve_llm_provider(repo)
-        llm_provider = LLMProvider(provider_str)
-
-        # One Fix per workflow file (unique constraint). The API preserves
-        # delivered fixes when force=False; inserting again would violate
-        # fix_workflow_file_id_key. When force=True the API deletes the
-        # existing fix first, so this lookup comes back empty.
-        existing_fix = session.exec(
-            select(Fix).where(Fix.workflow_file_id == wf_file.id)
-        ).first()
-        if existing_fix is not None:
-            events_pub.publish_event(ev.fix_skipped(str(repo.org_id), str(repo.id)))
-            return {"status": "skipped", "detail": "workflow_file_has_existing_fix"}
-
         org_id = str(repo.org_id)
         repo_id_str = str(repo.id)
 
-        fix = Fix(
-            workflow_file_id=wf_file.id,
-            llm_provider=llm_provider,
-            llm_model=model_str,
-            status=FixStatus.generating,
-        )
+        # The route creates one pending Fix per workflow file being (re)generated.
+        # A workflow file whose fix is in any other state (e.g. a delivered fix
+        # kept when force=False) has no pending row and is skipped here.
+        fix = session.exec(
+            select(Fix)
+            .where(Fix.workflow_file_id == wf_file.id)
+            .where(Fix.status == FixStatus.pending)
+        ).first()
+        if fix is None:
+            if batch_id:
+                _record_batch_result(batch_id, org_id, repo_id_str, [], [], None)
+            else:
+                events_pub.publish_event(ev.fix_skipped(org_id, repo_id_str))
+            return {"status": "skipped", "detail": "no_pending_fix"}
+
+        fix.status = FixStatus.generating
         session.add(fix)
-        for issue in issues:
-            issue.fix_id = fix.id
-            session.add(issue)
         session.commit()
         session.refresh(fix)
 
-        events_pub.publish_event(
-            ev.fix_generating(
-                org_id,
-                repo_id_str,
-                fix_ids=[str(fix.id)],
-                issue_ids=issue_ids,
+        provider_str, model_str = fix.llm_provider.value, fix.llm_model
+
+        if not batch_id:
+            events_pub.publish_event(
+                ev.fix_generating(
+                    org_id,
+                    repo_id_str,
+                    fix_ids=[str(fix.id)],
+                    issue_ids=issue_ids,
+                )
             )
-        )
 
         try:
             result = asyncio.run(
                 _generate_fixes(
                     workflow_content=wf_file.raw_content,
                     issues=issues,
-                    provider_str=llm_provider.value,
+                    provider_str=provider_str,
                     model_str=model_str,
                 )
             )
@@ -166,16 +260,15 @@ def run_fix_generation(
             fix.error_message = str(exc)[:2000]
             session.add(fix)
             session.commit()
-            events_pub.publish_event(
-                ev.fix_generation_failed(
-                    org_id, repo_id_str, str(fix.id), str(exc)[:200]
-                )
-            )
+            _emit_failure(batch_id, org_id, repo_id_str, str(fix.id), str(exc)[:200])
             return {"status": "failed", "issue_ids": issue_ids}
 
         full_content = _parse_llm_response(result.content)
+        generation_error: str | None = None
 
-        if full_content:
+        if not full_content:
+            generation_error = MISSING_CONTENT_ERROR
+        else:
             full_content = restore_trailing_whitespace(
                 wf_file.raw_content, full_content
             )
@@ -186,14 +279,14 @@ def run_fix_generation(
                     "LLM full_content for wf %s is not valid YAML; discarding",
                     wf_file.id,
                 )
-                full_content = ""
+                generation_error = INVALID_YAML_ERROR
 
         fix.prompt_tokens = result.prompt_tokens
         fix.completion_tokens = result.completion_tokens
         fix.langsmith_run_id = result.run_id
-        if not full_content:
+        if generation_error:
             fix.status = FixStatus.failed
-            fix.error_message = "LLM produced no valid full workflow content"
+            fix.error_message = generation_error
         else:
             fix.full_content = full_content
             fix.status = FixStatus.ready
@@ -201,11 +294,11 @@ def run_fix_generation(
         session.commit()
 
         if fix.status == FixStatus.failed:
-            events_pub.publish_event(
-                ev.fix_generation_failed(
-                    org_id, repo_id_str, str(fix.id), fix.error_message or "no fix"
-                )
+            _emit_failure(
+                batch_id, org_id, repo_id_str, str(fix.id), generation_error or "no fix"
             )
+        elif batch_id:
+            _record_batch_result(batch_id, org_id, repo_id_str, [str(fix.id)], [], None)
         else:
             events_pub.publish_event(
                 ev.fix_ready(org_id, repo_id_str, str(fix.id), issue_ids)
@@ -226,6 +319,17 @@ def run_fix_generation(
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
         }
+
+
+def _emit_failure(
+    batch_id: str | None, org_id: str, repo_id: str, fix_id: str, error: str
+) -> None:
+    if batch_id:
+        _record_batch_result(batch_id, org_id, repo_id, [], [fix_id], error)
+    else:
+        events_pub.publish_event(
+            ev.fix_generation_failed(org_id, repo_id, fix_id, error)
+        )
 
 
 def _parse_llm_response(content: str) -> str:
@@ -264,12 +368,11 @@ async def _generate_fixes(
 ) -> object:
     _configure_langchain()
 
-    from app.services.github.sha_resolver import resolve_action_shas, resolve_extra_shas
+    from app.services.github.sha_resolver import resolve_action_shas
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_fix_prompt
 
     action_sha_map = await resolve_action_shas(workflow_content)
-    action_sha_map = await resolve_extra_shas(action_sha_map)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,

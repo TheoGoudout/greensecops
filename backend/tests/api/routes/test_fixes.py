@@ -413,7 +413,9 @@ def test_generate_fixes_for_repo_with_issue_ids_filter(
     assert response.status_code == 202
     body = response.json()
     assert body["queued"] == 1
-    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs["issue_ids"] == [str(issue.id)]
+    assert mock_delay.call_args.kwargs["batch_id"]
 
 
 def test_generate_fixes_for_repo_with_nonexistent_issue_ids_returns_zero(
@@ -1156,8 +1158,8 @@ def test_run_fix_generation_skipped_publishes_fix_skipped_event(
 ) -> None:
     from app.workers.tasks.fix_generation import run_fix_generation
 
-    # Arrange — the workflow file already has a delivered fix; task should
-    # skip and fire fix.skipped
+    # Arrange — the workflow file has a delivered fix but no pending one; the
+    # task should skip and fire fix.skipped
     delivered_fix = Fix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
@@ -1171,7 +1173,7 @@ def test_run_fix_generation_skipped_publishes_fix_skipped_event(
     with patch("app.workers.tasks.fix_generation.events_pub.publish_event") as mock_pub:
         result = run_fix_generation(issue_ids=[str(issue.id)])
 
-    assert result == {"status": "skipped", "detail": "workflow_file_has_existing_fix"}
+    assert result == {"status": "skipped", "detail": "no_pending_fix"}
     published_events = [call.args[0].event for call in mock_pub.call_args_list]
     assert "fix.skipped" in published_events
 
@@ -1220,7 +1222,9 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
 
     assert response.status_code == 202
     assert response.json()["queued"] == 1
-    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs["issue_ids"] == [str(issue.id)]
+    assert mock_delay.call_args.kwargs["batch_id"]
 
     db.expire_all()
     from sqlmodel import select as sql_select

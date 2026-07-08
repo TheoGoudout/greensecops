@@ -34,7 +34,7 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
-from app.workers.tasks.fix_generation import run_fix_generation
+from app.workers.tasks.fix_generation import INVALID_YAML_ERROR, run_fix_generation
 
 _FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "workflows"
 _HTTPX_WORKFLOW = (_FIXTURES / "httpx_test_suite.yml").read_text()
@@ -144,6 +144,23 @@ def issue(
     return i
 
 
+def _seed_pending_fix(db: Session, workflow_file: WorkflowFile, issue: Issue) -> Fix:
+    """Mimic the trigger routes: create a pending Fix and link its issue."""
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.pending,
+    )
+    db.add(fix)
+    db.flush()
+    issue.fix_id = fix.id
+    db.add(issue)
+    db.commit()
+    db.refresh(fix)
+    return fix
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Full LLM→full-content roundtrip (mocked _generate_fixes, no Celery broker)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -152,7 +169,8 @@ def issue(
 def test_full_fix_generation_stores_full_content(
     db: Session, issue: Issue, workflow_file: WorkflowFile
 ) -> None:
-    """run_fix_generation with a mocked LLM stores one whole-file fix per workflow."""
+    """run_fix_generation consumes the pending fix and stores the whole-file rewrite."""
+    _seed_pending_fix(db, workflow_file, issue)
     fixed_workflow = _HTTPX_WORKFLOW.replace(
         '"actions/checkout@v4"',
         f'"actions/checkout@{_CHECKOUT_SHA}"  # v4',
@@ -165,15 +183,9 @@ def test_full_fix_generation_stores_full_content(
         completion_tokens = 100
         run_id = None
 
-    with (
-        patch(
-            "app.workers.tasks.fix_generation._resolve_llm_provider",
-            return_value=("openai", "gpt-4o-mini"),
-        ),
-        patch(
-            "app.workers.tasks.fix_generation._generate_fixes",
-            new=AsyncMock(return_value=_FakeLLMResult()),
-        ),
+    with patch(
+        "app.workers.tasks.fix_generation._generate_fixes",
+        new=AsyncMock(return_value=_FakeLLMResult()),
     ):
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
@@ -195,6 +207,7 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
     db: Session, issue: Issue, workflow_file: WorkflowFile
 ) -> None:
     """A full_content response that is not valid YAML must not be stored as ready."""
+    _seed_pending_fix(db, workflow_file, issue)
     llm_response_content = "<full_content>\n{ invalid: yaml: [}\n</full_content>\n"
 
     class _FakeLLMResult:
@@ -205,13 +218,12 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
 
     with (
         patch(
-            "app.workers.tasks.fix_generation._resolve_llm_provider",
-            return_value=("openai", "gpt-4o-mini"),
-        ),
-        patch(
             "app.workers.tasks.fix_generation._generate_fixes",
             new=AsyncMock(return_value=_FakeLLMResult()),
         ),
+        patch(
+            "app.workers.tasks.fix_generation.events_pub.publish_event"
+        ) as mock_publish,
     ):
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
@@ -219,7 +231,29 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
     fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
     assert fix is not None
     assert fix.status == FixStatus.failed
+    assert fix.error_message == INVALID_YAML_ERROR
     assert fix.full_content is None
+
+    failed = [
+        c.args[0]
+        for c in mock_publish.call_args_list
+        if c.args[0].event == "fix.failed"
+    ]
+    assert len(failed) == 1
+    assert failed[0].data["error"] == INVALID_YAML_ERROR
+
+
+def test_fix_generation_skips_workflow_without_pending_fix(
+    db: Session, issue: Issue
+) -> None:
+    """Without a route-created pending fix the worker generates nothing."""
+    with patch(
+        "app.workers.tasks.fix_generation._generate_fixes", new=AsyncMock()
+    ) as mock_generate:
+        result = run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
+
+    assert result.get()["status"] == "skipped"
+    mock_generate.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -230,6 +264,7 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
 def test_generate_fix_queued_for_realistic_workflow_issue(
     client: TestClient,
     superuser_token_headers: dict[str, str],
+    db: Session,
     issue: Issue,
     repo: Repository,
 ) -> None:
@@ -243,7 +278,17 @@ def test_generate_fix_queued_for_realistic_workflow_issue(
 
     assert response.status_code == 202
     assert response.json()["queued"] == 1
-    mock_delay.assert_called_once_with(issue_ids=[str(issue.id)], batch_mode=True)
+    mock_delay.assert_called_once()
+    call = mock_delay.call_args
+    assert call.kwargs["issue_ids"] == [str(issue.id)]
+    assert call.kwargs["batch_id"]
+
+    # A pending fix is created so the UI shows a queued state immediately.
+    fix = db.exec(
+        select(Fix).where(Fix.workflow_file_id == issue.workflow_file_id)
+    ).first()
+    assert fix is not None
+    assert fix.status == FixStatus.pending
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
