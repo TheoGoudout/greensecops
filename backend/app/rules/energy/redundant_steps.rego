@@ -56,7 +56,7 @@ _jobs_using_action(action_base) := {job_name |
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	uses := step.uses
 	uses != null
 	base := _action_base(uses)
@@ -68,6 +68,7 @@ violations contains violation if {
 		"category": "energy",
 		"job": job_name,
 		"step": uses,
+		"step_index": step_index,
 		"message": sprintf("Action '%v' is used in %v jobs. Consider consolidating or sharing results to avoid redundant work.", [base, count(jobs_using)]),
 		"context": uses,
 	}

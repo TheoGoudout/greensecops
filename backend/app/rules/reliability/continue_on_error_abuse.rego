@@ -29,7 +29,7 @@ import rego.v1
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	step["continue-on-error"] == true
 
 	# The default argument is evaluated eagerly, so a bare `step.uses` there
@@ -41,6 +41,7 @@ violations contains violation if {
 		"category": "reliability",
 		"job": job_name,
 		"step": object.get(step, "uses", null),
+		"step_index": step_index,
 		"message": sprintf("Step '%v' in job '%v' uses continue-on-error: true. Failures will be silently ignored, masking real problems.", [step_name, job_name]),
 		"context": "continue-on-error: true",
 	}

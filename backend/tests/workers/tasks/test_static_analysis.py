@@ -39,6 +39,7 @@ class FakeViolation:
     context: str | None = None
     job: str | None = None
     step: str | None = None
+    step_index: int | None = None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -224,6 +225,7 @@ def test_with_violations_sets_issue_fields(
         message="Unpinned action",
         job="build",
         step="actions/checkout@v3",
+        step_index=1,
     )
 
     with (
@@ -251,8 +253,64 @@ def test_with_violations_sets_issue_fields(
     assert issue.workflow_file_id == workflow_file.id
     assert issue.job == "build"
     assert issue.step == "actions/checkout@v3"
+    assert issue.step_index == 1
     assert issue.fingerprint is not None
     assert len(issue.fingerprint) == 16
+
+
+def test_same_action_twice_creates_two_issues(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    # Arrange — same rule, job and action reference at two step indices;
+    # fingerprinting on the index keeps them apart instead of upserting one.
+    violations = [
+        FakeViolation(
+            rule_slug=seeded_rule.slug,
+            severity=seeded_rule.severity.value,
+            category=seeded_rule.category.value,
+            line_start=5,
+            line_end=5,
+            message="Unpinned action",
+            job="build",
+            step="actions/cache@v3",
+            step_index=0,
+        ),
+        FakeViolation(
+            rule_slug=seeded_rule.slug,
+            severity=seeded_rule.severity.value,
+            category=seeded_rule.category.value,
+            line_start=9,
+            line_end=9,
+            message="Unpinned action",
+            job="build",
+            step="actions/cache@v3",
+            step_index=2,
+        ),
+    ]
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=violations,
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    analysis = db.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.completed)
+    ).first()
+    assert analysis is not None
+
+    issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
+    assert len(issues) == 2
+    assert {i.step_index for i in issues} == {0, 2}
+    assert len({i.fingerprint for i in issues}) == 2
 
 
 def test_opa_failure_marks_analysis_failed(

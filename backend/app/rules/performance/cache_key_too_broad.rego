@@ -33,7 +33,7 @@ import rego.v1
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	contains(step.uses, "actions/cache")
 	key := step["with"].key
 	is_string(key)
@@ -44,6 +44,7 @@ violations contains violation if {
 		"category": "performance",
 		"job": job_name,
 		"step": step.uses,
+		"step_index": step_index,
 		"message": sprintf("Step in job '%v' uses actions/cache with key '%v' that does not include hashFiles(). Add hashFiles() to invalidate the cache when dependencies change.", [job_name, key]),
 		"context": key,
 	}

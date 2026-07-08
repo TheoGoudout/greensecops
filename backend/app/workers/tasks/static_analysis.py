@@ -380,7 +380,7 @@ def _run_static_analysis_impl(
                 if not rule.enabled:
                     continue
                 fingerprint = compute_issue_fingerprint(
-                    wf_record.id, rule.id, v.job, v.step
+                    wf_record.id, rule.id, v.job, v.step_index
                 )
                 seen_fingerprints.add(fingerprint)
                 issue_count += 1
@@ -393,6 +393,7 @@ def _run_static_analysis_impl(
                         rule_id=rule.id,
                         job=v.job,
                         step=v.step,
+                        step_index=v.step_index,
                         fingerprint=fingerprint,
                         severity=IssueSeverity(v.severity),
                         category=IssueCategory(v.category),

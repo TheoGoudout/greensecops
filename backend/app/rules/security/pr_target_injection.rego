@@ -51,7 +51,7 @@ _has_head_checkout(step) if {
 violations contains violation if {
 	_triggers_on_pr_target
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	_has_head_checkout(step)
 	violation := {
 		"rule": "pr_target_injection",
@@ -59,6 +59,7 @@ violations contains violation if {
 		"category": "security",
 		"job": job_name,
 		"step": step.uses,
+		"step_index": step_index,
 		"message": sprintf("Job '%v' triggers on pull_request_target and checks out the PR head ref. This allows untrusted code to run with write access. See GitHub Security Lab advisory.", [job_name]),
 		"context": "pull_request_target + checkout head ref",
 	}
