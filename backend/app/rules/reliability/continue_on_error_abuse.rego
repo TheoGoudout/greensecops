@@ -31,7 +31,10 @@ violations contains violation if {
 	some job_name, job in input.jobs
 	some step in job.steps
 	step["continue-on-error"] == true
-	step_name := object.get(step, "name", step.uses)
+
+	# The default argument is evaluated eagerly, so a bare `step.uses` there
+	# makes the whole rule undefined for run-only steps without a `uses` key.
+	step_name := object.get(step, "name", object.get(step, "uses", "unnamed step"))
 	violation := {
 		"rule": "continue_on_error_abuse",
 		"severity": "medium",
