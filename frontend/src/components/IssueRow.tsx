@@ -6,11 +6,17 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 interface IssueRowProps {
   issue: IssuePublic
+  repoId: string
   checked?: boolean
   onCheckedChange?: () => void
 }
 
-export function IssueRow({ issue, checked, onCheckedChange }: IssueRowProps) {
+export function IssueRow({
+  issue,
+  repoId,
+  checked,
+  onCheckedChange,
+}: IssueRowProps) {
   const hasCheckbox = onCheckedChange !== undefined
 
   return (
@@ -43,7 +49,11 @@ export function IssueRow({ issue, checked, onCheckedChange }: IssueRowProps) {
           </p>
         )}
       </div>
-      <GenerateFixButton issueId={issue.id} fixStatus={issue.fix_status} />
+      <GenerateFixButton
+        issueId={issue.id}
+        repoId={repoId}
+        fixStatus={issue.fix_status}
+      />
     </div>
   )
 }

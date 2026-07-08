@@ -747,7 +747,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.commit()
     db.refresh(pr)
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
@@ -837,7 +837,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.commit()
     db.refresh(pr)
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,
@@ -927,7 +927,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.commit()
     db.refresh(pr)
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.delivered,

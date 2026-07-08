@@ -10,11 +10,6 @@ from app.models import Fix, FixStatus, Issue, LLMProvider, Repository, WorkflowF
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
-from app.workers.patch_utils import (
-    apply_patch,
-    normalize_patch,
-    restore_trailing_whitespace,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +22,28 @@ def _is_valid_workflow_yaml(content: str) -> bool:
         return isinstance(yaml.safe_load(content), dict)
     except yaml.YAMLError:
         return False
+
+
+def restore_trailing_whitespace(original: str, patched: str) -> str:
+    """Restore original trailing whitespace on lines that only differ in trailing whitespace.
+
+    LLMs routinely strip trailing whitespace when regenerating file content.
+    For lines where the stripped versions are identical, keep the original so
+    the delivered diff contains only meaningful changes.
+    """
+    orig_lines = original.split("\n")
+    new_lines = patched.split("\n")
+    result = []
+    for i, new_line in enumerate(new_lines):
+        if (
+            i < len(orig_lines)
+            and new_line.rstrip() == orig_lines[i].rstrip()
+            and new_line != orig_lines[i]
+        ):
+            result.append(orig_lines[i])
+        else:
+            result.append(new_line)
+    return "\n".join(result)
 
 
 def _resolve_llm_provider(repo: Repository) -> tuple[str, str]:
@@ -86,9 +103,9 @@ def _load_generation_context(
 def run_fix_generation(
     self: object,  # noqa: ARG001
     issue_ids: list[str],
-    batch_mode: bool = False,
+    batch_mode: bool = False,  # noqa: ARG001 — kept for queued-task compatibility
 ) -> dict:
-    """Single LLM call to generate fixes for one or more issues in the same workflow file."""
+    """Single LLM call regenerating one workflow file to fix the given issues."""
     with Session(engine) as session:
         context = _load_generation_context(session, issue_ids)
         if isinstance(context, dict):
@@ -98,48 +115,41 @@ def run_fix_generation(
         provider_str, model_str = _resolve_llm_provider(repo)
         llm_provider = LLMProvider(provider_str)
 
-        # Skip issues that already have a fix (unique constraint: one Fix per Issue).
-        # The API preserves delivered fixes when force=False; inserting again would
-        # violate fix_issue_id_key. When force=True the API deletes all fixes first,
-        # so this set will be empty.
-        existing_fix_issue_ids = set(
-            session.exec(
-                select(Fix.issue_id).where(  # type: ignore[arg-type]
-                    Fix.issue_id.in_([i.id for i in issues])  # type: ignore[attr-defined]
-                )
-            ).all()
-        )
-        issues = [i for i in issues if i.id not in existing_fix_issue_ids]
-        if not issues:
+        # One Fix per workflow file (unique constraint). The API preserves
+        # delivered fixes when force=False; inserting again would violate
+        # fix_workflow_file_id_key. When force=True the API deletes the
+        # existing fix first, so this lookup comes back empty.
+        existing_fix = session.exec(
+            select(Fix).where(Fix.workflow_file_id == wf_file.id)
+        ).first()
+        if existing_fix is not None:
             events_pub.publish_event(ev.fix_skipped(str(repo.org_id), str(repo.id)))
-            return {"status": "skipped", "detail": "all_issues_have_existing_fixes"}
+            return {"status": "skipped", "detail": "workflow_file_has_existing_fix"}
 
         org_id = str(repo.org_id)
         repo_id_str = str(repo.id)
 
-        fixes = []
+        fix = Fix(
+            workflow_file_id=wf_file.id,
+            llm_provider=llm_provider,
+            llm_model=model_str,
+            status=FixStatus.generating,
+        )
+        session.add(fix)
         for issue in issues:
-            fix = Fix(
-                issue_id=issue.id,
-                llm_provider=llm_provider,
-                llm_model=model_str,
-                status=FixStatus.generating,
-            )
-            session.add(fix)
-            fixes.append(fix)
+            issue.fix_id = fix.id
+            session.add(issue)
         session.commit()
-        for fix in fixes:
-            session.refresh(fix)
+        session.refresh(fix)
 
-        if not batch_mode:
-            events_pub.publish_event(
-                ev.fix_generating(
-                    org_id,
-                    repo_id_str,
-                    fix_ids=[str(f.id) for f in fixes],
-                    issue_ids=issue_ids,
-                )
+        events_pub.publish_event(
+            ev.fix_generating(
+                org_id,
+                repo_id_str,
+                fix_ids=[str(fix.id)],
+                issue_ids=issue_ids,
             )
+        )
 
         try:
             result = asyncio.run(
@@ -152,110 +162,74 @@ def run_fix_generation(
             )
         except Exception as exc:
             logger.exception("Fix generation failed for issues %s: %s", issue_ids, exc)
-            for fix in fixes:
-                fix.status = FixStatus.failed
-                fix.error_message = str(exc)[:2000]
-                session.add(fix)
-                events_pub.publish_event(
-                    ev.fix_generation_failed(
-                        org_id, repo_id_str, str(fix.id), str(exc)[:200]
-                    )
-                )
+            fix.status = FixStatus.failed
+            fix.error_message = str(exc)[:2000]
+            session.add(fix)
             session.commit()
+            events_pub.publish_event(
+                ev.fix_generation_failed(
+                    org_id, repo_id_str, str(fix.id), str(exc)[:200]
+                )
+            )
             return {"status": "failed", "issue_ids": issue_ids}
 
-        full_content, patches = _parse_llm_response(result.content)
-        patches = {fp: normalize_patch(diff) for fp, diff in patches.items()}
+        full_content = _parse_llm_response(result.content)
 
         if full_content:
             full_content = restore_trailing_whitespace(
                 wf_file.raw_content, full_content
             )
-            # Only trust the LLM's full rewrite if it is still valid workflow YAML;
-            # otherwise a later batch delivery would push a corrupt file.
-            if _is_valid_workflow_yaml(full_content):
-                wf_file.last_full_content = full_content
-                session.add(wf_file)
-            else:
+            # Only trust the LLM's rewrite if it is still valid workflow YAML;
+            # otherwise delivery would push a corrupt file.
+            if not _is_valid_workflow_yaml(full_content):
                 logger.warning(
                     "LLM full_content for wf %s is not valid YAML; discarding",
                     wf_file.id,
                 )
                 full_content = ""
 
-        ready_fixes: list[Fix] = []
-        failed_fixes: list[Fix] = []
-        for fix in fixes:
-            issue = session.get(Issue, fix.issue_id)
-            patch = (
-                patches.get(issue.fingerprint) if issue and issue.fingerprint else None
-            )
-            # Validate the patch actually applies and yields valid YAML before
-            # marking the fix ready. A patch that fails here is not deliverable.
-            if patch is not None:
-                patched = apply_patch(wf_file.raw_content, patch)
-                if patched is None or not _is_valid_workflow_yaml(patched):
-                    logger.warning(
-                        "LLM patch for fix %s is invalid (does not apply or bad YAML)",
-                        fix.id,
-                    )
-                    patch = None
-            fix.patch = patch
-            fix.prompt_tokens = result.prompt_tokens
-            fix.completion_tokens = result.completion_tokens
-            fix.langsmith_run_id = result.run_id
-            # A fix with neither a working patch nor a valid full rewrite must
-            # not be marked ready: delivery would push the unchanged file and
-            # fail with an opaque GitHub 422.
-            if patch is None and not full_content:
-                fix.status = FixStatus.failed
-                fix.error_message = "LLM produced no applicable, valid fix"
-                failed_fixes.append(fix)
-            else:
-                fix.status = FixStatus.ready
-                ready_fixes.append(fix)
-            session.add(fix)
+        fix.prompt_tokens = result.prompt_tokens
+        fix.completion_tokens = result.completion_tokens
+        fix.langsmith_run_id = result.run_id
+        if not full_content:
+            fix.status = FixStatus.failed
+            fix.error_message = "LLM produced no valid full workflow content"
+        else:
+            fix.full_content = full_content
+            fix.status = FixStatus.ready
+        session.add(fix)
         session.commit()
 
-        for fix in failed_fixes:
+        if fix.status == FixStatus.failed:
             events_pub.publish_event(
                 ev.fix_generation_failed(
-                    org_id, repo_id_str, str(fix.id), fix.error_message or "no patch"
+                    org_id, repo_id_str, str(fix.id), fix.error_message or "no fix"
                 )
             )
-        if batch_mode:
-            if ready_fixes:
-                events_pub.publish_event(
-                    ev.fix_ready_batch(
-                        org_id, repo_id_str, [str(f.id) for f in ready_fixes]
-                    )
-                )
         else:
-            for fix in ready_fixes:
-                events_pub.publish_event(
-                    ev.fix_ready(org_id, repo_id_str, str(fix.id), str(fix.issue_id))
-                )
+            events_pub.publish_event(
+                ev.fix_ready(org_id, repo_id_str, str(fix.id), issue_ids)
+            )
 
         logger.info(
-            "Fix generation for %d issue(s): %d ready, %d failed, "
+            "Fix generation for %d issue(s) in %s: %s, "
             "%d prompt tokens, %d completion tokens",
-            len(fixes),
-            len(ready_fixes),
-            len(failed_fixes),
+            len(issues),
+            wf_file.path,
+            fix.status.value,
             result.prompt_tokens,
             result.completion_tokens,
         )
         return {
-            "status": "ready" if ready_fixes else "failed",
-            "fix_count": len(ready_fixes),
-            "failed_count": len(failed_fixes),
+            "status": fix.status.value,
+            "fix_id": str(fix.id),
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
         }
 
 
-def _parse_llm_response(content: str) -> tuple[str, dict[str, str]]:
-    """Parse LLM XML-delimited response into (full_content, {fingerprint: diff})."""
+def _parse_llm_response(content: str) -> str:
+    """Extract the full regenerated workflow from the LLM's XML-delimited response."""
     import re
 
     full_content_match = re.search(
@@ -263,24 +237,13 @@ def _parse_llm_response(content: str) -> tuple[str, dict[str, str]]:
     )
     full_content = full_content_match.group(1) if full_content_match else ""
 
-    patches = {
-        m.group(1): m.group(2)
-        for m in re.finditer(
-            r'<fix fingerprint="([^"]+)">\n?(.*?)\n?</fix>', content, re.DOTALL
-        )
-    }
-
     if not full_content:
         logger.warning(
             "LLM response missing <full_content> block. First 500 chars: %r",
             content[:500],
         )
-    logger.info(
-        "Parsed LLM response: full_content=%d chars, %d patches",
-        len(full_content),
-        len(patches),
-    )
-    return full_content, patches
+    logger.info("Parsed LLM response: full_content=%d chars", len(full_content))
+    return full_content
 
 
 def _configure_langchain() -> None:

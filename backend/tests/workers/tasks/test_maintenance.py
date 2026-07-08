@@ -89,7 +89,7 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
     db.refresh(issue)
 
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.generating,

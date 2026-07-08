@@ -343,117 +343,12 @@ export const FixDeliveryModeSchema = {
     title: 'FixDeliveryMode'
 } as const;
 
-export const FixPublicSchema = {
+export const FixIssueSummarySchema = {
     properties: {
         id: {
             type: 'string',
             format: 'uuid',
             title: 'Id'
-        },
-        issue_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Issue Id'
-        },
-        pr_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Id'
-        },
-        llm_provider: {
-            '$ref': '#/components/schemas/LLMProvider'
-        },
-        llm_model: {
-            type: 'string',
-            title: 'Llm Model'
-        },
-        status: {
-            '$ref': '#/components/schemas/FixStatus'
-        },
-        diff_patch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Diff Patch'
-        },
-        pr_url: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Url'
-        },
-        pr_branch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Branch'
-        },
-        pr_state: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/PullRequestState'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        comment_url: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Comment Url'
-        },
-        created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Created At'
-        },
-        delivered_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Delivered At'
         },
         rule_slug: {
             anyOf: [
@@ -518,6 +413,24 @@ export const FixPublicSchema = {
                 }
             ],
             title: 'Line End'
+        }
+    },
+    type: 'object',
+    required: ['id'],
+    title: 'FixIssueSummary'
+} as const;
+
+export const FixPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        workflow_file_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow File Id'
         },
         workflow_file_path: {
             anyOf: [
@@ -529,10 +442,141 @@ export const FixPublicSchema = {
                 }
             ],
             title: 'Workflow File Path'
+        },
+        repo_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Id'
+        },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
+        llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        llm_model: {
+            type: 'string',
+            title: 'Llm Model'
+        },
+        status: {
+            '$ref': '#/components/schemas/FixStatus'
+        },
+        full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Content'
+        },
+        base_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Base Content'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        delivered_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Delivered At'
+        },
+        issues: {
+            items: {
+                '$ref': '#/components/schemas/FixIssueSummary'
+            },
+            type: 'array',
+            title: 'Issues',
+            default: []
         }
     },
     type: 'object',
-    required: ['id', 'issue_id', 'llm_provider', 'llm_model', 'status'],
+    required: ['id', 'workflow_file_id', 'llm_provider', 'llm_model', 'status'],
     title: 'FixPublic'
 } as const;
 
@@ -1430,17 +1474,14 @@ export const ValidationErrorSchema = {
 
 export const WorkflowDeliverRequestSchema = {
     properties: {
-        fix_ids: {
-            items: {
-                type: 'string',
-                format: 'uuid'
-            },
-            type: 'array',
-            title: 'Fix Ids'
+        fix_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Fix Id'
         }
     },
     type: 'object',
-    required: ['fix_ids'],
+    required: ['fix_id'],
     title: 'WorkflowDeliverRequest'
 } as const;
 
@@ -1465,17 +1506,6 @@ export const WorkflowFilePublicSchema = {
                 }
             ],
             title: 'Raw Content'
-        },
-        last_full_content: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Last Full Content'
         }
     },
     type: 'object',

@@ -165,7 +165,6 @@ class WorkflowFile(SQLModel, table=True):
     path: str = Field(max_length=512)
     content_hash: str = Field(max_length=64, index=True)
     raw_content: str
-    last_full_content: str | None = Field(default=None)
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -173,6 +172,7 @@ class WorkflowFile(SQLModel, table=True):
     analyses: list["Analysis"] = Relationship(
         back_populates="workflow_file",
     )
+    fix: Optional["Fix"] = Relationship(back_populates="workflow_file")
 
 
 # ─── Rule ────────────────────────────────────────────────────────────────────
@@ -257,9 +257,17 @@ class Issue(SQLModel, table=True):
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    fix_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("fix.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
     analysis: Analysis | None = Relationship(back_populates="issues")
     rule: Rule | None = Relationship(back_populates="issues")
-    fix: Optional["Fix"] = Relationship(back_populates="issue")
+    fix: Optional["Fix"] = Relationship(back_populates="issues")
 
 
 # ─── PullRequest ──────────────────────────────────────────────────────────────
@@ -292,8 +300,8 @@ class PullRequest(SQLModel, table=True):
 
 class Fix(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    issue_id: uuid.UUID = Field(
-        foreign_key="issue.id", unique=True, nullable=False, ondelete="CASCADE"
+    workflow_file_id: uuid.UUID = Field(
+        foreign_key="workflow_file.id", unique=True, nullable=False, ondelete="CASCADE"
     )
     pr_id: uuid.UUID | None = Field(
         default=None,
@@ -309,14 +317,14 @@ class Fix(SQLModel, table=True):
     completion_tokens: int | None = Field(default=None)
     langsmith_run_id: str | None = Field(default=None, max_length=255)
     status: FixStatus = Field(default=FixStatus.pending)
-    patch: str | None = Field(default=None)
-    comment_url: str | None = Field(default=None, max_length=1024)
+    full_content: str | None = Field(default=None)
     error_message: str | None = Field(default=None, max_length=2048)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
-    issue: Issue | None = Relationship(back_populates="fix")
+    workflow_file: WorkflowFile | None = Relationship(back_populates="fix")
+    issues: list[Issue] = Relationship(back_populates="fix")
     pull_request: Optional["PullRequest"] = Relationship(back_populates="fixes")
 
 

@@ -5,18 +5,6 @@ Return your answer using EXACTLY this format — no JSON, no markdown, no extra 
 <full_content>
 <complete fixed YAML with ALL issues addressed>
 </full_content>
-<fix fingerprint="FINGERPRINT_1">
---- a/.github/workflows/name.yml
-+++ b/.github/workflows/name.yml
-@@ -N,OLD_COUNT +N,NEW_COUNT @@
- context line
--removed line
-+added line
- context line
-</fix>
-<fix fingerprint="FINGERPRINT_2">
-...
-</fix>
 
 Rules for <full_content>:
 - Must be the complete fixed YAML with ALL issues addressed
@@ -26,20 +14,11 @@ Rules for <full_content>:
 - When pinning an action to a commit SHA, append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>`
 - CRITICAL: Only use SHAs from the "Known action commit SHAs" section. If you add an action whose SHA is NOT listed there, use its tag reference (e.g., `uses: actions/cache@v4`) — do NOT invent or guess a SHA.
 - CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`
-
-Rules for each <fix>:
-- One <fix> block per issue fingerprint
-- The diff is a minimal unified diff covering exactly one issue
-- N = 1-based line number of the first line in the hunk
-- OLD_COUNT = (number of unchanged context lines) + (number of `-` lines)
-- NEW_COUNT = (number of unchanged context lines) + (number of `+` lines)
-- Include exactly 3 lines of context before AND after the changed lines (or fewer at file boundaries)
-- CRITICAL: Count OLD_COUNT and NEW_COUNT by literally counting every line in the hunk body before writing the @@ header
-- Make the minimum changes required to fix each issue"""
+- Make the minimum changes required to fix the listed issues; leave unrelated lines untouched"""
 
 FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow:
 
-**Issues to fix (include each fingerprint exactly as shown in your JSON output):**
+**Issues to fix:**
 {issues_block}
 
 **Current workflow YAML:**
@@ -47,7 +26,7 @@ FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Act
 {workflow_content}
 ```
 
-Return only the JSON object — no markdown, no explanation."""
+Return only the <full_content> block — no markdown, no explanation."""
 
 
 def build_fix_prompt(
@@ -57,7 +36,7 @@ def build_fix_prompt(
 ) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt) for one or more issues."""
     issues_block = "\n".join(
-        f"{i + 1}. [fingerprint: {issue.fingerprint or 'none'}] [{issue.severity.value.upper()}] {issue.message}"
+        f"{i + 1}. [{issue.severity.value.upper()}] {issue.message}"
         f" (rule: {issue.rule.slug if issue.rule else 'unknown'}"
         f", job: {issue.job or 'n/a'}, step: {issue.step or 'n/a'})"
         for i, issue in enumerate(issues)

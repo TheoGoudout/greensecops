@@ -219,7 +219,6 @@ def list_workflow_files(
             id=wf.id,
             path=wf.path,
             raw_content=wf.raw_content,
-            last_full_content=wf.last_full_content,
         )
         for wf in wf_files
     ]

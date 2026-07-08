@@ -191,6 +191,7 @@ function IssuesPage() {
                     <IssueRow
                       key={issue.id}
                       issue={issue}
+                      repoId={repoId}
                       checked={!deselectedIds.has(issue.id)}
                       onCheckedChange={() => toggleIssue(issue.id)}
                     />

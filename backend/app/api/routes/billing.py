@@ -13,11 +13,11 @@ from app.models import (
     BillingSubscription,
     BillingSubscriptionPublic,
     Fix,
-    Issue,
     OrgMember,
     Repository,
     User,
     UserTier,
+    WorkflowFile,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,21 +63,14 @@ def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.U
         ).one()
         or 0
     )
-    issue_ids = list(
+    fixes_used = (
         session.exec(
-            select(Issue.id).join(Analysis).where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
-        ).all()
+            select(func.count(Fix.id))
+            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+            .where(WorkflowFile.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
+        ).one()
+        or 0
     )
-    fixes_used = 0
-    if issue_ids:
-        fixes_used = (
-            session.exec(
-                select(func.count(Fix.id)).where(
-                    Fix.issue_id.in_(issue_ids)  # type: ignore[attr-defined]
-                )
-            ).one()
-            or 0
-        )
     return analyses_used, fixes_used, repo_ids
 
 

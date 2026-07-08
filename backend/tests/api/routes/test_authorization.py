@@ -115,7 +115,7 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
     db.refresh(issue)
 
     fix = Fix(
-        issue_id=issue.id,
+        workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.ready,
@@ -123,6 +123,9 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
     db.add(fix)
     db.commit()
     db.refresh(fix)
+    issue.fix_id = fix.id
+    db.add(issue)
+    db.commit()
 
     return _Tenant(org, repo, analysis, issue, fix)
 
@@ -246,12 +249,24 @@ def test_outsider_cannot_deliver_fixes_for_repo(
     assert resp.status_code == 404
 
 
-def test_outsider_cannot_generate_fix_for_issue(
+def test_outsider_cannot_generate_fixes_for_repo(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.post(
-        f"{settings.API_V1_STR}/fixes/generate/{victim.issue.id}",
+        f"{settings.API_V1_STR}/fixes/generate-for-repo/{victim.repo.id}",
         headers=outsider_headers,
+        json={"issue_ids": [str(victim.issue.id)]},
+    )
+    assert resp.status_code == 404
+
+
+def test_outsider_cannot_deliver_fix_for_workflow(
+    client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
+) -> None:
+    resp = client.post(
+        f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
+        headers=outsider_headers,
+        json={"fix_id": str(victim.fix.id)},
     )
     assert resp.status_code == 404
 

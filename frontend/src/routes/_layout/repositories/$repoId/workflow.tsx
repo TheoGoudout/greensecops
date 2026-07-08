@@ -43,13 +43,10 @@ function WorkflowPage() {
     return map
   }, [issues])
 
-  const fixesByPath = useMemo(() => {
-    const map = new Map<string, FixPublic[]>()
+  const fixByPath = useMemo(() => {
+    const map = new Map<string, FixPublic>()
     for (const fix of fixes ?? []) {
-      const path = fix.workflow_file_path ?? ""
-      const list = map.get(path) ?? []
-      list.push(fix)
-      map.set(path, list)
+      map.set(fix.workflow_file_path ?? "", fix)
     }
     return map
   }, [fixes])
@@ -78,15 +75,19 @@ function WorkflowPage() {
     <div className="flex flex-col gap-6">
       {workflowFiles.map((wf) => {
         const fileIssues = issuesByPath.get(wf.path) ?? []
-        const fileFixes = fixesByPath.get(wf.path) ?? []
+        const fileFix = fixByPath.get(wf.path)
+        const showFix =
+          fileFix?.status === "ready" || fileFix?.status === "delivered"
         return (
           <WorkflowFileViewer
             key={wf.id}
             path={wf.path}
             rawContent={wf.raw_content ?? ""}
-            fullContent={wf.last_full_content ?? undefined}
+            fullContent={
+              showFix ? (fileFix?.full_content ?? undefined) : undefined
+            }
             issues={fileIssues}
-            fixes={fileFixes}
+            fix={fileFix}
           />
         )
       })}
