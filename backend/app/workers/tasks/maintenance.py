@@ -55,7 +55,11 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
         # wins the race, so a false sweep self-corrects.
         stuck_fixes = session.exec(
             select(Fix)
-            .where(col(Fix.status).in_([FixStatus.generating, FixStatus.delivering]))
+            .where(
+                col(Fix.status).in_(
+                    [FixStatus.pending, FixStatus.generating, FixStatus.delivering]
+                )
+            )
             .where(Fix.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for fix in stuck_fixes:

@@ -9,7 +9,6 @@ from app.services.github.sha_resolver import (
     _parse_action_refs,
     _resolve_ref_to_sha,
     resolve_action_shas,
-    resolve_extra_shas,
 )
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -30,12 +29,56 @@ def _fake_client(*responses: FakeResponse) -> MagicMock:
     return client
 
 
-def _fake_async_client_ctx(*responses: FakeResponse) -> MagicMock:
-    client = _fake_client(*responses)
+def _routing_client(routes: dict[str, FakeResponse]) -> MagicMock:
+    """Client whose GET responses are keyed by URL substring; 404 otherwise."""
+
+    async def _get(url: str, **_: Any) -> FakeResponse:
+        for fragment, resp in routes.items():
+            if fragment in url:
+                return resp
+        return FakeResponse({}, status_code=404)
+
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=_get)
+    return client
+
+
+def _fake_async_client_ctx(client: MagicMock) -> MagicMock:
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=client)
     ctx.__aexit__ = AsyncMock(return_value=None)
     return MagicMock(return_value=ctx)
+
+
+def _fake_cache(store: dict[str, str] | None = None) -> MagicMock:
+    store = store if store is not None else {}
+    cache = MagicMock()
+
+    async def _get(key: str) -> str | None:
+        return store.get(key)
+
+    async def _setex(key: str, _ttl: int, value: str) -> None:
+        store[key] = value
+
+    cache.get = AsyncMock(side_effect=_get)
+    cache.setex = AsyncMock(side_effect=_setex)
+    cache.aclose = AsyncMock()
+    cache._store = store
+    return cache
+
+
+def _resolve(workflow: str, client: MagicMock, cache: MagicMock) -> dict[str, str]:
+    with (
+        patch(
+            "app.services.github.sha_resolver.httpx.AsyncClient",
+            _fake_async_client_ctx(client),
+        ),
+        patch(
+            "app.services.github.sha_resolver.aioredis.from_url",
+            return_value=cache,
+        ),
+    ):
+        return asyncio.run(resolve_action_shas(workflow))
 
 
 # ─── _parse_action_refs ───────────────────────────────────────────────────────
@@ -137,81 +180,107 @@ def test_resolve_ref_to_sha_empty_sha_returns_none() -> None:
 # ─── resolve_action_shas ─────────────────────────────────────────────────────
 
 
-def test_resolve_action_shas_empty_workflow() -> None:
-    assert asyncio.run(resolve_action_shas("")) == {}
-
-
-def test_resolve_action_shas_all_already_pinned() -> None:
-    sha = "a" * 40
-    assert (
-        asyncio.run(resolve_action_shas(f"      - uses: actions/checkout@{sha}\n"))
-        == {}
-    )
-
-
-def test_resolve_action_shas_resolves_single_action() -> None:
+def test_resolve_action_shas_resolves_referenced_action() -> None:
     workflow = "      - uses: actions/checkout@v4\n"
-    resp = FakeResponse({"object": {"sha": "resolved_sha", "type": "commit"}})
-    factory = _fake_async_client_ctx(resp)
+    client = _routing_client(
+        {
+            "/git/ref/tags/": FakeResponse(
+                {"object": {"sha": "resolved_sha", "type": "commit"}}
+            ),
+        }
+    )
+    result = _resolve(workflow, client, _fake_cache())
+    assert result["actions/checkout@v4"] == "resolved_sha"
 
-    with patch("app.services.github.sha_resolver.httpx.AsyncClient", factory):
-        result = asyncio.run(resolve_action_shas(workflow))
 
-    assert result == {"actions/checkout@v4": "resolved_sha"}
+def test_resolve_action_shas_includes_latest_versions_of_well_known_actions() -> None:
+    client = _routing_client(
+        {
+            "/releases/latest": FakeResponse({"tag_name": "v9"}),
+            "/git/ref/tags/v9": FakeResponse(
+                {"object": {"sha": "latest_sha", "type": "commit"}}
+            ),
+        }
+    )
+    result = _resolve("", client, _fake_cache())
+    for repo in WELL_KNOWN_ACTIONS:
+        assert result[f"{repo}@v9"] == "latest_sha"
+
+
+def test_resolve_action_shas_latest_version_falls_back_to_tags() -> None:
+    client = _routing_client(
+        {
+            "/tags?per_page=1": FakeResponse([{"name": "v7.1.2"}]),
+            "/git/ref/tags/v7.1.2": FakeResponse(
+                {"object": {"sha": "tag_sha", "type": "commit"}}
+            ),
+        }
+    )
+    result = _resolve("", client, _fake_cache())
+    assert result["actions/checkout@v7.1.2"] == "tag_sha"
 
 
 def test_resolve_action_shas_skips_unresolvable_action() -> None:
-    workflow = "      - uses: actions/checkout@v4\n"
-    factory = _fake_async_client_ctx(FakeResponse({}, 404), FakeResponse({}, 404))
-
-    with patch("app.services.github.sha_resolver.httpx.AsyncClient", factory):
-        result = asyncio.run(resolve_action_shas(workflow))
-
+    workflow = "      - uses: someorg/private-action@v1\n"
+    client = _routing_client({})  # everything 404s
+    result = _resolve(workflow, client, _fake_cache())
     assert result == {}
 
 
-# ─── resolve_extra_shas ───────────────────────────────────────────────────────
+def test_resolve_action_shas_uses_cached_values() -> None:
+    workflow = "      - uses: actions/checkout@v4\n"
+    store = {
+        "action_sha:actions/checkout@v4": "cached_sha",
+        "action_sha:actions/checkout@v9": "cached_latest_sha",
+        "action_version:latest:actions/checkout": "v9",
+    }
+    for repo in WELL_KNOWN_ACTIONS:
+        store.setdefault(f"action_version:latest:{repo}", "v9")
+        store.setdefault(f"action_sha:{repo}@v9", "cached_latest_sha")
+
+    client = _routing_client({})  # any HTTP call would 404 → sha missing
+    result = _resolve(workflow, client, _fake_cache(store))
+
+    assert result["actions/checkout@v4"] == "cached_sha"
+    assert result["actions/checkout@v9"] == "cached_latest_sha"
+    client.get.assert_not_called()
 
 
-def test_resolve_extra_shas_adds_well_known_actions() -> None:
-    responses = [
-        FakeResponse({"object": {"sha": f"sha_{i:040d}", "type": "commit"}})
-        for i in range(len(WELL_KNOWN_ACTIONS))
-    ]
-    factory = _fake_async_client_ctx(*responses)
-
-    with patch("app.services.github.sha_resolver.httpx.AsyncClient", factory):
-        result = asyncio.run(resolve_extra_shas({}))
-
-    for repo, ref in WELL_KNOWN_ACTIONS:
-        assert f"{repo}@{ref}" in result
-
-
-def test_resolve_extra_shas_skips_already_resolved() -> None:
-    existing = {"actions/cache@v4": "a" * 40}
-    remaining = [
-        (repo, ref)
-        for repo, ref in WELL_KNOWN_ACTIONS
-        if f"{repo}@{ref}" not in existing
-    ]
-    responses = [
-        FakeResponse({"object": {"sha": f"sha_{i:040d}", "type": "commit"}})
-        for i in range(len(remaining))
-    ]
-    factory = _fake_async_client_ctx(*responses)
-
-    with patch("app.services.github.sha_resolver.httpx.AsyncClient", factory):
-        result = asyncio.run(resolve_extra_shas(existing))
-
-    assert result["actions/cache@v4"] == "a" * 40
-    assert len(result) == len(WELL_KNOWN_ACTIONS)
+def test_resolve_action_shas_populates_cache() -> None:
+    workflow = "      - uses: actions/checkout@v4\n"
+    client = _routing_client(
+        {
+            "/releases/latest": FakeResponse({"tag_name": "v9"}),
+            "/git/ref/tags/": FakeResponse(
+                {"object": {"sha": "fresh_sha", "type": "commit"}}
+            ),
+        }
+    )
+    cache = _fake_cache()
+    _resolve(workflow, client, cache)
+    assert cache._store["action_sha:actions/checkout@v4"] == "fresh_sha"
+    assert cache._store["action_version:latest:actions/checkout"] == "v9"
 
 
-def test_resolve_extra_shas_returns_existing_when_all_resolved() -> None:
-    existing = {f"{repo}@{ref}": "a" * 40 for repo, ref in WELL_KNOWN_ACTIONS}
-
-    with patch("app.services.github.sha_resolver.httpx.AsyncClient") as mock_client:
-        result = asyncio.run(resolve_extra_shas(existing))
-
-    mock_client.assert_not_called()
-    assert result == existing
+def test_resolve_action_shas_survives_redis_failure() -> None:
+    workflow = "      - uses: actions/checkout@v4\n"
+    client = _routing_client(
+        {
+            "/releases/latest": FakeResponse({"tag_name": "v9"}),
+            "/git/ref/tags/": FakeResponse(
+                {"object": {"sha": "resolved_sha", "type": "commit"}}
+            ),
+        }
+    )
+    with (
+        patch(
+            "app.services.github.sha_resolver.httpx.AsyncClient",
+            _fake_async_client_ctx(client),
+        ),
+        patch(
+            "app.services.github.sha_resolver.aioredis.from_url",
+            side_effect=RuntimeError("redis down"),
+        ),
+    ):
+        result = asyncio.run(resolve_action_shas(workflow))
+    assert result["actions/checkout@v4"] == "resolved_sha"

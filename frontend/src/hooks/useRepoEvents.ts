@@ -177,11 +177,21 @@ export function useRepoEvents(): void {
         case "fix.failed": {
           if (repoId) {
             invalidateFixQueries(queryClient, repoId, fixId)
+            invalidateIssueQueries(queryClient, repoId)
+            if (fixIds) {
+              for (const id of fixIds) {
+                queryClient.invalidateQueries({ queryKey: ["fix", id] })
+              }
+            }
           }
+          const failedCount = fixIds?.length ?? (fixId ? 1 : 0)
           const failErr = data.error as string | undefined
-          toast.error("Fix failed", {
-            description: failErr ?? "Unknown error",
-          })
+          toast.error(
+            failedCount > 1 ? `${failedCount} fixes failed` : "Fix failed",
+            {
+              description: failErr ?? "Unknown error",
+            },
+          )
           break
         }
 

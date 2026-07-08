@@ -124,18 +124,12 @@ function IssuesPage() {
             size="sm"
             className="gap-2"
             onClick={() => batchFixMutation.mutate()}
-            disabled={
-              batchFixMutation.isPending ||
-              batchFixMutation.isSuccess ||
-              noneSelected
-            }
+            disabled={batchFixMutation.isPending || noneSelected}
           >
             <Zap className="h-4 w-4" />
             {batchFixMutation.isPending
               ? "Queuing…"
-              : batchFixMutation.isSuccess
-                ? "Queued"
-                : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
+              : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
           </Button>
         </div>
       )}

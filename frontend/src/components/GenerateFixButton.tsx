@@ -59,7 +59,11 @@ export function GenerateFixButton({
     return (
       <Button variant="outline" size="sm" className="gap-1.5 shrink-0" disabled>
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        {fixStatus === "delivering" ? "Delivering…" : "Generating…"}
+        {fixStatus === "pending"
+          ? "Queued"
+          : fixStatus === "delivering"
+            ? "Delivering…"
+            : "Generating…"}
       </Button>
     )
   }
@@ -70,14 +74,10 @@ export function GenerateFixButton({
       size="sm"
       className="gap-1.5 shrink-0"
       onClick={() => mutation.mutate()}
-      disabled={mutation.isPending || mutation.isSuccess}
+      disabled={mutation.isPending}
     >
       <Wand2 className="h-3.5 w-3.5" />
-      {mutation.isPending
-        ? "Generating…"
-        : mutation.isSuccess
-          ? "Queued"
-          : "Generate fix"}
+      {mutation.isPending ? "Queuing…" : "Generate fix"}
     </Button>
   )
 }
