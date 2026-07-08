@@ -42,6 +42,47 @@ def test_enforce_quota_blocks_at_limit(db: Session) -> None:
     assert exc.value.status_code == 402
 
 
+def test_enforce_quota_replacing_does_not_count(db: Session) -> None:
+    user = User(
+        email=f"nu-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="x",
+        is_superuser=False,
+        tier=UserTier.free,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    with (
+        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 5}}),
+        patch.object(billing, "_usage_for_user", return_value=(0, 5, [])),
+    ):
+        # Regenerating all 5 existing fixes keeps the total at the limit → OK.
+        billing.enforce_quota(db, user, "fixes", requested=5, replacing=5)
+        # One net-new fix on top of the replaced ones exceeds the limit.
+        with pytest.raises(HTTPException) as exc:
+            billing.enforce_quota(db, user, "fixes", requested=6, replacing=5)
+    assert exc.value.status_code == 402
+
+
+def test_enforce_quota_default_still_blocks_at_limit(db: Session) -> None:
+    user = User(
+        email=f"nu-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password="x",
+        is_superuser=False,
+        tier=UserTier.free,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    with (
+        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 5}}),
+        patch.object(billing, "_usage_for_user", return_value=(0, 5, [])),
+        pytest.raises(HTTPException) as exc,
+    ):
+        billing.enforce_quota(db, user, "fixes")
+    assert exc.value.status_code == 402
+
+
 def test_enforce_quota_unlimited_tier(db: Session) -> None:
     user = User(
         email=f"un-{uuid.uuid4().hex[:8]}@example.com",

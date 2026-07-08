@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func  # noqa: F401
+from sqlalchemy import func
 from sqlmodel import col, delete, select
 
 from app.api.deps import (
@@ -250,7 +250,6 @@ def trigger_fix_generation_for_repo(
     authorize_repo(session, current_user, repo_id)
     from app.api.routes.billing import enforce_quota
 
-    enforce_quota(session, current_user, "fixes")
     latest_analysis_subq = (
         select(Analysis.id)
         .where(Analysis.workflow_file_id == Issue.workflow_file_id)
@@ -275,6 +274,19 @@ def trigger_fix_generation_for_repo(
         return {"queued": 0}
 
     issue_ids = [i.id for i in issues]
+
+    # Fixes already attached to the selected issues are deleted below (or kept
+    # and skipped by the worker), so they don't add to the resulting total.
+    existing_fix_count = session.exec(
+        select(func.count()).select_from(Fix).where(Fix.issue_id.in_(issue_ids))  # type: ignore[attr-defined]
+    ).one()
+    enforce_quota(
+        session,
+        current_user,
+        "fixes",
+        requested=len(issues),
+        replacing=existing_fix_count,
+    )
 
     delete_stmt = delete(Fix).where(Fix.issue_id.in_(issue_ids))  # type: ignore[attr-defined]
     if not force:
@@ -321,7 +333,12 @@ def trigger_fix_generation(
         )
     from app.api.routes.billing import enforce_quota
 
-    enforce_quota(session, current_user, "fixes")
+    existing_fix_count = session.exec(
+        select(func.count()).select_from(Fix).where(Fix.issue_id == issue_id)
+    ).one()
+    enforce_quota(
+        session, current_user, "fixes", requested=1, replacing=existing_fix_count
+    )
 
     delete_stmt = delete(Fix).where(Fix.issue_id == issue_id)
     if not force:

@@ -1,5 +1,5 @@
 import { AxiosError } from "axios"
-import type { ApiError } from "./client"
+import { ApiError } from "./client"
 
 function extractErrorMessage(err: ApiError): string {
   if (err instanceof AxiosError) {
@@ -19,6 +19,14 @@ export const handleError = function (
 ) {
   const errorMessage = extractErrorMessage(err)
   this(errorMessage)
+}
+
+export function apiErrorDetail(error: unknown): string | undefined {
+  if (error instanceof ApiError) {
+    const detail = (error.body as { detail?: unknown })?.detail
+    if (typeof detail === "string") return detail
+  }
+  return undefined
 }
 
 export const getInitials = (name: string): string => {

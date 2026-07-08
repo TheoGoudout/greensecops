@@ -19,12 +19,14 @@ from app.models import (
     IssueSeverity,
     LLMProvider,
     Organization,
+    OrgMember,
     PullRequest,
     Repository,
     Rule,
     UserTier,
     WorkflowFile,
 )
+from tests.utils.user import authentication_token_from_email, create_random_user
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -370,6 +372,110 @@ def test_generate_fixes_for_repo_with_nonexistent_issue_ids_returns_zero(
     # Assert
     assert response.status_code == 202
     assert response.json()["queued"] == 0
+    mock_delay.assert_not_called()
+
+
+def test_generate_fixes_for_repo_regeneration_allowed_at_quota(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    """A free-tier user at the fixes quota can still REgenerate existing fixes.
+
+    Regeneration deletes the old fixes and recreates the same number, so the
+    resulting total is unchanged and must not be blocked (regression test for
+    'Fix selected' → 'Failed to queue fixes' once the quota was reached).
+    """
+    # Arrange — fresh free-tier member so usage isn't polluted by other tests
+    user = create_random_user(db)
+    db.add(OrgMember(org_id=org.id, user_id=user.id))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+
+    free_fix_limit = 5
+    issues = []
+    for n in range(free_fix_limit):
+        i = Issue(
+            analysis_id=analysis.id,
+            workflow_file_id=workflow_file.id,
+            rule_id=rule.id,
+            fingerprint=uuid.uuid4().hex[:16],
+            severity=IssueSeverity.medium,
+            category=IssueCategory.reliability,
+            message=f"quota issue {n}",
+        )
+        db.add(i)
+        issues.append(i)
+    db.commit()
+    for i in issues:
+        db.refresh(i)
+        db.add(
+            Fix(
+                issue_id=i.id,
+                llm_provider=LLMProvider.openai,
+                llm_model="gpt-4o-mini",
+                status=FixStatus.ready,
+            )
+        )
+    db.commit()
+
+    # Act — regenerate all fixes while already at the quota
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=headers,
+        )
+
+    # Assert
+    assert response.status_code == 202, response.json()
+    assert response.json()["queued"] == free_fix_limit
+    mock_delay.assert_called()
+
+
+def test_generate_fixes_for_repo_blocks_net_new_over_quota(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    analysis: Analysis,
+    rule: Rule,
+) -> None:
+    """A free-tier user cannot generate more NET-NEW fixes than the quota."""
+    user = create_random_user(db)
+    db.add(OrgMember(org_id=org.id, user_id=user.id))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+
+    free_fix_limit = 5
+    for n in range(free_fix_limit + 1):
+        db.add(
+            Issue(
+                analysis_id=analysis.id,
+                workflow_file_id=workflow_file.id,
+                rule_id=rule.id,
+                fingerprint=uuid.uuid4().hex[:16],
+                severity=IssueSeverity.medium,
+                category=IssueCategory.reliability,
+                message=f"over-quota issue {n}",
+            )
+        )
+    db.commit()
+
+    # Act — no existing fixes; requesting limit+1 new ones must be rejected
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=headers,
+        )
+
+    # Assert
+    assert response.status_code == 402
+    assert "quota" in response.json()["detail"].lower()
     mock_delay.assert_not_called()
 
 

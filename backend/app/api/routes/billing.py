@@ -81,11 +81,21 @@ def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.U
     return analyses_used, fixes_used, repo_ids
 
 
-def enforce_quota(session: Session, user: User, kind: str) -> None:
-    """Raise HTTP 402 if the user is at or over their tier limit for ``kind``.
+def enforce_quota(
+    session: Session,
+    user: User,
+    kind: str,
+    *,
+    requested: int = 1,
+    replacing: int = 0,
+) -> None:
+    """Raise HTTP 402 if creating ``requested`` new items would exceed the
+    user's tier limit for ``kind``.
 
     ``kind`` is one of "analyses" or "fixes". Superusers are exempt. A ``None``
-    limit means unlimited.
+    limit means unlimited. ``replacing`` is the number of existing items the
+    operation deletes and recreates (e.g. regenerating fixes), which must not
+    count against the quota since the resulting total is unchanged.
     """
     if user.is_superuser:
         return
@@ -94,7 +104,7 @@ def enforce_quota(session: Session, user: User, kind: str) -> None:
         return
     analyses_used, fixes_used, _ = _usage_for_user(session, user)
     used = analyses_used if kind == "analyses" else fixes_used
-    if used >= limit:
+    if max(used - replacing, 0) + requested > limit:
         raise HTTPException(
             status_code=402,
             detail=(
