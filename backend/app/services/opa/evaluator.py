@@ -49,6 +49,7 @@ class OpaViolation:
     message: str
     job: str | None = None
     step: str | None = None
+    step_index: int | None = None
     line_start: int | None = None
     line_end: int | None = None
     context: str | None = None
@@ -118,6 +119,7 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
                         message=v.get("message", ""),
                         job=v.get("job"),
                         step=v.get("step"),
+                        step_index=v.get("step_index"),
                         line_start=v.get("line_start"),
                         line_end=v.get("line_end"),
                         context=v.get("context"),

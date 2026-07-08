@@ -58,6 +58,7 @@ class _Violation:
     message: str
     job: str | None = None
     step: str | None = None
+    step_index: int | None = None
     line_start: int | None = None
     line_end: int | None = None
     context: str | None = None

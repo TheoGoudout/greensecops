@@ -245,6 +245,7 @@ class Issue(SQLModel, table=True):
     )
     job: str | None = Field(default=None, max_length=255)
     step: str | None = Field(default=None, max_length=255)
+    step_index: int | None = Field(default=None)
     fingerprint: str | None = Field(default=None, max_length=16, index=True)
     severity: IssueSeverity
     category: IssueCategory

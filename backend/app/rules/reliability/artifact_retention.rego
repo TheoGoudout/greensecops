@@ -34,7 +34,7 @@ import rego.v1
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	contains(step.uses, "actions/upload-artifact")
 	not step["with"]["retention-days"]
 	violation := {
@@ -43,6 +43,7 @@ violations contains violation if {
 		"category": "reliability",
 		"job": job_name,
 		"step": step.uses,
+		"step_index": step_index,
 		"message": sprintf("Step in job '%v' uploads an artifact without setting 'retention-days'. Set an explicit retention period to control storage costs.", [job_name]),
 		"context": step.uses,
 	}

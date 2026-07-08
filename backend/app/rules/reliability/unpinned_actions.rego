@@ -41,7 +41,7 @@ _is_mutable_ref(uses) if {
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	uses := step.uses
 	uses != null
 	_is_mutable_ref(uses)
@@ -51,6 +51,7 @@ violations contains violation if {
 		"category": "reliability",
 		"job": job_name,
 		"step": uses,
+		"step_index": step_index,
 		"message": sprintf("Step in job '%v' uses a mutable ref '%v'. Pin to a full commit SHA for reproducibility and supply-chain safety.", [job_name, uses]),
 		"context": uses,
 	}

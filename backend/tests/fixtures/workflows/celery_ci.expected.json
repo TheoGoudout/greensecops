@@ -6,7 +6,8 @@
       "category": "reliability",
       "message": "actions/checkout@v7 uses a mutable ref",
       "job": "Unit",
-      "step": "actions/checkout@v7"
+      "step": "actions/checkout@v7",
+      "step_index": 1
     },
     {
       "rule_slug": "unpinned_actions",
@@ -14,7 +15,8 @@
       "category": "reliability",
       "message": "actions/setup-python@v6 uses a mutable ref",
       "job": "Unit",
-      "step": "actions/setup-python@v6"
+      "step": "actions/setup-python@v6",
+      "step_index": 2
     },
     {
       "rule_slug": "unpinned_actions",
@@ -22,7 +24,8 @@
       "category": "reliability",
       "message": "codecov/codecov-action@v7 uses a mutable ref",
       "job": "Unit",
-      "step": "codecov/codecov-action@v7"
+      "step": "codecov/codecov-action@v7",
+      "step_index": 5
     },
     {
       "rule_slug": "missing_timeout",

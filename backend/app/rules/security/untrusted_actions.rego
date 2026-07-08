@@ -44,7 +44,7 @@ _is_sha_pinned(uses) if {
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	some step in job.steps
+	some step_index, step in job.steps
 	uses := step.uses
 	uses != null
 	not _is_first_party(uses)
@@ -55,6 +55,7 @@ violations contains violation if {
 		"category": "security",
 		"job": job_name,
 		"step": uses,
+		"step_index": step_index,
 		"message": sprintf("Step in job '%v' uses third-party action '%v' without a full SHA pin. Pin to a commit SHA to prevent supply-chain attacks.", [job_name, uses]),
 		"context": uses,
 	}

@@ -14,13 +14,16 @@ def compute_issue_fingerprint(
     workflow_file_id: uuid.UUID,
     rule_id: uuid.UUID,
     job: str | None,
-    step: str | None,
+    step_index: int | None,
 ) -> str:
-    """Stable 16-char hex key for (workflow_file, rule, job, step).
+    """Stable 16-char hex key for (workflow_file, rule, job, step_index).
 
-    Used as the unique identity of an issue across analysis re-runs.
+    Used as the unique identity of an issue across analysis re-runs. The
+    step's position in the job (not its action reference) keys the hash so
+    two steps using the same action get distinct fingerprints.
     """
-    key = f"{workflow_file_id}:{rule_id}:{job or ''}:{step or ''}"
+    step_part = "" if step_index is None else step_index
+    key = f"{workflow_file_id}:{rule_id}:{job or ''}:{step_part}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 

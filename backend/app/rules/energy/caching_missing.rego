@@ -69,16 +69,15 @@ _has_setup_step(steps) if {
 	_is_known_setup_action(step.uses)
 }
 
-_first_setup_uses(steps) := steps[i].uses if {
-	i := min({j | _is_known_setup_action(steps[j].uses)})
-}
+_first_setup_idx(steps) := min({j | _is_known_setup_action(steps[j].uses)})
 
 violations contains violation if {
 	some job_name, job in input.jobs
 	steps := job.steps
 	_uses_package_manager(steps)
 	not _has_cache_action(steps)
-	setup_uses := _first_setup_uses(steps)
+	setup_idx := _first_setup_idx(steps)
+	setup_uses := steps[setup_idx].uses
 	cache_key := _setup_action_cache_keys[_action_name(setup_uses)]
 	violation := {
 		"rule": "caching_missing",
@@ -86,6 +85,7 @@ violations contains violation if {
 		"category": "energy",
 		"job": job_name,
 		"step": setup_uses,
+		"step_index": setup_idx,
 		"message": sprintf("Job '%v' installs dependencies without caching. Add '%v:' to %v.", [job_name, cache_key, setup_uses]),
 		"context": null,
 	}
