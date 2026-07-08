@@ -1,4 +1,6 @@
 # Pinned rather than :latest so policy evaluation is reproducible across
-# builds. Rules use `import rego.v1`, supported since OPA 0.59.
-FROM openpolicyagent/opa:0.70.0
+# builds. The -static variant is multi-arch (amd64 + arm64) — required
+# because the deployment host is arm64. Rules use `import rego.v1`,
+# the default dialect since OPA 1.0.
+FROM openpolicyagent/opa:1.18.2-static
 COPY backend/app/rules /policies
