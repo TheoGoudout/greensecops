@@ -101,7 +101,7 @@ test.describe("Issue Filters and Display", () => {
     await expect(
       page.getByText("Workflow uses overly permissive token permissions."),
     ).toBeVisible()
-    await expect(page.getByText(/generating/i).first()).toBeVisible()
+    await expect(page.getByText(/queued/i).first()).toBeVisible()
   })
 
   test("issue with failed fix shows generate fix button", async ({ page }) => {
@@ -148,7 +148,7 @@ test.describe("Issue Filters and Display", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
 
-    await expect(page.getByText(/generating/i).first()).toBeVisible()
+    await expect(page.getByText(/queued/i).first()).toBeVisible()
     await expect(page.getByText("Delivered").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })

@@ -70,7 +70,7 @@ test.describe("Fix Lifecycle — Status States", () => {
     await page.goto(`/fixes/${MOCK_FIX_READY.id}`)
 
     await expect(page.getByText("ready")).toBeVisible()
-    await expect(page.getByText("timeout-minutes")).toBeVisible()
+    await expect(page.getByText("timeout-minutes").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
