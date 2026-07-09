@@ -3,6 +3,7 @@
 <a href="https://github.com/TheoGoudout/greensecops/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/TheoGoudout/greensecops/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
 <a href="https://github.com/TheoGoudout/greensecops/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/TheoGoudout/greensecops/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
 <a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/TheoGoudout/greensecops" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/TheoGoudout/greensecops.svg" alt="Coverage"></a>
+[![GreenSecOps](http://localhost:8000/api/v1/badges/TheoGoudout/greensecops/main.svg)](http://localhost:5173/repositories/8d9a6da2-b327-42a6-aabf-7d554d394dec)
 
 GreenSecOps analyzes GitHub Actions workflows and automatically delivers fixes as pull requests. It evaluates every workflow file against a set of Rego rules across five axes — energy efficiency, reliability, security, performance, and maintainability — then uses an LLM to generate and open PRs with targeted improvements.
 
