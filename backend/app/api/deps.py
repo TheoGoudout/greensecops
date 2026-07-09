@@ -5,7 +5,7 @@ from typing import Annotated, Any, TypeVar
 import jwt
 import redis.asyncio as aioredis
 from fastapi import Depends, Header, HTTPException, Query, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2AuthorizationCodeBearer
 from jwt import PyJWKClient
 from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
@@ -35,11 +35,13 @@ def _get_github_jwks_client() -> PyJWKClient:
     return _github_jwks_client
 
 
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/login/access-token"
+reusable_oauth2 = OAuth2AuthorizationCodeBearer(
+    authorizationUrl="https://github.com/login/oauth/authorize",
+    tokenUrl=f"{settings.API_V1_STR}/auth/github/callback",
 )
 
-_optional_oauth2 = OAuth2PasswordBearer(
+_optional_oauth2 = OAuth2AuthorizationCodeBearer(
+    authorizationUrl="https://github.com/login/oauth/authorize",
     tokenUrl=f"{settings.API_V1_STR}/login/access-token",
     auto_error=False,
 )

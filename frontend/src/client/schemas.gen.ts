@@ -256,6 +256,66 @@ export const BillingSubscriptionPublicSchema = {
     title: 'BillingSubscriptionPublic'
 } as const;
 
+export const Body_auth_github_callbackSchema = {
+    properties: {
+        grant_type: {
+            anyOf: [
+                {
+                    type: 'string',
+                    pattern: '^authorization_code$'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grant Type'
+        },
+        code: {
+            type: 'string',
+            title: 'Code'
+        },
+        client_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Client Id'
+        },
+        redirect_uri: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 2083,
+                    minLength: 1,
+                    format: 'uri'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Redirect Uri'
+        },
+        code_verifier: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Code Verifier'
+        }
+    },
+    type: 'object',
+    required: ['code'],
+    title: 'Body_auth-github_callback'
+} as const;
+
 export const Body_login_login_access_tokenSchema = {
     properties: {
         grant_type: {

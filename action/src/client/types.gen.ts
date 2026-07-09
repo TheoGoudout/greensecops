@@ -47,6 +47,14 @@ export type BillingSubscriptionPublic = {
     period_end?: (string | null);
 };
 
+export type Body_auth_github_callback = {
+    grant_type?: (string | null);
+    code: string;
+    client_id?: (string | null);
+    redirect_uri?: (string | null);
+    code_verifier?: (string | null);
+};
+
 export type Body_login_login_access_token = {
     grant_type?: (string | null);
     username: string;
@@ -316,11 +324,8 @@ export type AnalysesReanalyzeAllResponse = ({
     [key: string]: (string);
 });
 
-export type AuthGithubLoginResponse = (unknown);
-
 export type AuthGithubCallbackData = {
-    code: string;
-    state?: (string | null);
+    formData: Body_auth_github_callback;
 };
 
 export type AuthGithubCallbackResponse = (Token);
