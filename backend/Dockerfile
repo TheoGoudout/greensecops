@@ -2,6 +2,10 @@
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#multi-stage-builds
 FROM python:3.14.6-slim AS builder
 
+# Install git
+# Used for dependencies specified by Git URLs
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 # Install uv
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/

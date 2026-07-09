@@ -166,7 +166,7 @@ def upsert_repository(
 def disable_repositories_by_github_ids(
     *, session: Session, github_repo_ids: list[int]
 ) -> int:
-    """Flip enabled=False for the given GitHub repo ids; returns count changed."""
+    """Flip enabled=False and is_accessible=False for the given GitHub repo ids; returns count changed."""
     if not github_repo_ids:
         return 0
     repos = session.exec(
@@ -174,6 +174,40 @@ def disable_repositories_by_github_ids(
     ).all()
     for repo in repos:
         repo.enabled = False
+        repo.is_accessible = False
         session.add(repo)
     session.commit()
     return len(repos)
+
+
+def mark_repositories_inaccessible_by_installation_id(
+    *, session: Session, installation_id: int
+) -> list[Repository]:
+    """Mark repos as disabled and inaccessible for a deleted/suspended installation."""
+    repos = list(
+        session.exec(
+            select(Repository).where(Repository.installation_id == installation_id)
+        ).all()
+    )
+    for repo in repos:
+        repo.enabled = False
+        repo.is_accessible = False
+        session.add(repo)
+    session.commit()
+    return repos
+
+
+def restore_repositories_accessibility_by_installation_id(
+    *, session: Session, installation_id: int
+) -> list[Repository]:
+    """Restore is_accessible=True for repos under a reinstated installation."""
+    repos = list(
+        session.exec(
+            select(Repository).where(Repository.installation_id == installation_id)
+        ).all()
+    )
+    for repo in repos:
+        repo.is_accessible = True
+        session.add(repo)
+    session.commit()
+    return repos

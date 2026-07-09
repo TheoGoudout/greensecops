@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import redis as redis_sync
 from ruamel.yaml import YAML as RuamelYAML
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, delete, select
 
 from app.core.config import settings
 from app.core.db import engine
@@ -14,9 +14,12 @@ from app.models import (
     Analysis,
     AnalysisStatus,
     AnalysisTrigger,
+    Fix,
+    FixStatus,
     Issue,
     IssueCategory,
     IssueSeverity,
+    LLMProvider,
     Repository,
     Rule,
     WorkflowFile,
@@ -31,6 +34,112 @@ from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _auto_queue_fix_generation(session: Session, repo: Repository, org_id: str) -> None:
+    """Queue fix generation for all open issues after a completed analysis batch.
+
+    Mirrors the API-level trigger_fix_generation_for_repo but skips billing/auth.
+    Only targets the latest completed analysis per workflow file.
+    """
+    from collections import defaultdict
+
+    from app.workers.tasks.fix_generation import (
+        init_fix_batch,
+        resolve_llm_provider,
+        run_fix_generation,
+    )
+
+    latest_analysis_subq = (
+        select(Analysis.id)
+        .where(Analysis.workflow_file_id == Issue.workflow_file_id)
+        .where(Analysis.repo_id == repo.id)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
+        .limit(1)
+        .correlate(Issue)
+        .scalar_subquery()
+    )
+    issues = session.exec(
+        select(Issue)
+        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        .where(Analysis.repo_id == repo.id)
+        .where(Issue.analysis_id == latest_analysis_subq)
+        .where(col(Issue.resolved_at).is_(None))
+    ).all()
+
+    if not issues:
+        return
+
+    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
+    for issue in issues:
+        by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
+
+    wf_file_ids = list(by_wf_file)
+    session.exec(
+        delete(Fix)
+        .where(col(Fix.workflow_file_id).in_(wf_file_ids))
+        .where(col(Fix.status) != FixStatus.delivered)  # type: ignore[arg-type]
+    )
+    session.commit()
+
+    provider_str, model_str = resolve_llm_provider(repo)
+    taken = set(
+        session.exec(
+            select(Fix.workflow_file_id).where(
+                col(Fix.workflow_file_id).in_(wf_file_ids)
+            )
+        ).all()
+    )
+    pending_fixes: list[Fix] = []
+    for wf_id, wf_issues in by_wf_file.items():
+        if wf_id in taken:
+            continue
+        fix = Fix(
+            workflow_file_id=wf_id,
+            llm_provider=LLMProvider(provider_str),
+            llm_model=model_str,
+            status=FixStatus.pending,
+        )
+        session.add(fix)
+        session.flush()
+        for issue in wf_issues:
+            issue.fix_id = fix.id
+            session.add(issue)
+        pending_fixes.append(fix)
+    session.commit()
+
+    if not pending_fixes:
+        return
+
+    from app.services.events import publisher as events_pub
+    from app.services.events import schemas as ev
+
+    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
+    events_pub.publish_event(
+        ev.fix_generating(
+            org_id,
+            str(repo.id),
+            fix_ids=[str(f.id) for f in pending_fixes],
+            issue_ids=[
+                str(i.id) for i in issues if i.workflow_file_id in pending_wf_ids
+            ],
+        )
+    )
+
+    batch_id = uuid.uuid4().hex
+    init_fix_batch(batch_id, len(pending_wf_ids))
+    for wf_id, group in by_wf_file.items():
+        if wf_id in pending_wf_ids:
+            run_fix_generation.delay(
+                issue_ids=[str(i.id) for i in group], batch_id=batch_id
+            )
+
+    logger.info(
+        "Auto-queued fix generation: repo=%s files=%d",
+        repo.id,
+        len(pending_fixes),
+    )
 
 
 class WorkflowFetchError(Exception):
@@ -498,6 +607,14 @@ def _run_static_analysis_impl(
                         batch_total_issues,
                     )
                 )
+                if repo.auto_fix_enabled and batch_total_issues > 0:
+                    try:
+                        _auto_queue_fix_generation(session, repo, org_id)
+                    except Exception:
+                        logger.exception(
+                            "Auto fix generation failed after analysis: repo=%s",
+                            repo_id,
+                        )
 
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 

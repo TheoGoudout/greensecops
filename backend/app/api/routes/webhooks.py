@@ -175,6 +175,8 @@ def _handle_workflow_run_event(
 
     workflow_run = payload.get("workflow_run", {})
     branch = workflow_run.get("head_branch", "")
+    if branch.startswith("greensecops/"):
+        return
     commit_sha = workflow_run.get("head_sha", "")
     _enqueue_static_analysis(
         repo_id=str(repo.id),
@@ -250,6 +252,7 @@ def _handle_repository_event(
 
     if action in ("deleted", "archived"):
         repo.enabled = False
+        repo.is_accessible = False
         session.add(repo)
         session.commit()
         logger.info("Disabled repo %s after %s event", repo.full_name, action)
@@ -260,6 +263,7 @@ def _handle_repository_event(
 
     if action == "unarchived":
         repo.enabled = True
+        repo.is_accessible = True
         session.add(repo)
         session.commit()
         logger.info("Re-enabled repo %s after unarchive", repo.full_name)
@@ -299,16 +303,11 @@ def _handle_installation_event(
         return
 
     if action in ("deleted", "suspend"):
-        from sqlmodel import select
-
-        repos = session.exec(
-            select(Repository).where(Repository.installation_id == installation_id)
-        ).all()
-        for repo in repos:
-            repo.enabled = False
-        session.commit()
+        repos = crud.mark_repositories_inaccessible_by_installation_id(
+            session=session, installation_id=installation_id
+        )
         logger.info(
-            "Disabled %d repos for %s installation %s",
+            "Marked %d repos inaccessible for %s installation %s",
             len(repos),
             action,
             installation_id,
@@ -332,13 +331,16 @@ def _handle_installation_event(
         org = _upsert_org_from_installation(session, installation)
         if org is None:
             return
-        if action == "created":
-            events_pub.publish_event(
-                ev.installation_created(str(org.id), installation_id, org.name)
+        if action == "unsuspend":
+            crud.restore_repositories_accessibility_by_installation_id(
+                session=session, installation_id=installation_id
             )
-        elif action == "unsuspend":
             events_pub.publish_event(
                 ev.installation_unsuspended(str(org.id), installation_id, org.name)
+            )
+        elif action == "created":
+            events_pub.publish_event(
+                ev.installation_created(str(org.id), installation_id, org.name)
             )
         else:
             events_pub.publish_event(
@@ -421,6 +423,22 @@ def _handle_installation_repositories_event(
         org = _upsert_org_from_installation(session, installation)
         if org is None:
             return
+        added: list[dict[str, Any]] = payload.get("repositories_added", [])
+        github_repo_ids = [r["id"] for r in added if r.get("id")]
+        if github_repo_ids:
+            from sqlmodel import select
+
+            repos = list(
+                session.exec(
+                    select(Repository).where(  # type: ignore[attr-defined]
+                        Repository.github_repo_id.in_(github_repo_ids)
+                    )
+                ).all()
+            )
+            for repo in repos:
+                repo.is_accessible = True
+                session.add(repo)
+            session.commit()
         # The payload lacks default_branch, so re-sync for accurate data.
         _enqueue_installation_sync(installation_id, str(org.id))
     elif action == "removed":

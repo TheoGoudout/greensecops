@@ -241,11 +241,49 @@ def toggle_repository(
     return {"repo_id": str(repo_id), "enabled": enabled}
 
 
+@router.patch("/{repo_id}/auto-fix")
+def toggle_auto_fix(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    enabled: bool,
+) -> dict[str, str | bool]:
+    repo = _get_repo_for_user(repo_id, session, current_user)
+    repo.auto_fix_enabled = enabled
+    session.add(repo)
+    session.commit()
+    return {"repo_id": str(repo_id), "auto_fix_enabled": enabled}
+
+
+@router.get("/{repo_id}/branches", response_model=list[str])
+def list_repository_branches(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[str]:
+    from sqlmodel import col
+
+    from app.models import Analysis, AnalysisStatus
+
+    _get_repo_for_user(repo_id, session, current_user)
+    branches = session.exec(
+        select(col(Analysis.branch))
+        .where(Analysis.repo_id == repo_id)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .where(col(Analysis.branch).isnot(None))
+        .distinct()
+        .order_by(col(Analysis.branch))
+    ).all()
+    return [b for b in branches if b]
+
+
 def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     """Parse workflow YAML to find insertion points, then insert the action step as raw text.
 
     Uses ruamel.yaml only for parsing (to get line numbers and detect duplicates).
     Serialization is text-based so the PR diff contains only the inserted lines.
+    Also injects `permissions: id-token: write` into each modified job, since the
+    action authenticates via GitHub OIDC and requires that permission.
     Returns (new_content, was_modified).
     """
     yaml_rt = YAML()
@@ -286,11 +324,12 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
             # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
             col = first_step_val_col - 2
             indent = " " * col
+            default_url = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
             step_text = (
                 f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
                 f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
                 f"{indent}  with:\n"
-                f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL || '{settings.BACKEND_HOST}' }}}}\n"
+                f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL || '{default_url}' }}}}\n"
             )
             all_insertions.append((first_step_line, step_text))
 
@@ -361,6 +400,34 @@ async def _inject_badge_via_llm(
     return result.content
 
 
+def _badge_only_added(original: str, modified: str) -> bool:
+    """Return True if modified differs from original only by pure insertions (no deletes/replaces)."""
+    import difflib
+
+    orig_lines = original.splitlines(keepends=True)
+    mod_lines = modified.splitlines(keepends=True)
+    for tag, _i1, _i2, _j1, _j2 in difflib.SequenceMatcher(
+        None, orig_lines, mod_lines
+    ).get_opcodes():
+        if tag in ("equal", "insert"):
+            continue
+        return False
+    return True
+
+
+def _insert_badge_simple(readme_content: str, badge_markdown: str) -> str:
+    """Insert badge after the first top-level heading, or prepend to the file."""
+    import re
+
+    match = re.search(r"^(#[^\n]*\n)", readme_content, re.MULTILINE)
+    if match:
+        pos = match.end()
+        return (
+            readme_content[:pos] + "\n" + badge_markdown + "\n" + readme_content[pos:]
+        )
+    return badge_markdown + "\n\n" + readme_content
+
+
 @router.post("/{repo_id}/integrate-action", status_code=202)
 async def integrate_action(
     repo_id: uuid.UUID,
@@ -426,9 +493,20 @@ async def integrate_action(
             new_readme = await _inject_badge_via_llm(
                 readme_content, badge_markdown, repo
             )
-            if new_readme and badge_url in new_readme:
-                badge_added = True
+            if (
+                new_readme
+                and badge_url in new_readme
+                and _badge_only_added(readme_content, new_readme)
+            ):
                 file_changes.append((readme_file.path, new_readme))
+            else:
+                file_changes.append(
+                    (
+                        readme_file.path,
+                        _insert_badge_simple(readme_content, badge_markdown),
+                    )
+                )
+            badge_added = True
     except Exception:
         logger.exception("Badge injection failed for repo %s", repo.full_name)
 

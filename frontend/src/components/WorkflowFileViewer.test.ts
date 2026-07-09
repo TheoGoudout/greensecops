@@ -65,4 +65,16 @@ describe("buildDiffEntries", () => {
       "fixed5",
     ])
   })
+
+  it("shows no diff when both sides end with trailing newline", () => {
+    const result = buildDiffEntries("line1\nline2\n", "line1\nline2\n")
+    expect(result.every((e) => e.type === "normal")).toBe(true)
+    expect(result.map((e) => e.text)).toEqual(["line1", "line2"])
+  })
+
+  it("shows no spurious removed line when fullContent preserves trailing newline", () => {
+    const result = buildDiffEntries("line1\nline2\n", "line1\nline2\n")
+    const removals = result.filter((e) => e.type === "remove")
+    expect(removals).toHaveLength(0)
+  })
 })

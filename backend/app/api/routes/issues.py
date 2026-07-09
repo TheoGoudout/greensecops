@@ -26,6 +26,7 @@ def list_issues(
     current_user: CurrentUser,
     analysis_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
+    branch: str | None = None,
     category: IssueCategory | None = None,
     severity: IssueSeverity | None = None,
     unfixed: bool = False,
@@ -37,8 +38,10 @@ def list_issues(
     query = select(Issue)
     if not include_resolved:
         query = query.where(col(Issue.resolved_at).is_(None))
-    # Join Analysis once if either tenant scoping or repo filtering needs it.
-    needs_analysis_join = repo_id is not None or not current_user.is_superuser
+    # Join Analysis once if either tenant scoping or repo/branch filtering needs it.
+    needs_analysis_join = (
+        repo_id is not None or branch is not None or not current_user.is_superuser
+    )
     if needs_analysis_join:
         query = query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
     if not current_user.is_superuser:
@@ -51,14 +54,20 @@ def list_issues(
         )
     if analysis_id:
         query = query.where(Issue.analysis_id == analysis_id)
+    if branch:
+        query = query.where(Analysis.branch == branch)
     if repo_id:
         query = query.where(Analysis.repo_id == repo_id)
         if latest_only:
-            latest_analysis_subq = (
+            latest_subq = (
                 select(Analysis.id)
                 .where(Analysis.workflow_file_id == Issue.workflow_file_id)
                 .where(Analysis.status == AnalysisStatus.completed)
-                .order_by(
+            )
+            if branch:
+                latest_subq = latest_subq.where(Analysis.branch == branch)
+            latest_subq = (
+                latest_subq.order_by(
                     Analysis.completed_at.desc().nulls_last(),
                     Analysis.created_at.desc(),
                 )  # type: ignore[union-attr]
@@ -66,7 +75,7 @@ def list_issues(
                 .correlate(Issue)
                 .scalar_subquery()
             )
-            query = query.where(Issue.analysis_id == latest_analysis_subq)
+            query = query.where(Issue.analysis_id == latest_subq)
     if unfixed:
         active_fix_ids = select(Fix.id).where(Fix.status != FixStatus.rejected)
         query = query.where(

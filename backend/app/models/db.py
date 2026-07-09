@@ -130,9 +130,11 @@ class Repository(SQLModel, table=True):
     full_name: str = Field(max_length=512, index=True)
     installation_id: int | None = Field(default=None, index=True)
     enabled: bool = Field(default=True)
+    is_accessible: bool = Field(default=True)
     is_external: bool = Field(default=False)
     default_branch: str = Field(default="main", max_length=255)
     fix_delivery_mode: FixDeliveryMode | None = Field(default=None)
+    auto_fix_enabled: bool = Field(default=False)
     llm_provider: LLMProvider | None = Field(default=None)
     llm_model: str | None = Field(default=None, max_length=255)
     created_at: datetime | None = Field(

@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import re
-from typing import Any
 
-import httpx
 import redis.asyncio as aioredis
+from github import Github
+from github.GithubException import GithubException, UnknownObjectException
 
 logger = logging.getLogger(__name__)
 
@@ -57,74 +58,69 @@ async def _cache_set(cache: aioredis.Redis | None, key: str, value: str) -> None
         logger.warning("Redis cache write failed for %s", key, exc_info=True)
 
 
-async def _resolve_ref_to_sha(
-    client: httpx.AsyncClient, repo: str, ref: str
-) -> str | None:
-    for url in [
-        f"https://api.github.com/repos/{repo}/git/ref/tags/{ref}",
-        f"https://api.github.com/repos/{repo}/git/ref/heads/{ref}",
-    ]:
+def _resolve_ref_to_sha_sync(gh: Github, repo_name: str, ref: str) -> str | None:
+    try:
+        repo = gh.get_repo(repo_name)
+    except (GithubException, UnknownObjectException) as exc:
+        logger.warning("Failed to get repo %s: %s", repo_name, exc)
+        return None
+
+    for ref_path in [f"tags/{ref}", f"heads/{ref}"]:
         try:
-            resp = await client.get(url, timeout=10.0)
-            if resp.status_code != 200:
-                continue
-            data: dict[str, Any] = resp.json()
-            obj = data.get("object", {})
-            sha: str = obj.get("sha", "")
-            if obj.get("type") == "tag":
-                tag_resp = await client.get(obj.get("url", ""), timeout=10.0)
-                if tag_resp.status_code == 200:
-                    sha = tag_resp.json().get("object", {}).get("sha", sha)
-            return sha or None
+            git_ref = repo.get_git_ref(ref_path)
+            sha = git_ref.object.sha
+            if git_ref.object.type == "tag":
+                sha = repo.get_git_tag(sha).object.sha
+            return sha
+        except (GithubException, UnknownObjectException):
+            continue
         except Exception as exc:
-            logger.warning("Failed to resolve SHA for %s@%s: %s", repo, ref, exc)
+            logger.warning("Failed to resolve SHA for %s@%s: %s", repo_name, ref, exc)
+    return None
+
+
+def _get_latest_version_sync(gh: Github, repo_name: str) -> str | None:
+    """Latest release tag of an action repo, falling back to the newest tag."""
+    try:
+        repo = gh.get_repo(repo_name)
+    except (GithubException, UnknownObjectException) as exc:
+        logger.warning("Failed to get repo %s: %s", repo_name, exc)
+        return None
+
+    try:
+        return repo.get_latest_release().tag_name
+    except GithubException:
+        pass
+
+    try:
+        tag = next(iter(repo.get_tags()), None)
+        return tag.name if tag else None
+    except Exception as exc:
+        logger.warning("Failed to resolve latest version for %s: %s", repo_name, exc)
     return None
 
 
 async def _cached_resolve_ref_to_sha(
-    client: httpx.AsyncClient, cache: aioredis.Redis | None, repo: str, ref: str
+    gh: Github, cache: aioredis.Redis | None, repo: str, ref: str
 ) -> str | None:
     cache_key = f"{_SHA_CACHE_PREFIX}{repo}@{ref}"
     sha = await _cache_get(cache, cache_key)
     if sha:
         return sha
-    sha = await _resolve_ref_to_sha(client, repo, ref)
+    sha = await asyncio.to_thread(_resolve_ref_to_sha_sync, gh, repo, ref)
     if sha:
         await _cache_set(cache, cache_key, sha)
     return sha
 
 
-async def _get_latest_version(client: httpx.AsyncClient, repo: str) -> str | None:
-    """Latest release tag of an action repo, falling back to the newest tag."""
-    try:
-        resp = await client.get(
-            f"https://api.github.com/repos/{repo}/releases/latest", timeout=10.0
-        )
-        if resp.status_code == 200:
-            tag: str = resp.json().get("tag_name", "")
-            if tag:
-                return tag
-        resp = await client.get(
-            f"https://api.github.com/repos/{repo}/tags?per_page=1", timeout=10.0
-        )
-        if resp.status_code == 200:
-            tags = resp.json()
-            if tags:
-                name: str = tags[0].get("name", "")
-                return name or None
-    except Exception as exc:
-        logger.warning("Failed to resolve latest version for %s: %s", repo, exc)
-    return None
-
-
 async def _cached_get_latest_version(
-    client: httpx.AsyncClient, cache: aioredis.Redis | None, repo: str
+    gh: Github, cache: aioredis.Redis | None, repo: str
 ) -> str | None:
     cache_key = f"{_VERSION_CACHE_PREFIX}{repo}"
     version = await _cache_get(cache, cache_key)
     if version:
         return version
-    version = await _get_latest_version(client, repo)
+    version = await asyncio.to_thread(_get_latest_version_sync, gh, repo)
     if version:
         await _cache_set(cache, cache_key, version)
     return version
@@ -148,21 +144,17 @@ async def resolve_action_shas(workflow_content: str) -> dict[str, str]:
     except Exception:
         logger.warning("Redis unavailable for action SHA cache", exc_info=True)
 
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    gh = Github()
     sha_map: dict[str, str] = {}
     try:
-        async with httpx.AsyncClient(headers=headers) as client:
-            for repo in sorted(repos):
-                latest = await _cached_get_latest_version(client, cache, repo)
-                if latest:
-                    refs.add((repo, latest))
-            for repo, ref in sorted(refs):
-                sha = await _cached_resolve_ref_to_sha(client, cache, repo, ref)
-                if sha:
-                    sha_map[f"{repo}@{ref}"] = sha
+        for repo in sorted(repos):
+            latest = await _cached_get_latest_version(gh, cache, repo)
+            if latest:
+                refs.add((repo, latest))
+        for repo, ref in sorted(refs):
+            sha = await _cached_resolve_ref_to_sha(gh, cache, repo, ref)
+            if sha:
+                sha_map[f"{repo}@{ref}"] = sha
     finally:
         if cache is not None:
             try:

@@ -988,6 +988,11 @@ export const RepositoryPublicSchema = {
             type: 'boolean',
             title: 'Enabled'
         },
+        is_accessible: {
+            type: 'boolean',
+            title: 'Is Accessible',
+            default: true
+        },
         is_external: {
             type: 'boolean',
             title: 'Is External',
@@ -996,6 +1001,11 @@ export const RepositoryPublicSchema = {
         default_branch: {
             type: 'string',
             title: 'Default Branch'
+        },
+        auto_fix_enabled: {
+            type: 'boolean',
+            title: 'Auto Fix Enabled',
+            default: false
         },
         tier: {
             anyOf: [

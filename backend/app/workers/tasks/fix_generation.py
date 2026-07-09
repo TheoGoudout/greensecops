@@ -80,6 +80,74 @@ def init_fix_batch(batch_id: str, group_count: int) -> None:
         logger.exception("Failed to init fix batch %s", batch_id)
 
 
+def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
+    """Queue PR delivery for ready fixes when the repo has auto_fix_enabled."""
+    try:
+        from app.core.config import settings
+        from app.services.pr_body import IssueInfo, build_pr_body
+        from app.workers.tasks.fix_delivery import deliver_fixes_batch
+
+        with Session(engine) as session:
+            repo = session.get(Repository, uuid.UUID(repo_id))
+            if not repo or not repo.auto_fix_enabled:
+                return
+
+            fixes = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
+            fixes = [f for f in fixes if f and f.status == FixStatus.ready]
+            if not fixes:
+                return
+
+            from sqlmodel import select as _select
+
+            from app.models import PullRequest, WorkflowFile
+
+            existing_branch = session.exec(
+                _select(PullRequest.pr_branch)
+                .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
+                .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+                .where(WorkflowFile.repo_id == repo.id)
+                .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
+                .limit(1)
+            ).first()
+            pr_branch = existing_branch or f"greensecops/fixes-{str(repo.id)[:8]}"
+
+            issues_info: list[IssueInfo] = []
+            for fix in fixes:
+                for issue in fix.issues or []:
+                    issues_info.append(
+                        IssueInfo(
+                            rule_slug=issue.rule.slug if issue.rule else "",
+                            rule_title=issue.rule.title if issue.rule else "",
+                            severity=issue.severity,
+                            category=issue.category,
+                            message=issue.message,
+                            line_start=issue.line_start,
+                        )
+                    )
+
+            pr_body = build_pr_body(
+                issues=issues_info,
+                fix_ids=fix_ids,
+                wiki_base_url=settings.WIKI_BASE_URL,
+                frontend_host=settings.FRONTEND_HOST,
+                bot_handle=settings.GITHUB_BOT_HANDLE,
+                app_name=settings.PROJECT_NAME,
+                app_url=settings.APP_URL,
+            )
+            deliver_fixes_batch.delay(
+                fix_ids=fix_ids,
+                repo_id=repo_id,
+                pr_branch=pr_branch,
+                pr_title=f"fix(ci): apply all {settings.PROJECT_NAME} fixes",
+                pr_body=pr_body,
+            )
+            logger.info(
+                "Auto-queued fix delivery: repo=%s fixes=%d", repo_id, len(fixes)
+            )
+    except Exception:
+        logger.exception("Auto-delivery failed for repo %s", repo_id)
+
+
 def _record_batch_result(
     batch_id: str,
     org_id: str,
@@ -131,6 +199,7 @@ def _record_batch_result(
 
     if all_ready:
         events_pub.publish_event(ev.fix_ready_batch(org_id, repo_id, list(all_ready)))
+        _maybe_auto_deliver(repo_id, list(all_ready))
     if all_failed:
         events_pub.publish_event(
             ev.fix_generation_failed_batch(
@@ -337,7 +406,7 @@ def _parse_llm_response(content: str) -> str:
     import re
 
     full_content_match = re.search(
-        r"<full_content>\n?(.*?)\n?</full_content>", content, re.DOTALL
+        r"<full_content>\n?(.*?)</full_content>", content, re.DOTALL
     )
     full_content = full_content_match.group(1) if full_content_match else ""
 

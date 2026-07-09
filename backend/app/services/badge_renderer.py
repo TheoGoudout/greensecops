@@ -43,12 +43,12 @@ def render_badge(grade: str, label: str | None = None) -> str:
     label = label or settings.PROJECT_NAME
     color = _GRADE_COLORS.get(grade, "#9CA3AF")
     label_width = max(100, 10 + len(label) * 8)
-    value_width = 40 + len(grade) * 6
+    value_width = 40 + len(grade) * 9
     total_width = label_width + value_width
     label_center = label_width // 2
     value_center = label_width + value_width // 2
     label_text_width = max(860, len(label) * 80)
-    value_text_width = max(180, len(grade) * 60)
+    value_text_width = max(200, len(grade) * 75)
 
     return _SVG_TEMPLATE.format(
         total_width=total_width,

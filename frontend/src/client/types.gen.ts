@@ -565,11 +565,11 @@ export type RepositoriesToggleAutoFixResponse = ({
     [key: string]: (string | boolean);
 });
 
-export type RepositoriesListBranchesData = {
+export type RepositoriesListRepositoryBranchesData = {
     repoId: string;
 };
 
-export type RepositoriesListBranchesResponse = (Array<string>);
+export type RepositoriesListRepositoryBranchesResponse = (Array<(string)>);
 
 export type RepositoriesIntegrateActionData = {
     repoId: string;

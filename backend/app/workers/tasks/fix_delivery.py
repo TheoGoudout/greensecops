@@ -96,6 +96,7 @@ def deliver_fixes_batch(
         # opaque GitHub 422.
         seen: dict[str, tuple[str, str]] = {}
         expected_base_contents: dict[str, str] = {}
+        commit_messages: dict[str, str] = {}
         base_branch = repo.default_branch or "main"
         deliverable: list[Fix] = []
         for fix in fixes:
@@ -114,6 +115,10 @@ def deliver_fixes_batch(
                 continue
             seen[wf.path] = (wf.path, fix.full_content)
             expected_base_contents[wf.path] = wf.raw_content
+            n_issues = len(fix.issues)
+            commit_messages[wf.path] = (
+                f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {wf.path}"
+            )
             issue = fix.issues[0] if fix.issues else None
             analysis = issue.analysis if issue else None
             base_branch = (
@@ -145,6 +150,7 @@ def deliver_fixes_batch(
                 pr_body=pr_body,
                 expected_base_contents=expected_base_contents,
                 force=force,
+                commit_messages=commit_messages,
             )
         )
 
@@ -245,6 +251,7 @@ async def _deliver_batch(
     pr_body: str,
     expected_base_contents: dict[str, str] | None = None,
     force: bool = False,
+    commit_messages: dict[str, str] | None = None,
 ) -> object:
     async with _delivery_service() as svc:
         return await svc.update_or_create_workflow_action_pr(
@@ -257,4 +264,5 @@ async def _deliver_batch(
             pr_body=pr_body,
             expected_base_contents=expected_base_contents,
             override_user_commits=force,
+            commit_messages=commit_messages,
         )

@@ -23,7 +23,7 @@ dependencies = [
     "redis>=5.0.0,<6.0.0",
     "pyyaml>=6.0,<7.0",
     "ruamel-yaml>=0.18,<0.19",
-    "pygithub>=2.3.0,<3.0.0",
+    "pygithub",
     "cryptography>=42.0.0,<44.0.0",
     "langchain>=0.3.0,<0.4.0",
     "langchain-openai>=0.2.0,<0.3.0",
@@ -104,6 +104,9 @@ sort = "-Cover"
 
 [tool.coverage.html]
 show_contexts = true
+
+[tool.uv.sources]
+pygithub = { git = "https://github.com/TheoGoudout/PyGithub", rev = "332b0617" }
 
 [tool.ty.terminal]
 error-on-warning = true

@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
 import redis.asyncio as aioredis
 from github import Auth, Github, GithubIntegration
 from github.GithubException import GithubException
@@ -224,26 +223,14 @@ class GitHubAppClient:
         self,
         code: str,
         code_verifier: str | None = None,
-        redirect_uri: str | None = None,
+        redirect_uri: str | None = None,  # noqa: ARG002
     ) -> str:
-        # PyGitHub does not support OAuth code exchange — raw HTTP required
-        body: dict[str, Any] = {
-            "client_id": settings.GITHUB_CLIENT_ID,
-            "client_secret": settings.GITHUB_CLIENT_SECRET,
-            "code": code,
-        }
-        if code_verifier is not None:
-            body["code_verifier"] = code_verifier
-        if redirect_uri is not None:
-            body["redirect_uri"] = redirect_uri
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://github.com/login/oauth/access_token",
-                json=body,
-                headers={"Accept": "application/json"},
+        def _exchange() -> str:
+            app = Github().get_oauth_application(
+                settings.GITHUB_CLIENT_ID,
+                settings.GITHUB_CLIENT_SECRET,
             )
-            response.raise_for_status()
-            data = response.json()
-            if "error" in data:
-                raise ValueError(f"GitHub OAuth error: {data['error_description']}")
-            return str(data["access_token"])
+            token = app.get_access_token(code, code_verifier)
+            return token.token
+
+        return await asyncio.to_thread(_exchange)
