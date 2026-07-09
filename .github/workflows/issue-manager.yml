@@ -18,13 +18,19 @@ permissions: {}
 
 jobs:
   issue-manager:
+    name: Manage issues and PRs
     if: github.repository_owner == 'fastapi'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      id-token: write
       issues: write
       pull-requests: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL }}
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
