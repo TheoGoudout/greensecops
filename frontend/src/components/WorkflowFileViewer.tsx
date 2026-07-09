@@ -200,27 +200,34 @@ export function WorkflowFileViewer({
 
   return (
     <div className="rounded-lg border bg-muted/30">
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/50 rounded-t-lg">
-        <span className="text-xs font-mono text-muted-foreground">{path}</span>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 border-b bg-muted/50 rounded-t-lg">
+        <span className="text-xs font-mono text-muted-foreground break-all min-w-0">
+          {path}
+        </span>
         {issues.length > 0 && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground shrink-0">
             {issues.length} issue{issues.length !== 1 ? "s" : ""}
           </span>
         )}
       </div>
 
       {issuesWithoutLine.length > 0 && (
-        <div className="border-b px-4 py-2 flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground font-medium mb-1">
+        <div className="border-b px-4 py-2 flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground font-medium">
             Workflow-level issues
           </p>
           {issuesWithoutLine.map((issue) => (
-            <div key={issue.id} className="flex items-start gap-2 text-xs">
-              <SeverityChip severity={issue.severity} />
-              <span className="font-mono text-blue-700 dark:text-blue-300">
+            <div
+              key={issue.id}
+              className="flex flex-wrap items-start gap-x-2 gap-y-1 text-xs"
+            >
+              <SeverityChip severity={issue.severity} className="shrink-0" />
+              <span className="font-mono text-blue-700 dark:text-blue-300 shrink-0">
                 {issue.rule_slug}
               </span>
-              <span className="text-foreground">{issue.message}</span>
+              <span className="text-foreground break-words">
+                {issue.message}
+              </span>
             </div>
           ))}
         </div>
@@ -247,7 +254,7 @@ export function WorkflowFileViewer({
               <button
                 key={key}
                 type="button"
-                className="w-full text-left flex items-center gap-2 px-3 py-0.5 text-muted-foreground hover:bg-muted/50 transition-colors"
+                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-muted-foreground hover:bg-muted/50 transition-colors"
                 onClick={() => toggleBlock(key)}
               >
                 <span className="w-10 shrink-0" />
@@ -301,13 +308,13 @@ function LineRow({
       {issues.map((issue) => (
         <div
           key={issue.id}
-          className={`border-l-2 ${SEVERITY_BORDER[issue.severity]} bg-muted/40 flex items-start gap-2 px-4 py-2`}
+          className={`border-l-2 ${SEVERITY_BORDER[issue.severity]} bg-muted/40 flex flex-wrap items-start gap-x-2 gap-y-1 px-4 py-2`}
         >
-          <SeverityChip severity={issue.severity} />
+          <SeverityChip severity={issue.severity} className="shrink-0" />
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 shrink-0">
             {issue.rule_slug}
           </span>
-          <span className="text-xs text-foreground flex-1">
+          <span className="text-xs text-foreground break-words">
             {issue.message}
           </span>
           {fixedIssueIds.has(issue.id) && (
