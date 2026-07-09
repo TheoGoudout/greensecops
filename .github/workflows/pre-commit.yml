@@ -14,9 +14,16 @@ env:
 
 jobs:
   pre-commit:
+    name: Run pre-commit checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      id-token: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL }}
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
@@ -49,6 +56,7 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
+          cache: "pip"
       - name: Setup uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
@@ -75,7 +83,6 @@ jobs:
       - name: Run prek - pre-commit
         id: precommit
         run: uv run prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
-        continue-on-error: true
       - name: Commit and push changes
         if: env.HAS_SECRETS == 'true'
         run: |
@@ -98,12 +105,19 @@ jobs:
 
   # https://github.com/marketplace/actions/alls-green#why
   pre-commit-alls-green:  # This job does nothing and is only used for the branch protection
+    name: All pre-commit checks passed
     if: always()
     needs:
       - pre-commit
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      id-token: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL }}
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
