@@ -141,6 +141,8 @@ def _handle_push_event(
         return
 
     branch = payload.get("ref", "").removeprefix("refs/heads/")
+    if branch.startswith("greensecops/"):
+        return
     commit_sha = payload.get("after", "")
     _enqueue_static_analysis(
         repo_id=str(repo.id),
