@@ -323,6 +323,8 @@ const SAMPLE_BASE_CONTENT =
   "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4"
 const SAMPLE_FULL_CONTENT =
   "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 30\n    steps:\n      - uses: actions/checkout@v4"
+const SAMPLE_DIFF_PATCH =
+  "--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -4,6 +4,7 @@\n jobs:\n   build:\n     runs-on: ubuntu-latest\n+    timeout-minutes: 30\n     steps:\n       - uses: actions/checkout@v4"
 
 export const MOCK_FIX_READY = {
   id: ID.fixReady,
