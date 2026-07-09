@@ -2,52 +2,17 @@
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import User
 
-LOGIN_URL = f"{settings.API_V1_STR}/auth/github/login"
 CALLBACK_URL = f"{settings.API_V1_STR}/auth/github/callback"
 
 
-@pytest.fixture(autouse=True)
-def _isolate_oauth_cookies(client: TestClient):
-    """Each OAuth attempt is an independent browser session.
-
-    The module-scoped client otherwise persists the gh_oauth_state cookie set by
-    the /login redirect into later popup-flow callback tests (which legitimately
-    carry no such cookie in production).
-    """
-    client.cookies.clear()
-    yield
-    client.cookies.clear()
-
-
-# ─── /login ──────────────────────────────────────────────────────────────────
-
-
-def test_github_login_oauth_not_configured_returns_503(client: TestClient) -> None:
-    # Arrange — no client_id
-    with patch.object(settings, "GITHUB_CLIENT_ID", None):
-        response = client.get(LOGIN_URL, follow_redirects=False)
-
-    # Assert
-    assert response.status_code == 503
-    assert response.json()["detail"] == "GitHub OAuth not configured"
-
-
-def test_github_login_redirects_to_github(client: TestClient) -> None:
-    with patch.object(settings, "GITHUB_CLIENT_ID", "test-client-id"):
-        response = client.get(LOGIN_URL, follow_redirects=False)
-
-    assert response.status_code in (302, 307)
-    location = response.headers["location"]
-    assert "github.com/login/oauth/authorize" in location
-    assert "client_id=test-client-id" in location
-    assert "scope=read%3Auser%2Cuser%3Aemail" in location or "scope=read" in location
+def _post(client: TestClient, **form_fields) -> object:
+    return client.post(CALLBACK_URL, data=form_fields)
 
 
 # ─── /callback — config guard ─────────────────────────────────────────────────
@@ -58,7 +23,7 @@ def test_github_callback_oauth_not_configured_returns_503(client: TestClient) ->
         patch.object(settings, "GITHUB_CLIENT_ID", None),
         patch.object(settings, "GITHUB_CLIENT_SECRET", None),
     ):
-        response = client.get(CALLBACK_URL, params={"code": "somecode"})
+        response = _post(client, code="somecode")
 
     assert response.status_code == 503
     assert response.json()["detail"] == "GitHub OAuth not configured"
@@ -71,35 +36,23 @@ def test_github_callback_missing_client_secret_returns_503(
         patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
         patch.object(settings, "GITHUB_CLIENT_SECRET", None),
     ):
-        response = client.get(CALLBACK_URL, params={"code": "somecode"})
+        response = _post(client, code="somecode", client_id="test-id")
 
     assert response.status_code == 503
 
 
-# ─── /callback — CSRF state validation (server-initiated flow) ───────────────
+# ─── /callback — client_id validation ────────────────────────────────────────
 
 
-def test_github_callback_state_mismatch_returns_400(client: TestClient) -> None:
-    # A state cookie present but not matching the returned state → rejected.
-    client.cookies.set("gh_oauth_state", "the-real-state")
+def test_github_callback_client_id_mismatch_returns_400(client: TestClient) -> None:
     with (
-        patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
+        patch.object(settings, "GITHUB_CLIENT_ID", "real-client-id"),
         patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
     ):
-        response = client.get(
-            CALLBACK_URL,
-            params={"code": "somecode", "state": "attacker-state"},
-        )
+        response = _post(client, code="somecode", client_id="wrong-client-id")
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid OAuth state"
-
-
-def test_github_login_sets_state_cookie(client: TestClient) -> None:
-    with patch.object(settings, "GITHUB_CLIENT_ID", "test-client-id"):
-        response = client.get(LOGIN_URL, follow_redirects=False)
-    assert response.status_code in (302, 307)
-    assert "gh_oauth_state" in response.cookies
+    assert response.json()["detail"] == "GitHub Client ID not matching"
 
 
 # ─── /callback — OAuth exchange failure ──────────────────────────────────────
@@ -109,21 +62,19 @@ def test_github_callback_exchange_failure_returns_400(client: TestClient) -> Non
     mock_client = AsyncMock()
     mock_client.exchange_oauth_code.side_effect = Exception("bad_verification_code")
 
-    with (
-        patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
-        patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
-        patch("app.api.deps.get_github_app_client", return_value=mock_client),
-        patch("app.api.routes.github_oauth.GitHubAppClientDep", mock_client),
-    ):
-        from app.api.deps import get_github_app_client
-        from app.main import app
+    from app.api.deps import get_github_app_client
+    from app.main import app
 
-        app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    app.dependency_overrides[get_github_app_client] = lambda: mock_client
 
-        try:
-            response = client.get(CALLBACK_URL, params={"code": "bad-code"})
-        finally:
-            app.dependency_overrides.clear()
+    try:
+        with (
+            patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
+            patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
+        ):
+            response = _post(client, code="bad-code", client_id="test-id")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 400
     assert "GitHub OAuth failed" in response.json()["detail"]
@@ -152,16 +103,12 @@ def test_github_callback_creates_new_user(client: TestClient, db: Session) -> No
             patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
             patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
         ):
-            response = client.get(CALLBACK_URL, params={"code": "valid-code"})
+            response = _post(client, code="valid-code", client_id="test-id")
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-
-    # Verify user was created in DB
-    from sqlmodel import select
+    assert "access_token" in response.json()
 
     user = db.exec(select(User).where(User.github_id == 123456789)).first()
     assert user is not None
@@ -190,15 +137,11 @@ def test_github_callback_creates_new_user_no_email_uses_noreply(
             patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
             patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
         ):
-            response = client.get(CALLBACK_URL, params={"code": "valid-code-2"})
+            response = _post(client, code="valid-code-2", client_id="test-id")
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-
-    from sqlmodel import select
 
     user = db.exec(select(User).where(User.github_id == 987654321)).first()
     assert user is not None
@@ -211,7 +154,6 @@ def test_github_callback_creates_new_user_no_email_uses_noreply(
 def test_github_callback_updates_existing_user_by_github_id(
     client: TestClient, db: Session
 ) -> None:
-    # Arrange — create user with a known github_id
     existing = User(
         email="existing-gh@example.com",
         hashed_password="$argon2id$fake",
@@ -242,7 +184,7 @@ def test_github_callback_updates_existing_user_by_github_id(
             patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
             patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
         ):
-            response = client.get(CALLBACK_URL, params={"code": "code-existing"})
+            response = _post(client, code="code-existing", client_id="test-id")
     finally:
         app.dependency_overrides.clear()
 
@@ -254,7 +196,6 @@ def test_github_callback_updates_existing_user_by_github_id(
 def test_github_callback_updates_existing_user_by_email(
     client: TestClient, db: Session
 ) -> None:
-    # Arrange — user exists with matching email but no github_id yet
     email = "email-match@example.com"
     existing = User(
         email=email,
@@ -286,7 +227,7 @@ def test_github_callback_updates_existing_user_by_email(
             patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
             patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
         ):
-            response = client.get(CALLBACK_URL, params={"code": "code-email-match"})
+            response = _post(client, code="code-email-match", client_id="test-id")
     finally:
         app.dependency_overrides.clear()
 
@@ -294,3 +235,42 @@ def test_github_callback_updates_existing_user_by_email(
     db.refresh(existing)
     assert existing.github_id == 444555666
     assert existing.github_username == "email-match-user"
+
+
+def test_github_callback_passes_code_verifier_to_exchange(
+    client: TestClient,
+) -> None:
+    mock_client = AsyncMock()
+    mock_client.exchange_oauth_code.return_value = "gho_pkce_token"
+    mock_client.get_oauth_user.return_value = {
+        "id": 777888999,
+        "login": "pkceuser",
+        "email": "pkce@example.com",
+        "name": "PKCE User",
+    }
+
+    from app.api.deps import get_github_app_client
+    from app.main import app
+
+    app.dependency_overrides[get_github_app_client] = lambda: mock_client
+
+    try:
+        with (
+            patch.object(settings, "GITHUB_CLIENT_ID", "test-id"),
+            patch.object(settings, "GITHUB_CLIENT_SECRET", "test-secret"),
+        ):
+            response = _post(
+                client,
+                code="pkce-code",
+                client_id="test-id",
+                code_verifier="my-verifier-string",
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    mock_client.exchange_oauth_code.assert_called_once_with(
+        "pkce-code",
+        code_verifier="my-verifier-string",
+        redirect_uri=settings.GITHUB_OAUTH_REDIRECT_URI,
+    )

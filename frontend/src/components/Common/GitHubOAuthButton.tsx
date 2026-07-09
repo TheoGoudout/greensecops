@@ -17,9 +17,14 @@ export function GitHubOAuthButton() {
     // Set that URL in your GitHub OAuth App settings to this frontend route.
     redirectUri: `${window.location.origin}/auth/github/callback`,
     scope: "read:user user:email",
-    onSuccess: async ({ code, state }) => {
+    onSuccess: async ({ code }) => {
       try {
-        const token = await AuthService.githubCallback({ code, state })
+        const token = await AuthService.githubCallback({
+          formData: {
+            code,
+            client_id: import.meta.env.VITE_GITHUB_OAUTH_CLIENT_ID,
+          },
+        })
         localStorage.setItem("access_token", token.access_token)
         await queryClient.invalidateQueries({ queryKey: ["currentUser"] })
         const pending = sessionStorage.getItem("pending_installation")

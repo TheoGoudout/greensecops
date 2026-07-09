@@ -221,7 +221,10 @@ class GitHubAppClient:
         return await asyncio.to_thread(_get)
 
     async def exchange_oauth_code(
-        self, code: str, redirect_uri: str | None = None
+        self,
+        code: str,
+        code_verifier: str | None = None,
+        redirect_uri: str | None = None,
     ) -> str:
         # PyGitHub does not support OAuth code exchange — raw HTTP required
         body: dict[str, Any] = {
@@ -229,6 +232,8 @@ class GitHubAppClient:
             "client_secret": settings.GITHUB_CLIENT_SECRET,
             "code": code,
         }
+        if code_verifier is not None:
+            body["code_verifier"] = code_verifier
         if redirect_uri is not None:
             body["redirect_uri"] = redirect_uri
         async with httpx.AsyncClient() as client:

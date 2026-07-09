@@ -1,8 +1,9 @@
 import secrets
 from datetime import timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, Cookie, HTTPException, Response
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException
+from pydantic import HttpUrl
 from sqlmodel import select
 
 from app import crud
@@ -11,61 +12,60 @@ from app.core import security
 from app.core.config import settings
 from app.models import Token, User, UserCreate
 
+
+class OAuth2AuthorizationCodeForm:
+    def __init__(
+        self,
+        *,
+        grant_type: Annotated[
+            str | None,
+            Form(pattern="^authorization_code$"),
+        ] = None,
+        code: Annotated[
+            str,
+            Form(),
+        ],
+        client_id: Annotated[
+            str | None,
+            Form(),
+        ] = None,
+        redirect_uri: Annotated[
+            HttpUrl | None,
+            Form(),
+        ] = None,
+        code_verifier: Annotated[
+            str | None,
+            Form(),
+        ] = None,
+    ):
+        self.grant_type = grant_type
+        self.code = code
+        self.client_id = client_id
+        self.redirect_uri = redirect_uri
+        self.code_verifier = code_verifier
+
+
 router = APIRouter(prefix="/auth/github", tags=["auth"])
 
-_STATE_COOKIE = "gh_oauth_state"
 
-
-@router.get("/login")
-async def github_login() -> RedirectResponse:
-    if not settings.GITHUB_CLIENT_ID:
-        raise HTTPException(status_code=503, detail="GitHub OAuth not configured")
-    state = secrets.token_urlsafe(16)
-    url = (
-        "https://github.com/login/oauth/authorize"
-        f"?client_id={settings.GITHUB_CLIENT_ID}"
-        f"&redirect_uri={settings.GITHUB_OAUTH_REDIRECT_URI}"
-        "&scope=read:user,user:email"
-        f"&state={state}"
-    )
-    response = RedirectResponse(url=url)
-    # Bind the state to this browser so the callback can detect login CSRF.
-    response.set_cookie(
-        key=_STATE_COOKIE,
-        value=state,
-        max_age=600,
-        httponly=True,
-        secure=settings.ENVIRONMENT != "local",
-        samesite="lax",
-    )
-    return response
-
-
-@router.get("/callback")
+@router.post("/callback")
 async def github_callback(
-    code: str,
+    *,
     session: SessionDep,
     github_client: GitHubAppClientDep,
-    response: Response,
-    state: str | None = None,
-    state_cookie: str | None = Cookie(
-        default=None, alias=_STATE_COOKIE, include_in_schema=False
-    ),
+    form_data: Annotated[OAuth2AuthorizationCodeForm, Depends()],
 ) -> Token:
     if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="GitHub OAuth not configured")
 
-    # Server-initiated flow (/login set a state cookie): the returned state must
-    # match, and the cookie is single-use. The frontend popup flow uses no cookie
-    # and validates state itself.
-    if state_cookie is not None:
-        response.delete_cookie(_STATE_COOKIE)
-        if not state or not secrets.compare_digest(state, state_cookie):
-            raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    if form_data.client_id != settings.GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=400, detail="GitHub Client ID not matching")
 
     try:
         access_token = await github_client.exchange_oauth_code(
-            code, redirect_uri=settings.GITHUB_OAUTH_REDIRECT_URI
+            form_data.code,
+            code_verifier=form_data.code_verifier,
+            redirect_uri=settings.GITHUB_OAUTH_REDIRECT_URI,
         )
         gh_user = await github_client.get_oauth_user(access_token)
     except Exception as exc:

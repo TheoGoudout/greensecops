@@ -7,23 +7,36 @@ const ID = {
   org: "00000000-0000-0000-0000-000000000010",
   repo: "00000000-0000-0000-0000-000000000020",
   repoDisabled: "00000000-0000-0000-0000-000000000021",
+  repoExternal: "00000000-0000-0000-0000-000000000022",
+  repoNoAnalyses: "00000000-0000-0000-0000-000000000023",
   workflowFile: "00000000-0000-0000-0000-000000000030",
   workflowFileDeploy: "00000000-0000-0000-0000-000000000031",
   workflowFileRelease: "00000000-0000-0000-0000-000000000032",
   analysis: "00000000-0000-0000-0000-000000000040",
   analysisPending: "00000000-0000-0000-0000-000000000041",
   analysisFailed: "00000000-0000-0000-0000-000000000042",
+  analysisInProgress: "00000000-0000-0000-0000-000000000043",
+  analysisGradeA: "00000000-0000-0000-0000-000000000044",
+  analysisGradeF: "00000000-0000-0000-0000-000000000045",
   issueSecurity: "00000000-0000-0000-0000-000000000050",
   issueReliability: "00000000-0000-0000-0000-000000000051",
   issueEnergy: "00000000-0000-0000-0000-000000000052",
   issueWithFix: "00000000-0000-0000-0000-000000000053",
+  issueWithContext: "00000000-0000-0000-0000-000000000054",
+  issueWithPendingFix: "00000000-0000-0000-0000-000000000055",
+  issueWithFailedFix: "00000000-0000-0000-0000-000000000056",
+  issueWithDeliveredFix: "00000000-0000-0000-0000-000000000057",
   ruleSecurity: "00000000-0000-0000-0000-000000000060",
   ruleReliability: "00000000-0000-0000-0000-000000000061",
   ruleDisabled: "00000000-0000-0000-0000-000000000062",
   fixReady: "00000000-0000-0000-0000-000000000070",
   fixDelivered: "00000000-0000-0000-0000-000000000071",
   fixPending: "00000000-0000-0000-0000-000000000072",
+  fixFailed: "00000000-0000-0000-0000-000000000073",
+  fixCommentDelivered: "00000000-0000-0000-0000-000000000074",
+  fixMergedPr: "00000000-0000-0000-0000-000000000075",
   subscription: "00000000-0000-0000-0000-000000000080",
+  subscriptionPro: "00000000-0000-0000-0000-000000000081",
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -85,6 +98,30 @@ export const MOCK_REPO_DISABLED = {
   grade: null,
 }
 
+export const MOCK_REPO_EXTERNAL = {
+  id: ID.repoExternal,
+  full_name: "external/third-party-repo",
+  enabled: true,
+  is_external: true,
+  default_branch: "main",
+  tier: "free" as const,
+  created_at: "2024-01-01T00:00:00Z",
+  avg_score: 65,
+  grade: "C",
+}
+
+export const MOCK_REPO_NO_ANALYSES = {
+  id: ID.repoNoAnalyses,
+  full_name: "acme/new-repo",
+  enabled: true,
+  is_external: false,
+  default_branch: "main",
+  tier: "free" as const,
+  created_at: "2024-06-01T00:00:00Z",
+  avg_score: null,
+  grade: null,
+}
+
 // ── Analyses ──────────────────────────────────────────────────────────
 export const MOCK_ANALYSIS = {
   id: ID.analysis,
@@ -119,6 +156,29 @@ export const MOCK_ANALYSIS_FAILED = {
   score: null,
   grade: null,
   error_message: "Failed to fetch workflow files",
+}
+
+export const MOCK_ANALYSIS_IN_PROGRESS = {
+  ...MOCK_ANALYSIS,
+  id: ID.analysisInProgress,
+  status: "in_progress" as const,
+  score: null,
+  grade: null,
+  completed_at: null,
+}
+
+export const MOCK_ANALYSIS_GRADE_A = {
+  ...MOCK_ANALYSIS,
+  id: ID.analysisGradeA,
+  score: 100,
+  grade: "A",
+}
+
+export const MOCK_ANALYSIS_GRADE_F = {
+  ...MOCK_ANALYSIS,
+  id: ID.analysisGradeF,
+  score: 12,
+  grade: "F",
 }
 
 // ── Issues ─────────────────────────────────────────────────────────────
@@ -190,11 +250,81 @@ export const MOCK_ISSUE_WITH_FIX = {
   workflow_file_path: ".github/workflows/ci.yml",
 }
 
+export const MOCK_ISSUE_WITH_CONTEXT = {
+  id: ID.issueWithContext,
+  analysis_id: ID.analysis,
+  rule_id: ID.ruleReliability,
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  line_start: 12,
+  line_end: 14,
+  message: "Job 'build' has no timeout-minutes set.",
+  context: "  build:\n    runs-on: ubuntu-latest\n    steps:",
+  created_at: "2024-01-02T10:01:00Z",
+  fix_id: null,
+  fix_status: null,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
+export const MOCK_ISSUE_WITH_PENDING_FIX = {
+  id: ID.issueWithPendingFix,
+  analysis_id: ID.analysis,
+  rule_id: ID.ruleSecurity,
+  rule_slug: "excessive_token_permissions",
+  severity: "critical" as const,
+  category: "security" as const,
+  line_start: 5,
+  line_end: 5,
+  message: "Workflow uses overly permissive token permissions.",
+  context: null,
+  created_at: "2024-01-02T10:01:00Z",
+  fix_id: ID.fixPending,
+  fix_status: "pending" as const,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
+export const MOCK_ISSUE_WITH_FAILED_FIX = {
+  id: ID.issueWithFailedFix,
+  analysis_id: ID.analysis,
+  rule_id: ID.ruleReliability,
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  line_start: 20,
+  line_end: 20,
+  message: "Job 'lint' has no timeout-minutes set.",
+  context: null,
+  created_at: "2024-01-02T10:01:00Z",
+  fix_id: ID.fixFailed,
+  fix_status: "failed" as const,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
+export const MOCK_ISSUE_WITH_DELIVERED_FIX = {
+  id: ID.issueWithDeliveredFix,
+  analysis_id: ID.analysis,
+  rule_id: ID.ruleReliability,
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  line_start: 25,
+  line_end: 25,
+  message: "Job 'deploy' has no timeout-minutes set.",
+  context: null,
+  created_at: "2024-01-02T10:01:00Z",
+  fix_id: ID.fixDelivered,
+  fix_status: "delivered" as const,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
 // ── Fixes ──────────────────────────────────────────────────────────────
 const SAMPLE_BASE_CONTENT =
   "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4"
 const SAMPLE_FULL_CONTENT =
   "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 30\n    steps:\n      - uses: actions/checkout@v4"
+const SAMPLE_DIFF_PATCH =
+  "--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -4,6 +4,7 @@\n jobs:\n   build:\n     runs-on: ubuntu-latest\n+    timeout-minutes: 30\n     steps:\n       - uses: actions/checkout@v4"
 
 export const MOCK_FIX_READY = {
   id: ID.fixReady,
@@ -286,6 +416,76 @@ export const MOCK_FIX_PENDING = {
   ],
 }
 
+export const MOCK_FIX_FAILED = {
+  id: ID.fixFailed,
+  issue_id: ID.issueWithFailedFix,
+  llm_provider: "openai" as const,
+  llm_model: "gpt-4o-mini",
+  status: "failed" as const,
+  diff: null,
+  diff_patch: null,
+  pr_url: null,
+  pr_branch: null,
+  pr_state: null,
+  comment_url: null,
+  error_message: "LLM API timeout after 30s",
+  created_at: "2024-01-02T10:02:00Z",
+  delivered_at: null,
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "Job 'lint' has no timeout-minutes set.",
+  line_start: 20,
+  line_end: 20,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
+export const MOCK_FIX_COMMENT_DELIVERED = {
+  id: ID.fixCommentDelivered,
+  issue_id: ID.issueWithDeliveredFix,
+  llm_provider: "openai" as const,
+  llm_model: "gpt-4o-mini",
+  status: "delivered" as const,
+  diff: null,
+  diff_patch: SAMPLE_DIFF_PATCH,
+  pr_url: null,
+  pr_branch: null,
+  pr_state: null,
+  comment_url: "https://github.com/acme/web-app/issues/5#issuecomment-9876543",
+  created_at: "2024-01-02T10:02:00Z",
+  delivered_at: "2024-01-02T10:04:00Z",
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "Job 'deploy' has no timeout-minutes set.",
+  line_start: 25,
+  line_end: 25,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
+export const MOCK_FIX_MERGED_PR = {
+  id: ID.fixMergedPr,
+  issue_id: ID.issueReliability,
+  llm_provider: "openai" as const,
+  llm_model: "gpt-4o-mini",
+  status: "delivered" as const,
+  diff: null,
+  diff_patch: SAMPLE_DIFF_PATCH,
+  pr_url: "https://github.com/acme/web-app/pull/10",
+  pr_branch: "greensecops/fix-missing-timeout-deploy",
+  pr_state: "merged",
+  comment_url: null,
+  created_at: "2024-01-01T09:00:00Z",
+  delivered_at: "2024-01-01T09:01:00Z",
+  rule_slug: "missing_timeout",
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "Job 'build' has no timeout-minutes set.",
+  line_start: 12,
+  line_end: 12,
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
 // ── Rules ──────────────────────────────────────────────────────────────
 export const MOCK_RULE_SECURITY = {
   id: ID.ruleSecurity,
@@ -334,6 +534,31 @@ export const MOCK_SUBSCRIPTION = {
 export const MOCK_TIER_LIMITS = {
   tier: "free",
   limits: { analyses: 50, fixes: 5, repos: 3 },
+}
+
+export const MOCK_SUBSCRIPTION_PRO = {
+  id: ID.subscriptionPro,
+  tier: "pro" as const,
+  analyses_used: 5,
+  fixes_used: 10,
+  repos_used: 2,
+  period_start: "2024-01-01T00:00:00Z",
+  period_end: "2024-02-01T00:00:00Z",
+}
+
+export const MOCK_TIER_LIMITS_PRO = {
+  tier: "pro",
+  limits: { analyses: 500, fixes: 100, repos: 20 },
+}
+
+export const MOCK_SUBSCRIPTION_AT_LIMIT = {
+  id: ID.subscription,
+  tier: "free" as const,
+  analyses_used: 50,
+  fixes_used: 5,
+  repos_used: 3,
+  period_start: null,
+  period_end: null,
 }
 
 // ── AI Providers ───────────────────────────────────────────────────────
