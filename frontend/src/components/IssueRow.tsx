@@ -38,7 +38,7 @@ export function IssueRow({
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
             {issue.rule_slug}
           </span>
-          <span className="text-sm">{issue.message}</span>
+          <span className="text-sm break-words min-w-0">{issue.message}</span>
         </div>
         {issue.line_start != null && (
           <p className="text-xs text-muted-foreground mt-0.5">
