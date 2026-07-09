@@ -40,6 +40,7 @@ class FakeViolation:
     job: str | None = None
     step: str | None = None
     step_index: int | None = None
+    discriminator: str | None = None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -1187,3 +1188,87 @@ def test_evaluate_delegates_to_opa_evaluator() -> None:
         new=AsyncMock(return_value=[]),
     ):
         assert asyncio.run(_evaluate("on: push")) == []
+
+
+# ─── _auto_queue_fix_generation ──────────────────────────────────────────────
+
+
+def _completed_analysis(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> Analysis:
+    analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=workflow_file.id,
+        content_hash=workflow_file.content_hash,
+        status=AnalysisStatus.completed,
+        branch="main",
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    return analysis
+
+
+def test_auto_queue_fix_generation_no_open_issues_is_noop(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    from app.models import Fix
+    from app.workers.tasks.static_analysis import _auto_queue_fix_generation
+
+    _completed_analysis(db, repo, workflow_file)
+
+    with patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task:
+        _auto_queue_fix_generation(db, repo, str(repo.org_id))
+
+    mock_task.delay.assert_not_called()
+    fixes = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).all()
+    assert fixes == []
+
+
+def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    seeded_rule: Rule,
+) -> None:
+    from app.models import Fix, FixStatus, LLMProvider
+    from app.workers.tasks.static_analysis import _auto_queue_fix_generation
+
+    repo.llm_provider = LLMProvider.openai
+    repo.llm_model = "gpt-test"
+    db.add(repo)
+
+    analysis = _completed_analysis(db, repo, workflow_file)
+    issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=workflow_file.id,
+        rule_id=seeded_rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="test issue",
+        line_start=1,
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+
+    with (
+        patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task,
+        patch("app.workers.tasks.fix_generation.init_fix_batch") as mock_init,
+        patch("app.services.events.publisher.publish_event") as mock_publish,
+    ):
+        _auto_queue_fix_generation(db, repo, str(repo.org_id))
+
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    assert fix.status == FixStatus.pending
+    assert fix.llm_provider == LLMProvider.openai
+    assert fix.llm_model == "gpt-test"
+
+    db.refresh(issue)
+    assert issue.fix_id == fix.id
+
+    mock_init.assert_called_once()
+    mock_publish.assert_called_once()
+    mock_task.delay.assert_called_once_with(
+        issue_ids=[str(issue.id)], batch_id=mock_init.call_args.args[0]
+    )

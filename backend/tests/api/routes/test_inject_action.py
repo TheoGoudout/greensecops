@@ -19,12 +19,30 @@ def test_inject_into_simple_workflow() -> None:
     assert "GreenSecOps Telemetry" in result
 
 
-def test_inject_already_present_skips() -> None:
+def test_inject_already_present_adds_permissions_only() -> None:
     raw = (
         "on: push\n"
         "jobs:\n"
         "  build:\n"
         "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: greensecops/greensecops-action@v1\n"
+        "      - run: echo hello\n"
+    )
+    result, modified = _inject_action_into_workflow(raw)
+    assert modified is True
+    assert result.count("greensecops/greensecops-action@v1") == 1
+    assert "id-token: write" in result
+
+
+def test_inject_action_and_permissions_present_skips() -> None:
+    raw = (
+        "on: push\n"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    permissions:\n"
+        "      id-token: write\n"
         "    steps:\n"
         "      - uses: greensecops/greensecops-action@v1\n"
         "      - run: echo hello\n"

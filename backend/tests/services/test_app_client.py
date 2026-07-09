@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from github.GithubException import GithubException
 
 from app.services.github.app_client import GitHubAppClient
 
@@ -160,47 +161,47 @@ def test_list_user_installations_empty(app_client: GitHubAppClient) -> None:
 # ─── exchange_oauth_code ─────────────────────────────────────────────────────
 
 
-def test_exchange_oauth_code_omits_redirect_uri_by_default(
-    app_client: GitHubAppClient,
-) -> None:
-    resp = FakeResponse({"access_token": "gho_x"})
-    factory, client = _fake_async_client(post_response=resp)
+def _mock_oauth_application(token: str = "gho_x") -> tuple[MagicMock, MagicMock]:
+    """Return (patchable Github class mock, oauth application mock)."""
+    oauth_app = MagicMock()
+    oauth_app.get_access_token.return_value = MagicMock(token=token)
+    gh = MagicMock()
+    gh.get_oauth_application.return_value = oauth_app
+    return MagicMock(return_value=gh), oauth_app
 
-    with patch("app.services.github.app_client.httpx.AsyncClient", factory):
+
+def test_exchange_oauth_code_returns_token(app_client: GitHubAppClient) -> None:
+    github_cls, oauth_app = _mock_oauth_application("gho_x")
+
+    with patch("app.services.github.app_client.Github", github_cls):
         token = asyncio.run(app_client.exchange_oauth_code("the-code"))
 
     assert token == "gho_x"
-    sent_body = client.post.call_args.kwargs["json"]
-    assert "redirect_uri" not in sent_body
-    assert sent_body["code"] == "the-code"
+    oauth_app.get_access_token.assert_called_once_with("the-code", None)
 
 
-def test_exchange_oauth_code_includes_redirect_uri_when_given(
+def test_exchange_oauth_code_passes_code_verifier(
     app_client: GitHubAppClient,
 ) -> None:
-    resp = FakeResponse({"access_token": "gho_y"})
-    factory, client = _fake_async_client(post_response=resp)
+    github_cls, oauth_app = _mock_oauth_application("gho_y")
 
-    with patch("app.services.github.app_client.httpx.AsyncClient", factory):
+    with patch("app.services.github.app_client.Github", github_cls):
         token = asyncio.run(
-            app_client.exchange_oauth_code(
-                "the-code", redirect_uri="https://example.com/cb"
-            )
+            app_client.exchange_oauth_code("the-code", code_verifier="ver1fier")
         )
 
     assert token == "gho_y"
-    sent_body = client.post.call_args.kwargs["json"]
-    assert sent_body["redirect_uri"] == "https://example.com/cb"
+    oauth_app.get_access_token.assert_called_once_with("the-code", "ver1fier")
 
 
 def test_exchange_oauth_code_raises_on_error(
     app_client: GitHubAppClient,
 ) -> None:
-    resp = FakeResponse(
-        {"error": "bad_verification_code", "error_description": "expired"}
+    github_cls, oauth_app = _mock_oauth_application()
+    oauth_app.get_access_token.side_effect = GithubException(
+        400, {"error": "bad_verification_code"}, None
     )
-    factory, _ = _fake_async_client(post_response=resp)
 
-    with patch("app.services.github.app_client.httpx.AsyncClient", factory):
-        with pytest.raises(ValueError, match="GitHub OAuth error"):
+    with patch("app.services.github.app_client.Github", github_cls):
+        with pytest.raises(GithubException):
             asyncio.run(app_client.exchange_oauth_code("bad"))

@@ -62,6 +62,7 @@ class _Violation:
     line_start: int | None = None
     line_end: int | None = None
     context: str | None = None
+    discriminator: str | None = None
 
 
 def _make_wf(db: Session, repo: Repository, content: str, path: str) -> WorkflowFile:
