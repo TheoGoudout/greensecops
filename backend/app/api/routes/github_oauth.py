@@ -48,7 +48,7 @@ class OAuth2AuthorizationCodeForm:
 router = APIRouter(prefix="/auth/github", tags=["auth"])
 
 
-@router.get("/callback")
+@router.post("/callback")
 async def github_callback(
     *,
     session: SessionDep,

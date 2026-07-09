@@ -109,7 +109,7 @@ export class AuthService {
      */
     public static githubCallback(data: AuthGithubCallbackData): CancelablePromise<AuthGithubCallbackResponse> {
         return __request(OpenAPI, {
-            method: 'GET',
+            method: 'POST',
             url: '/api/v1/auth/github/callback',
             formData: data.formData,
             mediaType: 'application/x-www-form-urlencoded',
