@@ -17,12 +17,19 @@ permissions: {}
 
 jobs:
   test:
+    name: Run tests and linting
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
         working-directory: action
+    permissions:
+      id-token: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL }}
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -30,6 +37,11 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: action/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('action/bun.lockb') }}
 
       - name: Install dependencies
         run: bun install
