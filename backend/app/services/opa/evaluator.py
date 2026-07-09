@@ -53,6 +53,7 @@ class OpaViolation:
     line_start: int | None = None
     line_end: int | None = None
     context: str | None = None
+    discriminator: str | None = None
 
 
 # All registered policy packages to evaluate against, discovered from the
@@ -123,6 +124,7 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
                         line_start=v.get("line_start"),
                         line_end=v.get("line_end"),
                         context=v.get("context"),
+                        discriminator=v.get("discriminator"),
                     )
                 )
 

@@ -363,7 +363,8 @@ def _run_static_analysis_impl(
             _enrich_line_numbers(violations, content)
 
             rule_map: dict[str, Rule] = {
-                r.slug: r for r in session.exec(select(Rule)).all()
+                r.slug: r
+                for r in session.exec(select(Rule).where(Rule.enabled == True)).all()  # noqa: E712
             }
 
             seen_fingerprints: set[str] = set()
@@ -376,11 +377,14 @@ def _run_static_analysis_impl(
                     rule = _register_rule_from_violation(session, v)
                     if rule is None:
                         continue
+                    if not rule.enabled:
+                        continue
                     rule_map[v.rule_slug] = rule
-                if not rule.enabled:
-                    continue
+                disc = v.discriminator or (
+                    str(v.line_start) if v.line_start is not None else None
+                )
                 fingerprint = compute_issue_fingerprint(
-                    wf_record.id, rule.id, v.job, v.step_index
+                    wf_record.id, rule.id, v.job, v.step_index, disc
                 )
                 seen_fingerprints.add(fingerprint)
                 issue_count += 1
