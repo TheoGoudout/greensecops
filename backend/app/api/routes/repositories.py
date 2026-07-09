@@ -261,42 +261,72 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     if not isinstance(jobs, dict):
         return raw_content, False
 
-    # Collect (line_index, dash_column) for each job that needs the step inserted.
-    insertions: list[tuple[int, int]] = []
+    action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
+
+    # All text insertions as (line_index, text) pairs — processed in reverse order.
+    all_insertions: list[tuple[int, str]] = []
+
     for job in jobs.values():
         if not isinstance(job, dict):
             continue
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps:
             continue
-        action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
+
         already_present = any(
             isinstance(s, dict) and str(s.get("uses", "")).startswith(action_prefix)
             for s in steps
         )
-        if already_present:
-            continue
-        try:
-            first_step_line, first_step_val_col = steps.lc.data[0]
-        except (AttributeError, KeyError, IndexError):
-            continue
-        # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
-        insertions.append((first_step_line, first_step_val_col - 2))
 
-    if not insertions:
+        if not already_present:
+            try:
+                first_step_line, first_step_val_col = steps.lc.data[0]
+            except (AttributeError, KeyError, IndexError):
+                continue
+            # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
+            col = first_step_val_col - 2
+            indent = " " * col
+            step_text = (
+                f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
+                f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
+                f"{indent}  with:\n"
+                f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL || '{settings.BACKEND_HOST}' }}}}\n"
+            )
+            all_insertions.append((first_step_line, step_text))
+
+        # Inject `permissions: id-token: write` for this job if not already set.
+        # Required because the action uses GitHub OIDC for authentication.
+        permissions = job.get("permissions")
+        if isinstance(permissions, dict):
+            if permissions.get("id-token") != "write":
+                try:
+                    perm_line = job.lc.data["permissions"][0]
+                    perm_col = job.lc.data["permissions"][1]
+                    perm_value_indent = " " * (perm_col + 2)
+                    all_insertions.append(
+                        (perm_line + 1, f"{perm_value_indent}id-token: write\n")
+                    )
+                except (AttributeError, KeyError, TypeError):
+                    pass
+        elif permissions is None:
+            try:
+                steps_line = job.lc.data["steps"][0]
+                steps_col = job.lc.data["steps"][1]
+                job_indent = " " * steps_col
+                perm_block = (
+                    f"{job_indent}permissions:\n{job_indent}  id-token: write\n"
+                )
+                all_insertions.append((steps_line, perm_block))
+            except (AttributeError, KeyError, TypeError):
+                pass
+
+    if not all_insertions:
         return raw_content, False
 
     lines = raw_content.splitlines(keepends=True)
-    # Process in reverse order so earlier line numbers stay valid.
-    for line_idx, col in sorted(insertions, key=lambda x: x[0], reverse=True):
-        indent = " " * col
-        step_lines = (
-            f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
-            f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
-            f"{indent}  with:\n"
-            f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL }}}}\n"
-        ).splitlines(keepends=True)
-        lines[line_idx:line_idx] = step_lines
+    # Process in reverse order so earlier line numbers stay valid after insertions.
+    for line_idx, text in sorted(all_insertions, key=lambda x: x[0], reverse=True):
+        lines[line_idx:line_idx] = text.splitlines(keepends=True)
 
     return "".join(lines), True
 
@@ -362,37 +392,43 @@ async def integrate_action(
             detail=f"Repository has no GitHub App installation — ask the repo owner to install the {app_name} GitHub App first",
         )
 
+    token = await github_client.get_installation_token(repo.installation_id)
+    gh_repo = Github(auth=Auth.Token(token)).get_repo(repo.full_name)
+    branch = repo.default_branch or "main"
+
+    # Use live file content from the base branch so the PR diff is scoped to
+    # only the telemetry step + OIDC permissions — not any pending fix changes
+    # that may be stored in wf.raw_content.
     file_changes: list[tuple[str, str]] = []
     for wf in workflow_files:
-        new_content, modified = _inject_action_into_workflow(wf.raw_content)
+        try:
+            gh_file = gh_repo.get_contents(wf.path, ref=branch)
+            live_content = gh_file.decoded_content.decode("utf-8")  # type: ignore[union-attr]
+        except GithubException:
+            live_content = wf.raw_content
+        new_content, modified = _inject_action_into_workflow(live_content)
         if modified:
             file_changes.append((wf.path, new_content))
 
     badge_added = False
     try:
-        token = await github_client.get_installation_token(repo.installation_id)
-        gh_repo = Github(auth=Auth.Token(token)).get_repo(repo.full_name)
-        branch = repo.default_branch or "main"
-        try:
-            readme_file = gh_repo.get_readme(ref=branch)
-            readme_content = readme_file.decoded_content.decode("utf-8")
-            owner, name = repo.full_name.split("/", 1)
-            badge_url = (
-                f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
-                f"/badges/{owner}/{name}/{branch}.svg"
-            )
-            link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
-            badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
+        readme_file = gh_repo.get_readme(ref=branch)
+        readme_content = readme_file.decoded_content.decode("utf-8")
+        owner, name = repo.full_name.split("/", 1)
+        badge_url = (
+            f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
+            f"/badges/{owner}/{name}/{branch}.svg"
+        )
+        link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
+        badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
 
-            if badge_url not in readme_content:
-                new_readme = await _inject_badge_via_llm(
-                    readme_content, badge_markdown, repo
-                )
-                if new_readme and badge_url in new_readme:
-                    badge_added = True
-                    file_changes.append((readme_file.path, new_readme))
-        except GithubException:
-            pass
+        if badge_url not in readme_content:
+            new_readme = await _inject_badge_via_llm(
+                readme_content, badge_markdown, repo
+            )
+            if new_readme and badge_url in new_readme:
+                badge_added = True
+                file_changes.append((readme_file.path, new_readme))
     except Exception:
         logger.exception("Badge injection failed for repo %s", repo.full_name)
 
