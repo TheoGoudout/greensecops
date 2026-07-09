@@ -154,7 +154,7 @@ function IssuesPage() {
           return (
             <Card key={wfPath || "__unknown__"}>
               <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-mono flex items-center gap-2">
+                <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
                   <Checkbox
                     checked={allGroupSelected}
                     onCheckedChange={() => {
@@ -170,11 +170,13 @@ function IssuesPage() {
                     }}
                     className="shrink-0"
                   />
-                  <span className="text-muted-foreground font-sans font-normal text-xs">
+                  <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
                     Workflow:
                   </span>
-                  {workflowLabel(wfPath)}
-                  <span className="text-muted-foreground font-normal text-xs">
+                  <span className="truncate min-w-0 flex-1">
+                    {workflowLabel(wfPath)}
+                  </span>
+                  <span className="text-muted-foreground font-normal text-xs shrink-0">
                     ({wfIssues.length})
                   </span>
                 </CardTitle>

@@ -117,8 +117,8 @@ function FixesPage() {
               return (
                 <Card key={fix.id}>
                   <CardHeader className="pb-2 pt-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
+                    <div className="flex items-center justify-between gap-4 min-w-0">
+                      <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0 flex-1">
                         <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
                           Workflow:
                         </span>
@@ -126,7 +126,7 @@ function FixesPage() {
                           to="/fixes/$fixId"
                           params={{ fixId: fix.id }}
                           search={{ repoId }}
-                          className="truncate hover:underline"
+                          className="truncate hover:underline min-w-0 flex-1"
                         >
                           {workflowLabel(fix.workflow_file_path ?? "")}
                         </Link>
@@ -196,7 +196,9 @@ function FixesPage() {
                                     {issue.rule_slug}
                                   </span>
                                 )}
-                                <span className="text-sm">{issue.message}</span>
+                                <span className="text-sm break-words min-w-0">
+                                  {issue.message}
+                                </span>
                               </div>
                               {issue.line_start != null && (
                                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -212,11 +214,11 @@ function FixesPage() {
                         ))
                       )}
                     </div>
-                    <div className="flex items-center justify-between px-6 py-3 border-t">
-                      <p className="text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3 px-6 py-3 border-t">
+                      <p className="text-xs text-muted-foreground truncate min-w-0">
                         {fix.llm_model}
                       </p>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 shrink-0">
                         {fix.pr_url && (
                           <a
                             href={fix.pr_url}
