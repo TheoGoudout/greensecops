@@ -466,6 +466,8 @@ async def integrate_action(
     app_name = settings.PROJECT_NAME
 
     repo = _get_repo_for_user(repo_id, session, current_user)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     workflow_files = repo.workflow_files
     if not workflow_files:

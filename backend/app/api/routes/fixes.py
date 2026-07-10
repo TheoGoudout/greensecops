@@ -321,6 +321,8 @@ def trigger_fix_generation_for_repo(
     repo = session.get(Repository, repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     # Create a pending Fix per workflow file so the UI shows a DB-backed queued
     # state immediately; the worker flips these to generating/ready/failed.
@@ -377,6 +379,8 @@ def trigger_workflow_delivery(
         raise HTTPException(status_code=404, detail="Repository not found")
     if not current_user.is_superuser:
         authorize_repo(session, current_user, repo.id, detail="Repository not found")
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     pr_body = build_pr_body(
         issues=_issues_info_for_fixes([fix]),
@@ -416,7 +420,9 @@ def trigger_repo_delivery(
 
     When force=True, fixes in any status are included (not just ready).
     """
-    authorize_repo(session, current_user, repo_id)
+    repo = authorize_repo(session, current_user, repo_id)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     base_query = (
         select(Fix)
