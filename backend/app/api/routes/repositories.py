@@ -241,11 +241,49 @@ def toggle_repository(
     return {"repo_id": str(repo_id), "enabled": enabled}
 
 
+@router.patch("/{repo_id}/auto-fix")
+def toggle_auto_fix(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    enabled: bool,
+) -> dict[str, str | bool]:
+    repo = _get_repo_for_user(repo_id, session, current_user)
+    repo.auto_fix_enabled = enabled
+    session.add(repo)
+    session.commit()
+    return {"repo_id": str(repo_id), "auto_fix_enabled": enabled}
+
+
+@router.get("/{repo_id}/branches", response_model=list[str])
+def list_repository_branches(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[str]:
+    from sqlmodel import col
+
+    from app.models import Analysis, AnalysisStatus
+
+    _get_repo_for_user(repo_id, session, current_user)
+    branches = session.exec(
+        select(col(Analysis.branch))
+        .where(Analysis.repo_id == repo_id)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .where(col(Analysis.branch).isnot(None))
+        .distinct()
+        .order_by(col(Analysis.branch))
+    ).all()
+    return [b for b in branches if b]
+
+
 def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     """Parse workflow YAML to find insertion points, then insert the action step as raw text.
 
     Uses ruamel.yaml only for parsing (to get line numbers and detect duplicates).
     Serialization is text-based so the PR diff contains only the inserted lines.
+    Also injects `permissions: id-token: write` into each modified job, since the
+    action authenticates via GitHub OIDC and requires that permission.
     Returns (new_content, was_modified).
     """
     yaml_rt = YAML()
@@ -261,42 +299,73 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     if not isinstance(jobs, dict):
         return raw_content, False
 
-    # Collect (line_index, dash_column) for each job that needs the step inserted.
-    insertions: list[tuple[int, int]] = []
+    action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
+
+    # All text insertions as (line_index, text) pairs — processed in reverse order.
+    all_insertions: list[tuple[int, str]] = []
+
     for job in jobs.values():
         if not isinstance(job, dict):
             continue
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps:
             continue
-        action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
+
         already_present = any(
             isinstance(s, dict) and str(s.get("uses", "")).startswith(action_prefix)
             for s in steps
         )
-        if already_present:
-            continue
-        try:
-            first_step_line, first_step_val_col = steps.lc.data[0]
-        except (AttributeError, KeyError, IndexError):
-            continue
-        # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
-        insertions.append((first_step_line, first_step_val_col - 2))
 
-    if not insertions:
+        if not already_present:
+            try:
+                first_step_line, first_step_val_col = steps.lc.data[0]
+            except (AttributeError, KeyError, IndexError):
+                continue
+            # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
+            col = first_step_val_col - 2
+            indent = " " * col
+            default_url = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
+            step_text = (
+                f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
+                f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
+                f"{indent}  with:\n"
+                f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL || '{default_url}' }}}}\n"
+            )
+            all_insertions.append((first_step_line, step_text))
+
+        # Inject `permissions: id-token: write` for this job if not already set.
+        # Required because the action uses GitHub OIDC for authentication.
+        permissions = job.get("permissions")
+        if isinstance(permissions, dict):
+            if permissions.get("id-token") != "write":
+                try:
+                    perm_line = job.lc.data["permissions"][0]
+                    perm_col = job.lc.data["permissions"][1]
+                    perm_value_indent = " " * (perm_col + 2)
+                    all_insertions.append(
+                        (perm_line + 1, f"{perm_value_indent}id-token: write\n")
+                    )
+                except (AttributeError, KeyError, TypeError):
+                    pass
+        elif permissions is None:
+            try:
+                steps_line = job.lc.data["steps"][0]
+                steps_col = job.lc.data["steps"][1]
+                job_indent = " " * steps_col
+                perm_block = (
+                    f"{job_indent}permissions:\n{job_indent}  id-token: write\n"
+                )
+                all_insertions.append((steps_line, perm_block))
+            except (AttributeError, KeyError, TypeError):
+                pass
+
+    if not all_insertions:
         return raw_content, False
 
     lines = raw_content.splitlines(keepends=True)
-    # Process in reverse order so earlier line numbers stay valid.
-    for line_idx, col in sorted(insertions, key=lambda x: x[0], reverse=True):
-        indent = " " * col
-        step_lines = (
-            f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
-            f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
-            f"{indent}  with:\n"
-            f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL }}}}\n"
-        ).splitlines(keepends=True)
-        lines[line_idx:line_idx] = step_lines
+    # Process in reverse order so earlier line numbers stay valid after insertions.
+    for line_idx, text in sorted(all_insertions, key=lambda x: x[0], reverse=True):
+        lines[line_idx:line_idx] = text.splitlines(keepends=True)
 
     return "".join(lines), True
 
@@ -331,6 +400,34 @@ async def _inject_badge_via_llm(
     return result.content
 
 
+def _badge_only_added(original: str, modified: str) -> bool:
+    """Return True if modified differs from original only by pure insertions (no deletes/replaces)."""
+    import difflib
+
+    orig_lines = original.splitlines(keepends=True)
+    mod_lines = modified.splitlines(keepends=True)
+    for tag, _i1, _i2, _j1, _j2 in difflib.SequenceMatcher(
+        None, orig_lines, mod_lines
+    ).get_opcodes():
+        if tag in ("equal", "insert"):
+            continue
+        return False
+    return True
+
+
+def _insert_badge_simple(readme_content: str, badge_markdown: str) -> str:
+    """Insert badge after the first top-level heading, or prepend to the file."""
+    import re
+
+    match = re.search(r"^(#[^\n]*\n)", readme_content, re.MULTILINE)
+    if match:
+        pos = match.end()
+        return (
+            readme_content[:pos] + "\n" + badge_markdown + "\n" + readme_content[pos:]
+        )
+    return badge_markdown + "\n\n" + readme_content
+
+
 @router.post("/{repo_id}/integrate-action", status_code=202)
 async def integrate_action(
     repo_id: uuid.UUID,
@@ -362,37 +459,54 @@ async def integrate_action(
             detail=f"Repository has no GitHub App installation — ask the repo owner to install the {app_name} GitHub App first",
         )
 
+    token = await github_client.get_installation_token(repo.installation_id)
+    gh_repo = Github(auth=Auth.Token(token)).get_repo(repo.full_name)
+    branch = repo.default_branch or "main"
+
+    # Use live file content from the base branch so the PR diff is scoped to
+    # only the telemetry step + OIDC permissions — not any pending fix changes
+    # that may be stored in wf.raw_content.
     file_changes: list[tuple[str, str]] = []
     for wf in workflow_files:
-        new_content, modified = _inject_action_into_workflow(wf.raw_content)
+        try:
+            gh_file = gh_repo.get_contents(wf.path, ref=branch)
+            live_content = gh_file.decoded_content.decode("utf-8")  # type: ignore[union-attr]
+        except GithubException:
+            live_content = wf.raw_content
+        new_content, modified = _inject_action_into_workflow(live_content)
         if modified:
             file_changes.append((wf.path, new_content))
 
     badge_added = False
     try:
-        token = await github_client.get_installation_token(repo.installation_id)
-        gh_repo = Github(auth=Auth.Token(token)).get_repo(repo.full_name)
-        branch = repo.default_branch or "main"
-        try:
-            readme_file = gh_repo.get_readme(ref=branch)
-            readme_content = readme_file.decoded_content.decode("utf-8")
-            owner, name = repo.full_name.split("/", 1)
-            badge_url = (
-                f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
-                f"/badges/{owner}/{name}/{branch}.svg"
-            )
-            link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
-            badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
+        readme_file = gh_repo.get_readme(ref=branch)
+        readme_content = readme_file.decoded_content.decode("utf-8")
+        owner, name = repo.full_name.split("/", 1)
+        badge_url = (
+            f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
+            f"/badges/{owner}/{name}/{branch}.svg"
+        )
+        link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
+        badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
 
-            if badge_url not in readme_content:
-                new_readme = await _inject_badge_via_llm(
-                    readme_content, badge_markdown, repo
+        if badge_url not in readme_content:
+            new_readme = await _inject_badge_via_llm(
+                readme_content, badge_markdown, repo
+            )
+            if (
+                new_readme
+                and badge_url in new_readme
+                and _badge_only_added(readme_content, new_readme)
+            ):
+                file_changes.append((readme_file.path, new_readme))
+            else:
+                file_changes.append(
+                    (
+                        readme_file.path,
+                        _insert_badge_simple(readme_content, badge_markdown),
+                    )
                 )
-                if new_readme and badge_url in new_readme:
-                    badge_added = True
-                    file_changes.append((readme_file.path, new_readme))
-        except GithubException:
-            pass
+            badge_added = True
     except Exception:
         logger.exception("Badge injection failed for repo %s", repo.full_name)
 

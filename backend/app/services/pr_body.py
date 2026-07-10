@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from app.models.enums import IssueSeverity
+
 _SEVERITY_EMOJI: dict[str, str] = {
     "critical": "🔴",
     "high": "🟠",
@@ -7,6 +9,8 @@ _SEVERITY_EMOJI: dict[str, str] = {
     "low": "🟢",
     "info": "⚪",
 }
+
+_SEVERITY_ORDER: dict[str, int] = {s.value: i for i, s in enumerate(IssueSeverity)}
 
 
 @dataclass
@@ -16,6 +20,7 @@ class IssueInfo:
     category: str
     severity: str
     message: str
+    line_start: int | None = None
 
 
 def build_pr_body(
@@ -27,12 +32,15 @@ def build_pr_body(
     app_name: str = "GreenSecOps",
     app_url: str = "https://greensecops.io",
 ) -> str:
+    sorted_issues = sorted(
+        issues, key=lambda i: (_SEVERITY_ORDER.get(i.severity, 99), i.rule_title)
+    )
     rows = "\n".join(
         f"| [{i.rule_title}]({wiki_base_url}/{i.rule_slug}) "
         f"| {i.category.title()} "
         f"| {_SEVERITY_EMOJI.get(i.severity, '')} {i.severity.title()} "
         f"| {i.message} |"
-        for i in issues
+        for i in sorted_issues
     )
     fix_ids_str = ", ".join(f"`{fid}`" for fid in fix_ids[:5])
     if len(fix_ids) > 5:

@@ -194,6 +194,7 @@ class FixDeliveryService:
         pr_body: str,
         expected_base_contents: dict[str, str] | None = None,
         override_user_commits: bool = False,
+        commit_messages: dict[str, str] | None = None,
     ) -> FixDeliveryResult:
         """Create or update a multi-file fix PR.
 
@@ -224,7 +225,9 @@ class FixDeliveryService:
                         fp,
                         new_content,
                         fix_branch,
-                        f"ci: add {settings.PROJECT_NAME} telemetry to {fp}",
+                        (commit_messages or {}).get(
+                            fp, f"ci: add {settings.PROJECT_NAME} telemetry to {fp}"
+                        ),
                     )
                 return _update_or_create_open_pr(
                     repo, branch_existed, fix_branch, base_branch, pr_title, pr_body

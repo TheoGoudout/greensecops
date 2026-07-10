@@ -53,6 +53,7 @@ _check_env(env, job_name, context_label) := {violation |
 		"job": job_name,
 		"message": sprintf("Env var '%v' in %v appears to contain a hardcoded secret. Use ${{ secrets.NAME }} instead.", [key, context_label]),
 		"context": key,
+		"discriminator": key,
 	}
 }
 

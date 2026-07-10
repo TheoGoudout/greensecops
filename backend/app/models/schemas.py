@@ -60,8 +60,10 @@ class RepositoryPublic(SQLModel):
     id: uuid.UUID
     full_name: str
     enabled: bool
+    is_accessible: bool = True
     is_external: bool = False
     default_branch: str
+    auto_fix_enabled: bool = False
     tier: UserTier | None = None
     created_at: datetime | None = None
     avg_score: float | None = None

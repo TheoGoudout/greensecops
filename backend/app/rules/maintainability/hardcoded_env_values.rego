@@ -69,6 +69,7 @@ _check_env(env, job_name) := {violation |
 		"job": job_name,
 		"message": sprintf("Env var '%v' has a hardcoded value that looks like a URL or bucket name. Move environment-specific values to repository variables or secrets.", [key]),
 		"context": key,
+		"discriminator": key,
 	}
 }
 

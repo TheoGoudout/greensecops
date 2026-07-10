@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import useAuth from "@/hooks/useAuth"
 import { CATEGORY_SELECT_OPTIONS } from "@/lib/issue-constants"
+import { severityRank } from "@/lib/severity"
 
 export const Route = createFileRoute("/_layout/rules")({
   component: Rules,
@@ -136,9 +137,15 @@ function Rules() {
             </p>
           ) : (
             <div className="divide-y">
-              {rules.map((rule) => (
-                <RuleRow key={rule.id} rule={rule} canToggle={isSuperuser} />
-              ))}
+              {[...rules]
+                .sort(
+                  (a, b) =>
+                    severityRank(a.severity) - severityRank(b.severity) ||
+                    a.title.localeCompare(b.title),
+                )
+                .map((rule) => (
+                  <RuleRow key={rule.id} rule={rule} canToggle={isSuperuser} />
+                ))}
             </div>
           )}
         </CardContent>

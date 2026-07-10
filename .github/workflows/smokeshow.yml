@@ -9,6 +9,9 @@ permissions: {}
 
 jobs:
   smokeshow:
+    # Only upload coverage when the triggering run succeeded; a failed run
+    # never uploads the coverage-html artifact, so downloading it would fail.
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

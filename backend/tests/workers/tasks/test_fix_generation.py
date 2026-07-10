@@ -29,7 +29,7 @@ _WORKFLOW = (
 
 def test_parse_llm_response_extracts_full_content() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>"
-    assert _parse_llm_response(response) == _WORKFLOW.rstrip("\n")
+    assert _parse_llm_response(response) == _WORKFLOW
 
 
 def test_parse_llm_response_missing_block_returns_empty() -> None:
@@ -42,7 +42,7 @@ def test_parse_llm_response_ignores_surrounding_prose() -> None:
         "<full_content>\nname: CI\non: push\n</full_content>\n"
         "All issues addressed."
     )
-    assert _parse_llm_response(response) == "name: CI\non: push"
+    assert _parse_llm_response(response) == "name: CI\non: push\n"
 
 
 # ─── _is_valid_workflow_yaml ─────────────────────────────────────────────────

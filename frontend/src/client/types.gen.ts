@@ -173,8 +173,10 @@ export type RepositoryPublic = {
     id: string;
     full_name: string;
     enabled: boolean;
+    is_accessible?: boolean;
     is_external?: boolean;
     default_branch: string;
+    auto_fix_enabled?: boolean;
     tier?: (UserTier | null);
     created_at?: (string | null);
     avg_score?: (number | null);
@@ -449,6 +451,7 @@ export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>)
 
 export type IssuesListIssuesData = {
     analysisId?: (string | null);
+    branch?: (string | null);
     category?: (IssueCategory | null);
     includeResolved?: boolean;
     latestOnly?: boolean;
@@ -552,6 +555,21 @@ export type RepositoriesToggleRepositoryData = {
 export type RepositoriesToggleRepositoryResponse = ({
     [key: string]: (string | boolean);
 });
+
+export type RepositoriesToggleAutoFixData = {
+    enabled: boolean;
+    repoId: string;
+};
+
+export type RepositoriesToggleAutoFixResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type RepositoriesListRepositoryBranchesData = {
+    repoId: string;
+};
+
+export type RepositoriesListRepositoryBranchesResponse = (Array<(string)>);
 
 export type RepositoriesIntegrateActionData = {
     repoId: string;

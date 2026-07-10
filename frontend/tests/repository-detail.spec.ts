@@ -43,6 +43,8 @@ test.describe("Repository Detail", () => {
           route.fulfill({
             json: { pr_url: "https://github.com/acme/web-app/pull/99" },
           })
+        } else if (url.includes("/branches")) {
+          route.fulfill({ json: ["main"] })
         } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
           route.fulfill({ json: MOCK_REPO })
         } else {
@@ -134,7 +136,11 @@ test.describe("Repository Detail", () => {
     let fixCalled = false
     await mockUserMe(page)
     await page.route("**/api/v1/repositories/**", (route) => {
-      route.fulfill({ json: MOCK_REPO })
+      if (route.request().url().includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else {
+        route.fulfill({ json: MOCK_REPO })
+      }
     })
     await page.route("**/api/v1/analyses/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
@@ -191,7 +197,11 @@ test.describe("Repository Detail", () => {
   test("Fixes tab Create PR for all workflows button", async ({ page }) => {
     let deliverCalled = false
     await page.route("**/api/v1/repositories/**", (route) => {
-      route.fulfill({ json: MOCK_REPO })
+      if (route.request().url().includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else {
+        route.fulfill({ json: MOCK_REPO })
+      }
     })
     await page.route("**/api/v1/analyses/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })

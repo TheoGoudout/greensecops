@@ -612,6 +612,8 @@ export async function mockRepositories(page: Page, repos = [MOCK_REPO]) {
       route.fulfill({
         json: { pr_url: "https://github.com/acme/web-app/pull/99" },
       })
+    } else if (url.includes("/branches")) {
+      route.fulfill({ json: ["main"] })
     } else {
       route.fulfill({ json: repos })
     }

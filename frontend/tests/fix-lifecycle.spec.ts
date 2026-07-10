@@ -60,7 +60,7 @@ test.describe("Fix Lifecycle — Status States", () => {
 
     await page.goto(`/fixes/${MOCK_FIX_PENDING.id}`)
 
-    await expect(page.getByText("pending")).toBeVisible()
+    await expect(page.getByText("pending", { exact: true })).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 

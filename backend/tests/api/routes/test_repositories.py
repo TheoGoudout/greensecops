@@ -619,7 +619,8 @@ def test_integrate_action_already_present(
         path=".github/workflows/ci.yml",
         content_hash=uuid.uuid4().hex,
         raw_content=(
-            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n"
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    permissions:\n      id-token: write\n    steps:\n"
             f"      - uses: {settings.GITHUB_ACTION_REF}\n"
         ),
     )
@@ -627,19 +628,112 @@ def test_integrate_action_already_present(
     db.commit()
 
     mock_client = AsyncMock()
-    mock_client.get_installation_token = AsyncMock(side_effect=Exception("skip badge"))
+    mock_client.get_installation_token = AsyncMock(return_value="tok")
+
+    from unittest.mock import MagicMock, patch
+
+    from github.GithubException import GithubException
 
     from app.api.deps import get_github_app_client
     from app.main import app as fastapi_app
 
+    # Live-content and README fetches 404, so the route falls back to the
+    # stored raw_content (already integrated) and skips badge injection.
+    gh_repo = MagicMock()
+    gh_repo.get_contents.side_effect = GithubException(404, "Not Found", None)
+    gh_repo.get_readme.side_effect = GithubException(404, "Not Found", None)
+    gh_instance = MagicMock()
+    gh_instance.get_repo.return_value = gh_repo
+
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
     try:
-        response = client.post(
-            f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
-            headers=superuser_token_headers,
-        )
+        with patch("github.Github", return_value=gh_instance):
+            response = client.post(
+                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
+                headers=superuser_token_headers,
+            )
     finally:
         fastapi_app.dependency_overrides.clear()
 
     assert response.status_code == 409
     assert "already present" in response.json()["detail"]
+
+
+# ─── auto-fix toggle and branches listing ────────────────────────────────────
+
+
+def test_toggle_auto_fix_enable(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    db: Session,
+) -> None:
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
+        params={"enabled": "true"},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["auto_fix_enabled"] is True
+    assert body["repo_id"] == str(repo.id)
+
+    db.refresh(repo)
+    assert repo.auto_fix_enabled is True
+
+
+def test_toggle_auto_fix_not_found(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}/auto-fix",
+        params={"enabled": "true"},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 404
+
+
+def test_list_repository_branches(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    db: Session,
+) -> None:
+    from app.models import Analysis, AnalysisStatus, WorkflowFile
+
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/branches.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\n",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    for branch, status in [
+        ("main", AnalysisStatus.completed),
+        ("dev", AnalysisStatus.completed),
+        ("main", AnalysisStatus.completed),
+        ("wip", AnalysisStatus.pending),
+    ]:
+        db.add(
+            Analysis(
+                repo_id=repo.id,
+                workflow_file_id=wf.id,
+                content_hash=uuid.uuid4().hex,
+                status=status,
+                branch=branch,
+            )
+        )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/branches",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == ["dev", "main"]

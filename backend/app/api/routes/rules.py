@@ -23,7 +23,11 @@ def list_rules(
         query = query.where(Rule.category == category)
     if enabled is not None:
         query = query.where(Rule.enabled == enabled)
-    query = query.offset(skip).limit(limit)
+    query = (
+        query.order_by(Rule.severity_weight.desc(), Rule.title)
+        .offset(skip)
+        .limit(limit)
+    )  # type: ignore[union-attr]
     return list(session.exec(query).all())
 
 

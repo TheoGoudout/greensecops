@@ -51,6 +51,7 @@ _check_env_for_static_creds(env, job_name) := {violation |
 		"job": job_name,
 		"message": sprintf("Static cloud credential '%v' found in env. Use OIDC (id-token: write + cloud provider OIDC action) instead of long-lived credentials.", [key]),
 		"context": key,
+		"discriminator": key,
 	}
 }
 
