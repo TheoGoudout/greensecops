@@ -506,7 +506,37 @@ def _enqueue_static_analysis(
         )
 
 
+_INSTALLATION_SYNC_DEDUP_TTL = 90  # seconds
+
+
 def _enqueue_installation_sync(installation_id: int, org_id: str) -> None:
+    """Enqueue an installation sync, skipping if one is already queued.
+
+    GitHub fires both `installation` and `installation_repositories` events
+    simultaneously on app install; this dedup prevents the resulting duplicate
+    sync tasks from each enqueueing analyses for the same repos.
+    Fails open: when Redis is unavailable the task is enqueued anyway.
+    """
+    import redis as redis_sync
+
+    try:
+        r = redis_sync.Redis.from_url(settings.REDIS_URL)
+        try:
+            key = f"greensecops:queued:installation_sync:{installation_id}"
+            if not r.set(key, "1", nx=True, ex=_INSTALLATION_SYNC_DEDUP_TTL):
+                logger.info(
+                    "Installation sync already queued for installation %s, skipping",
+                    installation_id,
+                )
+                return
+        finally:
+            r.close()
+    except Exception:
+        logger.warning(
+            "Redis unavailable for installation sync dedup; enqueuing anyway",
+            exc_info=True,
+        )
+
     from app.workers.tasks.installation_sync import sync_installation_repositories
 
     sync_installation_repositories.delay(
