@@ -1198,6 +1198,7 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
     db.add(pr)
     db.commit()
     db.refresh(pr)
+    pr_id = pr.id
 
     fix = Fix(
         workflow_file_id=workflow_file.id,
@@ -1229,8 +1230,100 @@ def test_regenerate_for_pr_deletes_fixes_and_queues_generation(
     db.expire_all()
     from sqlmodel import select as sql_select
 
-    remaining = db.exec(sql_select(Fix).where(Fix.pr_id == pr.id)).all()
+    remaining = db.exec(sql_select(Fix).where(Fix.pr_id == pr_id)).all()
     assert remaining == []
+    # The closed PR record is forgotten so the redelivery is not auto-rejected
+    # by the closed-PR guard.
+    assert (
+        db.exec(sql_select(PullRequest).where(PullRequest.id == pr_id)).first() is None
+    )
+
+
+def test_regenerate_for_pr_works_for_guard_rejected_fix(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    issue: Issue,
+) -> None:
+    """A fix auto-rejected by the closed-PR delivery guard (rejected, never
+    delivered, linked to the closed PR) can be regenerated like a delivered one."""
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-regen-rejected",
+        pr_url=f"https://github.com/{repo.full_name}/pull/202",
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.rejected,
+        pr_id=pr.id,
+        full_content=_FULL_CONTENT,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    pr_id, fix_id = pr.id, fix.id
+    issue.fix_id = fix.id
+    db.add(issue)
+    db.commit()
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/regenerate-for-pr/{pr_id}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    mock_delay.assert_called_once()
+
+    db.expire_all()
+    from sqlmodel import select as sql_select
+
+    assert db.exec(sql_select(Fix).where(Fix.id == fix_id)).first() is None
+    assert (
+        db.exec(sql_select(PullRequest).where(PullRequest.id == pr_id)).first() is None
+    )
+
+
+def test_regenerate_for_pr_without_fixes_clears_pr_record(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-regen-empty",
+        pr_url=f"https://github.com/{repo.full_name}/pull/203",
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    pr_id = pr.id
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/regenerate-for-pr/{pr_id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 0
+    db.expire_all()
+    from sqlmodel import select as sql_select
+
+    assert (
+        db.exec(sql_select(PullRequest).where(PullRequest.id == pr_id)).first() is None
+    )
 
 
 def test_regenerate_for_pr_rejects_open_pr(

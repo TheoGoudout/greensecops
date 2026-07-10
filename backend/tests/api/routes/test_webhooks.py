@@ -952,6 +952,79 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     assert response.status_code == 200
     db.refresh(pr)
     assert pr.pr_state == "open"
+    # A delivered fix keeps its status on reopen — its content is in the PR.
+    db.refresh(fix)
+    assert fix.status == FixStatus.delivered
+
+
+def test_github_webhook_pull_request_reopened_restores_guard_rejected_fix(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """Fixes auto-rejected by the closed-PR delivery guard (rejected, never
+    delivered) become ready again when the PR is reopened on GitHub."""
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/pr-restore-{uuid.uuid4().hex[:6]}",
+        installation_id=99913,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-test-restore",
+        pr_url=pr_url,
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix = Fix(
+        workflow_file_id=wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.rejected,
+        pr_id=pr.id,
+        full_content="on: push\njobs: {}",
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    assert fix.delivered_at is None
+
+    payload = {
+        "action": "reopened",
+        "pull_request": {"html_url": pr_url},
+    }
+
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == "open"
+    db.refresh(fix)
+    assert fix.status == FixStatus.ready
 
 
 def test_github_webhook_pull_request_non_closed_skipped(

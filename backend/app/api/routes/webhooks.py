@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.models import (
     AnalysisTrigger,
     Fix,
+    FixStatus,
     Organization,
     PullRequest,
     PullRequestState,
@@ -386,6 +387,18 @@ def _handle_pull_request_event(
 
     # Notify for all fixes associated with this PR
     pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+
+    if action == "reopened":
+        # Reopening withdraws the close-as-rejection signal: fixes the
+        # closed-PR delivery guard auto-rejected (rejected but never
+        # delivered) become deliverable again. Fixes that actually reached
+        # the PR (delivered_at set) keep their status.
+        for pr_fix in pr_fixes:
+            if pr_fix.status == FixStatus.rejected and pr_fix.delivered_at is None:
+                pr_fix.status = FixStatus.ready
+                session.add(pr_fix)
+        session.commit()
+
     fix = pr_fixes[0] if pr_fixes else None
     if fix:
         repo = session.get(Repository, pr_record.repo_id)

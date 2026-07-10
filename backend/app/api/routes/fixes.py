@@ -500,10 +500,16 @@ def regenerate_fixes_for_pr(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, int]:
-    """Delete delivered fixes for a closed PR and re-trigger generation.
+    """Delete the fixes of a closed PR and re-trigger generation.
 
     Only valid when pr_state == closed. Merged PRs are not touched because
     the code changes were already applied.
+
+    The PullRequest record is deleted too: a closed record on the fix branch
+    makes every later delivery auto-reject its fixes (the closed-PR guard in
+    deliver_fixes_batch), and regenerating is an explicit request for a new
+    PR. The next successful delivery creates a fresh record — and reuses the
+    GitHub PR itself if the user reopened it in the meantime.
     """
     pr = get_or_404(session, PullRequest, pr_id)
     if not current_user.is_superuser:
@@ -516,9 +522,11 @@ def regenerate_fixes_for_pr(
             detail=f"PR is not closed (state: {pr.pr_state})",
         )
 
+    repo = session.get(Repository, pr.repo_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
     fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_id)).all())
-    if not fixes:
-        return {"queued": 0}
 
     # Regenerate the unresolved issues each fix addressed, grouped per workflow file.
     by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
@@ -534,13 +542,11 @@ def regenerate_fixes_for_pr(
             if issue.workflow_file_id is not None:
                 by_wf_file[issue.workflow_file_id].append(issue)
 
-    fix_ids_to_delete = [fix.id for fix in fixes]
-    session.exec(delete(Fix).where(Fix.id.in_(fix_ids_to_delete)))  # type: ignore[attr-defined]
+    if fixes:
+        fix_ids_to_delete = [fix.id for fix in fixes]
+        session.exec(delete(Fix).where(Fix.id.in_(fix_ids_to_delete)))  # type: ignore[attr-defined]
+    session.delete(pr)
     session.commit()
-
-    repo = session.get(Repository, pr.repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
 
     pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
     if not pending_fixes:
