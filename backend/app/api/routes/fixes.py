@@ -207,6 +207,7 @@ def list_fixes(
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
     status: FixStatus | None = None,
+    branch: str | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
 ) -> list[FixPublic]:
@@ -221,14 +222,24 @@ def list_fixes(
             )
         )
         query = query.where(Fix.workflow_file_id.in_(allowed_wf_ids))  # type: ignore[attr-defined]
+    query = query.join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
     if repo_id:
-        query = query.join(
-            WorkflowFile,
-            Fix.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
-        ).where(WorkflowFile.repo_id == repo_id)
+        query = query.where(WorkflowFile.repo_id == repo_id)
     if status:
         query = query.where(Fix.status == status)
-    query = query.order_by(col(Fix.created_at).desc()).offset(skip).limit(limit)
+    if branch:
+        query = query.where(
+            col(Fix.id).in_(
+                select(Issue.fix_id)
+                .join(Analysis, Issue.analysis_id == Analysis.id)
+                .where(Analysis.branch == branch)  # type: ignore[arg-type]
+            )
+        )
+    query = (
+        query.order_by(WorkflowFile.path.asc(), col(Fix.created_at).desc())
+        .offset(skip)
+        .limit(limit)
+    )
     fixes = list(session.exec(query).all())
     return _fixes_to_public(session, fixes)
 

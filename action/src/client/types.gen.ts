@@ -377,6 +377,7 @@ export type EventsStreamEventsData = {
 export type EventsStreamEventsResponse = (unknown);
 
 export type FixesListFixesData = {
+    branch?: (string | null);
     limit?: number;
     repoId?: (string | null);
     skip?: number;

@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import case
 from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
@@ -85,7 +86,17 @@ def list_issues(
         query = query.where(Issue.category == category)
     if severity:
         query = query.where(Issue.severity == severity)
-    query = query.order_by(Issue.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
+    severity_rank = case(
+        (Issue.severity == IssueSeverity.critical, 0),
+        (Issue.severity == IssueSeverity.high, 1),
+        (Issue.severity == IssueSeverity.medium, 2),
+        (Issue.severity == IssueSeverity.low, 3),
+        (Issue.severity == IssueSeverity.info, 4),
+        else_=99,
+    )
+    query = (
+        query.order_by(severity_rank, Issue.created_at.desc()).offset(skip).limit(limit)
+    )  # type: ignore[arg-type]
     return [to_issue_public(issue) for issue in session.exec(query).all()]
 
 

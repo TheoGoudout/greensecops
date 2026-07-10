@@ -277,6 +277,7 @@ export class FixesService {
      * @param data The data for the request.
      * @param data.repoId
      * @param data.status
+     * @param data.branch
      * @param data.skip
      * @param data.limit
      * @returns FixPublic Successful Response
@@ -289,6 +290,7 @@ export class FixesService {
             query: {
                 repo_id: data.repoId,
                 status: data.status,
+                branch: data.branch,
                 skip: data.skip,
                 limit: data.limit
             },
