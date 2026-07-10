@@ -14,7 +14,12 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
@@ -27,6 +32,7 @@ import { User } from "./User"
 const repoSubItems = [
   { title: "Analyses", segment: "analyses" },
   { title: "Issues", segment: "issues" },
+  { title: "Workflow", segment: "workflow" },
   { title: "Fixes", segment: "fixes" },
   { title: "Pull Requests", segment: "pull-requests" },
 ] as const
@@ -68,6 +74,7 @@ function RepoSubNav({ repoId }: { repoId: string }) {
 
 export function AppSidebar() {
   const { user: currentUser } = useAuth()
+  const { isMobile, setOpenMobile } = useSidebar()
   const currentPath = useRouterState({
     select: (s) => s.location.pathname,
   })
@@ -75,8 +82,11 @@ export function AppSidebar() {
   const repoIdMatch = currentPath.match(/^\/repositories\/([^/]+)\/.+$/)
   const currentRepoId = repoIdMatch?.[1] ?? null
 
+  const handleMenuClick = () => {
+    if (isMobile) setOpenMobile(false)
+  }
+
   const analysisItems: NavItem[] = [
-    { icon: LayoutDashboard, title: "Dashboard", path: "/dashboard" },
     {
       icon: GitBranch,
       title: "Repositories",
@@ -85,11 +95,11 @@ export function AppSidebar() {
         <RepoSubNav repoId={currentRepoId} />
       ) : undefined,
     },
+    { icon: Award, title: "Badges", path: "/badges" },
   ]
 
   const configItems: NavItem[] = [
     { icon: ListChecks, title: "Rules", path: "/rules" },
-    { icon: Award, title: "Badges", path: "/badges" },
     { icon: CreditCard, title: "Billing", path: "/billing" },
   ]
 
@@ -103,6 +113,24 @@ export function AppSidebar() {
         <Logo variant="responsive" />
       </SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Dashboard"
+                  isActive={currentPath.startsWith("/dashboard")}
+                  asChild
+                >
+                  <RouterLink to="/dashboard" onClick={handleMenuClick}>
+                    <LayoutDashboard />
+                    <span>Dashboard</span>
+                  </RouterLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <NavGroup label="CI/CD Analysis" items={analysisItems} />
         <NavGroup label="Configuration" items={configItems} />
       </SidebarContent>
