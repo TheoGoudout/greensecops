@@ -427,10 +427,16 @@ export class FixesService {
 
     /**
      * Regenerate Fixes For Pr
-     * Delete delivered fixes for a closed PR and re-trigger generation.
+     * Delete the fixes of a closed PR and re-trigger generation.
      *
      * Only valid when pr_state == closed. Merged PRs are not touched because
      * the code changes were already applied.
+     *
+     * The PullRequest record is deleted too: a closed record on the fix branch
+     * makes every later delivery auto-reject its fixes (the closed-PR guard in
+     * deliver_fixes_batch), and regenerating is an explicit request for a new
+     * PR. The next successful delivery creates a fresh record — and reuses the
+     * GitHub PR itself if the user reopened it in the meantime.
      * @param data The data for the request.
      * @param data.prId
      * @returns number Successful Response
