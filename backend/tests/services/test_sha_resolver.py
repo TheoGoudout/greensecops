@@ -1,6 +1,7 @@
 """Tests for the GitHub action SHA resolver."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -91,19 +92,22 @@ def _fake_cache(store: dict[str, str] | None = None) -> MagicMock:
         return None
 
     cache.aclose = MagicMock(side_effect=_aclose)
+
+    @asynccontextmanager
+    async def _noop_lock_cm():
+        yield
+
+    cache.lock = lambda *a, **kw: _noop_lock_cm()
     cache._store = store
     return cache
 
 
 def _resolve(workflow: str, gh: FakeGithub, cache: MagicMock) -> dict[str, str]:
-    with (
-        patch("app.services.github.sha_resolver.Github", return_value=gh),
-        patch(
-            "app.services.github.sha_resolver.aioredis.from_url",
-            return_value=cache,
-        ),
+    with patch(
+        "app.services.github.sha_resolver.aioredis.from_url",
+        return_value=cache,
     ):
-        return asyncio.run(resolve_action_shas(workflow))
+        return asyncio.run(resolve_action_shas(workflow, gh=gh))
 
 
 # ─── _parse_action_refs ───────────────────────────────────────────────────────
@@ -262,12 +266,53 @@ def test_resolve_action_shas_survives_redis_failure() -> None:
             latest_release="v9",
         )
     )
-    with (
-        patch("app.services.github.sha_resolver.Github", return_value=gh),
-        patch(
-            "app.services.github.sha_resolver.aioredis.from_url",
-            side_effect=RuntimeError("redis down"),
-        ),
+    with patch(
+        "app.services.github.sha_resolver.aioredis.from_url",
+        side_effect=RuntimeError("redis down"),
     ):
-        result = asyncio.run(resolve_action_shas("      - uses: actions/checkout@v4\n"))
+        result = asyncio.run(
+            resolve_action_shas("      - uses: actions/checkout@v4\n", gh=gh)
+        )
     assert result["actions/checkout@v4"] == "resolved_sha"
+
+
+def test_resolve_action_shas_uses_provided_gh_instance() -> None:
+    """Provided gh is used as-is; unauthenticated Github() is never instantiated."""
+    provided_gh = FakeGithub(
+        default_repo=FakeRepo(
+            refs={"tags/v4": ("auth_sha", "commit")}, latest_release="v4"
+        )
+    )
+    cache = _fake_cache()
+    with (
+        patch("app.services.github.sha_resolver.Github") as mock_gh_cls,
+        patch("app.services.github.sha_resolver.aioredis.from_url", return_value=cache),
+    ):
+        result = asyncio.run(
+            resolve_action_shas("      - uses: actions/checkout@v4\n", gh=provided_gh)
+        )
+    mock_gh_cls.assert_not_called()
+    assert result["actions/checkout@v4"] == "auth_sha"
+
+
+def test_resolve_action_shas_acquires_lock_on_cache_miss() -> None:
+    """Redis lock is acquired on a cache miss to prevent concurrent duplicate fetches."""
+    lock_keys: list[str] = []
+
+    @asynccontextmanager
+    async def _tracking_lock(key: str, **kwargs):
+        lock_keys.append(key)
+        yield
+
+    gh = FakeGithub(
+        default_repo=FakeRepo(refs={"tags/v4": ("sha", "commit")}, latest_release="v4")
+    )
+    cache = _fake_cache()
+    cache.lock = _tracking_lock
+
+    with patch(
+        "app.services.github.sha_resolver.aioredis.from_url", return_value=cache
+    ):
+        asyncio.run(resolve_action_shas("      - uses: actions/checkout@v4\n", gh=gh))
+
+    assert any("action_sha:actions/checkout@v4" in k for k in lock_keys)

@@ -321,6 +321,7 @@ def run_fix_generation(
                     issues=issues,
                     provider_str=provider_str,
                     model_str=model_str,
+                    installation_id=repo.installation_id,
                 )
             )
         except Exception as exc:
@@ -434,6 +435,7 @@ async def _generate_fixes(
     issues: list,
     provider_str: str,
     model_str: str,
+    installation_id: int | None = None,
 ) -> object:
     _configure_langchain()
 
@@ -441,7 +443,31 @@ async def _generate_fixes(
     from app.services.llm.catalog import get_provider
     from app.services.llm.fix_prompt import build_fix_prompt
 
-    action_sha_map = await resolve_action_shas(workflow_content)
+    gh = None
+    if installation_id is not None:
+        try:
+            import redis.asyncio as aioredis
+            from github import Auth, Github
+
+            from app.core.config import settings
+            from app.services.github.app_client import GitHubAppClient
+
+            redis_client = aioredis.from_url(settings.REDIS_URL)
+            try:
+                token = await GitHubAppClient(redis_client).get_installation_token(
+                    installation_id
+                )
+                gh = Github(auth=Auth.Token(token))
+            finally:
+                await redis_client.aclose()
+        except Exception:
+            logger.warning(
+                "Failed to build authenticated GitHub client for SHA resolution, "
+                "falling back to unauthenticated",
+                exc_info=True,
+            )
+
+    action_sha_map = await resolve_action_shas(workflow_content, gh=gh)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,
