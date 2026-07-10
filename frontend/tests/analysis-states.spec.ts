@@ -34,7 +34,7 @@ test.describe("Analysis States", () => {
 
     await page.goto(`/analyses/${MOCK_ANALYSIS_PENDING.id}`)
 
-    await expect(page.getByText("pending")).toBeVisible()
+    await expect(page.getByText("pending", { exact: true })).toBeVisible()
     await expect(page.locator("body")).not.toContainText(/\d+\/100/)
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
