@@ -17,7 +17,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      id-token: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -50,5 +56,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
       - uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
         id: deployment
