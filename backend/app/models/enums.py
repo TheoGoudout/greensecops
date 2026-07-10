@@ -34,6 +34,7 @@ class AnalysisStatus(str, enum.Enum):
     completed = "completed"
     failed = "failed"
     skipped = "skipped"
+    no_workflows = "no_workflows"
 
 
 class AnalysisTrigger(str, enum.Enum):
@@ -88,6 +89,7 @@ class SSESignal(str, enum.Enum):
     analysis_completed = "analysis.completed"
     analysis_failed = "analysis.failed"
     analysis_skipped = "analysis.skipped"
+    analysis_no_workflows = "analysis.no_workflows"
     # Fix generation & delivery
     fix_skipped = "fix.skipped"
     fix_generating = "fix.generating"

@@ -77,6 +77,14 @@ def analysis_skipped(org_id: str, repo_id: str, analysis_id: str) -> SSEEvent:
     )
 
 
+def analysis_no_workflows(org_id: str, repo_id: str, analysis_id: str) -> SSEEvent:
+    return SSEEvent(
+        event=SSESignal.analysis_no_workflows,
+        org_id=org_id,
+        data={"repo_id": repo_id, "analysis_id": analysis_id},
+    )
+
+
 # ─── Fix generation ──────────────────────────────────────────────────────────
 
 

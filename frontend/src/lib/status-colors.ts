@@ -10,8 +10,19 @@ export function analysisStatusColor(status: string): string {
       return "bg-red-500/15 text-red-700 dark:text-red-400"
     case "pending":
       return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+    case "no_workflows":
+      return "bg-muted text-muted-foreground"
     default:
       return "bg-muted text-muted-foreground"
+  }
+}
+
+export function analysisStatusLabel(status: string): string {
+  switch (status) {
+    case "no_workflows":
+      return "No workflows"
+    default:
+      return status.replace(/_/g, " ")
   }
 }
 

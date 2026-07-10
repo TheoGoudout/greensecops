@@ -200,8 +200,8 @@ class Analysis(SQLModel, table=True):
     repo_id: uuid.UUID = Field(
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
     )
-    workflow_file_id: uuid.UUID = Field(
-        foreign_key="workflow_file.id", nullable=False, ondelete="CASCADE"
+    workflow_file_id: uuid.UUID | None = Field(
+        default=None, foreign_key="workflow_file.id", nullable=True, ondelete="CASCADE"
     )
     content_hash: str = Field(max_length=64, index=True)
     status: AnalysisStatus = Field(default=AnalysisStatus.pending)
