@@ -1,5 +1,7 @@
 # GreenSecOps
 
+[![GreenSecOps](http://localhost:8000/api/v1/badges/TheoGoudout/greensecops/main.svg)](https://app.greensecops.goudout.com/repositories/6b2b771e-a8c6-4066-ae17-4b1d81fc9172)
+
 <a href="https://github.com/TheoGoudout/greensecops/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/TheoGoudout/greensecops/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
 <a href="https://github.com/TheoGoudout/greensecops/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/TheoGoudout/greensecops/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
 <a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/TheoGoudout/greensecops" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/TheoGoudout/greensecops.svg" alt="Coverage"></a>
