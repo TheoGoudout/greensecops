@@ -9,6 +9,8 @@ permissions: {}
 
 jobs:
   deploy:
+    name: Deploy to Staging Environment
+    timeout-minutes: 30
     environment: staging
     # Only deploy from the canonical repository, never from forks.
     if: github.repository_owner == 'TheoGoudout'
