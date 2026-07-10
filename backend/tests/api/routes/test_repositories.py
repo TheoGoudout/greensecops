@@ -384,7 +384,7 @@ def test_list_repositories_grade_null_without_analyses(
     data = response.json()
     repo_data = next(r for r in data if r["id"] == str(repo.id))
     assert repo_data["avg_score"] is None
-    assert repo_data["grade"] is None
+    assert repo_data["grade"] == "-"
 
 
 def test_list_repositories_grade_populated(

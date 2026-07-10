@@ -228,7 +228,7 @@ function Dashboard() {
         const repo = repoMap.get(repoId)
         if (!repo) return null
         const buckets = Array.from(wfMap.values())
-        const latestScore = repo.score ?? avg(buckets.map((b) => b[0].score!))
+        const latestScore = avg(buckets.map((b) => b[0].score!))
         const firstScore = avg(buckets.map((b) => b[b.length - 1].score!))
         return {
           repoId,
