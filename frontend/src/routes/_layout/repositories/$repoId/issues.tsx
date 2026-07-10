@@ -47,7 +47,7 @@ function IssuesPage() {
 
   const { data: branches } = useQuery({
     queryKey: ["branches", repoId],
-    queryFn: () => RepositoriesService.listBranches({ repoId }),
+    queryFn: () => RepositoriesService.listRepositoryBranches({ repoId }),
   })
 
   const { data: issues, isLoading } = useQuery({
