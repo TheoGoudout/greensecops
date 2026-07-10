@@ -24,7 +24,13 @@ jobs:
     # Set job outputs to values from filter step
     outputs:
       changed: ${{ steps.filter.outputs.changed }}
+    permissions:
+      id-token: write
     steps:
+    - name: GreenSecOps Telemetry
+      uses: greensecops/greensecops-action@v1
+      with:
+        greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         persist-credentials: false
@@ -68,7 +74,13 @@ jobs:
         shardIndex: [1, 2, 3, 4]
         shardTotal: [4]
       fail-fast: false
+    permissions:
+      id-token: write
     steps:
+    - name: GreenSecOps Telemetry
+      uses: greensecops/greensecops-action@v1
+      with:
+        greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         persist-credentials: false
@@ -123,7 +135,13 @@ jobs:
     if: ${{ !cancelled() && needs.changes.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      id-token: write
     steps:
+    - name: GreenSecOps Telemetry
+      uses: greensecops/greensecops-action@v1
+      with:
+        greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         persist-credentials: false
@@ -156,7 +174,13 @@ jobs:
       - test-playwright
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      id-token: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
         with:
