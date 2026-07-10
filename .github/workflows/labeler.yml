@@ -14,12 +14,17 @@ permissions: {}
 jobs:
   labeler:
     permissions:
+      id-token: write
       contents: read
       issues: write
       pull-requests: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+    - name: GreenSecOps Telemetry
+      uses: greensecops/greensecops-action@v1
+      with:
+        greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
     - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213 # v6.1.0
       if: ${{ github.event.action != 'labeled' && github.event.action != 'unlabeled' }}
     - run: echo "Done adding labels"
@@ -28,10 +33,15 @@ jobs:
     needs:
       - labeler
     permissions:
+      id-token: write
       pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: GreenSecOps Telemetry
+        uses: greensecops/greensecops-action@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL || 'http://localhost:8000' }}
       - uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5 # v1.6.65
         with:
           one_of: breaking,security,feature,bug,refactor,upgrade,docs,lang-all,internal
