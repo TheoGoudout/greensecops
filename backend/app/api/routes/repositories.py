@@ -204,7 +204,7 @@ async def create_external_repository(
         full_name=target.full_name,
         installation_id=body.installation_id,
         default_branch=target.default_branch,
-        enabled=True,
+        enabled=False,
         is_external=True,
     )
     session.add(repo)

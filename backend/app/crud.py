@@ -134,7 +134,7 @@ def upsert_repository(
     installation_id: int,
     default_branch: str,
 ) -> Repository:
-    """Upsert a repository by its unique github_repo_id; (re)enables it."""
+    """Upsert a repository by its unique github_repo_id; preserves enabled state on update."""
     stmt = (
         pg_insert(Repository)
         .values(
@@ -144,7 +144,7 @@ def upsert_repository(
             full_name=full_name,
             installation_id=installation_id,
             default_branch=default_branch,
-            enabled=True,
+            enabled=False,
         )
         .on_conflict_do_update(
             index_elements=["github_repo_id"],
@@ -153,7 +153,6 @@ def upsert_repository(
                 "full_name": full_name,
                 "installation_id": installation_id,
                 "default_branch": default_branch,
-                "enabled": True,
             },
         )
         .returning(Repository)

@@ -129,7 +129,7 @@ class Repository(SQLModel, table=True):
     github_repo_id: int = Field(unique=True, index=True)
     full_name: str = Field(max_length=512, index=True)
     installation_id: int | None = Field(default=None, index=True)
-    enabled: bool = Field(default=True)
+    enabled: bool = Field(default=False)
     is_accessible: bool = Field(default=True)
     is_external: bool = Field(default=False)
     default_branch: str = Field(default="main", max_length=255)
