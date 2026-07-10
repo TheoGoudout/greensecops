@@ -106,7 +106,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
   test("dashboard shows recent analysis grade", async ({ page }) => {
     await page.goto("/")
-    await expect(page.getByText("Recent Analyses")).toBeVisible()
+    await expect(page.getByText("Repository Health")).toBeVisible()
     await expect(
       page.getByText(`${MOCK_ANALYSIS.score}/100`).first(),
     ).toBeVisible()

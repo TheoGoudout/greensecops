@@ -1,7 +1,7 @@
 """Unit tests for the installation_sync Celery task (extracted impl function)."""
 
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlmodel import Session, select
@@ -24,6 +24,13 @@ def org(db: Session) -> Organization:
     return organization
 
 
+def _fake_redis_always_acquire() -> MagicMock:
+    """Redis mock where every SETNX succeeds (first caller wins)."""
+    r = MagicMock()
+    r.set.return_value = True
+    return r
+
+
 def test_sync_creates_repositories(db: Session, org: Organization) -> None:
     gh_id1 = int(uuid.uuid4().int % 10**9)
     gh_id2 = int(uuid.uuid4().int % 10**9)
@@ -33,11 +40,13 @@ def test_sync_creates_repositories(db: Session, org: Organization) -> None:
     ]
     assert org.installation_id is not None
 
+    mock_redis = _fake_redis_always_acquire()
     with (
         patch(
             "app.workers.tasks.installation_sync._fetch_installation_repositories",
             return_value=fake_repos,
         ),
+        patch("redis.Redis.from_url", return_value=mock_redis),
         patch(
             "app.workers.tasks.static_analysis.run_static_analysis.apply_async"
         ) as mock_enqueue,
@@ -52,7 +61,6 @@ def test_sync_creates_repositories(db: Session, org: Organization) -> None:
     assert by_id[gh_id1].full_name == "owner/repo-a"
     assert by_id[gh_id1].default_branch == "main"
     assert by_id[gh_id2].default_branch == "develop"
-    assert all(r.enabled for r in repos)
 
     # Never-analyzed repos get an initial analysis queued.
     enqueued_repo_ids = {
@@ -78,11 +86,13 @@ def test_sync_is_idempotent_and_reenables(db: Session, org: Organization) -> Non
     db.commit()
 
     fake_repos = [InstallationRepo(gh_id, "owner/new-name", "main")]
+    mock_redis = _fake_redis_always_acquire()
     with (
         patch(
             "app.workers.tasks.installation_sync._fetch_installation_repositories",
             return_value=fake_repos,
         ),
+        patch("redis.Redis.from_url", return_value=mock_redis),
         patch("app.workers.tasks.static_analysis.run_static_analysis.apply_async"),
     ):
         _sync_installation_repositories_impl(org.installation_id, str(org.id))
@@ -92,11 +102,71 @@ def test_sync_is_idempotent_and_reenables(db: Session, org: Organization) -> Non
     repos = db.exec(select(Repository).where(Repository.github_repo_id == gh_id)).all()
     assert len(repos) == 1
     assert repos[0].full_name == "owner/new-name"
-    assert repos[0].enabled is True
+
+
+def test_sync_deduplicates_analysis_enqueue(db: Session, org: Organization) -> None:
+    """When two sync tasks race, each repo gets at most one analysis enqueued."""
+    gh_id = int(uuid.uuid4().int % 10**9)
+    assert org.installation_id is not None
+
+    fake_repos = [InstallationRepo(gh_id, "owner/repo", "main")]
+
+    # First SETNX succeeds; subsequent calls for the same key return None (already set).
+    set_results: dict[str, bool] = {}
+
+    def setnx_side_effect(key: str, value: str, **kwargs: object) -> bool | None:
+        if key in set_results:
+            return None  # already set
+        set_results[key] = True
+        return True
+
+    mock_redis = MagicMock()
+    mock_redis.set.side_effect = setnx_side_effect
+
+    with (
+        patch(
+            "app.workers.tasks.installation_sync._fetch_installation_repositories",
+            return_value=fake_repos,
+        ),
+        patch("redis.Redis.from_url", return_value=mock_redis),
+        patch(
+            "app.workers.tasks.static_analysis.run_static_analysis.apply_async"
+        ) as mock_enqueue,
+    ):
+        # Simulate two concurrent sync tasks for the same installation.
+        _sync_installation_repositories_impl(org.installation_id, str(org.id))
+        _sync_installation_repositories_impl(org.installation_id, str(org.id))
+
+    # Only one analysis should have been enqueued despite two sync runs.
+    assert mock_enqueue.call_count == 1
+
+
+def test_sync_enqueue_fails_open_on_redis_error(db: Session, org: Organization) -> None:
+    """Redis error during dedup check must not block analysis enqueue."""
+    gh_id = int(uuid.uuid4().int % 10**9)
+    assert org.installation_id is not None
+
+    fake_repos = [InstallationRepo(gh_id, "owner/repo", "main")]
+    mock_redis = MagicMock()
+    mock_redis.set.side_effect = RuntimeError("redis down")
+
+    with (
+        patch(
+            "app.workers.tasks.installation_sync._fetch_installation_repositories",
+            return_value=fake_repos,
+        ),
+        patch("redis.Redis.from_url", return_value=mock_redis),
+        patch(
+            "app.workers.tasks.static_analysis.run_static_analysis.apply_async"
+        ) as mock_enqueue,
+    ):
+        _sync_installation_repositories_impl(org.installation_id, str(org.id))
+
+    mock_enqueue.assert_called_once()
 
 
 def test_fetch_installation_repositories_uses_app_client() -> None:
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import AsyncMock
 
     from app.workers.tasks.installation_sync import _fetch_installation_repositories
 

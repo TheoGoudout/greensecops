@@ -15,7 +15,7 @@ export type AIProvidersPublic = {
 export type AnalysisPublic = {
     id: string;
     repo_id: string;
-    workflow_file_id: string;
+    workflow_file_id?: (string | null);
     workflow_file_path?: (string | null);
     repo_full_name?: (string | null);
     content_hash: string;
@@ -29,7 +29,7 @@ export type AnalysisPublic = {
     completed_at?: (string | null);
 };
 
-export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'no_workflows';
 
 export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled' | 'release';
 
@@ -202,7 +202,7 @@ export type SamplePayload = {
     net_bytes_recv?: (number | null);
 };
 
-export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'fix.skipped' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened';
+export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened';
 
 export type TelemetryPayload = {
     workflow_run_id: number;
@@ -377,6 +377,7 @@ export type EventsStreamEventsData = {
 export type EventsStreamEventsResponse = (unknown);
 
 export type FixesListFixesData = {
+    branch?: (string | null);
     limit?: number;
     repoId?: (string | null);
     skip?: number;

@@ -57,7 +57,14 @@ def _compute_repo_grade(
 
     avg, count = average_latest_scores(list(analyses))
     if avg is None:
-        return None, None, 0
+        has_no_workflows = session.exec(
+            select(Analysis)
+            .where(Analysis.repo_id == repo_id)
+            .where(Analysis.status == AnalysisStatus.no_workflows)
+            .limit(1)
+        ).first()
+        grade = "N/A" if has_no_workflows else "-"
+        return None, grade, 0
     return round(avg, 1), score_to_grade(avg), count
 
 
@@ -84,14 +91,27 @@ def _compute_grades_batch(
             if a.score is not None:
                 scores_by_repo[a.repo_id].append(a.score)  # type: ignore[arg-type]
 
+    repos_without_grades = [r for r in repo_ids if r not in scores_by_repo]
+    no_workflows_repo_ids: set[uuid.UUID] = set()
+    if repos_without_grades:
+        rows = session.exec(
+            select(Analysis.repo_id)
+            .where(Analysis.repo_id.in_(repos_without_grades))  # type: ignore[attr-defined]
+            .where(Analysis.status == AnalysisStatus.no_workflows)
+            .distinct()
+        ).all()
+        no_workflows_repo_ids = set(rows)
+
     result: dict[uuid.UUID, tuple[float | None, str | None]] = {}
     for repo_id in repo_ids:
         scores = scores_by_repo.get(repo_id, [])
         if scores:
             avg = round(sum(scores) / len(scores), 1)
             result[repo_id] = (avg, score_to_grade(avg))
+        elif repo_id in no_workflows_repo_ids:
+            result[repo_id] = (None, "N/A")
         else:
-            result[repo_id] = (None, None)
+            result[repo_id] = (None, "-")
     return result
 
 
@@ -184,7 +204,7 @@ async def create_external_repository(
         full_name=target.full_name,
         installation_id=body.installation_id,
         default_branch=target.default_branch,
-        enabled=True,
+        enabled=False,
         is_external=True,
     )
     session.add(repo)
@@ -446,6 +466,8 @@ async def integrate_action(
     app_name = settings.PROJECT_NAME
 
     repo = _get_repo_for_user(repo_id, session, current_user)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     workflow_files = repo.workflow_files
     if not workflow_files:

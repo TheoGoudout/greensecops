@@ -59,8 +59,15 @@ export const AnalysisPublicSchema = {
             title: 'Repo Id'
         },
         workflow_file_id: {
-            type: 'string',
-            format: 'uuid',
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
             title: 'Workflow File Id'
         },
         workflow_file_path: {
@@ -165,13 +172,13 @@ export const AnalysisPublicSchema = {
         }
     },
     type: 'object',
-    required: ['id', 'repo_id', 'workflow_file_id', 'content_hash', 'status', 'triggered_by'],
+    required: ['id', 'repo_id', 'content_hash', 'status', 'triggered_by'],
     title: 'AnalysisPublic'
 } as const;
 
 export const AnalysisStatusSchema = {
     type: 'string',
-    enum: ['pending', 'running', 'completed', 'failed', 'skipped'],
+    enum: ['pending', 'running', 'completed', 'failed', 'skipped', 'no_workflows'],
     title: 'AnalysisStatus'
 } as const;
 
@@ -1094,7 +1101,7 @@ export const RulePublicSchema = {
 
 export const SSESignalSchema = {
     type: 'string',
-    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'fix.skipped', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
     title: 'SSESignal'
 } as const;
 

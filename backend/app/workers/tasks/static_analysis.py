@@ -354,14 +354,21 @@ def _run_static_analysis_impl(
             _resolve_issues_for_missing_files(session, repo, fetched_paths)
 
         if not workflow_files_to_analyse:
-            # Terminal signal — without it the UI shows "queued" forever for
-            # repositories that have no .github/workflows directory.
-            from app.services.scoring import score_to_grade
-
+            now = datetime.now(timezone.utc)
+            no_wf_analysis = Analysis(
+                repo_id=repo.id,
+                workflow_file_id=None,
+                content_hash="",
+                status=AnalysisStatus.no_workflows,
+                triggered_by=AnalysisTrigger(trigger),
+                branch=effective_branch,
+                commit_sha=commit_sha or None,
+                completed_at=now,
+            )
+            session.add(no_wf_analysis)
+            session.commit()
             events_pub.publish_event(
-                ev.analysis_completed(
-                    org_id, repo_id, "", 100.0, score_to_grade(100.0), 0
-                )
+                ev.analysis_no_workflows(org_id, repo_id, str(no_wf_analysis.id))
             )
             return {"status": "no_workflow_files", "repo_id": repo_id, "results": "[]"}
 
@@ -640,7 +647,11 @@ def run_static_analysis(
     r = redis_sync.Redis.from_url(settings.REDIS_URL)
     try:
         if not r.set(lock_key, "1", nx=True, ex=ANALYSIS_LOCK_TTL_SECONDS):
-            raise self.retry(countdown=15, max_retries=40)
+            # Another analysis for this repo is already running.  Layers upstream
+            # (installation sync dedup) should prevent true duplicates; the retry
+            # here covers legitimate concurrent webhook events.  10 × 30 s = 300 s
+            # max wait — enough for any realistic analysis to complete.
+            raise self.retry(countdown=30, max_retries=10)
         try:
             return _run_static_analysis_impl(
                 repo_id=repo_id,

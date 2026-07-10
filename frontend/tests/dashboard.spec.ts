@@ -50,7 +50,7 @@ test.describe("Dashboard", () => {
     await expect(page.getByText("1 critical")).toBeVisible()
   })
 
-  test("recent analyses table shows repo name, grade, and score", async ({
+  test("repository health table shows repo name, grade, and score", async ({
     page,
   }) => {
     await mockRepositories(page, [MOCK_REPO])
@@ -59,9 +59,8 @@ test.describe("Dashboard", () => {
 
     await page.goto("/dashboard")
 
-    await expect(page.getByText("Recent Analyses")).toBeVisible()
+    await expect(page.getByText("Repository Health")).toBeVisible()
     await expect(page.getByText("acme/web-app")).toBeVisible()
-    await expect(page.getByText("a1b2c3d")).toBeVisible()
     await expect(page.getByText("82/100").first()).toBeVisible({
       timeout: 10000,
     })
@@ -74,11 +73,7 @@ test.describe("Dashboard", () => {
 
     await page.goto("/dashboard")
 
-    await expect(
-      page.getByText(
-        "No analyses yet. Trigger one from the Repositories page.",
-      ),
-    ).toBeVisible()
+    await expect(page.getByText("No completed analyses yet.")).toBeVisible()
   })
 
   test("empty state when no repos shows 0 connected", async ({ page }) => {
@@ -91,7 +86,9 @@ test.describe("Dashboard", () => {
     await expect(page.getByText("of 0 connected")).toBeVisible()
   })
 
-  test("clicking analysis row navigates to detail", async ({ page }) => {
+  test("clicking repository health row navigates to repo analyses", async ({
+    page,
+  }) => {
     await mockRepositories(page, [MOCK_REPO])
     await mockAnalyses(page, [MOCK_ANALYSIS])
     await mockIssues(page, [])
@@ -100,7 +97,9 @@ test.describe("Dashboard", () => {
 
     await page.getByText("acme/web-app").click()
 
-    await expect(page).toHaveURL(new RegExp(`/analyses/${MOCK_ANALYSIS.id}`))
+    await expect(page).toHaveURL(
+      new RegExp(`/repositories/${MOCK_REPO.id}/analyses`),
+    )
   })
 
   test("/ redirects to /dashboard", async ({ page }) => {

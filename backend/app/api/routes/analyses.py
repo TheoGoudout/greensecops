@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 
 from app.api.deps import (
@@ -83,6 +83,8 @@ def trigger_analysis(
     force: bool = True,
 ) -> dict[str, str]:
     repo = authorize_repo(session, current_user, repo_id)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
     from app.api.routes.billing import enforce_quota
 
     enforce_quota(session, current_user, "analyses")

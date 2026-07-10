@@ -2,15 +2,18 @@ import asyncio
 import logging
 import uuid
 
+import redis as redis_sync
 from sqlmodel import Session, select
 
 from app import crud
+from app.core.config import settings
 from app.core.db import engine
 from app.models import Analysis
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import InstallationRepo
 from app.workers.celery_app import celery_app
+from app.workers.tasks.static_analysis import ANALYSIS_LOCK_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +44,46 @@ def _sync_installation_repositories_impl(
 
     # Kick off an initial analysis for repos that have never been analyzed —
     # otherwise a fresh installation shows nothing until a push arrives.
+    # A per-repo "queued" key in Redis prevents duplicate enqueues when two
+    # sync tasks race (e.g. `installation` + `installation_repositories` webhooks).
     from app.workers.tasks.static_analysis import run_static_analysis
 
-    for i, repo_id in enumerate(never_analyzed):
-        run_static_analysis.apply_async(
-            kwargs={"repo_id": repo_id, "trigger": "manual"},
-            countdown=i * 2,
-        )
-    if never_analyzed:
+    r = redis_sync.Redis.from_url(settings.REDIS_URL)
+    enqueued: list[str] = []
+    try:
+        for i, repo_id in enumerate(never_analyzed):
+            queued_key = f"greensecops:queued:static_analysis:{repo_id}"
+            try:
+                already_queued = not r.set(
+                    queued_key, "1", nx=True, ex=ANALYSIS_LOCK_TTL_SECONDS
+                )
+            except Exception:
+                logger.warning(
+                    "Redis unavailable for analysis enqueue dedup; enqueuing repo %s anyway",
+                    repo_id,
+                    exc_info=True,
+                )
+                already_queued = False
+
+            if already_queued:
+                logger.info(
+                    "Analysis already queued for repo %s, skipping duplicate enqueue",
+                    repo_id,
+                )
+                continue
+
+            run_static_analysis.apply_async(
+                kwargs={"repo_id": repo_id, "trigger": "manual"},
+                countdown=i * 2,
+            )
+            enqueued.append(repo_id)
+    finally:
+        r.close()
+
+    if enqueued:
         logger.info(
             "Enqueued initial analysis for %d newly synced repo(s)",
-            len(never_analyzed),
+            len(enqueued),
         )
     logger.info(
         "Synced %d repositories for installation %s (org=%s)",

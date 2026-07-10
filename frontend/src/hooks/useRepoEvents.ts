@@ -107,6 +107,17 @@ export function useRepoEvents(): void {
           }
           break
 
+        case "analysis.no_workflows":
+          if (repoId) {
+            invalidateRepoQueries(queryClient, repoId)
+            invalidateAnalysisQueries(queryClient, repoId, analysisId)
+          }
+          toast.info("No workflow files", {
+            description:
+              "This repository has no GitHub Actions workflows to analyse.",
+          })
+          break
+
         case "fix.skipped":
           if (repoId) {
             invalidateFixQueries(queryClient, repoId)

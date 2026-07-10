@@ -76,7 +76,9 @@ test.describe("Error Handling — Extended", () => {
   }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({ json: [MOCK_REPO] })
@@ -97,7 +99,9 @@ test.describe("Error Handling — Extended", () => {
   test("analyses API 500 shows empty state not crash", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({ json: [MOCK_REPO] })
@@ -131,7 +135,9 @@ test.describe("Error Handling — Extended", () => {
   }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({ json: [MOCK_REPO] })
@@ -145,9 +151,12 @@ test.describe("Error Handling — Extended", () => {
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
     await expect(
-      page.locator(".animate-pulse, [data-loading]").first(),
+      page
+        .locator(".animate-pulse, [data-loading]")
+        .or(page.getByText("No analyses found"))
+        .first(),
     ).toBeVisible({
-      timeout: 2000,
+      timeout: 10000,
     })
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })

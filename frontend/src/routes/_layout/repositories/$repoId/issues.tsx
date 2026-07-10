@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Zap } from "lucide-react"
+import { Loader2, Wand2, Zap } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { FixesService, IssuesService, RepositoriesService } from "@/client"
@@ -8,13 +8,6 @@ import { IssueRow } from "@/components/IssueRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { severityRank } from "@/lib/severity"
 import {
@@ -22,15 +15,11 @@ import {
   PAGE_SIZE,
   workflowLabel,
 } from "@/lib/workflow-utils"
+import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
 import { apiErrorDetail } from "@/utils"
-
-type IssuesSearch = { branch?: string }
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/issues")({
   component: IssuesPage,
-  validateSearch: (search: Record<string, unknown>): IssuesSearch => ({
-    branch: typeof search.branch === "string" ? search.branch : undefined,
-  }),
   head: () => ({
     meta: [{ title: "Issues - GreenSecOps" }],
   }),
@@ -38,17 +27,17 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/issues")({
 
 function IssuesPage() {
   const { repoId } = Route.useParams()
-  const { branch } = Route.useSearch()
-  const navigate = Route.useNavigate()
+  const { branch } = RepoRoute.useSearch()
   const queryClient = useQueryClient()
   const [unfixed, setUnfixed] = useState(false)
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(0)
 
-  const { data: branches } = useQuery({
-    queryKey: ["branches", repoId],
-    queryFn: () => RepositoriesService.listRepositoryBranches({ repoId }),
+  const { data: repo } = useQuery({
+    queryKey: ["repository", repoId],
+    queryFn: () => RepositoriesService.getRepository({ repoId }),
   })
+  const isAccessible = repo?.is_accessible ?? true
 
   const { data: issues, isLoading } = useQuery({
     queryKey: ["issues", "repo", repoId, { unfixed, branch }],
@@ -65,6 +54,24 @@ function IssuesPage() {
     if (!issues) return []
     return issues.filter((i) => !deselectedIds.has(i.id)).map((i) => i.id)
   }, [issues, deselectedIds])
+
+  const wfFixMutation = useMutation({
+    mutationFn: (vars: { wfPath: string; issueIds: string[] }) =>
+      FixesService.triggerFixGenerationForRepo({
+        repoId,
+        force: true,
+        requestBody: { issue_ids: vars.issueIds },
+      }),
+    onSuccess: () => {
+      toast.success("Fix generation queued")
+      queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
+      queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+    },
+    onError: (error) =>
+      toast.error("Failed to queue fix", {
+        description: apiErrorDetail(error),
+      }),
+  })
 
   const batchFixMutation = useMutation({
     mutationFn: () =>
@@ -95,6 +102,11 @@ function IssuesPage() {
           a.rule_slug.localeCompare(b.rule_slug),
       ),
     [issues],
+  )
+
+  const allIssuesByWorkflow = useMemo(
+    () => groupByWorkflowFile(sortedIssues),
+    [sortedIssues],
   )
 
   const pagedIssues = useMemo(
@@ -129,28 +141,6 @@ function IssuesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <p className="text-sm text-muted-foreground">Branch:</p>
-        <Select
-          value={branch ?? ""}
-          onValueChange={(val) => {
-            navigate({ search: val ? { branch: val } : {} })
-            setPage(0)
-          }}
-        >
-          <SelectTrigger className="w-48 h-8 text-xs">
-            <SelectValue placeholder="All branches" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All branches</SelectItem>
-            {(branches ?? []).map((b) => (
-              <SelectItem key={b} value={b}>
-                {b}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
       {!!issues?.length && (
         <div className="flex items-center gap-3 flex-wrap">
           <Button
@@ -178,7 +168,9 @@ function IssuesPage() {
             size="sm"
             className="gap-2"
             onClick={() => batchFixMutation.mutate()}
-            disabled={batchFixMutation.isPending || noneSelected}
+            disabled={
+              !isAccessible || batchFixMutation.isPending || noneSelected
+            }
           >
             <Zap className="h-4 w-4" />
             {batchFixMutation.isPending
@@ -201,56 +193,88 @@ function IssuesPage() {
           </CardContent>
         </Card>
       ) : (
-        [...pagedIssuesByWorkflow.entries()].map(([wfPath, wfIssues]) => {
-          const allGroupSelected = wfIssues.every(
-            (i) => !deselectedIds.has(i.id),
-          )
-          return (
-            <Card key={wfPath || "__unknown__"}>
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0">
-                  <Checkbox
-                    checked={allGroupSelected}
-                    onCheckedChange={() => {
-                      setDeselectedIds((prev) => {
-                        const next = new Set(prev)
-                        if (allGroupSelected) {
-                          for (const i of wfIssues) next.add(i.id)
-                        } else {
-                          for (const i of wfIssues) next.delete(i.id)
-                        }
-                        return next
-                      })
-                    }}
-                    className="shrink-0"
-                  />
-                  <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
-                    Workflow:
-                  </span>
-                  <span className="truncate min-w-0 flex-1">
-                    {workflowLabel(wfPath)}
-                  </span>
-                  <span className="text-muted-foreground font-normal text-xs shrink-0">
-                    ({wfIssues.length})
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y">
-                  {wfIssues.map((issue) => (
-                    <IssueRow
-                      key={issue.id}
-                      issue={issue}
-                      repoId={repoId}
-                      checked={!deselectedIds.has(issue.id)}
-                      onCheckedChange={() => toggleIssue(issue.id)}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })
+        [...pagedIssuesByWorkflow.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([wfPath, wfIssues]) => {
+            const allGroupSelected = wfIssues.every(
+              (i) => !deselectedIds.has(i.id),
+            )
+            return (
+              <Card key={wfPath || "__unknown__"}>
+                <CardHeader className="pb-2 pt-4">
+                  <div className="flex items-center justify-between gap-4 min-w-0">
+                    <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0 flex-1">
+                      <Checkbox
+                        checked={allGroupSelected}
+                        onCheckedChange={() => {
+                          setDeselectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (allGroupSelected) {
+                              for (const i of wfIssues) next.add(i.id)
+                            } else {
+                              for (const i of wfIssues) next.delete(i.id)
+                            }
+                            return next
+                          })
+                        }}
+                        className="shrink-0"
+                      />
+                      <span className="text-muted-foreground font-sans font-normal text-xs shrink-0">
+                        Workflow:
+                      </span>
+                      <span className="truncate min-w-0 flex-1">
+                        {workflowLabel(wfPath)}
+                      </span>
+                      <span className="text-muted-foreground font-normal text-xs shrink-0">
+                        ({wfIssues.length})
+                      </span>
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1.5 shrink-0"
+                      onClick={() =>
+                        wfFixMutation.mutate({
+                          wfPath,
+                          issueIds: (allIssuesByWorkflow.get(wfPath) ?? []).map(
+                            (i) => i.id,
+                          ),
+                        })
+                      }
+                      disabled={
+                        !isAccessible ||
+                        (wfFixMutation.isPending &&
+                          wfFixMutation.variables?.wfPath === wfPath)
+                      }
+                    >
+                      {wfFixMutation.isPending &&
+                      wfFixMutation.variables?.wfPath === wfPath ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Wand2 className="h-3 w-3" />
+                      )}
+                      {wfFixMutation.isPending &&
+                      wfFixMutation.variables?.wfPath === wfPath
+                        ? "Queuing…"
+                        : "Generate fix"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {wfIssues.map((issue) => (
+                      <IssueRow
+                        key={issue.id}
+                        issue={issue}
+                        checked={!deselectedIds.has(issue.id)}
+                        onCheckedChange={() => toggleIssue(issue.id)}
+                      />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })
       )}
       {(issues?.length ?? 0) > PAGE_SIZE && (
         <div className="flex items-center justify-between py-2">

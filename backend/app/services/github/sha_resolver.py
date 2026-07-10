@@ -22,7 +22,7 @@ WELL_KNOWN_ACTIONS: list[str] = [
 ]
 
 # GitHub tags and release history are effectively immutable; a day-long cache
-# keeps unauthenticated API usage far below the 60 req/h rate limit.
+# keeps API usage far below rate limits.
 _CACHE_TTL = 24 * 60 * 60
 _SHA_CACHE_PREFIX = "action_sha:"
 _VERSION_CACHE_PREFIX = "action_version:latest:"
@@ -100,38 +100,72 @@ def _get_latest_version_sync(gh: Github, repo_name: str) -> str | None:
     return None
 
 
+async def _cached_fetch(
+    cache: aioredis.Redis | None,
+    cache_key: str,
+    fetch_fn,
+) -> str | None:
+    """Get from cache, or fetch with a Redis lock to prevent cache stampede.
+
+    The double-check-lock pattern (check → lock → recheck → fetch) ensures that
+    when multiple workers miss the cache simultaneously, only the first one calls
+    the GitHub API; the rest read the value populated under the lock.
+    """
+    value = await _cache_get(cache, cache_key)
+    if value:
+        return value
+    if cache is not None:
+        try:
+            async with cache.lock(f"lock:{cache_key}", timeout=30, blocking_timeout=35):
+                value = await _cache_get(cache, cache_key)
+                if value:
+                    return value
+                value = await fetch_fn()
+                if value:
+                    await _cache_set(cache, cache_key, value)
+                return value
+        except Exception:
+            logger.warning("Redis lock failed for %s", cache_key, exc_info=True)
+    value = await fetch_fn()
+    if value:
+        await _cache_set(cache, cache_key, value)
+    return value
+
+
 async def _cached_resolve_ref_to_sha(
     gh: Github, cache: aioredis.Redis | None, repo: str, ref: str
 ) -> str | None:
-    cache_key = f"{_SHA_CACHE_PREFIX}{repo}@{ref}"
-    sha = await _cache_get(cache, cache_key)
-    if sha:
-        return sha
-    sha = await asyncio.to_thread(_resolve_ref_to_sha_sync, gh, repo, ref)
-    if sha:
-        await _cache_set(cache, cache_key, sha)
-    return sha
+    return await _cached_fetch(
+        cache,
+        f"{_SHA_CACHE_PREFIX}{repo}@{ref}",
+        lambda: asyncio.to_thread(_resolve_ref_to_sha_sync, gh, repo, ref),
+    )
 
 
 async def _cached_get_latest_version(
     gh: Github, cache: aioredis.Redis | None, repo: str
 ) -> str | None:
-    cache_key = f"{_VERSION_CACHE_PREFIX}{repo}"
-    version = await _cache_get(cache, cache_key)
-    if version:
-        return version
-    version = await asyncio.to_thread(_get_latest_version_sync, gh, repo)
-    if version:
-        await _cache_set(cache, cache_key, version)
-    return version
+    return await _cached_fetch(
+        cache,
+        f"{_VERSION_CACHE_PREFIX}{repo}",
+        lambda: asyncio.to_thread(_get_latest_version_sync, gh, repo),
+    )
 
 
-async def resolve_action_shas(workflow_content: str) -> dict[str, str]:
+async def resolve_action_shas(
+    workflow_content: str, gh: Github | None = None
+) -> dict[str, str]:
     """Return a map of 'owner/repo@ref' -> commit SHA for the LLM prompt.
 
     Covers every pinnable ref in the workflow, plus the latest version of each
     referenced and well-known action (fetched online). All lookups are cached
-    in Redis; on cache failure the resolver falls back to direct API calls.
+    in Redis with a 24-hour TTL; on cache failure the resolver falls back to
+    direct API calls.
+
+    Pass an authenticated ``gh`` instance (e.g. built from a GitHub App
+    installation token) to use the 5 000 req/h authenticated rate limit instead
+    of the 60 req/h unauthenticated limit. When omitted an unauthenticated
+    client is created as a fallback.
     """
     refs = _parse_action_refs(workflow_content)
     repos = {repo for repo, _ in refs} | set(WELL_KNOWN_ACTIONS)
@@ -144,7 +178,9 @@ async def resolve_action_shas(workflow_content: str) -> dict[str, str]:
     except Exception:
         logger.warning("Redis unavailable for action SHA cache", exc_info=True)
 
-    gh = Github()
+    if gh is None:
+        gh = Github()
+
     sha_map: dict[str, str] = {}
     try:
         for repo in sorted(repos):

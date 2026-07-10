@@ -1,13 +1,19 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { AlertCircle, ArrowLeft, ExternalLink } from "lucide-react"
+import { AlertCircle, ArrowLeft, ExternalLink, Wand2 } from "lucide-react"
+import { toast } from "sonner"
 import type { IssueCategory, IssuePublic } from "@/client"
-import { AnalysesService, IssuesService } from "@/client"
+import {
+  AnalysesService,
+  FixesService,
+  IssuesService,
+  RepositoriesService,
+} from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
-import { GenerateFixButton } from "@/components/GenerateFixButton"
 import { GradeBadge } from "@/components/GradeBadge"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
@@ -49,6 +55,27 @@ function AnalysisDetail() {
     enabled: !!analysisId,
   })
 
+  const { data: repo } = useQuery({
+    queryKey: ["repository", analysis?.repo_id],
+    queryFn: () =>
+      RepositoriesService.getRepository({ repoId: analysis!.repo_id }),
+    enabled: !!analysis?.repo_id,
+  })
+  const isAccessible = repo?.is_accessible ?? true
+
+  const fixMutation = useMutation({
+    mutationFn: () =>
+      FixesService.triggerFixGenerationForRepo({
+        repoId: analysis!.repo_id,
+        force: true,
+        requestBody: issues?.length
+          ? { issue_ids: issues.map((i) => i.id) }
+          : undefined,
+      }),
+    onSuccess: () => toast.success("Fix generation queued"),
+    onError: () => toast.error("Failed to queue fix"),
+  })
+
   const grouped = issues ? groupByCategory(issues) : null
 
   if (analysisError) {
@@ -64,21 +91,39 @@ function AnalysisDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <Link
-          to={analysis?.repo_id ? "/repositories/$repoId" : "/repositories"}
-          params={analysis?.repo_id ? { repoId: analysis.repo_id } : undefined}
-          search={analysis?.repo_id ? { tab: "analyses" } : undefined}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Analysis Detail</h1>
-          <p className="text-muted-foreground text-sm font-mono">
-            {analysisId}
-          </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            to={analysis?.repo_id ? "/repositories/$repoId" : "/repositories"}
+            params={
+              analysis?.repo_id ? { repoId: analysis.repo_id } : undefined
+            }
+            search={analysis?.repo_id ? { tab: "analyses" } : undefined}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Analysis Detail
+            </h1>
+            <p className="text-muted-foreground text-sm font-mono">
+              {analysisId}
+            </p>
+          </div>
         </div>
+        {analysis?.repo_id && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 shrink-0"
+            onClick={() => fixMutation.mutate()}
+            disabled={!isAccessible || fixMutation.isPending || !issues?.length}
+          >
+            <Wand2 className="h-4 w-4" />
+            {fixMutation.isPending ? "Queuing…" : "Generate fix"}
+          </Button>
+        )}
       </div>
 
       {analysisLoading ? (
@@ -203,11 +248,6 @@ function AnalysisDetail() {
                             </div>
                           )}
                         </div>
-                        <GenerateFixButton
-                          issueId={issue.id}
-                          repoId={analysis?.repo_id ?? ""}
-                          fixStatus={issue.fix_status}
-                        />
                       </div>
                     )
                   })}

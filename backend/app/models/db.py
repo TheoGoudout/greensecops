@@ -129,7 +129,7 @@ class Repository(SQLModel, table=True):
     github_repo_id: int = Field(unique=True, index=True)
     full_name: str = Field(max_length=512, index=True)
     installation_id: int | None = Field(default=None, index=True)
-    enabled: bool = Field(default=True)
+    enabled: bool = Field(default=False)
     is_accessible: bool = Field(default=True)
     is_external: bool = Field(default=False)
     default_branch: str = Field(default="main", max_length=255)
@@ -200,8 +200,8 @@ class Analysis(SQLModel, table=True):
     repo_id: uuid.UUID = Field(
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
     )
-    workflow_file_id: uuid.UUID = Field(
-        foreign_key="workflow_file.id", nullable=False, ondelete="CASCADE"
+    workflow_file_id: uuid.UUID | None = Field(
+        default=None, foreign_key="workflow_file.id", nullable=True, ondelete="CASCADE"
     )
     content_hash: str = Field(max_length=64, index=True)
     status: AnalysisStatus = Field(default=AnalysisStatus.pending)

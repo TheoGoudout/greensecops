@@ -1,22 +1,15 @@
 import type { IssuePublic } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
-import { GenerateFixButton } from "@/components/GenerateFixButton"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Checkbox } from "@/components/ui/checkbox"
 
 interface IssueRowProps {
   issue: IssuePublic
-  repoId: string
   checked?: boolean
   onCheckedChange?: () => void
 }
 
-export function IssueRow({
-  issue,
-  repoId,
-  checked,
-  onCheckedChange,
-}: IssueRowProps) {
+export function IssueRow({ issue, checked, onCheckedChange }: IssueRowProps) {
   const hasCheckbox = onCheckedChange !== undefined
 
   return (
@@ -49,11 +42,6 @@ export function IssueRow({
           </p>
         )}
       </div>
-      <GenerateFixButton
-        issueId={issue.id}
-        repoId={repoId}
-        fixStatus={issue.fix_status}
-      />
     </div>
   )
 }

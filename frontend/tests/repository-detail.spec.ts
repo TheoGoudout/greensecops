@@ -97,7 +97,9 @@ test.describe("Repository Detail", () => {
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
     await expect(page.getByText("acme/web-app")).toBeVisible()
-    await expect(page.getByText("default: main")).toBeVisible()
+    await expect(
+      page.getByRole("combobox").filter({ hasText: "main" }),
+    ).toBeVisible()
   })
 
   test("Analyses tab shows analysis rows", async ({ page }) => {

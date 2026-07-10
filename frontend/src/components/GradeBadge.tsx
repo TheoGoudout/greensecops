@@ -22,21 +22,8 @@ const GRADE_STYLES: Record<string, string> = {
 const FALLBACK_STYLE = "bg-muted text-muted-foreground"
 
 export function GradeBadge({ grade, className }: GradeBadgeProps) {
-  if (!grade) {
-    return (
-      <span
-        className={cn(
-          "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
-          FALLBACK_STYLE,
-          className,
-        )}
-      >
-        —
-      </span>
-    )
-  }
-
-  const style = GRADE_STYLES[grade] ?? FALLBACK_STYLE
+  const display = grade ?? "-"
+  const style = GRADE_STYLES[display] ?? FALLBACK_STYLE
 
   return (
     <span
@@ -46,7 +33,7 @@ export function GradeBadge({ grade, className }: GradeBadgeProps) {
         className,
       )}
     >
-      {grade}
+      {display}
     </span>
   )
 }

@@ -207,6 +207,7 @@ def list_fixes(
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
     status: FixStatus | None = None,
+    branch: str | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
 ) -> list[FixPublic]:
@@ -221,14 +222,24 @@ def list_fixes(
             )
         )
         query = query.where(Fix.workflow_file_id.in_(allowed_wf_ids))  # type: ignore[attr-defined]
+    query = query.join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
     if repo_id:
-        query = query.join(
-            WorkflowFile,
-            Fix.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
-        ).where(WorkflowFile.repo_id == repo_id)
+        query = query.where(WorkflowFile.repo_id == repo_id)
     if status:
         query = query.where(Fix.status == status)
-    query = query.order_by(col(Fix.created_at).desc()).offset(skip).limit(limit)
+    if branch:
+        query = query.where(
+            col(Fix.id).in_(
+                select(Issue.fix_id)
+                .join(Analysis, Issue.analysis_id == Analysis.id)
+                .where(Analysis.branch == branch)  # type: ignore[arg-type]
+            )
+        )
+    query = (
+        query.order_by(WorkflowFile.path.asc(), col(Fix.created_at).desc())
+        .offset(skip)
+        .limit(limit)
+    )
     fixes = list(session.exec(query).all())
     return _fixes_to_public(session, fixes)
 
@@ -321,6 +332,8 @@ def trigger_fix_generation_for_repo(
     repo = session.get(Repository, repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     # Create a pending Fix per workflow file so the UI shows a DB-backed queued
     # state immediately; the worker flips these to generating/ready/failed.
@@ -377,6 +390,8 @@ def trigger_workflow_delivery(
         raise HTTPException(status_code=404, detail="Repository not found")
     if not current_user.is_superuser:
         authorize_repo(session, current_user, repo.id, detail="Repository not found")
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     pr_body = build_pr_body(
         issues=_issues_info_for_fixes([fix]),
@@ -416,7 +431,9 @@ def trigger_repo_delivery(
 
     When force=True, fixes in any status are included (not just ready).
     """
-    authorize_repo(session, current_user, repo_id)
+    repo = authorize_repo(session, current_user, repo_id)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     base_query = (
         select(Fix)

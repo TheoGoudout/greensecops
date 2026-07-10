@@ -45,7 +45,11 @@ test.describe("Repository Edge Cases", () => {
 
   test("external repo detail page loads without crash", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
-      route.fulfill({ json: MOCK_REPO_EXTERNAL })
+      if (route.request().url().includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else {
+        route.fulfill({ json: MOCK_REPO_EXTERNAL })
+      }
     })
     await page.route("**/api/v1/analyses/**", (route) => {
       route.fulfill({ json: [] })
@@ -81,7 +85,9 @@ test.describe("Repository Edge Cases", () => {
   test("repo with no analyses shows no grade", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO_NO_ANALYSES })
       } else {
         route.fulfill({ json: [MOCK_REPO_NO_ANALYSES] })
@@ -103,7 +109,9 @@ test.describe("Repository Edge Cases", () => {
   }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({ json: [MOCK_REPO] })
@@ -127,7 +135,9 @@ test.describe("Repository Edge Cases", () => {
   test("repo with pending analysis shows pending status", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/branches")) {
+        route.fulfill({ json: ["main"] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({ json: [MOCK_REPO] })

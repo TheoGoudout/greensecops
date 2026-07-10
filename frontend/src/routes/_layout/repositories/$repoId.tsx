@@ -5,16 +5,26 @@ import {
   Outlet,
   useRouterState,
 } from "@tanstack/react-router"
-import { ArrowLeft, GitBranch, Play, Puzzle } from "lucide-react"
+import { ArrowLeft, GitBranch, Play, Puzzle, WifiOff } from "lucide-react"
 import { toast } from "sonner"
 import { AnalysesService, ApiError, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId")({
   component: RepositoryLayout,
+  validateSearch: (search: Record<string, unknown>): { branch?: string } => ({
+    branch: typeof search.branch === "string" ? search.branch : undefined,
+  }),
   head: () => ({
     meta: [{ title: "Repository - GreenSecOps" }],
   }),
@@ -30,6 +40,8 @@ const navItems = [
 
 function RepositoryLayout() {
   const { repoId } = Route.useParams()
+  const { branch } = Route.useSearch()
+  const navigate = Route.useNavigate()
   const currentPath = useRouterState({
     select: (s) => s.location.pathname,
   })
@@ -39,10 +51,26 @@ function RepositoryLayout() {
     queryFn: () => RepositoriesService.getRepository({ repoId }),
   })
 
+  const { data: branches } = useQuery({
+    queryKey: ["branches", repoId],
+    queryFn: () => RepositoriesService.listRepositoryBranches({ repoId }),
+    enabled: !!repo,
+  })
+
   const currentGrade = repo?.grade ?? null
+  const isAccessible = repo?.is_accessible ?? true
+
+  const branchOptions = branches
+    ? repo?.default_branch && !branches.includes(repo.default_branch)
+      ? [repo.default_branch, ...branches]
+      : branches
+    : repo?.default_branch
+      ? [repo.default_branch]
+      : []
 
   const triggerMutation = useMutation({
-    mutationFn: () => AnalysesService.triggerAnalysis({ repoId }),
+    mutationFn: () =>
+      AnalysesService.triggerAnalysis({ repoId, branch: branch || undefined }),
     onSuccess: () => toast.success("Analysis queued"),
     onError: () => toast.error("Failed to trigger analysis"),
   })
@@ -93,10 +121,34 @@ function RepositoryLayout() {
               <GradeBadge grade={currentGrade} />
             </div>
             {repo && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                <GitBranch className="h-3 w-3" />
-                default: {repo.default_branch}
-              </span>
+              <div className="flex items-center gap-1 mt-0.5">
+                <GitBranch className="h-3 w-3 text-muted-foreground shrink-0" />
+                <Select
+                  value={branch ?? repo.default_branch}
+                  onValueChange={(val) =>
+                    navigate({
+                      search:
+                        val !== repo.default_branch ? { branch: val } : {},
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-6 text-xs border-none shadow-none px-1 gap-1 text-muted-foreground hover:text-foreground w-auto">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branchOptions.map((b) => (
+                      <SelectItem key={b} value={b} className="text-xs">
+                        {b}
+                        {b === repo.default_branch && (
+                          <span className="ml-1 text-muted-foreground">
+                            (default)
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           </div>
         </div>
@@ -107,6 +159,7 @@ function RepositoryLayout() {
             className="gap-2"
             onClick={() => integrateActionMutation.mutate()}
             disabled={
+              !isAccessible ||
               integrateActionMutation.isPending ||
               integrateActionMutation.isSuccess
             }
@@ -123,13 +176,23 @@ function RepositoryLayout() {
             size="sm"
             className="gap-2"
             onClick={() => triggerMutation.mutate()}
-            disabled={triggerMutation.isPending}
+            disabled={!isAccessible || triggerMutation.isPending}
           >
             <Play className="h-4 w-4" />
             Run analysis
           </Button>
         </div>
       </div>
+
+      {!repoLoading && !isAccessible && (
+        <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300">
+          <WifiOff className="h-4 w-4 shrink-0" />
+          <span>
+            GitHub App access lost — this repository is disabled. Actions are
+            unavailable until access is restored.
+          </span>
+        </div>
+      )}
 
       <nav className="flex gap-1 border-b overflow-x-auto scrollbar-none">
         {navItems.map((item) => {
@@ -140,6 +203,7 @@ function RepositoryLayout() {
               key={item.to}
               to={`/repositories/$repoId/${item.to}`}
               params={{ repoId }}
+              search={branch ? { branch } : {}}
               className={cn(
                 "px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px",
                 isActive

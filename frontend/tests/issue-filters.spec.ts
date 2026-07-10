@@ -91,7 +91,9 @@ test.describe("Issue Filters and Display", () => {
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("issue with pending fix shows generating button", async ({ page }) => {
+  test("issue with pending fix renders without per-issue fix status", async ({
+    page,
+  }) => {
     await page.route("**/api/v1/issues/**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_PENDING_FIX] })
     })
@@ -101,7 +103,8 @@ test.describe("Issue Filters and Display", () => {
     await expect(
       page.getByText("Workflow uses overly permissive token permissions."),
     ).toBeVisible()
-    await expect(page.getByText(/queued/i).first()).toBeVisible()
+    await expect(page.getByText(/queued/i)).toHaveCount(0)
+    await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
   test("issue with failed fix shows generate fix button", async ({ page }) => {
@@ -119,7 +122,7 @@ test.describe("Issue Filters and Display", () => {
     ).toBeVisible()
   })
 
-  test("issue with delivered fix shows delivered status badge", async ({
+  test("issue with delivered fix renders without per-issue fix status", async ({
     page,
   }) => {
     await page.route("**/api/v1/issues/**", (route) => {
@@ -131,7 +134,8 @@ test.describe("Issue Filters and Display", () => {
     await expect(
       page.getByText("Job 'deploy' has no timeout-minutes set."),
     ).toBeVisible()
-    await expect(page.getByText("delivered").first()).toBeVisible()
+    await expect(page.getByText("delivered")).toHaveCount(0)
+    await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
   test("mix of issue fix statuses all rendered correctly", async ({ page }) => {
@@ -148,8 +152,17 @@ test.describe("Issue Filters and Display", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
 
-    await expect(page.getByText(/queued/i).first()).toBeVisible()
-    await expect(page.getByText("Delivered").first()).toBeVisible()
+    await expect(
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
+    ).toBeVisible()
+    await expect(
+      page.getByText("Job 'lint' has no timeout-minutes set."),
+    ).toBeVisible()
+    await expect(
+      page.getByText("Job 'deploy' has no timeout-minutes set."),
+    ).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 

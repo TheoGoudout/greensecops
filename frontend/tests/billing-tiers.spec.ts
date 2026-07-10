@@ -65,7 +65,7 @@ test.describe("Billing Tiers", () => {
 
     await page.goto("/billing")
 
-    await expect(page.getByText(/12.*50|50.*12/)).toBeVisible()
+    await expect(page.getByText(/12.*50|50.*12/).first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
@@ -81,7 +81,7 @@ test.describe("Billing Tiers", () => {
 
     await page.goto("/billing")
 
-    await expect(page.getByText("Pro")).toBeVisible()
+    await expect(page.getByText("Pro").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
@@ -97,7 +97,7 @@ test.describe("Billing Tiers", () => {
 
     await page.goto("/billing")
 
-    await expect(page.getByText(/500/)).toBeVisible()
+    await expect(page.getByText(/500/).first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
@@ -129,7 +129,7 @@ test.describe("Billing Tiers", () => {
 
     await page.goto("/billing")
 
-    await expect(page.getByText(/50.*50|50 \/ 50/)).toBeVisible()
+    await expect(page.getByText(/50.*50|50 \/ 50/).first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 

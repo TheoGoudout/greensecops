@@ -1113,11 +1113,55 @@ def test_enqueue_installation_sync_calls_celery_task() -> None:
 
     from app.api.routes.webhooks import _enqueue_installation_sync
 
+    mock_redis = MagicMock()
+    mock_redis.set.return_value = True  # NX succeeds → first caller
     mock_task = MagicMock()
-    with patch(
-        "app.workers.tasks.installation_sync.sync_installation_repositories", mock_task
+    with (
+        patch("redis.Redis.from_url", return_value=mock_redis),
+        patch(
+            "app.workers.tasks.installation_sync.sync_installation_repositories",
+            mock_task,
+        ),
     ):
         _enqueue_installation_sync(12345, "org-id-str")
+    mock_task.delay.assert_called_once()
+
+
+def test_enqueue_installation_sync_deduplicates() -> None:
+    """Second call with same installation_id within TTL window must be silently skipped."""
+    from unittest.mock import MagicMock
+
+    from app.api.routes.webhooks import _enqueue_installation_sync
+
+    mock_redis = MagicMock()
+    mock_redis.set.return_value = None  # NX fails → already queued
+    mock_task = MagicMock()
+    with (
+        patch("redis.Redis.from_url", return_value=mock_redis),
+        patch(
+            "app.workers.tasks.installation_sync.sync_installation_repositories",
+            mock_task,
+        ),
+    ):
+        _enqueue_installation_sync(12345, "org-id-str")
+    mock_task.delay.assert_not_called()
+
+
+def test_enqueue_installation_sync_fails_open_on_redis_error() -> None:
+    """Redis error must not prevent the sync task from being enqueued."""
+    from unittest.mock import MagicMock
+
+    from app.api.routes.webhooks import _enqueue_installation_sync
+
+    mock_task = MagicMock()
+    with (
+        patch("redis.Redis.from_url", side_effect=RuntimeError("redis down")),
+        patch(
+            "app.workers.tasks.installation_sync.sync_installation_repositories",
+            mock_task,
+        ),
+    ):
+        _enqueue_installation_sync(99999, "org-id-str")
     mock_task.delay.assert_called_once()
 
 

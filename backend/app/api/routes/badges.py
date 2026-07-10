@@ -21,7 +21,12 @@ _CACHE_HEADERS = {
 def _avg_grade_for_branch(
     session: Session, repo_id: uuid.UUID, branch: str
 ) -> str | None:
-    """Average grade across latest completed analysis per workflow file on a branch."""
+    """Average grade across latest completed analysis per workflow file on a branch.
+
+    Returns a grade string (e.g. "A", "B", "N/A") or None when no analyses exist yet.
+    "N/A" means the repo has no workflow files on this branch.
+    None means analyses are pending or have not run yet.
+    """
     analyses = session.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo_id)
@@ -32,7 +37,18 @@ def _avg_grade_for_branch(
     ).all()
 
     avg, _ = average_latest_scores(list(analyses))
-    return score_to_grade(avg) if avg is not None else None
+    if avg is not None:
+        return score_to_grade(avg)
+
+    has_no_workflows = session.exec(
+        select(Analysis)
+        .where(Analysis.repo_id == repo_id)
+        .where(Analysis.branch == branch)
+        .where(Analysis.status == AnalysisStatus.no_workflows)
+        .limit(1)
+    ).first()
+
+    return "N/A" if has_no_workflows else None
 
 
 @router.get("/{owner}/{repo}/{branch}.svg", response_class=Response)
@@ -55,7 +71,7 @@ def get_badge(
         )
 
     grade = _avg_grade_for_branch(session, db_repo.id, branch)
-    svg = render_badge(grade) if grade else render_unknown_badge()
+    svg = render_unknown_badge() if grade is None else render_badge(grade)
 
     return Response(content=svg, headers=_CACHE_HEADERS)
 
@@ -84,7 +100,7 @@ def get_badge_json(
 
     grade = _avg_grade_for_branch(session, db_repo.id, branch)
 
-    if not grade:
+    if grade is None:
         return {
             "schemaVersion": 1,
             "label": settings.PROJECT_NAME,

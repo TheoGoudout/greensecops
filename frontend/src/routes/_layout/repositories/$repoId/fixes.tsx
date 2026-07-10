@@ -3,14 +3,16 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitPullRequest, RefreshCw } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { FixesService } from "@/client"
+import { FixesService, RepositoriesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
+import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
 import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
@@ -22,12 +24,24 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
 
 function FixesPage() {
   const { repoId } = Route.useParams()
+  const { branch } = RepoRoute.useSearch()
   const queryClient = useQueryClient()
   const [fixesPage, setFixesPage] = useState(0)
 
+  const { data: repo } = useQuery({
+    queryKey: ["repository", repoId],
+    queryFn: () => RepositoriesService.getRepository({ repoId }),
+  })
+  const isAccessible = repo?.is_accessible ?? true
+
   const { data: fixes, isLoading: fixesLoading } = useQuery({
-    queryKey: ["fixes", "repo", repoId],
-    queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
+    queryKey: ["fixes", "repo", repoId, branch],
+    queryFn: () =>
+      FixesService.listFixes({
+        repoId,
+        branch: branch || undefined,
+        limit: 100,
+      }),
   })
 
   const deliverWorkflowMutation = useMutation({
@@ -66,10 +80,17 @@ function FixesPage() {
     onError: () => toast.error("Failed to regenerate fixes"),
   })
 
-  const pagedFixes = useMemo(
+  const sortedFixes = useMemo(
     () =>
-      (fixes ?? []).slice(fixesPage * PAGE_SIZE, (fixesPage + 1) * PAGE_SIZE),
-    [fixes, fixesPage],
+      [...(fixes ?? [])].sort((a, b) =>
+        (a.workflow_file_path ?? "").localeCompare(b.workflow_file_path ?? ""),
+      ),
+    [fixes],
+  )
+
+  const pagedFixes = useMemo(
+    () => sortedFixes.slice(fixesPage * PAGE_SIZE, (fixesPage + 1) * PAGE_SIZE),
+    [sortedFixes, fixesPage],
   )
 
   return (
@@ -81,7 +102,7 @@ function FixesPage() {
             variant="outline"
             className="gap-2"
             onClick={() => deliverRepoMutation.mutate()}
-            disabled={deliverRepoMutation.isPending}
+            disabled={!isAccessible || deliverRepoMutation.isPending}
           >
             <GitPullRequest className="h-4 w-4" />
             {deliverRepoMutation.isPending
@@ -145,7 +166,7 @@ function FixesPage() {
                             onClick={() =>
                               regenerateMutation.mutate(fix.pr_id!)
                             }
-                            disabled={isRegenerating}
+                            disabled={!isAccessible || isRegenerating}
                           >
                             <RefreshCw className="h-3 w-3" />
                             {isRegenerating ? "Queuing…" : "Regenerate fix"}
@@ -159,7 +180,7 @@ function FixesPage() {
                             onClick={() =>
                               deliverWorkflowMutation.mutate(fix.id)
                             }
-                            disabled={isWfDelivering}
+                            disabled={!isAccessible || isWfDelivering}
                           >
                             <GitPullRequest className="h-3 w-3" />
                             {isWfDelivering ? "Queuing…" : "Create PR"}
@@ -175,43 +196,53 @@ function FixesPage() {
                           No issue details available.
                         </p>
                       ) : (
-                        issues.map((issue) => (
-                          <div
-                            key={issue.id}
-                            className="flex items-start gap-3 px-6 py-3"
-                          >
-                            {issue.category && (
-                              <CategoryIcon
-                                category={issue.category}
-                                className="mt-0.5 shrink-0 text-base"
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {issue.severity && (
-                                  <SeverityChip severity={issue.severity} />
-                                )}
-                                {issue.rule_slug && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                    {issue.rule_slug}
-                                  </span>
-                                )}
-                                <span className="text-sm break-words min-w-0">
-                                  {issue.message}
-                                </span>
-                              </div>
-                              {issue.line_start != null && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Line {issue.line_start}
-                                  {issue.line_end &&
-                                  issue.line_end !== issue.line_start
-                                    ? `–${issue.line_end}`
-                                    : ""}
-                                </p>
+                        issues
+                          .slice()
+                          .sort(
+                            (a, b) =>
+                              (a.severity ? severityRank(a.severity) : 99) -
+                                (b.severity ? severityRank(b.severity) : 99) ||
+                              (a.rule_slug ?? "").localeCompare(
+                                b.rule_slug ?? "",
+                              ),
+                          )
+                          .map((issue) => (
+                            <div
+                              key={issue.id}
+                              className="flex items-start gap-3 px-6 py-3"
+                            >
+                              {issue.category && (
+                                <CategoryIcon
+                                  category={issue.category}
+                                  className="mt-0.5 shrink-0 text-base"
+                                />
                               )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {issue.severity && (
+                                    <SeverityChip severity={issue.severity} />
+                                  )}
+                                  {issue.rule_slug && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                      {issue.rule_slug}
+                                    </span>
+                                  )}
+                                  <span className="text-sm break-words min-w-0">
+                                    {issue.message}
+                                  </span>
+                                </div>
+                                {issue.line_start != null && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Line {issue.line_start}
+                                    {issue.line_end &&
+                                    issue.line_end !== issue.line_start
+                                      ? `–${issue.line_end}`
+                                      : ""}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          ))
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-3 px-6 py-3 border-t">

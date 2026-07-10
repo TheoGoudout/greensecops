@@ -5,24 +5,13 @@ import { AnalysesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { analysisStatusColor } from "@/lib/status-colors"
+import { analysisStatusColor, analysisStatusLabel } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
-
-type AnalysesSearch = { branch?: string }
+import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/analyses")({
   component: AnalysesPage,
-  validateSearch: (search: Record<string, unknown>): AnalysesSearch => ({
-    branch: typeof search.branch === "string" ? search.branch : undefined,
-  }),
   head: () => ({
     meta: [{ title: "Analyses - GreenSecOps" }],
   }),
@@ -30,8 +19,7 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/analyses")({
 
 function AnalysesPage() {
   const { repoId } = Route.useParams()
-  const { branch } = Route.useSearch()
-  const navigate = Route.useNavigate()
+  const { branch } = RepoRoute.useSearch()
   const [page, setPage] = useState(0)
 
   const { data: analyses, isLoading } = useQuery({
@@ -44,10 +32,6 @@ function AnalysesPage() {
       }),
   })
 
-  const branches = analyses
-    ? [...new Set(analyses.map((a) => a.branch).filter(Boolean) as string[])]
-    : []
-
   const paged = useMemo(
     () => (analyses ?? []).slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
     [analyses, page],
@@ -55,38 +39,6 @@ function AnalysesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <p className="text-sm text-muted-foreground">Branch:</p>
-        <Select
-          value={branch ?? ""}
-          onValueChange={(val) =>
-            navigate({ search: val ? { branch: val } : {} })
-          }
-        >
-          <SelectTrigger className="w-48 h-8 text-xs">
-            <SelectValue placeholder="All branches" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All branches</SelectItem>
-            {branches.map((b) => (
-              <SelectItem key={b} value={b}>
-                {b}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {branch && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => navigate({ search: {} })}
-          >
-            Clear
-          </Button>
-        )}
-      </div>
-
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -131,9 +83,9 @@ function AnalysesPage() {
                       </span>
                       <div className="flex justify-center">
                         <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${analysisStatusColor(a.status)}`}
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${analysisStatusColor(a.status)}`}
                         >
-                          {a.status}
+                          {analysisStatusLabel(a.status)}
                         </span>
                       </div>
                       <div className="flex justify-center">
