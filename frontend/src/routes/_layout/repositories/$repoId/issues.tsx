@@ -1,9 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Loader2, Wand2, Zap } from "lucide-react"
+import { Loader2, RefreshCw, Wand2, Zap } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { FixesService, IssuesService, RepositoriesService } from "@/client"
+import {
+  FixesService,
+  type FixPublic,
+  type FixStatus,
+  IssuesService,
+  RepositoriesService,
+} from "@/client"
 import { IssueRow } from "@/components/IssueRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +30,14 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/issues")({
     meta: [{ title: "Issues - GreenSecOps" }],
   }),
 })
+
+const IN_FLIGHT_STATUSES: FixStatus[] = ["pending", "generating", "delivering"]
+
+// Mirrors the backend eligibility rules: a fix a worker is processing cannot
+// be regenerated out from under it, and merged code changes are already
+// applied.
+const isRegenerable = (fix: FixPublic) =>
+  !IN_FLIGHT_STATUSES.includes(fix.status) && fix.pr_state !== "merged"
 
 function IssuesPage() {
   const { repoId } = Route.useParams()
@@ -54,6 +68,19 @@ function IssuesPage() {
     if (!issues) return []
     return issues.filter((i) => !deselectedIds.has(i.id)).map((i) => i.id)
   }, [issues, deselectedIds])
+
+  const { data: fixes } = useQuery({
+    queryKey: ["fixes", "repo", repoId],
+    queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
+  })
+
+  const fixByWfPath = useMemo(() => {
+    const map = new Map<string, FixPublic>()
+    for (const fix of fixes ?? []) {
+      if (fix.workflow_file_path) map.set(fix.workflow_file_path, fix)
+    }
+    return map
+  }, [fixes])
 
   const wfFixMutation = useMutation({
     mutationFn: (vars: { wfPath: string; issueIds: string[] }) =>
@@ -90,6 +117,33 @@ function IssuesPage() {
     },
     onError: (error) =>
       toast.error("Failed to queue fixes", {
+        description: apiErrorDetail(error),
+      }),
+  })
+
+  const regenerateWorkflowMutation = useMutation({
+    mutationFn: (fixId: string) =>
+      FixesService.regenerateFixesForWorkflow({ fixId }),
+    onSuccess: () => {
+      toast.success("Fix queued for regeneration")
+      queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
+      queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+    },
+    onError: (error) =>
+      toast.error("Failed to regenerate fix", {
+        description: apiErrorDetail(error),
+      }),
+  })
+
+  const regenerateRepoMutation = useMutation({
+    mutationFn: () => FixesService.regenerateFixesForRepo({ repoId }),
+    onSuccess: () => {
+      toast.success("All fixes queued for regeneration")
+      queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
+      queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+    },
+    onError: (error) =>
+      toast.error("Failed to regenerate fixes", {
         description: apiErrorDetail(error),
       }),
   })
@@ -177,6 +231,20 @@ function IssuesPage() {
               ? "Queuing…"
               : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
           </Button>
+          {fixes?.some(isRegenerable) && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => regenerateRepoMutation.mutate()}
+              disabled={!isAccessible || regenerateRepoMutation.isPending}
+            >
+              <RefreshCw className="h-4 w-4" />
+              {regenerateRepoMutation.isPending
+                ? "Queuing…"
+                : "Regenerate all fixes"}
+            </Button>
+          )}
         </div>
       )}
 
@@ -199,6 +267,12 @@ function IssuesPage() {
             const allGroupSelected = wfIssues.every(
               (i) => !deselectedIds.has(i.id),
             )
+            const wfFix = fixByWfPath.get(wfPath)
+            const wfFixInFlight =
+              !!wfFix && IN_FLIGHT_STATUSES.includes(wfFix.status)
+            const isRegenerating =
+              regenerateWorkflowMutation.isPending &&
+              regenerateWorkflowMutation.variables === wfFix?.id
             return (
               <Card key={wfPath || "__unknown__"}>
                 <CardHeader className="pb-2 pt-4">
@@ -229,35 +303,62 @@ function IssuesPage() {
                         ({wfIssues.length})
                       </span>
                     </CardTitle>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1.5 shrink-0"
-                      onClick={() =>
-                        wfFixMutation.mutate({
-                          wfPath,
-                          issueIds: (allIssuesByWorkflow.get(wfPath) ?? []).map(
-                            (i) => i.id,
-                          ),
-                        })
-                      }
-                      disabled={
-                        !isAccessible ||
+                    {wfFix && isRegenerable(wfFix) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5 shrink-0"
+                        onClick={() =>
+                          regenerateWorkflowMutation.mutate(wfFix.id)
+                        }
+                        disabled={
+                          !isAccessible ||
+                          isRegenerating ||
+                          regenerateRepoMutation.isPending
+                        }
+                      >
+                        {isRegenerating ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        {isRegenerating ? "Queuing…" : "Regenerate fix"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5 shrink-0"
+                        onClick={() =>
+                          wfFixMutation.mutate({
+                            wfPath,
+                            issueIds: (
+                              allIssuesByWorkflow.get(wfPath) ?? []
+                            ).map((i) => i.id),
+                          })
+                        }
+                        disabled={
+                          !isAccessible ||
+                          wfFixInFlight ||
+                          (wfFixMutation.isPending &&
+                            wfFixMutation.variables?.wfPath === wfPath)
+                        }
+                      >
+                        {wfFixInFlight ||
                         (wfFixMutation.isPending &&
-                          wfFixMutation.variables?.wfPath === wfPath)
-                      }
-                    >
-                      {wfFixMutation.isPending &&
-                      wfFixMutation.variables?.wfPath === wfPath ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Wand2 className="h-3 w-3" />
-                      )}
-                      {wfFixMutation.isPending &&
-                      wfFixMutation.variables?.wfPath === wfPath
-                        ? "Queuing…"
-                        : "Generate fix"}
-                    </Button>
+                          wfFixMutation.variables?.wfPath === wfPath) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3 w-3" />
+                        )}
+                        {wfFixInFlight
+                          ? "Generating…"
+                          : wfFixMutation.isPending &&
+                              wfFixMutation.variables?.wfPath === wfPath
+                            ? "Queuing…"
+                            : "Generate fix"}
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">

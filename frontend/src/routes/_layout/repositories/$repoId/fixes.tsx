@@ -1,14 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { GitPullRequest, RefreshCw } from "lucide-react"
+import { GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import {
-  FixesService,
-  type FixPublic,
-  type FixStatus,
-  RepositoriesService,
-} from "@/client"
+import { FixesService, type FixPublic, RepositoriesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
@@ -27,13 +22,25 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
   }),
 })
 
-const IN_FLIGHT_STATUSES: FixStatus[] = ["pending", "generating", "delivering"]
-
-// Mirrors the backend eligibility rules: a fix a worker is processing cannot
-// be regenerated out from under it, and merged code changes are already
-// applied.
-const isRegenerable = (fix: FixPublic) =>
-  !IN_FLIGHT_STATUSES.includes(fix.status) && fix.pr_state !== "merged"
+// What the delivery button on a fix card should do, if anything. Reopening
+// after the user closed the PR without merging needs force=true to bypass the
+// closed-PR delivery guard.
+function deliverAction(
+  fix: FixPublic,
+): { label: string; force: boolean } | null {
+  if (fix.status === "ready") {
+    if (fix.pr_state === "closed") return { label: "Reopen PR", force: true }
+    if (fix.pr_state === "open") return { label: "Update PR", force: false }
+    return { label: "Create PR", force: false }
+  }
+  if (
+    (fix.status === "delivered" || fix.status === "rejected") &&
+    fix.pr_state === "closed"
+  ) {
+    return { label: "Reopen PR", force: true }
+  }
+  return null
+}
 
 function FixesPage() {
   const { repoId } = Route.useParams()
@@ -58,9 +65,10 @@ function FixesPage() {
   })
 
   const deliverWorkflowMutation = useMutation({
-    mutationFn: (fixId: string) =>
+    mutationFn: (vars: { fixId: string; force: boolean }) =>
       FixesService.triggerWorkflowDelivery({
-        requestBody: { fix_id: fixId },
+        force: vars.force,
+        requestBody: { fix_id: vars.fixId },
       }),
     onSuccess: () => {
       toast.success("Workflow PR queued")
@@ -84,31 +92,6 @@ function FixesPage() {
       }),
   })
 
-  const regenerateWorkflowMutation = useMutation({
-    mutationFn: (fixId: string) =>
-      FixesService.regenerateFixesForWorkflow({ fixId }),
-    onSuccess: () => {
-      toast.success("Fix queued for regeneration")
-      queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
-    },
-    onError: (error) =>
-      toast.error("Failed to regenerate fix", {
-        description: apiErrorDetail(error),
-      }),
-  })
-
-  const regenerateRepoMutation = useMutation({
-    mutationFn: () => FixesService.regenerateFixesForRepo({ repoId }),
-    onSuccess: () => {
-      toast.success("All fixes queued for regeneration")
-      queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
-    },
-    onError: (error) =>
-      toast.error("Failed to regenerate fixes", {
-        description: apiErrorDetail(error),
-      }),
-  })
-
   const sortedFixes = useMemo(
     () =>
       [...(fixes ?? [])].sort((a, b) =>
@@ -125,36 +108,20 @@ function FixesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          {fixes?.some((f) => f.status === "ready") && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-2"
-              onClick={() => deliverRepoMutation.mutate()}
-              disabled={!isAccessible || deliverRepoMutation.isPending}
-            >
-              <GitPullRequest className="h-4 w-4" />
-              {deliverRepoMutation.isPending
-                ? "Queuing…"
-                : "Create PR for all workflows"}
-            </Button>
-          )}
-          {fixes?.some(isRegenerable) && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-2"
-              onClick={() => regenerateRepoMutation.mutate()}
-              disabled={!isAccessible || regenerateRepoMutation.isPending}
-            >
-              <RefreshCw className="h-4 w-4" />
-              {regenerateRepoMutation.isPending
-                ? "Queuing…"
-                : "Regenerate all fixes"}
-            </Button>
-          )}
-        </div>
+        {fixes?.some((f) => f.status === "ready") && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            onClick={() => deliverRepoMutation.mutate()}
+            disabled={!isAccessible || deliverRepoMutation.isPending}
+          >
+            <GitPullRequest className="h-4 w-4" />
+            {deliverRepoMutation.isPending
+              ? "Queuing…"
+              : "Create PR for all workflows"}
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -176,10 +143,8 @@ function FixesPage() {
               const issues = fix.issues ?? []
               const isWfDelivering =
                 deliverWorkflowMutation.isPending &&
-                deliverWorkflowMutation.variables === fix.id
-              const isRegenerating =
-                regenerateWorkflowMutation.isPending &&
-                regenerateWorkflowMutation.variables === fix.id
+                deliverWorkflowMutation.variables?.fixId === fix.id
+              const action = deliverAction(fix)
               return (
                 <Card key={fix.id}>
                   <CardHeader className="pb-2 pt-4">
@@ -203,36 +168,21 @@ function FixesPage() {
                         </span>
                       </CardTitle>
                       <div className="flex items-center gap-2 shrink-0">
-                        {isRegenerable(fix) && (
+                        {action && (
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs gap-1.5"
                             onClick={() =>
-                              regenerateWorkflowMutation.mutate(fix.id)
-                            }
-                            disabled={
-                              !isAccessible ||
-                              isRegenerating ||
-                              regenerateRepoMutation.isPending
-                            }
-                          >
-                            <RefreshCw className="h-3 w-3" />
-                            {isRegenerating ? "Queuing…" : "Regenerate fix"}
-                          </Button>
-                        )}
-                        {fix.status === "ready" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs gap-1.5"
-                            onClick={() =>
-                              deliverWorkflowMutation.mutate(fix.id)
+                              deliverWorkflowMutation.mutate({
+                                fixId: fix.id,
+                                force: action.force,
+                              })
                             }
                             disabled={!isAccessible || isWfDelivering}
                           >
                             <GitPullRequest className="h-3 w-3" />
-                            {isWfDelivering ? "Queuing…" : "Create PR"}
+                            {isWfDelivering ? "Queuing…" : action.label}
                           </Button>
                         )}
                       </div>
