@@ -18,9 +18,9 @@ The production Compose file (`compose.yml`) is written for [Coolify](https://coo
 * `SERVICE_PASSWORD_POSTGRES`: Generated PostgreSQL password, passed as `POSTGRES_PASSWORD`.
 * `SERVICE_PASSWORD_64_SECRETKEY`: Generated 64-character secret, passed to the backend as `SECRET_KEY` (signs JWTs).
 * `SERVICE_PASSWORD_FIRSTSUPERUSER`: Generated password for the first superuser account, passed as `FIRST_SUPERUSER_PASSWORD`.
-* `SERVICE_FQDN_FRONTEND`: Public hostname of the frontend dashboard. Used as the default for `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and as the landing page's `APP_URL`.
-* `SERVICE_FQDN_BACKEND`: Public hostname of the backend API. Used as the default for `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
-* `SERVICE_FQDN_DOCS`: Public hostname of the docs site. Used as the default for `DOCS_URL` and the docs image's `DOCS_BASE_URL` build arg.
+* `SERVICE_URL_FRONTEND`: Public URL (scheme included) of the frontend dashboard. Used as the default for `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and as the landing page's `APP_URL`.
+* `SERVICE_URL_BACKEND`: Public URL of the backend API. Used as the default for `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
+* `SERVICE_URL_DOCS`: Public URL of the docs site. Used as the default for `DOCS_URL` and the docs image's `DOCS_BASE_URL` build arg.
 
 **Deploying without Coolify:** export these seven variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
 
@@ -57,12 +57,12 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **Hosts and URLs**
 
-* `FRONTEND_HOST`: Public URL of the frontend dashboard. Default: `https://${SERVICE_FQDN_FRONTEND}`.
-* `BACKEND_HOST`: Public URL of the backend API. Default: `https://${SERVICE_FQDN_BACKEND}`.
+* `FRONTEND_HOST`: Public URL of the frontend dashboard. Default: `${SERVICE_URL_FRONTEND}`.
+* `BACKEND_HOST`: Public URL of the backend API. Default: `${SERVICE_URL_BACKEND}`.
 * `GREENSECOPS_PUBLIC_URL`: Public backend URL embedded in generated customer workflow files. Empty by default, which falls back to `BACKEND_HOST`.
 * `APP_URL`: Marketing/landing site URL used in PR messages. Default: `https://greensecops.io`.
-* `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Default: `https://${SERVICE_FQDN_DOCS}`.
-* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Default: `https://${SERVICE_FQDN_FRONTEND}`.
+* `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Default: `${SERVICE_URL_DOCS}`.
+* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Default: `${SERVICE_URL_FRONTEND}`.
 
 **Branding**
 
@@ -122,7 +122,7 @@ docker compose -f compose.yml up -d
 
 For production you wouldn't want to have the overrides in `compose.override.yml`, that's why we explicitly specify `compose.yml` as the file to use.
 
-Note that `compose.yml` does not publish any ports — in a Coolify deployment the platform's proxy routes the `SERVICE_FQDN_*` hostnames to the right containers and terminates HTTPS. On a plain Docker host you need to put your own reverse proxy in front of the `frontend`, `backend`, `landing`, and `docs` services.
+Note that `compose.yml` does not publish any ports — in a Coolify deployment the platform's proxy routes the `SERVICE_URL_*` hostnames to the right containers and terminates HTTPS. On a plain Docker host you need to put your own reverse proxy in front of the `frontend`, `backend`, `landing`, and `docs` services.
 
 ## URLs
 

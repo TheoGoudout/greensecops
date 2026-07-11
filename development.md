@@ -89,7 +89,7 @@ fastapi dev app/main.py
 
 When you start the Docker Compose stack locally, `compose.override.yml` publishes each service on a different `localhost` port (see the URL list above). Adminer, Flower, Mailcatcher, and the database are bound to `127.0.0.1` only and exist solely for development.
 
-When deployed to production, `compose.yml` publishes no ports at all: each public-facing service (frontend, backend, landing, docs) gets its own hostname, and the deployment platform's reverse proxy routes traffic and terminates HTTPS. See the guide about [deployment](deployment.md) for how the hostnames are configured through the `SERVICE_FQDN_*` variables.
+When deployed to production, `compose.yml` publishes no ports at all: each public-facing service (frontend, backend, landing, docs) gets its own hostname, and the deployment platform's reverse proxy routes traffic and terminates HTTPS. See the guide about [deployment](deployment.md) for how the hostnames are configured through the `SERVICE_URL_*` variables.
 
 ## Docker Compose files and env vars
 

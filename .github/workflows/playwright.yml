@@ -54,8 +54,8 @@ jobs:
       SERVICE_PASSWORD_POSTGRES: testpassword
       SERVICE_PASSWORD_64_SECRETKEY: changethischangethischangethischangethischangethischangethischanget
       SERVICE_PASSWORD_FIRSTSUPERUSER: testpassword
-      SERVICE_FQDN_BACKEND: localhost:8000
-      SERVICE_FQDN_FRONTEND: localhost:5173
+      SERVICE_URL_BACKEND: http://localhost:8000
+      SERVICE_URL_FRONTEND: http://localhost:5173
       # Plain vars required by compose.override.yml (override takes precedence
       # over compose.yml Coolify vars, so these must be set explicitly in CI).
       POSTGRES_USER: postgres
