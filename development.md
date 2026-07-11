@@ -85,29 +85,11 @@ cd backend
 fastapi dev app/main.py
 ```
 
-## Docker Compose with Subdomain Routing
+## Local Ports vs Production Hostnames
 
-When you start the Docker Compose stack, it uses `localhost` by default, with different ports for each service (backend, frontend, adminer, etc).
+When you start the Docker Compose stack locally, `compose.override.yml` publishes each service on a different `localhost` port (see the URL list above). Adminer, Flower, Mailcatcher, and the database are bound to `127.0.0.1` only and exist solely for development.
 
-When deployed to production or staging, each service runs on its own subdomain, like `api.example.com` for the backend and `dashboard.example.com` for the frontend.
-
-In the guide about [deployment](deployment.md) you can read about Traefik, the configured proxy. That's the component in charge of transmitting traffic to each service based on the subdomain.
-
-If you want to test subdomain routing locally, edit the `.env` file and set `DOMAIN` to any wildcard-resolvable domain pointing to `127.0.0.1`. For example, `localhost.tiangolo.com` is a public domain pre-configured to resolve `*.localhost.tiangolo.com` to `127.0.0.1`:
-
-```dotenv
-DOMAIN=localhost.tiangolo.com
-```
-
-Traefik will then route `api.localhost.tiangolo.com` to the backend and `dashboard.localhost.tiangolo.com` to the frontend.
-
-After updating, restart the stack:
-
-```bash
-docker compose watch
-```
-
-When deploying to production, the main Traefik is configured outside the Docker Compose files. For local development, `compose.override.yml` includes a Traefik instance for testing subdomain routing.
+When deployed to production, `compose.yml` publishes no ports at all: each public-facing service (frontend, backend, landing, docs) gets its own hostname, and the deployment platform's reverse proxy routes traffic and terminates HTTPS. See the guide about [deployment](deployment.md) for how the hostnames are configured through the `SERVICE_FQDN_*` variables.
 
 ## Docker Compose files and env vars
 
@@ -184,11 +166,7 @@ biome check..............................................................Passed
 
 ## URLs
 
-The production or staging URLs would use these same paths, but with your own domain.
-
-### Development URLs
-
-Development URLs, for local development.
+Development URLs, for local development. In production each public-facing service gets its own hostname instead (see [deployment.md](deployment.md)).
 
 Frontend (dashboard): <http://localhost:5173>
 
@@ -204,26 +182,8 @@ Automatic Alternative Docs (ReDoc): <http://localhost:8000/redoc>
 
 Adminer: <http://localhost:8080>
 
-Traefik UI: <http://localhost:8090>
-
 MailCatcher: <http://localhost:1080>
 
 Flower (Celery): <http://localhost:5555>
 
 OPA: <http://localhost:8181>
-
-### Development URLs with `localhost.tiangolo.com` Configured
-
-Frontend: <http://dashboard.localhost.tiangolo.com>
-
-Backend: <http://api.localhost.tiangolo.com>
-
-Automatic Interactive Docs (Swagger UI): <http://api.localhost.tiangolo.com/docs>
-
-Automatic Alternative Docs (ReDoc): <http://api.localhost.tiangolo.com/redoc>
-
-Adminer: <http://localhost.tiangolo.com:8080>
-
-Traefik UI: <http://localhost.tiangolo.com:8090>
-
-MailCatcher: <http://localhost.tiangolo.com:1080>

@@ -42,6 +42,10 @@ services:
         condition: service_completed_successfully
     environment: &backend-required-env
       - FRONTEND_HOST=${FRONTEND_HOST:-https://${SERVICE_FQDN_FRONTEND}}
+      - BACKEND_HOST=${BACKEND_HOST:-https://${SERVICE_FQDN_BACKEND}}
+      - GREENSECOPS_PUBLIC_URL=${GREENSECOPS_PUBLIC_URL}
+      - APP_URL=${APP_URL}
+      - GITHUB_ACTION_REF=${GITHUB_ACTION_REF:-greensecops/greensecops-action@v1}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
       - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-https://${SERVICE_FQDN_FRONTEND}}
@@ -51,7 +55,11 @@ services:
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_TLS=${SMTP_TLS:-True}
+      - SMTP_SSL=${SMTP_SSL:-False}
+      - SMTP_PORT=${SMTP_PORT:-587}
       - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@example.com}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME}
       - POSTGRES_SERVER=db
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_DB=${POSTGRES_DB:-greensecops}
@@ -75,6 +83,8 @@ services:
       - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - STRIPE_PRICE_STARTER=${STRIPE_PRICE_STARTER}
       - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
       - STRIPE_PRICE_ULTIMATE=${STRIPE_PRICE_ULTIMATE}
@@ -198,7 +208,6 @@ services:
         - VITE_API_URL=https://${SERVICE_FQDN_BACKEND}
         - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
         - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
-        - NODE_ENV=production
 
   landing:
     image: greensecops/landing:${TAG:-latest}

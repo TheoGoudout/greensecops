@@ -113,8 +113,6 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
-    # Dev only: public tunnel base URL (e.g. ngrok) for webhook delivery to localhost
-    GITHUB_WEBHOOK_URL: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -145,7 +143,7 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ULTIMATE: str | None = None
 
     # OPA
-    OPA_URL: str = "http://opa:8181"
+    OPA_URL: str = "http://localhost:8181"
 
     # Docs
     DOCS_URL: str = "http://localhost:3002"

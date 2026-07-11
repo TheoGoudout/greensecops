@@ -2,395 +2,140 @@
 
 You can deploy the project using Docker Compose to a remote server.
 
-This project expects you to have a Traefik proxy handling communication to the outside world and HTTPS certificates.
-
-You can use CI/CD (continuous integration and continuous deployment) systems to deploy automatically, there are already configurations to do it with GitHub Actions.
-
-But you have to configure a couple things first. 🤓
+The production Compose file (`compose.yml`) is written for [Coolify](https://coolify.io/), a self-hostable deployment platform that builds the stack, injects secrets, and handles HTTPS and routing for the public-facing services. You can also run `compose.yml` by hand on any Docker host, as long as you provide the same variables yourself (see below).
 
 ## Preparation
 
-* Have a remote server ready and available.
-* Configure the DNS records of your domain to point to the IP of the server you just created.
-* Configure a wildcard subdomain for your domain, so that you can have multiple subdomains for different services, e.g. `*.greensecops.example.com`. This will be useful for accessing different components, like `dashboard.greensecops.example.com`, `api.greensecops.example.com`, `traefik.greensecops.example.com`, `adminer.greensecops.example.com`, etc. And also for `staging`, like `dashboard.staging.greensecops.example.com`, `adminer.staging.greensecops.example.com`, etc.
-* Install and configure [Docker](https://docs.docker.com/engine/install/) on the remote server (Docker Engine, not Docker Desktop).
+* Have a remote server ready and available, with [Docker Engine](https://docs.docker.com/engine/install/) installed (and Coolify, if you use it).
+* Configure the DNS records of your domain to point to the IP of the server.
+* Plan a hostname for each public-facing service, e.g. `app.greensecops.example.com` (frontend dashboard), `api.greensecops.example.com` (backend), `docs.greensecops.example.com` (Sphinx docs), and `greensecops.example.com` (landing page).
 
-## Public Traefik
+## Coolify Magic Variables
 
-We need a Traefik proxy to handle incoming connections and HTTPS certificates.
+`compose.yml` relies on [Coolify magic variables](https://coolify.io/docs/knowledge-base/docker/compose#coolify-magic-environment-variables): variables with a `SERVICE_` prefix that Coolify auto-generates at deploy time. The stack uses:
 
-You need to do these next steps only once.
+* `SERVICE_USER_POSTGRES`: Generated PostgreSQL user, passed to both the `db` and backend services as `POSTGRES_USER`.
+* `SERVICE_PASSWORD_POSTGRES`: Generated PostgreSQL password, passed as `POSTGRES_PASSWORD`.
+* `SERVICE_PASSWORD_64_SECRETKEY`: Generated 64-character secret, passed to the backend as `SECRET_KEY` (signs JWTs).
+* `SERVICE_PASSWORD_FIRSTSUPERUSER`: Generated password for the first superuser account, passed as `FIRST_SUPERUSER_PASSWORD`.
+* `SERVICE_FQDN_FRONTEND`: Public hostname of the frontend dashboard. Used as the default for `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and as the landing page's `APP_URL`.
+* `SERVICE_FQDN_BACKEND`: Public hostname of the backend API. Used as the default for `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
+* `SERVICE_FQDN_DOCS`: Public hostname of the docs site. Used as the default for `DOCS_URL` and the docs image's `DOCS_BASE_URL` build arg.
 
-### Traefik Docker Compose
-
-* Create a remote directory to store your Traefik Docker Compose file:
-
-```bash
-mkdir -p /root/code/traefik-public/
-```
-
-Copy the Traefik Docker Compose file to your server. You could do it by running the command `rsync` in your local terminal:
-
-```bash
-rsync -a compose.traefik.yml root@your-server.example.com:/root/code/traefik-public/
-```
-
-### Traefik Public Network
-
-This Traefik will expect a Docker "public network" named `traefik-public` to communicate with your stack(s).
-
-This way, there will be a single public Traefik proxy that handles the communication (HTTP and HTTPS) with the outside world, and then behind that, you could have one or more stacks with different domains, even if they are on the same single server.
-
-To create a Docker "public network" named `traefik-public` run the following command in your remote server:
-
-```bash
-docker network create traefik-public
-```
-
-### Traefik Environment Variables
-
-The Traefik Docker Compose file expects some environment variables to be set in your terminal before starting it. You can do it by running the following commands in your remote server.
-
-* Create the username for HTTP Basic Auth, e.g.:
-
-```bash
-export USERNAME=admin
-```
-
-* Create an environment variable with the password for HTTP Basic Auth, e.g.:
-
-```bash
-export PASSWORD=changethis
-```
-
-* Use openssl to generate the "hashed" version of the password for HTTP Basic Auth and store it in an environment variable:
-
-```bash
-export HASHED_PASSWORD=$(openssl passwd -apr1 $PASSWORD)
-```
-
-To verify that the hashed password is correct, you can print it:
-
-```bash
-echo $HASHED_PASSWORD
-```
-
-* Create an environment variable with the domain name for your server, e.g.:
-
-```bash
-export DOMAIN=greensecops.example.com
-```
-
-* Create an environment variable with the email for Let's Encrypt, e.g.:
-
-```bash
-export EMAIL=admin@example.com
-```
-
-**Note**: you need to set a different email, an email `@example.com` won't work.
-
-### Start the Traefik Docker Compose
-
-Go to the directory where you copied the Traefik Docker Compose file in your remote server:
-
-```bash
-cd /root/code/traefik-public/
-```
-
-Now with the environment variables set and the `compose.traefik.yml` in place, you can start the Traefik Docker Compose running the following command:
-
-```bash
-docker compose -f compose.traefik.yml up -d
-```
-
-## Deploy GreenSecOps
-
-Now that you have Traefik in place you can deploy your FastAPI project with Docker Compose.
-
-**Note**: You might want to jump ahead to the section about Continuous Deployment with GitHub Actions.
-
-## Copy the Code
-
-```bash
-rsync -av --filter=":- .gitignore" ./ root@your-server.example.com:/root/code/app/
-```
-
-Note: `--filter=":- .gitignore"` tells `rsync` to use the same rules as git, ignore files ignored by git, like the Python virtual environment.
+**Deploying without Coolify:** export these seven variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
 
 ## Environment Variables
 
-You need to set some environment variables first.
+Beyond the magic variables above, the stack is configured through ordinary environment variables. Coolify lets you set them in the resource's **Environment Variables** tab; on a plain Docker host, export them or put them in a `.env` file.
+
+The backend reads its settings from `backend/app/core/config.py`; `.env.example` at the repository root documents the same list with local-development defaults.
 
 ### Generate secret keys
 
-Some environment variables in the `.env` file have a default value of `changethis`.
-
-You have to change them with a secret key, to generate secret keys you can run the following command:
+Some values must be secret keys. To generate one, run:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Copy the content and use that as password / secret key. And run that again to generate another secure key.
+Copy the output and use it as the password / secret key. Run it again to generate another secure key. The backend refuses to start in `staging`/`production` with an empty `SECRET_KEY` or with any secret left at the placeholder value `changethis`.
 
 ### Required Environment Variables
 
-Set the `ENVIRONMENT`, by default `local` (for development), but when deploying to a server you would put something like `staging` or `production`:
-
-```bash
-export ENVIRONMENT=production
-```
-
-Set the `DOMAIN`, by default `localhost` (for development), but when deploying you would use your own domain, for example:
-
-```bash
-export DOMAIN=greensecops.example.com
-```
-
-Set the `POSTGRES_PASSWORD` to something different than `changethis`:
-
-```bash
-export POSTGRES_PASSWORD="changethis"
-```
-
-Set the `SECRET_KEY`, used to sign tokens:
-
-```bash
-export SECRET_KEY="changethis"
-```
-
-Note: you can use the Python command above to generate a secure secret key.
-
-Set the `FIRST_SUPER_USER_PASSWORD` to something different than `changethis`:
-
-```bash
-export FIRST_SUPERUSER_PASSWORD="changethis"
-```
-
-Set the `BACKEND_CORS_ORIGINS` to include your domain:
-
-```bash
-export BACKEND_CORS_ORIGINS="https://dashboard.${DOMAIN?Variable not set},https://api.${DOMAIN?Variable not set}"
-```
-
-You can set several other environment variables:
-
-* `PROJECT_NAME`: The name of the project, used in the API for the docs and emails.
-* `STACK_NAME`: The name of the stack used for Docker Compose labels and project name, this should be different for `staging`, `production`, etc. You could use the same domain replacing dots with dashes, e.g. `greensecops-example-com` and `staging-greensecops-example-com`.
-* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas.
-* `FIRST_SUPERUSER`: The email of the first superuser, this superuser will be the one that can create new users.
-* `SMTP_HOST`: The SMTP server host to send emails, this would come from your email provider (E.g. Mailgun, Sparkpost, Sendgrid, etc).
-* `SMTP_USER`: The SMTP server user to send emails.
-* `SMTP_PASSWORD`: The SMTP server password to send emails.
-* `EMAILS_FROM_EMAIL`: The email account to send emails from.
-* `POSTGRES_SERVER`: The hostname of the PostgreSQL server. You can leave the default of `db`, provided by the same Docker Compose. You normally wouldn't need to change this unless you are using a third-party provider.
-* `POSTGRES_PORT`: The port of the PostgreSQL server. You can leave the default. You normally wouldn't need to change this unless you are using a third-party provider.
-* `POSTGRES_USER`: The Postgres user, you can leave the default.
-* `POSTGRES_DB`: The database name to use for this application. You can leave the default of `greensecops`.
-* `REDIS_URL`: The Redis connection URL for Celery. You can leave the default of `redis://redis:6379/0`.
+* `ENVIRONMENT`: Deployment environment: `local` (development), `staging`, or `production`. `compose.yml` defaults it to `production`.
+* `FIRST_SUPERUSER`: The email of the first superuser, this superuser will be the one that can create new users. Default: `admin@example.com`.
 * `GITHUB_APP_ID`: The numeric ID of your GitHub App.
 * `GITHUB_APP_PRIVATE_KEY`: The full PEM content of your GitHub App's private key.
 * `GITHUB_WEBHOOK_SECRET`: The secret used to verify incoming webhook payloads from GitHub.
-* `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: OAuth credentials for GitHub login.
-* `GITHUB_OAUTH_REDIRECT_URI`: The frontend callback URL for the GitHub OAuth flow (e.g. `https://dashboard.greensecops.example.com/auth/github/callback`).
+* `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: OAuth credentials for GitHub login. The client ID is also baked into the frontend build as `VITE_GITHUB_OAUTH_CLIENT_ID`.
+* `GITHUB_APP_NAME`: The GitHub App slug, baked into the frontend build as `VITE_GITHUB_APP_NAME` (used for the install URL `github.com/apps/<slug>/installations/new`).
+* At least one LLM provider: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or a reachable Ollama instance via `OLLAMA_BASE_URL`.
+
+Note: the GitHub OAuth callback URL is not configurable separately — the backend computes it as `${FRONTEND_HOST}/auth/github/callback`, so your GitHub OAuth App's "Authorization callback URL" must point at the frontend host.
+
+### Optional Environment Variables
+
+**Hosts and URLs**
+
+* `FRONTEND_HOST`: Public URL of the frontend dashboard. Default: `https://${SERVICE_FQDN_FRONTEND}`.
+* `BACKEND_HOST`: Public URL of the backend API. Default: `https://${SERVICE_FQDN_BACKEND}`.
+* `GREENSECOPS_PUBLIC_URL`: Public backend URL embedded in generated customer workflow files. Empty by default, which falls back to `BACKEND_HOST`.
+* `APP_URL`: Marketing/landing site URL used in PR messages. Default: `https://greensecops.io`.
+* `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Default: `https://${SERVICE_FQDN_DOCS}`.
+* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Default: `https://${SERVICE_FQDN_FRONTEND}`.
+
+**Branding**
+
+* `PROJECT_NAME`: The name of the project, used in the API for the docs and emails. Default: `GreenSecOps`.
+* `GITHUB_BOT_HANDLE`: The bot handle mentioned in PR messages. Default: `@greensecops`.
+* `GITHUB_ACTION_REF`: The action reference written into generated customer workflows. Default: `greensecops/greensecops-action@v1`.
+
+**Emails**
+
+* `SMTP_HOST`: The SMTP server host to send emails, this would come from your email provider (E.g. Mailgun, Sparkpost, Sendgrid, etc). Emails are disabled if unset.
+* `SMTP_USER`: The SMTP server user to send emails.
+* `SMTP_PASSWORD`: The SMTP server password to send emails.
+* `SMTP_PORT`: The SMTP server port. Default: `587`.
+* `SMTP_TLS` / `SMTP_SSL`: Whether to use STARTTLS / implicit SSL. Defaults: `True` / `False`.
+* `EMAILS_FROM_EMAIL`: The email account to send emails from. Default: `noreply@example.com`.
+* `EMAILS_FROM_NAME`: The sender display name. Defaults to `PROJECT_NAME`.
+
+**Database and infrastructure**
+
+* `POSTGRES_PORT`: The port of the PostgreSQL server. Default: `5432`.
+* `POSTGRES_DB`: The database name to use for this application. Default: `greensecops`.
+* `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL`: Hardcoded by `compose.yml` to the in-network services (`db`, `redis://redis:6379/0`, `http://opa:8181`); only relevant when running the backend outside the Compose stack, where they default to `localhost`-based values.
+
+**LLM configuration**
+
 * `DEFAULT_LLM_PROVIDER`: Which LLM provider to use for fix generation. One of `openai`, `anthropic`, `gemini`, `ollama`. Default: `openai`.
-* `DEFAULT_LLM_MODEL`: The model name for the selected provider (e.g. `gpt-4o-mini`).
-* `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`: API keys for the respective LLM provider.
-* `OPA_URL`: URL of the OPA instance. You can leave the default of `http://opa:8181`.
+* `DEFAULT_LLM_MODEL`: The model name for the selected provider. Default: `gpt-4o-mini`.
+* `OLLAMA_BASE_URL`: Base URL of an Ollama instance, when using the `ollama` provider. Default: `http://localhost:11434`.
+* `AI_PROVIDERS_CONFIG`: Path to a JSON file defining available providers and model lists. Defaults to the file bundled in the backend image.
+
+**Billing (optional)**
+
+* `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`: Stripe API credentials.
+* `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ULTIMATE`: Stripe price IDs for the subscription tiers.
+
+**Observability (optional)**
+
 * `SENTRY_DSN`: The DSN for Sentry, if you are using it.
 * `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`: Enable LangSmith tracing for LLM calls.
-* `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_STARTER`, `STRIPE_PRICE_ID_PRO`: Stripe billing credentials.
+* `LANGCHAIN_ENDPOINT`, `LANGCHAIN_PROJECT`: LangSmith endpoint and project name. Defaults: `https://api.smith.langchain.com`, `greensecops`.
 
 ## GitHub Actions Environment Variables
 
-There are some environment variables only used by GitHub Actions that you can configure:
+There are some environment variables only used by GitHub Actions (as repository secrets) that you can configure:
 
 * `LATEST_CHANGES`: Used by the GitHub Action [latest-changes](https://github.com/tiangolo/latest-changes) to automatically add release notes based on the PRs merged. It's a personal access token, read the docs for details.
 * `SMOKESHOW_AUTH_KEY`: Used to handle and publish the code coverage using [Smokeshow](https://github.com/samuelcolvin/smokeshow), follow their instructions to create a (free) Smokeshow key.
 
-### Deploy with Docker Compose
+## Deploy with Docker Compose
 
-With the environment variables in place, you can deploy with Docker Compose:
+With the environment variables in place (including the seven `SERVICE_*` variables if you are not using Coolify), you can deploy with Docker Compose:
 
 ```bash
-cd /root/code/app/
 docker compose -f compose.yml build
 docker compose -f compose.yml up -d
 ```
 
 For production you wouldn't want to have the overrides in `compose.override.yml`, that's why we explicitly specify `compose.yml` as the file to use.
 
-## Continuous Deployment (CD)
-
-You can use GitHub Actions to deploy your project automatically. 😎
-
-You can have multiple environment deployments.
-
-There are already two environments configured, `staging` and `production`. 🚀
-
-### Install GitHub Actions Runner
-
-* On your remote server, create a user for your GitHub Actions:
-
-```bash
-sudo adduser github
-```
-
-* Add Docker permissions to the `github` user:
-
-```bash
-sudo usermod -aG docker github
-```
-
-* Temporarily switch to the `github` user:
-
-```bash
-sudo su - github
-```
-
-* Go to the `github` user's home directory:
-
-```bash
-cd
-```
-
-* [Install a GitHub Action self-hosted runner following the official guide](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners#adding-a-self-hosted-runner-to-a-repository).
-
-* When asked about labels, add a label for the environment, e.g. `production`. You can also add labels later.
-
-After installing, the guide would tell you to run a command to start the runner. Nevertheless, it would stop once you terminate that process or if your local connection to your server is lost.
-
-To make sure it runs on startup and continues running, you can install it as a service. To do that, exit the `github` user and go back to the `root` user:
-
-```bash
-exit
-```
-
-After you do it, you will be on the previous user again. And you will be on the previous directory, belonging to that user.
-
-Before being able to go the `github` user directory, you need to become the `root` user (you might already be):
-
-```bash
-sudo su
-```
-
-* As the `root` user, go to the `actions-runner` directory inside of the `github` user's home directory:
-
-```bash
-cd /home/github/actions-runner
-```
-
-* Install the self-hosted runner as a service with the user `github`:
-
-```bash
-./svc.sh install github
-```
-
-* Start the service:
-
-```bash
-./svc.sh start
-```
-
-* Check the status of the service:
-
-```bash
-./svc.sh status
-```
-
-You can read more about it in the official guide: [Configuring the self-hosted runner application as a service](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/configuring-the-self-hosted-runner-application-as-a-service).
-
-### Configure GitHub Environments
-
-The deployment workflows use [GitHub Environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments) for `staging` and `production`. This enables environment-specific secrets, deployment protection rules (e.g. required reviewers, wait timers), and deployment status tracking.
-
-To configure them, go to your repository's **Settings** > **Environments** and create the `staging` and `production` environments.
-
-### Set Secrets
-
-For each GitHub Environment (`staging` and `production`), configure the required secrets as [environment secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets#creating-secrets-for-an-environment). Environment secrets are preferred over [repository secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets#creating-secrets-for-a-repository) because they are scoped to the specific environment, reducing exposure and aligning with any protection rules you configure.
-
-The current Github Actions workflows expect these secrets:
-
-**Core**
-* `DOMAIN_PRODUCTION`
-* `DOMAIN_STAGING`
-* `STACK_NAME_PRODUCTION`
-* `STACK_NAME_STAGING`
-* `SECRET_KEY`
-* `FIRST_SUPERUSER`
-* `FIRST_SUPERUSER_PASSWORD`
-* `POSTGRES_PASSWORD`
-* `EMAILS_FROM_EMAIL`
-
-**GitHub App**
-* `GITHUB_APP_ID`
-* `GITHUB_APP_PRIVATE_KEY` — full PEM content
-* `GITHUB_WEBHOOK_SECRET`
-* `GITHUB_CLIENT_ID`
-* `GITHUB_CLIENT_SECRET`
-* `GITHUB_OAUTH_REDIRECT_URI`
-
-**LLM providers** (at least one required)
-* `OPENAI_API_KEY`
-* `ANTHROPIC_API_KEY`
-* `GOOGLE_API_KEY`
-
-**Billing (optional)**
-* `STRIPE_SECRET_KEY`
-* `STRIPE_WEBHOOK_SECRET`
-* `STRIPE_PRICE_ID_STARTER`
-* `STRIPE_PRICE_ID_PRO`
-
-**Observability (optional)**
-* `SENTRY_DSN`
-* `LANGCHAIN_API_KEY` — enables LangSmith tracing
-
-**CI tooling**
-* `LATEST_CHANGES`
-* `SMOKESHOW_AUTH_KEY`
-
-## GitHub Action Deployment Workflows
-
-There are GitHub Action workflows in the `.github/workflows` directory already configured for deploying to the environments (GitHub Actions runners with the labels):
-
-* `staging`: after pushing (or merging) to the branch `master`.
-* `production`: after publishing a release.
-
-Both workflows are associated with their respective GitHub Environments, so deployments will be visible in the repository's **Environments** section and will respect any protection rules you configure.
-
-If you need to add extra environments you could use those as a starting point.
+Note that `compose.yml` does not publish any ports — in a Coolify deployment the platform's proxy routes the `SERVICE_FQDN_*` hostnames to the right containers and terminates HTTPS. On a plain Docker host you need to put your own reverse proxy in front of the `frontend`, `backend`, `landing`, and `docs` services.
 
 ## URLs
 
-Replace `greensecops.example.com` with your domain.
-
-### Main Traefik Dashboard
-
-Traefik UI: `https://traefik.greensecops.example.com`
-
-### Production
-
-Frontend (dashboard): `https://dashboard.greensecops.example.com`
+Replace `greensecops.example.com` with your domain. With the FQDNs suggested above:
 
 Landing page: `https://greensecops.example.com`
 
-Sphinx docs: `https://docs.greensecops.example.com`
+Frontend (dashboard): `https://app.greensecops.example.com`
 
-Backend API docs: `https://api.greensecops.example.com/docs`
+Sphinx docs: `https://docs.greensecops.example.com`
 
 Backend API base URL: `https://api.greensecops.example.com`
 
-Adminer: `https://adminer.greensecops.example.com`
+Backend API docs: `https://api.greensecops.example.com/docs`
 
-Flower (Celery): `https://flower.greensecops.example.com`
-
-### Staging
-
-Frontend (dashboard): `https://dashboard.staging.greensecops.example.com`
-
-Backend API docs: `https://api.staging.greensecops.example.com/docs`
-
-Backend API base URL: `https://api.staging.greensecops.example.com`
-
-Adminer: `https://adminer.staging.greensecops.example.com`
+Adminer, Flower, and Mailcatcher are development-only services defined in `compose.override.yml` and are not part of the production stack (see [development.md](development.md) for the local URLs).

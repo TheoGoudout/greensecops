@@ -204,7 +204,6 @@ services:
       dockerfile: frontend/Dockerfile.playwright
       args:
         - VITE_API_URL=http://backend:8000
-        - NODE_ENV=production
     ipc: host
     depends_on:
       - backend

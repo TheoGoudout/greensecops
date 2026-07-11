@@ -25,8 +25,6 @@ jobs:
       SERVICE_PASSWORD_FIRSTSUPERUSER: testpassword
       SERVICE_FQDN_BACKEND: localhost:8000
       SERVICE_FQDN_FRONTEND: localhost
-      SERVICE_FQDN_ADMINER: localhost:8080
-      SERVICE_FQDN_FLOWER: localhost:5555
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
