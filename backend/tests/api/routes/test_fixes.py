@@ -1,7 +1,7 @@
 """Tests for the /api/v1/fixes/ endpoints."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -1417,7 +1417,7 @@ def test_regenerate_for_repo_keeps_fix_without_unresolved_issues(
     issue: Issue,
 ) -> None:
     # Arrange — the fix's only issue is resolved: nothing to regenerate from
-    issue.resolved_at = datetime.now(UTC)
+    issue.resolved_at = datetime.now(timezone.utc)
     db.add(issue)
     db.commit()
     fix_id = ready_fix.id
@@ -1610,7 +1610,7 @@ def test_regenerate_for_workflow_rejects_when_issues_resolved(
     issue: Issue,
 ) -> None:
     # Arrange — the workflow file's only issue is resolved
-    issue.resolved_at = datetime.now(UTC)
+    issue.resolved_at = datetime.now(timezone.utc)
     db.add(issue)
     db.commit()
     fix_id = ready_fix.id
