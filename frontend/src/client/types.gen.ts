@@ -426,11 +426,19 @@ export type FixesTriggerRepoDeliveryResponse = ({
     [key: string]: (string);
 });
 
-export type FixesRegenerateFixesForPrData = {
-    prId: string;
+export type FixesRegenerateFixesForRepoData = {
+    repoId: string;
 };
 
-export type FixesRegenerateFixesForPrResponse = ({
+export type FixesRegenerateFixesForRepoResponse = ({
+    [key: string]: (number);
+});
+
+export type FixesRegenerateFixesForWorkflowData = {
+    fixId: string;
+};
+
+export type FixesRegenerateFixesForWorkflowResponse = ({
     [key: string]: (number);
 });
 

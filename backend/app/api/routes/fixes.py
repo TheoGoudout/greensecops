@@ -5,7 +5,7 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func
-from sqlmodel import col, delete, select
+from sqlmodel import col, delete, or_, select
 
 from app.api.deps import (
     CurrentUser,
@@ -51,6 +51,10 @@ class BatchFixRequest(BaseModel):
 
 
 router = APIRouter(prefix="/fixes", tags=["fixes"])
+
+# Statuses of fixes a worker is still processing; such fixes cannot be
+# regenerated out from under the worker.
+IN_FLIGHT_STATUSES = (FixStatus.pending, FixStatus.generating, FixStatus.delivering)
 
 
 def _repo_id_for_fix(session: SessionDep, fix: Fix) -> uuid.UUID | None:
@@ -108,6 +112,103 @@ def _create_pending_fixes(
     for fix in created:
         session.refresh(fix)
     return created
+
+
+def _latest_unresolved_issues(
+    session: SessionDep,
+    repo_id: uuid.UUID,
+    wf_file_ids: list[uuid.UUID] | None = None,
+    issue_ids: list[uuid.UUID] | None = None,
+) -> dict[uuid.UUID, list[Issue]]:
+    """Unresolved issues from each workflow file's latest completed analysis.
+
+    Grouped by workflow file → one whole-file fix (one LLM call) per file.
+    The latest-analysis correlation guarantees workflow_file_id is set.
+    """
+    latest_analysis_subq = (
+        select(Analysis.id)
+        .where(Analysis.workflow_file_id == Issue.workflow_file_id)
+        .where(Analysis.status == AnalysisStatus.completed)
+        .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
+        .limit(1)
+        .correlate(Issue)
+        .scalar_subquery()
+    )
+    query = (
+        select(Issue)
+        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        .where(Analysis.repo_id == repo_id)
+        .where(Issue.analysis_id == latest_analysis_subq)
+        .where(col(Issue.resolved_at).is_(None))
+    )
+    if wf_file_ids is not None:
+        query = query.where(col(Issue.workflow_file_id).in_(wf_file_ids))
+    if issue_ids is not None:
+        query = query.where(Issue.id.in_(issue_ids))  # type: ignore[attr-defined]
+
+    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
+    for issue in session.exec(query).all():
+        by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
+    return dict(by_wf_file)
+
+
+def _queue_fix_generation(
+    session: SessionDep,
+    repo: Repository,
+    by_wf_file: dict[uuid.UUID, list[Issue]],
+) -> list[Fix]:
+    """Create pending fixes and queue one generation task per workflow file.
+
+    Pending fixes give the UI a DB-backed queued state immediately; the worker
+    flips them to generating/ready/failed. Workflow files that still carry a
+    fix are skipped by _create_pending_fixes.
+    """
+    pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
+    if not pending_fixes:
+        return []
+    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
+
+    events_pub.publish_event(
+        ev.fix_generating(
+            str(repo.org_id),
+            str(repo.id),
+            fix_ids=[str(f.id) for f in pending_fixes],
+            issue_ids=[
+                str(i.id) for wf_id in pending_wf_ids for i in by_wf_file[wf_id]
+            ],
+        )
+    )
+
+    # One aggregated ready/failed notification for the whole run.
+    batch_id = uuid.uuid4().hex
+    init_fix_batch(batch_id, len(pending_wf_ids))
+    for wf_id in pending_wf_ids:
+        run_fix_generation.delay(
+            issue_ids=[str(i.id) for i in by_wf_file[wf_id]], batch_id=batch_id
+        )
+    return pending_fixes
+
+
+def _delete_orphaned_closed_prs(session: SessionDep, repo_id: uuid.UUID) -> None:
+    """Delete closed PR records that no fix references anymore.
+
+    A closed record on a fix branch makes every later delivery on that branch
+    auto-reject its fixes (the closed-PR guard in deliver_fixes_batch), and
+    regenerating is an explicit request for a new PR. Records still referenced
+    by surviving fixes are kept — deleting them would silently clear those
+    fixes' pr_id (ON DELETE SET NULL). The next successful delivery creates a
+    fresh record — and reuses the GitHub PR itself if the user reopened it in
+    the meantime.
+    """
+    referenced = select(Fix.pr_id).where(col(Fix.pr_id).is_not(None))
+    stale_prs = session.exec(
+        select(PullRequest)
+        .where(PullRequest.repo_id == repo_id)
+        .where(PullRequest.pr_state == PullRequestState.closed)
+        .where(~col(PullRequest.id).in_(referenced))
+    ).all()
+    for pr in stale_prs:
+        session.delete(pr)
 
 
 def _issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
@@ -277,34 +378,9 @@ def trigger_fix_generation_for_repo(
     authorize_repo(session, current_user, repo_id)
     from app.api.routes.billing import enforce_quota
 
-    latest_analysis_subq = (
-        select(Analysis.id)
-        .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-        .where(Analysis.status == AnalysisStatus.completed)
-        .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
-        .limit(1)
-        .correlate(Issue)
-        .scalar_subquery()
-    )
-    query = (
-        select(Issue)
-        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo_id)
-        .where(Issue.analysis_id == latest_analysis_subq)
-        .where(col(Issue.resolved_at).is_(None))
-    )
-    if body.issue_ids is not None:
-        query = query.where(Issue.id.in_(body.issue_ids))  # type: ignore[attr-defined]
-    issues = session.exec(query).all()
-
-    if not issues:
+    by_wf_file = _latest_unresolved_issues(session, repo_id, issue_ids=body.issue_ids)
+    if not by_wf_file:
         return {"queued": 0}
-
-    # Group by workflow file → one whole-file fix (one LLM call) per file.
-    # The latest-analysis correlation above guarantees workflow_file_id is set.
-    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
-    for issue in issues:
-        by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
 
     wf_file_ids = list(by_wf_file)
 
@@ -335,33 +411,7 @@ def trigger_fix_generation_for_repo(
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
 
-    # Create a pending Fix per workflow file so the UI shows a DB-backed queued
-    # state immediately; the worker flips these to generating/ready/failed.
-    pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
-    if not pending_fixes:
-        return {"queued": 0}
-    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
-
-    events_pub.publish_event(
-        ev.fix_generating(
-            str(repo.org_id),
-            str(repo_id),
-            fix_ids=[str(f.id) for f in pending_fixes],
-            issue_ids=[
-                str(i.id) for i in issues if i.workflow_file_id in pending_wf_ids
-            ],
-        )
-    )
-
-    # One aggregated ready/failed notification for the whole run.
-    batch_id = uuid.uuid4().hex
-    init_fix_batch(batch_id, len(pending_wf_ids))
-    for wf_id, group in by_wf_file.items():
-        if wf_id in pending_wf_ids:
-            run_fix_generation.delay(
-                issue_ids=[str(i.id) for i in group], batch_id=batch_id
-            )
-
+    pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
     return {"queued": len(pending_fixes)}
 
 
@@ -494,84 +544,118 @@ def reject_fix(
         )
 
 
-@router.post("/regenerate-for-pr/{pr_id}", status_code=202)
-def regenerate_fixes_for_pr(
-    pr_id: uuid.UUID,
+@router.post("/regenerate-for-repo/{repo_id}", status_code=202)
+def regenerate_fixes_for_repo(
+    repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, int]:
-    """Delete the fixes of a closed PR and re-trigger generation.
+    """Discard a repo's regenerable fixes and re-trigger generation.
 
-    Only valid when pr_state == closed. Merged PRs are not touched because
-    the code changes were already applied.
-
-    The PullRequest record is deleted too: a closed record on the fix branch
-    makes every later delivery auto-reject its fixes (the closed-PR guard in
-    deliver_fixes_batch), and regenerating is an explicit request for a new
-    PR. The next successful delivery creates a fresh record — and reuses the
-    GitHub PR itself if the user reopened it in the meantime.
+    A fix is regenerable when no worker is processing it and its PR, if any,
+    was not merged — merged code changes were already applied. Fixes whose
+    workflow file has no unresolved issues left in its latest analysis are
+    kept: there is nothing to regenerate them from.
     """
-    pr = get_or_404(session, PullRequest, pr_id)
-    if not current_user.is_superuser:
-        authorize_repo(
-            session, current_user, pr.repo_id, detail="PullRequest not found"
-        )
-    if pr.pr_state != PullRequestState.closed:
-        raise HTTPException(
-            status_code=409,
-            detail=f"PR is not closed (state: {pr.pr_state})",
-        )
+    repo = authorize_repo(session, current_user, repo_id)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    from app.api.routes.billing import enforce_quota
 
-    repo = session.get(Repository, pr.repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
-    fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_id)).all())
-
-    # Regenerate the unresolved issues each fix addressed, grouped per workflow file.
-    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
-    for fix in fixes:
-        wf_issues = list(
-            session.exec(
-                select(Issue)
-                .where(Issue.fix_id == fix.id)
-                .where(col(Issue.resolved_at).is_(None))
-            ).all()
-        )
-        for issue in wf_issues:
-            if issue.workflow_file_id is not None:
-                by_wf_file[issue.workflow_file_id].append(issue)
-
-    if fixes:
-        fix_ids_to_delete = [fix.id for fix in fixes]
-        session.exec(delete(Fix).where(Fix.id.in_(fix_ids_to_delete)))  # type: ignore[attr-defined]
-    session.delete(pr)
-    session.commit()
-
-    pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
-    if not pending_fixes:
+    # pr_state is nullable, and NULL != 'merged' is NULL in SQL — the IS NULL
+    # arms keep fixes on stateless PR records eligible.
+    eligible = list(
+        session.exec(
+            select(Fix)
+            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+            .join(PullRequest, Fix.pr_id == PullRequest.id, isouter=True)  # type: ignore[arg-type]
+            .where(WorkflowFile.repo_id == repo_id)
+            .where(col(Fix.status).not_in(IN_FLIGHT_STATUSES))
+            .where(
+                or_(
+                    col(Fix.pr_id).is_(None),
+                    col(PullRequest.pr_state).is_(None),
+                    PullRequest.pr_state != PullRequestState.merged,
+                )
+            )
+        ).all()
+    )
+    if not eligible:
         return {"queued": 0}
-    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
-    all_issue_ids = [i.id for wf_id in pending_wf_ids for i in by_wf_file[wf_id]]
 
-    events_pub.publish_event(
-        ev.fix_generating(
-            str(repo.org_id),
-            str(repo.id),
-            fix_ids=[str(f.id) for f in pending_fixes],
-            issue_ids=[str(iid) for iid in all_issue_ids],
-        )
+    by_wf_file = _latest_unresolved_issues(
+        session, repo_id, wf_file_ids=[f.workflow_file_id for f in eligible]
+    )
+    fixes_to_delete = [f for f in eligible if f.workflow_file_id in by_wf_file]
+    if not fixes_to_delete:
+        return {"queued": 0}
+
+    enforce_quota(
+        session,
+        current_user,
+        "fixes",
+        requested=len(by_wf_file),
+        replacing=len(fixes_to_delete),
     )
 
-    batch_id = uuid.uuid4().hex
-    init_fix_batch(batch_id, len(pending_wf_ids))
-    for wf_id in pending_wf_ids:
-        run_fix_generation.delay(
-            issue_ids=[str(i.id) for i in by_wf_file[wf_id]],
-            batch_id=batch_id,
+    session.exec(delete(Fix).where(col(Fix.id).in_([f.id for f in fixes_to_delete])))
+    _delete_orphaned_closed_prs(session, repo_id)
+    session.commit()
+
+    pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
+    return {"queued": len(pending_fixes)}
+
+
+@router.post("/regenerate-for-workflow/{fix_id}", status_code=202)
+def regenerate_fixes_for_workflow(
+    fix_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, int]:
+    """Discard one workflow file's fix and re-trigger generation.
+
+    Rejected while a worker is processing the fix, once its PR was merged
+    (the code changes were already applied), and when the latest analysis
+    has no unresolved issues left to regenerate from.
+    """
+    fix = get_or_404(session, Fix, fix_id)
+    _authorize_fix(session, current_user, fix)
+    from app.api.routes.billing import enforce_quota
+
+    if fix.status in IN_FLIGHT_STATUSES:
+        raise HTTPException(
+            status_code=409, detail=f"Fix is currently {fix.status.value}"
+        )
+    pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
+    if pr and pr.pr_state == PullRequestState.merged:
+        raise HTTPException(
+            status_code=409, detail="Fix was already merged; nothing to regenerate"
         )
 
-    return {"queued": len(all_issue_ids)}
+    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
+    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
+
+    by_wf_file = _latest_unresolved_issues(
+        session, repo.id, wf_file_ids=[fix.workflow_file_id]
+    )
+    if not by_wf_file:
+        raise HTTPException(
+            status_code=409,
+            detail="No unresolved issues found for this workflow file",
+        )
+
+    enforce_quota(session, current_user, "fixes", requested=1, replacing=1)
+
+    session.delete(fix)
+    _delete_orphaned_closed_prs(session, repo.id)
+    session.commit()
+
+    pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
+    return {"queued": len(pending_fixes)}
 
 
 @router.post("/sync-pr-status/{repo_id}")
