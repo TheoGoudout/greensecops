@@ -91,7 +91,7 @@ opa ← (none, mounts ./backend/app/rules as read-only)
 - `SERVICE_PASSWORD_POSTGRES` → Postgres password
 - `SERVICE_PASSWORD_64_SECRETKEY` → app secret key (64 chars)
 - `SERVICE_PASSWORD_FIRSTSUPERUSER` → first superuser password
-- `SERVICE_FQDN_BACKEND` / `SERVICE_FQDN_FRONTEND` → service FQDNs
+- `SERVICE_URL_BACKEND` / `SERVICE_URL_FRONTEND` / `SERVICE_URL_DOCS` → public service URLs (scheme included)
 
 `compose.override.yml` maps plain `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SECRET_KEY` for local dev.
 

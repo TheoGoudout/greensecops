@@ -44,6 +44,7 @@ services:
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD?Variable not set}
       POSTGRES_USER: ${POSTGRES_USER?Variable not set}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Variable not set}
+      GITHUB_WEBHOOK_URL: ${GITHUB_WEBHOOK_URL:-}
       SMTP_HOST: "mailcatcher"
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
@@ -204,7 +205,6 @@ services:
       dockerfile: frontend/Dockerfile.playwright
       args:
         - VITE_API_URL=http://backend:8000
-        - NODE_ENV=production
     ipc: host
     depends_on:
       - backend

@@ -29,8 +29,7 @@ GreenSecOps analyzes GitHub Actions workflows and automatically delivers fixes a
 - 📫 Email based password recovery.
 - 📬 [Mailcatcher](https://mailcatcher.me) for local email testing during development.
 - ✅ Tests with [Pytest](https://pytest.org).
-- 📞 [Traefik](https://traefik.io) as a reverse proxy / load balancer.
-- 🚢 Deployment instructions using Docker Compose, including how to set up a Traefik proxy with automatic HTTPS certificates.
+- 🚢 Deployment instructions using Docker Compose, designed for [Coolify](https://coolify.io) with automatic HTTPS certificates.
 - 🏭 CI/CD based on GitHub Actions.
 
 ## How It Works
@@ -50,6 +49,7 @@ Copy `.env.example` to `.env` and fill in the required values. At minimum, set:
 - `POSTGRES_PASSWORD`
 - `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`
 - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- `GITHUB_APP_NAME` — the GitHub App slug, used by the frontend to build the install URL
 - At least one LLM provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or a running Ollama instance via `OLLAMA_BASE_URL`)
 
 Read the [deployment.md](./deployment.md) docs for the full list of environment variables and secrets.

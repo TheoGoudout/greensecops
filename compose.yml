@@ -41,17 +41,25 @@ services:
       prestart:
         condition: service_completed_successfully
     environment: &backend-required-env
-      - FRONTEND_HOST=${FRONTEND_HOST:-https://${SERVICE_FQDN_FRONTEND}}
+      - FRONTEND_HOST=${FRONTEND_HOST:-${SERVICE_URL_FRONTEND}}
+      - BACKEND_HOST=${BACKEND_HOST:-${SERVICE_URL_BACKEND}}
+      - GREENSECOPS_PUBLIC_URL=${GREENSECOPS_PUBLIC_URL}
+      - APP_URL=${APP_URL}
+      - GITHUB_ACTION_REF=${GITHUB_ACTION_REF:-greensecops/greensecops-action@v1}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
-      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-https://${SERVICE_FQDN_FRONTEND}}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-${SERVICE_URL_FRONTEND}}
       - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
       - FIRST_SUPERUSER=${FIRST_SUPERUSER:-admin@example.com}
       - FIRST_SUPERUSER_PASSWORD=${SERVICE_PASSWORD_FIRSTSUPERUSER}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_TLS=${SMTP_TLS:-True}
+      - SMTP_SSL=${SMTP_SSL:-False}
+      - SMTP_PORT=${SMTP_PORT:-587}
       - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@example.com}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME}
       - POSTGRES_SERVER=db
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_DB=${POSTGRES_DB:-greensecops}
@@ -75,11 +83,13 @@ services:
       - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - STRIPE_PRICE_STARTER=${STRIPE_PRICE_STARTER}
       - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
       - STRIPE_PRICE_ULTIMATE=${STRIPE_PRICE_ULTIMATE}
       - OPA_URL=http://opa:8181
-      - DOCS_URL=${DOCS_URL:-https://${SERVICE_FQDN_DOCS}}
+      - DOCS_URL=${DOCS_URL:-${SERVICE_URL_DOCS}}
       - GITHUB_BOT_HANDLE=${GITHUB_BOT_HANDLE:-@greensecops}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
@@ -195,10 +205,9 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        - VITE_API_URL=https://${SERVICE_FQDN_BACKEND}
+        - VITE_API_URL=${SERVICE_URL_BACKEND}
         - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
         - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
-        - NODE_ENV=production
 
   landing:
     image: greensecops/landing:${TAG:-latest}
@@ -213,8 +222,8 @@ services:
       context: .
       dockerfile: landing/Dockerfile
     environment:
-      - APP_URL=https://${SERVICE_FQDN_FRONTEND}
-      - DOCS_URL=https://${SERVICE_FQDN_DOCS}
+      - APP_URL=${SERVICE_URL_FRONTEND}
+      - DOCS_URL=${SERVICE_URL_DOCS}
 
   docs:
     image: greensecops/docs:${TAG:-latest}
@@ -229,7 +238,7 @@ services:
       context: .
       dockerfile: docs/Dockerfile
       args:
-        - DOCS_BASE_URL=${DOCS_URL:-https://${SERVICE_FQDN_DOCS}}
+        - DOCS_BASE_URL=${DOCS_URL:-${SERVICE_URL_DOCS}}
 
 volumes:
   app-db-data:
