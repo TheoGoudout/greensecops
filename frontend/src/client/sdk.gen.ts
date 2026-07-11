@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForPrData, FixesRegenerateFixesForPrResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueData, IssuesGetIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -426,28 +426,49 @@ export class FixesService {
     }
 
     /**
-     * Regenerate Fixes For Pr
-     * Delete the fixes of a closed PR and re-trigger generation.
+     * Regenerate Fixes For Repo
+     * Discard a repo's regenerable fixes and re-trigger generation.
      *
-     * Only valid when pr_state == closed. Merged PRs are not touched because
-     * the code changes were already applied.
-     *
-     * The PullRequest record is deleted too: a closed record on the fix branch
-     * makes every later delivery auto-reject its fixes (the closed-PR guard in
-     * deliver_fixes_batch), and regenerating is an explicit request for a new
-     * PR. The next successful delivery creates a fresh record — and reuses the
-     * GitHub PR itself if the user reopened it in the meantime.
+     * A fix is regenerable when no worker is processing it and its PR, if any,
+     * was not merged — merged code changes were already applied. Fixes whose
+     * workflow file has no unresolved issues left in its latest analysis are
+     * kept: there is nothing to regenerate them from.
      * @param data The data for the request.
-     * @param data.prId
+     * @param data.repoId
      * @returns number Successful Response
      * @throws ApiError
      */
-    public static regenerateFixesForPr(data: FixesRegenerateFixesForPrData): CancelablePromise<FixesRegenerateFixesForPrResponse> {
+    public static regenerateFixesForRepo(data: FixesRegenerateFixesForRepoData): CancelablePromise<FixesRegenerateFixesForRepoResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/fixes/regenerate-for-pr/{pr_id}',
+            url: '/api/v1/fixes/regenerate-for-repo/{repo_id}',
             path: {
-                pr_id: data.prId
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Regenerate Fixes For Workflow
+     * Discard one workflow file's fix and re-trigger generation.
+     *
+     * Rejected while a worker is processing the fix, once its PR was merged
+     * (the code changes were already applied), and when the latest analysis
+     * has no unresolved issues left to regenerate from.
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static regenerateFixesForWorkflow(data: FixesRegenerateFixesForWorkflowData): CancelablePromise<FixesRegenerateFixesForWorkflowResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/fixes/regenerate-for-workflow/{fix_id}',
+            path: {
+                fix_id: data.fixId
             },
             errors: {
                 422: 'Validation Error'

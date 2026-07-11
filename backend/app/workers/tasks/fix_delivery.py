@@ -81,8 +81,9 @@ def deliver_fixes_batch(
             for fix in fixes:
                 fix.status = FixStatus.rejected
                 # Link the fix to the PR that caused the rejection so the UI
-                # can offer regeneration (regenerate-for-pr) for it. A guard
-                # rejection is recognizable later by delivered_at being unset.
+                # can offer regeneration (regenerate-for-workflow/-repo) for
+                # it. A guard rejection is recognizable later by delivered_at
+                # being unset.
                 fix.pr_id = branch_pr.id
                 session.add(fix)
             session.commit()
