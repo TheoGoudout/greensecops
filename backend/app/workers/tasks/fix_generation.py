@@ -81,9 +81,19 @@ def init_fix_batch(batch_id: str, group_count: int) -> None:
 
 
 def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
-    """Queue PR delivery for ready fixes when the repo has auto_fix_enabled."""
+    """Queue PR delivery for a repo's ready fixes when it has auto_fix_enabled.
+
+    Delivers the repo's *entire* current ready set, not just ``fix_ids``: the PR
+    branch is hard-reset to base on each delivery, so any ready fix left out
+    would be dropped from the PR. ``fix_ids`` only signals that a delivery is
+    warranted; the full set is re-queried here.
+    """
     try:
+        from sqlmodel import col, or_
+        from sqlmodel import select as _select
+
         from app.core.config import settings
+        from app.models import PullRequest, PullRequestState, WorkflowFile
         from app.services.pr_body import IssueInfo, build_pr_body
         from app.workers.tasks.fix_delivery import deliver_fixes_batch
 
@@ -92,21 +102,37 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
             if not repo or not repo.auto_fix_enabled:
                 return
 
-            fixes = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
-            fixes = [f for f in fixes if f and f.status == FixStatus.ready]
+            fixes = list(
+                session.exec(
+                    _select(Fix)
+                    .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+                    .where(WorkflowFile.repo_id == repo.id)
+                    .where(Fix.status == FixStatus.ready)
+                    .order_by(col(WorkflowFile.path).asc())
+                ).all()
+            )
             if not fixes:
                 return
+            fix_ids = [str(f.id) for f in fixes]
 
-            from sqlmodel import select as _select
-
-            from app.models import PullRequest, WorkflowFile
-
+            # Reuse the repo's existing open PR branch so the same PR is updated
+            # in place. Resolved from the PullRequest directly (not via a fix's
+            # pr_id) so a just-regenerated fix, whose link was dropped, still
+            # lands on the original PR. A merged PR is excluded — its branch is
+            # spent; a fresh PR is opened instead.
             existing_branch = session.exec(
                 _select(PullRequest.pr_branch)
-                .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
-                .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-                .where(WorkflowFile.repo_id == repo.id)
-                .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
+                .where(PullRequest.repo_id == repo.id)
+                .where(
+                    or_(
+                        col(PullRequest.pr_state).is_(None),
+                        PullRequest.pr_state != PullRequestState.merged,
+                    )
+                )
+                .order_by(
+                    PullRequest.updated_at.desc().nulls_last(),  # type: ignore[union-attr]
+                    PullRequest.created_at.desc(),  # type: ignore[union-attr]
+                )
                 .limit(1)
             ).first()
             pr_branch = existing_branch or f"greensecops/fixes-{str(repo.id)[:8]}"

@@ -1031,6 +1031,77 @@ def test_batch_mode_publishes_single_started_event(
     assert results_str.count("completed") == 2
 
 
+def test_single_file_completion_reconciles_fixes_when_auto_fix_enabled(
+    db: Session, repo: Repository
+) -> None:
+    """A single-workflow re-analysis auto-reconciles fixes with the changed file."""
+    repo.auto_fix_enabled = True
+    db.add(repo)
+    db.commit()
+
+    unique = uuid.uuid4().hex
+    files = [
+        _FakeBatchFile(
+            path=f".github/workflows/ci-{unique}.yml",
+            content=f"# {unique}\non: push\njobs: {{}}",
+        )
+    ]
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=files,
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+        patch("app.workers.tasks.static_analysis.events_pub.publish_event"),
+        patch(
+            "app.workers.tasks.static_analysis._auto_queue_fix_generation"
+        ) as mock_reconcile,
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    assert result["status"] == "done"
+    mock_reconcile.assert_called_once()
+    # The freshly-analysed workflow file is passed as the "changed" set.
+    changed = mock_reconcile.call_args.kwargs["changed_wf_ids"]
+    wf = db.exec(select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)).one()
+    assert changed == {wf.id}
+
+
+def test_duplicate_only_run_does_not_reconcile_fixes(
+    db: Session, repo: Repository, seeded_rule: Rule
+) -> None:
+    """A re-run whose content is unchanged (dedup) triggers no fix reconciliation."""
+    repo.auto_fix_enabled = True
+    db.add(repo)
+    db.commit()
+
+    unique = uuid.uuid4().hex
+    files = [
+        _FakeBatchFile(
+            path=f".github/workflows/ci-{unique}.yml",
+            content=f"# {unique}\non: push\njobs: {{}}",
+        )
+    ]
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=files,
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+        patch("app.workers.tasks.static_analysis.events_pub.publish_event"),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+        # Second run: identical content → deduped, nothing freshly analysed.
+        with patch(
+            "app.workers.tasks.static_analysis._auto_queue_fix_generation"
+        ) as mock_reconcile:
+            _run_static_analysis_impl(str(repo.id))
+
+    mock_reconcile.assert_not_called()
+
+
 def test_batch_mode_opa_failure_sets_batch_any_failed(
     db: Session, repo: Repository
 ) -> None:
@@ -1272,3 +1343,200 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
     mock_task.delay.assert_called_once_with(
         issue_ids=[str(issue.id)], batch_id=mock_init.call_args.args[0]
     )
+
+
+def _open_issue(db: Session, analysis: Analysis, wf: WorkflowFile, rule: Rule) -> Issue:
+    issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=wf.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="test issue",
+        line_start=1,
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    return issue
+
+
+def _delivered_fix(
+    db: Session,
+    repo: Repository,
+    wf: WorkflowFile,
+    pr_state: str,
+) -> tuple[object, object]:
+    """Create a delivered Fix on a PR in ``pr_state`` for workflow file ``wf``."""
+    from app.models import Fix, FixStatus, LLMProvider, PullRequest
+
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/fixes-{str(repo.id)[:8]}",
+        pr_url="https://github.com/o/r/pull/1",
+        pr_state=pr_state,
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix = Fix(
+        workflow_file_id=wf.id,
+        pr_id=pr.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-test",
+        status=FixStatus.delivered,
+        full_content="# fixed\non: push\n",
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    return fix, pr
+
+
+def test_auto_queue_regenerates_delivered_fix_when_content_changed(
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    seeded_rule: Rule,
+) -> None:
+    """A delivered fix on an open PR is regenerated when its workflow changed."""
+    from app.models import Fix, FixStatus, LLMProvider
+    from app.workers.tasks.static_analysis import _auto_queue_fix_generation
+
+    repo.llm_provider = LLMProvider.openai
+    repo.llm_model = "gpt-test"
+    db.add(repo)
+    analysis = _completed_analysis(db, repo, workflow_file)
+    _open_issue(db, analysis, workflow_file, seeded_rule)
+    old_fix, _pr = _delivered_fix(db, repo, workflow_file, "open")
+    old_fix_id = old_fix.id
+
+    with (
+        patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task,
+        patch("app.workers.tasks.fix_generation.init_fix_batch"),
+        patch("app.services.events.publisher.publish_event"),
+    ):
+        _auto_queue_fix_generation(
+            db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
+        )
+
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    assert fix.id != old_fix_id  # the stale delivered fix was replaced
+    assert fix.status == FixStatus.pending
+    mock_task.delay.assert_called_once()
+
+
+def test_auto_queue_reuses_unchanged_fix_and_regenerates_changed(
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    seeded_rule: Rule,
+) -> None:
+    """Only the changed workflow file is regenerated; the unchanged one is reused."""
+    from app.models import Fix, FixStatus, LLMProvider
+    from app.workers.tasks.static_analysis import _auto_queue_fix_generation
+
+    repo.llm_provider = LLMProvider.openai
+    repo.llm_model = "gpt-test"
+    db.add(repo)
+
+    # Changed file: has an open issue but no fix yet → must be generated.
+    a1 = _completed_analysis(db, repo, workflow_file)
+    _open_issue(db, a1, workflow_file, seeded_rule)
+
+    # Unchanged file: a delivered fix on an open PR → reused, not regenerated.
+    wf2 = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/other.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}\n",
+    )
+    db.add(wf2)
+    db.commit()
+    db.refresh(wf2)
+    a2 = _completed_analysis(db, repo, wf2)
+    _open_issue(db, a2, wf2, seeded_rule)
+    kept_fix, _pr = _delivered_fix(db, repo, wf2, "open")
+    kept_fix_id = kept_fix.id
+
+    with (
+        patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task,
+        patch("app.workers.tasks.fix_generation.init_fix_batch"),
+        patch("app.services.events.publisher.publish_event"),
+    ):
+        _auto_queue_fix_generation(
+            db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
+        )
+
+    changed = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    assert changed.status == FixStatus.pending
+
+    kept = db.exec(select(Fix).where(Fix.workflow_file_id == wf2.id)).one()
+    assert kept.id == kept_fix_id  # not deleted
+    assert kept.status == FixStatus.ready  # re-included in the delivery set
+
+    # Exactly one generation task — for the changed file only.
+    mock_task.delay.assert_called_once()
+
+
+def test_auto_queue_skips_merged_fix(
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    seeded_rule: Rule,
+) -> None:
+    """A merged fix is left untouched — its code is already on the default branch."""
+    from app.models import Fix, FixStatus, LLMProvider
+    from app.workers.tasks.static_analysis import _auto_queue_fix_generation
+
+    repo.llm_provider = LLMProvider.openai
+    repo.llm_model = "gpt-test"
+    db.add(repo)
+    analysis = _completed_analysis(db, repo, workflow_file)
+    _open_issue(db, analysis, workflow_file, seeded_rule)
+    merged_fix, _pr = _delivered_fix(db, repo, workflow_file, "merged")
+    merged_fix_id = merged_fix.id
+
+    with (
+        patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task,
+        patch("app.workers.tasks.fix_generation.init_fix_batch"),
+        patch("app.services.events.publisher.publish_event"),
+    ):
+        _auto_queue_fix_generation(
+            db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
+        )
+
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    assert fix.id == merged_fix_id
+    assert fix.status == FixStatus.delivered
+    mock_task.delay.assert_not_called()
+
+
+def test_auto_queue_is_noop_when_nothing_changed(
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    seeded_rule: Rule,
+) -> None:
+    """No content changed: the delivered fix and its PR are left alone."""
+    from app.models import Fix, FixStatus, LLMProvider
+    from app.workers.tasks.static_analysis import _auto_queue_fix_generation
+
+    repo.llm_provider = LLMProvider.openai
+    repo.llm_model = "gpt-test"
+    db.add(repo)
+    analysis = _completed_analysis(db, repo, workflow_file)
+    _open_issue(db, analysis, workflow_file, seeded_rule)
+    delivered_fix, _pr = _delivered_fix(db, repo, workflow_file, "open")
+
+    with (
+        patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task,
+        patch("app.workers.tasks.fix_generation.init_fix_batch"),
+        patch("app.services.events.publisher.publish_event"),
+    ):
+        _auto_queue_fix_generation(db, repo, str(repo.org_id), changed_wf_ids=set())
+
+    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    assert fix.id == delivered_fix.id
+    assert fix.status == FixStatus.delivered  # untouched
+    mock_task.delay.assert_not_called()
