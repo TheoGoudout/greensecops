@@ -29,11 +29,14 @@ class LLMProvider(str, enum.Enum):
 
 
 class AnalysisStatus(str, enum.Enum):
-    pending = "pending"
+    # An analysis row is created directly as ``running`` (or ``no_workflows``);
+    # the queued phase is signalled over SSE without a row. Content-hash
+    # duplicates reference the prior analysis and emit ``analysis.skipped``
+    # without writing a row. Neither a ``pending`` nor a ``skipped`` row is ever
+    # persisted, so those values are not part of the state machine.
     running = "running"
     completed = "completed"
     failed = "failed"
-    skipped = "skipped"
     no_workflows = "no_workflows"
 
 
@@ -61,6 +64,19 @@ class IssueCategory(str, enum.Enum):
     maintainability = "maintainability"
 
 
+class IssueStatus(str, enum.Enum):
+    """Derived lifecycle of an issue.
+
+    Issues carry no status column; this value is computed from ``resolved_at``
+    and ``fix_id`` (see ``Issue.status``). It exists so the issue lifecycle can
+    be reasoned about with the same vocabulary as the other state machines.
+    """
+
+    open = "open"
+    fix_in_progress = "fix_in_progress"
+    resolved = "resolved"
+
+
 class FixStatus(str, enum.Enum):
     pending = "pending"
     generating = "generating"
@@ -68,7 +84,12 @@ class FixStatus(str, enum.Enum):
     delivering = "delivering"
     delivered = "delivered"
     failed = "failed"
-    rejected = "rejected"
+    # Two distinct rejections (previously a single overloaded ``rejected``):
+    #  - ``rejected_by_user``:  a human dismissed the fix via the API.
+    #  - ``superseded_by_closed_pr``: the closed-PR delivery guard auto-rejected
+    #    it; it becomes deliverable again if that PR is reopened.
+    rejected_by_user = "rejected_by_user"
+    superseded_by_closed_pr = "superseded_by_closed_pr"
 
 
 class PullRequestState(str, enum.Enum):

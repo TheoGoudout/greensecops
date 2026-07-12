@@ -75,6 +75,13 @@ async def ingest_telemetry(
     session.add(run)
     session.commit()
 
+    # A completed run carries the full metrics needed for enrichment; queue the
+    # dynamic analysis that turns them into persisted findings.
+    if payload.phase == TelemetryPhase.completed:
+        from app.workers.tasks.dynamic_analysis import run_dynamic_analysis
+
+        run_dynamic_analysis.delay(str(run.id))
+
     logger.info(
         "Telemetry ingested: repo=%s run_id=%d phase=%s",
         repository,

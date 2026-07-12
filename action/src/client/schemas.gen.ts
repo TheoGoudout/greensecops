@@ -178,7 +178,7 @@ export const AnalysisPublicSchema = {
 
 export const AnalysisStatusSchema = {
     type: 'string',
-    enum: ['pending', 'running', 'completed', 'failed', 'skipped', 'no_workflows'],
+    enum: ['running', 'completed', 'failed', 'no_workflows'],
     title: 'AnalysisStatus'
 } as const;
 
@@ -609,6 +609,17 @@ export const FixPublicSchema = {
                 }
             ]
         },
+        comment_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Comment Url'
+        },
         created_at: {
             anyOf: [
                 {
@@ -649,7 +660,7 @@ export const FixPublicSchema = {
 
 export const FixStatusSchema = {
     type: 'string',
-    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected'],
+    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr'],
     title: 'FixStatus'
 } as const;
 
@@ -760,6 +771,9 @@ export const IssuePublicSchema = {
             ],
             title: 'Context'
         },
+        status: {
+            '$ref': '#/components/schemas/IssueStatus'
+        },
         created_at: {
             anyOf: [
                 {
@@ -819,7 +833,7 @@ export const IssuePublicSchema = {
         }
     },
     type: 'object',
-    required: ['id', 'analysis_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message'],
+    required: ['id', 'analysis_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status'],
     title: 'IssuePublic'
 } as const;
 
@@ -827,6 +841,17 @@ export const IssueSeveritySchema = {
     type: 'string',
     enum: ['critical', 'high', 'medium', 'low', 'info'],
     title: 'IssueSeverity'
+} as const;
+
+export const IssueStatusSchema = {
+    type: 'string',
+    enum: ['open', 'fix_in_progress', 'resolved'],
+    title: 'IssueStatus',
+    description: `Derived lifecycle of an issue.
+
+Issues carry no status column; this value is computed from \`\`resolved_at\`\`
+and \`\`fix_id\`\` (see \`\`Issue.status\`\`). It exists so the issue lifecycle can
+be reasoned about with the same vocabulary as the other state machines.`
 } as const;
 
 export const LLMProviderSchema = {

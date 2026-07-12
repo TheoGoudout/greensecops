@@ -29,7 +29,7 @@ export type AnalysisPublic = {
     completed_at?: (string | null);
 };
 
-export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'no_workflows';
+export type AnalysisStatus = 'running' | 'completed' | 'failed' | 'no_workflows';
 
 export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled' | 'release';
 
@@ -96,12 +96,13 @@ export type FixPublic = {
     pr_url?: (string | null);
     pr_branch?: (string | null);
     pr_state?: (PullRequestState | null);
+    comment_url?: (string | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
     issues?: Array<FixIssueSummary>;
 };
 
-export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected';
+export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr';
 
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
@@ -125,6 +126,7 @@ export type IssuePublic = {
     line_end?: (number | null);
     message: string;
     context?: (string | null);
+    status: IssueStatus;
     created_at?: (string | null);
     resolved_at?: (string | null);
     fix_id?: (string | null);
@@ -133,6 +135,15 @@ export type IssuePublic = {
 };
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+/**
+ * Derived lifecycle of an issue.
+ *
+ * Issues carry no status column; this value is computed from ``resolved_at``
+ * and ``fix_id`` (see ``Issue.status``). It exists so the issue lifecycle can
+ * be reasoned about with the same vocabulary as the other state machines.
+ */
+export type IssueStatus = 'open' | 'fix_in_progress' | 'resolved';
 
 export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 

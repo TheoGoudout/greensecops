@@ -1,0 +1,87 @@
+"""Fix lifecycle state machine (``python-statemachine``).
+
+States mirror ``FixStatus``. Behaviour lives in ``fix_generation.py``,
+``fix_delivery.py``, ``api/routes/fixes.py`` and ``maintenance.py``.
+
+The two rejection states are distinct (no longer disambiguated by a
+``delivered_at IS NULL`` convention):
+
+* ``rejected_by_user`` — a human dismissed the fix; terminal (idempotent
+  re-reject only).
+* ``superseded_by_closed_pr`` — the closed-PR delivery guard auto-rejected it;
+  ``restore`` makes it deliverable again when the PR is reopened.
+"""
+
+from __future__ import annotations
+
+from statemachine import State, StateMachine
+
+from app.models.enums import FixStatus, SSESignal
+
+# Statuses a worker is actively processing — a fix here may not be regenerated
+# out from under the worker. Single source of truth for fixes.IN_FLIGHT_STATUSES.
+IN_FLIGHT_STATUSES: frozenset[FixStatus] = frozenset(
+    {FixStatus.pending, FixStatus.generating, FixStatus.delivering}
+)
+
+# The two terminal rejection states — an issue whose fix is in either is not
+# actively being addressed. Single source of truth for the "active fix" filter.
+REJECTED_STATUSES: frozenset[FixStatus] = frozenset(
+    {FixStatus.rejected_by_user, FixStatus.superseded_by_closed_pr}
+)
+
+
+class FixMachine(StateMachine):
+    state_field = "status"
+
+    pending = State(initial=True, value=FixStatus.pending)
+    generating = State(value=FixStatus.generating)
+    ready = State(value=FixStatus.ready)
+    delivering = State(value=FixStatus.delivering)
+    delivered = State(value=FixStatus.delivered)
+    failed = State(value=FixStatus.failed, final=True)
+    rejected_by_user = State(value=FixStatus.rejected_by_user, final=True)
+    superseded = State(value=FixStatus.superseded_by_closed_pr)
+
+    # Inputs (events)
+    start_generation = pending.to(generating)
+    generation_succeeded = generating.to(ready)
+    generation_failed = generating.to(failed)
+    mark_ready = ready.to.itself() | delivered.to(ready)  # type: ignore[no-untyped-call]
+    start_delivery = ready.to(delivering)
+    precheck_failed = ready.to(failed)
+    delivery_succeeded = delivering.to(delivered)
+    delivery_failed = delivering.to(failed)
+    # Closed-PR delivery guard: distinct from a user rejection so it can be
+    # restored on PR reopen without an out-of-band delivered_at check.
+    supersede_closed_pr = ready.to(superseded)
+    # User reject is legal from every state except the two terminal ones
+    # (``failed`` and an already ``rejected_by_user`` fix). A repeated DELETE is
+    # kept idempotent at the endpoint via ``try_advance`` rather than a
+    # self-loop, so ``rejected_by_user`` stays a true final state.
+    reject = (
+        pending.to(rejected_by_user)
+        | generating.to(rejected_by_user)
+        | ready.to(rejected_by_user)
+        | delivering.to(rejected_by_user)
+        | delivered.to(rejected_by_user)
+        | superseded.to(rejected_by_user)
+    )
+    restore = superseded.to(ready)
+    swept = pending.to(failed) | generating.to(failed) | delivering.to(failed)
+
+    # Outputs (SSE signal emitted when each event fires)
+    outputs: dict[str, SSESignal | None] = {
+        "start_generation": SSESignal.fix_generating,
+        "generation_succeeded": SSESignal.fix_ready,
+        "generation_failed": SSESignal.fix_failed,
+        "mark_ready": None,
+        "start_delivery": SSESignal.fix_delivering,
+        "precheck_failed": SSESignal.fix_failed,
+        "delivery_succeeded": SSESignal.fix_delivered,
+        "delivery_failed": SSESignal.fix_failed,
+        "supersede_closed_pr": SSESignal.fix_rejected,
+        "reject": SSESignal.fix_rejected,
+        "restore": None,
+        "swept": SSESignal.fix_failed,
+    }

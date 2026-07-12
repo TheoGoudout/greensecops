@@ -46,6 +46,7 @@ def to_issue_public(issue: Issue) -> IssuePublic:
         line_end=issue.line_end,
         message=issue.message,
         context=issue.context,
+        status=issue.status,
         created_at=issue.created_at,
         resolved_at=issue.resolved_at,
         fix_id=fix.id if fix else None,

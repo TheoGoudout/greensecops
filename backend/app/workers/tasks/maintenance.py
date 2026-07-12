@@ -14,6 +14,7 @@ from app.models import (
     PullRequestState,
     Repository,
 )
+from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
@@ -34,15 +35,11 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     with Session(engine) as session:
         stuck_analyses = session.exec(
             select(Analysis)
-            .where(
-                col(Analysis.status).in_(
-                    [AnalysisStatus.pending, AnalysisStatus.running]
-                )
-            )
+            .where(Analysis.status == AnalysisStatus.running)
             .where(Analysis.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for analysis in stuck_analyses:
-            analysis.status = AnalysisStatus.failed
+            sm.advance(analysis, sm.AnalysisMachine, "swept")
             analysis.error_message = (
                 "Timed out: the analysis worker was interrupted before completion"
             )
@@ -63,7 +60,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             .where(Fix.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for fix in stuck_fixes:
-            fix.status = FixStatus.failed
+            sm.advance(fix, sm.FixMachine, "swept")
             fix.error_message = (
                 "Timed out: the fix worker was interrupted before completion"
             )
@@ -123,7 +120,9 @@ def _sync_open_pr_states_impl() -> dict[str, int]:
             pr_record = session.get(PullRequest, pr_id)
             if pr_record is None:
                 continue
-            pr_record.pr_state = new_state
+            pr_event = "merge" if new_state == PullRequestState.merged else "close"
+            if not sm.try_advance(pr_record, sm.PullRequestMachine, pr_event):
+                continue
             pr_record.updated_at = datetime.now(timezone.utc)
             session.add(pr_record)
             updated += 1

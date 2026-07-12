@@ -13,9 +13,9 @@ from app.models import (
     FixStatus,
     Organization,
     PullRequest,
-    PullRequestState,
     Repository,
 )
+from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.webhook_verifier import verify_webhook_signature
@@ -357,20 +357,13 @@ def _handle_pull_request_event(
     payload: dict[str, Any],
 ) -> None:
     action = payload.get("action")
-    if action not in ("closed", "reopened"):
+    if action not in ("closed", "reopened", "synchronize", "edited"):
         return
 
     pr = payload.get("pull_request", {})
     pr_url = pr.get("html_url")
     if not pr_url:
         return
-
-    if action == "closed":
-        merged = pr.get("merged", False)
-        new_state = PullRequestState.merged if merged else PullRequestState.closed
-    else:
-        merged = False
-        new_state = PullRequestState.open
 
     from sqlmodel import select
 
@@ -380,22 +373,41 @@ def _handle_pull_request_event(
     if not pr_record:
         return
 
-    pr_record.pr_state = new_state
+    # New commits pushed to the PR branch (synchronize) or a title/base edit
+    # (edited): record the update without changing lifecycle state, so the PR is
+    # no longer silently ignored. try_advance keeps it a no-op on a non-open PR.
+    if action in ("synchronize", "edited"):
+        _handle_pull_request_external_update(session, pr_record, pr_url)
+        return
+
+    if action == "closed":
+        merged = pr.get("merged", False)
+        pr_event = "merge" if merged else "close"
+    else:
+        merged = False
+        pr_event = "reopen"
+
+    # try_trigger: GitHub may redeliver or reorder pull_request events, so an
+    # already-applied transition (e.g. reopen on an open PR) is a no-op, not an
+    # error.
+    sm.try_advance(pr_record, sm.PullRequestMachine, pr_event)
     session.add(pr_record)
     session.commit()
-    logger.info("PR %s -> state=%s for PR record %s", pr_url, new_state, pr_record.id)
+    logger.info(
+        "PR %s -> state=%s for PR record %s", pr_url, pr_record.pr_state, pr_record.id
+    )
 
     # Notify for all fixes associated with this PR
     pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
 
     if action == "reopened":
-        # Reopening withdraws the close-as-rejection signal: fixes the
-        # closed-PR delivery guard auto-rejected (rejected but never
-        # delivered) become deliverable again. Fixes that actually reached
-        # the PR (delivered_at set) keep their status.
+        # Reopening withdraws the close-as-rejection signal: fixes the closed-PR
+        # delivery guard auto-rejected (status ``superseded_by_closed_pr``)
+        # become deliverable again. User-rejected and delivered fixes keep their
+        # status.
         for pr_fix in pr_fixes:
-            if pr_fix.status == FixStatus.rejected and pr_fix.delivered_at is None:
-                pr_fix.status = FixStatus.ready
+            if pr_fix.status == FixStatus.superseded_by_closed_pr:
+                sm.advance(pr_fix, sm.FixMachine, "restore")
                 session.add(pr_fix)
         session.commit()
 
@@ -419,6 +431,39 @@ def _handle_pull_request_event(
                         pr_record.pr_branch,
                     )
                 )
+
+
+def _handle_pull_request_external_update(
+    session: Session,
+    pr_record: PullRequest,
+    pr_url: str,
+) -> None:
+    """Record a synchronize/edited event on an open PR (updated_at + SSE)."""
+    from datetime import datetime, timezone
+
+    from sqlmodel import select
+
+    if not sm.try_advance(pr_record, sm.PullRequestMachine, "external_update"):
+        # PR is not open (closed/merged/NULL): nothing to record.
+        return
+    pr_record.updated_at = datetime.now(timezone.utc)
+    session.add(pr_record)
+    session.commit()
+
+    repo = session.get(Repository, pr_record.repo_id)
+    if not repo:
+        return
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    events_pub.publish_event(
+        ev.pr_updated(
+            str(repo.org_id),
+            str(repo.id),
+            [str(f.id) for f in pr_fixes],
+            pr_url,
+            pr_record.pr_branch,
+        )
+    )
+    logger.info("PR %s external update recorded (record %s)", pr_url, pr_record.id)
 
 
 def _handle_installation_repositories_event(

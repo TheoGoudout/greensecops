@@ -3,6 +3,7 @@ from sqlmodel import SQLModel
 from .db import (
     Analysis,
     BillingSubscription,
+    DynamicEnrichment,
     Fix,
     Issue,
     Organization,
@@ -29,6 +30,7 @@ from .enums import (
     FixStatus,
     IssueCategory,
     IssueSeverity,
+    IssueStatus,
     LLMProvider,
     OrgRole,
     PullRequestState,
@@ -81,6 +83,7 @@ __all__ = [
     "Fix",
     "TelemetryRun",
     "TelemetryMetricSample",
+    "DynamicEnrichment",
     "BillingSubscription",
     # enums
     "UserTier",
@@ -91,6 +94,7 @@ __all__ = [
     "AnalysisTrigger",
     "IssueSeverity",
     "IssueCategory",
+    "IssueStatus",
     "FixStatus",
     "PullRequestState",
     "SSESignal",

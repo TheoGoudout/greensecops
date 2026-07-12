@@ -24,6 +24,7 @@ from app.models import (
     Rule,
     WorkflowFile,
 )
+from app.services import state_machines as sm
 from app.services.deduplication import (
     compute_content_hash,
     compute_issue_fingerprint,
@@ -141,7 +142,7 @@ def _auto_queue_fix_generation(
     # file must ride along or it would be dropped from the PR.
     for fix in to_keep:
         if fix.status != FixStatus.ready:
-            fix.status = FixStatus.ready
+            sm.advance(fix, sm.FixMachine, "mark_ready")
             session.add(fix)
     session.commit()
 
@@ -513,7 +514,7 @@ def _run_static_analysis_impl(
                 violations = asyncio.run(_evaluate(content))
             except Exception as exc:
                 logger.exception("OPA evaluation failed for %s: %s", path, exc)
-                analysis.status = AnalysisStatus.failed
+                sm.advance(analysis, sm.AnalysisMachine, "opa_failed")
                 analysis.error_message = str(exc)[:2000]
                 analysis.completed_at = datetime.now(timezone.utc)
                 session.add(analysis)
@@ -602,7 +603,7 @@ def _run_static_analysis_impl(
             score = compute_score(workflow_score_inputs, job_score_inputs)
             grade = score_to_grade(score)
 
-            analysis.status = AnalysisStatus.completed
+            sm.advance(analysis, sm.AnalysisMachine, "opa_succeeded")
             analysis.score = score
             analysis.grade = grade
             analysis.completed_at = datetime.now(timezone.utc)

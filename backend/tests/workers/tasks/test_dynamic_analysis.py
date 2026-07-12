@@ -5,12 +5,13 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import (
     Analysis,
     AnalysisStatus,
     AnalysisTrigger,
+    DynamicEnrichment,
     Organization,
     Repository,
     TelemetryRun,
@@ -189,6 +190,51 @@ def test_run_dynamic_analysis_logs_enrichment_when_analysis_exists(
     # The enrichment log line should have been called
     info_calls = [str(c) for c in mock_logger.info.call_args_list]
     assert any("Dynamic enrichment" in c for c in info_calls)
+
+
+def test_run_dynamic_analysis_persists_enrichment_linked_to_analysis(
+    db: Session, repo: Repository
+) -> None:
+    # Arrange — oversized runner + a completed analysis to attach to.
+    analysis = _make_completed_analysis(db, repo)
+    run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=5.0, ram_percent=10.0)
+
+    # Act
+    result = _run_dynamic_analysis_impl(str(run.id))
+
+    # Assert — a DynamicEnrichment row is persisted, linked to run + analysis.
+    assert int(result["enrichments"]) == 1
+    rows = db.exec(
+        select(DynamicEnrichment).where(DynamicEnrichment.telemetry_run_id == run.id)
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].rule_slug == "runner_sizing"
+    assert rows[0].analysis_id == analysis.id
+    assert rows[0].repo_id == repo.id
+
+
+def test_run_dynamic_analysis_is_idempotent_on_rerun(
+    db: Session, repo: Repository
+) -> None:
+    run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=5.0, ram_percent=10.0)
+    _run_dynamic_analysis_impl(str(run.id))
+    _run_dynamic_analysis_impl(str(run.id))
+    rows = db.exec(
+        select(DynamicEnrichment).where(DynamicEnrichment.telemetry_run_id == run.id)
+    ).all()
+    # Re-running replaces rather than duplicating.
+    assert len(rows) == 1
+
+
+def test_run_dynamic_analysis_persists_nothing_when_no_signal(
+    db: Session, repo: Repository
+) -> None:
+    run = _make_telemetry_run(db, repo, vcpus=2, cpu_percent=50.0, ram_percent=50.0)
+    _run_dynamic_analysis_impl(str(run.id))
+    rows = db.exec(
+        select(DynamicEnrichment).where(DynamicEnrichment.telemetry_run_id == run.id)
+    ).all()
+    assert rows == []
 
 
 def test_run_dynamic_analysis_empty_specs_and_metrics(

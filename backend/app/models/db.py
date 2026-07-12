@@ -14,6 +14,7 @@ from .enums import (
     FixStatus,
     IssueCategory,
     IssueSeverity,
+    IssueStatus,
     LLMProvider,
     OrgRole,
     PullRequestState,
@@ -204,7 +205,10 @@ class Analysis(SQLModel, table=True):
         default=None, foreign_key="workflow_file.id", nullable=True, ondelete="CASCADE"
     )
     content_hash: str = Field(max_length=64, index=True)
-    status: AnalysisStatus = Field(default=AnalysisStatus.pending)
+    status: AnalysisStatus = Field(
+        default=AnalysisStatus.running,
+        sa_column_kwargs={"server_default": AnalysisStatus.running.value},
+    )
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)
     triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
@@ -251,6 +255,14 @@ class Issue(SQLModel, table=True):
     fingerprint: str | None = Field(default=None, max_length=16, index=True)
     severity: IssueSeverity
     category: IssueCategory
+    # Derived from resolved_at + fix_id, but persisted and kept authoritative by
+    # a DB trigger (see migration 0022) so it survives the fix_id ON DELETE SET
+    # NULL cascade. Applications never need to set it; the trigger owns writes.
+    status: IssueStatus = Field(
+        default=IssueStatus.open,
+        sa_column_kwargs={"server_default": IssueStatus.open.value},
+        index=True,
+    )
     line_start: int | None = Field(default=None)
     line_end: int | None = Field(default=None)
     message: str = Field(max_length=2048)
@@ -347,6 +359,42 @@ class TelemetryRun(SQLModel, table=True):
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     repository: Repository | None = Relationship(back_populates="telemetry_runs")
+
+
+# ─── DynamicEnrichment ────────────────────────────────────────────────────────
+
+
+class DynamicEnrichment(SQLModel, table=True):
+    """A runtime-telemetry finding produced by dynamic analysis.
+
+    Persisted (rather than only logged) so the recommendations a telemetry run
+    surfaces — e.g. an oversized runner — are queryable and can be shown
+    alongside the repo's static findings. Linked to the telemetry run that
+    produced it and, when available, the latest completed analysis it enriches.
+    """
+
+    __tablename__ = "dynamic_enrichment"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    telemetry_run_id: uuid.UUID = Field(
+        foreign_key="telemetry_run.id", nullable=False, ondelete="CASCADE"
+    )
+    analysis_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("analysis.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    rule_slug: str = Field(max_length=128, index=True)
+    evidence: str = Field(max_length=2048)
+    recommendation: str = Field(max_length=2048)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
 
 
 # ─── TelemetryMetricSample ────────────────────────────────────────────────────

@@ -555,7 +555,7 @@ def test_reject_fix_found(
     assert response.status_code == 204
 
     db.refresh(ready_fix)
-    assert ready_fix.status == FixStatus.rejected
+    assert ready_fix.status == FixStatus.rejected_by_user
 
 
 def test_reject_fix_not_found(
@@ -1388,10 +1388,12 @@ def test_regenerate_for_repo_regenerates_guard_rejected_fix(
     workflow_file: WorkflowFile,
     issue: Issue,
 ) -> None:
-    """A fix auto-rejected by the closed-PR delivery guard (rejected, never
+    """A fix auto-rejected by the closed-PR delivery guard (superseded, never
     delivered, linked to the closed PR) is regenerated like a delivered one."""
     pr = _make_pr(db, repo, "closed", "greensecops/regen-repo-rejected")
-    fix_id = _make_fix(db, workflow_file.id, FixStatus.rejected, pr_id=pr.id).id
+    fix_id = _make_fix(
+        db, workflow_file.id, FixStatus.superseded_by_closed_pr, pr_id=pr.id
+    ).id
     pr_id = pr.id
 
     with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
