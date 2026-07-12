@@ -15,15 +15,10 @@ from app.models import (
     PullRequest,
     Repository,
 )
+from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.webhook_verifier import verify_webhook_signature
-from app.services.state_machines import (
-    FixEvent,
-    PullRequestEvent,
-    fix_machine,
-    pull_request_machine,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -372,10 +367,10 @@ def _handle_pull_request_event(
 
     if action == "closed":
         merged = pr.get("merged", False)
-        pr_event = PullRequestEvent.merge if merged else PullRequestEvent.close
+        pr_event = "merge" if merged else "close"
     else:
         merged = False
-        pr_event = PullRequestEvent.reopen
+        pr_event = "reopen"
 
     from sqlmodel import select
 
@@ -388,7 +383,7 @@ def _handle_pull_request_event(
     # try_trigger: GitHub may redeliver or reorder pull_request events, so an
     # already-applied transition (e.g. reopen on an open PR) is a no-op, not an
     # error.
-    pull_request_machine.try_trigger(pr_record, pr_event)
+    sm.try_advance(pr_record, sm.PullRequestMachine, pr_event)
     session.add(pr_record)
     session.commit()
     logger.info(
@@ -405,7 +400,7 @@ def _handle_pull_request_event(
         # the PR (delivered_at set) keep their status.
         for pr_fix in pr_fixes:
             if pr_fix.status == FixStatus.rejected and pr_fix.delivered_at is None:
-                fix_machine.trigger(pr_fix, FixEvent.restore)
+                sm.advance(pr_fix, sm.FixMachine, "restore")
                 session.add(pr_fix)
         session.commit()
 

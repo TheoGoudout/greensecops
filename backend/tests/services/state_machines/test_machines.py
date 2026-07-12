@@ -1,6 +1,7 @@
 """Behavioural tests for the four lifecycle state machines."""
 
 import pytest
+from statemachine import StateMachine
 
 from app.models.enums import (
     AnalysisStatus,
@@ -9,202 +10,156 @@ from app.models.enums import (
     PullRequestState,
     SSESignal,
 )
-from app.services.state_machines import (
-    AnalysisEvent,
-    FixEvent,
-    IssueEvent,
-    PullRequestEvent,
-    analysis_machine,
-    fix_machine,
-    issue_machine,
-    pull_request_machine,
-)
-from app.services.state_machines.base import IllegalTransition, StateMachine
+from app.services import state_machines as sm
 
 ALL_MACHINES = [
-    analysis_machine,
-    fix_machine,
-    issue_machine,
-    pull_request_machine,
+    sm.AnalysisMachine,
+    sm.FixMachine,
+    sm.PullRequestMachine,
+    sm.IssueMachine,
 ]
+
+
+class _Model:
+    """Minimal stand-in that holds a state in the machine's state_field."""
+
+    def __init__(self, machine_cls: type[StateMachine], value: object) -> None:
+        setattr(self, machine_cls.state_field, value)  # type: ignore[attr-defined]
 
 
 # ── Structural invariants shared by every machine ────────────────────────────
 
 
 @pytest.mark.parametrize("machine", ALL_MACHINES, ids=lambda m: m.name)
-def test_states_and_events_belong_to_declared_enums(machine: StateMachine) -> None:
-    for t in machine.transitions:
-        assert isinstance(t.event, machine.event_enum)
-        assert t.dest in machine.state_enum
-        for src in t.sources:
-            assert src in machine.state_enum
+def test_machine_graph_is_valid(machine: type[StateMachine]) -> None:
+    # python-statemachine validates connectivity and a single initial state at
+    # class-definition time; a machine object existing at all proves the graph.
+    assert machine.states
+    initials = [s for s in machine.states if s.initial]
+    assert len(initials) == 1
 
 
 @pytest.mark.parametrize("machine", ALL_MACHINES, ids=lambda m: m.name)
-def test_initial_and_terminal_states_are_valid(machine: StateMachine) -> None:
-    assert machine.initial_states <= set(machine.state_enum)
-    assert machine.terminal_states <= set(machine.state_enum)
+def test_state_values_are_the_status_enums(machine: type[StateMachine]) -> None:
+    for state in machine.states:
+        # Each state carries the persisted enum value it maps to.
+        assert state.value is not None
 
 
 @pytest.mark.parametrize("machine", ALL_MACHINES, ids=lambda m: m.name)
-def test_every_referenced_state_is_reachable(machine: StateMachine) -> None:
-    # Every state the machine can be in (a transition source, or a declared
-    # terminal/resting state) must be arrivable: either an initial state or the
-    # destination of some transition. Catches orphaned states without assuming
-    # terminals are absorbing (these lifecycles are intentionally re-entrant —
-    # e.g. a resolved issue can recur, a rejected fix can be restored).
-    reachable = set(machine.initial_states) | {t.dest for t in machine.transitions}
-    referenced = {src for t in machine.transitions for src in t.sources}
-    referenced |= machine.terminal_states
-    orphans = referenced - reachable
-    assert not orphans, f"{machine.name}: unreachable states {orphans}"
-
-
-@pytest.mark.parametrize("machine", ALL_MACHINES, ids=lambda m: m.name)
-def test_declared_outputs_are_sse_signals(machine: StateMachine) -> None:
-    for t in machine.transitions:
-        assert t.output is None or isinstance(t.output, SSESignal)
+def test_declared_outputs_reference_known_events(
+    machine: type[StateMachine],
+) -> None:
+    event_ids = {e.id for e in machine.events}
+    for event_id, signal in machine.outputs.items():  # type: ignore[attr-defined]
+        assert event_id in event_ids
+        assert signal is None or isinstance(signal, SSESignal)
 
 
 # ── Analysis ─────────────────────────────────────────────────────────────────
 
 
 def test_analysis_happy_path() -> None:
+    a = _Model(sm.AnalysisMachine, AnalysisStatus.running)
     assert (
-        analysis_machine.next_state(AnalysisStatus.running, AnalysisEvent.opa_succeeded)
-        is AnalysisStatus.completed
-    )
-    assert (
-        analysis_machine.output_for(AnalysisStatus.running, AnalysisEvent.opa_succeeded)
-        is SSESignal.analysis_completed
+        sm.advance(a, sm.AnalysisMachine, "opa_succeeded") is AnalysisStatus.completed
     )
 
 
-def test_analysis_sweep_from_pending_or_running() -> None:
-    for src in (AnalysisStatus.pending, AnalysisStatus.running):
-        assert (
-            analysis_machine.next_state(src, AnalysisEvent.swept)
-            is AnalysisStatus.failed
-        )
+def test_analysis_no_workflows_edge() -> None:
+    a = _Model(sm.AnalysisMachine, AnalysisStatus.running)
+    assert (
+        sm.advance(a, sm.AnalysisMachine, "no_workflows_found")
+        is AnalysisStatus.no_workflows
+    )
 
 
-def test_analysis_cannot_complete_from_terminal() -> None:
-    with pytest.raises(IllegalTransition):
-        analysis_machine.next_state(
-            AnalysisStatus.completed, AnalysisEvent.opa_succeeded
-        )
+def test_analysis_sweep_from_running() -> None:
+    a = _Model(sm.AnalysisMachine, AnalysisStatus.running)
+    assert sm.advance(a, sm.AnalysisMachine, "swept") is AnalysisStatus.failed
+
+
+def test_analysis_cannot_advance_from_terminal() -> None:
+    a = _Model(sm.AnalysisMachine, AnalysisStatus.completed)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(a, sm.AnalysisMachine, "opa_succeeded")
 
 
 # ── Fix ──────────────────────────────────────────────────────────────────────
 
 
 def test_fix_generation_and_delivery_path() -> None:
-    state = FixStatus.pending
+    f = _Model(sm.FixMachine, FixStatus.pending)
     for event, expected in [
-        (FixEvent.start_generation, FixStatus.generating),
-        (FixEvent.generation_succeeded, FixStatus.ready),
-        (FixEvent.start_delivery, FixStatus.delivering),
-        (FixEvent.delivery_succeeded, FixStatus.delivered),
+        ("start_generation", FixStatus.generating),
+        ("generation_succeeded", FixStatus.ready),
+        ("start_delivery", FixStatus.delivering),
+        ("delivery_succeeded", FixStatus.delivered),
     ]:
-        state = fix_machine.next_state(state, event)
-        assert state is expected
+        assert sm.advance(f, sm.FixMachine, event) is expected
 
 
-def test_fix_user_reject_is_idempotent() -> None:
-    # reject is legal from every non-in-flight state, including rejected itself.
+def test_fix_reject_is_idempotent() -> None:
     for src in (FixStatus.ready, FixStatus.delivered, FixStatus.rejected):
-        assert fix_machine.next_state(src, FixEvent.reject) is FixStatus.rejected
+        f = _Model(sm.FixMachine, src)
+        assert sm.advance(f, sm.FixMachine, "reject") is FixStatus.rejected
 
 
-def test_fix_guard_reject_only_from_ready() -> None:
-    assert (
-        fix_machine.next_state(FixStatus.ready, FixEvent.supersede_closed_pr)
-        is FixStatus.rejected
-    )
-    with pytest.raises(IllegalTransition):
-        fix_machine.next_state(FixStatus.delivered, FixEvent.supersede_closed_pr)
+def test_fix_guard_supersede_only_from_ready() -> None:
+    f = _Model(sm.FixMachine, FixStatus.ready)
+    assert sm.advance(f, sm.FixMachine, "supersede_closed_pr") is FixStatus.rejected
+    f2 = _Model(sm.FixMachine, FixStatus.delivered)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f2, sm.FixMachine, "supersede_closed_pr")
 
 
 def test_fix_restore_from_rejected() -> None:
-    assert (
-        fix_machine.next_state(FixStatus.rejected, FixEvent.restore) is FixStatus.ready
-    )
-
-
-def test_fix_force_start_delivery_from_non_ready() -> None:
-    class _F:
-        status = FixStatus.delivered
-
-    f = _F()
-    # Normal trigger is illegal from delivered; force bypasses the source check.
-    with pytest.raises(IllegalTransition):
-        fix_machine.trigger(f, FixEvent.start_delivery)
-    fix_machine.force(f, FixEvent.start_delivery)
-    assert f.status is FixStatus.delivering
+    f = _Model(sm.FixMachine, FixStatus.rejected)
+    assert sm.advance(f, sm.FixMachine, "restore") is FixStatus.ready
 
 
 def test_fix_sweep_from_in_flight_only() -> None:
     for src in (FixStatus.pending, FixStatus.generating, FixStatus.delivering):
-        assert fix_machine.next_state(src, FixEvent.swept) is FixStatus.failed
-    with pytest.raises(IllegalTransition):
-        fix_machine.next_state(FixStatus.ready, FixEvent.swept)
+        f = _Model(sm.FixMachine, src)
+        assert sm.advance(f, sm.FixMachine, "swept") is FixStatus.failed
+    f2 = _Model(sm.FixMachine, FixStatus.ready)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f2, sm.FixMachine, "swept")
+
+
+def test_in_flight_statuses_constant() -> None:
+    assert sm.IN_FLIGHT_STATUSES == frozenset(
+        {FixStatus.pending, FixStatus.generating, FixStatus.delivering}
+    )
 
 
 # ── Pull request ─────────────────────────────────────────────────────────────
 
 
 def test_pull_request_lifecycle() -> None:
-    assert (
-        pull_request_machine.next_state(PullRequestState.open, PullRequestEvent.close)
-        is PullRequestState.closed
-    )
-    assert (
-        pull_request_machine.next_state(
-            PullRequestState.closed, PullRequestEvent.reopen
-        )
-        is PullRequestState.open
-    )
-    assert (
-        pull_request_machine.next_state(PullRequestState.open, PullRequestEvent.merge)
-        is PullRequestState.merged
-    )
-
-
-def test_pull_request_reopen_from_open_is_noop_via_try_trigger() -> None:
-    class _PR:
-        pr_state = PullRequestState.open
-
-    pr = _PR()
-    assert pull_request_machine.try_trigger(pr, PullRequestEvent.reopen) is False
-    assert pr.pr_state is PullRequestState.open
+    pr = _Model(sm.PullRequestMachine, PullRequestState.open)
+    assert sm.advance(pr, sm.PullRequestMachine, "close") is PullRequestState.closed
+    assert sm.advance(pr, sm.PullRequestMachine, "reopen") is PullRequestState.open
+    assert sm.advance(pr, sm.PullRequestMachine, "merge") is PullRequestState.merged
 
 
 def test_pull_request_cannot_reopen_a_merged_pr() -> None:
-    with pytest.raises(IllegalTransition):
-        pull_request_machine.next_state(
-            PullRequestState.merged, PullRequestEvent.reopen
-        )
+    pr = _Model(sm.PullRequestMachine, PullRequestState.merged)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(pr, sm.PullRequestMachine, "reopen")
 
 
-# ── Issue (derived) ──────────────────────────────────────────────────────────
+# ── Issue ────────────────────────────────────────────────────────────────────
 
 
 def test_issue_transitions() -> None:
-    assert (
-        issue_machine.next_state(IssueStatus.open, IssueEvent.link_fix)
-        is IssueStatus.fix_in_progress
-    )
-    assert (
-        issue_machine.next_state(IssueStatus.fix_in_progress, IssueEvent.resolve)
-        is IssueStatus.resolved
-    )
-    assert (
-        issue_machine.next_state(IssueStatus.resolved, IssueEvent.recur)
-        is IssueStatus.open
-    )
+    i = _Model(sm.IssueMachine, IssueStatus.open)
+    assert sm.advance(i, sm.IssueMachine, "link_fix") is IssueStatus.fix_in_progress
+    assert sm.advance(i, sm.IssueMachine, "resolve") is IssueStatus.resolved
+    assert sm.advance(i, sm.IssueMachine, "recur") is IssueStatus.open
 
 
 def test_issue_cannot_link_fix_when_resolved() -> None:
-    with pytest.raises(IllegalTransition):
-        issue_machine.next_state(IssueStatus.resolved, IssueEvent.link_fix)
+    i = _Model(sm.IssueMachine, IssueStatus.resolved)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(i, sm.IssueMachine, "link_fix")

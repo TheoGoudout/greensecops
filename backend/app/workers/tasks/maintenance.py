@@ -14,16 +14,9 @@ from app.models import (
     PullRequestState,
     Repository,
 )
+from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
-from app.services.state_machines import (
-    AnalysisEvent,
-    FixEvent,
-    PullRequestEvent,
-    analysis_machine,
-    fix_machine,
-    pull_request_machine,
-)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -50,7 +43,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             .where(Analysis.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for analysis in stuck_analyses:
-            analysis_machine.trigger(analysis, AnalysisEvent.swept)
+            sm.advance(analysis, sm.AnalysisMachine, "swept")
             analysis.error_message = (
                 "Timed out: the analysis worker was interrupted before completion"
             )
@@ -71,7 +64,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             .where(Fix.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for fix in stuck_fixes:
-            fix_machine.trigger(fix, FixEvent.swept)
+            sm.advance(fix, sm.FixMachine, "swept")
             fix.error_message = (
                 "Timed out: the fix worker was interrupted before completion"
             )
@@ -131,12 +124,8 @@ def _sync_open_pr_states_impl() -> dict[str, int]:
             pr_record = session.get(PullRequest, pr_id)
             if pr_record is None:
                 continue
-            pr_event = (
-                PullRequestEvent.merge
-                if new_state == PullRequestState.merged
-                else PullRequestEvent.close
-            )
-            if not pull_request_machine.try_trigger(pr_record, pr_event):
+            pr_event = "merge" if new_state == PullRequestState.merged else "close"
+            if not sm.try_advance(pr_record, sm.PullRequestMachine, pr_event):
                 continue
             pr_record.updated_at = datetime.now(timezone.utc)
             session.add(pr_record)

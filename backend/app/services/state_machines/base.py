@@ -1,175 +1,108 @@
-"""A small, dependency-free state-machine primitive.
+"""Shared helpers for the lifecycle state machines.
 
-The four GreenSecOps lifecycles (analysis, issue, fix, pull request) are each
-declared as a :class:`StateMachine`: an explicit set of :class:`Transition`
-records that name the **input event** driving them, the **source states** the
-event is legal from, the **destination state**, and the **output** side effect
-(the SSE signal the application emits when the transition fires).
+Each lifecycle is a :class:`statemachine.StateMachine` subclass (the
+``python-statemachine`` library) that binds to a persisted model instance and
+stores its state in a column (``status`` or ``pr_state``). The library is the
+engine: it owns the state graph and rejects illegal transitions. On top of it
+these helpers add the three call-site ergonomics the application needs:
 
-The machine is the single source of truth for "what may follow what". Call
-sites mutate persisted status by asking the machine for the next state
-(:meth:`StateMachine.trigger`), so an illegal transition raises
-:class:`IllegalTransition` instead of silently corrupting state.
+* :func:`advance` — fire an event, raising on an illegal transition (normal
+  worker/API paths).
+* :func:`try_advance` — fire an event only if legal, else no-op (idempotent
+  boundaries where GitHub may redeliver or reorder events).
+* :func:`force_to` — set the state directly, bypassing the source guard, for
+  explicit administrator overrides (forced fix delivery).
 
-This mirrors, in code, the diagrams in ``docs/state-machines.md``; a test
-asserts the two stay in sync.
+Concrete machines declare two extra class attributes: ``state_field`` (the
+model column they drive) and ``outputs`` (a mapping of event name → the
+``SSESignal`` emitted as that transition's observable output).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, cast
 
-from app.models.enums import SSESignal
+from statemachine import StateMachine
+from statemachine.exceptions import (
+    InvalidStateValue,
+    TransitionNotAllowed,
+)
 
-S = TypeVar("S", bound=Enum)  # state enum
-E = TypeVar("E", bound=Enum)  # input-event enum
+if TYPE_CHECKING:
+    from app.models.enums import SSESignal
 
 
 class IllegalTransition(Exception):
-    """Raised when an event is fired from a state that does not allow it."""
+    """Raised by :func:`advance` when an event is not legal from the current
+    state (or the state column is ``NULL``). Wraps the library's
+    ``TransitionNotAllowed`` so call sites depend on this package, not the
+    library directly.
+    """
 
-    def __init__(self, machine: str, current: Enum, event: Enum) -> None:
-        self.machine = machine
-        self.current = current
-        self.event = event
-        super().__init__(
-            f"{machine}: event {event.value!r} is not allowed from state "
-            f"{current.value!r}"
+
+def _state_field(machine_cls: type[StateMachine]) -> str:
+    # getattr (not attribute access): mypy cannot see the subclass-only
+    # ``state_field`` attribute on the ``type[StateMachine]`` base.
+    return cast(str, getattr(machine_cls, "state_field"))  # noqa: B009
+
+
+def _current(model: object, machine_cls: type[StateMachine]) -> object:
+    return getattr(model, _state_field(machine_cls))
+
+
+def advance(model: object, machine_cls: type[StateMachine], event: str) -> object:
+    """Fire ``event`` on ``model`` via ``machine_cls``; return the new state.
+
+    Raises :class:`IllegalTransition` (without mutating) when the event is not
+    legal from the model's current state.
+    """
+    field = _state_field(machine_cls)
+    if _current(model, machine_cls) is None:
+        raise IllegalTransition(
+            f"{machine_cls.__name__}: cannot fire {event!r} on a row whose "
+            f"{field!r} is NULL"
         )
+    machine = machine_cls(model, state_field=field)
+    try:
+        machine.send(event)
+    except TransitionNotAllowed as exc:
+        raise IllegalTransition(
+            f"{machine_cls.__name__}: {event!r} is not allowed from "
+            f"{_current(model, machine_cls)!r}"
+        ) from exc
+    return _current(model, machine_cls)
 
 
-@dataclass(frozen=True)
-class Transition(Generic[S, E]):
-    """One edge of a state machine.
+def try_advance(model: object, machine_cls: type[StateMachine], event: str) -> bool:
+    """Fire ``event`` if legal from the current state; else no-op.
 
-    Attributes:
-        event: the input that triggers this edge.
-        sources: states the event is legal from.
-        dest: the resulting state.
-        output: the SSE signal emitted as the transition's observable output
-            (``None`` for internal transitions with no notification).
-        guard: human-readable precondition enforced by the caller, for docs.
-        description: what the transition represents.
+    Returns whether the transition fired. A model whose state column is
+    ``NULL``/unknown (legacy rows) is treated as "cannot transition" and is left
+    untouched — binding is skipped so the library does not auto-initialise it.
     """
-
-    event: E
-    sources: frozenset[S]
-    dest: S
-    output: SSESignal | None = None
-    guard: str | None = None
-    description: str = ""
-
-
-@dataclass(frozen=True)
-class StateMachine(Generic[S, E]):
-    """An immutable collection of transitions over a state enum.
-
-    ``state_attr`` is the attribute the machine reads and writes on a model
-    instance (``"status"`` for analysis/fix, ``"pr_state"`` for pull request).
-    ``initial_states`` and ``terminal_states`` are declarative — recorded for
-    documentation and validated by tests, not enforced at runtime.
-    """
-
-    name: str
-    state_attr: str
-    state_enum: type[S]
-    event_enum: type[E]
-    transitions: tuple[Transition[S, E], ...]
-    initial_states: frozenset[S]
-    terminal_states: frozenset[S]
-    _index: dict[tuple[S, E], Transition[S, E]] = field(
-        default_factory=dict, init=False, repr=False, compare=False
-    )
-
-    def __post_init__(self) -> None:
-        for t in self.transitions:
-            for src in t.sources:
-                key = (src, t.event)
-                if key in self._index:
-                    raise ValueError(
-                        f"{self.name}: duplicate transition for "
-                        f"({src.value!r}, {t.event.value!r})"
-                    )
-                self._index[key] = t
-
-    # ── Queries ──────────────────────────────────────────────────────────────
-
-    def can(self, current: S, event: E) -> bool:
-        """True when ``event`` is legal from ``current``."""
-        return (current, event) in self._index
-
-    def next_state(self, current: S, event: E) -> S:
-        """Destination state for ``event`` from ``current`` (validates)."""
-        transition = self._index.get((current, event))
-        if transition is None:
-            raise IllegalTransition(self.name, current, event)
-        return transition.dest
-
-    def output_for(self, current: S, event: E) -> SSESignal | None:
-        """The SSE signal declared as this transition's output."""
-        transition = self._index.get((current, event))
-        if transition is None:
-            raise IllegalTransition(self.name, current, event)
-        return transition.output
-
-    def allowed_events(self, current: S) -> set[E]:
-        """Every event legal from ``current``."""
-        return {event for (state, event) in self._index if state == current}
-
-    def event_dest(self, event: E) -> S:
-        """The single destination state ``event`` always leads to.
-
-        Raises ``ValueError`` if the event is unknown or (in some other
-        machine) maps to more than one destination.
-        """
-        dests = {t.dest for t in self.transitions if t.event == event}
-        if len(dests) != 1:
-            raise ValueError(
-                f"{self.name}: event {event.value!r} has {len(dests)} "
-                "destinations; event_dest requires exactly one"
-            )
-        return next(iter(dests))
-
-    # ── Mutation ─────────────────────────────────────────────────────────────
-
-    def trigger(self, obj: object, event: E) -> S:
-        """Advance ``obj``'s state by firing ``event``; returns the new state.
-
-        Reads and writes ``obj.<state_attr>``. Raises
-        :class:`IllegalTransition` (without mutating) when the event is not
-        legal from the current state.
-        """
-        current: S = getattr(obj, self.state_attr)
-        dest = self.next_state(current, event)
-        setattr(obj, self.state_attr, dest)
-        return dest
-
-    def try_trigger(self, obj: object, event: E) -> bool:
-        """Fire ``event`` if legal from the current state; else no-op.
-
-        Returns whether the transition fired. Use at boundaries where
-        duplicate or out-of-order inputs are expected (webhooks, missed-event
-        reconciliation) and must not raise.
-        """
-        current: S = getattr(obj, self.state_attr)
-        if not self.can(current, event):
-            return False
-        setattr(obj, self.state_attr, self.next_state(current, event))
+    if _current(model, machine_cls) is None:
+        return False
+    try:
+        machine = machine_cls(model, state_field=_state_field(machine_cls))
+    except InvalidStateValue:
+        return False
+    try:
+        machine.send(event)
         return True
+    except TransitionNotAllowed:
+        return False
 
-    def force(self, obj: object, event: E) -> S:
-        """Set the state to ``event``'s destination, bypassing source checks.
 
-        For explicit administrator overrides (e.g. forced fix delivery) that
-        intentionally short-circuit the normal guards, while still expressing
-        the change in the machine's own vocabulary.
-        """
-        dest = self.event_dest(event)
-        setattr(obj, self.state_attr, dest)
-        return dest
+def force_to(model: object, machine_cls: type[StateMachine], state: object) -> None:
+    """Set ``model``'s state column directly, bypassing the source guard.
 
-    def apply(self, obj: object, event: E, *, force: bool = False) -> S:
-        """:meth:`force` when ``force`` else :meth:`trigger`."""
-        return self.force(obj, event) if force else self.trigger(obj, event)
+    For explicit administrator overrides (e.g. forced fix delivery) that
+    intentionally short-circuit the normal transition guards.
+    """
+    setattr(model, _state_field(machine_cls), state)
+
+
+def output_for(machine_cls: type[StateMachine], event: str) -> SSESignal | None:
+    """The SSE signal declared as ``event``'s observable output, if any."""
+    outputs = cast("dict[str, SSESignal | None]", getattr(machine_cls, "outputs"))  # noqa: B009
+    return outputs.get(event)

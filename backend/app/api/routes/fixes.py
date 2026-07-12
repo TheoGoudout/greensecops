@@ -32,17 +32,12 @@ from app.models import (
     User,
     WorkflowFile,
 )
+from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import parse_pr_url
 from app.services.pr_body import IssueInfo, build_pr_body
-from app.services.state_machines import (
-    IN_FLIGHT_STATUSES,
-    FixEvent,
-    PullRequestEvent,
-    fix_machine,
-    pull_request_machine,
-)
+from app.services.state_machines import IN_FLIGHT_STATUSES
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
 from app.workers.tasks.fix_generation import (
     init_fix_batch,
@@ -539,7 +534,7 @@ def reject_fix(
 ) -> None:
     fix = get_or_404(session, Fix, fix_id)
     _authorize_fix(session, current_user, fix)
-    fix_machine.trigger(fix, FixEvent.reject)
+    sm.advance(fix, sm.FixMachine, "reject")
     session.add(fix)
     session.commit()
 
@@ -703,12 +698,8 @@ async def sync_pr_statuses(
         if new_state == PullRequestState.open:
             continue
 
-        pr_event = (
-            PullRequestEvent.merge
-            if new_state == PullRequestState.merged
-            else PullRequestEvent.close
-        )
-        if not pull_request_machine.try_trigger(pr_record, pr_event):
+        pr_event = "merge" if new_state == PullRequestState.merged else "close"
+        if not sm.try_advance(pr_record, sm.PullRequestMachine, pr_event):
             continue
         session.add(pr_record)
         updated += 1

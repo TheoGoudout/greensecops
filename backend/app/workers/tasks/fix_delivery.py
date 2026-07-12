@@ -16,10 +16,10 @@ from app.models import (
     PullRequestState,
     Repository,
 )
+from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.fix_delivery import STALE_CONTENT_ERROR_CODE
-from app.services.state_machines import FixEvent, fix_machine
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ def deliver_fixes_batch(
         ):
             for fix in fixes:
                 # Guard runs only when not forced, so every fix here is `ready`.
-                fix_machine.trigger(fix, FixEvent.supersede_closed_pr)
+                sm.advance(fix, sm.FixMachine, "supersede_closed_pr")
                 # Link the fix to the PR that caused the rejection so the UI
                 # can offer regeneration (regenerate-for-workflow/-repo) for
                 # it. A guard rejection is recognizable later by delivered_at
@@ -112,7 +112,10 @@ def deliver_fixes_batch(
                 continue
             if not fix.full_content:
                 # `force` can bring a non-ready fix here; bypass the source check.
-                fix_machine.apply(fix, FixEvent.precheck_failed, force=force)
+                if force:
+                    sm.force_to(fix, sm.FixMachine, FixStatus.failed)
+                else:
+                    sm.advance(fix, sm.FixMachine, "precheck_failed")
                 fix.error_message = "Fix has no generated workflow content"
                 session.add(fix)
                 events_pub.publish_event(
@@ -141,7 +144,10 @@ def deliver_fixes_batch(
 
         for fix in fixes:
             # `force` may deliver a fix that is not `ready`; bypass the guard.
-            fix_machine.apply(fix, FixEvent.start_delivery, force=force)
+            if force:
+                sm.force_to(fix, sm.FixMachine, FixStatus.delivering)
+            else:
+                sm.advance(fix, sm.FixMachine, "start_delivery")
             session.add(fix)
         session.commit()
         events_pub.publish_event(
@@ -193,10 +199,10 @@ def deliver_fixes_batch(
             # Every fix reached here in `delivering`, so these transitions are
             # always legal (no force needed).
             if result.error:
-                fix_machine.trigger(fix, FixEvent.delivery_failed)
+                sm.advance(fix, sm.FixMachine, "delivery_failed")
                 fix.error_message = result.error
             else:
-                fix_machine.trigger(fix, FixEvent.delivery_succeeded)
+                sm.advance(fix, sm.FixMachine, "delivery_succeeded")
                 fix.pr_id = pr.id if pr else None
                 fix.delivered_at = now
                 delivered_fix_ids.append(str(fix.id))

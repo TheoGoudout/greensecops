@@ -32,6 +32,7 @@ dependencies = [
     "langchain-ollama>=0.2.0,<0.3.0",
     "langsmith>=0.2.0,<0.3.0",
     "stripe>=10.0.0,<11.0.0",
+    "python-statemachine>=2.3,<3.0",
 ]
 
 [dependency-groups]
