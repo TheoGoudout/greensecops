@@ -9,45 +9,45 @@ which is the single source of truth.
 
 ## Formalization in code
 
-Each lifecycle is declared as a `StateMachine` of `Transition` records
-(`app/services/state_machines/base.py`):
+Each lifecycle is a [`python-statemachine`](https://pypi.org/project/python-statemachine/)
+`StateMachine` subclass (`analysis.py`, `fix.py`, `pull_request.py`,
+`issue.py`). States carry the persisted status-enum value they map to; events
+declare the transitions; a per-machine `outputs` map records the `SSESignal`
+each event emits.
 
 | Concept | In code |
 |---|---|
-| **State** | the existing status enum (`AnalysisStatus`, `FixStatus`, `PullRequestState`) or the derived `IssueStatus` |
-| **Input event** | a per-machine `*Event` enum (`AnalysisEvent`, `FixEvent`, `PullRequestEvent`, `IssueEvent`) |
-| **Transition** | `Transition(event, sources, dest, output, guard, description)` |
-| **Output** | the `SSESignal` the application emits when the transition fires |
+| **State** | `State(value=<StatusEnum>.x, final=…)` — the persisted column value |
+| **Input event** | a `<source>.to(<dest>)` transition method on the machine |
+| **Output** | `Machine.outputs[event]` → the `SSESignal` emitted when it fires |
 
-Call sites no longer assign status directly; they ask the machine to advance it,
-so an illegal transition raises instead of silently corrupting state:
+The library enforces a **single connected graph** with **one initial state**;
+states with no outgoing edge must be `final`. Call sites never assign status
+directly — they go through thin helpers in `base.py` so an illegal transition
+raises instead of corrupting state:
 
 ```python
-from app.services.state_machines import fix_machine, FixEvent
+from app.services import state_machines as sm
 
-fix_machine.trigger(fix, FixEvent.start_generation)   # pending → generating; raises if illegal
-fix_machine.try_trigger(pr, PullRequestEvent.reopen)  # idempotent no-op at webhook boundaries
-fix_machine.apply(fix, FixEvent.start_delivery, force=force)  # admin override bypasses source guard
+sm.advance(fix, sm.FixMachine, "start_generation")      # raises on illegal transition
+sm.try_advance(pr, sm.PullRequestMachine, "reopen")     # idempotent no-op at webhook boundaries
+sm.force_to(fix, sm.FixMachine, FixStatus.delivering)   # admin override (forced delivery)
 ```
 
-- **`trigger`** — validates the source state and advances, else raises
-  `IllegalTransition`. Used on the normal worker/API paths.
-- **`try_trigger`** — advances only if legal, else returns `False` without
-  raising. Used at boundaries where GitHub may **redeliver or reorder** events
-  (the `pull_request` webhook, missed-webhook reconciliation).
-- **`force` / `apply(..., force=True)`** — sets the destination while bypassing
-  the source check, for explicit administrator overrides (forced fix delivery).
+- **`advance`** — validates the source state and fires, else raises
+  `IllegalTransition`. Normal worker/API paths.
+- **`try_advance`** — fires only if legal, else returns `False`. Boundaries
+  where GitHub may **redeliver or reorder** events, and it leaves a `NULL`
+  legacy state column untouched (no auto-initialisation).
+- **`force_to`** — sets the destination directly, bypassing the source guard,
+  for explicit administrator overrides (forced fix delivery).
 
-> Legend: solid transitions exist in code today. States/transitions annotated
-> with **⚠️** are gaps — an enum value that is never persisted, or a real-world
-> transition the system does not yet handle. Per the plan, this pass formalizes
-> **current behavior**; the ⚠️ items are left for a follow-up.
+> This document reflects the **closed-gap** behaviour. Each machine ends with
+> what was **closed** in the formalization pass and what remains **open**.
 
 ---
 
 ## 0. Pipeline Overview
-
-How the entities chain together, and where external events enter.
 
 ```mermaid
 flowchart TD
@@ -56,9 +56,9 @@ flowchart TD
         WH_run["webhook: workflow_run"]
         WH_comment["webhook: issue_comment (/greensecops reanalyze)"]
         WH_install["webhook: installation / installation_repositories"]
-        WH_pr["webhook: pull_request (closed / reopened)"]
+        WH_pr["webhook: pull_request (closed / reopened / synchronize / edited)"]
         WH_repo["webhook: repository (renamed / archived / deleted)"]
-        API["REST API (manual trigger / generate / deliver / reject)"]
+        API["REST API (trigger / generate / deliver / reject)"]
         BEAT["Celery beat (nightly re-analysis, sweepers, PR sync)"]
         TELEM["Action telemetry ingest (/telemetry)"]
     end
@@ -74,7 +74,8 @@ flowchart TD
     AN -->|produces| ISS[Issues]
     ISS -->|auto_fix_enabled or manual| FIX[Fix generation]
     FIX -->|ready + auto/manual deliver| DEL[Fix delivery]
-    DEL -->|opens/updates| PR[Pull Request]
+    DEL -->|PR mode| PR[Pull Request]
+    DEL -->|comment mode| CM[Commit comment]
     WH_pr --> PR
     BEAT --> PR
     API --> PR
@@ -82,170 +83,148 @@ flowchart TD
     REPO -. gates .-> AN
     REPO -. gates .-> DEL
 
-    TELEM --> DYN["Dynamic Analysis ⚠️ never invoked"]
-    DYN -. "⚠️ enrichments only logged," .-> ISS
+    TELEM --> DYN[Dynamic Analysis]
+    DYN -->|persisted| ENR[(dynamic_enrichment)]
 ```
 
 ---
 
 ## 1. Analysis
 
-- **States** — `AnalysisStatus`: `pending`, `running`, `completed`, `failed`,
-  `skipped`, `no_workflows`
-- **Events** — `AnalysisEvent`: `opa_succeeded`, `opa_failed`, `swept`
-- **Code** — `state_machines/analysis.py`; behavior in
-  `workers/tasks/static_analysis.py`, `maintenance.py`
-- **Initial** — `running`, `no_workflows` (`pending` declared but never
-  persisted). **Terminal** — `completed`, `failed`, `no_workflows`.
+- **States** — `AnalysisStatus`: `running`, `completed`, `failed`,
+  `no_workflows`
+- **Events** — `opa_succeeded`, `opa_failed`, `no_workflows_found`, `swept`
+- **Code** — `state_machines/analysis.py`; `workers/tasks/static_analysis.py`,
+  `maintenance.py`
+- **Initial** — `running`. **Final** — `completed`, `failed`, `no_workflows`.
 
 ### Transitions (input → output)
 
-| Event (input) | From → To | Output (SSE) | Guard |
+| Event | From → To | Output (SSE) | Guard |
 |---|---|---|---|
 | `opa_succeeded` | `running` → `completed` | `analysis.completed` | OPA eval produced a score |
 | `opa_failed` | `running` → `failed` | `analysis.failed` | OPA eval raised |
-| `swept` | `pending`, `running` → `failed` | `analysis.failed` | `created_at` older than 30 min |
+| `no_workflows_found` | `running` → `no_workflows` | `analysis.no_workflows` | repo has no workflow files |
+| `swept` | `running` → `failed` | `analysis.failed` | `created_at` older than 30 min |
 
-### External triggers (what enqueues an analysis)
+### External triggers
 
-| Source | Trigger | `AnalysisTrigger` |
-|---|---|---|
-| webhook `push` (touches `.github/workflows/**` or new branch) | enqueue | `webhook_push` |
-| webhook `workflow_run` (`completed`) | enqueue | `webhook_workflow_run` |
-| webhook `issue_comment` (`/greensecops reanalyze`) | enqueue (`force`) | `manual` |
-| REST `POST /analyses/trigger/{repo}` | enqueue (`force`) | `manual` |
-| REST `POST /analyses/reanalyze-all`, version ship | fan-out | `release` |
-| `installation_sync` (first sync of a repo) | enqueue | `manual` |
-| Celery beat `nightly-reanalysis` | fan-out (`force=False`) | `scheduled` |
-| `fix_delivery` stale-content error | enqueue (`force`) | `manual` |
+| Source | `AnalysisTrigger` |
+|---|---|
+| webhook `push` (touches `.github/workflows/**` or new branch) | `webhook_push` |
+| webhook `workflow_run` (`completed`) | `webhook_workflow_run` |
+| webhook `issue_comment` (`/greensecops reanalyze`) / REST trigger | `manual` |
+| `reanalyze-all`, version ship | `release` |
+| `installation_sync` (first sync) | `manual` |
+| Celery beat `nightly-reanalysis` | `scheduled` |
+| `fix_delivery` stale-content error | `manual` |
 
 ### State machine
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Running: row created (worker inserts directly)
-    [*] --> NoWorkflows: repo has no workflow files
+    [*] --> Running: row created
 
     Running --> Completed: opa_succeeded / analysis.completed
     Running --> Failed: opa_failed / analysis.failed
     Running --> Failed: swept / analysis.failed
-    Pending --> Failed: swept / analysis.failed
+    Running --> NoWorkflows: no_workflows_found / analysis.no_workflows
 
-    NoWorkflows --> [*]
     Completed --> [*]
     Failed --> [*]
-
-    note right of Pending
-      ⚠️ Never persisted: the "queued" phase is SSE-only
-      (analysis.queued); the worker inserts the row directly
-      as `running` or `no_workflows`. Kept as a legal sweeper
-      source only.
-    end note
-    note right of Completed
-      ⚠️ `skipped` enum value is never written to a row — a
-      content-hash duplicate references the prior analysis and
-      emits analysis.skipped without inserting a row.
-    end note
+    NoWorkflows --> [*]
 ```
 
-### ⚠️ Missing states / transitions
+**Closed in this pass:** the never-persisted `pending` and `skipped` enum
+values were removed; `no_workflows` is now reached by an explicit edge instead
+of being a disconnected initial state; dynamic analysis is wired in (§6).
 
-1. **`pending` never persisted** — the queued phase is SSE-only; the sweeper
-   still lists `pending` as a source that can never occur.
-2. **`skipped` never persisted** — duplicate detection references the prior
-   analysis, so the enum value is dead (absent from the machine graph).
-3. **No "retries exhausted" state** distinct from `failed`.
-4. **Dynamic analysis is disconnected** — `run_dynamic_analysis` is never
-   called, and its enrichments are only logged, never attached to an analysis.
+**Still open:** no dedicated "retries exhausted" state distinct from `failed`.
 
 ---
 
 ## 2. Issue
 
-Issues carry **no status column**; the state is **derived** from `resolved_at`
-and `fix_id` via `Issue.status` → `IssueStatus`. The machine is therefore the
-canonical, testable declaration of the field-level transitions the code
-performs; the derived property guarantees only valid states are ever observed.
+`Issue.status` is a **persisted, indexed column** (`IssueStatus`) maintained by
+a database trigger that computes it from `resolved_at` + `fix_id` (migration
+`0022`). The trigger keeps it authoritative even when `fix_id` is cleared by the
+`ON DELETE SET NULL` cascade on fix deletion — which bypasses application code —
+so the column can never disagree with the underlying fields. The machine
+therefore documents and validates the legal field-level transitions; the
+trigger owns writes.
 
 - **States** — `IssueStatus`: `open`, `fix_in_progress`, `resolved`
-- **Events** — `IssueEvent`: `link_fix`, `unlink_fix`, `resolve`, `recur`
-- **Code** — `state_machines/issue.py`; behavior in `static_analysis.py`
-  (`_resolve_stale_issues`, `_resolve_issues_for_missing_files`, the upsert) and
-  the fix routes.
-- **Derivation** — `resolved_at` set ⇒ `resolved`; else `fix_id` set ⇒
-  `fix_in_progress`; else `open`.
+- **Events** — `link_fix`, `unlink_fix`, `resolve`, `recur`
+- **Code** — `state_machines/issue.py`; trigger in migration `0022`
 
-### Transitions (input → derived state)
+### Transitions
 
-| Event (input) | From → To | Underlying field change |
+| Event | From → To | Underlying field change |
 |---|---|---|
-| `link_fix` | `open` → `fix_in_progress` | `fix_id` set (fix queued) |
-| `unlink_fix` | `fix_in_progress` → `open` | `fix_id` → `NULL` (fix deleted/regenerated) |
-| `resolve` | `open`, `fix_in_progress` → `resolved` | `resolved_at` set (not in latest run / file deleted / user fix) |
-| `recur` | `resolved` → `open` | `resolved_at` → `NULL` (violation reappears) |
-
-### State machine
+| `link_fix` | `open` → `fix_in_progress` | `fix_id` set |
+| `unlink_fix` | `fix_in_progress` → `open` | `fix_id` → `NULL` (fix deleted) |
+| `resolve` | `open`, `fix_in_progress` → `resolved` | `resolved_at` set |
+| `recur` | `resolved` → `open` | `resolved_at` → `NULL` |
 
 ```mermaid
 stateDiagram-v2
-    [*] --> OpenUnfixed: violation found (resolved_at = NULL, fix_id = NULL)
-
-    OpenUnfixed --> FixLinked: link_fix (fix_id set)
-    FixLinked --> OpenUnfixed: unlink_fix (fix_id → NULL)
-
-    OpenUnfixed --> Resolved: resolve
-    FixLinked --> Resolved: resolve
-
-    Resolved --> OpenUnfixed: recur (resolved_at → NULL)
-
+    [*] --> Open: violation found (status trigger: open)
+    Open --> FixInProgress: link_fix
+    FixInProgress --> Open: unlink_fix
+    Open --> Resolved: resolve
+    FixInProgress --> Resolved: resolve
+    Resolved --> Open: recur
     Resolved --> [*]: retained in history
 ```
 
-### ⚠️ Missing states / transitions
+**Closed in this pass:** the status is now a real persisted column (was a
+Python-only derived property).
 
-1. **No "ignored / muted" state** — `/greensecops ignore` is parsed but
-   unimplemented; a user cannot dismiss a false positive.
-2. **`resolved` records no reason** (user fix vs. rule disabled vs. merged).
-3. **No immediate "fixed & merged"** — a merged fix resolves its issues only on
-   the *next* analysis of the default branch.
+**Still open:** no `ignored` / `muted` state (`/greensecops ignore` remains
+unimplemented); `resolved` records no reason (user fix vs. rule disabled vs.
+merged).
 
 ---
 
 ## 3. Fix
 
 - **States** — `FixStatus`: `pending`, `generating`, `ready`, `delivering`,
-  `delivered`, `failed`, `rejected`
-- **Events** — `FixEvent`: `start_generation`, `generation_succeeded`,
-  `generation_failed`, `mark_ready`, `start_delivery`, `precheck_failed`,
-  `delivery_succeeded`, `delivery_failed`, `supersede_closed_pr`, `reject`,
-  `restore`, `swept`
-- **Code** — `state_machines/fix.py`; behavior in `fix_generation.py`,
-  `fix_delivery.py`, `api/routes/fixes.py`, `maintenance.py`
-- **Initial** — `pending`. **Terminal (resting)** — `delivered`, `failed`,
-  `rejected` (re-entrant: `delivered`/`rejected` have outgoing edges).
+  `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`
+- **Events** — `start_generation`, `generation_succeeded`, `generation_failed`,
+  `mark_ready`, `start_delivery`, `precheck_failed`, `delivery_succeeded`,
+  `delivery_failed`, `supersede_closed_pr`, `reject`, `restore`, `swept`
+- **Code** — `state_machines/fix.py`; `fix_generation.py`, `fix_delivery.py`,
+  `api/routes/fixes.py`, `maintenance.py`
+- **Initial** — `pending`. **Final** — `failed`, `rejected_by_user`.
+
+The two rejections are now **distinct states** (no longer disambiguated by a
+`delivered_at IS NULL` convention):
+
+- `rejected_by_user` — a human dismissed the fix; **terminal**. A repeated
+  DELETE is made idempotent at the endpoint via `try_advance`, not a self-loop.
+- `superseded_by_closed_pr` — the closed-PR delivery guard auto-rejected it;
+  `restore` makes it deliverable again when the PR is reopened.
 
 ### Transitions (input → output)
 
-| Event (input) | From → To | Output (SSE) | Guard |
+| Event | From → To | Output (SSE) | Guard |
 |---|---|---|---|
 | `start_generation` | `pending` → `generating` | `fix.generating` | worker picked up |
 | `generation_succeeded` | `generating` → `ready` | `fix.ready` | valid workflow YAML |
 | `generation_failed` | `generating` → `failed` | `fix.failed` | LLM error / invalid / empty |
-| `mark_ready` | `ready`, `delivered` → `ready` | — | unchanged file re-included in delivery |
+| `mark_ready` | `ready`, `delivered` → `ready` | — | unchanged file re-included |
 | `start_delivery` | `ready` → `delivering` | `fix.delivering` | (bypassed under `force`) |
-| `precheck_failed` | `ready` → `failed` | `fix.failed` | fix has no generated content |
-| `delivery_succeeded` | `delivering` → `delivered` | `fix.delivered` | PR opened/updated |
-| `delivery_failed` | `delivering` → `failed` | `fix.failed` | push / PR error |
-| `supersede_closed_pr` | `ready` → `rejected` | `fix.rejected` | target PR branch closed, not forced |
-| `reject` | any non-in-flight (+ `rejected`) → `rejected` | `fix.rejected` | user DELETE (idempotent) |
-| `restore` | `rejected` → `ready` | — | PR reopened; guard-rejected only (`delivered_at` NULL) |
-| `swept` | `pending`, `generating`, `delivering` → `failed` | `fix.failed` | `created_at` older than 30 min |
-
-### State machine
+| `precheck_failed` | `ready` → `failed` | `fix.failed` | fix has no content |
+| `delivery_succeeded` | `delivering` → `delivered` | `fix.delivered` | PR opened / comment posted |
+| `delivery_failed` | `delivering` → `failed` | `fix.failed` | push / PR / comment error |
+| `supersede_closed_pr` | `ready` → `superseded_by_closed_pr` | `fix.rejected` | target PR branch closed, not forced |
+| `reject` | any non-terminal → `rejected_by_user` | `fix.rejected` | user DELETE |
+| `restore` | `superseded_by_closed_pr` → `ready` | — | PR reopened |
+| `swept` | `pending`, `generating`, `delivering` → `failed` | `fix.failed` | stuck > 30 min |
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pending: fix created (auto after analysis / manual / regenerate)
+    [*] --> Pending: fix created
 
     Pending --> Generating: start_generation / fix.generating
     Generating --> Ready: generation_succeeded / fix.ready
@@ -253,111 +232,119 @@ stateDiagram-v2
 
     Ready --> Delivering: start_delivery / fix.delivering
     Ready --> Failed: precheck_failed / fix.failed
-    Ready --> Rejected: supersede_closed_pr / fix.rejected
-    Ready --> Rejected: reject / fix.rejected
+    Ready --> Superseded: supersede_closed_pr / fix.rejected
     Ready --> Ready: mark_ready
 
     Delivering --> Delivered: delivery_succeeded / fix.delivered
     Delivering --> Failed: delivery_failed / fix.failed
 
     Delivered --> Ready: mark_ready
-    Delivered --> Rejected: reject / fix.rejected
+    Delivered --> RejectedByUser: reject / fix.rejected
     Delivered --> [*]: PR merged (left untouched)
 
-    Rejected --> Ready: restore
+    Superseded --> Ready: restore
+    Superseded --> RejectedByUser: reject / fix.rejected
 
     Pending --> Failed: swept / fix.failed
     Generating --> Failed: swept / fix.failed
     Delivering --> Failed: swept / fix.failed
 
-    Failed --> [*]
+    Ready --> RejectedByUser: reject / fix.rejected
+    Pending --> RejectedByUser: reject / fix.rejected
+    Generating --> RejectedByUser: reject / fix.rejected
+    Delivering --> RejectedByUser: reject / fix.rejected
 
-    note right of Rejected
-      ⚠️ Overloaded: user reject and the closed-PR guard both
-      land here, distinguished only by `delivered_at` being NULL.
-    end note
-    note right of Pending
-      Regenerate deletes the row and creates a fresh `pending`
-      fix rather than transitioning back.
-    end note
+    Failed --> [*]
+    RejectedByUser --> [*]
 ```
 
-### ⚠️ Missing states / transitions
+**Closed in this pass:** the overloaded `rejected` state was split into
+`rejected_by_user` and `superseded_by_closed_pr` (migration `0024`), removing
+the `delivered_at IS NULL` convention.
 
-1. **`rejected` is two states** (user reject vs. closed-PR guard),
-   disambiguated only by `delivered_at IS NULL`.
-2. **`failed` has no auto-recovery** — a transient failure needs a manual
-   regenerate; there is no automatic edge back to `pending`.
-3. **`fix.skipped` is SSE-only**, never a persisted status.
-4. **Delivered-then-closed** (not merged) leaves the fix `delivered` though its
-   code never landed.
-5. **Comment delivery mode unimplemented** — `FixDeliveryMode.comment` /
-   `PullRequest.comment_url` exist but delivery only ever opens a PR.
+**Still open:** `failed` has no automatic recovery (needs a manual regenerate);
+a *delivered* PR closed without merging leaves the fix `delivered`; the
+`fix.skipped` SSE signal has no persisted status.
 
 ---
 
 ## 4. Pull Request
 
 - **States** — `PullRequestState`: `open`, `merged`, `closed` (column nullable —
-  legacy `NULL` records exist)
-- **Events** — `PullRequestEvent`: `redeliver`, `merge`, `close`, `reopen`
-- **Code** — `state_machines/pull_request.py`; behavior in `fix_delivery.py`,
-  the `pull_request` webhook, `maintenance.sync_open_pr_states`,
+  legacy `NULL` rows exist)
+- **Events** — `redeliver`, `external_update`, `merge`, `close`, `reopen`
+- **Code** — `state_machines/pull_request.py`; `fix_delivery.py`, the
+  `pull_request` webhook, `maintenance.sync_open_pr_states`,
   `fixes.sync_pr_statuses`
-- **Initial** — `open`. **Terminal** — `merged`.
+- **Initial** — `open`. **Final** — `merged`.
 
-PR **creation** and the "ensure open on re-delivery" reconciliation happen at
-the delivery boundary as initialization, not guarded transitions; `redeliver`
-is declared to document that self-loop. The genuine lifecycle transitions —
-`merge`, `close`, `reopen` — are routed through the machine (with `try_trigger`
-at the webhook/reconcile boundaries so redelivered/reordered events no-op).
+Genuine lifecycle transitions (`merge`, `close`, `reopen`) go through the
+machine with `try_advance` at the webhook/reconcile boundaries. PR creation and
+the "ensure open on re-delivery" reconciliation happen at the delivery boundary
+as initialisation.
 
 ### Transitions (input → output)
 
-| Event (input) | From → To | Output (SSE) | Source |
+| Event | From → To | Output (SSE) | Source |
 |---|---|---|---|
 | `redeliver` | `open` → `open` | `pr.updated` | a later delivery updated the branch |
+| `external_update` | `open` → `open` | `pr.updated` | webhook `synchronize` / `edited` |
 | `merge` | `open` → `merged` | `pr.merged` | webhook `closed`+merged / reconcile |
 | `close` | `open` → `closed` | `pr.closed` | webhook `closed` (not merged) / reconcile |
 | `reopen` | `closed` → `open` | `pr.opened` | webhook `reopened` |
 
-### State machine
-
 ```mermaid
 stateDiagram-v2
     [*] --> Open: fix delivered (PR created)
-
-    Open --> Open: redeliver / pr.updated
+    Open --> Open: redeliver / external_update (pr.updated)
     Open --> Merged: merge / pr.merged
     Open --> Closed: close / pr.closed
-    Closed --> Open: reopen / pr.opened (guard-rejected fixes → ready)
-
+    Closed --> Open: reopen / pr.opened (guard-superseded fixes → ready)
     Closed --> [*]: orphaned record deleted on regenerate
     Merged --> [*]
-
-    note right of Open
-      ⚠️ Legacy records may carry pr_state = NULL (not a machine
-      state). Only `closed` / `reopened` webhook actions are
-      handled; `synchronize` / `edited` are ignored.
-    end note
 ```
 
-### ⚠️ Missing states / transitions
+**Closed in this pass:** `synchronize` and `edited` webhook actions are now
+handled (previously ignored) via `external_update`.
 
-1. **Only `closed` / `reopened` webhook actions handled** — `synchronize` /
-   `edited` are not tracked.
-2. **`NULL` (stateless) records** exist alongside the three real states.
-3. **No CI / review / merge-conflict states** — delivery can't react to a red or
-   conflicting PR.
-4. **No draft state** and no representation of the (unimplemented) inline
-   `comment` delivery channel.
+**Still open:** legacy `NULL` state rows; no CI / review / merge-conflict
+states; no draft state.
+
+---
+
+## 5. Fix delivery modes
+
+`FixDeliveryMode` selects how a ready fix reaches the repo:
+
+| Mode | Behaviour |
+|---|---|
+| `pr` (default) | open/update a PR on a `greensecops/…` branch (§4) |
+| `comment` | post the suggested changes as a **commit comment** on the base branch HEAD; the comment URL is stored on a per-repo record the fixes link to and surfaced as `FixPublic.comment_url` |
+| `disabled` | delivery is skipped |
+
+**Closed in this pass:** `comment` mode is implemented (it previously fell
+through to PR delivery).
+
+---
+
+## 6. Dynamic analysis (runtime telemetry)
+
+The companion Action posts runtime telemetry to `/telemetry/ingest`. On the
+`completed` phase this now enqueues `run_dynamic_analysis`, which evaluates the
+metrics (e.g. an oversized runner) and **persists** its findings to the
+`dynamic_enrichment` table (migration `0025`), linked to the telemetry run and
+the latest completed analysis, replacing any prior rows for the same run.
+
+**Closed in this pass:** dynamic analysis is wired to telemetry ingest and its
+enrichments are persisted (previously it was never invoked and only logged).
+
+**Still open:** surfacing the persisted enrichments through the API / UI.
 
 ---
 
 ## Cross-cutting: Repository / Installation gating
 
-Every machine above is gated by repository flags that are themselves driven by
-webhooks (not a persisted state machine, but the inputs matter):
+Every machine above is gated by repository flags driven by webhooks:
 
 | Event | Effect on `Repository` |
 |---|---|
