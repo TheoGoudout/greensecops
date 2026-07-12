@@ -283,6 +283,7 @@ def _fixes_to_public(session: SessionDep, fixes: list[Fix]) -> list[FixPublic]:
             data.pr_url = pr.pr_url
             data.pr_branch = pr.pr_branch
             data.pr_state = pr.pr_state
+            data.comment_url = pr.comment_url
 
         data.issues = [
             FixIssueSummary(

@@ -137,6 +137,7 @@ class FixPublic(SQLModel):
     pr_url: str | None = None
     pr_branch: str | None = None
     pr_state: PullRequestState | None = None
+    comment_url: str | None = None
     created_at: datetime | None = None
     delivered_at: datetime | None = None
     issues: list[FixIssueSummary] = []

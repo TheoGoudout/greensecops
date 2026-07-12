@@ -19,7 +19,11 @@ from app.models import (
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
-from app.services.github.fix_delivery import STALE_CONTENT_ERROR_CODE
+from app.services.github.fix_delivery import (
+    STALE_CONTENT_ERROR_CODE,
+    FixDeliveryResult,
+    FixDeliveryService,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -65,6 +69,13 @@ def deliver_fixes_batch(
 
         org_id = str(repo.org_id)
         repo_id_str = repo_id
+
+        # `comment` mode surfaces the fixes on the base branch's HEAD commit
+        # instead of opening a PR; it shares nothing with the PR branch flow.
+        if delivery_mode == FixDeliveryMode.comment:
+            return _deliver_batch_as_comment(
+                session, repo, [f for f in fixes if f], org_id, repo_id_str
+            )
 
         # A PR the user closed without merging is a rejection signal: do not
         # re-open it on the next delivery unless explicitly forced.
@@ -244,12 +255,11 @@ def deliver_fixes_batch(
 
 
 @asynccontextmanager
-async def _delivery_service() -> AsyncGenerator[object, None]:
+async def _delivery_service() -> AsyncGenerator[FixDeliveryService, None]:
     import redis.asyncio as aioredis
 
     from app.core.config import settings
     from app.services.github.app_client import GitHubAppClient
-    from app.services.github.fix_delivery import FixDeliveryService
 
     r = aioredis.from_url(settings.REDIS_URL)
     try:
@@ -269,7 +279,7 @@ async def _deliver_batch(
     expected_base_contents: dict[str, str] | None = None,
     force: bool = False,
     commit_messages: dict[str, str] | None = None,
-) -> object:
+) -> FixDeliveryResult:
     async with _delivery_service() as svc:
         return await svc.update_or_create_workflow_action_pr(
             installation_id=installation_id,
@@ -283,3 +293,149 @@ async def _deliver_batch(
             override_user_commits=force,
             commit_messages=commit_messages,
         )
+
+
+def _build_comment_body(fixes: list[Fix]) -> str:
+    """Markdown body for a comment-mode delivery: issues + proposed content."""
+    from app.core.config import settings
+
+    lines = [f"## {settings.PROJECT_NAME} suggested workflow fixes", ""]
+    for fix in fixes:
+        wf = fix.workflow_file
+        path = wf.path if wf else "workflow"
+        lines.append(f"### `{path}`")
+        if fix.issues:
+            lines.append("")
+            lines.append("Issues addressed:")
+            for issue in fix.issues:
+                slug = issue.rule.slug if issue.rule else "issue"
+                lines.append(f"- **{slug}** ({issue.severity.value}): {issue.message}")
+        lines += [
+            "",
+            "<details><summary>Proposed content</summary>",
+            "",
+            "```yaml",
+            (fix.full_content or "").rstrip(),
+            "```",
+            "",
+            "</details>",
+            "",
+        ]
+    return "\n".join(lines)
+
+
+async def _post_comment(
+    installation_id: int, full_name: str, base_branch: str, body: str
+) -> FixDeliveryResult:
+    async with _delivery_service() as svc:
+        return await svc.post_fix_comment(
+            installation_id=installation_id,
+            full_name=full_name,
+            base_branch=base_branch,
+            body=body,
+        )
+
+
+def _deliver_batch_as_comment(
+    session: Session,
+    repo: Repository,
+    fixes: list[Fix],
+    org_id: str,
+    repo_id_str: str,
+) -> dict[str, str]:
+    """Deliver ready fixes as a single commit comment on the base branch HEAD."""
+    deliverable: list[Fix] = []
+    seen: set[str] = set()
+    for fix in fixes:
+        wf = fix.workflow_file
+        if not wf or wf.path in seen:
+            continue
+        if not fix.full_content:
+            sm.advance(fix, sm.FixMachine, "precheck_failed")
+            fix.error_message = "Fix has no generated workflow content"
+            session.add(fix)
+            events_pub.publish_event(
+                ev.fix_delivery_failed(
+                    org_id, repo_id_str, str(fix.id), fix.error_message
+                )
+            )
+            continue
+        seen.add(wf.path)
+        deliverable.append(fix)
+    session.commit()
+
+    if not deliverable:
+        return {"status": "error", "detail": "no_workflow_files"}
+
+    for fix in deliverable:
+        sm.advance(fix, sm.FixMachine, "start_delivery")
+        session.add(fix)
+    session.commit()
+    events_pub.publish_event(
+        ev.fix_delivering_batch(org_id, repo_id_str, [str(f.id) for f in deliverable])
+    )
+
+    base_branch = repo.default_branch or "main"
+    # The caller only routes here after checking installation_id is set.
+    assert repo.installation_id is not None
+    result = asyncio.run(
+        _post_comment(
+            installation_id=repo.installation_id,
+            full_name=repo.full_name,
+            base_branch=base_branch,
+            body=_build_comment_body(deliverable),
+        )
+    )
+
+    now = datetime.now(timezone.utc)
+    if result.error or not result.comment_url:
+        error = result.error or "comment delivery returned no URL"
+        for fix in deliverable:
+            sm.advance(fix, sm.FixMachine, "delivery_failed")
+            fix.error_message = error
+            session.add(fix)
+        session.commit()
+        events_pub.publish_event(
+            ev.fix_delivery_failed(
+                org_id, repo_id_str, str(deliverable[0].id), error[:200]
+            )
+        )
+        return {"status": "failed"}
+
+    # Reuse a stable per-repo record to hold the comment URL (no PR branch).
+    comment_branch = f"greensecops/comments-{str(repo.id)[:8]}"
+    pr = session.exec(
+        select(PullRequest).where(
+            PullRequest.repo_id == repo.id,
+            PullRequest.pr_branch == comment_branch,
+        )
+    ).first()
+    if pr is None:
+        pr = PullRequest(
+            repo_id=repo.id,
+            pr_branch=comment_branch,
+            comment_url=result.comment_url,
+        )
+        session.add(pr)
+        session.flush()
+    else:
+        pr.comment_url = result.comment_url
+        pr.updated_at = now
+        session.add(pr)
+        session.flush()
+
+    delivered_fix_ids: list[str] = []
+    for fix in deliverable:
+        sm.advance(fix, sm.FixMachine, "delivery_succeeded")
+        fix.pr_id = pr.id
+        fix.delivered_at = now
+        session.add(fix)
+        delivered_fix_ids.append(str(fix.id))
+    session.commit()
+
+    events_pub.publish_event(
+        ev.fix_delivered_batch(
+            org_id, repo_id_str, delivered_fix_ids, result.comment_url, comment_branch
+        )
+    )
+    return {"status": "ok"}

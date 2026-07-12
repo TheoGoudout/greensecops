@@ -15,6 +15,7 @@ USER_COMMITS_ERROR_CODE = "user_commits_on_fix_branch"
 @dataclass
 class FixDeliveryResult:
     pr_url: str | None = None
+    comment_url: str | None = None
     error: str | None = None
     error_code: str | None = None
 
@@ -236,5 +237,31 @@ class FixDeliveryService:
             return FixDeliveryResult(pr_url=await asyncio.to_thread(_upsert_batch_pr))
         except _DeliveryAborted as exc:
             return FixDeliveryResult(error=str(exc), error_code=exc.code)
+        except Exception as exc:
+            return FixDeliveryResult(error=str(exc))
+
+    async def post_fix_comment(
+        self,
+        installation_id: int,
+        full_name: str,
+        base_branch: str,
+        body: str,
+    ) -> FixDeliveryResult:
+        """Deliver fixes as a commit comment on the base branch HEAD.
+
+        The ``comment`` delivery mode surfaces the suggested changes inline on
+        the latest commit instead of opening a PR, for repos that prefer review
+        without a branch. Returns the created comment's URL.
+        """
+        try:
+            token = await self._app.get_installation_token(installation_id)
+
+            def _post() -> str:
+                repo = Github(auth=Auth.Token(token)).get_repo(full_name)
+                head_sha = repo.get_branch(base_branch).commit.sha
+                comment = repo.get_commit(head_sha).create_comment(body)
+                return comment.html_url
+
+            return FixDeliveryResult(comment_url=await asyncio.to_thread(_post))
         except Exception as exc:
             return FixDeliveryResult(error=str(exc))

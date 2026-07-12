@@ -124,6 +124,9 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
             existing_branch = session.exec(
                 _select(PullRequest.pr_branch)
                 .where(PullRequest.repo_id == repo.id)
+                # Exclude comment-mode records (they carry a comment_url but no
+                # pr_url) so a PR delivery never reuses their synthetic branch.
+                .where(col(PullRequest.pr_url).is_not(None))
                 .where(
                     or_(
                         col(PullRequest.pr_state).is_(None),
