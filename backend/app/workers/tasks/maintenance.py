@@ -35,11 +35,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     with Session(engine) as session:
         stuck_analyses = session.exec(
             select(Analysis)
-            .where(
-                col(Analysis.status).in_(
-                    [AnalysisStatus.pending, AnalysisStatus.running]
-                )
-            )
+            .where(Analysis.status == AnalysisStatus.running)
             .where(Analysis.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for analysis in stuck_analyses:

@@ -205,7 +205,10 @@ class Analysis(SQLModel, table=True):
         default=None, foreign_key="workflow_file.id", nullable=True, ondelete="CASCADE"
     )
     content_hash: str = Field(max_length=64, index=True)
-    status: AnalysisStatus = Field(default=AnalysisStatus.pending)
+    status: AnalysisStatus = Field(
+        default=AnalysisStatus.running,
+        sa_column_kwargs={"server_default": AnalysisStatus.running.value},
+    )
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)
     triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)

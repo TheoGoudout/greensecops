@@ -717,7 +717,7 @@ def test_list_repository_branches(
         ("main", AnalysisStatus.completed),
         ("dev", AnalysisStatus.completed),
         ("main", AnalysisStatus.completed),
-        ("wip", AnalysisStatus.pending),
+        ("wip", AnalysisStatus.running),
     ]:
         db.add(
             Analysis(

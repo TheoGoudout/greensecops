@@ -383,20 +383,14 @@ def test_duplicate_detection_skips_second_run(
     # _evaluate should NOT have been called for the duplicate
     mock_eval.assert_not_called()
 
-    # No new `skipped` Analysis rows accumulate: the result references the
-    # prior completed analysis instead.
-    skipped = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.skipped)
+    # No new Analysis row accumulates for the duplicate: only the original
+    # completed row exists, and the result references it instead.
+    rows = db.exec(
+        select(Analysis).where(Analysis.repo_id == repo.id)
     ).all()
-    assert skipped == []
-    completed = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
-    ).first()
-    assert completed is not None
+    assert len(rows) == 1
+    completed = rows[0]
+    assert completed.status == AnalysisStatus.completed
     assert str(completed.id) in second_results_str
 
 

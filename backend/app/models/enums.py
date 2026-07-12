@@ -29,11 +29,14 @@ class LLMProvider(str, enum.Enum):
 
 
 class AnalysisStatus(str, enum.Enum):
-    pending = "pending"
+    # An analysis row is created directly as ``running`` (or ``no_workflows``);
+    # the queued phase is signalled over SSE without a row. Content-hash
+    # duplicates reference the prior analysis and emit ``analysis.skipped``
+    # without writing a row. Neither a ``pending`` nor a ``skipped`` row is ever
+    # persisted, so those values are not part of the state machine.
     running = "running"
     completed = "completed"
     failed = "failed"
-    skipped = "skipped"
     no_workflows = "no_workflows"
 
 
