@@ -73,9 +73,7 @@ def repo(db: Session, org: Organization) -> Repository:
 def _mock_dynamic_delay():
     """Completed-phase ingest enqueues dynamic analysis; stub the Celery call so
     tests never reach a broker/result backend (which is unavailable in CI)."""
-    with patch(
-        "app.workers.tasks.dynamic_analysis.run_dynamic_analysis.delay"
-    ) as mock:
+    with patch("app.workers.tasks.dynamic_analysis.run_dynamic_analysis.delay") as mock:
         yield mock
 
 
