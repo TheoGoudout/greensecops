@@ -23,6 +23,7 @@ from app.models import (
     LLMProvider,
     Organization,
     PullRequest,
+    PullRequestState,
     Repository,
     Rule,
     UserTier,
@@ -1041,6 +1042,89 @@ def test_github_webhook_pull_request_non_closed_skipped(
             headers={"X-GitHub-Event": "pull_request"},
         )
     assert response.status_code == 200
+
+
+def test_github_webhook_pull_request_synchronize_bumps_open_pr(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """A synchronize event on an open PR is recorded (updated_at) instead of
+    being silently ignored, and leaves the PR open."""
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/pr-sync-{uuid.uuid4().hex[:6]}",
+        installation_id=99914,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-sync",
+        pr_url=pr_url,
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    assert pr.updated_at is None
+
+    payload = {"action": "synchronize", "pull_request": {"html_url": pr_url}}
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.open
+    assert pr.updated_at is not None
+
+
+def test_github_webhook_pull_request_synchronize_noop_on_closed_pr(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """A synchronize event on a closed PR is a no-op (no spurious reopen)."""
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/pr-sync-closed-{uuid.uuid4().hex[:6]}",
+        installation_id=99915,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fix-sync-closed",
+        pr_url=pr_url,
+        pr_state="closed",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    payload = {"action": "synchronize", "pull_request": {"html_url": pr_url}}
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "pull_request"},
+        )
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.closed
 
 
 def test_github_webhook_pull_request_no_pr_url_skipped(
