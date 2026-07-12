@@ -252,6 +252,14 @@ class Issue(SQLModel, table=True):
     fingerprint: str | None = Field(default=None, max_length=16, index=True)
     severity: IssueSeverity
     category: IssueCategory
+    # Derived from resolved_at + fix_id, but persisted and kept authoritative by
+    # a DB trigger (see migration 0022) so it survives the fix_id ON DELETE SET
+    # NULL cascade. Applications never need to set it; the trigger owns writes.
+    status: IssueStatus = Field(
+        default=IssueStatus.open,
+        sa_column_kwargs={"server_default": IssueStatus.open.value},
+        index=True,
+    )
     line_start: int | None = Field(default=None)
     line_end: int | None = Field(default=None)
     message: str = Field(max_length=2048)
@@ -271,19 +279,6 @@ class Issue(SQLModel, table=True):
     analysis: Analysis | None = Relationship(back_populates="issues")
     rule: Rule | None = Relationship(back_populates="issues")
     fix: Optional["Fix"] = Relationship(back_populates="issues")
-
-    @property
-    def status(self) -> IssueStatus:
-        """Derived lifecycle state (see :class:`IssueStatus`).
-
-        ``resolved_at`` wins over ``fix_id``: a resolved issue that still
-        carries a link to the fix that addressed it reads as ``resolved``.
-        """
-        if self.resolved_at is not None:
-            return IssueStatus.resolved
-        if self.fix_id is not None:
-            return IssueStatus.fix_in_progress
-        return IssueStatus.open
 
 
 # ─── PullRequest ──────────────────────────────────────────────────────────────

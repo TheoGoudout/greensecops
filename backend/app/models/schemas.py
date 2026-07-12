@@ -11,6 +11,7 @@ from .enums import (
     FixStatus,
     IssueCategory,
     IssueSeverity,
+    IssueStatus,
     LLMProvider,
     PullRequestState,
     UserTier,
@@ -103,6 +104,7 @@ class IssuePublic(SQLModel):
     line_end: int | None = None
     message: str
     context: str | None = None
+    status: IssueStatus
     created_at: datetime | None = None
     resolved_at: datetime | None = None
     fix_id: uuid.UUID | None = None
