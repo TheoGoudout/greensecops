@@ -36,6 +36,13 @@ from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import parse_pr_url
 from app.services.pr_body import IssueInfo, build_pr_body
+from app.services.state_machines import (
+    IN_FLIGHT_STATUSES,
+    FixEvent,
+    PullRequestEvent,
+    fix_machine,
+    pull_request_machine,
+)
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
 from app.workers.tasks.fix_generation import (
     init_fix_batch,
@@ -53,8 +60,8 @@ class BatchFixRequest(BaseModel):
 router = APIRouter(prefix="/fixes", tags=["fixes"])
 
 # Statuses of fixes a worker is still processing; such fixes cannot be
-# regenerated out from under the worker.
-IN_FLIGHT_STATUSES = (FixStatus.pending, FixStatus.generating, FixStatus.delivering)
+# regenerated out from under the worker. Sourced from the fix state machine so
+# the two never drift.
 
 
 def _repo_id_for_fix(session: SessionDep, fix: Fix) -> uuid.UUID | None:
@@ -532,7 +539,7 @@ def reject_fix(
 ) -> None:
     fix = get_or_404(session, Fix, fix_id)
     _authorize_fix(session, current_user, fix)
-    fix.status = FixStatus.rejected
+    fix_machine.trigger(fix, FixEvent.reject)
     session.add(fix)
     session.commit()
 
@@ -696,7 +703,13 @@ async def sync_pr_statuses(
         if new_state == PullRequestState.open:
             continue
 
-        pr_record.pr_state = new_state
+        pr_event = (
+            PullRequestEvent.merge
+            if new_state == PullRequestState.merged
+            else PullRequestEvent.close
+        )
+        if not pull_request_machine.try_trigger(pr_record, pr_event):
+            continue
         session.add(pr_record)
         updated += 1
 

@@ -14,6 +14,7 @@ from .enums import (
     FixStatus,
     IssueCategory,
     IssueSeverity,
+    IssueStatus,
     LLMProvider,
     OrgRole,
     PullRequestState,
@@ -270,6 +271,19 @@ class Issue(SQLModel, table=True):
     analysis: Analysis | None = Relationship(back_populates="issues")
     rule: Rule | None = Relationship(back_populates="issues")
     fix: Optional["Fix"] = Relationship(back_populates="issues")
+
+    @property
+    def status(self) -> IssueStatus:
+        """Derived lifecycle state (see :class:`IssueStatus`).
+
+        ``resolved_at`` wins over ``fix_id``: a resolved issue that still
+        carries a link to the fix that addressed it reads as ``resolved``.
+        """
+        if self.resolved_at is not None:
+            return IssueStatus.resolved
+        if self.fix_id is not None:
+            return IssueStatus.fix_in_progress
+        return IssueStatus.open
 
 
 # ─── PullRequest ──────────────────────────────────────────────────────────────

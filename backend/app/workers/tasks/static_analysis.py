@@ -31,6 +31,12 @@ from app.services.deduplication import (
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.state_machines import (
+    AnalysisEvent,
+    FixEvent,
+    analysis_machine,
+    fix_machine,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -141,7 +147,7 @@ def _auto_queue_fix_generation(
     # file must ride along or it would be dropped from the PR.
     for fix in to_keep:
         if fix.status != FixStatus.ready:
-            fix.status = FixStatus.ready
+            fix_machine.trigger(fix, FixEvent.mark_ready)
             session.add(fix)
     session.commit()
 
@@ -513,7 +519,7 @@ def _run_static_analysis_impl(
                 violations = asyncio.run(_evaluate(content))
             except Exception as exc:
                 logger.exception("OPA evaluation failed for %s: %s", path, exc)
-                analysis.status = AnalysisStatus.failed
+                analysis_machine.trigger(analysis, AnalysisEvent.opa_failed)
                 analysis.error_message = str(exc)[:2000]
                 analysis.completed_at = datetime.now(timezone.utc)
                 session.add(analysis)
@@ -602,7 +608,7 @@ def _run_static_analysis_impl(
             score = compute_score(workflow_score_inputs, job_score_inputs)
             grade = score_to_grade(score)
 
-            analysis.status = AnalysisStatus.completed
+            analysis_machine.trigger(analysis, AnalysisEvent.opa_succeeded)
             analysis.score = score
             analysis.grade = grade
             analysis.completed_at = datetime.now(timezone.utc)

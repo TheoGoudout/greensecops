@@ -19,6 +19,7 @@ from app.models import (
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.fix_delivery import STALE_CONTENT_ERROR_CODE
+from app.services.state_machines import FixEvent, fix_machine
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,8 @@ def deliver_fixes_batch(
             and branch_pr.pr_state == PullRequestState.closed
         ):
             for fix in fixes:
-                fix.status = FixStatus.rejected
+                # Guard runs only when not forced, so every fix here is `ready`.
+                fix_machine.trigger(fix, FixEvent.supersede_closed_pr)
                 # Link the fix to the PR that caused the rejection so the UI
                 # can offer regeneration (regenerate-for-workflow/-repo) for
                 # it. A guard rejection is recognizable later by delivered_at
@@ -109,7 +111,8 @@ def deliver_fixes_batch(
             if not wf or wf.path in seen:
                 continue
             if not fix.full_content:
-                fix.status = FixStatus.failed
+                # `force` can bring a non-ready fix here; bypass the source check.
+                fix_machine.apply(fix, FixEvent.precheck_failed, force=force)
                 fix.error_message = "Fix has no generated workflow content"
                 session.add(fix)
                 events_pub.publish_event(
@@ -137,7 +140,8 @@ def deliver_fixes_batch(
             return {"status": "error", "detail": "no_workflow_files"}
 
         for fix in fixes:
-            fix.status = FixStatus.delivering
+            # `force` may deliver a fix that is not `ready`; bypass the guard.
+            fix_machine.apply(fix, FixEvent.start_delivery, force=force)
             session.add(fix)
         session.commit()
         events_pub.publish_event(
@@ -186,11 +190,13 @@ def deliver_fixes_batch(
                 session.flush()
 
         for fix in fixes:
+            # Every fix reached here in `delivering`, so these transitions are
+            # always legal (no force needed).
             if result.error:
-                fix.status = FixStatus.failed
+                fix_machine.trigger(fix, FixEvent.delivery_failed)
                 fix.error_message = result.error
             else:
-                fix.status = FixStatus.delivered
+                fix_machine.trigger(fix, FixEvent.delivery_succeeded)
                 fix.pr_id = pr.id if pr else None
                 fix.delivered_at = now
                 delivered_fix_ids.append(str(fix.id))

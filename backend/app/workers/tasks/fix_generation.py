@@ -9,6 +9,7 @@ from app.core.db import engine
 from app.models import Fix, FixStatus, Issue, Repository, WorkflowFile
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.state_machines import FixEvent, fix_machine
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -323,7 +324,7 @@ def run_fix_generation(
                 events_pub.publish_event(ev.fix_skipped(org_id, repo_id_str))
             return {"status": "skipped", "detail": "no_pending_fix"}
 
-        fix.status = FixStatus.generating
+        fix_machine.trigger(fix, FixEvent.start_generation)
         session.add(fix)
         session.commit()
         session.refresh(fix)
@@ -352,7 +353,7 @@ def run_fix_generation(
             )
         except Exception as exc:
             logger.exception("Fix generation failed for issues %s: %s", issue_ids, exc)
-            fix.status = FixStatus.failed
+            fix_machine.trigger(fix, FixEvent.generation_failed)
             fix.error_message = str(exc)[:2000]
             session.add(fix)
             session.commit()
@@ -381,11 +382,11 @@ def run_fix_generation(
         fix.completion_tokens = result.completion_tokens
         fix.langsmith_run_id = result.run_id
         if generation_error:
-            fix.status = FixStatus.failed
+            fix_machine.trigger(fix, FixEvent.generation_failed)
             fix.error_message = generation_error
         else:
             fix.full_content = full_content
-            fix.status = FixStatus.ready
+            fix_machine.trigger(fix, FixEvent.generation_succeeded)
         session.add(fix)
         session.commit()
 

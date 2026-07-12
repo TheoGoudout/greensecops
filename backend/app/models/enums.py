@@ -61,6 +61,19 @@ class IssueCategory(str, enum.Enum):
     maintainability = "maintainability"
 
 
+class IssueStatus(str, enum.Enum):
+    """Derived lifecycle of an issue.
+
+    Issues carry no status column; this value is computed from ``resolved_at``
+    and ``fix_id`` (see ``Issue.status``). It exists so the issue lifecycle can
+    be reasoned about with the same vocabulary as the other state machines.
+    """
+
+    open = "open"
+    fix_in_progress = "fix_in_progress"
+    resolved = "resolved"
+
+
 class FixStatus(str, enum.Enum):
     pending = "pending"
     generating = "generating"

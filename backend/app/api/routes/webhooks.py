@@ -13,12 +13,17 @@ from app.models import (
     FixStatus,
     Organization,
     PullRequest,
-    PullRequestState,
     Repository,
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.webhook_verifier import verify_webhook_signature
+from app.services.state_machines import (
+    FixEvent,
+    PullRequestEvent,
+    fix_machine,
+    pull_request_machine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -367,10 +372,10 @@ def _handle_pull_request_event(
 
     if action == "closed":
         merged = pr.get("merged", False)
-        new_state = PullRequestState.merged if merged else PullRequestState.closed
+        pr_event = PullRequestEvent.merge if merged else PullRequestEvent.close
     else:
         merged = False
-        new_state = PullRequestState.open
+        pr_event = PullRequestEvent.reopen
 
     from sqlmodel import select
 
@@ -380,10 +385,15 @@ def _handle_pull_request_event(
     if not pr_record:
         return
 
-    pr_record.pr_state = new_state
+    # try_trigger: GitHub may redeliver or reorder pull_request events, so an
+    # already-applied transition (e.g. reopen on an open PR) is a no-op, not an
+    # error.
+    pull_request_machine.try_trigger(pr_record, pr_event)
     session.add(pr_record)
     session.commit()
-    logger.info("PR %s -> state=%s for PR record %s", pr_url, new_state, pr_record.id)
+    logger.info(
+        "PR %s -> state=%s for PR record %s", pr_url, pr_record.pr_state, pr_record.id
+    )
 
     # Notify for all fixes associated with this PR
     pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
@@ -395,7 +405,7 @@ def _handle_pull_request_event(
         # the PR (delivered_at set) keep their status.
         for pr_fix in pr_fixes:
             if pr_fix.status == FixStatus.rejected and pr_fix.delivered_at is None:
-                pr_fix.status = FixStatus.ready
+                fix_machine.trigger(pr_fix, FixEvent.restore)
                 session.add(pr_fix)
         session.commit()
 
