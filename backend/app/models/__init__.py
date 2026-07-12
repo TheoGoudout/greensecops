@@ -3,6 +3,7 @@ from sqlmodel import SQLModel
 from .db import (
     Analysis,
     BillingSubscription,
+    DynamicEnrichment,
     Fix,
     Issue,
     Organization,
@@ -82,6 +83,7 @@ __all__ = [
     "Fix",
     "TelemetryRun",
     "TelemetryMetricSample",
+    "DynamicEnrichment",
     "BillingSubscription",
     # enums
     "UserTier",

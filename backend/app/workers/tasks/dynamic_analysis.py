@@ -2,10 +2,10 @@ import json
 import logging
 import uuid
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
-from app.models import Analysis, AnalysisStatus, TelemetryRun
+from app.models import Analysis, AnalysisStatus, DynamicEnrichment, TelemetryRun
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -42,10 +42,31 @@ def _run_dynamic_analysis_impl(telemetry_run_id: str) -> dict[str, str | float]:
             .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
         ).first()
 
-        if latest_analysis and enrichments:
+        # Persist this run's enrichments, replacing any from a prior run of the
+        # same telemetry row so re-runs stay idempotent.
+        session.exec(
+            delete(DynamicEnrichment).where(
+                col(DynamicEnrichment.telemetry_run_id) == run.id
+            )
+        )
+        analysis_id = latest_analysis.id if latest_analysis else None
+        for enrichment in enrichments:
+            session.add(
+                DynamicEnrichment(
+                    repo_id=run.repo_id,
+                    telemetry_run_id=run.id,
+                    analysis_id=analysis_id,
+                    rule_slug=str(enrichment["rule_slug"]),
+                    evidence=str(enrichment["evidence"]),
+                    recommendation=str(enrichment["recommendation"]),
+                )
+            )
+        session.commit()
+
+        if enrichments:
             logger.info(
-                "Dynamic enrichment for analysis %s: %d signals",
-                latest_analysis.id,
+                "Dynamic enrichment for analysis %s: %d signal(s) persisted",
+                analysis_id,
                 len(enrichments),
             )
 

@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -106,6 +107,47 @@ def test_ingest_creates_run(client: TestClient, db: Session, repo: Repository) -
     assert saved.phase == "completed"
     specs = json.loads(saved.runner_specs or "{}")
     assert specs["vcpus"] == 2
+
+
+def test_ingest_completed_enqueues_dynamic_analysis(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    _override_oidc(_oidc_claims(repo.full_name, run_id=2101))
+    try:
+        with patch(
+            "app.workers.tasks.dynamic_analysis.run_dynamic_analysis.delay"
+        ) as mock_delay:
+            response = client.post(
+                f"{settings.API_V1_STR}/telemetry/ingest",
+                json=_ingest_payload(run_id=2101, phase="completed"),
+                headers={"Authorization": "Bearer mock-oidc-token"},
+            )
+    finally:
+        _clear_oidc()
+
+    assert response.status_code == 201
+    run_id = response.json()["telemetry_run_id"]
+    mock_delay.assert_called_once_with(run_id)
+
+
+def test_ingest_started_does_not_enqueue_dynamic_analysis(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    _override_oidc(_oidc_claims(repo.full_name, run_id=2102))
+    try:
+        with patch(
+            "app.workers.tasks.dynamic_analysis.run_dynamic_analysis.delay"
+        ) as mock_delay:
+            response = client.post(
+                f"{settings.API_V1_STR}/telemetry/ingest",
+                json=_ingest_payload(run_id=2102, phase="started"),
+                headers={"Authorization": "Bearer mock-oidc-token"},
+            )
+    finally:
+        _clear_oidc()
+
+    assert response.status_code == 201
+    mock_delay.assert_not_called()
 
 
 def test_ingest_unknown_repo_accepted_silently(client: TestClient) -> None:

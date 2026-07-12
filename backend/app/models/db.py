@@ -361,6 +361,42 @@ class TelemetryRun(SQLModel, table=True):
     repository: Repository | None = Relationship(back_populates="telemetry_runs")
 
 
+# ─── DynamicEnrichment ────────────────────────────────────────────────────────
+
+
+class DynamicEnrichment(SQLModel, table=True):
+    """A runtime-telemetry finding produced by dynamic analysis.
+
+    Persisted (rather than only logged) so the recommendations a telemetry run
+    surfaces — e.g. an oversized runner — are queryable and can be shown
+    alongside the repo's static findings. Linked to the telemetry run that
+    produced it and, when available, the latest completed analysis it enriches.
+    """
+
+    __tablename__ = "dynamic_enrichment"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    telemetry_run_id: uuid.UUID = Field(
+        foreign_key="telemetry_run.id", nullable=False, ondelete="CASCADE"
+    )
+    analysis_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("analysis.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    rule_slug: str = Field(max_length=128, index=True)
+    evidence: str = Field(max_length=2048)
+    recommendation: str = Field(max_length=2048)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+
+
 # ─── TelemetryMetricSample ────────────────────────────────────────────────────
 
 
