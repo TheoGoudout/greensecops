@@ -34,7 +34,8 @@ export function fixStatusColor(status: FixStatus): string {
       return "bg-blue-500/15 text-blue-700 dark:text-blue-400"
     case "failed":
       return "bg-red-500/15 text-red-700 dark:text-red-400"
-    case "rejected":
+    case "rejected_by_user":
+    case "superseded_by_closed_pr":
       return "bg-muted text-muted-foreground line-through"
     default:
       return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"

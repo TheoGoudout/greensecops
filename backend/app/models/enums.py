@@ -84,7 +84,12 @@ class FixStatus(str, enum.Enum):
     delivering = "delivering"
     delivered = "delivered"
     failed = "failed"
-    rejected = "rejected"
+    # Two distinct rejections (previously a single overloaded ``rejected``):
+    #  - ``rejected_by_user``:  a human dismissed the fix via the API.
+    #  - ``superseded_by_closed_pr``: the closed-PR delivery guard auto-rejected
+    #    it; it becomes deliverable again if that PR is reopened.
+    rejected_by_user = "rejected_by_user"
+    superseded_by_closed_pr = "superseded_by_closed_pr"
 
 
 class PullRequestState(str, enum.Enum):

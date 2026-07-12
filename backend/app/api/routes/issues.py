@@ -10,13 +10,13 @@ from app.models import (
     Analysis,
     AnalysisStatus,
     Fix,
-    FixStatus,
     Issue,
     IssueCategory,
     IssuePublic,
     IssueSeverity,
     Repository,
 )
+from app.services.state_machines import REJECTED_STATUSES
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -78,7 +78,7 @@ def list_issues(
             )
             query = query.where(Issue.analysis_id == latest_subq)
     if unfixed:
-        active_fix_ids = select(Fix.id).where(Fix.status != FixStatus.rejected)
+        active_fix_ids = select(Fix.id).where(col(Fix.status).not_in(REJECTED_STATUSES))
         query = query.where(
             col(Issue.fix_id).is_(None) | ~col(Issue.fix_id).in_(active_fix_ids)
         )

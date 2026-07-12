@@ -81,11 +81,11 @@ def deliver_fixes_batch(
         ):
             for fix in fixes:
                 # Guard runs only when not forced, so every fix here is `ready`.
+                # This moves it to `superseded_by_closed_pr` — a distinct state
+                # from a user rejection, so it can be restored on PR reopen.
                 sm.advance(fix, sm.FixMachine, "supersede_closed_pr")
                 # Link the fix to the PR that caused the rejection so the UI
-                # can offer regeneration (regenerate-for-workflow/-repo) for
-                # it. A guard rejection is recognizable later by delivered_at
-                # being unset.
+                # can offer regeneration (regenerate-for-workflow/-repo) for it.
                 fix.pr_id = branch_pr.id
                 session.add(fix)
             session.commit()

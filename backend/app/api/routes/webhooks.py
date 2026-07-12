@@ -394,12 +394,12 @@ def _handle_pull_request_event(
     pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
 
     if action == "reopened":
-        # Reopening withdraws the close-as-rejection signal: fixes the
-        # closed-PR delivery guard auto-rejected (rejected but never
-        # delivered) become deliverable again. Fixes that actually reached
-        # the PR (delivered_at set) keep their status.
+        # Reopening withdraws the close-as-rejection signal: fixes the closed-PR
+        # delivery guard auto-rejected (status ``superseded_by_closed_pr``)
+        # become deliverable again. User-rejected and delivered fixes keep their
+        # status.
         for pr_fix in pr_fixes:
-            if pr_fix.status == FixStatus.rejected and pr_fix.delivered_at is None:
+            if pr_fix.status == FixStatus.superseded_by_closed_pr:
                 sm.advance(pr_fix, sm.FixMachine, "restore")
                 session.add(pr_fix)
         session.commit()

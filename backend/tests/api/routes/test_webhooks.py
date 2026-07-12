@@ -999,7 +999,7 @@ def test_github_webhook_pull_request_reopened_restores_guard_rejected_fix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
-        status=FixStatus.rejected,
+        status=FixStatus.superseded_by_closed_pr,
         pr_id=pr.id,
         full_content="on: push\njobs: {}",
     )

@@ -2,6 +2,14 @@
 
 States mirror ``FixStatus``. Behaviour lives in ``fix_generation.py``,
 ``fix_delivery.py``, ``api/routes/fixes.py`` and ``maintenance.py``.
+
+The two rejection states are distinct (no longer disambiguated by a
+``delivered_at IS NULL`` convention):
+
+* ``rejected_by_user`` — a human dismissed the fix; terminal (idempotent
+  re-reject only).
+* ``superseded_by_closed_pr`` — the closed-PR delivery guard auto-rejected it;
+  ``restore`` makes it deliverable again when the PR is reopened.
 """
 
 from __future__ import annotations
@@ -16,6 +24,12 @@ IN_FLIGHT_STATUSES: frozenset[FixStatus] = frozenset(
     {FixStatus.pending, FixStatus.generating, FixStatus.delivering}
 )
 
+# The two terminal rejection states — an issue whose fix is in either is not
+# actively being addressed. Single source of truth for the "active fix" filter.
+REJECTED_STATUSES: frozenset[FixStatus] = frozenset(
+    {FixStatus.rejected_by_user, FixStatus.superseded_by_closed_pr}
+)
+
 
 class FixMachine(StateMachine):
     state_field = "status"
@@ -26,7 +40,8 @@ class FixMachine(StateMachine):
     delivering = State(value=FixStatus.delivering)
     delivered = State(value=FixStatus.delivered)
     failed = State(value=FixStatus.failed, final=True)
-    rejected = State(value=FixStatus.rejected)
+    rejected_by_user = State(value=FixStatus.rejected_by_user, final=True)
+    superseded = State(value=FixStatus.superseded_by_closed_pr)
 
     # Inputs (events)
     start_generation = pending.to(generating)
@@ -37,18 +52,22 @@ class FixMachine(StateMachine):
     precheck_failed = ready.to(failed)
     delivery_succeeded = delivering.to(delivered)
     delivery_failed = delivering.to(failed)
-    supersede_closed_pr = ready.to(rejected)
-    # User reject is legal from every non-in-flight state; the self-loop keeps a
-    # repeated DELETE idempotent.
+    # Closed-PR delivery guard: distinct from a user rejection so it can be
+    # restored on PR reopen without an out-of-band delivered_at check.
+    supersede_closed_pr = ready.to(superseded)
+    # User reject is legal from every state except the two terminal ones
+    # (``failed`` and an already ``rejected_by_user`` fix). A repeated DELETE is
+    # kept idempotent at the endpoint via ``try_advance`` rather than a
+    # self-loop, so ``rejected_by_user`` stays a true final state.
     reject = (
-        pending.to(rejected)
-        | generating.to(rejected)
-        | ready.to(rejected)
-        | delivering.to(rejected)
-        | delivered.to(rejected)
-        | rejected.to.itself()  # type: ignore[no-untyped-call]
+        pending.to(rejected_by_user)
+        | generating.to(rejected_by_user)
+        | ready.to(rejected_by_user)
+        | delivering.to(rejected_by_user)
+        | delivered.to(rejected_by_user)
+        | superseded.to(rejected_by_user)
     )
-    restore = rejected.to(ready)
+    restore = superseded.to(ready)
     swept = pending.to(failed) | generating.to(failed) | delivering.to(failed)
 
     # Outputs (SSE signal emitted when each event fires)

@@ -534,7 +534,11 @@ def reject_fix(
 ) -> None:
     fix = get_or_404(session, Fix, fix_id)
     _authorize_fix(session, current_user, fix)
-    sm.advance(fix, sm.FixMachine, "reject")
+    # try_advance: rejecting an already terminal fix (already rejected_by_user,
+    # or failed) is an idempotent no-op rather than an error, so the DELETE stays
+    # safe to retry.
+    if not sm.try_advance(fix, sm.FixMachine, "reject"):
+        return
     session.add(fix)
     session.commit()
 

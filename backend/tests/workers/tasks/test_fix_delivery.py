@@ -82,7 +82,7 @@ def test_closed_pr_guard_rejects_and_links_fix_to_pr(db: Session) -> None:
 
     assert result == {"status": "skipped", "reason": "pr_previously_closed"}
     db.refresh(fix)
-    assert fix.status == FixStatus.rejected
+    assert fix.status == FixStatus.superseded_by_closed_pr
     # The fix is linked to the closed PR so the UI can offer regeneration,
     # and delivered_at stays unset so the rejection is recognizable as a
     # guard rejection (vs. an actually delivered fix).

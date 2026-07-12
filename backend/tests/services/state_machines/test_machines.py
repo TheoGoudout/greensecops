@@ -99,23 +99,42 @@ def test_fix_generation_and_delivery_path() -> None:
         assert sm.advance(f, sm.FixMachine, event) is expected
 
 
-def test_fix_reject_is_idempotent() -> None:
-    for src in (FixStatus.ready, FixStatus.delivered, FixStatus.rejected):
+def test_fix_reject_lands_in_rejected_by_user() -> None:
+    for src in (
+        FixStatus.ready,
+        FixStatus.delivered,
+        FixStatus.superseded_by_closed_pr,
+    ):
         f = _Model(sm.FixMachine, src)
-        assert sm.advance(f, sm.FixMachine, "reject") is FixStatus.rejected
+        assert sm.advance(f, sm.FixMachine, "reject") is FixStatus.rejected_by_user
+
+
+def test_fix_reject_is_terminal_double_reject_is_illegal() -> None:
+    # rejected_by_user is a true final state; the DELETE route makes a repeated
+    # reject idempotent via try_advance, not a machine self-loop.
+    f = _Model(sm.FixMachine, FixStatus.rejected_by_user)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f, sm.FixMachine, "reject")
 
 
 def test_fix_guard_supersede_only_from_ready() -> None:
     f = _Model(sm.FixMachine, FixStatus.ready)
-    assert sm.advance(f, sm.FixMachine, "supersede_closed_pr") is FixStatus.rejected
+    assert (
+        sm.advance(f, sm.FixMachine, "supersede_closed_pr")
+        is FixStatus.superseded_by_closed_pr
+    )
     f2 = _Model(sm.FixMachine, FixStatus.delivered)
     with pytest.raises(sm.IllegalTransition):
         sm.advance(f2, sm.FixMachine, "supersede_closed_pr")
 
 
-def test_fix_restore_from_rejected() -> None:
-    f = _Model(sm.FixMachine, FixStatus.rejected)
+def test_fix_restore_only_from_superseded_not_user_rejected() -> None:
+    f = _Model(sm.FixMachine, FixStatus.superseded_by_closed_pr)
     assert sm.advance(f, sm.FixMachine, "restore") is FixStatus.ready
+    # A user rejection is final — reopening a PR must not resurrect it.
+    f2 = _Model(sm.FixMachine, FixStatus.rejected_by_user)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f2, sm.FixMachine, "restore")
 
 
 def test_fix_sweep_from_in_flight_only() -> None:

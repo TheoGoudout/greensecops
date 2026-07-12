@@ -34,7 +34,9 @@ function deliverAction(
     return { label: "Create PR", force: false }
   }
   if (
-    (fix.status === "delivered" || fix.status === "rejected") &&
+    (fix.status === "delivered" ||
+      fix.status === "rejected_by_user" ||
+      fix.status === "superseded_by_closed_pr") &&
     fix.pr_state === "closed"
   ) {
     return { label: "Reopen PR", force: true }

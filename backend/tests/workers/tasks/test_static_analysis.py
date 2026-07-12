@@ -385,9 +385,7 @@ def test_duplicate_detection_skips_second_run(
 
     # No new Analysis row accumulates for the duplicate: only the original
     # completed row exists, and the result references it instead.
-    rows = db.exec(
-        select(Analysis).where(Analysis.repo_id == repo.id)
-    ).all()
+    rows = db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
     assert len(rows) == 1
     completed = rows[0]
     assert completed.status == AnalysisStatus.completed

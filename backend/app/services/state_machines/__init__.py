@@ -23,7 +23,7 @@ from .base import (
     output_for,
     try_advance,
 )
-from .fix import IN_FLIGHT_STATUSES, FixMachine
+from .fix import IN_FLIGHT_STATUSES, REJECTED_STATUSES, FixMachine
 from .issue import IssueMachine
 from .pull_request import PullRequestMachine
 
@@ -40,4 +40,5 @@ __all__ = [
     "IssueMachine",
     "PullRequestMachine",
     "IN_FLIGHT_STATUSES",
+    "REJECTED_STATUSES",
 ]
