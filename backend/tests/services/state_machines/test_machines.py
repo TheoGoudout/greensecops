@@ -60,10 +60,15 @@ def test_declared_outputs_reference_known_events(
 
 
 def test_analysis_happy_path() -> None:
-    a = _Model(sm.AnalysisMachine, AnalysisStatus.running)
+    a = _Model(sm.AnalysisMachine, AnalysisStatus.queued)
+    assert sm.advance(a, sm.AnalysisMachine, "started") is AnalysisStatus.running
     assert (
         sm.advance(a, sm.AnalysisMachine, "opa_succeeded") is AnalysisStatus.completed
     )
+
+
+def test_analysis_queued_is_initial() -> None:
+    assert sm.AnalysisMachine.initial_state.value is AnalysisStatus.queued
 
 
 def test_analysis_no_workflows_edge() -> None:
@@ -74,9 +79,10 @@ def test_analysis_no_workflows_edge() -> None:
     )
 
 
-def test_analysis_sweep_from_running() -> None:
-    a = _Model(sm.AnalysisMachine, AnalysisStatus.running)
-    assert sm.advance(a, sm.AnalysisMachine, "swept") is AnalysisStatus.failed
+def test_analysis_sweep_from_queued_or_running() -> None:
+    for src in (AnalysisStatus.queued, AnalysisStatus.running):
+        a = _Model(sm.AnalysisMachine, src)
+        assert sm.advance(a, sm.AnalysisMachine, "swept") is AnalysisStatus.failed
 
 
 def test_analysis_cannot_advance_from_terminal() -> None:
@@ -117,15 +123,28 @@ def test_fix_reject_is_terminal_double_reject_is_illegal() -> None:
         sm.advance(f, sm.FixMachine, "reject")
 
 
-def test_fix_guard_supersede_only_from_ready() -> None:
-    f = _Model(sm.FixMachine, FixStatus.ready)
-    assert (
-        sm.advance(f, sm.FixMachine, "supersede_closed_pr")
-        is FixStatus.superseded_by_closed_pr
-    )
-    f2 = _Model(sm.FixMachine, FixStatus.delivered)
+def test_fix_supersede_from_ready_or_delivered() -> None:
+    # Closed-PR guard fires both at delivery time (from ``ready``) and when the
+    # pull_request ``closed`` webhook withdraws an already-``delivered`` fix.
+    for src in (FixStatus.ready, FixStatus.delivered):
+        f = _Model(sm.FixMachine, src)
+        assert (
+            sm.advance(f, sm.FixMachine, "supersede_closed_pr")
+            is FixStatus.superseded_by_closed_pr
+        )
+    # Not legal from an in-flight or terminal state.
+    f2 = _Model(sm.FixMachine, FixStatus.generating)
     with pytest.raises(sm.IllegalTransition):
         sm.advance(f2, sm.FixMachine, "supersede_closed_pr")
+
+
+def test_fix_regenerate_from_failed_only() -> None:
+    f = _Model(sm.FixMachine, FixStatus.failed)
+    assert sm.advance(f, sm.FixMachine, "regenerate") is FixStatus.pending
+    # A user dismissal stays terminal — no in-place regenerate.
+    f2 = _Model(sm.FixMachine, FixStatus.rejected_by_user)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f2, sm.FixMachine, "regenerate")
 
 
 def test_fix_restore_only_from_superseded_not_user_rejected() -> None:
@@ -182,3 +201,16 @@ def test_issue_cannot_link_fix_when_resolved() -> None:
     i = _Model(sm.IssueMachine, IssueStatus.resolved)
     with pytest.raises(sm.IllegalTransition):
         sm.advance(i, sm.IssueMachine, "link_fix")
+
+
+def test_issue_ignore_and_unignore() -> None:
+    for src in (IssueStatus.open, IssueStatus.fix_in_progress):
+        i = _Model(sm.IssueMachine, src)
+        assert sm.advance(i, sm.IssueMachine, "ignore") is IssueStatus.ignored
+        assert sm.advance(i, sm.IssueMachine, "unignore") is IssueStatus.open
+
+
+def test_issue_cannot_ignore_when_resolved() -> None:
+    i = _Model(sm.IssueMachine, IssueStatus.resolved)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(i, sm.IssueMachine, "ignore")

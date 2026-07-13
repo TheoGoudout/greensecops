@@ -91,21 +91,28 @@ flowchart TD
 
 ## 1. Analysis
 
-- **States** — `AnalysisStatus`: `running`, `completed`, `failed`,
+- **States** — `AnalysisStatus`: `queued`, `running`, `completed`, `failed`,
   `no_workflows`
-- **Events** — `opa_succeeded`, `opa_failed`, `no_workflows_found`, `swept`
+- **Events** — `started`, `opa_succeeded`, `opa_failed`, `no_workflows_found`,
+  `swept`
 - **Code** — `state_machines/analysis.py`; `workers/tasks/static_analysis.py`,
   `maintenance.py`
-- **Initial** — `running`. **Final** — `completed`, `failed`, `no_workflows`.
+- **Initial** — `queued`. **Final** — `completed`, `failed`, `no_workflows`.
+
+Rows are inserted as `queued` and advance to `running` (`started`) when the
+worker begins OPA evaluation, so a row that dies before the worker starts is
+distinguishable (still `queued`) from one that hangs mid-eval (`running`) — the
+sweeper covers both.
 
 ### Transitions (input → output)
 
 | Event | From → To | Output (SSE) | Guard |
 |---|---|---|---|
+| `started` | `queued` → `running` | `analysis.started` | worker begins OPA eval |
 | `opa_succeeded` | `running` → `completed` | `analysis.completed` | OPA eval produced a score |
 | `opa_failed` | `running` → `failed` | `analysis.failed` | OPA eval raised |
 | `no_workflows_found` | `running` → `no_workflows` | `analysis.no_workflows` | repo has no workflow files |
-| `swept` | `running` → `failed` | `analysis.failed` | `created_at` older than 30 min |
+| `swept` | `queued`, `running` → `failed` | `analysis.failed` | `created_at` older than 30 min |
 
 ### External triggers
 
@@ -123,8 +130,10 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Running: row created
+    [*] --> Queued: row created
 
+    Queued --> Running: started / analysis.started
+    Queued --> Failed: swept / analysis.failed
     Running --> Completed: opa_succeeded / analysis.completed
     Running --> Failed: opa_failed / analysis.failed
     Running --> Failed: swept / analysis.failed
@@ -135,27 +144,37 @@ stateDiagram-v2
     NoWorkflows --> [*]
 ```
 
-**Closed in this pass:** the never-persisted `pending` and `skipped` enum
-values were removed; `no_workflows` is now reached by an explicit edge instead
-of being a disconnected initial state; dynamic analysis is wired in (§6).
+**Closed in this pass:** a `queued` initial state models the worker-pickup phase
+so `analysis.started` maps to a real transition and the sweeper distinguishes
+never-started from hung rows; the never-persisted `pending`/`skipped` values are
+gone; dynamic analysis is wired in (§6).
 
-**Still open:** no dedicated "retries exhausted" state distinct from `failed`.
+**Still open:** no dedicated "retries exhausted" state distinct from `failed`;
+the broker-queue window *before* the worker picks the task up is still SSE-only
+(a per-row `queued` would need a parent "analysis run" entity).
 
 ---
 
 ## 2. Issue
 
 `Issue.status` is a **persisted, indexed column** (`IssueStatus`) maintained by
-a database trigger that computes it from `resolved_at` + `fix_id` (migration
-`0022`). The trigger keeps it authoritative even when `fix_id` is cleared by the
-`ON DELETE SET NULL` cascade on fix deletion — which bypasses application code —
-so the column can never disagree with the underlying fields. The machine
-therefore documents and validates the legal field-level transitions; the
-trigger owns writes.
+a database trigger that computes it from `ignored_at` + `resolved_at` + `fix_id`
+(migrations `0022`/`0026`). The trigger keeps it authoritative even when `fix_id`
+is cleared by the `ON DELETE SET NULL` cascade on fix deletion — which bypasses
+application code — so the column can never disagree with the underlying fields.
+The machine therefore documents and validates the legal field-level
+transitions; the trigger owns writes.
 
-- **States** — `IssueStatus`: `open`, `fix_in_progress`, `resolved`
-- **Events** — `link_fix`, `unlink_fix`, `resolve`, `recur`
-- **Code** — `state_machines/issue.py`; trigger in migration `0022`
+- **States** — `IssueStatus`: `open`, `fix_in_progress`, `resolved`, `ignored`
+- **Events** — `link_fix`, `unlink_fix`, `resolve`, `recur`, `ignore`,
+  `unignore`
+- **Code** — `state_machines/issue.py`; trigger in migrations `0022`/`0026`;
+  `api/routes/issues.py` (`/ignore`, `/unignore`), `/greensecops ignore
+  <fingerprint>` comment command in the webhook handler
+
+`ignored` takes precedence in the trigger: a muted violation reads `ignored`
+regardless of fix/resolve activity, and drops out of the default (active) issue
+and fix-generation queries.
 
 ### Transitions
 
@@ -165,6 +184,8 @@ trigger owns writes.
 | `unlink_fix` | `fix_in_progress` → `open` | `fix_id` → `NULL` (fix deleted) |
 | `resolve` | `open`, `fix_in_progress` → `resolved` | `resolved_at` set |
 | `recur` | `resolved` → `open` | `resolved_at` → `NULL` |
+| `ignore` | `open`, `fix_in_progress` → `ignored` | `ignored_at` set |
+| `unignore` | `ignored` → `open` | `ignored_at` → `NULL` |
 
 ```mermaid
 stateDiagram-v2
@@ -174,14 +195,17 @@ stateDiagram-v2
     Open --> Resolved: resolve
     FixInProgress --> Resolved: resolve
     Resolved --> Open: recur
+    Open --> Ignored: ignore
+    FixInProgress --> Ignored: ignore
+    Ignored --> Open: unignore
     Resolved --> [*]: retained in history
 ```
 
-**Closed in this pass:** the status is now a real persisted column (was a
-Python-only derived property).
+**Closed in this pass:** an `ignored` state implements `/greensecops ignore`
+(and a REST `/ignore` endpoint), letting users mute false positives / accepted
+risk; the status is a real persisted column with `ignored_at` precedence.
 
-**Still open:** no `ignored` / `muted` state (`/greensecops ignore` remains
-unimplemented); `resolved` records no reason (user fix vs. rule disabled vs.
+**Still open:** `resolved` records no reason (user fix vs. rule disabled vs.
 merged).
 
 ---
@@ -192,10 +216,12 @@ merged).
   `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`
 - **Events** — `start_generation`, `generation_succeeded`, `generation_failed`,
   `mark_ready`, `start_delivery`, `precheck_failed`, `delivery_succeeded`,
-  `delivery_failed`, `supersede_closed_pr`, `reject`, `restore`, `swept`
+  `delivery_failed`, `supersede_closed_pr`, `reject`, `restore`, `regenerate`,
+  `swept`
 - **Code** — `state_machines/fix.py`; `fix_generation.py`, `fix_delivery.py`,
-  `api/routes/fixes.py`, `maintenance.py`
-- **Initial** — `pending`. **Final** — `failed`, `rejected_by_user`.
+  `api/routes/fixes.py`, `maintenance.py`, the `pull_request` webhook handler
+- **Initial** — `pending`. **Final** — `rejected_by_user` (`failed` is no longer
+  final — `regenerate` retries it in place).
 
 The two rejections are now **distinct states** (no longer disambiguated by a
 `delivered_at IS NULL` convention):
@@ -217,9 +243,10 @@ The two rejections are now **distinct states** (no longer disambiguated by a
 | `precheck_failed` | `ready` → `failed` | `fix.failed` | fix has no content |
 | `delivery_succeeded` | `delivering` → `delivered` | `fix.delivered` | PR opened / comment posted |
 | `delivery_failed` | `delivering` → `failed` | `fix.failed` | push / PR / comment error |
-| `supersede_closed_pr` | `ready` → `superseded_by_closed_pr` | `fix.rejected` | target PR branch closed, not forced |
+| `supersede_closed_pr` | `ready`, `delivered` → `superseded_by_closed_pr` | `fix.rejected` | target PR branch closed, not forced / a delivered PR closed unmerged |
 | `reject` | any non-terminal → `rejected_by_user` | `fix.rejected` | user DELETE |
 | `restore` | `superseded_by_closed_pr` → `ready` | — | PR reopened |
+| `regenerate` | `failed` → `pending` | `fix.pending` | user retries a failed fix in place |
 | `swept` | `pending`, `generating`, `delivering` → `failed` | `fix.failed` | stuck > 30 min |
 
 ```mermaid
@@ -239,6 +266,7 @@ stateDiagram-v2
     Delivering --> Failed: delivery_failed / fix.failed
 
     Delivered --> Ready: mark_ready
+    Delivered --> Superseded: supersede_closed_pr / fix.rejected
     Delivered --> RejectedByUser: reject / fix.rejected
     Delivered --> [*]: PR merged (left untouched)
 
@@ -254,24 +282,25 @@ stateDiagram-v2
     Generating --> RejectedByUser: reject / fix.rejected
     Delivering --> RejectedByUser: reject / fix.rejected
 
-    Failed --> [*]
+    Failed --> Pending: regenerate / fix.pending
     RejectedByUser --> [*]
 ```
 
-**Closed in this pass:** the overloaded `rejected` state was split into
-`rejected_by_user` and `superseded_by_closed_pr` (migration `0024`), removing
-the `delivered_at IS NULL` convention.
+**Closed in this pass:** `supersede_closed_pr` now also fires from `delivered`,
+so a delivered PR closed without merging withdraws its fix (restored on reopen)
+instead of stranding it; a `regenerate` edge (`failed` → `pending`) retries a
+failed fix in place, so `failed` is no longer terminal.
 
-**Still open:** `failed` has no automatic recovery (needs a manual regenerate);
-a *delivered* PR closed without merging leaves the fix `delivered`; the
-`fix.skipped` SSE signal has no persisted status.
+**Still open:** the `fix.skipped` SSE signal has no persisted status; a *merged*
+PR still leaves the fix `delivered` (no `merged`/`landed` terminal state).
 
 ---
 
 ## 4. Pull Request
 
-- **States** — `PullRequestState`: `open`, `merged`, `closed` (column nullable —
-  legacy `NULL` rows exist)
+- **States** — `PullRequestState`: `open`, `merged`, `closed` (column is
+  `NOT NULL DEFAULT 'open'` since migration `0027`; legacy `NULL` rows were
+  backfilled to `open`)
 - **Events** — `redeliver`, `external_update`, `merge`, `close`, `reopen`
 - **Code** — `state_machines/pull_request.py`; `fix_delivery.py`, the
   `pull_request` webhook, `maintenance.sync_open_pr_states`,
@@ -305,10 +334,11 @@ stateDiagram-v2
 ```
 
 **Closed in this pass:** `synchronize` and `edited` webhook actions are now
-handled (previously ignored) via `external_update`.
+handled (previously ignored) via `external_update`; legacy `NULL` `pr_state`
+rows were backfilled to `open` and the column is now `NOT NULL` (migration
+`0027`), so `try_advance` no longer silently no-ops on old PRs.
 
-**Still open:** legacy `NULL` state rows; no CI / review / merge-conflict
-states; no draft state.
+**Still open:** no CI / review / merge-conflict states; no draft state.
 
 ---
 

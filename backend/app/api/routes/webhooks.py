@@ -8,9 +8,11 @@ from app import crud
 from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import (
+    Analysis,
     AnalysisTrigger,
     Fix,
     FixStatus,
+    Issue,
     Organization,
     PullRequest,
     Repository,
@@ -202,8 +204,8 @@ def _handle_issue_comment_event(
     logger.info("Received GreenSecOps command comment: %s", body[:100])
 
     command = stripped.removeprefix("/greensecops").strip().split()
-    if not command or command[0] != "reanalyze":
-        # Other commands (fix, ignore, ...) are not implemented yet.
+    if not command or command[0] not in ("reanalyze", "ignore", "unignore"):
+        # Other commands (fix, ...) are not implemented yet.
         return
 
     github_repo_id = payload.get("repository", {}).get("id")
@@ -218,13 +220,56 @@ def _handle_issue_comment_event(
     if not repo or not repo.enabled:
         return
 
-    _enqueue_static_analysis(
-        repo_id=str(repo.id),
-        branch=repo.default_branch,
-        commit_sha="",
-        trigger=AnalysisTrigger.manual,
-        org_id=str(repo.org_id),
-        force=True,
+    if command[0] == "reanalyze":
+        _enqueue_static_analysis(
+            repo_id=str(repo.id),
+            branch=repo.default_branch,
+            commit_sha="",
+            trigger=AnalysisTrigger.manual,
+            org_id=str(repo.org_id),
+            force=True,
+        )
+    else:
+        # `/greensecops ignore|unignore <fingerprint>` mutes/un-mutes every issue
+        # in this repo carrying that fingerprint (a stable per-violation id). The
+        # status trigger recomputes `status` from `ignored_at`.
+        _handle_issue_ignore_command(session, repo, command)
+
+
+def _handle_issue_ignore_command(
+    session: Session,
+    repo: Repository,
+    command: list[str],
+) -> None:
+    from datetime import datetime, timezone
+
+    from sqlmodel import select
+
+    if len(command) < 2:
+        logger.info("`/greensecops %s` requires a fingerprint argument", command[0])
+        return
+    fingerprint = command[1]
+    issues = list(
+        session.exec(
+            select(Issue)
+            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+            .where(Analysis.repo_id == repo.id)
+            .where(Issue.fingerprint == fingerprint)
+        ).all()
+    )
+    if not issues:
+        return
+    now = datetime.now(timezone.utc) if command[0] == "ignore" else None
+    for issue in issues:
+        issue.ignored_at = now
+        session.add(issue)
+    session.commit()
+    logger.info(
+        "%s %d issue(s) with fingerprint %s in repo %s",
+        "Ignored" if now else "Un-ignored",
+        len(issues),
+        fingerprint,
+        repo.id,
     )
 
 
@@ -403,13 +448,30 @@ def _handle_pull_request_event(
     if action == "reopened":
         # Reopening withdraws the close-as-rejection signal: fixes the closed-PR
         # delivery guard auto-rejected (status ``superseded_by_closed_pr``)
-        # become deliverable again. User-rejected and delivered fixes keep their
-        # status.
+        # become deliverable again. User-rejected fixes keep their status.
         for pr_fix in pr_fixes:
             if pr_fix.status == FixStatus.superseded_by_closed_pr:
                 sm.advance(pr_fix, sm.FixMachine, "restore")
                 session.add(pr_fix)
         session.commit()
+    elif action == "closed" and not merged:
+        # A delivered PR closed without merging withdraws its fixes: move them to
+        # ``superseded_by_closed_pr`` so ``reopen`` (above) restores them. Only
+        # ``ready``/``delivered`` fixes are affected; try_advance keeps it a
+        # no-op for any already-terminal fix, and safe on redelivered events.
+        superseded_fixes: list[Fix] = []
+        for pr_fix in pr_fixes:
+            if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr"):
+                session.add(pr_fix)
+                superseded_fixes.append(pr_fix)
+        if superseded_fixes:
+            session.commit()
+            repo = session.get(Repository, pr_record.repo_id)
+            if repo:
+                for pr_fix in superseded_fixes:
+                    events_pub.publish_event(
+                        ev.fix_rejected(str(repo.org_id), str(repo.id), str(pr_fix.id))
+                    )
 
     fix = pr_fixes[0] if pr_fixes else None
     if fix:

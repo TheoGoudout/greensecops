@@ -85,6 +85,7 @@ def _auto_queue_fix_generation(
         .where(Analysis.repo_id == repo.id)
         .where(Issue.analysis_id == latest_analysis_subq)
         .where(col(Issue.resolved_at).is_(None))
+        .where(col(Issue.ignored_at).is_(None))
     ).all()
 
     if not issues:
@@ -496,13 +497,17 @@ def _run_static_analysis_impl(
                 repo_id=repo.id,
                 workflow_file_id=wf_record.id,
                 content_hash=content_hash,
-                status=AnalysisStatus.running,
+                status=AnalysisStatus.queued,
                 triggered_by=AnalysisTrigger(trigger),
                 branch=effective_branch,
                 commit_sha=commit_sha or None,
             )
             session.add(analysis)
             session.flush()
+            # Advance queued -> running as the worker begins OPA evaluation, so
+            # a row that dies before this point is distinguishable (still
+            # ``queued``) from one that hangs mid-eval (``running``).
+            sm.advance(analysis, sm.AnalysisMachine, "started")
             if not is_batch:
                 events_pub.publish_event(
                     ev.analysis_started(

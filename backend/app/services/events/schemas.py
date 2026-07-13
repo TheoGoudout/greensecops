@@ -96,6 +96,15 @@ def fix_skipped(org_id: str, repo_id: str) -> SSEEvent:
     )
 
 
+def fix_pending(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
+    """A failed fix was re-queued for generation (in-place regenerate)."""
+    return SSEEvent(
+        event=SSESignal.fix_pending,
+        org_id=org_id,
+        data={"repo_id": repo_id, "fix_id": fix_id},
+    )
+
+
 def fix_generating(
     org_id: str, repo_id: str, fix_ids: list[str], issue_ids: list[str]
 ) -> SSEEvent:

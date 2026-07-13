@@ -20,6 +20,7 @@ from app.models import (
     Issue,
     IssueCategory,
     IssueSeverity,
+    IssueStatus,
     LLMProvider,
     Organization,
     PullRequest,
@@ -863,6 +864,10 @@ def test_github_webhook_pull_request_closed_not_merged(
     assert response.status_code == 200
     db.refresh(pr)
     assert pr.pr_state == "closed"
+    # P1: a delivered fix whose PR closed without merging is withdrawn so a
+    # later reopen can restore it (mirrors the ready-stage delivery guard).
+    db.refresh(fix)
+    assert fix.status == FixStatus.superseded_by_closed_pr
 
 
 def test_github_webhook_pull_request_reopened_updates_fix(
@@ -1451,6 +1456,60 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
     enqueue.assert_called_once()
     assert enqueue.call_args.kwargs["repo_id"] == str(enabled_repo.id)
     assert enqueue.call_args.kwargs["force"] is True
+
+
+def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
+    client: TestClient, db: Session, enabled_repo: Repository
+) -> None:
+    analysis = Analysis(
+        repo_id=enabled_repo.id,
+        content_hash=uuid.uuid4().hex,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+    fingerprint = uuid.uuid4().hex[:16]
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="mute me",
+        fingerprint=fingerprint,
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    assert issue.status == IssueStatus.open
+
+    payload = {
+        "action": "created",
+        "comment": {"body": f"/greensecops ignore {fingerprint}"},
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
+        )
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.ignored_at is not None
+    assert issue.status == IssueStatus.ignored
+
+    # `unignore` reverses it.
+    payload["comment"]["body"] = f"/greensecops unignore {fingerprint}"
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
+        )
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.ignored_at is None
+    assert issue.status == IssueStatus.open
 
 
 def test_github_webhook_unknown_command_is_ignored(

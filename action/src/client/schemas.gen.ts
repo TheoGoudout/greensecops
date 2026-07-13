@@ -178,7 +178,7 @@ export const AnalysisPublicSchema = {
 
 export const AnalysisStatusSchema = {
     type: 'string',
-    enum: ['running', 'completed', 'failed', 'no_workflows'],
+    enum: ['queued', 'running', 'completed', 'failed', 'no_workflows'],
     title: 'AnalysisStatus'
 } as const;
 
@@ -845,13 +845,15 @@ export const IssueSeveritySchema = {
 
 export const IssueStatusSchema = {
     type: 'string',
-    enum: ['open', 'fix_in_progress', 'resolved'],
+    enum: ['open', 'fix_in_progress', 'resolved', 'ignored'],
     title: 'IssueStatus',
     description: `Derived lifecycle of an issue.
 
-Issues carry no status column; this value is computed from \`\`resolved_at\`\`
-and \`\`fix_id\`\` (see \`\`Issue.status\`\`). It exists so the issue lifecycle can
-be reasoned about with the same vocabulary as the other state machines.`
+This value is a persisted column computed by a database trigger from
+\`\`ignored_at\`\`, \`\`resolved_at\`\` and \`\`fix_id\`\` (see \`\`Issue.status\`\` and
+migrations \`\`0022\`\`/\`\`0026\`\`). \`\`ignored\`\` takes precedence over the other
+states so a user-dismissed violation stays muted regardless of fix/resolve
+activity.`
 } as const;
 
 export const LLMProviderSchema = {
@@ -1126,7 +1128,7 @@ export const RulePublicSchema = {
 
 export const SSESignalSchema = {
     type: 'string',
-    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
     title: 'SSESignal'
 } as const;
 

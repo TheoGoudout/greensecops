@@ -29,11 +29,13 @@ class LLMProvider(str, enum.Enum):
 
 
 class AnalysisStatus(str, enum.Enum):
-    # An analysis row is created directly as ``running`` (or ``no_workflows``);
-    # the queued phase is signalled over SSE without a row. Content-hash
-    # duplicates reference the prior analysis and emit ``analysis.skipped``
-    # without writing a row. Neither a ``pending`` nor a ``skipped`` row is ever
-    # persisted, so those values are not part of the state machine.
+    # An analysis row is created as ``queued`` (or directly ``no_workflows``)
+    # and advances to ``running`` when the worker begins OPA evaluation. The
+    # broker-queue phase before the worker picks the task up is still signalled
+    # over SSE without a row. Content-hash duplicates reference the prior
+    # analysis and emit ``analysis.skipped`` without writing a row. A
+    # ``skipped`` row is never persisted, so that value is not a machine state.
+    queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
@@ -67,14 +69,17 @@ class IssueCategory(str, enum.Enum):
 class IssueStatus(str, enum.Enum):
     """Derived lifecycle of an issue.
 
-    Issues carry no status column; this value is computed from ``resolved_at``
-    and ``fix_id`` (see ``Issue.status``). It exists so the issue lifecycle can
-    be reasoned about with the same vocabulary as the other state machines.
+    This value is a persisted column computed by a database trigger from
+    ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
+    migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
+    states so a user-dismissed violation stays muted regardless of fix/resolve
+    activity.
     """
 
     open = "open"
     fix_in_progress = "fix_in_progress"
     resolved = "resolved"
+    ignored = "ignored"
 
 
 class FixStatus(str, enum.Enum):
@@ -113,6 +118,7 @@ class SSESignal(str, enum.Enum):
     analysis_no_workflows = "analysis.no_workflows"
     # Fix generation & delivery
     fix_skipped = "fix.skipped"
+    fix_pending = "fix.pending"
     fix_generating = "fix.generating"
     fix_ready = "fix.ready"
     fix_delivering = "fix.delivering"
