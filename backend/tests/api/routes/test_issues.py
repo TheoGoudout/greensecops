@@ -14,6 +14,7 @@ from app.models import (
     Issue,
     IssueCategory,
     IssueSeverity,
+    IssueStatus,
     Organization,
     Repository,
     Rule,
@@ -446,3 +447,75 @@ def test_list_issues_latest_only_false_includes_all(
     ids = [i["id"] for i in response.json()]
     assert str(new_issue.id) in ids
     assert str(issue.id) in ids
+
+
+# ─── POST /issues/{id}/ignore & /unignore ─────────────────────────────────────
+
+
+def test_ignore_and_unignore_issue(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+) -> None:
+    # Ignore → status becomes ignored (DB trigger) and ignored_at is set.
+    resp = client.post(
+        f"{settings.API_V1_STR}/issues/{issue.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+    db.refresh(issue)
+    assert issue.ignored_at is not None
+    assert issue.status is IssueStatus.ignored
+
+    # Ignore again is idempotent.
+    resp = client.post(
+        f"{settings.API_V1_STR}/issues/{issue.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+
+    # Unignore → reverts to the underlying (open) state.
+    resp = client.post(
+        f"{settings.API_V1_STR}/issues/{issue.id}/unignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "open"
+    db.refresh(issue)
+    assert issue.ignored_at is None
+
+
+def test_ignored_issue_hidden_by_default_shown_with_flag(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    issue: Issue,
+) -> None:
+    client.post(
+        f"{settings.API_V1_STR}/issues/{issue.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    # Default list excludes ignored issues.
+    resp = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={"repo_id": str(repo.id), "latest_only": "false"},
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert str(issue.id) not in [i["id"] for i in resp.json()]
+    # include_ignored=true surfaces it again.
+    resp = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        params={
+            "repo_id": str(repo.id),
+            "latest_only": "false",
+            "include_ignored": "true",
+        },
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert str(issue.id) in [i["id"] for i in resp.json()]

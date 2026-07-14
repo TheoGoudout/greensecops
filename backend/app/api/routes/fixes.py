@@ -142,6 +142,7 @@ def _latest_unresolved_issues(
         .where(Analysis.repo_id == repo_id)
         .where(Issue.analysis_id == latest_analysis_subq)
         .where(col(Issue.resolved_at).is_(None))
+        .where(col(Issue.ignored_at).is_(None))
     )
     if wf_file_ids is not None:
         query = query.where(col(Issue.workflow_file_id).in_(wf_file_ids))
@@ -663,6 +664,61 @@ def regenerate_fixes_for_workflow(
 
     pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
     return {"queued": len(pending_fixes)}
+
+
+@router.post("/{fix_id}/regenerate", status_code=202)
+def regenerate_failed_fix(
+    fix_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, str]:
+    """Retry a failed fix in place (``failed`` -> ``pending``), reusing the row.
+
+    Unlike ``regenerate-for-workflow`` (which discards the row and creates a new
+    one), this recovers a fix that failed generation/precheck without losing its
+    identity or PR linkage. Only legal from ``failed``.
+    """
+    fix = get_or_404(session, Fix, fix_id)
+    _authorize_fix(session, current_user, fix)
+
+    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
+    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
+
+    # Issues still needing this fix (a resolved/ignored issue no longer counts).
+    issue_ids = [
+        str(i.id)
+        for i in session.exec(
+            select(Issue)
+            .where(Issue.fix_id == fix.id)
+            .where(col(Issue.resolved_at).is_(None))
+            .where(col(Issue.ignored_at).is_(None))
+        ).all()
+    ]
+    if not issue_ids:
+        raise HTTPException(
+            status_code=409, detail="No unresolved issues left for this fix"
+        )
+
+    try:
+        sm.advance(fix, sm.FixMachine, "regenerate")
+    except sm.IllegalTransition:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Fix is {fix.status.value}; only a failed fix can be regenerated",
+        )
+    fix.error_message = None
+    session.add(fix)
+    session.commit()
+
+    events_pub.publish_event(
+        ev.fix_pending(str(repo.org_id), str(repo.id), str(fix.id))
+    )
+    run_fix_generation.delay(issue_ids=issue_ids)
+    return {"status": "queued", "fix_id": str(fix_id)}
 
 
 @router.post("/sync-pr-status/{repo_id}")

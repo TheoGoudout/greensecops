@@ -29,7 +29,7 @@ export type AnalysisPublic = {
     completed_at?: (string | null);
 };
 
-export type AnalysisStatus = 'running' | 'completed' | 'failed' | 'no_workflows';
+export type AnalysisStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_workflows';
 
 export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled' | 'release';
 
@@ -102,7 +102,7 @@ export type FixPublic = {
     issues?: Array<FixIssueSummary>;
 };
 
-export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr';
+export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'landed';
 
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
@@ -129,21 +129,38 @@ export type IssuePublic = {
     status: IssueStatus;
     created_at?: (string | null);
     resolved_at?: (string | null);
+    resolution_reason?: (IssueResolutionReason | null);
     fix_id?: (string | null);
     fix_status?: (FixStatus | null);
     workflow_file_path?: (string | null);
 };
+
+/**
+ * Why an issue was resolved — an attribute of the ``resolved`` state.
+ *
+ * Kept as a column rather than splitting ``resolved`` into several states so
+ * the issue graph stays small. Set alongside ``resolved_at`` and cleared when
+ * a resolved violation recurs.
+ *
+ * - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
+ * disabled/removed rule — the two cannot be told apart after the fact).
+ * - ``file_removed``: the workflow file was deleted or renamed.
+ * - ``merged``: the fix PR was merged, applying the change to the branch.
+ */
+export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged';
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * Derived lifecycle of an issue.
  *
- * Issues carry no status column; this value is computed from ``resolved_at``
- * and ``fix_id`` (see ``Issue.status``). It exists so the issue lifecycle can
- * be reasoned about with the same vocabulary as the other state machines.
+ * This value is a persisted column computed by a database trigger from
+ * ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
+ * migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
+ * states so a user-dismissed violation stays muted regardless of fix/resolve
+ * activity.
  */
-export type IssueStatus = 'open' | 'fix_in_progress' | 'resolved';
+export type IssueStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
 export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
@@ -178,7 +195,7 @@ export type PrivateUserCreate = {
     is_verified?: boolean;
 };
 
-export type PullRequestState = 'open' | 'merged' | 'closed';
+export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
 
 export type RepositoryPublic = {
     id: string;
@@ -213,7 +230,7 @@ export type SamplePayload = {
     net_bytes_recv?: (number | null);
 };
 
-export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened';
+export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed';
 
 export type TelemetryPayload = {
     workflow_run_id: number;
@@ -453,6 +470,14 @@ export type FixesRegenerateFixesForWorkflowResponse = ({
     [key: string]: (number);
 });
 
+export type FixesRegenerateFailedFixData = {
+    fixId: string;
+};
+
+export type FixesRegenerateFailedFixResponse = ({
+    [key: string]: (string);
+});
+
 export type FixesSyncPrStatusesData = {
     repoId: string;
 };
@@ -473,6 +498,7 @@ export type IssuesListIssuesData = {
     analysisId?: (string | null);
     branch?: (string | null);
     category?: (IssueCategory | null);
+    includeIgnored?: boolean;
     includeResolved?: boolean;
     latestOnly?: boolean;
     limit?: number;
@@ -489,6 +515,18 @@ export type IssuesGetIssueData = {
 };
 
 export type IssuesGetIssueResponse = (IssuePublic);
+
+export type IssuesIgnoreIssueData = {
+    issueId: string;
+};
+
+export type IssuesIgnoreIssueResponse = (IssuePublic);
+
+export type IssuesUnignoreIssueData = {
+    issueId: string;
+};
+
+export type IssuesUnignoreIssueResponse = (IssuePublic);
 
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;

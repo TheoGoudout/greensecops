@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import case
@@ -21,6 +22,18 @@ from app.services.state_machines import REJECTED_STATUSES
 router = APIRouter(prefix="/issues", tags=["issues"])
 
 
+def _authorize_issue(
+    session: SessionDep, current_user: CurrentUser, issue: Issue
+) -> None:
+    """404 unless the caller is a superuser or a member of the issue's org."""
+    if current_user.is_superuser:
+        return
+    analysis = session.get(Analysis, issue.analysis_id)
+    repo = session.get(Repository, analysis.repo_id) if analysis else None
+    if not repo or repo.org_id not in user_org_ids(session, current_user):
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+
 @router.get("/", response_model=list[IssuePublic])
 def list_issues(
     session: SessionDep,
@@ -33,12 +46,15 @@ def list_issues(
     unfixed: bool = False,
     latest_only: bool = True,
     include_resolved: bool = False,
+    include_ignored: bool = False,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
 ) -> list[IssuePublic]:
     query = select(Issue)
     if not include_resolved:
         query = query.where(col(Issue.resolved_at).is_(None))
+    if not include_ignored:
+        query = query.where(col(Issue.ignored_at).is_(None))
     # Join Analysis once if either tenant scoping or repo/branch filtering needs it.
     needs_analysis_join = (
         repo_id is not None or branch is not None or not current_user.is_superuser
@@ -107,9 +123,44 @@ def get_issue(
     current_user: CurrentUser,
 ) -> IssuePublic:
     issue = get_or_404(session, Issue, issue_id)
-    if not current_user.is_superuser:
-        analysis = session.get(Analysis, issue.analysis_id)
-        repo = session.get(Repository, analysis.repo_id) if analysis else None
-        if not repo or repo.org_id not in user_org_ids(session, current_user):
-            raise HTTPException(status_code=404, detail="Issue not found")
+    _authorize_issue(session, current_user, issue)
+    return to_issue_public(issue)
+
+
+@router.post("/{issue_id}/ignore", response_model=IssuePublic)
+def ignore_issue(
+    issue_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> IssuePublic:
+    """Mute a violation (false positive / accepted risk).
+
+    Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
+    which takes precedence over resolve/fix state and drops the issue out of the
+    default (active) issue and fix queries. Idempotent.
+    """
+    issue = get_or_404(session, Issue, issue_id)
+    _authorize_issue(session, current_user, issue)
+    if issue.ignored_at is None:
+        issue.ignored_at = datetime.now(timezone.utc)
+        session.add(issue)
+        session.commit()
+        session.refresh(issue)
+    return to_issue_public(issue)
+
+
+@router.post("/{issue_id}/unignore", response_model=IssuePublic)
+def unignore_issue(
+    issue_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> IssuePublic:
+    """Un-mute a previously ignored violation. Idempotent."""
+    issue = get_or_404(session, Issue, issue_id)
+    _authorize_issue(session, current_user, issue)
+    if issue.ignored_at is not None:
+        issue.ignored_at = None
+        session.add(issue)
+        session.commit()
+        session.refresh(issue)
     return to_issue_public(issue)

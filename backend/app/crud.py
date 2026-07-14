@@ -14,6 +14,7 @@ from app.models import (
     UserCreate,
     UserUpdate,
 )
+from app.services import state_machines as sm
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -165,7 +166,8 @@ def upsert_repository(
 def disable_repositories_by_github_ids(
     *, session: Session, github_repo_ids: list[int]
 ) -> int:
-    """Flip enabled=False and is_accessible=False for the given GitHub repo ids; returns count changed."""
+    """Repos removed from an installation: clear ``enabled`` and drive the
+    RepositoryMachine to ``inaccessible`` (syncing ``is_accessible``)."""
     if not github_repo_ids:
         return 0
     repos = session.exec(
@@ -173,16 +175,22 @@ def disable_repositories_by_github_ids(
     ).all()
     for repo in repos:
         repo.enabled = False
-        repo.is_accessible = False
+        sm.try_advance(repo, sm.RepositoryMachine, "lose_access")
+        sm.sync_access_flag(repo)
         session.add(repo)
     session.commit()
     return len(repos)
 
 
 def mark_repositories_inaccessible_by_installation_id(
-    *, session: Session, installation_id: int
+    *, session: Session, installation_id: int, event: str = "lose_access"
 ) -> list[Repository]:
-    """Mark repos as disabled and inaccessible for a deleted/suspended installation."""
+    """Drive repos of a deleted/suspended installation off ``active``.
+
+    ``event`` selects the cause: ``suspend`` (installation suspended, reversible
+    via ``unsuspend``) or ``lose_access`` (installation deleted). ``enabled`` is
+    cleared for both; ``is_accessible`` is synced from the new status.
+    """
     repos = list(
         session.exec(
             select(Repository).where(Repository.installation_id == installation_id)
@@ -190,7 +198,8 @@ def mark_repositories_inaccessible_by_installation_id(
     )
     for repo in repos:
         repo.enabled = False
-        repo.is_accessible = False
+        sm.try_advance(repo, sm.RepositoryMachine, event)
+        sm.sync_access_flag(repo)
         session.add(repo)
     session.commit()
     return repos
@@ -199,14 +208,20 @@ def mark_repositories_inaccessible_by_installation_id(
 def restore_repositories_accessibility_by_installation_id(
     *, session: Session, installation_id: int
 ) -> list[Repository]:
-    """Restore is_accessible=True for repos under a reinstated installation."""
+    """Restore accessibility for repos under a reinstated (unsuspended)
+    installation: drive the machine back to ``active`` and sync
+    ``is_accessible``. ``enabled`` (user opt-in) is intentionally left as-is."""
     repos = list(
         session.exec(
             select(Repository).where(Repository.installation_id == installation_id)
         ).all()
     )
     for repo in repos:
-        repo.is_accessible = True
+        # A suspended repo unsuspends; an inaccessible one (edge case) regains
+        # access — try both so accessibility is restored either way.
+        if not sm.try_advance(repo, sm.RepositoryMachine, "unsuspend"):
+            sm.try_advance(repo, sm.RepositoryMachine, "regain_access")
+        sm.sync_access_flag(repo)
         session.add(repo)
     session.commit()
     return repos

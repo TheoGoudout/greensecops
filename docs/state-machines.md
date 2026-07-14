@@ -1,9 +1,10 @@
 # GreenSecOps — Workflow State Machines
 
-This document formalizes the four core lifecycles — **Analysis**, **Issue**,
-**Fix**, and **Pull Request** — as state machines: their **states**, the
-**input events** that drive transitions, and the **outputs** (SSE signals) each
-transition emits. It is kept in sync with the code in
+This document formalizes the six core lifecycles — **Analysis**, **Issue**,
+**Fix**, **Pull Request**, **Repository** and **Telemetry (dynamic analysis)** —
+as state machines: their **states**, the **input events** that drive
+transitions, and the **outputs** (SSE signals) each transition emits. It is kept
+in sync with the code in
 [`backend/app/services/state_machines/`](../backend/app/services/state_machines),
 which is the single source of truth.
 
@@ -11,9 +12,9 @@ which is the single source of truth.
 
 Each lifecycle is a [`python-statemachine`](https://pypi.org/project/python-statemachine/)
 `StateMachine` subclass (`analysis.py`, `fix.py`, `pull_request.py`,
-`issue.py`). States carry the persisted status-enum value they map to; events
-declare the transitions; a per-machine `outputs` map records the `SSESignal`
-each event emits.
+`issue.py`, `repository.py`, `telemetry.py`). States carry the persisted
+status-enum value they map to; events declare the transitions; a per-machine
+`outputs` map records the `SSESignal` each event emits.
 
 | Concept | In code |
 |---|---|
@@ -91,21 +92,33 @@ flowchart TD
 
 ## 1. Analysis
 
-- **States** — `AnalysisStatus`: `running`, `completed`, `failed`,
+- **States** — `AnalysisStatus`: `queued`, `running`, `completed`, `failed`,
   `no_workflows`
-- **Events** — `opa_succeeded`, `opa_failed`, `no_workflows_found`, `swept`
+- **Events** — `started`, `opa_succeeded`, `opa_failed`, `no_workflows_found`,
+  `swept`
 - **Code** — `state_machines/analysis.py`; `workers/tasks/static_analysis.py`,
   `maintenance.py`
-- **Initial** — `running`. **Final** — `completed`, `failed`, `no_workflows`.
+- **Initial** — `queued`. **Final** — `completed`, `failed`, `no_workflows`.
+
+Rows are inserted as `queued` and advance to `running` (`started`) when the
+worker begins OPA evaluation, so a row that dies before the worker starts is
+distinguishable (still `queued`) from one that hangs mid-eval (`running`) — the
+sweeper covers both.
 
 ### Transitions (input → output)
 
 | Event | From → To | Output (SSE) | Guard |
 |---|---|---|---|
+| `started` | `queued` → `running` | `analysis.started` | worker begins OPA eval |
 | `opa_succeeded` | `running` → `completed` | `analysis.completed` | OPA eval produced a score |
 | `opa_failed` | `running` → `failed` | `analysis.failed` | OPA eval raised |
 | `no_workflows_found` | `running` → `no_workflows` | `analysis.no_workflows` | repo has no workflow files |
-| `swept` | `running` → `failed` | `analysis.failed` | `created_at` older than 30 min |
+| `swept` | `queued`, `running` → `failed` | `analysis.failed` | `created_at` older than 30 min |
+| `retry` | `failed` → `queued` | `analysis.queued` | re-queue a (transient) failure in place |
+
+The `failure_kind` column (`transient` / `permanent`) records whether a failure
+is retry-worthy: OPA timeouts and network/IO errors are `transient`, a swept row
+is `transient`, and parse/value errors (invalid workflow YAML) are `permanent`.
 
 ### External triggers
 
@@ -123,39 +136,55 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Running: row created
+    [*] --> Queued: row created
 
+    Queued --> Running: started / analysis.started
+    Queued --> Failed: swept / analysis.failed
     Running --> Completed: opa_succeeded / analysis.completed
     Running --> Failed: opa_failed / analysis.failed
     Running --> Failed: swept / analysis.failed
     Running --> NoWorkflows: no_workflows_found / analysis.no_workflows
 
+    Failed --> Queued: retry / analysis.queued
+
     Completed --> [*]
-    Failed --> [*]
     NoWorkflows --> [*]
 ```
 
-**Closed in this pass:** the never-persisted `pending` and `skipped` enum
-values were removed; `no_workflows` is now reached by an explicit edge instead
-of being a disconnected initial state; dynamic analysis is wired in (§6).
+**Closed in this pass:** a `queued` initial state models the worker-pickup phase
+so `analysis.started` maps to a real transition and the sweeper distinguishes
+never-started from hung rows; the never-persisted `pending`/`skipped` values are
+gone; a `failure_kind` attribute distinguishes transient from permanent failures
+and a `retry` edge re-queues a failed row in place (`failed` is no longer
+terminal); dynamic analysis is a formal machine (§6).
 
-**Still open:** no dedicated "retries exhausted" state distinct from `failed`.
+**Still open:** the broker-queue window *before* the worker picks the task up is
+still SSE-only (a per-row `queued` would need a parent "analysis run" entity);
+in-place row-reuse on `retry` awaits a per-row worker — today users re-run via
+the repo-level `POST /analyses/trigger/{repo_id}`.
 
 ---
 
 ## 2. Issue
 
 `Issue.status` is a **persisted, indexed column** (`IssueStatus`) maintained by
-a database trigger that computes it from `resolved_at` + `fix_id` (migration
-`0022`). The trigger keeps it authoritative even when `fix_id` is cleared by the
-`ON DELETE SET NULL` cascade on fix deletion — which bypasses application code —
-so the column can never disagree with the underlying fields. The machine
-therefore documents and validates the legal field-level transitions; the
-trigger owns writes.
+a database trigger that computes it from `ignored_at` + `resolved_at` + `fix_id`
+(migrations `0022`/`0026`). The trigger keeps it authoritative even when `fix_id`
+is cleared by the `ON DELETE SET NULL` cascade on fix deletion — which bypasses
+application code — so the column can never disagree with the underlying fields.
+The machine therefore documents and validates the legal field-level
+transitions; the trigger owns writes.
 
-- **States** — `IssueStatus`: `open`, `fix_in_progress`, `resolved`
-- **Events** — `link_fix`, `unlink_fix`, `resolve`, `recur`
-- **Code** — `state_machines/issue.py`; trigger in migration `0022`
+- **States** — `IssueStatus`: `open`, `fix_in_progress`, `resolved`, `ignored`
+- **Events** — `link_fix`, `unlink_fix`, `resolve`, `recur`, `ignore`,
+  `unignore`
+- **Code** — `state_machines/issue.py`; trigger in migrations `0022`/`0026`;
+  `api/routes/issues.py` (`/ignore`, `/unignore`), `/greensecops ignore
+  <fingerprint>` comment command in the webhook handler
+
+`ignored` takes precedence in the trigger: a muted violation reads `ignored`
+regardless of fix/resolve activity, and drops out of the default (active) issue
+and fix-generation queries.
 
 ### Transitions
 
@@ -165,6 +194,8 @@ trigger owns writes.
 | `unlink_fix` | `fix_in_progress` → `open` | `fix_id` → `NULL` (fix deleted) |
 | `resolve` | `open`, `fix_in_progress` → `resolved` | `resolved_at` set |
 | `recur` | `resolved` → `open` | `resolved_at` → `NULL` |
+| `ignore` | `open`, `fix_in_progress` → `ignored` | `ignored_at` set |
+| `unignore` | `ignored` → `open` | `ignored_at` → `NULL` |
 
 ```mermaid
 stateDiagram-v2
@@ -174,15 +205,21 @@ stateDiagram-v2
     Open --> Resolved: resolve
     FixInProgress --> Resolved: resolve
     Resolved --> Open: recur
+    Open --> Ignored: ignore
+    FixInProgress --> Ignored: ignore
+    Ignored --> Open: unignore
     Resolved --> [*]: retained in history
 ```
 
-**Closed in this pass:** the status is now a real persisted column (was a
-Python-only derived property).
+**Closed in this pass:** an `ignored` state implements `/greensecops ignore`
+(and a REST `/ignore` endpoint), letting users mute false positives / accepted
+risk; the status is a real persisted column with `ignored_at` precedence; a
+`resolution_reason` attribute (`no_longer_detected` / `file_removed` / `merged`)
+records *why* an issue resolved, set alongside `resolved_at` and cleared on
+recur.
 
-**Still open:** no `ignored` / `muted` state (`/greensecops ignore` remains
-unimplemented); `resolved` records no reason (user fix vs. rule disabled vs.
-merged).
+**Still open:** `no_longer_detected` conflates a manual fix with a
+disabled/removed rule — the two are not distinguishable after re-analysis.
 
 ---
 
@@ -192,10 +229,12 @@ merged).
   `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`
 - **Events** — `start_generation`, `generation_succeeded`, `generation_failed`,
   `mark_ready`, `start_delivery`, `precheck_failed`, `delivery_succeeded`,
-  `delivery_failed`, `supersede_closed_pr`, `reject`, `restore`, `swept`
+  `delivery_failed`, `supersede_closed_pr`, `reject`, `restore`, `regenerate`,
+  `swept`
 - **Code** — `state_machines/fix.py`; `fix_generation.py`, `fix_delivery.py`,
-  `api/routes/fixes.py`, `maintenance.py`
-- **Initial** — `pending`. **Final** — `failed`, `rejected_by_user`.
+  `api/routes/fixes.py`, `maintenance.py`, the `pull_request` webhook handler
+- **Initial** — `pending`. **Final** — `rejected_by_user` (`failed` is no longer
+  final — `regenerate` retries it in place).
 
 The two rejections are now **distinct states** (no longer disambiguated by a
 `delivered_at IS NULL` convention):
@@ -217,9 +256,11 @@ The two rejections are now **distinct states** (no longer disambiguated by a
 | `precheck_failed` | `ready` → `failed` | `fix.failed` | fix has no content |
 | `delivery_succeeded` | `delivering` → `delivered` | `fix.delivered` | PR opened / comment posted |
 | `delivery_failed` | `delivering` → `failed` | `fix.failed` | push / PR / comment error |
-| `supersede_closed_pr` | `ready` → `superseded_by_closed_pr` | `fix.rejected` | target PR branch closed, not forced |
+| `supersede_closed_pr` | `ready`, `delivered` → `superseded_by_closed_pr` | `fix.rejected` | target PR branch closed, not forced / a delivered PR closed unmerged |
 | `reject` | any non-terminal → `rejected_by_user` | `fix.rejected` | user DELETE |
 | `restore` | `superseded_by_closed_pr` → `ready` | — | PR reopened |
+| `regenerate` | `failed` → `pending` | `fix.pending` | user retries a failed fix in place |
+| `land` | `delivered` → `landed` | `fix.landed` | the fix's PR was merged |
 | `swept` | `pending`, `generating`, `delivering` → `failed` | `fix.failed` | stuck > 30 min |
 
 ```mermaid
@@ -239,8 +280,9 @@ stateDiagram-v2
     Delivering --> Failed: delivery_failed / fix.failed
 
     Delivered --> Ready: mark_ready
+    Delivered --> Superseded: supersede_closed_pr / fix.rejected
     Delivered --> RejectedByUser: reject / fix.rejected
-    Delivered --> [*]: PR merged (left untouched)
+    Delivered --> Landed: land / fix.landed
 
     Superseded --> Ready: restore
     Superseded --> RejectedByUser: reject / fix.rejected
@@ -254,25 +296,33 @@ stateDiagram-v2
     Generating --> RejectedByUser: reject / fix.rejected
     Delivering --> RejectedByUser: reject / fix.rejected
 
-    Failed --> [*]
+    Failed --> Pending: regenerate / fix.pending
     RejectedByUser --> [*]
+    Landed --> [*]
 ```
 
-**Closed in this pass:** the overloaded `rejected` state was split into
-`rejected_by_user` and `superseded_by_closed_pr` (migration `0024`), removing
-the `delivered_at IS NULL` convention.
+**Closed in this pass:** `supersede_closed_pr` now also fires from `delivered`,
+so a delivered PR closed without merging withdraws its fix (restored on reopen)
+instead of stranding it; a `regenerate` edge (`failed` → `pending`) retries a
+failed fix in place, so `failed` is no longer terminal; a `land` edge
+(`delivered` → `landed`) fired from the PR-merge webhook gives a merged fix a
+terminal success state and resolves its issues with reason `merged`.
 
-**Still open:** `failed` has no automatic recovery (needs a manual regenerate);
-a *delivered* PR closed without merging leaves the fix `delivered`; the
-`fix.skipped` SSE signal has no persisted status.
+**Still open:** the `fix.skipped` SSE signal has no persisted status (dedup
+avoids row bloat — intentional).
 
 ---
 
 ## 4. Pull Request
 
-- **States** — `PullRequestState`: `open`, `merged`, `closed` (column nullable —
-  legacy `NULL` rows exist)
-- **Events** — `redeliver`, `external_update`, `merge`, `close`, `reopen`
+- **States** — `PullRequestState`: `open`, `draft`, `merged`, `closed` (column
+  is `NOT NULL DEFAULT 'open'` since migration `0027`; legacy `NULL` rows were
+  backfilled to `open`)
+- **Events** — `redeliver`, `external_update`, `convert_to_draft`,
+  `mark_ready_for_review`, `merge`, `close`, `reopen`
+- **Attributes** (not states) — `ci_status`, `review_decision`,
+  `mergeable_state`, populated by `check_suite` / `pull_request_review` /
+  `pull_request` webhooks (migration `0030`)
 - **Code** — `state_machines/pull_request.py`; `fix_delivery.py`, the
   `pull_request` webhook, `maintenance.sync_open_pr_states`,
   `fixes.sync_pr_statuses`
@@ -289,26 +339,37 @@ as initialisation.
 |---|---|---|---|
 | `redeliver` | `open` → `open` | `pr.updated` | a later delivery updated the branch |
 | `external_update` | `open` → `open` | `pr.updated` | webhook `synchronize` / `edited` |
-| `merge` | `open` → `merged` | `pr.merged` | webhook `closed`+merged / reconcile |
-| `close` | `open` → `closed` | `pr.closed` | webhook `closed` (not merged) / reconcile |
+| `convert_to_draft` | `open` → `draft` | `pr.updated` | webhook `converted_to_draft` |
+| `mark_ready_for_review` | `draft` → `open` | `pr.updated` | webhook `ready_for_review` |
+| `merge` | `open`, `draft` → `merged` | `pr.merged` | webhook `closed`+merged / reconcile |
+| `close` | `open`, `draft` → `closed` | `pr.closed` | webhook `closed` (not merged) / reconcile |
 | `reopen` | `closed` → `open` | `pr.opened` | webhook `reopened` |
 
 ```mermaid
 stateDiagram-v2
     [*] --> Open: fix delivered (PR created)
     Open --> Open: redeliver / external_update (pr.updated)
+    Open --> Draft: convert_to_draft / pr.updated
+    Draft --> Open: mark_ready_for_review / pr.updated
     Open --> Merged: merge / pr.merged
+    Draft --> Merged: merge / pr.merged
     Open --> Closed: close / pr.closed
+    Draft --> Closed: close / pr.closed
     Closed --> Open: reopen / pr.opened (guard-superseded fixes → ready)
     Closed --> [*]: orphaned record deleted on regenerate
     Merged --> [*]
 ```
 
-**Closed in this pass:** `synchronize` and `edited` webhook actions are now
-handled (previously ignored) via `external_update`.
+**Closed in this pass:** `synchronize` and `edited` webhook actions are handled
+via `external_update`; legacy `NULL` `pr_state` rows were backfilled to `open`
+and the column is now `NOT NULL` (migration `0027`); a first-class `draft` state
+tracks GitHub's `converted_to_draft` / `ready_for_review`; and CI outcome,
+review decision and mergeable-state are captured as **attributes** (via
+`check_suite` and `pull_request_review` webhooks) rather than as extra states,
+keeping the core graph small.
 
-**Still open:** legacy `NULL` state rows; no CI / review / merge-conflict
-states; no draft state.
+**Still open:** CI/review are single-value attributes, not a full check-run
+history; no explicit `conflicted` state (surfaced through `mergeable_state`).
 
 ---
 
@@ -327,33 +388,90 @@ through to PR delivery).
 
 ---
 
-## 6. Dynamic analysis (runtime telemetry)
+## 6. Dynamic analysis (runtime telemetry) — `TelemetryMachine`
 
-The companion Action posts runtime telemetry to `/telemetry/ingest`. On the
-`completed` phase this now enqueues `run_dynamic_analysis`, which evaluates the
-metrics (e.g. an oversized runner) and **persists** its findings to the
-`dynamic_enrichment` table (migration `0025`), linked to the telemetry run and
-the latest completed analysis, replacing any prior rows for the same run.
+The companion Action posts runtime telemetry to `/telemetry/ingest`. `phase`
+(`started` / `completed`) is an ingest *category* — the two are separate rows —
+so the dynamic-analysis lifecycle is a **separate** `dynamic_status` column
+(migration `0032`) driven by `TelemetryMachine`. A `completed`-phase row is
+created `queued` at ingest, which enqueues `run_dynamic_analysis`; the worker
+evaluates the metrics (e.g. an oversized runner) and **persists** findings to
+`dynamic_enrichment` (migration `0025`).
 
-**Closed in this pass:** dynamic analysis is wired to telemetry ingest and its
-enrichments are persisted (previously it was never invoked and only logged).
+- **States** — `DynamicAnalysisStatus`: `queued`(init), `running`, `enriched`
+  (final), `failed`
+- **Events** — `started`, `enrich`, `fail`, `retry`
+- **Code** — `state_machines/telemetry.py`; `api/routes/telemetry.py`,
+  `workers/tasks/dynamic_analysis.py`
+
+| Event | From → To | Output (SSE) |
+|---|---|---|
+| `started` | `queued` → `running` | `dynamic.running` |
+| `enrich` | `running` → `enriched` | `dynamic.enriched` |
+| `fail` | `running` → `failed` | `dynamic.failed` |
+| `retry` | `failed` → `queued` | `dynamic.queued` |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Queued: completed-phase run ingested
+    Queued --> Running: started / dynamic.running
+    Running --> Enriched: enrich / dynamic.enriched
+    Running --> Failed: fail / dynamic.failed
+    Failed --> Queued: retry / dynamic.queued
+    Enriched --> [*]
+```
+
+**Closed in this pass:** the dynamic-analysis lifecycle is now a formal machine
+with `enriched` / `failed` states (the worker previously wrote no status and let
+failures bubble); `started`-phase rows keep `dynamic_status` NULL.
 
 **Still open:** surfacing the persisted enrichments through the API / UI.
 
 ---
 
-## Cross-cutting: Repository / Installation gating
+## 7. Repository accessibility / lifecycle — `RepositoryMachine`
 
-Every machine above is gated by repository flags driven by webhooks:
+Repository *accessibility* is now a formal machine over a `status` column
+(migration `0031`) rather than an ad-hoc boolean. `is_accessible` is a
+machine-synced cache of `status == active`, so the existing write-gates are
+unchanged. `enabled` (user opt-in) and `is_external` stay independent flags —
+they are a genuinely separate axis (a user can disable an accessible repo).
 
-| Event | Effect on `Repository` |
-|---|---|
-| webhook `installation` `created` / `unsuspend` | sync repos, mark accessible |
-| webhook `installation` `deleted` / `suspend` | mark all repos `is_accessible = False` |
-| webhook `installation_repositories` `added` / `removed` | toggle accessibility / disable |
-| webhook `repository` `archived` / `deleted` | `enabled = False`, `is_accessible = False` |
-| webhook `repository` `unarchived` | re-enable |
-| webhook `repository` `renamed` / `transferred` | update `full_name` / `default_branch` |
+- **States** — `RepositoryStatus`: `active`(init), `suspended`, `archived`,
+  `inaccessible`
+- **Events** — `suspend`, `unsuspend`, `archive`, `unarchive`, `lose_access`,
+  `regain_access`
+- **Code** — `state_machines/repository.py`; the
+  `installation`/`installation_repositories`/`repository` webhook handlers and
+  `crud.py`
 
-`enabled` gates analysis triggers; `is_accessible` + `installation_id` gate fix
-delivery.
+| Event | From → To | Output (SSE) | Cause |
+|---|---|---|---|
+| `suspend` | `active` → `suspended` | `repository.suspended` | installation suspended |
+| `unsuspend` | `suspended` → `active` | `repository.restored` | installation unsuspended |
+| `archive` | `active` → `archived` | `repository.archived` | repo archived on GitHub |
+| `unarchive` | `archived` → `active` | `repository.restored` | repo unarchived |
+| `lose_access` | `active`/`suspended`/`archived` → `inaccessible` | `repository.inaccessible` | installation deleted / repo removed |
+| `regain_access` | `inaccessible` → `active` | `repository.restored` | repo re-added |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Suspended: suspend
+    Suspended --> Active: unsuspend
+    Active --> Archived: archive
+    Archived --> Active: unarchive
+    Active --> Inaccessible: lose_access
+    Suspended --> Inaccessible: lose_access
+    Archived --> Inaccessible: lose_access
+    Inaccessible --> Active: regain_access
+```
+
+`enabled` gates analysis triggers; `is_accessible` (≡ `status == active`) +
+`installation_id` gate fix delivery. `repository` `renamed` / `transferred`
+webhooks update `full_name` / `default_branch` without a status change.
+
+**Closed in this pass:** the accessibility axis is a formal machine with
+per-cause SSE signals; the old asymmetry (unsuspend restored `is_accessible` but
+not `enabled`) is now explicit — `enabled` is deliberately a separate user-owned
+flag, left untouched by accessibility transitions.

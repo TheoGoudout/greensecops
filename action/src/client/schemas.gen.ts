@@ -178,7 +178,7 @@ export const AnalysisPublicSchema = {
 
 export const AnalysisStatusSchema = {
     type: 'string',
-    enum: ['running', 'completed', 'failed', 'no_workflows'],
+    enum: ['queued', 'running', 'completed', 'failed', 'no_workflows'],
     title: 'AnalysisStatus'
 } as const;
 
@@ -660,7 +660,7 @@ export const FixPublicSchema = {
 
 export const FixStatusSchema = {
     type: 'string',
-    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr'],
+    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr', 'landed'],
     title: 'FixStatus'
 } as const;
 
@@ -798,6 +798,16 @@ export const IssuePublicSchema = {
             ],
             title: 'Resolved At'
         },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/IssueResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
         fix_id: {
             anyOf: [
                 {
@@ -837,6 +847,22 @@ export const IssuePublicSchema = {
     title: 'IssuePublic'
 } as const;
 
+export const IssueResolutionReasonSchema = {
+    type: 'string',
+    enum: ['no_longer_detected', 'file_removed', 'merged'],
+    title: 'IssueResolutionReason',
+    description: `Why an issue was resolved — an attribute of the \`\`resolved\`\` state.
+
+Kept as a column rather than splitting \`\`resolved\`\` into several states so
+the issue graph stays small. Set alongside \`\`resolved_at\`\` and cleared when
+a resolved violation recurs.
+
+- \`\`no_longer_detected\`\`: absent from the latest analysis (a manual fix or a
+  disabled/removed rule — the two cannot be told apart after the fact).
+- \`\`file_removed\`\`: the workflow file was deleted or renamed.
+- \`\`merged\`\`: the fix PR was merged, applying the change to the branch.`
+} as const;
+
 export const IssueSeveritySchema = {
     type: 'string',
     enum: ['critical', 'high', 'medium', 'low', 'info'],
@@ -845,13 +871,15 @@ export const IssueSeveritySchema = {
 
 export const IssueStatusSchema = {
     type: 'string',
-    enum: ['open', 'fix_in_progress', 'resolved'],
+    enum: ['open', 'fix_in_progress', 'resolved', 'ignored'],
     title: 'IssueStatus',
     description: `Derived lifecycle of an issue.
 
-Issues carry no status column; this value is computed from \`\`resolved_at\`\`
-and \`\`fix_id\`\` (see \`\`Issue.status\`\`). It exists so the issue lifecycle can
-be reasoned about with the same vocabulary as the other state machines.`
+This value is a persisted column computed by a database trigger from
+\`\`ignored_at\`\`, \`\`resolved_at\`\` and \`\`fix_id\`\` (see \`\`Issue.status\`\` and
+migrations \`\`0022\`\`/\`\`0026\`\`). \`\`ignored\`\` takes precedence over the other
+states so a user-dismissed violation stays muted regardless of fix/resolve
+activity.`
 } as const;
 
 export const LLMProviderSchema = {
@@ -1001,7 +1029,7 @@ export const PrivateUserCreateSchema = {
 
 export const PullRequestStateSchema = {
     type: 'string',
-    enum: ['open', 'merged', 'closed'],
+    enum: ['open', 'draft', 'merged', 'closed'],
     title: 'PullRequestState'
 } as const;
 
@@ -1126,7 +1154,7 @@ export const RulePublicSchema = {
 
 export const SSESignalSchema = {
     type: 'string',
-    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'fix.landed', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened', 'repository.suspended', 'repository.archived', 'repository.inaccessible', 'repository.restored', 'dynamic.queued', 'dynamic.running', 'dynamic.enriched', 'dynamic.failed'],
     title: 'SSESignal'
 } as const;
 

@@ -29,15 +29,29 @@ class LLMProvider(str, enum.Enum):
 
 
 class AnalysisStatus(str, enum.Enum):
-    # An analysis row is created directly as ``running`` (or ``no_workflows``);
-    # the queued phase is signalled over SSE without a row. Content-hash
-    # duplicates reference the prior analysis and emit ``analysis.skipped``
-    # without writing a row. Neither a ``pending`` nor a ``skipped`` row is ever
-    # persisted, so those values are not part of the state machine.
+    # An analysis row is created as ``queued`` (or directly ``no_workflows``)
+    # and advances to ``running`` when the worker begins OPA evaluation. The
+    # broker-queue phase before the worker picks the task up is still signalled
+    # over SSE without a row. Content-hash duplicates reference the prior
+    # analysis and emit ``analysis.skipped`` without writing a row. A
+    # ``skipped`` row is never persisted, so that value is not a machine state.
+    queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
     no_workflows = "no_workflows"
+
+
+class AnalysisFailureKind(str, enum.Enum):
+    """Why an analysis ``failed`` — orthogonal to the state itself.
+
+    ``transient`` failures (sweep timeout, OPA/network hiccup) are safe to
+    ``retry`` in place; ``permanent`` ones (invalid workflow YAML, a rule bug)
+    will fail identically on re-run and need a code/content change first.
+    """
+
+    transient = "transient"
+    permanent = "permanent"
 
 
 class AnalysisTrigger(str, enum.Enum):
@@ -67,14 +81,35 @@ class IssueCategory(str, enum.Enum):
 class IssueStatus(str, enum.Enum):
     """Derived lifecycle of an issue.
 
-    Issues carry no status column; this value is computed from ``resolved_at``
-    and ``fix_id`` (see ``Issue.status``). It exists so the issue lifecycle can
-    be reasoned about with the same vocabulary as the other state machines.
+    This value is a persisted column computed by a database trigger from
+    ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
+    migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
+    states so a user-dismissed violation stays muted regardless of fix/resolve
+    activity.
     """
 
     open = "open"
     fix_in_progress = "fix_in_progress"
     resolved = "resolved"
+    ignored = "ignored"
+
+
+class IssueResolutionReason(str, enum.Enum):
+    """Why an issue was resolved — an attribute of the ``resolved`` state.
+
+    Kept as a column rather than splitting ``resolved`` into several states so
+    the issue graph stays small. Set alongside ``resolved_at`` and cleared when
+    a resolved violation recurs.
+
+    - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
+      disabled/removed rule — the two cannot be told apart after the fact).
+    - ``file_removed``: the workflow file was deleted or renamed.
+    - ``merged``: the fix PR was merged, applying the change to the branch.
+    """
+
+    no_longer_detected = "no_longer_detected"
+    file_removed = "file_removed"
+    merged = "merged"
 
 
 class FixStatus(str, enum.Enum):
@@ -90,17 +125,72 @@ class FixStatus(str, enum.Enum):
     #    it; it becomes deliverable again if that PR is reopened.
     rejected_by_user = "rejected_by_user"
     superseded_by_closed_pr = "superseded_by_closed_pr"
+    # Terminal: the fix's PR was merged, so its change is on the branch. Distinct
+    # from ``delivered`` (awaiting review) — set from the pull_request merge
+    # webhook, and it resolves the fix's issues with reason ``merged``.
+    landed = "landed"
 
 
 class PullRequestState(str, enum.Enum):
     open = "open"
+    # A GitHub draft PR (opened as draft or via ``converted_to_draft``); returns
+    # to ``open`` on ``ready_for_review``. CI / review / mergeable detail is kept
+    # as attributes on the row, not as extra states.
+    draft = "draft"
     merged = "merged"
     closed = "closed"
+
+
+class CIStatus(str, enum.Enum):
+    """Aggregate CI outcome for a PR, from ``check_suite`` webhooks."""
+
+    pending = "pending"
+    success = "success"
+    failure = "failure"
+    none = "none"
+
+
+class ReviewDecision(str, enum.Enum):
+    """Latest human review decision for a PR, from ``pull_request_review``."""
+
+    approved = "approved"
+    changes_requested = "changes_requested"
+    review_required = "review_required"
+    none = "none"
 
 
 class TelemetryPhase(str, enum.Enum):
     started = "started"
     completed = "completed"
+
+
+class DynamicAnalysisStatus(str, enum.Enum):
+    """Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
+    telemetry run.
+
+    Distinct from ``TelemetryPhase`` (an ingest category — ``started`` and
+    ``completed`` are separate rows): this tracks the worker that turns a
+    completed run's metrics into persisted ``DynamicEnrichment`` findings.
+    """
+
+    queued = "queued"
+    running = "running"
+    enriched = "enriched"
+    failed = "failed"
+
+
+class RepositoryStatus(str, enum.Enum):
+    """Accessibility / lifecycle of a repository as GreenSecOps sees it.
+
+    Drives the ``is_accessible`` gate (``active`` ⇒ accessible). Orthogonal to
+    ``Repository.enabled`` (user opt-in) and ``is_external``, which stay plain
+    flags. Toggled by installation/repository webhooks.
+    """
+
+    active = "active"
+    suspended = "suspended"  # installation suspended
+    archived = "archived"  # repo archived on GitHub
+    inaccessible = "inaccessible"  # installation deleted or repo removed from it
 
 
 class SSESignal(str, enum.Enum):
@@ -113,12 +203,14 @@ class SSESignal(str, enum.Enum):
     analysis_no_workflows = "analysis.no_workflows"
     # Fix generation & delivery
     fix_skipped = "fix.skipped"
+    fix_pending = "fix.pending"
     fix_generating = "fix.generating"
     fix_ready = "fix.ready"
     fix_delivering = "fix.delivering"
     fix_delivered = "fix.delivered"
     fix_failed = "fix.failed"
     fix_rejected = "fix.rejected"
+    fix_landed = "fix.landed"
     # Pull requests
     pr_opened = "pr.opened"
     pr_updated = "pr.updated"
@@ -137,3 +229,12 @@ class SSESignal(str, enum.Enum):
     repository_disabled = "repository.disabled"
     repository_toggled = "repository.toggled"
     repository_action_pr_opened = "repository.action_pr_opened"
+    repository_suspended = "repository.suspended"
+    repository_archived = "repository.archived"
+    repository_inaccessible = "repository.inaccessible"
+    repository_restored = "repository.restored"
+    # Dynamic analysis (telemetry enrichment)
+    dynamic_queued = "dynamic.queued"
+    dynamic_running = "dynamic.running"
+    dynamic_enriched = "dynamic.enriched"
+    dynamic_failed = "dynamic.failed"

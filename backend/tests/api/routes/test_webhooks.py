@@ -15,16 +15,21 @@ from app.models import (
     Analysis,
     AnalysisStatus,
     AnalysisTrigger,
+    CIStatus,
     Fix,
     FixStatus,
     Issue,
     IssueCategory,
+    IssueResolutionReason,
     IssueSeverity,
+    IssueStatus,
     LLMProvider,
     Organization,
     PullRequest,
     PullRequestState,
     Repository,
+    RepositoryStatus,
+    ReviewDecision,
     Rule,
     UserTier,
     WorkflowFile,
@@ -757,6 +762,10 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.add(fix)
     db.commit()
     db.refresh(fix)
+    # Link the issue to the fix so merge resolves it.
+    issue.fix_id = fix.id
+    db.add(issue)
+    db.commit()
 
     payload = {
         "action": "closed",
@@ -773,6 +782,13 @@ def test_github_webhook_pull_request_merged_updates_fix(
     assert response.status_code == 200
     db.refresh(pr)
     assert pr.pr_state == "merged"
+    # A3: the merged PR's delivered fix lands, and its issue resolves as merged.
+    db.refresh(fix)
+    assert fix.status == FixStatus.landed
+    db.refresh(issue)
+    assert issue.resolved_at is not None
+    assert issue.resolution_reason == IssueResolutionReason.merged
+    assert issue.status == IssueStatus.resolved
 
 
 def test_github_webhook_pull_request_closed_not_merged(
@@ -863,6 +879,10 @@ def test_github_webhook_pull_request_closed_not_merged(
     assert response.status_code == 200
     db.refresh(pr)
     assert pr.pr_state == "closed"
+    # P1: a delivered fix whose PR closed without merging is withdrawn so a
+    # later reopen can restore it (mirrors the ready-stage delivery guard).
+    db.refresh(fix)
+    assert fix.status == FixStatus.superseded_by_closed_pr
 
 
 def test_github_webhook_pull_request_reopened_updates_fix(
@@ -1453,6 +1473,60 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
     assert enqueue.call_args.kwargs["force"] is True
 
 
+def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
+    client: TestClient, db: Session, enabled_repo: Repository
+) -> None:
+    analysis = Analysis(
+        repo_id=enabled_repo.id,
+        content_hash=uuid.uuid4().hex,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+    fingerprint = uuid.uuid4().hex[:16]
+    issue = Issue(
+        analysis_id=analysis.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="mute me",
+        fingerprint=fingerprint,
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    assert issue.status == IssueStatus.open
+
+    payload = {
+        "action": "created",
+        "comment": {"body": f"/greensecops ignore {fingerprint}"},
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
+        )
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.ignored_at is not None
+    assert issue.status == IssueStatus.ignored
+
+    # `unignore` reverses it.
+    payload["comment"]["body"] = f"/greensecops unignore {fingerprint}"
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
+        )
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.ignored_at is None
+    assert issue.status == IssueStatus.open
+
+
 def test_github_webhook_unknown_command_is_ignored(
     client: TestClient, enabled_repo: Repository
 ) -> None:
@@ -1536,3 +1610,174 @@ def test_is_duplicate_delivery_fails_open_on_redis_error() -> None:
 
     with patch("redis.asyncio.from_url", side_effect=RuntimeError("redis down")):
         assert asyncio.run(_is_duplicate_delivery("delivery-2")) is False
+
+
+# ─── PR draft / CI / review attributes ────────────────────────────────────────
+
+
+def _make_repo_with_open_pr(db: Session, org: Organization, branch: str) -> PullRequest:
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/attr-{uuid.uuid4().hex[:6]}",
+        installation_id=int(uuid.uuid4().int % 10**8),
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=branch,
+        pr_url=f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    return pr
+
+
+def test_github_webhook_pr_draft_toggle(
+    client: TestClient, db: Session, org: Organization
+) -> None:
+    pr = _make_repo_with_open_pr(db, org, "greensecops/draft-toggle")
+    for action, expected in (
+        ("converted_to_draft", PullRequestState.draft),
+        ("ready_for_review", PullRequestState.open),
+    ):
+        payload = {"action": action, "pull_request": {"html_url": pr.pr_url}}
+        with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+            resp = client.post(
+                WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "pull_request"}
+            )
+        assert resp.status_code == 200
+        db.refresh(pr)
+        assert pr.pr_state == expected
+
+
+def test_github_webhook_check_suite_sets_ci_status(
+    client: TestClient, db: Session, org: Organization
+) -> None:
+    pr = _make_repo_with_open_pr(db, org, "greensecops/ci-branch")
+    repo = db.get(Repository, pr.repo_id)
+    payload = {
+        "action": "completed",
+        "check_suite": {
+            "head_branch": pr.pr_branch,
+            "status": "completed",
+            "conclusion": "failure",
+        },
+        "repository": {"id": repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        resp = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "check_suite"}
+        )
+    assert resp.status_code == 200
+    db.refresh(pr)
+    assert pr.ci_status == CIStatus.failure
+
+
+def test_github_webhook_pull_request_review_sets_decision(
+    client: TestClient, db: Session, org: Organization
+) -> None:
+    pr = _make_repo_with_open_pr(db, org, "greensecops/review-branch")
+    payload = {
+        "action": "submitted",
+        "review": {"state": "changes_requested"},
+        "pull_request": {"html_url": pr.pr_url},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        resp = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "pull_request_review"},
+        )
+    assert resp.status_code == 200
+    db.refresh(pr)
+    assert pr.review_decision == ReviewDecision.changes_requested
+
+
+# ─── Repository lifecycle machine ─────────────────────────────────────────────
+
+
+def test_github_webhook_repository_archived_and_unarchived(
+    client: TestClient, db: Session, org: Organization
+) -> None:
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/arch-{uuid.uuid4().hex[:6]}",
+        installation_id=int(uuid.uuid4().int % 10**8),
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    def _send(action: str) -> None:
+        payload = {"action": action, "repository": {"id": repo.github_repo_id}}
+        with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+            resp = client.post(
+                WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+            )
+        assert resp.status_code == 200
+
+    _send("archived")
+    db.refresh(repo)
+    assert repo.status == RepositoryStatus.archived
+    assert repo.is_accessible is False
+    assert repo.enabled is False
+
+    _send("unarchived")
+    db.refresh(repo)
+    assert repo.status == RepositoryStatus.active
+    assert repo.is_accessible is True
+
+
+def test_github_webhook_installation_suspend_unsuspend(
+    client: TestClient, db: Session, org: Organization
+) -> None:
+    installation_id = int(uuid.uuid4().int % 10**8)
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/susp-{uuid.uuid4().hex[:6]}",
+        installation_id=installation_id,
+        enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    # unsuspend upserts the org from the installation payload, so it needs
+    # account info; suspend does not.
+    account = {
+        "id": int(uuid.uuid4().int % 10**8),
+        "login": f"acct-{uuid.uuid4().hex[:6]}",
+    }
+
+    def _send(action: str) -> None:
+        payload = {
+            "action": action,
+            "installation": {"id": installation_id, "account": account},
+        }
+        with (
+            patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+            patch("app.api.routes.webhooks._enqueue_installation_sync"),
+        ):
+            resp = client.post(
+                WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "installation"}
+            )
+        assert resp.status_code == 200
+
+    _send("suspend")
+    db.refresh(repo)
+    assert repo.status == RepositoryStatus.suspended
+    assert repo.is_accessible is False
+
+    _send("unsuspend")
+    db.refresh(repo)
+    assert repo.status == RepositoryStatus.active
+    assert repo.is_accessible is True

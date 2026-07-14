@@ -7,7 +7,13 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from app.api.deps import GitHubOidcClaims, SessionDep
-from app.models import Repository, TelemetryMetricSample, TelemetryPhase, TelemetryRun
+from app.models import (
+    DynamicAnalysisStatus,
+    Repository,
+    TelemetryMetricSample,
+    TelemetryPhase,
+    TelemetryRun,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +77,13 @@ async def ingest_telemetry(
         runner_specs=json.dumps(payload.runner_specs),
         metrics=json.dumps(payload.metrics),
         phase=payload.phase,
+        # Only completed-phase rows enrich; mark them queued so the worker can
+        # advance them through the TelemetryMachine.
+        dynamic_status=(
+            DynamicAnalysisStatus.queued
+            if payload.phase == TelemetryPhase.completed
+            else None
+        ),
     )
     session.add(run)
     session.commit()

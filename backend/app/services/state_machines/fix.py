@@ -39,9 +39,14 @@ class FixMachine(StateMachine):
     ready = State(value=FixStatus.ready)
     delivering = State(value=FixStatus.delivering)
     delivered = State(value=FixStatus.delivered)
-    failed = State(value=FixStatus.failed, final=True)
+    # Not ``final``: ``regenerate`` gives a failed fix a path back to
+    # ``pending`` so recovery reuses the row instead of creating a new one.
+    failed = State(value=FixStatus.failed)
     rejected_by_user = State(value=FixStatus.rejected_by_user, final=True)
     superseded = State(value=FixStatus.superseded_by_closed_pr)
+    # Terminal success: the fix's PR was merged. Distinct from ``delivered``
+    # (awaiting review) so "landed on the branch" is queryable.
+    landed = State(value=FixStatus.landed, final=True)
 
     # Inputs (events)
     start_generation = pending.to(generating)
@@ -53,8 +58,10 @@ class FixMachine(StateMachine):
     delivery_succeeded = delivering.to(delivered)
     delivery_failed = delivering.to(failed)
     # Closed-PR delivery guard: distinct from a user rejection so it can be
-    # restored on PR reopen without an out-of-band delivered_at check.
-    supersede_closed_pr = ready.to(superseded)
+    # restored on PR reopen without an out-of-band delivered_at check. Fires
+    # from ``ready`` (the delivery-time guard) and from ``delivered`` (the
+    # pull_request ``closed`` webhook withdrawing an already-delivered fix).
+    supersede_closed_pr = ready.to(superseded) | delivered.to(superseded)
     # User reject is legal from every state except the two terminal ones
     # (``failed`` and an already ``rejected_by_user`` fix). A repeated DELETE is
     # kept idempotent at the endpoint via ``try_advance`` rather than a
@@ -68,6 +75,13 @@ class FixMachine(StateMachine):
         | superseded.to(rejected_by_user)
     )
     restore = superseded.to(ready)
+    # In-place recovery for a failed fix: re-queue the same row for generation
+    # instead of discarding it and inserting a new one. Not offered from
+    # ``rejected_by_user`` — an explicit user dismissal stays terminal.
+    regenerate = failed.to(pending)
+    # The fix's PR merged: mark it landed and (at the call site) resolve its
+    # issues with reason ``merged``. Fired from the pull_request merge webhook.
+    land = delivered.to(landed)
     swept = pending.to(failed) | generating.to(failed) | delivering.to(failed)
 
     # Outputs (SSE signal emitted when each event fires)
@@ -83,5 +97,7 @@ class FixMachine(StateMachine):
         "supersede_closed_pr": SSESignal.fix_rejected,
         "reject": SSESignal.fix_rejected,
         "restore": None,
+        "regenerate": SSESignal.fix_pending,
+        "land": SSESignal.fix_landed,
         "swept": SSESignal.fix_failed,
     }

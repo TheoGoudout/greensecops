@@ -129,3 +129,47 @@ def test_resolving_wins_over_fix_link(issue_ctx) -> None:
     db.commit()
     db.refresh(issue)
     assert issue.status is IssueStatus.resolved
+
+
+def test_ignoring_sets_ignored(issue_ctx) -> None:
+    db, _, issue = issue_ctx
+    issue.ignored_at = datetime.now(timezone.utc)
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    assert issue.status is IssueStatus.ignored
+
+
+def test_ignored_wins_over_resolved_and_fix(issue_ctx) -> None:
+    # ``ignored_at`` takes precedence over both resolved_at and a fix link.
+    db, wf, issue = issue_ctx
+    fix = Fix(
+        workflow_file_id=wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="m",
+        status=FixStatus.pending,
+    )
+    db.add(fix)
+    db.flush()
+    issue.fix_id = fix.id
+    issue.resolved_at = datetime.now(timezone.utc)
+    issue.ignored_at = datetime.now(timezone.utc)
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    assert issue.status is IssueStatus.ignored
+
+
+def test_unignoring_falls_back_to_underlying_state(issue_ctx) -> None:
+    db, _, issue = issue_ctx
+    issue.ignored_at = datetime.now(timezone.utc)
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    assert issue.status is IssueStatus.ignored
+    # Clearing ignored_at reverts to the resolved_at/fix_id-derived state.
+    issue.ignored_at = None
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    assert issue.status is IssueStatus.open

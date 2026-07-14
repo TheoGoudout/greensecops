@@ -1755,3 +1755,78 @@ def test_regenerate_for_workflow_inaccessible_repo(
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
+
+
+# ─── POST /fixes/{id}/regenerate (in-place failed-fix retry) ──────────────────
+
+
+def test_regenerate_failed_fix_in_place(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    rule: Rule,
+) -> None:
+    wf, issue = _make_wf_with_issue(db, repo, rule, 71)
+    fix = _make_fix(db, wf.id, FixStatus.failed)
+    fix.error_message = "boom"
+    issue.fix_id = fix.id
+    db.add_all([fix, issue])
+    db.commit()
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        resp = client.post(
+            f"{settings.API_V1_STR}/fixes/{fix.id}/regenerate",
+            headers=superuser_token_headers,
+        )
+    assert resp.status_code == 202
+    db.refresh(fix)
+    assert fix.status == FixStatus.pending
+    assert fix.error_message is None
+    mock_delay.assert_called_once()
+
+
+def test_regenerate_non_failed_fix_conflicts(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    rule: Rule,
+) -> None:
+    wf, issue = _make_wf_with_issue(db, repo, rule, 72)
+    fix = _make_fix(db, wf.id, FixStatus.ready)
+    issue.fix_id = fix.id
+    db.add(issue)
+    db.commit()
+
+    resp = client.post(
+        f"{settings.API_V1_STR}/fixes/{fix.id}/regenerate",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 409
+    db.refresh(fix)
+    assert fix.status == FixStatus.ready
+
+
+def test_regenerate_failed_fix_without_open_issues_conflicts(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    rule: Rule,
+) -> None:
+    # A failed fix whose only issue is ignored has nothing to regenerate from.
+    from datetime import datetime, timezone
+
+    wf, issue = _make_wf_with_issue(db, repo, rule, 73)
+    fix = _make_fix(db, wf.id, FixStatus.failed)
+    issue.fix_id = fix.id
+    issue.ignored_at = datetime.now(timezone.utc)
+    db.add_all([fix, issue])
+    db.commit()
+
+    resp = client.post(
+        f"{settings.API_V1_STR}/fixes/{fix.id}/regenerate",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 409

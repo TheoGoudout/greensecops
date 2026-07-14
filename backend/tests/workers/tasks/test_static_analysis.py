@@ -12,6 +12,7 @@ from app.models import (
     AnalysisStatus,
     Issue,
     IssueCategory,
+    IssueResolutionReason,
     IssueSeverity,
     Organization,
     Repository,
@@ -600,6 +601,7 @@ def test_stale_issue_is_resolved_when_violation_disappears(
 
     db.refresh(issue)
     assert issue.resolved_at is not None
+    assert issue.resolution_reason == IssueResolutionReason.no_longer_detected
 
     # Third run — the violation reappears: the issue is reopened
     with (
@@ -616,6 +618,8 @@ def test_stale_issue_is_resolved_when_violation_disappears(
 
     db.refresh(issue)
     assert issue.resolved_at is None
+    # Recur clears the resolution reason too.
+    assert issue.resolution_reason is None
 
 
 def test_issues_of_deleted_workflow_files_are_resolved(
@@ -660,6 +664,7 @@ def test_issues_of_deleted_workflow_files_are_resolved(
     assert result["status"] == "no_workflow_files"
     db.refresh(issue)
     assert issue.resolved_at is not None
+    assert issue.resolution_reason == IssueResolutionReason.file_removed
 
 
 def test_completed_analysis_is_queryable_as_latest(
