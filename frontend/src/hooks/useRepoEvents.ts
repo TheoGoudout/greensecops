@@ -62,6 +62,7 @@ export function useRepoEvents(): void {
       const analysisId = data.analysis_id as string | undefined
       const fixId = data.fix_id as string | undefined
       const fixIds = data.fix_ids as string[] | undefined
+      const repoIds = data.repo_ids as string[] | undefined
 
       switch (data.event) {
         case "analysis.queued":
@@ -203,6 +204,23 @@ export function useRepoEvents(): void {
               description: failErr ?? "Unknown error",
             },
           )
+          break
+        }
+
+        case "fix.pending":
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId, fixId)
+          }
+          break
+
+        case "fix.landed": {
+          if (repoId) {
+            invalidateFixQueries(queryClient, repoId, fixId)
+            invalidateIssueQueries(queryClient, repoId)
+          }
+          toast.success("Fix merged", {
+            description: "The fix's pull request was merged.",
+          })
           break
         }
 
@@ -351,6 +369,54 @@ export function useRepoEvents(): void {
         case "repository.action_pr_opened":
           if (repoId) {
             queryClient.invalidateQueries({ queryKey: ["repository", repoId] })
+          }
+          break
+
+        // Repository accessibility lifecycle (RepositoryMachine) — payloads
+        // carry repo_ids (a batch), not a single repo_id.
+        case "repository.suspended":
+        case "repository.archived":
+        case "repository.inaccessible": {
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          for (const id of repoIds ?? []) {
+            queryClient.invalidateQueries({ queryKey: ["repository", id] })
+          }
+          const count = repoIds?.length ?? 0
+          const suffix = count > 1 ? `${count} repositories` : "A repository"
+          if (data.event === "repository.suspended") {
+            toast.warning("Repository access suspended", {
+              description: `${suffix} can no longer be acted on.`,
+            })
+          } else if (data.event === "repository.archived") {
+            toast.info("Repository archived", {
+              description: `${suffix} was archived on GitHub.`,
+            })
+          } else {
+            toast.warning("Repository access lost", {
+              description: `${suffix} is no longer accessible.`,
+            })
+          }
+          break
+        }
+
+        case "repository.restored": {
+          queryClient.invalidateQueries({ queryKey: ["repositories"] })
+          for (const id of repoIds ?? []) {
+            queryClient.invalidateQueries({ queryKey: ["repository", id] })
+          }
+          toast.success("Repository access restored")
+          break
+        }
+
+        // Dynamic analysis (TelemetryMachine). No dedicated UI yet, so keep
+        // this as forward-compatible invalidation only (no toast).
+        case "dynamic.queued":
+        case "dynamic.running":
+        case "dynamic.enriched":
+        case "dynamic.failed":
+          if (repoId) {
+            invalidateRepoQueries(queryClient, repoId)
+            invalidateAnalysisQueries(queryClient, repoId)
           }
           break
       }
