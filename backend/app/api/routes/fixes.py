@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from collections import defaultdict
 
@@ -721,6 +722,79 @@ def regenerate_failed_fix(
     return {"status": "queued", "fix_id": str(fix_id)}
 
 
+# Matches the single-file fix branch ``greensecops/fixes-wf-<workflow_file_id[:8]>``
+# minted at delivery (see fixes.py deliver route and fix_delivery worker). The
+# 8-hex group reverses to the workflow file whose id starts with it.
+_WF_FIX_BRANCH_RE = re.compile(r"greensecops/fixes-wf-([0-9a-f]{8})$")
+
+# Statuses of a fix that was actually delivered — the only ones eligible for the
+# bundle-level relink onto a repo-wide batch PR (a ``ready``/``pending`` fix never
+# had a PR, so it must not be swept into one).
+_DELIVERED_FIX_STATUSES = frozenset(
+    {
+        FixStatus.delivered,
+        FixStatus.landed,
+        FixStatus.superseded_by_closed_pr,
+    }
+)
+
+
+def _relink_orphaned_fixes(session: SessionDep, repo: Repository) -> int:
+    """Reconnect fixes whose ``pr_id`` was lost to the repo's existing PR rows.
+
+    A ``PullRequest`` row deleted while fixes still referenced it clears their
+    ``pr_id`` (ON DELETE SET NULL), orphaning fixes that a matching PR record may
+    still cover. Matching is by the deterministic greensecops branch name — the
+    same key delivery uses — never a fuzzy heuristic, and only NULL links are
+    filled (an existing link is never overwritten). Returns the number relinked.
+    """
+    orphans = list(
+        session.exec(
+            select(Fix)
+            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+            .where(WorkflowFile.repo_id == repo.id)
+            .where(col(Fix.pr_id).is_(None))
+        ).all()
+    )
+    if not orphans:
+        return 0
+
+    # prefix8 -> fix, dropping any prefix shared by >1 fix (ambiguous, so skip it).
+    fix_by_prefix: dict[str, Fix | None] = {}
+    for fix in orphans:
+        prefix = str(fix.workflow_file_id)[:8]
+        fix_by_prefix[prefix] = None if prefix in fix_by_prefix else fix
+
+    prs = list(
+        session.exec(select(PullRequest).where(PullRequest.repo_id == repo.id)).all()
+    )
+    batch_branch = f"greensecops/fixes-{str(repo.id)[:8]}"
+    batch_prs = [pr for pr in prs if pr.pr_branch == batch_branch]
+
+    relinked = 0
+    for pr in prs:
+        match = _WF_FIX_BRANCH_RE.fullmatch(pr.pr_branch)
+        if not match:
+            continue
+        fix = fix_by_prefix.get(match.group(1))
+        if fix is not None and fix.pr_id is None:
+            fix.pr_id = pr.id
+            session.add(fix)
+            relinked += 1
+
+    # Repo-wide batch PR: bundle-level match, only when unambiguous (exactly one
+    # such record) and only for fixes that were actually delivered.
+    if len(batch_prs) == 1:
+        batch_pr = batch_prs[0]
+        for fix in orphans:
+            if fix.pr_id is None and fix.status in _DELIVERED_FIX_STATUSES:
+                fix.pr_id = batch_pr.id
+                session.add(fix)
+                relinked += 1
+
+    return relinked
+
+
 @router.post("/sync-pr-status/{repo_id}")
 async def sync_pr_statuses(
     repo_id: uuid.UUID,
@@ -729,6 +803,10 @@ async def sync_pr_statuses(
     github_client: GitHubAppClientDep,
 ) -> dict[str, int]:
     repo = authorize_repo(session, current_user, repo_id)
+
+    relinked = _relink_orphaned_fixes(session, repo)
+    if relinked:
+        session.commit()
 
     open_prs = list(
         session.exec(
@@ -739,7 +817,7 @@ async def sync_pr_statuses(
         ).all()
     )
     if not open_prs:
-        return {"synced": 0, "updated": 0}
+        return {"synced": 0, "updated": 0, "relinked": relinked}
 
     updated = 0
     for pr_record in open_prs:
@@ -781,4 +859,4 @@ async def sync_pr_statuses(
     if updated:
         session.commit()
 
-    return {"synced": len(open_prs), "updated": updated}
+    return {"synced": len(open_prs), "updated": updated, "relinked": relinked}
