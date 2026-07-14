@@ -1000,6 +1000,168 @@ def test_sync_pr_status_no_open_prs(
     data = response.json()
     assert data["synced"] == 0
     assert data["updated"] == 0
+    assert data["relinked"] == 0
+
+
+def _make_orphan_fix(
+    db: Session,
+    workflow_file: WorkflowFile,
+    status: FixStatus = FixStatus.delivered,
+) -> Fix:
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=status,
+        pr_id=None,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    return fix
+
+
+def test_sync_pr_status_relinks_orphan_fix_by_wf_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+) -> None:
+    branch = f"greensecops/fixes-wf-{str(workflow_file.id)[:8]}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/7",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix = _make_orphan_fix(db, workflow_file)
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["relinked"] == 1
+
+    db.refresh(fix)
+    assert fix.pr_id == pr.id
+
+
+def test_sync_pr_status_no_relink_without_matching_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+) -> None:
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch="greensecops/fixes-wf-deadbeef",
+        pr_url=f"https://github.com/{repo.full_name}/pull/8",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    fix = _make_orphan_fix(db, workflow_file)
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["relinked"] == 0
+
+    db.refresh(fix)
+    assert fix.pr_id is None
+
+
+def test_sync_pr_status_leaves_linked_fix_untouched(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+) -> None:
+    branch = f"greensecops/fixes-wf-{str(workflow_file.id)[:8]}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/9",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_id=pr.id,
+    )
+    db.add(fix)
+    db.commit()
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["relinked"] == 0
+
+    db.refresh(fix)
+    assert fix.pr_id == pr.id
+
+
+def test_sync_pr_status_relinks_delivered_fix_to_batch_pr(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+) -> None:
+    """A repo-wide batch PR relinks delivered orphans, but not undelivered ones."""
+    batch_branch = f"greensecops/fixes-{str(repo.id)[:8]}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=batch_branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/10",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    # Second workflow file so the two fixes don't collide on the unique
+    # (workflow_file_id) constraint.
+    other_wf = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/other.yml",
+        content_hash="relinkbatchhash",
+        raw_content="name: other\n",
+    )
+    db.add(other_wf)
+    db.commit()
+    db.refresh(other_wf)
+
+    delivered = _make_orphan_fix(db, workflow_file, status=FixStatus.delivered)
+    not_delivered = _make_orphan_fix(db, other_wf, status=FixStatus.ready)
+
+    response = client.post(
+        f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["relinked"] == 1
+
+    db.refresh(delivered)
+    db.refresh(not_delivered)
+    assert delivered.pr_id == pr.id
+    assert not_delivered.pr_id is None
 
 
 def test_sync_pr_status_updates_merged_pr(
