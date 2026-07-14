@@ -185,7 +185,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await page.route("**/api/v1/fixes/**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
-      if (method === "POST" && url.includes("/retry-delivery")) {
+      if (method === "POST" && url.includes("/regenerate")) {
         retryCalled = true
         route.fulfill({ status: 202, json: { status: "queued" } })
       } else {

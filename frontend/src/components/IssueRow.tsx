@@ -69,7 +69,7 @@ export function IssueRow({
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
             {issue.rule_slug}
           </span>
-          {issue.status !== "open" && (
+          {issue.status && issue.status !== "open" && (
             <span
               className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${issueStatusColor(issue.status)}`}
             >
