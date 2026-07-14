@@ -44,6 +44,7 @@ function IssuesPage() {
   const { branch } = RepoRoute.useSearch()
   const queryClient = useQueryClient()
   const [unfixed, setUnfixed] = useState(false)
+  const [showIgnored, setShowIgnored] = useState(false)
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(0)
 
@@ -54,19 +55,23 @@ function IssuesPage() {
   const isAccessible = repo?.is_accessible ?? true
 
   const { data: issues, isLoading } = useQuery({
-    queryKey: ["issues", "repo", repoId, { unfixed, branch }],
+    queryKey: ["issues", "repo", repoId, { unfixed, branch, showIgnored }],
     queryFn: () =>
       IssuesService.listIssues({
         repoId,
         branch: branch || undefined,
         unfixed: unfixed || undefined,
+        includeIgnored: showIgnored || undefined,
         limit: 200,
       }),
   })
 
   const selectedIds = useMemo(() => {
     if (!issues) return []
-    return issues.filter((i) => !deselectedIds.has(i.id)).map((i) => i.id)
+    // Ignored issues are muted — never part of a fix batch.
+    return issues
+      .filter((i) => i.status !== "ignored" && !deselectedIds.has(i.id))
+      .map((i) => i.id)
   }, [issues, deselectedIds])
 
   const { data: fixes } = useQuery({
@@ -195,7 +200,10 @@ function IssuesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {!!issues?.length && (
+      {/* Filter toggles stay available even when the current view is empty, so
+          ignored issues can always be revealed and unignored. Batch actions
+          below are gated on there being visible issues. */}
+      {!isLoading && (
         <div className="flex items-center gap-3 flex-wrap">
           <Button
             variant={unfixed ? "default" : "outline"}
@@ -209,41 +217,56 @@ function IssuesPage() {
             Open only
           </Button>
           <Button
-            variant="ghost"
+            variant={showIgnored ? "default" : "outline"}
             size="sm"
-            className="text-xs"
-            onClick={allSelected ? deselectAll : selectAll}
-            disabled={!issues?.length}
+            onClick={() => {
+              setShowIgnored((v) => !v)
+              setDeselectedIds(new Set())
+              setPage(0)
+            }}
           >
-            {allSelected ? "Deselect all" : "Select all"}
+            Show ignored
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => batchFixMutation.mutate()}
-            disabled={
-              !isAccessible || batchFixMutation.isPending || noneSelected
-            }
-          >
-            <Zap className="h-4 w-4" />
-            {batchFixMutation.isPending
-              ? "Queuing…"
-              : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
-          </Button>
-          {fixes?.some(isRegenerable) && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => regenerateRepoMutation.mutate()}
-              disabled={!isAccessible || regenerateRepoMutation.isPending}
-            >
-              <RefreshCw className="h-4 w-4" />
-              {regenerateRepoMutation.isPending
-                ? "Queuing…"
-                : "Regenerate all fixes"}
-            </Button>
+          {!!issues?.length && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={allSelected ? deselectAll : selectAll}
+                disabled={!issues?.length}
+              >
+                {allSelected ? "Deselect all" : "Select all"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => batchFixMutation.mutate()}
+                disabled={
+                  !isAccessible || batchFixMutation.isPending || noneSelected
+                }
+              >
+                <Zap className="h-4 w-4" />
+                {batchFixMutation.isPending
+                  ? "Queuing…"
+                  : `Fix selected${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}
+              </Button>
+              {fixes?.some(isRegenerable) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => regenerateRepoMutation.mutate()}
+                  disabled={!isAccessible || regenerateRepoMutation.isPending}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {regenerateRepoMutation.isPending
+                    ? "Queuing…"
+                    : "Regenerate all fixes"}
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -367,8 +390,10 @@ function IssuesPage() {
                       <IssueRow
                         key={issue.id}
                         issue={issue}
+                        repoId={repoId}
                         checked={!deselectedIds.has(issue.id)}
                         onCheckedChange={() => toggleIssue(issue.id)}
+                        isAccessible={isAccessible}
                       />
                     ))}
                   </div>

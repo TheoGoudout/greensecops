@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { AlertCircle, ArrowLeft, GitPullRequest } from "lucide-react"
+import { AlertCircle, ArrowLeft, GitPullRequest, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { FixesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { WorkflowFileViewer } from "@/components/WorkflowFileViewer"
+import { fixStatusColor } from "@/lib/status-colors"
 import { apiErrorDetail } from "@/utils"
 
 type FixDetailSearch = { repoId?: string }
@@ -23,22 +24,6 @@ export const Route = createFileRoute("/_layout/fixes/$fixId")({
     meta: [{ title: "Fix - GreenSecOps" }],
   }),
 })
-
-function fixStatusColor(status: string): string {
-  switch (status) {
-    case "delivered":
-      return "bg-green-500/15 text-green-700 dark:text-green-400"
-    case "ready":
-      return "bg-blue-500/15 text-blue-700 dark:text-blue-400"
-    case "failed":
-      return "bg-red-500/15 text-red-700 dark:text-red-400"
-    case "rejected_by_user":
-    case "superseded_by_closed_pr":
-      return "bg-muted text-muted-foreground line-through"
-    default:
-      return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
-  }
-}
 
 function FixDetail() {
   const { fixId } = Route.useParams()
@@ -76,6 +61,21 @@ function FixDetail() {
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
     },
     onError: () => toast.error("Failed to reject fix"),
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: () => FixesService.regenerateFailedFix({ fixId }),
+    onSuccess: () => {
+      toast.success("Retrying fix")
+      queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
+      if (repoId) {
+        queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+      }
+    },
+    onError: (error) =>
+      toast.error("Failed to retry fix", {
+        description: apiErrorDetail(error),
+      }),
   })
 
   if (fixError) {
@@ -136,6 +136,22 @@ function FixDetail() {
                       : "Create PR"}
                 </Button>
               </>
+            )}
+            {fix.status === "failed" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => retryMutation.mutate()}
+                disabled={retryMutation.isPending || retryMutation.isSuccess}
+              >
+                <RefreshCw className="h-4 w-4" />
+                {retryMutation.isPending
+                  ? "Retrying…"
+                  : retryMutation.isSuccess
+                    ? "Queued"
+                    : "Retry"}
+              </Button>
             )}
             {fix.pr_url && (
               <a

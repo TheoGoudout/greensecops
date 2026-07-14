@@ -1,4 +1,4 @@
-import type { FixStatus } from "@/client"
+import type { FixStatus, IssueStatus } from "@/client"
 
 export function analysisStatusColor(status: string): string {
   switch (status) {
@@ -28,6 +28,8 @@ export function analysisStatusLabel(status: string): string {
 
 export function fixStatusColor(status: FixStatus): string {
   switch (status) {
+    case "landed":
+      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
     case "delivered":
       return "bg-green-500/15 text-green-700 dark:text-green-400"
     case "ready":
@@ -39,5 +41,27 @@ export function fixStatusColor(status: FixStatus): string {
       return "bg-muted text-muted-foreground line-through"
     default:
       return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+  }
+}
+
+export function issueStatusColor(status: IssueStatus): string {
+  switch (status) {
+    case "resolved":
+      return "bg-green-500/15 text-green-700 dark:text-green-400"
+    case "fix_in_progress":
+      return "bg-blue-500/15 text-blue-700 dark:text-blue-400"
+    case "ignored":
+      return "bg-muted text-muted-foreground"
+    default:
+      return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+  }
+}
+
+export function issueStatusLabel(status: IssueStatus): string {
+  switch (status) {
+    case "fix_in_progress":
+      return "Fix in progress"
+    default:
+      return status.replace(/_/g, " ")
   }
 }
