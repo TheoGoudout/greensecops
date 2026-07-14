@@ -11,6 +11,7 @@ from app.models import (
     Analysis,
     AnalysisStatus,
     AnalysisTrigger,
+    DynamicAnalysisStatus,
     DynamicEnrichment,
     Organization,
     Repository,
@@ -59,6 +60,8 @@ def _make_telemetry_run(
         workflow_run_id=int(uuid.uuid4().int % 10**6),
         runner_specs=json.dumps({"vcpus": vcpus, "os": "Linux"}),
         metrics=json.dumps({"cpu_percent": cpu_percent, "ram_percent": ram_percent}),
+        # Ingest marks completed-phase rows queued before enqueuing the worker.
+        dynamic_status=DynamicAnalysisStatus.queued,
     )
     db.add(run)
     db.commit()
@@ -105,6 +108,23 @@ def test_run_dynamic_analysis_returns_completed(db: Session, repo: Repository) -
     # Assert
     assert result["status"] == "completed"
     assert result["telemetry_run_id"] == str(run.id)
+    # The machine drove the row queued -> running -> enriched.
+    db.refresh(run)
+    assert run.dynamic_status == DynamicAnalysisStatus.enriched
+
+
+def test_run_dynamic_analysis_marks_failed_on_error(
+    db: Session, repo: Repository
+) -> None:
+    run = _make_telemetry_run(db, repo)
+    with patch(
+        "app.workers.tasks.dynamic_analysis._enrich",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = _run_dynamic_analysis_impl(str(run.id))
+    assert result["status"] == "failed"
+    db.refresh(run)
+    assert run.dynamic_status == DynamicAnalysisStatus.failed
 
 
 def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:  # noqa: ARG001

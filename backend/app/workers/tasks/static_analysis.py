@@ -12,12 +12,14 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
+    AnalysisFailureKind,
     AnalysisStatus,
     AnalysisTrigger,
     Fix,
     FixStatus,
     Issue,
     IssueCategory,
+    IssueResolutionReason,
     IssueSeverity,
     LLMProvider,
     Repository,
@@ -194,6 +196,21 @@ def _auto_queue_fix_generation(
     )
 
 
+def _classify_failure(exc: BaseException) -> AnalysisFailureKind:
+    """Transient (retry-worthy) vs permanent (input must change) OPA failure.
+
+    Timeouts and network/IO errors are transient; parse/value errors (invalid
+    workflow YAML, a malformed policy result) will fail identically on re-run.
+    """
+    if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
+        return AnalysisFailureKind.transient
+    if isinstance(exc, (ValueError, KeyError, TypeError)):
+        return AnalysisFailureKind.permanent
+    # Unknown failures default to permanent so a genuinely broken input is not
+    # retried forever; an operator can still retry explicitly.
+    return AnalysisFailureKind.permanent
+
+
 class WorkflowFetchError(Exception):
     """Raised when workflow files cannot be fetched from GitHub (transient)."""
 
@@ -306,6 +323,7 @@ def _resolve_stale_issues(
     stale = [i for i in open_issues if i.fingerprint not in seen_fingerprints]
     for issue in stale:
         issue.resolved_at = now
+        issue.resolution_reason = IssueResolutionReason.no_longer_detected
         session.add(issue)
     if stale:
         session.commit()
@@ -337,6 +355,7 @@ def _resolve_issues_for_missing_files(
         ).all()
         for issue in open_issues:
             issue.resolved_at = now
+            issue.resolution_reason = IssueResolutionReason.file_removed
             session.add(issue)
             resolved += 1
     if resolved:
@@ -521,6 +540,7 @@ def _run_static_analysis_impl(
                 logger.exception("OPA evaluation failed for %s: %s", path, exc)
                 sm.advance(analysis, sm.AnalysisMachine, "opa_failed")
                 analysis.error_message = str(exc)[:2000]
+                analysis.failure_kind = _classify_failure(exc)
                 analysis.completed_at = datetime.now(timezone.utc)
                 session.add(analysis)
                 session.commit()
@@ -593,6 +613,7 @@ def _run_static_analysis_impl(
                             "context": v.context,
                             # A recurring violation reopens a resolved issue.
                             "resolved_at": None,
+                            "resolution_reason": None,
                         },
                     )
                 )

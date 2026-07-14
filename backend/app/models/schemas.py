@@ -7,13 +7,16 @@ from .db import UserBase
 from .enums import (
     AnalysisStatus,
     AnalysisTrigger,
+    CIStatus,
     FixDeliveryMode,
     FixStatus,
     IssueCategory,
+    IssueResolutionReason,
     IssueSeverity,
     IssueStatus,
     LLMProvider,
     PullRequestState,
+    ReviewDecision,
     UserTier,
 )
 
@@ -107,6 +110,7 @@ class IssuePublic(SQLModel):
     status: IssueStatus
     created_at: datetime | None = None
     resolved_at: datetime | None = None
+    resolution_reason: IssueResolutionReason | None = None
     fix_id: uuid.UUID | None = None
     fix_status: FixStatus | None = None
     workflow_file_path: str | None = None
@@ -155,6 +159,9 @@ class PullRequestPublic(SQLModel):
     pr_branch: str
     pr_url: str | None = None
     pr_state: PullRequestState | None = None
+    ci_status: CIStatus | None = None
+    review_decision: ReviewDecision | None = None
+    mergeable_state: str | None = None
     comment_url: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

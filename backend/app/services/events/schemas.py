@@ -216,6 +216,15 @@ def fix_rejected(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
     )
 
 
+def fix_landed(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
+    """The fix's PR was merged — terminal success."""
+    return SSEEvent(
+        event=SSESignal.fix_landed,
+        org_id=org_id,
+        data={"repo_id": repo_id, "fix_id": fix_id},
+    )
+
+
 # ─── PR ──────────────────────────────────────────────────────────────────────
 
 
@@ -372,9 +381,36 @@ def repository_toggled(org_id: str, repo_id: str, enabled: bool) -> SSEEvent:
     )
 
 
+def repository_status_changed(
+    org_id: str, repo_ids: list[str], signal: SSESignal
+) -> SSEEvent:
+    """Per-cause repository lifecycle signal (suspended/archived/inaccessible/
+    restored) emitted by the RepositoryMachine transition's declared output."""
+    return SSEEvent(
+        event=signal,
+        org_id=org_id,
+        data={"org_id": org_id, "repo_ids": repo_ids},
+    )
+
+
 def repository_action_pr_opened(org_id: str, repo_id: str, pr_url: str) -> SSEEvent:
     return SSEEvent(
         event=SSESignal.repository_action_pr_opened,
         org_id=org_id,
         data={"org_id": org_id, "repo_id": repo_id, "pr_url": pr_url},
+    )
+
+
+# ─── Dynamic analysis (telemetry enrichment) ─────────────────────────────────
+
+
+def dynamic_status(
+    org_id: str, repo_id: str, telemetry_run_id: str, signal: SSESignal
+) -> SSEEvent:
+    """A dynamic-analysis lifecycle signal (running/enriched/failed) emitted by
+    the TelemetryMachine transition's declared output."""
+    return SSEEvent(
+        event=signal,
+        org_id=org_id,
+        data={"repo_id": repo_id, "telemetry_run_id": telemetry_run_id},
     )

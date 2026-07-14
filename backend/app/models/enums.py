@@ -42,6 +42,18 @@ class AnalysisStatus(str, enum.Enum):
     no_workflows = "no_workflows"
 
 
+class AnalysisFailureKind(str, enum.Enum):
+    """Why an analysis ``failed`` — orthogonal to the state itself.
+
+    ``transient`` failures (sweep timeout, OPA/network hiccup) are safe to
+    ``retry`` in place; ``permanent`` ones (invalid workflow YAML, a rule bug)
+    will fail identically on re-run and need a code/content change first.
+    """
+
+    transient = "transient"
+    permanent = "permanent"
+
+
 class AnalysisTrigger(str, enum.Enum):
     webhook_push = "webhook_push"
     webhook_workflow_run = "webhook_workflow_run"
@@ -82,6 +94,24 @@ class IssueStatus(str, enum.Enum):
     ignored = "ignored"
 
 
+class IssueResolutionReason(str, enum.Enum):
+    """Why an issue was resolved — an attribute of the ``resolved`` state.
+
+    Kept as a column rather than splitting ``resolved`` into several states so
+    the issue graph stays small. Set alongside ``resolved_at`` and cleared when
+    a resolved violation recurs.
+
+    - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
+      disabled/removed rule — the two cannot be told apart after the fact).
+    - ``file_removed``: the workflow file was deleted or renamed.
+    - ``merged``: the fix PR was merged, applying the change to the branch.
+    """
+
+    no_longer_detected = "no_longer_detected"
+    file_removed = "file_removed"
+    merged = "merged"
+
+
 class FixStatus(str, enum.Enum):
     pending = "pending"
     generating = "generating"
@@ -95,17 +125,72 @@ class FixStatus(str, enum.Enum):
     #    it; it becomes deliverable again if that PR is reopened.
     rejected_by_user = "rejected_by_user"
     superseded_by_closed_pr = "superseded_by_closed_pr"
+    # Terminal: the fix's PR was merged, so its change is on the branch. Distinct
+    # from ``delivered`` (awaiting review) — set from the pull_request merge
+    # webhook, and it resolves the fix's issues with reason ``merged``.
+    landed = "landed"
 
 
 class PullRequestState(str, enum.Enum):
     open = "open"
+    # A GitHub draft PR (opened as draft or via ``converted_to_draft``); returns
+    # to ``open`` on ``ready_for_review``. CI / review / mergeable detail is kept
+    # as attributes on the row, not as extra states.
+    draft = "draft"
     merged = "merged"
     closed = "closed"
+
+
+class CIStatus(str, enum.Enum):
+    """Aggregate CI outcome for a PR, from ``check_suite`` webhooks."""
+
+    pending = "pending"
+    success = "success"
+    failure = "failure"
+    none = "none"
+
+
+class ReviewDecision(str, enum.Enum):
+    """Latest human review decision for a PR, from ``pull_request_review``."""
+
+    approved = "approved"
+    changes_requested = "changes_requested"
+    review_required = "review_required"
+    none = "none"
 
 
 class TelemetryPhase(str, enum.Enum):
     started = "started"
     completed = "completed"
+
+
+class DynamicAnalysisStatus(str, enum.Enum):
+    """Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
+    telemetry run.
+
+    Distinct from ``TelemetryPhase`` (an ingest category — ``started`` and
+    ``completed`` are separate rows): this tracks the worker that turns a
+    completed run's metrics into persisted ``DynamicEnrichment`` findings.
+    """
+
+    queued = "queued"
+    running = "running"
+    enriched = "enriched"
+    failed = "failed"
+
+
+class RepositoryStatus(str, enum.Enum):
+    """Accessibility / lifecycle of a repository as GreenSecOps sees it.
+
+    Drives the ``is_accessible`` gate (``active`` ⇒ accessible). Orthogonal to
+    ``Repository.enabled`` (user opt-in) and ``is_external``, which stay plain
+    flags. Toggled by installation/repository webhooks.
+    """
+
+    active = "active"
+    suspended = "suspended"  # installation suspended
+    archived = "archived"  # repo archived on GitHub
+    inaccessible = "inaccessible"  # installation deleted or repo removed from it
 
 
 class SSESignal(str, enum.Enum):
@@ -125,6 +210,7 @@ class SSESignal(str, enum.Enum):
     fix_delivered = "fix.delivered"
     fix_failed = "fix.failed"
     fix_rejected = "fix.rejected"
+    fix_landed = "fix.landed"
     # Pull requests
     pr_opened = "pr.opened"
     pr_updated = "pr.updated"
@@ -143,3 +229,12 @@ class SSESignal(str, enum.Enum):
     repository_disabled = "repository.disabled"
     repository_toggled = "repository.toggled"
     repository_action_pr_opened = "repository.action_pr_opened"
+    repository_suspended = "repository.suspended"
+    repository_archived = "repository.archived"
+    repository_inaccessible = "repository.inaccessible"
+    repository_restored = "repository.restored"
+    # Dynamic analysis (telemetry enrichment)
+    dynamic_queued = "dynamic.queued"
+    dynamic_running = "dynamic.running"
+    dynamic_enriched = "dynamic.enriched"
+    dynamic_failed = "dynamic.failed"

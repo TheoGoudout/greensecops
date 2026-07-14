@@ -5,9 +5,11 @@ from statemachine import StateMachine
 
 from app.models.enums import (
     AnalysisStatus,
+    DynamicAnalysisStatus,
     FixStatus,
     IssueStatus,
     PullRequestState,
+    RepositoryStatus,
     SSESignal,
 )
 from app.services import state_machines as sm
@@ -17,6 +19,8 @@ ALL_MACHINES = [
     sm.FixMachine,
     sm.PullRequestMachine,
     sm.IssueMachine,
+    sm.RepositoryMachine,
+    sm.TelemetryMachine,
 ]
 
 
@@ -91,6 +95,15 @@ def test_analysis_cannot_advance_from_terminal() -> None:
         sm.advance(a, sm.AnalysisMachine, "opa_succeeded")
 
 
+def test_analysis_retry_requeues_a_failed_row() -> None:
+    a = _Model(sm.AnalysisMachine, AnalysisStatus.failed)
+    assert sm.advance(a, sm.AnalysisMachine, "retry") is AnalysisStatus.queued
+    # A completed analysis has no retry edge.
+    a2 = _Model(sm.AnalysisMachine, AnalysisStatus.completed)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(a2, sm.AnalysisMachine, "retry")
+
+
 # ── Fix ──────────────────────────────────────────────────────────────────────
 
 
@@ -156,6 +169,19 @@ def test_fix_restore_only_from_superseded_not_user_rejected() -> None:
         sm.advance(f2, sm.FixMachine, "restore")
 
 
+def test_fix_land_from_delivered_only() -> None:
+    f = _Model(sm.FixMachine, FixStatus.delivered)
+    assert sm.advance(f, sm.FixMachine, "land") is FixStatus.landed
+    # A landed fix is terminal.
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f, sm.FixMachine, "land")
+    # Only a delivered fix can land (a merged PR of an undelivered fix is a
+    # contradiction).
+    f2 = _Model(sm.FixMachine, FixStatus.ready)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f2, sm.FixMachine, "land")
+
+
 def test_fix_sweep_from_in_flight_only() -> None:
     for src in (FixStatus.pending, FixStatus.generating, FixStatus.delivering):
         f = _Model(sm.FixMachine, src)
@@ -185,6 +211,85 @@ def test_pull_request_cannot_reopen_a_merged_pr() -> None:
     pr = _Model(sm.PullRequestMachine, PullRequestState.merged)
     with pytest.raises(sm.IllegalTransition):
         sm.advance(pr, sm.PullRequestMachine, "reopen")
+
+
+def test_pull_request_draft_toggle() -> None:
+    pr = _Model(sm.PullRequestMachine, PullRequestState.open)
+    assert (
+        sm.advance(pr, sm.PullRequestMachine, "convert_to_draft")
+        is PullRequestState.draft
+    )
+    # A draft PR can still merge or be marked ready.
+    assert (
+        sm.advance(pr, sm.PullRequestMachine, "mark_ready_for_review")
+        is PullRequestState.open
+    )
+    d = _Model(sm.PullRequestMachine, PullRequestState.draft)
+    assert sm.advance(d, sm.PullRequestMachine, "merge") is PullRequestState.merged
+
+
+# ── Repository ───────────────────────────────────────────────────────────────
+
+
+def test_repository_suspend_unsuspend() -> None:
+    r = _Model(sm.RepositoryMachine, RepositoryStatus.active)
+    assert sm.advance(r, sm.RepositoryMachine, "suspend") is RepositoryStatus.suspended
+    assert sm.advance(r, sm.RepositoryMachine, "unsuspend") is RepositoryStatus.active
+
+
+def test_repository_archive_and_lose_access() -> None:
+    r = _Model(sm.RepositoryMachine, RepositoryStatus.active)
+    assert sm.advance(r, sm.RepositoryMachine, "archive") is RepositoryStatus.archived
+    assert sm.advance(r, sm.RepositoryMachine, "unarchive") is RepositoryStatus.active
+    for src in (
+        RepositoryStatus.active,
+        RepositoryStatus.suspended,
+        RepositoryStatus.archived,
+    ):
+        r2 = _Model(sm.RepositoryMachine, src)
+        assert (
+            sm.advance(r2, sm.RepositoryMachine, "lose_access")
+            is RepositoryStatus.inaccessible
+        )
+    assert (
+        sm.advance(r2, sm.RepositoryMachine, "regain_access") is RepositoryStatus.active
+    )
+
+
+def test_repository_sync_access_flag() -> None:
+    class _Repo:
+        status = RepositoryStatus.active
+        is_accessible = False
+
+    repo = _Repo()
+    sm.sync_access_flag(repo)
+    assert repo.is_accessible is True
+    repo.status = RepositoryStatus.suspended
+    sm.sync_access_flag(repo)
+    assert repo.is_accessible is False
+
+
+# ── Telemetry (dynamic analysis) ─────────────────────────────────────────────
+
+
+def test_telemetry_happy_path() -> None:
+    t = _Model(sm.TelemetryMachine, DynamicAnalysisStatus.queued)
+    assert (
+        sm.advance(t, sm.TelemetryMachine, "started") is DynamicAnalysisStatus.running
+    )
+    assert (
+        sm.advance(t, sm.TelemetryMachine, "enrich") is DynamicAnalysisStatus.enriched
+    )
+
+
+def test_telemetry_failure_and_retry() -> None:
+    t = _Model(sm.TelemetryMachine, DynamicAnalysisStatus.running)
+    assert sm.advance(t, sm.TelemetryMachine, "fail") is DynamicAnalysisStatus.failed
+    assert sm.advance(t, sm.TelemetryMachine, "retry") is DynamicAnalysisStatus.queued
+    # enriched is terminal.
+    e = _Model(sm.TelemetryMachine, DynamicAnalysisStatus.enriched)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(e, sm.TelemetryMachine, "retry")
 
 
 # ── Issue ────────────────────────────────────────────────────────────────────

@@ -660,7 +660,7 @@ export const FixPublicSchema = {
 
 export const FixStatusSchema = {
     type: 'string',
-    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr'],
+    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr', 'landed'],
     title: 'FixStatus'
 } as const;
 
@@ -798,6 +798,16 @@ export const IssuePublicSchema = {
             ],
             title: 'Resolved At'
         },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/IssueResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
         fix_id: {
             anyOf: [
                 {
@@ -835,6 +845,22 @@ export const IssuePublicSchema = {
     type: 'object',
     required: ['id', 'analysis_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status'],
     title: 'IssuePublic'
+} as const;
+
+export const IssueResolutionReasonSchema = {
+    type: 'string',
+    enum: ['no_longer_detected', 'file_removed', 'merged'],
+    title: 'IssueResolutionReason',
+    description: `Why an issue was resolved — an attribute of the \`\`resolved\`\` state.
+
+Kept as a column rather than splitting \`\`resolved\`\` into several states so
+the issue graph stays small. Set alongside \`\`resolved_at\`\` and cleared when
+a resolved violation recurs.
+
+- \`\`no_longer_detected\`\`: absent from the latest analysis (a manual fix or a
+  disabled/removed rule — the two cannot be told apart after the fact).
+- \`\`file_removed\`\`: the workflow file was deleted or renamed.
+- \`\`merged\`\`: the fix PR was merged, applying the change to the branch.`
 } as const;
 
 export const IssueSeveritySchema = {
@@ -1003,7 +1029,7 @@ export const PrivateUserCreateSchema = {
 
 export const PullRequestStateSchema = {
     type: 'string',
-    enum: ['open', 'merged', 'closed'],
+    enum: ['open', 'draft', 'merged', 'closed'],
     title: 'PullRequestState'
 } as const;
 
@@ -1128,7 +1154,7 @@ export const RulePublicSchema = {
 
 export const SSESignalSchema = {
     type: 'string',
-    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened'],
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'fix.landed', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened', 'repository.suspended', 'repository.archived', 'repository.inaccessible', 'repository.restored', 'dynamic.queued', 'dynamic.running', 'dynamic.enriched', 'dynamic.failed'],
     title: 'SSESignal'
 } as const;
 

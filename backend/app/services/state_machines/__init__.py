@@ -26,6 +26,8 @@ from .base import (
 from .fix import IN_FLIGHT_STATUSES, REJECTED_STATUSES, FixMachine
 from .issue import IssueMachine
 from .pull_request import PullRequestMachine
+from .repository import RepositoryMachine, sync_access_flag
+from .telemetry import TelemetryMachine
 
 __all__ = [
     # helpers
@@ -34,11 +36,14 @@ __all__ = [
     "force_to",
     "output_for",
     "IllegalTransition",
+    "sync_access_flag",
     # machines
     "AnalysisMachine",
     "FixMachine",
     "IssueMachine",
     "PullRequestMachine",
+    "RepositoryMachine",
+    "TelemetryMachine",
     "IN_FLIGHT_STATUSES",
     "REJECTED_STATUSES",
 ]

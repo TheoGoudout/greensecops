@@ -8,16 +8,22 @@ from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from .enums import (
+    AnalysisFailureKind,
     AnalysisStatus,
     AnalysisTrigger,
+    CIStatus,
+    DynamicAnalysisStatus,
     FixDeliveryMode,
     FixStatus,
     IssueCategory,
+    IssueResolutionReason,
     IssueSeverity,
     IssueStatus,
     LLMProvider,
     OrgRole,
     PullRequestState,
+    RepositoryStatus,
+    ReviewDecision,
     TelemetryPhase,
     UserTier,
 )
@@ -133,6 +139,13 @@ class Repository(SQLModel, table=True):
     enabled: bool = Field(default=False)
     is_accessible: bool = Field(default=True)
     is_external: bool = Field(default=False)
+    # Accessibility / lifecycle axis, owned by the RepositoryMachine (migration
+    # 0031). ``is_accessible`` is a machine-synced cache of ``status == active``;
+    # ``enabled`` (user opt-in) stays an independent flag.
+    status: RepositoryStatus = Field(
+        default=RepositoryStatus.active,
+        sa_column_kwargs={"server_default": RepositoryStatus.active.value},
+    )
     default_branch: str = Field(default="main", max_length=255)
     fix_delivery_mode: FixDeliveryMode | None = Field(default=None)
     auto_fix_enabled: bool = Field(default=False)
@@ -215,6 +228,9 @@ class Analysis(SQLModel, table=True):
     branch: str | None = Field(default=None, max_length=255)
     commit_sha: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=2048)
+    # Set when status is ``failed`` to say whether a ``retry`` is worthwhile
+    # (transient) or futile until the input changes (permanent).
+    failure_kind: AnalysisFailureKind | None = Field(default=None)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -272,6 +288,9 @@ class Issue(SQLModel, table=True):
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # Why the issue resolved (set with resolved_at, cleared on recur). An
+    # attribute of the ``resolved`` state, not a separate state.
+    resolution_reason: IssueResolutionReason | None = Field(default=None)
     # Set when a user dismisses the violation (false positive / accepted risk);
     # takes precedence in the status trigger so the issue reads ``ignored``.
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
@@ -311,6 +330,12 @@ class PullRequest(SQLModel, table=True):
         sa_column_kwargs={"server_default": PullRequestState.open.value},
     )
     comment_url: str | None = Field(default=None, max_length=1024)
+    # Enrichment attributes (not machine states): CI outcome, latest review
+    # decision and GitHub mergeable_state, populated by check_suite /
+    # pull_request_review / pull_request webhooks.
+    ci_status: CIStatus | None = Field(default=None)
+    review_decision: ReviewDecision | None = Field(default=None)
+    mergeable_state: str | None = Field(default=None, max_length=32)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -365,6 +390,9 @@ class TelemetryRun(SQLModel, table=True):
     runner_specs: str | None = Field(default=None)
     metrics: str | None = Field(default=None)
     phase: TelemetryPhase | None = Field(default=None)
+    # Dynamic-analysis lifecycle for a ``completed``-phase run (owned by the
+    # TelemetryMachine); NULL for ``started``-phase rows, which never enrich.
+    dynamic_status: DynamicAnalysisStatus | None = Field(default=None)
     collected_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )

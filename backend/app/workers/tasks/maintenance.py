@@ -7,6 +7,7 @@ from sqlmodel import Session, col, select
 from app.core.db import engine
 from app.models import (
     Analysis,
+    AnalysisFailureKind,
     AnalysisStatus,
     Fix,
     FixStatus,
@@ -47,6 +48,9 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             analysis.error_message = (
                 "Timed out: the analysis worker was interrupted before completion"
             )
+            # A sweep is a transient failure (worker/broker interruption) — safe
+            # to retry once the pipeline is healthy again.
+            analysis.failure_kind = AnalysisFailureKind.transient
             analysis.completed_at = now
             session.add(analysis)
             swept_analyses += 1

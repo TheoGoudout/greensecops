@@ -44,6 +44,9 @@ class FixMachine(StateMachine):
     failed = State(value=FixStatus.failed)
     rejected_by_user = State(value=FixStatus.rejected_by_user, final=True)
     superseded = State(value=FixStatus.superseded_by_closed_pr)
+    # Terminal success: the fix's PR was merged. Distinct from ``delivered``
+    # (awaiting review) so "landed on the branch" is queryable.
+    landed = State(value=FixStatus.landed, final=True)
 
     # Inputs (events)
     start_generation = pending.to(generating)
@@ -76,6 +79,9 @@ class FixMachine(StateMachine):
     # instead of discarding it and inserting a new one. Not offered from
     # ``rejected_by_user`` — an explicit user dismissal stays terminal.
     regenerate = failed.to(pending)
+    # The fix's PR merged: mark it landed and (at the call site) resolve its
+    # issues with reason ``merged``. Fired from the pull_request merge webhook.
+    land = delivered.to(landed)
     swept = pending.to(failed) | generating.to(failed) | delivering.to(failed)
 
     # Outputs (SSE signal emitted when each event fires)
@@ -92,5 +98,6 @@ class FixMachine(StateMachine):
         "reject": SSESignal.fix_rejected,
         "restore": None,
         "regenerate": SSESignal.fix_pending,
+        "land": SSESignal.fix_landed,
         "swept": SSESignal.fix_failed,
     }

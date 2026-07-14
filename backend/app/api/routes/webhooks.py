@@ -2,7 +2,7 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from sqlmodel import Session
+from sqlmodel import Session, col
 
 from app import crud
 from app.api.deps import SessionDep
@@ -10,12 +10,15 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisTrigger,
+    CIStatus,
     Fix,
     FixStatus,
     Issue,
+    IssueResolutionReason,
     Organization,
     PullRequest,
     Repository,
+    ReviewDecision,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -106,6 +109,10 @@ async def github_webhook(
         _handle_installation_repositories_event(session, payload)
     elif event == "pull_request":
         _handle_pull_request_event(session, payload)
+    elif event == "check_suite":
+        _handle_check_suite_event(session, payload)
+    elif event == "pull_request_review":
+        _handle_pull_request_review_event(session, payload)
     elif event == "repository":
         _handle_repository_event(session, payload)
 
@@ -297,22 +304,37 @@ def _handle_repository_event(
         return
 
     if action in ("deleted", "archived"):
+        # ``archived`` is a reversible GitHub state (→ archived); ``deleted``
+        # removes the repo (→ inaccessible). Both keep ``enabled=False`` (user
+        # opt-in is a separate axis) and drop ``is_accessible`` via the machine.
         repo.enabled = False
-        repo.is_accessible = False
+        event_name = "archive" if action == "archived" else "lose_access"
+        moved = sm.try_advance(repo, sm.RepositoryMachine, event_name)
+        sm.sync_access_flag(repo)
         session.add(repo)
         session.commit()
-        logger.info("Disabled repo %s after %s event", repo.full_name, action)
-        events_pub.publish_event(
-            ev.repository_disabled(str(repo.org_id), [str(repo.id)])
+        logger.info(
+            "Repo %s -> status=%s after %s", repo.full_name, repo.status, action
         )
+        signal = sm.output_for(sm.RepositoryMachine, event_name)
+        if moved and signal is not None:
+            events_pub.publish_event(
+                ev.repository_status_changed(str(repo.org_id), [str(repo.id)], signal)
+            )
         return
 
     if action == "unarchived":
         repo.enabled = True
-        repo.is_accessible = True
+        moved = sm.try_advance(repo, sm.RepositoryMachine, "unarchive")
+        sm.sync_access_flag(repo)
         session.add(repo)
         session.commit()
         logger.info("Re-enabled repo %s after unarchive", repo.full_name)
+        signal = sm.output_for(sm.RepositoryMachine, "unarchive")
+        if moved and signal is not None:
+            events_pub.publish_event(
+                ev.repository_status_changed(str(repo.org_id), [str(repo.id)], signal)
+            )
         return
 
     if action in ("renamed", "transferred", "edited"):
@@ -350,7 +372,9 @@ def _handle_installation_event(
 
     if action in ("deleted", "suspend"):
         repos = crud.mark_repositories_inaccessible_by_installation_id(
-            session=session, installation_id=installation_id
+            session=session,
+            installation_id=installation_id,
+            event="suspend" if action == "suspend" else "lose_access",
         )
         logger.info(
             "Marked %d repos inaccessible for %s installation %s",
@@ -402,7 +426,14 @@ def _handle_pull_request_event(
     payload: dict[str, Any],
 ) -> None:
     action = payload.get("action")
-    if action not in ("closed", "reopened", "synchronize", "edited"):
+    if action not in (
+        "closed",
+        "reopened",
+        "synchronize",
+        "edited",
+        "converted_to_draft",
+        "ready_for_review",
+    ):
         return
 
     pr = payload.get("pull_request", {})
@@ -418,11 +449,24 @@ def _handle_pull_request_event(
     if not pr_record:
         return
 
+    # Draft toggles: converted_to_draft (open -> draft) / ready_for_review
+    # (draft -> open). try_advance keeps redeliveries idempotent.
+    if action in ("converted_to_draft", "ready_for_review"):
+        draft_event = (
+            "convert_to_draft"
+            if action == "converted_to_draft"
+            else "mark_ready_for_review"
+        )
+        _handle_pull_request_draft_toggle(session, pr_record, pr_url, draft_event)
+        return
+
     # New commits pushed to the PR branch (synchronize) or a title/base edit
     # (edited): record the update without changing lifecycle state, so the PR is
     # no longer silently ignored. try_advance keeps it a no-op on a non-open PR.
     if action in ("synchronize", "edited"):
-        _handle_pull_request_external_update(session, pr_record, pr_url)
+        _handle_pull_request_external_update(
+            session, pr_record, pr_url, mergeable_state=pr.get("mergeable_state")
+        )
         return
 
     if action == "closed":
@@ -472,6 +516,24 @@ def _handle_pull_request_event(
                     events_pub.publish_event(
                         ev.fix_rejected(str(repo.org_id), str(repo.id), str(pr_fix.id))
                     )
+    elif action == "closed" and merged:
+        # The PR merged: land its delivered fixes (terminal) and resolve the
+        # issues they addressed with reason ``merged`` — the code is now on the
+        # branch. try_advance keeps non-``delivered`` fixes untouched.
+        landed_fixes: list[Fix] = []
+        for pr_fix in pr_fixes:
+            if sm.try_advance(pr_fix, sm.FixMachine, "land"):
+                session.add(pr_fix)
+                landed_fixes.append(pr_fix)
+        if landed_fixes:
+            _resolve_issues_for_landed_fixes(session, landed_fixes)
+            session.commit()
+            repo = session.get(Repository, pr_record.repo_id)
+            if repo:
+                for pr_fix in landed_fixes:
+                    events_pub.publish_event(
+                        ev.fix_landed(str(repo.org_id), str(repo.id), str(pr_fix.id))
+                    )
 
     fix = pr_fixes[0] if pr_fixes else None
     if fix:
@@ -495,18 +557,46 @@ def _handle_pull_request_event(
                 )
 
 
-def _handle_pull_request_external_update(
+def _resolve_issues_for_landed_fixes(
     session: Session,
-    pr_record: PullRequest,
-    pr_url: str,
+    fixes: list[Fix],
 ) -> None:
-    """Record a synchronize/edited event on an open PR (updated_at + SSE)."""
+    """Resolve the still-open issues addressed by merged (landed) fixes.
+
+    Sets ``resolved_at`` + ``resolution_reason = merged``. Idempotent: a later
+    re-analysis leaves already-resolved issues alone, and a recurring violation
+    reopens via the usual on-conflict path.
+    """
     from datetime import datetime, timezone
 
     from sqlmodel import select
 
-    if not sm.try_advance(pr_record, sm.PullRequestMachine, "external_update"):
-        # PR is not open (closed/merged/NULL): nothing to record.
+    now = datetime.now(timezone.utc)
+    fix_ids = [f.id for f in fixes]
+    issues = session.exec(
+        select(Issue)
+        .where(col(Issue.fix_id).in_(fix_ids))
+        .where(col(Issue.resolved_at).is_(None))
+    ).all()
+    for issue in issues:
+        issue.resolved_at = now
+        issue.resolution_reason = IssueResolutionReason.merged
+        session.add(issue)
+
+
+def _handle_pull_request_draft_toggle(
+    session: Session,
+    pr_record: PullRequest,
+    pr_url: str,
+    event: str,
+) -> None:
+    """Record a converted_to_draft / ready_for_review toggle (state + SSE)."""
+    from datetime import datetime, timezone
+
+    from sqlmodel import select
+
+    if not sm.try_advance(pr_record, sm.PullRequestMachine, event):
+        # Not in a state the toggle applies to (e.g. already merged/closed).
         return
     pr_record.updated_at = datetime.now(timezone.utc)
     session.add(pr_record)
@@ -525,7 +615,140 @@ def _handle_pull_request_external_update(
             pr_record.pr_branch,
         )
     )
+    logger.info(
+        "PR %s draft toggle %s recorded (record %s)", pr_url, event, pr_record.id
+    )
+
+
+def _handle_pull_request_external_update(
+    session: Session,
+    pr_record: PullRequest,
+    pr_url: str,
+    mergeable_state: str | None = None,
+) -> None:
+    """Record a synchronize/edited event on an open PR (updated_at + SSE)."""
+    from datetime import datetime, timezone
+
+    from sqlmodel import select
+
+    if not sm.try_advance(pr_record, sm.PullRequestMachine, "external_update"):
+        # PR is not open/draft (closed/merged/NULL): nothing to record.
+        return
+    pr_record.updated_at = datetime.now(timezone.utc)
+    if mergeable_state is not None:
+        pr_record.mergeable_state = mergeable_state[:32]
+    session.add(pr_record)
+    session.commit()
+
+    repo = session.get(Repository, pr_record.repo_id)
+    if not repo:
+        return
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    events_pub.publish_event(
+        ev.pr_updated(
+            str(repo.org_id),
+            str(repo.id),
+            [str(f.id) for f in pr_fixes],
+            pr_url,
+            pr_record.pr_branch,
+        )
+    )
     logger.info("PR %s external update recorded (record %s)", pr_url, pr_record.id)
+
+
+def _ci_status_from_conclusion(status: str, conclusion: str | None) -> CIStatus:
+    if status != "completed":
+        return CIStatus.pending
+    if conclusion == "success":
+        return CIStatus.success
+    if conclusion in ("failure", "timed_out", "cancelled", "action_required"):
+        return CIStatus.failure
+    return CIStatus.none
+
+
+def _handle_check_suite_event(
+    session: Session,
+    payload: dict[str, Any],
+) -> None:
+    """Record CI outcome (an attribute, not a state) from a check_suite event."""
+    from sqlmodel import select
+
+    suite = payload.get("check_suite", {})
+    head_branch = suite.get("head_branch")
+    github_repo_id = payload.get("repository", {}).get("id")
+    if not head_branch or not github_repo_id:
+        return
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if not repo:
+        return
+    pr_record = session.exec(
+        select(PullRequest)
+        .where(PullRequest.repo_id == repo.id)
+        .where(PullRequest.pr_branch == head_branch)
+    ).first()
+    if not pr_record:
+        return
+    pr_record.ci_status = _ci_status_from_conclusion(
+        suite.get("status", ""), suite.get("conclusion")
+    )
+    session.add(pr_record)
+    session.commit()
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    events_pub.publish_event(
+        ev.pr_updated(
+            str(repo.org_id),
+            str(repo.id),
+            [str(f.id) for f in pr_fixes],
+            pr_record.pr_url or "",
+            pr_record.pr_branch,
+        )
+    )
+
+
+def _handle_pull_request_review_event(
+    session: Session,
+    payload: dict[str, Any],
+) -> None:
+    """Record the latest review decision (an attribute) from a review event."""
+    from sqlmodel import select
+
+    if payload.get("action") not in ("submitted", "dismissed"):
+        return
+    state = (payload.get("review", {}).get("state") or "").lower()
+    decision = {
+        "approved": ReviewDecision.approved,
+        "changes_requested": ReviewDecision.changes_requested,
+        "dismissed": ReviewDecision.review_required,
+    }.get(state)
+    if decision is None:
+        # A plain comment review carries no decision — leave the current value.
+        return
+    pr_url = payload.get("pull_request", {}).get("html_url")
+    if not pr_url:
+        return
+    pr_record = session.exec(
+        select(PullRequest).where(PullRequest.pr_url == pr_url)
+    ).first()
+    if not pr_record:
+        return
+    pr_record.review_decision = decision
+    session.add(pr_record)
+    session.commit()
+    repo = session.get(Repository, pr_record.repo_id)
+    if not repo:
+        return
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    events_pub.publish_event(
+        ev.pr_updated(
+            str(repo.org_id),
+            str(repo.id),
+            [str(f.id) for f in pr_fixes],
+            pr_url,
+            pr_record.pr_branch,
+        )
+    )
 
 
 def _handle_installation_repositories_event(
@@ -556,7 +779,10 @@ def _handle_installation_repositories_event(
                 ).all()
             )
             for repo in repos:
-                repo.is_accessible = True
+                # Re-added to the installation: regain access (machine syncs
+                # is_accessible). ``enabled`` (user opt-in) stays as-is.
+                sm.try_advance(repo, sm.RepositoryMachine, "regain_access")
+                sm.sync_access_flag(repo)
                 session.add(repo)
             session.commit()
         # The payload lacks default_branch, so re-sync for accurate data.
