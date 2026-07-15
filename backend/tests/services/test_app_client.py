@@ -107,6 +107,62 @@ def test_list_installation_repositories_empty(
     assert result == []
 
 
+# ─── get_app_bot_login ───────────────────────────────────────────────────────
+
+
+def _mock_app_integration(slug: str | None) -> MagicMock:
+    mock_app = MagicMock()
+    mock_app.slug = slug
+    mock_integration = MagicMock()
+    mock_integration.get_app.return_value = mock_app
+    return mock_integration
+
+
+def test_get_app_bot_login_derives_from_slug() -> None:
+    redis = AsyncMock()
+    redis.get.return_value = None
+    client = GitHubAppClient(redis_client=redis)
+
+    with patch.object(
+        client,
+        "_get_integration",
+        return_value=_mock_app_integration("greensecops-staging"),
+    ):
+        login = asyncio.run(client.get_app_bot_login())
+
+    assert login == "greensecops-staging[bot]"
+    redis.setex.assert_awaited_once()
+
+
+def test_get_app_bot_login_uses_cache() -> None:
+    redis = AsyncMock()
+    redis.get.return_value = b"greensecops-staging[bot]"
+    client = GitHubAppClient(redis_client=redis)
+
+    with patch.object(client, "_get_integration") as get_integration:
+        login = asyncio.run(client.get_app_bot_login())
+
+    assert login == "greensecops-staging[bot]"
+    get_integration.assert_not_called()
+    redis.setex.assert_not_awaited()
+
+
+def test_get_app_bot_login_falls_back_on_error() -> None:
+    redis = AsyncMock()
+    redis.get.return_value = None
+    client = GitHubAppClient(redis_client=redis)
+
+    integration = MagicMock()
+    integration.get_app.side_effect = GithubException(500, {}, None)
+    with patch.object(client, "_get_integration", return_value=integration):
+        login = asyncio.run(client.get_app_bot_login())
+
+    from app.core.config import settings
+
+    assert login == settings.GITHUB_BOT_HANDLE
+    redis.setex.assert_not_awaited()
+
+
 # ─── list_user_installations ─────────────────────────────────────────────────
 
 

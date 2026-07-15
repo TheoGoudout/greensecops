@@ -32,15 +32,23 @@ def _normalize_bot_handle(handle: str | None) -> str:
     return (handle or "").lstrip("@").lower().removesuffix("[bot]")
 
 
-def _is_bot_login(login: str | None) -> bool:
-    """Whether a commit author login belongs to our GitHub App bot."""
+def _is_bot_login(login: str | None, bot_login: str) -> bool:
+    """Whether a commit author login belongs to our GitHub App bot.
+
+    ``bot_login`` is the authenticated App's own login (``<slug>[bot]``), which is
+    how installation-token commits are attributed. The configured
+    ``GITHUB_BOT_HANDLE`` is accepted too, so a cross-environment branch (e.g.
+    touched by both the staging and production apps) still passes.
+    """
     if not login:
         # Author unknown (e.g. commit without a linked account): stay
         # permissive so normal operation is not blocked.
         return True
-    return _normalize_bot_handle(login) == _normalize_bot_handle(
-        settings.GITHUB_BOT_HANDLE
-    )
+    normalized = _normalize_bot_handle(login)
+    return normalized in {
+        _normalize_bot_handle(bot_login),
+        _normalize_bot_handle(settings.GITHUB_BOT_HANDLE),
+    }
 
 
 def _fetch_file_content(repo: GithubRepository, file_path: str, ref: str) -> str | None:
@@ -83,6 +91,7 @@ def _prepare_fix_branch(
     fix_branch: str,
     base_sha: str,
     override_user_commits: bool,
+    bot_login: str,
 ) -> bool:
     """Create the fix branch, or reset an existing one to the base SHA.
 
@@ -99,7 +108,7 @@ def _prepare_fix_branch(
     if not override_user_commits and branch_ref.object.sha != base_sha:
         head_commit = repo.get_commit(branch_ref.object.sha)
         author_login = head_commit.author.login if head_commit.author else None
-        if not _is_bot_login(author_login):
+        if not _is_bot_login(author_login, bot_login):
             raise _DeliveryAborted(
                 USER_COMMITS_ERROR_CODE,
                 f"branch {fix_branch} has commits by {author_login}; "
@@ -209,6 +218,7 @@ class FixDeliveryService:
         """
         try:
             token = await self._app.get_installation_token(installation_id)
+            bot_login = await self._app.get_app_bot_login()
 
             def _upsert_batch_pr() -> str:
                 repo = Github(auth=Auth.Token(token)).get_repo(full_name)
@@ -218,7 +228,7 @@ class FixDeliveryService:
                     for fp, expected in expected_base_contents.items():
                         _check_base_content_fresh(repo, fp, base_branch, expected)
                 branch_existed = _prepare_fix_branch(
-                    repo, fix_branch, base_sha, override_user_commits
+                    repo, fix_branch, base_sha, override_user_commits, bot_login
                 )
                 for fp, new_content in file_changes:
                     _upsert_file(
