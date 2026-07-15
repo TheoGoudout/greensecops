@@ -51,6 +51,7 @@ class GitHubAppClient:
     """GitHub App client with PyGitHub and Redis-cached installation tokens."""
 
     _TOKEN_TTL = 55 * 60  # 55 minutes (tokens last 60 min)
+    _APP_LOGIN_TTL = 24 * 60 * 60  # 24 hours (the app slug is stable)
 
     def __init__(self, redis_client: aioredis.Redis) -> None:
         self._redis = redis_client
@@ -83,6 +84,38 @@ class GitHubAppClient:
         token = await asyncio.to_thread(_exchange)
         await self._redis.setex(cache_key, self._TOKEN_TTL, token)
         return token
+
+    async def get_app_bot_login(self) -> str:
+        """Return the authenticated App's own bot login (``<slug>[bot]``).
+
+        Commits made with an installation token are authored by this login, so it
+        is the identity to trust when deciding whether a branch carries only the
+        bot's own work. Deriving it from the App itself (rather than a separately
+        configured handle) keeps the check correct across environments whose app
+        slugs differ, e.g. ``greensecops`` vs ``greensecops-staging``.
+
+        The slug is stable, so the result is cached in Redis. Falls back to
+        ``settings.GITHUB_BOT_HANDLE`` if the lookup fails, so behavior is never
+        worse than the previous config-only comparison.
+        """
+        cache_key = "gh:app_bot_login"
+        cached = await self._redis.get(cache_key)
+        if cached:
+            return str(cached.decode())
+
+        def _fetch_slug() -> str | None:
+            slug: str | None = self._get_integration().get_app().slug
+            return slug
+
+        try:
+            slug = await asyncio.to_thread(_fetch_slug)
+        except Exception:
+            slug = None
+
+        bot_login = f"{slug}[bot]" if slug else settings.GITHUB_BOT_HANDLE
+        if slug:
+            await self._redis.setex(cache_key, self._APP_LOGIN_TTL, bot_login)
+        return bot_login
 
     def get_installation_github(self, token: str) -> Github:
         return Github(auth=Auth.Token(token))
