@@ -38,6 +38,19 @@ REJECTED_STATUSES: frozenset[FixStatus] = frozenset(
     }
 )
 
+# Statuses of a fix that was actually delivered onto a PR — the fix's content
+# is (or was) reflected in that PR's branch. Single source of truth for
+# "which fixes count toward a PR's body/relink", shared by the delivery
+# routes (building a PR body must include every such fix, not just the ones
+# in the current batch) and _relink_orphaned_fixes.
+DELIVERED_FIX_STATUSES: frozenset[FixStatus] = frozenset(
+    {
+        FixStatus.delivered,
+        FixStatus.landed,
+        FixStatus.superseded_by_closed_pr,
+    }
+)
+
 
 class FixMachine(StateMachine):
     state_field = "status"
