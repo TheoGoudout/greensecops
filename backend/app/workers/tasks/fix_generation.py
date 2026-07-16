@@ -84,10 +84,9 @@ def init_fix_batch(batch_id: str, group_count: int) -> None:
 def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
     """Queue PR delivery for a repo's ready fixes when it has auto_fix_enabled.
 
-    Delivers the repo's *entire* current ready set, not just ``fix_ids``: the PR
-    branch is hard-reset to base on each delivery, so any ready fix left out
-    would be dropped from the PR. ``fix_ids`` only signals that a delivery is
-    warranted; the full set is re-queried here.
+    Delivers the repo's *entire* current ready set, not just ``fix_ids``:
+    ``fix_ids`` only signals that a delivery is warranted; the full ready set
+    is re-queried here so no ready fix is left undelivered.
     """
     try:
         from sqlmodel import col, or_
@@ -96,6 +95,7 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
         from app.core.config import settings
         from app.models import PullRequest, PullRequestState, WorkflowFile
         from app.services.pr_body import IssueInfo, build_pr_body
+        from app.services.state_machines import DELIVERED_FIX_STATUSES
         from app.workers.tasks.fix_delivery import deliver_fixes_batch
 
         with Session(engine) as session:
@@ -121,8 +121,8 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
             # pr_id) so a just-regenerated fix, whose link was dropped, still
             # lands on the original PR. A merged PR is excluded — its branch is
             # spent; a fresh PR is opened instead.
-            existing_branch = session.exec(
-                _select(PullRequest.pr_branch)
+            existing_pr = session.exec(
+                _select(PullRequest)
                 .where(PullRequest.repo_id == repo.id)
                 # Exclude comment-mode records (they carry a comment_url but no
                 # pr_url) so a PR delivery never reuses their synthetic branch.
@@ -139,10 +139,32 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                 )
                 .limit(1)
             ).first()
-            pr_branch = existing_branch or f"greensecops/fixes-{str(repo.id)[:8]}"
+            pr_branch = (
+                existing_pr.pr_branch
+                if existing_pr
+                else f"greensecops/fixes-{str(repo.id)[:8]}"
+            )
+
+            # The body must reflect every fix ever delivered onto this PR, not
+            # just this run's ready set — a fix already `delivered` in an
+            # earlier auto-run would otherwise vanish from the description.
+            body_fixes = list(fixes)
+            if existing_pr:
+                current_ids = {f.id for f in fixes}
+                prior_fixes = session.exec(
+                    _select(Fix)
+                    .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+                    .where(
+                        WorkflowFile.repo_id == repo.id,
+                        Fix.pr_id == existing_pr.id,
+                        col(Fix.status).in_(DELIVERED_FIX_STATUSES),
+                    )
+                ).all()
+                body_fixes.extend(f for f in prior_fixes if f.id not in current_ids)
 
             issues_info: list[IssueInfo] = []
-            for fix in fixes:
+            for fix in body_fixes:
+                wf_path = fix.workflow_file.path if fix.workflow_file else "unknown"
                 for issue in fix.issues or []:
                     issues_info.append(
                         IssueInfo(
@@ -151,13 +173,14 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                             severity=issue.severity,
                             category=issue.category,
                             message=issue.message,
+                            workflow_path=wf_path,
                             line_start=issue.line_start,
                         )
                     )
 
             pr_body = build_pr_body(
                 issues=issues_info,
-                fix_ids=fix_ids,
+                fix_ids=[str(f.id) for f in body_fixes],
                 wiki_base_url=settings.WIKI_BASE_URL,
                 frontend_host=settings.FRONTEND_HOST,
                 bot_handle=settings.GITHUB_BOT_HANDLE,

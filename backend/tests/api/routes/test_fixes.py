@@ -343,6 +343,73 @@ def test_get_fix_not_found(
     assert response.json()["detail"] == "Fix not found"
 
 
+# ─── GET /fixes/pull-requests/{repo_id} ──────────────────────────────────────
+
+
+def test_list_pull_requests_returns_repo_prs(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — a PR row exists but no Fix currently references it (the
+    # exact scenario a `ready` fix after regeneration hits: pr_id is NULL).
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/fixes-{str(repo.id)[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/134",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/fixes/pull-requests/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == str(pr.id)
+    assert body[0]["pr_branch"] == pr.pr_branch
+    assert body[0]["pr_state"] == "open"
+
+
+def test_list_pull_requests_empty_when_none_exist(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/fixes/pull-requests/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_pull_requests_repo_not_found_returns_404(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    # Act
+    response = client.get(
+        f"{settings.API_V1_STR}/fixes/pull-requests/{uuid.uuid4()}",
+        headers=superuser_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Repository not found"
+
+
 # ─── POST /fixes/generate-for-repo/{repo_id} ─────────────────────────────────
 
 
@@ -672,6 +739,66 @@ def test_deliver_for_workflow_reuses_existing_pr_branch(
     assert mock_delay.call_args.kwargs["pr_branch"] == existing_branch
 
 
+def test_deliver_for_workflow_body_keeps_sibling_fixes_on_shared_pr(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    ready_fix: Fix,
+    repo: Repository,
+    rule: Rule,
+) -> None:
+    # Regression: this exact bug — updating PR #135 via the per-workflow
+    # button dropped every other workflow's issue rows from the description,
+    # because `ready_fix`'s own `pr_id` pointed at a shared repo-wide PR that
+    # also has other fixes' issues delivered onto it.
+    shared_branch = f"greensecops/fixes-{str(repo.id)[:8]}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=shared_branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/135",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    ready_fix.pr_id = pr.id
+    db.add(ready_fix)
+    db.commit()
+
+    other_wf, other_issue = _make_wf_with_issue(db, repo, rule, 102)
+    delivered_fix = Fix(
+        workflow_file_id=other_wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        full_content=_FULL_CONTENT,
+        pr_id=pr.id,
+    )
+    db.add(delivered_fix)
+    db.commit()
+    db.refresh(delivered_fix)
+    other_issue.fix_id = delivered_fix.id
+    db.add(other_issue)
+    db.commit()
+
+    # Act
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
+            headers=superuser_token_headers,
+            json={"fix_id": str(ready_fix.id)},
+        )
+
+    # Assert
+    assert response.status_code == 202
+    call_kwargs = mock_delay.call_args.kwargs
+    assert call_kwargs["fix_ids"] == [str(ready_fix.id)]
+    assert other_issue.message in call_kwargs["pr_body"]
+    assert other_wf.path in call_kwargs["pr_body"]
+
+
 # ─── POST /fixes/deliver-for-repo/{repo_id} ───────────────────────────────────
 
 
@@ -953,6 +1080,63 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
     pr_branch = mock_delay.call_args.kwargs["pr_branch"]
     # Must reuse the existing branch, not generate a new one
     assert pr_branch == existing_branch
+
+
+def test_deliver_for_repo_body_keeps_previously_delivered_fixes(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    ready_fix: Fix,
+    repo: Repository,
+    rule: Rule,
+) -> None:
+    # Regression: a sibling workflow's fix was already delivered onto a
+    # shared repo-wide PR. Delivering just `ready_fix` (the only one still
+    # `ready`) must not wipe the sibling's issue row out of the PR body.
+    existing_branch = f"greensecops/fixes-{str(repo.id)[:8]}"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=existing_branch,
+        pr_url=f"https://github.com/{repo.full_name}/pull/135",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    other_wf, other_issue = _make_wf_with_issue(db, repo, rule, 101)
+    delivered_fix = Fix(
+        workflow_file_id=other_wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        full_content=_FULL_CONTENT,
+        pr_id=pr.id,
+    )
+    db.add(delivered_fix)
+    db.commit()
+    db.refresh(delivered_fix)
+    other_issue.fix_id = delivered_fix.id
+    db.add(other_issue)
+    db.commit()
+
+    # Act
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/deliver-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert
+    assert response.status_code == 202
+    call_kwargs = mock_delay.call_args.kwargs
+    # Only the still-ready fix is actually delivered in this batch...
+    assert call_kwargs["fix_ids"] == [str(ready_fix.id)]
+    # ...but the body still reflects the sibling's already-delivered issue.
+    assert other_issue.message in call_kwargs["pr_body"]
+    assert other_wf.path in call_kwargs["pr_body"]
 
 
 # ─── POST /fixes/sync-pr-status/{repo_id} ───────────────────────────────────
