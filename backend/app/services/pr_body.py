@@ -65,7 +65,7 @@ def build_pr_body(
     frontend_host: str,
     bot_handle: str,
     app_name: str = "GreenSecOps",
-    app_url: str = "https://greensecops.io",
+    app_url: str = "https://greensecops.com",
 ) -> str:
     sections = _issues_by_workflow_section(issues, wiki_base_url)
     fix_ids_str = ", ".join(f"`{fid}`" for fid in fix_ids[:5])

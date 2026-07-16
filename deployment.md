@@ -60,7 +60,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `FRONTEND_HOST`: Public URL of the frontend dashboard. Default: `${SERVICE_URL_FRONTEND}`.
 * `BACKEND_HOST`: Public URL of the backend API. Default: `${SERVICE_URL_BACKEND}`.
 * `GREENSECOPS_PUBLIC_URL`: Public backend URL embedded in generated customer workflow files. Empty by default, which falls back to `BACKEND_HOST`.
-* `APP_URL`: Marketing/landing site URL used in PR messages. Default: `https://greensecops.io`.
+* `APP_URL`: Marketing/landing site URL used in PR messages. Default: `https://greensecops.com`.
 * `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Default: `${SERVICE_URL_DOCS}`.
 * `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Default: `${SERVICE_URL_FRONTEND}`.
 
@@ -69,6 +69,14 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `PROJECT_NAME`: The name of the project, used in the API for the docs and emails. Default: `GreenSecOps`.
 * `GITHUB_BOT_HANDLE`: The bot handle mentioned in PR messages. Default: `@greensecops`.
 * `GITHUB_ACTION_REF`: The action reference written into generated customer workflows. Default: `greensecops/greensecops-action@v1`.
+
+**Landing page**
+
+* `MARKETING_URL`: Marketing site domain referenced in the landing page's legal copy. Default: `https://greensecops.com`.
+* `SUPPORT_EMAIL`: Support contact address shown on the landing page. Default: `support@greensecops.com`.
+* `SALES_EMAIL`: Sales contact address shown on the pricing page. Default: `sales@greensecops.com`.
+* `LEGAL_EMAIL`: Legal contact address shown on the terms page. Default: `legal@greensecops.com`.
+* `PRIVACY_EMAIL`: Privacy contact address shown on the privacy page. Default: `privacy@greensecops.com`.
 
 **Emails**
 

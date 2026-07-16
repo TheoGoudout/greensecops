@@ -9,7 +9,7 @@ author: GreenSecOps
 
 inputs:
   greensecops_url:
-    description: GreenSecOps instance URL (e.g. https://app.greensecops.io)
+    description: GreenSecOps instance URL (e.g. https://app.greensecops.com)
     required: true
   sample_interval:
     description: Seconds between background telemetry samples

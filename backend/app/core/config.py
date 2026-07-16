@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # Set this to the canonical production URL so customer workflows point to prod
     # by default. vars.GREENSECOPS_URL in the customer repo overrides for dev/staging.
     GREENSECOPS_PUBLIC_URL: str = ""
-    APP_URL: str = "https://greensecops.io"
+    APP_URL: str = "https://greensecops.com"
     GITHUB_ACTION_REF: str = "greensecops/greensecops-action@v1"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 

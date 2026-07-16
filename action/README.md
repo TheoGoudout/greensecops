@@ -17,7 +17,7 @@ jobs:
       - name: GreenSecOps Telemetry
         uses: theogoudout/greensecops@main
         with:
-          greensecops_url: https://app.greensecops.io
+          greensecops_url: https://app.greensecops.com
           # sample_interval: "30"  # optional, seconds between samples
 ```
 
