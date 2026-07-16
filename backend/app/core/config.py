@@ -120,6 +120,17 @@ class Settings(BaseSettings):
     # localhost. When set, the tunnel origin is added to the allowed CORS origins.
     GITHUB_WEBHOOK_URL: str | None = None
 
+    # Bot account credential for outreach PRs on *external* repos. The GitHub App
+    # is not installed on arbitrary open-source projects, so those repos cannot
+    # be delivered to with an installation token: we fork them into a dedicated
+    # bot account and open a cross-repo PR. This is the bot user's user-to-server
+    # OAuth token (the App acting on behalf of the bot user) — it can fork any
+    # public repo and open cross-fork PRs, and inherits the App's Workflows:write
+    # permission needed to push .github/workflows changes. GITHUB_BOT_LOGIN is
+    # the fork owner login; when empty it is derived from the token and cached.
+    GITHUB_BOT_TOKEN: str | None = None
+    GITHUB_BOT_LOGIN: str | None = None
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def GITHUB_OAUTH_REDIRECT_URI(self) -> str:

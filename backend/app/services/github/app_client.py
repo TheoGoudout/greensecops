@@ -2,12 +2,14 @@ import asyncio
 import base64
 import hashlib
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import redis.asyncio as aioredis
 from github import Auth, Github, GithubIntegration
 from github.GithubException import GithubException
+from github.Repository import Repository as GithubRepository
 
 from app.core.config import settings
 from app.models.enums import PullRequestState
@@ -52,6 +54,9 @@ class GitHubAppClient:
 
     _TOKEN_TTL = 55 * 60  # 55 minutes (tokens last 60 min)
     _APP_LOGIN_TTL = 24 * 60 * 60  # 24 hours (the app slug is stable)
+    # Forks are created asynchronously; poll until the fork's git data is ready.
+    _FORK_POLL_ATTEMPTS = 30
+    _FORK_POLL_INTERVAL = 2  # seconds (≈60s max)
 
     def __init__(self, redis_client: aioredis.Redis) -> None:
         self._redis = redis_client
@@ -120,11 +125,70 @@ class GitHubAppClient:
     def get_installation_github(self, token: str) -> Github:
         return Github(auth=Auth.Token(token))
 
-    async def get_pr_state(
-        self, installation_id: int, full_name: str, pr_number: int
-    ) -> PullRequestState:
-        token = await self.get_installation_token(installation_id)
+    # ─── Bot account (external outreach PRs) ─────────────────────────────────
 
+    def get_bot_github(self) -> Github:
+        """Return a PyGitHub client authenticated as the outreach bot account.
+
+        Raises if ``GITHUB_BOT_TOKEN`` is unset, so callers can surface a clear
+        "no bot credential" state instead of an opaque auth failure.
+        """
+        if not settings.GITHUB_BOT_TOKEN:
+            raise RuntimeError("GITHUB_BOT_TOKEN is not configured")
+        return Github(auth=Auth.Token(settings.GITHUB_BOT_TOKEN))
+
+    async def get_bot_login(self) -> str:
+        """Return the bot account login (the owner of outreach forks).
+
+        Uses ``GITHUB_BOT_LOGIN`` when set, otherwise derives it from the token
+        and caches it in Redis (the login is stable).
+        """
+        if settings.GITHUB_BOT_LOGIN:
+            return settings.GITHUB_BOT_LOGIN
+        cache_key = "gh:bot_login"
+        cached = await self._redis.get(cache_key)
+        if cached:
+            return str(cached.decode())
+
+        def _fetch_login() -> str:
+            return self.get_bot_github().get_user().login
+
+        login = await asyncio.to_thread(_fetch_login)
+        await self._redis.setex(cache_key, self._APP_LOGIN_TTL, login)
+        return login
+
+    def ensure_fork(self, bot: Github, full_name: str) -> GithubRepository:
+        """Return the bot's fork of ``full_name``, creating it if needed.
+
+        Forks are created asynchronously by GitHub, so after creating one this
+        polls until its default branch resolves before returning it.
+        """
+        _, repo_name = full_name.split("/", 1)
+        bot_user = bot.get_user()
+        try:
+            existing = bot_user.get_repo(repo_name)
+            if (
+                existing.fork
+                and existing.parent
+                and existing.parent.full_name.lower() == full_name.lower()
+            ):
+                return existing
+        except GithubException:
+            pass
+
+        fork = bot.get_repo(full_name).create_fork()
+        for _ in range(self._FORK_POLL_ATTEMPTS):
+            try:
+                fork.get_branch(fork.default_branch)
+                return fork
+            except GithubException:
+                time.sleep(self._FORK_POLL_INTERVAL)
+                fork = bot.get_repo(f"{bot_user.login}/{repo_name}")
+        return fork
+
+    async def get_pr_state_with_token(
+        self, token: str, full_name: str, pr_number: int
+    ) -> PullRequestState:
         def _fetch() -> PullRequestState:
             repo = Github(auth=Auth.Token(token)).get_repo(full_name)
             pr = repo.get_pull(pr_number)
@@ -133,6 +197,12 @@ class GitHubAppClient:
             return PullRequestState(pr.state)
 
         return await asyncio.to_thread(_fetch)
+
+    async def get_pr_state(
+        self, installation_id: int, full_name: str, pr_number: int
+    ) -> PullRequestState:
+        token = await self.get_installation_token(installation_id)
+        return await self.get_pr_state_with_token(token, full_name, pr_number)
 
     async def fetch_workflow_files(
         self, installation_id: int | None, full_name: str, ref: str | None = None
