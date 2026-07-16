@@ -13,6 +13,7 @@ permissions: {}
 
 jobs:
   labeler:
+    name: Apply labels
     permissions:
       contents: read
       issues: write
@@ -25,6 +26,7 @@ jobs:
     - run: echo "Done adding labels"
   # Run this after labeler applied labels
   check-labels:
+    name: Check labels
     needs:
       - labeler
     permissions:
