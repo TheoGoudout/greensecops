@@ -1,17 +1,39 @@
 """Unit tests for fix_generation helpers."""
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.models import LLMProvider
+from sqlmodel import Session
+
+from app.models import (
+    Analysis,
+    AnalysisStatus,
+    AnalysisTrigger,
+    Fix,
+    FixStatus,
+    Issue,
+    IssueCategory,
+    IssueSeverity,
+    LLMProvider,
+    Organization,
+    PullRequest,
+    Repository,
+    Rule,
+    UserTier,
+    WorkflowFile,
+)
 from app.workers.tasks.fix_generation import (
     _is_valid_workflow_yaml,
+    _maybe_auto_deliver,
     _parse_llm_response,
     _record_batch_result,
     init_fix_batch,
     resolve_llm_provider,
     restore_trailing_whitespace,
 )
+
+_FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
 
 _WORKFLOW = (
     "name: CI\n"
@@ -208,3 +230,125 @@ def test_batch_fails_open_when_redis_unavailable() -> None:
     failed = next(e for e in events if "error" in e.data)
     assert ready.data["fix_ids"] == ["f1"]
     assert failed.data["fix_ids"] == ["f2"]
+
+
+# ─── _maybe_auto_deliver ─────────────────────────────────────────────────────
+
+
+def _make_wf_fix_issue(
+    db: Session, repo: Repository, rule: Rule, status: FixStatus, n: int
+) -> tuple[WorkflowFile, Fix, Issue]:
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        path=f".github/workflows/auto-deliver-{n}-{uuid.uuid4().hex[:6]}.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    fix = Fix(
+        workflow_file_id=wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=status,
+        full_content=_FULL_CONTENT if status == FixStatus.ready else None,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=wf.id,
+        rule_id=rule.id,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=IssueSeverity.medium,
+        category=IssueCategory.reliability,
+        message=f"auto-deliver issue {n}",
+        fix_id=fix.id,
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    return wf, fix, issue
+
+
+def test_maybe_auto_deliver_body_keeps_previously_delivered_fixes(
+    db: Session,
+) -> None:
+    # Regression: same bug as the manual delivery routes, in the auto-fix
+    # path — a sibling workflow's fix already `delivered` onto a shared PR
+    # must not be dropped from the body when only a new fix is `ready`.
+    org = Organization(
+        name=f"auto-deliver-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"autodeliver/repo-{uuid.uuid4().hex[:8]}",
+        installation_id=99992,
+        auto_fix_enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+    rule = Rule(
+        slug=f"auto-deliver-rule-{uuid.uuid4().hex[:8]}",
+        category=IssueCategory.reliability,
+        severity=IssueSeverity.medium,
+        title="Auto Deliver Rule",
+        description="A test rule",
+        enabled=True,
+        severity_weight=1.0,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/fixes-{str(repo.id)[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/135",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    _delivered_wf, delivered_fix, delivered_issue = _make_wf_fix_issue(
+        db, repo, rule, FixStatus.delivered, 1
+    )
+    delivered_fix.pr_id = pr.id
+    db.add(delivered_fix)
+    db.commit()
+
+    _ready_wf, ready_fix, ready_issue = _make_wf_fix_issue(
+        db, repo, rule, FixStatus.ready, 2
+    )
+
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        _maybe_auto_deliver(str(repo.id), [str(ready_fix.id)])
+
+    mock_delay.assert_called_once()
+    call_kwargs = mock_delay.call_args.kwargs
+    # Only the ready fix is actually delivered...
+    assert call_kwargs["fix_ids"] == [str(ready_fix.id)]
+    # ...but the body still reflects the sibling's already-delivered issue.
+    assert delivered_issue.message in call_kwargs["pr_body"]
+    assert ready_issue.message in call_kwargs["pr_body"]

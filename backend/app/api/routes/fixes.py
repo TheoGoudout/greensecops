@@ -27,6 +27,7 @@ from app.models import (
     Issue,
     LLMProvider,
     PullRequest,
+    PullRequestPublic,
     PullRequestState,
     Repository,
     Rule,
@@ -38,7 +39,7 @@ from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import parse_pr_url
 from app.services.pr_body import IssueInfo, build_pr_body
-from app.services.state_machines import IN_FLIGHT_STATUSES
+from app.services.state_machines import DELIVERED_FIX_STATUSES, IN_FLIGHT_STATUSES
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
 from app.workers.tasks.fix_generation import (
     init_fix_batch,
@@ -224,6 +225,7 @@ def _issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
             category=issue.category.value if issue.category else "unknown",
             severity=issue.severity.value if issue.severity else "unknown",
             message=issue.message or "",
+            workflow_path=fix.workflow_file.path if fix.workflow_file else "unknown",
         )
         for fix in fixes
         for issue in fix.issues
@@ -350,6 +352,28 @@ def list_fixes(
     return _fixes_to_public(session, fixes)
 
 
+@router.get("/pull-requests/{repo_id}", response_model=list[PullRequestPublic])
+def list_pull_requests(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[PullRequest]:
+    """List a repo's PR rows directly, independent of any Fix's ``pr_id``.
+
+    A ``ready`` fix never carries a ``pr_id`` (see ``_relink_orphaned_fixes``),
+    so views that need "does a PR already exist for this branch" must read the
+    ``PullRequest`` table itself rather than deriving it from fixes.
+    """
+    authorize_repo(session, current_user, repo_id)
+    return list(
+        session.exec(
+            select(PullRequest)
+            .where(PullRequest.repo_id == repo_id)
+            .order_by(col(PullRequest.updated_at).desc().nulls_last())
+        ).all()
+    )
+
+
 @router.get("/{fix_id}", response_model=FixPublic)
 def get_fix(
     fix_id: uuid.UUID,
@@ -448,21 +472,40 @@ def trigger_workflow_delivery(
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
 
-    pr_body = build_pr_body(
-        issues=_issues_info_for_fixes([fix]),
-        fix_ids=[str(fix.id)],
-        wiki_base_url=settings.WIKI_BASE_URL,
-        frontend_host=settings.FRONTEND_HOST,
-        bot_handle=settings.GITHUB_BOT_HANDLE,
-        app_name=settings.PROJECT_NAME,
-        app_url=settings.APP_URL,
-    )
     # Stable branch: reuse the branch of the fix's own PR when it has one.
     existing_pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
     pr_branch = (
         existing_pr.pr_branch
         if existing_pr
         else f"greensecops/fixes-wf-{str(fix.workflow_file_id)[:8]}"
+    )
+
+    # The body must reflect every fix ever delivered onto this PR, not just
+    # this one — `existing_pr` may be a repo-wide batch PR shared with other
+    # workflows' fixes, and overwriting the body with only this fix's issue
+    # would wipe their rows out of the description.
+    body_fixes = [fix]
+    if existing_pr:
+        prior_fixes = session.exec(
+            select(Fix)
+            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+            .where(
+                WorkflowFile.repo_id == repo.id,
+                Fix.pr_id == existing_pr.id,
+                Fix.id != fix.id,
+                col(Fix.status).in_(DELIVERED_FIX_STATUSES),
+            )
+        ).all()
+        body_fixes.extend(prior_fixes)
+
+    pr_body = build_pr_body(
+        issues=_issues_info_for_fixes(body_fixes),
+        fix_ids=[str(f.id) for f in body_fixes],
+        wiki_base_url=settings.WIKI_BASE_URL,
+        frontend_host=settings.FRONTEND_HOST,
+        bot_handle=settings.GITHUB_BOT_HANDLE,
+        app_name=settings.PROJECT_NAME,
+        app_url=settings.APP_URL,
     )
     deliver_fixes_batch.delay(
         fix_ids=[str(fix.id)],
@@ -500,24 +543,47 @@ def trigger_repo_delivery(
     if not fixes:
         raise HTTPException(status_code=404, detail="No ready fixes found")
 
-    pr_body = build_pr_body(
-        issues=_issues_info_for_fixes(fixes),
-        fix_ids=[str(f.id) for f in fixes],
-        wiki_base_url=settings.WIKI_BASE_URL,
-        frontend_host=settings.FRONTEND_HOST,
-        bot_handle=settings.GITHUB_BOT_HANDLE,
-        app_name=settings.PROJECT_NAME,
-        app_url=settings.APP_URL,
-    )
-    existing_branch = session.exec(
-        select(PullRequest.pr_branch)
+    existing_pr = session.exec(
+        select(PullRequest)
         .join(Fix, Fix.pr_id == PullRequest.id)  # type: ignore[arg-type]
         .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
         .where(WorkflowFile.repo_id == repo_id)
         .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
         .limit(1)
     ).first()
-    pr_branch = existing_branch or f"greensecops/fixes-{str(repo_id)[:8]}"
+    pr_branch = (
+        existing_pr.pr_branch
+        if existing_pr
+        else f"greensecops/fixes-{str(repo_id)[:8]}"
+    )
+
+    # The body must reflect every fix ever delivered onto this PR, not just
+    # this batch — a fix left `ready` while its siblings are `delivered`
+    # (e.g. one workflow regenerated on its own) would otherwise wipe the
+    # other workflows' rows out of a shared repo-wide PR description.
+    body_fixes = list(fixes)
+    if existing_pr:
+        current_ids = {f.id for f in fixes}
+        prior_fixes = session.exec(
+            select(Fix)
+            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+            .where(
+                WorkflowFile.repo_id == repo_id,
+                Fix.pr_id == existing_pr.id,
+                col(Fix.status).in_(DELIVERED_FIX_STATUSES),
+            )
+        ).all()
+        body_fixes.extend(f for f in prior_fixes if f.id not in current_ids)
+
+    pr_body = build_pr_body(
+        issues=_issues_info_for_fixes(body_fixes),
+        fix_ids=[str(f.id) for f in body_fixes],
+        wiki_base_url=settings.WIKI_BASE_URL,
+        frontend_host=settings.FRONTEND_HOST,
+        bot_handle=settings.GITHUB_BOT_HANDLE,
+        app_name=settings.PROJECT_NAME,
+        app_url=settings.APP_URL,
+    )
     deliver_fixes_batch.delay(
         fix_ids=[str(f.id) for f in fixes],
         repo_id=str(repo_id),
@@ -727,17 +793,6 @@ def regenerate_failed_fix(
 # 8-hex group reverses to the workflow file whose id starts with it.
 _WF_FIX_BRANCH_RE = re.compile(r"greensecops/fixes-wf-([0-9a-f]{8})$")
 
-# Statuses of a fix that was actually delivered — the only ones eligible for the
-# bundle-level relink onto a repo-wide batch PR (a ``ready``/``pending`` fix never
-# had a PR, so it must not be swept into one).
-_DELIVERED_FIX_STATUSES = frozenset(
-    {
-        FixStatus.delivered,
-        FixStatus.landed,
-        FixStatus.superseded_by_closed_pr,
-    }
-)
-
 
 def _relink_orphaned_fixes(session: SessionDep, repo: Repository) -> int:
     """Reconnect fixes whose ``pr_id`` was lost to the repo's existing PR rows.
@@ -787,7 +842,7 @@ def _relink_orphaned_fixes(session: SessionDep, repo: Repository) -> int:
     if len(batch_prs) == 1:
         batch_pr = batch_prs[0]
         for fix in orphans:
-            if fix.pr_id is None and fix.status in _DELIVERED_FIX_STATUSES:
+            if fix.pr_id is None and fix.status in DELIVERED_FIX_STATUSES:
                 fix.pr_id = batch_pr.id
                 session.add(fix)
                 relinked += 1

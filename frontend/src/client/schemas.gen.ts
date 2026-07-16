@@ -380,6 +380,13 @@ export const Body_login_login_access_tokenSchema = {
     title: 'Body_login-login_access_token'
 } as const;
 
+export const CIStatusSchema = {
+    type: 'string',
+    enum: ['pending', 'success', 'failure', 'none'],
+    title: 'CIStatus',
+    description: 'Aggregate CI outcome for a PR, from ``check_suite`` webhooks.'
+} as const;
+
 export const ExternalRepositoryCreateSchema = {
     properties: {
         full_name: {
@@ -1027,6 +1034,115 @@ export const PrivateUserCreateSchema = {
     title: 'PrivateUserCreate'
 } as const;
 
+export const PullRequestPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        pr_branch: {
+            type: 'string',
+            title: 'Pr Branch'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        ci_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/CIStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        review_decision: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ReviewDecision'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        mergeable_state: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Mergeable State'
+        },
+        comment_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Comment Url'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        updated_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Updated At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'repo_id', 'pr_branch'],
+    title: 'PullRequestPublic'
+} as const;
+
 export const PullRequestStateSchema = {
     type: 'string',
     enum: ['open', 'draft', 'merged', 'closed'],
@@ -1115,6 +1231,13 @@ export const RepositoryPublicSchema = {
     type: 'object',
     required: ['id', 'full_name', 'enabled', 'default_branch'],
     title: 'RepositoryPublic'
+} as const;
+
+export const ReviewDecisionSchema = {
+    type: 'string',
+    enum: ['approved', 'changes_requested', 'review_required', 'none'],
+    title: 'ReviewDecision',
+    description: 'Latest human review decision for a PR, from ``pull_request_review``.'
 } as const;
 
 export const RulePublicSchema = {

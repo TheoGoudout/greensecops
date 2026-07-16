@@ -30,16 +30,18 @@ function PullRequestsPage() {
   const [stateFilter, setStateFilter] = useState<string>("all")
   const [page, setPage] = useState(0)
 
-  const { data: fixes, isLoading } = useQuery({
-    queryKey: ["fixes", "repo", repoId],
-    queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
+  const { data: pullRequests, isLoading } = useQuery({
+    queryKey: ["pull-requests", "repo", repoId],
+    queryFn: () => FixesService.listPullRequests({ repoId }),
   })
 
   const syncMutation = useMutation({
     mutationFn: () => FixesService.syncPrStatuses({ repoId }),
     onSuccess: (data: Record<string, number>) => {
       if (data.updated > 0 || data.relinked > 0) {
-        queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+        queryClient.invalidateQueries({
+          queryKey: ["pull-requests", "repo", repoId],
+        })
       }
     },
   })
@@ -48,26 +50,19 @@ function PullRequestsPage() {
     syncMutation.mutate()
   }, [syncMutation.mutate])
 
-  const allGsPrs = useMemo(() => {
-    if (!fixes) return []
-    const seen = new Set<string>()
-    return fixes
-      .filter((f) => f.pr_url)
-      .filter((f) => {
-        if (seen.has(f.pr_url!)) return false
-        seen.add(f.pr_url!)
-        return true
-      })
-      .sort(
+  const allGsPrs = useMemo(
+    () =>
+      [...(pullRequests ?? [])].sort(
         (a, b) =>
           new Date(b.created_at ?? 0).getTime() -
           new Date(a.created_at ?? 0).getTime(),
-      )
-  }, [fixes])
+      ),
+    [pullRequests],
+  )
 
   const filtered = useMemo(() => {
     if (stateFilter === "all") return allGsPrs
-    return allGsPrs.filter((f) => (f.pr_state ?? "open") === stateFilter)
+    return allGsPrs.filter((pr) => (pr.pr_state ?? "open") === stateFilter)
   }, [allGsPrs, stateFilter])
 
   const paged = useMemo(
@@ -134,36 +129,44 @@ function PullRequestsPage() {
                 <span className="text-right">Date</span>
               </div>
               <div className="divide-y">
-                {paged.map((fix) => {
-                  const state = fix.pr_state ?? "open"
+                {paged.map((pr) => {
+                  const state = pr.pr_state ?? "open"
                   const stateCls =
                     state === "merged"
                       ? "bg-purple-500/15 text-purple-700 dark:text-purple-400"
                       : state === "closed"
                         ? "bg-red-500/15 text-red-700 dark:text-red-400"
                         : "bg-green-500/15 text-green-700 dark:text-green-400"
+                  const lastActivity = pr.updated_at ?? pr.created_at
                   return (
                     <div
-                      key={fix.pr_url}
+                      key={pr.id}
                       className="grid grid-cols-[1fr_6rem_8rem] items-center px-4 sm:px-6 py-3 gap-4"
                     >
-                      <a
-                        href={fix.pr_url!}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline truncate flex items-center gap-1.5"
-                      >
-                        <GitPullRequest className="h-3 w-3 shrink-0" />
-                        {fix.pr_url!.replace("https://github.com/", "")}
-                      </a>
+                      {pr.pr_url ? (
+                        <a
+                          href={pr.pr_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline truncate flex items-center gap-1.5"
+                        >
+                          <GitPullRequest className="h-3 w-3 shrink-0" />
+                          {pr.pr_url.replace("https://github.com/", "")}
+                        </a>
+                      ) : (
+                        <span className="text-xs font-mono text-muted-foreground truncate flex items-center gap-1.5">
+                          <GitPullRequest className="h-3 w-3 shrink-0" />
+                          {pr.pr_branch}
+                        </span>
+                      )}
                       <span
                         className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize text-center ${stateCls}`}
                       >
                         {state}
                       </span>
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap text-right">
-                        {fix.delivered_at
-                          ? new Date(fix.delivered_at).toLocaleDateString(
+                        {lastActivity
+                          ? new Date(lastActivity).toLocaleDateString(
                               undefined,
                               {
                                 month: "short",

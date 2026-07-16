@@ -23,7 +23,12 @@ from .base import (
     output_for,
     try_advance,
 )
-from .fix import IN_FLIGHT_STATUSES, REJECTED_STATUSES, FixMachine
+from .fix import (
+    DELIVERED_FIX_STATUSES,
+    IN_FLIGHT_STATUSES,
+    REJECTED_STATUSES,
+    FixMachine,
+)
 from .issue import IssueMachine
 from .pull_request import PullRequestMachine
 from .repository import RepositoryMachine, sync_access_flag
@@ -46,4 +51,5 @@ __all__ = [
     "TelemetryMachine",
     "IN_FLIGHT_STATUSES",
     "REJECTED_STATUSES",
+    "DELIVERED_FIX_STATUSES",
 ]

@@ -13,6 +13,7 @@ def single_issue() -> IssueInfo:
         category="security",
         severity="high",
         message="Action uses a mutable tag instead of a pinned SHA",
+        workflow_path=".github/workflows/ci.yml",
     )
 
 
@@ -25,6 +26,7 @@ def issues() -> list[IssueInfo]:
             category="security",
             severity="high",
             message="Action uses a mutable tag",
+            workflow_path=".github/workflows/ci.yml",
         ),
         IssueInfo(
             rule_slug="missing-timeout",
@@ -32,6 +34,7 @@ def issues() -> list[IssueInfo]:
             category="reliability",
             severity="medium",
             message="Job has no timeout",
+            workflow_path=".github/workflows/ci.yml",
         ),
         IssueInfo(
             rule_slug="no-cache",
@@ -39,6 +42,7 @@ def issues() -> list[IssueInfo]:
             category="performance",
             severity="low",
             message="Dependencies are not cached",
+            workflow_path=".github/workflows/deploy.yml",
         ),
     ]
 
@@ -159,6 +163,7 @@ def test_build_pr_body_unknown_severity_has_empty_emoji() -> None:
         category="security",
         severity="unknown-level",
         message="Some message",
+        workflow_path=".github/workflows/ci.yml",
     )
     body = build_pr_body(
         issues=[issue],
@@ -187,6 +192,7 @@ def redis_py_issues() -> list[IssueInfo]:
             category="reliability",
             severity="high",
             message="Job 'lint' uses actions/checkout@v7 — mutable tag",
+            workflow_path=".github/workflows/integration.yml",
         ),
         IssueInfo(
             rule_slug="missing_timeout",
@@ -194,6 +200,7 @@ def redis_py_issues() -> list[IssueInfo]:
             category="reliability",
             severity="high",
             message="Job 'dependency-audit' has no timeout-minutes configured",
+            workflow_path=".github/workflows/integration.yml",
         ),
         IssueInfo(
             rule_slug="missing_timeout",
@@ -201,6 +208,7 @@ def redis_py_issues() -> list[IssueInfo]:
             category="reliability",
             severity="high",
             message="Job 'lint' has no timeout-minutes configured",
+            workflow_path=".github/workflows/integration.yml",
         ),
         IssueInfo(
             rule_slug="missing_timeout",
@@ -208,6 +216,7 @@ def redis_py_issues() -> list[IssueInfo]:
             category="reliability",
             severity="high",
             message="Job 'build-and-test-package' has no timeout-minutes configured",
+            workflow_path=".github/workflows/integration.yml",
         ),
         IssueInfo(
             rule_slug="excessive_token_permissions",
@@ -215,6 +224,7 @@ def redis_py_issues() -> list[IssueInfo]:
             category="security",
             severity="critical",
             message="Workflow grants write-all GITHUB_TOKEN permissions",
+            workflow_path=".github/workflows/integration.yml",
         ),
     ]
 
@@ -255,3 +265,43 @@ def test_pr_body_all_five_issue_messages_present(
 
     for issue in redis_py_issues:
         assert issue.message in body, f"Expected message not found: {issue.message!r}"
+
+
+# ─── Grouping by workflow file ───────────────────────────────────────────────
+
+
+def test_build_pr_body_groups_issues_under_their_workflow_file(
+    issues: list[IssueInfo],
+) -> None:
+    """A multi-file PR renders one collapsible section per workflow path,
+    not one flat table — so it's clear which file each row belongs to."""
+    body = build_pr_body(
+        issues=issues,
+        fix_ids=["fix-1", "fix-2", "fix-3"],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    assert body.count("<details") == 2
+    ci_idx = body.index(".github/workflows/ci.yml")
+    deploy_idx = body.index(".github/workflows/deploy.yml")
+    # Each path's own issues are near its own heading, not interleaved.
+    assert ci_idx < body.index("Unpinned Actions") < deploy_idx
+    assert deploy_idx < body.index("No Cache")
+
+
+def test_build_pr_body_single_workflow_still_wraps_in_details(
+    single_issue: IssueInfo,
+) -> None:
+    body = build_pr_body(
+        issues=[single_issue],
+        fix_ids=["fix-id-1"],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    assert "<details" in body
+    assert ".github/workflows/ci.yml" in body
+    assert "(1 issue)" in body

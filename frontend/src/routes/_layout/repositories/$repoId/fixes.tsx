@@ -3,7 +3,12 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { FixesService, type FixPublic, RepositoriesService } from "@/client"
+import {
+  FixesService,
+  type FixPublic,
+  type PullRequestPublic,
+  RepositoriesService,
+} from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
@@ -22,16 +27,43 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
   }),
 })
 
+// Mirrors the deterministic branch names delivery mints server-side (see
+// backend/app/api/routes/fixes.py trigger_workflow_delivery / trigger_repo_delivery).
+export function workflowFixBranch(workflowFileId: string): string {
+  return `greensecops/fixes-wf-${workflowFileId.slice(0, 8)}`
+}
+
+export function repoFixBranch(repoId: string): string {
+  return `greensecops/fixes-${repoId.slice(0, 8)}`
+}
+
+// A ready fix never carries pr_id/pr_state (it never had a PR through the
+// Fix record), so whether a PR already exists for its branch must come from
+// the real PullRequest rows, not from the fix itself.
+export function labelForBranch(
+  prByBranch: Map<string, PullRequestPublic>,
+  branch: string,
+  verb: string,
+): { label: string; force: boolean } {
+  const pr = prByBranch.get(branch)
+  if (pr?.pr_state === "closed") return { label: `Reopen ${verb}`, force: true }
+  if (pr) return { label: `Update ${verb}`, force: false }
+  return { label: `Create ${verb}`, force: false }
+}
+
 // What the delivery button on a fix card should do, if anything. Reopening
 // after the user closed the PR without merging needs force=true to bypass the
 // closed-PR delivery guard.
-function deliverAction(
+export function deliverAction(
   fix: FixPublic,
+  prByBranch: Map<string, PullRequestPublic>,
 ): { label: string; force: boolean } | null {
   if (fix.status === "ready") {
-    if (fix.pr_state === "closed") return { label: "Reopen PR", force: true }
-    if (fix.pr_state === "open") return { label: "Update PR", force: false }
-    return { label: "Create PR", force: false }
+    return labelForBranch(
+      prByBranch,
+      workflowFixBranch(fix.workflow_file_id),
+      "PR",
+    )
   }
   if (
     (fix.status === "delivered" ||
@@ -66,6 +98,17 @@ function FixesPage() {
       }),
   })
 
+  const { data: pullRequests } = useQuery({
+    queryKey: ["pull-requests", "repo", repoId],
+    queryFn: () => FixesService.listPullRequests({ repoId }),
+  })
+
+  const prByBranch = useMemo(() => {
+    const map = new Map<string, PullRequestPublic>()
+    for (const pr of pullRequests ?? []) map.set(pr.pr_branch, pr)
+    return map
+  }, [pullRequests])
+
   const deliverWorkflowMutation = useMutation({
     mutationFn: (vars: { fixId: string; force: boolean }) =>
       FixesService.triggerWorkflowDelivery({
@@ -75,6 +118,9 @@ function FixesPage() {
     onSuccess: () => {
       toast.success("Workflow PR queued")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+      queryClient.invalidateQueries({
+        queryKey: ["pull-requests", "repo", repoId],
+      })
     },
     onError: (error) =>
       toast.error("Failed to queue workflow PR", {
@@ -83,16 +129,26 @@ function FixesPage() {
   })
 
   const deliverRepoMutation = useMutation({
-    mutationFn: () => FixesService.triggerRepoDelivery({ repoId }),
+    mutationFn: (vars: { force: boolean }) =>
+      FixesService.triggerRepoDelivery({ repoId, force: vars.force }),
     onSuccess: () => {
       toast.success("Repo-wide PR queued")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
+      queryClient.invalidateQueries({
+        queryKey: ["pull-requests", "repo", repoId],
+      })
     },
     onError: (error) =>
       toast.error("Failed to queue repo-wide PR", {
         description: apiErrorDetail(error),
       }),
   })
+
+  const repoAction = labelForBranch(
+    prByBranch,
+    repoFixBranch(repoId),
+    "PR for all workflows",
+  )
 
   const sortedFixes = useMemo(
     () =>
@@ -115,13 +171,13 @@ function FixesPage() {
             size="sm"
             variant="outline"
             className="gap-2"
-            onClick={() => deliverRepoMutation.mutate()}
+            onClick={() =>
+              deliverRepoMutation.mutate({ force: repoAction.force })
+            }
             disabled={!isAccessible || deliverRepoMutation.isPending}
           >
             <GitPullRequest className="h-4 w-4" />
-            {deliverRepoMutation.isPending
-              ? "Queuing…"
-              : "Create PR for all workflows"}
+            {deliverRepoMutation.isPending ? "Queuing…" : repoAction.label}
           </Button>
         )}
       </div>
@@ -146,7 +202,7 @@ function FixesPage() {
               const isWfDelivering =
                 deliverWorkflowMutation.isPending &&
                 deliverWorkflowMutation.variables?.fixId === fix.id
-              const action = deliverAction(fix)
+              const action = deliverAction(fix, prByBranch)
               return (
                 <Card key={fix.id}>
                   <CardHeader className="pb-2 pt-4">

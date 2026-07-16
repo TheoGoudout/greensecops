@@ -64,6 +64,11 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
+/**
+ * Aggregate CI outcome for a PR, from ``check_suite`` webhooks.
+ */
+export type CIStatus = 'pending' | 'success' | 'failure' | 'none';
+
 export type ExternalRepositoryCreate = {
     full_name: string;
     installation_id?: (number | null);
@@ -195,6 +200,20 @@ export type PrivateUserCreate = {
     is_verified?: boolean;
 };
 
+export type PullRequestPublic = {
+    id: string;
+    repo_id: string;
+    pr_branch: string;
+    pr_url?: (string | null);
+    pr_state?: (PullRequestState | null);
+    ci_status?: (CIStatus | null);
+    review_decision?: (ReviewDecision | null);
+    mergeable_state?: (string | null);
+    comment_url?: (string | null);
+    created_at?: (string | null);
+    updated_at?: (string | null);
+};
+
 export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
 
 export type RepositoryPublic = {
@@ -210,6 +229,11 @@ export type RepositoryPublic = {
     avg_score?: (number | null);
     grade?: (string | null);
 };
+
+/**
+ * Latest human review decision for a PR, from ``pull_request_review``.
+ */
+export type ReviewDecision = 'approved' | 'changes_requested' | 'review_required' | 'none';
 
 export type RulePublic = {
     id: string;
@@ -413,6 +437,12 @@ export type FixesListFixesData = {
 };
 
 export type FixesListFixesResponse = (Array<FixPublic>);
+
+export type FixesListPullRequestsData = {
+    repoId: string;
+};
+
+export type FixesListPullRequestsResponse = (Array<PullRequestPublic>);
 
 export type FixesGetFixData = {
     fixId: string;

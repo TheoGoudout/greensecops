@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from github import Auth, Github
 from github.GithubException import GithubException
+from github.PullRequest import PullRequest as GithubPullRequest
 from github.Repository import Repository as GithubRepository
 
 from app.core.config import settings
@@ -92,18 +93,27 @@ def _prepare_fix_branch(
     base_sha: str,
     override_user_commits: bool,
     bot_login: str,
-) -> bool:
+    reset_to_base: bool,
+) -> None:
     """Create the fix branch, or reset an existing one to the base SHA.
+
+    ``reset_to_base`` must be false when the branch already backs an open PR:
+    force-pushing an open PR's head to be even with its base makes GitHub
+    auto-close the PR (zero commits ahead to merge) before the new fix
+    commits land, which silently replaces the PR with a new one instead of
+    updating it. The reset is only safe for a branch with no open PR to lose.
 
     Refuses to force-reset a branch whose head commit was not authored by the
     app bot (the user pushed their own commits) unless explicitly overridden.
-    Returns whether the branch already existed.
     """
     try:
         branch_ref = repo.get_git_ref(f"heads/{fix_branch}")
     except GithubException:
         repo.create_git_ref(ref=f"refs/heads/{fix_branch}", sha=base_sha)
-        return False
+        return
+
+    if not reset_to_base:
+        return
 
     if not override_user_commits and branch_ref.object.sha != base_sha:
         head_commit = repo.get_commit(branch_ref.object.sha)
@@ -115,7 +125,6 @@ def _prepare_fix_branch(
                 "not overwriting user work",
             )
     branch_ref.edit(sha=base_sha, force=True)
-    return True
 
 
 def _upsert_file(
@@ -153,30 +162,27 @@ def _upsert_file(
         )
 
 
+def _update_comment_body(updated_paths: list[str]) -> str:
+    if len(updated_paths) == 1:
+        return f"{settings.PROJECT_NAME} re-analyzed and updated `{updated_paths[0]}`."
+    paths_list = "\n".join(f"- `{p}`" for p in sorted(updated_paths))
+    return f"{settings.PROJECT_NAME} re-analyzed and updated:\n\n{paths_list}"
+
+
 def _update_or_create_open_pr(
     repo: GithubRepository,
-    branch_existed: bool,
+    open_prs: list[GithubPullRequest],
     fix_branch: str,
     base_branch: str,
     pr_title: str,
     pr_body: str,
+    updated_paths: list[str],
 ) -> str:
-    if branch_existed:
-        open_prs = list(
-            repo.get_pulls(
-                state="open",
-                head=f"{repo.owner.login}:{fix_branch}",
-                base=base_branch,
-            )
-        )
-        if open_prs:
-            pr = open_prs[0]
-            pr.edit(body=pr_body)
-            pr.create_issue_comment(
-                f"{settings.PROJECT_NAME} re-analyzed this workflow. "
-                "Fixes have been updated."
-            )
-            return pr.html_url
+    if open_prs:
+        pr = open_prs[0]
+        pr.edit(body=pr_body)
+        pr.create_issue_comment(_update_comment_body(updated_paths))
+        return pr.html_url
 
     pr = repo.create_pull(
         title=pr_title,
@@ -227,8 +233,24 @@ class FixDeliveryService:
                 if expected_base_contents:
                     for fp, expected in expected_base_contents.items():
                         _check_base_content_fresh(repo, fp, base_branch, expected)
-                branch_existed = _prepare_fix_branch(
-                    repo, fix_branch, base_sha, override_user_commits, bot_login
+                # Fetched once, up front: both whether to reset the branch and
+                # whether to update-vs-create the PR must agree on the same
+                # open-PR snapshot, or the reset can auto-close the very PR
+                # this was meant to update (see _prepare_fix_branch).
+                open_prs = list(
+                    repo.get_pulls(
+                        state="open",
+                        head=f"{repo.owner.login}:{fix_branch}",
+                        base=base_branch,
+                    )
+                )
+                _prepare_fix_branch(
+                    repo,
+                    fix_branch,
+                    base_sha,
+                    override_user_commits,
+                    bot_login,
+                    reset_to_base=not open_prs,
                 )
                 for fp, new_content in file_changes:
                     _upsert_file(
@@ -241,7 +263,13 @@ class FixDeliveryService:
                         ),
                     )
                 return _update_or_create_open_pr(
-                    repo, branch_existed, fix_branch, base_branch, pr_title, pr_body
+                    repo,
+                    open_prs,
+                    fix_branch,
+                    base_branch,
+                    pr_title,
+                    pr_body,
+                    updated_paths=[fp for fp, _ in file_changes],
                 )
 
             return FixDeliveryResult(pr_url=await asyncio.to_thread(_upsert_batch_pr))
