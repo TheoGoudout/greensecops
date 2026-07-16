@@ -13,6 +13,7 @@ permissions: {}
 
 jobs:
   test-backend:
+    name: Run Backend Tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -43,6 +44,7 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.10"
+          cache: 'pip'
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
@@ -64,6 +66,7 @@ jobs:
           name: coverage-html
           path: backend/htmlcov
           include-hidden-files: true
+          retention-days: 7
       - name: Coverage report
         run: uv run coverage report --fail-under=90
         working-directory: backend
