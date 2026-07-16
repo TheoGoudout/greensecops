@@ -18,6 +18,7 @@ permissions: {}
 
 jobs:
   issue-manager:
+    name: Manage issues and PRs
     if: github.repository_owner == 'fastapi'
     runs-on: ubuntu-latest
     timeout-minutes: 5
