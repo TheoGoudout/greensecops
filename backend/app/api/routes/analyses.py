@@ -87,7 +87,7 @@ def trigger_analysis(
         raise HTTPException(status_code=403, detail="Repository is not accessible")
     from app.api.routes.billing import enforce_quota
 
-    enforce_quota(session, current_user, "analyses")
+    enforce_quota(session, current_user, repo.org_id, "analyses")
     effective_branch = branch or repo.default_branch
     run_static_analysis.delay(
         repo_id=str(repo_id),

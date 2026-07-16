@@ -19,6 +19,7 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
+from tests.utils.user import authentication_token_from_email, create_random_user
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -250,6 +251,86 @@ def test_toggle_repository_not_found(
     # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Repository not found"
+
+
+def test_toggle_repository_enable_blocks_over_repo_quota(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """Enabling a repo beyond the tier's repo cap is rejected."""
+    user = create_random_user(db)
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+
+    free_repo_limit = 3
+    for n in range(free_repo_limit):
+        db.add(
+            Repository(
+                org_id=org.id,
+                github_repo_id=int(uuid.uuid4().int % 10**9),
+                full_name=f"owner/enabled-{n}-{uuid.uuid4().hex[:8]}",
+                installation_id=55555,
+                enabled=True,
+            )
+        )
+    extra_repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/extra-{uuid.uuid4().hex[:8]}",
+        installation_id=55555,
+        enabled=False,
+    )
+    db.add(extra_repo)
+    db.commit()
+    db.refresh(extra_repo)
+
+    # Act — enabling a 4th repo exceeds the free tier's cap of 3
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{extra_repo.id}/toggle",
+        params={"enabled": "true"},
+        headers=headers,
+    )
+
+    # Assert
+    assert response.status_code == 402
+    assert "quota" in response.json()["detail"].lower()
+    db.refresh(extra_repo)
+    assert extra_repo.enabled is False
+
+
+def test_toggle_repository_disable_never_blocked_by_quota(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """Disabling a repo is never quota-gated, even already over the cap."""
+    user = create_random_user(db)
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+
+    over_cap_repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/over-cap-{uuid.uuid4().hex[:8]}",
+        installation_id=55555,
+        enabled=True,
+    )
+    db.add(over_cap_repo)
+    db.commit()
+    db.refresh(over_cap_repo)
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{over_cap_repo.id}/toggle",
+        params={"enabled": "false"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    db.refresh(over_cap_repo)
+    assert over_cap_repo.enabled is False
 
 
 # ─── Org-scoped access for non-superusers ────────────────────────────────────

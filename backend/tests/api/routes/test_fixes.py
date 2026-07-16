@@ -21,6 +21,7 @@ from app.models import (
     LLMProvider,
     Organization,
     OrgMember,
+    OrgRole,
     PullRequest,
     Repository,
     Rule,
@@ -520,7 +521,7 @@ def test_generate_fixes_for_repo_regeneration_allowed_at_quota(
     """
     # Arrange — fresh free-tier member so usage isn't polluted by other tests
     user = create_random_user(db)
-    db.add(OrgMember(org_id=org.id, user_id=user.id))
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
     db.commit()
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
@@ -559,7 +560,7 @@ def test_generate_fixes_for_repo_blocks_net_new_over_quota(
 ) -> None:
     """A free-tier user cannot generate more NET-NEW fixes than the quota."""
     user = create_random_user(db)
-    db.add(OrgMember(org_id=org.id, user_id=user.id))
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
     db.commit()
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
@@ -1811,7 +1812,7 @@ def test_regenerate_for_repo_allowed_at_quota(
     """A free-tier user at the fixes quota can still regenerate all fixes —
     the delete-and-recreate nets to zero."""
     user = create_random_user(db)
-    db.add(OrgMember(org_id=org.id, user_id=user.id))
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
     db.commit()
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
@@ -2038,7 +2039,7 @@ def test_regenerate_for_workflow_allowed_at_quota(
 ) -> None:
     """A free-tier user at the fixes quota can still regenerate one fix."""
     user = create_random_user(db)
-    db.add(OrgMember(org_id=org.id, user_id=user.id))
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
     db.commit()
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 

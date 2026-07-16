@@ -404,7 +404,7 @@ def trigger_fix_generation_for_repo(
     When force=True, delivered fixes are also discarded and regenerated.
     Only issues from the latest analysis per workflow file are targeted.
     """
-    authorize_repo(session, current_user, repo_id)
+    repo = authorize_repo(session, current_user, repo_id)
     from app.api.routes.billing import enforce_quota
 
     by_wf_file = _latest_unresolved_issues(session, repo_id, issue_ids=body.issue_ids)
@@ -423,6 +423,7 @@ def trigger_fix_generation_for_repo(
     enforce_quota(
         session,
         current_user,
+        repo.org_id,
         "fixes",
         requested=len(by_wf_file),
         replacing=existing_fix_count,
@@ -668,6 +669,7 @@ def regenerate_fixes_for_repo(
     enforce_quota(
         session,
         current_user,
+        repo.org_id,
         "fixes",
         requested=len(by_wf_file),
         replacing=len(fixes_to_delete),
@@ -723,7 +725,7 @@ def regenerate_fixes_for_workflow(
             detail="No unresolved issues found for this workflow file",
         )
 
-    enforce_quota(session, current_user, "fixes", requested=1, replacing=1)
+    enforce_quota(session, current_user, repo.org_id, "fixes", requested=1, replacing=1)
 
     session.delete(fix)
     _delete_orphaned_closed_prs(session, repo.id)

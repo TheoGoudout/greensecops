@@ -14,6 +14,7 @@ from app.models import (
     BillingSubscriptionPublic,
     Fix,
     OrgMember,
+    OrgRole,
     Repository,
     User,
     UserTier,
@@ -33,13 +34,65 @@ _TIER_LIMITS: dict[str, dict[str, int | None]] = {
 }
 
 
-def _user_repo_ids(session: Session, user: User) -> list[uuid.UUID]:
-    org_ids = list(
-        session.exec(select(OrgMember.org_id).where(OrgMember.user_id == user.id)).all()
-    )
+def _org_billing_owner(session: Session, org_id: uuid.UUID) -> User | None:
+    """Return the user whose tier/subscription an org's usage counts against.
+
+    The billing owner is the earliest-joined ``owner`` member of the org.
+    Every org gets an owner member the moment it's linked (``add_org_owner``),
+    but a shared GitHub org can end up with several owner members if more than
+    one person links it — ordering by ``joined_at`` keeps that resolution
+    stable instead of arbitrary, so later members don't pool usage into (or
+    borrow quota from) their own separate personal tier.
+    """
+    member = session.exec(
+        select(OrgMember)
+        .where(OrgMember.org_id == org_id, OrgMember.role == OrgRole.owner)
+        .order_by(OrgMember.joined_at, OrgMember.user_id)
+    ).first()
+    if member is None:
+        return None
+    return session.get(User, member.user_id)
+
+
+def _billing_owner_org_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
+    """Return org ids whose usage counts against ``user_id``'s tier.
+
+    Restricted to orgs where this user is the resolved billing owner, so a
+    user merely riding along as a later owner/member of someone else's org
+    doesn't inherit that org's usage.
+    """
+    owned_org_ids = session.exec(
+        select(OrgMember.org_id).where(
+            OrgMember.user_id == user_id, OrgMember.role == OrgRole.owner
+        )
+    ).all()
+    return [
+        org_id
+        for org_id in owned_org_ids
+        if (owner := _org_billing_owner(session, org_id)) is not None
+        and owner.id == user_id
+    ]
+
+
+def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.UUID]]:
+    """Return (analyses_used, fixes_used, enabled_repo_ids) for ``user``.
+
+    ``analyses_used`` and ``fixes_used`` count every repo ever attached to an
+    org this user is the billing owner of, enabled or not — disabling a repo
+    doesn't erase its history, so it must not erase its usage either.
+    ``enabled_repo_ids`` (backing the "repos" limit and display count) is the
+    live, current set of enabled repos — a capacity metric, not a cumulative
+    one, so it's expected to change as repos are toggled.
+    """
+    org_ids = _billing_owner_org_ids(session, user.id)
     if not org_ids:
-        return []
-    return list(
+        return 0, 0, []
+    all_repo_ids = list(
+        session.exec(
+            select(Repository.id).where(Repository.org_id.in_(org_ids))  # type: ignore[attr-defined]
+        ).all()
+    )
+    enabled_repo_ids = list(
         session.exec(
             select(Repository.id).where(
                 Repository.org_id.in_(org_ids),  # type: ignore[attr-defined]
@@ -47,17 +100,12 @@ def _user_repo_ids(session: Session, user: User) -> list[uuid.UUID]:
             )
         ).all()
     )
-
-
-def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.UUID]]:
-    """Return (analyses_used, fixes_used, repo_ids) for the user's org repos."""
-    repo_ids = _user_repo_ids(session, user)
-    if not repo_ids:
+    if not all_repo_ids:
         return 0, 0, []
     analyses_used = (
         session.exec(
             select(func.count(Analysis.id)).where(
-                Analysis.repo_id.in_(repo_ids),  # type: ignore[attr-defined]
+                Analysis.repo_id.in_(all_repo_ids),  # type: ignore[attr-defined]
                 Analysis.status == AnalysisStatus.completed,
             )
         ).one()
@@ -67,36 +115,51 @@ def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.U
         session.exec(
             select(func.count(Fix.id))
             .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-            .where(WorkflowFile.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
+            .where(WorkflowFile.repo_id.in_(all_repo_ids))  # type: ignore[attr-defined]
         ).one()
         or 0
     )
-    return analyses_used, fixes_used, repo_ids
+    return analyses_used, fixes_used, enabled_repo_ids
 
 
 def enforce_quota(
     session: Session,
-    user: User,
+    current_user: User,
+    org_id: uuid.UUID,
     kind: str,
     *,
     requested: int = 1,
     replacing: int = 0,
 ) -> None:
     """Raise HTTP 402 if creating ``requested`` new items would exceed the
-    user's tier limit for ``kind``.
+    tier limit for ``kind`` of ``org_id``'s billing owner.
 
-    ``kind`` is one of "analyses" or "fixes". Superusers are exempt. A ``None``
-    limit means unlimited. ``replacing`` is the number of existing items the
-    operation deletes and recreates (e.g. regenerating fixes), which must not
-    count against the quota since the resulting total is unchanged.
+    ``kind`` is one of "analyses", "fixes", or "repos". ``current_user`` being
+    a superuser exempts the call outright (admin override); the org's billing
+    owner being a superuser exempts it too. A ``None`` limit means unlimited.
+    ``replacing`` is the number of existing items the operation deletes and
+    recreates (e.g. regenerating fixes), which must not count against the
+    quota since the resulting total is unchanged.
+
+    Usage is measured against the org's billing owner rather than
+    ``current_user`` directly, so a non-owner teammate triggering an action on
+    a shared org still debits and is blocked by the real billing owner's
+    quota instead of silently bypassing it.
     """
-    if user.is_superuser:
+    if current_user.is_superuser:
+        return
+    user = _org_billing_owner(session, org_id)
+    if user is None or user.is_superuser:
         return
     limit = _TIER_LIMITS.get(user.tier, _TIER_LIMITS[UserTier.free]).get(kind)
     if limit is None:
         return
-    analyses_used, fixes_used, _ = _usage_for_user(session, user)
-    used = analyses_used if kind == "analyses" else fixes_used
+    analyses_used, fixes_used, enabled_repo_ids = _usage_for_user(session, user)
+    used = {
+        "analyses": analyses_used,
+        "fixes": fixes_used,
+        "repos": len(enabled_repo_ids),
+    }[kind]
     if max(used - replacing, 0) + requested > limit:
         raise HTTPException(
             status_code=402,
