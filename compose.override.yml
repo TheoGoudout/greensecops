@@ -172,6 +172,11 @@ services:
     environment:
       APP_URL: ${FRONTEND_HOST:-http://localhost:5173}
       DOCS_URL: ${DOCS_URL:-http://localhost:3002}
+      MARKETING_URL: ${MARKETING_URL:-https://greensecops.com}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@greensecops.com}
+      SALES_EMAIL: ${SALES_EMAIL:-sales@greensecops.com}
+      LEGAL_EMAIL: ${LEGAL_EMAIL:-legal@greensecops.com}
+      PRIVACY_EMAIL: ${PRIVACY_EMAIL:-privacy@greensecops.com}
     develop:
       watch:
         - path: ./landing/assets
