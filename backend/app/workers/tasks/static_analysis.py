@@ -339,12 +339,18 @@ def _resolve_issues_for_missing_files(
     repo: Repository,
     fetched_paths: set[str],
 ) -> None:
-    """Resolve open issues of workflow files that no longer exist in the repo."""
+    """Reconcile workflow files that no longer exist in the repo.
+
+    Resolves their open issues (``file_removed``) and withdraws any
+    non-terminal fix targeting them, so a stale ``ready``/``delivered`` fix
+    can't later resurrect content the user deliberately deleted.
+    """
     now = datetime.now(timezone.utc)
     wf_rows = session.exec(
         select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
     ).all()
     resolved = 0
+    superseded = 0
     for wf in wf_rows:
         if wf.path in fetched_paths:
             continue
@@ -358,11 +364,18 @@ def _resolve_issues_for_missing_files(
             issue.resolution_reason = IssueResolutionReason.file_removed
             session.add(issue)
             resolved += 1
-    if resolved:
+        if wf.fix is not None and sm.try_advance(
+            wf.fix, sm.FixMachine, "supersede_deleted_file"
+        ):
+            session.add(wf.fix)
+            superseded += 1
+    if resolved or superseded:
         session.commit()
         logger.info(
-            "Resolved %d issue(s) for deleted workflow files in repo %s",
+            "Resolved %d issue(s) and superseded %d fix(es) for deleted "
+            "workflow files in repo %s",
             resolved,
+            superseded,
             repo.full_name,
         )
 
@@ -510,6 +523,12 @@ def _run_static_analysis_impl(
                     wf_record.content_hash = content_hash
                     wf_record.raw_content = content
                     session.add(wf_record)
+                    # The path reappeared: give a fix withdrawn for its
+                    # deletion a path back to `ready` instead of leaving it
+                    # stranded (mirrors PR-reopen restoring a closed-PR fix).
+                    if wf_record.fix is not None:
+                        sm.try_advance(wf_record.fix, sm.FixMachine, "restore")
+                        session.add(wf_record.fix)
                 session.flush()
 
             analysis = Analysis(

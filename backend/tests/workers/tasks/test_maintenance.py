@@ -8,6 +8,7 @@ from sqlmodel import Session
 from app.models import (
     Analysis,
     AnalysisStatus,
+    DynamicAnalysisStatus,
     Fix,
     FixStatus,
     Issue,
@@ -19,10 +20,45 @@ from app.models import (
     PullRequestState,
     Repository,
     Rule,
+    TelemetryRun,
     UserTier,
     WorkflowFile,
 )
 from app.workers.tasks.maintenance import _sweep_stuck_states_impl
+
+
+def _build_telemetry_run(
+    db: Session, status: DynamicAnalysisStatus, *, stale: bool
+) -> TelemetryRun:
+    org = Organization(name=f"maint-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"maint/repo-{uuid.uuid4().hex[:8]}",
+        installation_id=40001,
+        default_branch="main",
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    collected_at = datetime.now(timezone.utc) - (
+        timedelta(hours=2) if stale else timedelta(minutes=1)
+    )
+    run = TelemetryRun(
+        repo_id=repo.id,
+        workflow_run_id=1,
+        dynamic_status=status,
+        collected_at=collected_at,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
 
 
 def _build_chain(db: Session) -> tuple[Analysis, Fix]:
@@ -133,6 +169,28 @@ def test_sweeper_leaves_recent_records_alone(db: Session) -> None:
     db.refresh(fix)
     assert analysis.status == AnalysisStatus.running
     assert fix.status == FixStatus.generating
+
+
+def test_sweeper_fails_stuck_telemetry_runs(db: Session) -> None:
+    queued_run = _build_telemetry_run(db, DynamicAnalysisStatus.queued, stale=True)
+    running_run = _build_telemetry_run(db, DynamicAnalysisStatus.running, stale=True)
+
+    result = _sweep_stuck_states_impl()
+
+    assert result["swept_telemetry"] >= 2
+    db.refresh(queued_run)
+    db.refresh(running_run)
+    assert queued_run.dynamic_status == DynamicAnalysisStatus.failed
+    assert running_run.dynamic_status == DynamicAnalysisStatus.failed
+
+
+def test_sweeper_leaves_recent_telemetry_runs_alone(db: Session) -> None:
+    run = _build_telemetry_run(db, DynamicAnalysisStatus.running, stale=False)
+
+    _sweep_stuck_states_impl()
+
+    db.refresh(run)
+    assert run.dynamic_status == DynamicAnalysisStatus.running
 
 
 def test_sweeper_task_wrapper_runs(db: Session) -> None:  # noqa: ARG001
