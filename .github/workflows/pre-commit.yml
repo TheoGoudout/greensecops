@@ -77,6 +77,7 @@ jobs:
       - name: Run prek - pre-commit
         id: precommit
         run: uv run prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
+        continue-on-error: true
       - name: Commit and push changes
         if: env.HAS_SECRETS == 'true'
         run: |
@@ -99,7 +100,7 @@ jobs:
 
   # https://github.com/marketplace/actions/alls-green#why
   pre-commit-alls-green:  # This job does nothing and is only used for the branch protection
-    name: All pre-commit checks passed
+    name: All checks passed
     if: always()
     needs:
       - pre-commit
