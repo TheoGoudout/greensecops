@@ -84,6 +84,9 @@ flowchart TD
     REPO -. gates .-> AN
     REPO -. gates .-> DEL
 
+    AN -->|fetches & upserts| WF[(WorkflowFile)]
+    WF -. "file deleted: Issue resolved, Fix superseded (see #8)" .-> FIX
+
     TELEM --> DYN[Dynamic Analysis]
     DYN -->|persisted| ENR[(dynamic_enrichment)]
 ```
@@ -226,23 +229,29 @@ disabled/removed rule — the two are not distinguishable after re-analysis.
 ## 3. Fix
 
 - **States** — `FixStatus`: `pending`, `generating`, `ready`, `delivering`,
-  `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`
+  `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`,
+  `superseded_by_deleted_file`
 - **Events** — `start_generation`, `generation_succeeded`, `generation_failed`,
   `mark_ready`, `start_delivery`, `precheck_failed`, `delivery_succeeded`,
-  `delivery_failed`, `supersede_closed_pr`, `reject`, `restore`, `regenerate`,
-  `swept`
+  `delivery_failed`, `supersede_closed_pr`, `supersede_deleted_file`, `reject`,
+  `restore`, `regenerate`, `swept`
 - **Code** — `state_machines/fix.py`; `fix_generation.py`, `fix_delivery.py`,
-  `api/routes/fixes.py`, `maintenance.py`, the `pull_request` webhook handler
+  `api/routes/fixes.py`, `maintenance.py`, the `pull_request` webhook handler,
+  `static_analysis.py` (`_resolve_issues_for_missing_files`)
 - **Initial** — `pending`. **Final** — `rejected_by_user` (`failed` is no longer
   final — `regenerate` retries it in place).
 
-The two rejections are now **distinct states** (no longer disambiguated by a
-`delivered_at IS NULL` convention):
+The two withdrawal-by-the-system states sit alongside the one user rejection
+(no longer disambiguated by a `delivered_at IS NULL` convention):
 
 - `rejected_by_user` — a human dismissed the fix; **terminal**. A repeated
   DELETE is made idempotent at the endpoint via `try_advance`, not a self-loop.
 - `superseded_by_closed_pr` — the closed-PR delivery guard auto-rejected it;
   `restore` makes it deliverable again when the PR is reopened.
+- `superseded_by_deleted_file` — the workflow file this fix targets was
+  deleted from the repo (detected during missing-file reconciliation, see
+  §8); `restore` makes it deliverable again if a later push re-adds the same
+  path.
 
 ### Transitions (input → output)
 
@@ -257,8 +266,9 @@ The two rejections are now **distinct states** (no longer disambiguated by a
 | `delivery_succeeded` | `delivering` → `delivered` | `fix.delivered` | PR opened / comment posted |
 | `delivery_failed` | `delivering` → `failed` | `fix.failed` | push / PR / comment error |
 | `supersede_closed_pr` | `ready`, `delivered` → `superseded_by_closed_pr` | `fix.rejected` | target PR branch closed, not forced / a delivered PR closed unmerged |
+| `supersede_deleted_file` | `pending`, `generating`, `ready`, `delivering`, `delivered` → `superseded_by_deleted_file` | `fix.rejected` | fix's workflow file missing from the latest push's fetched paths |
 | `reject` | any non-terminal → `rejected_by_user` | `fix.rejected` | user DELETE |
-| `restore` | `superseded_by_closed_pr` → `ready` | — | PR reopened |
+| `restore` | `superseded_by_closed_pr`, `superseded_by_deleted_file` → `ready` | — | PR reopened / workflow file path reappears |
 | `regenerate` | `failed` → `pending` | `fix.pending` | user retries a failed fix in place |
 | `land` | `delivered` → `landed` | `fix.landed` | the fix's PR was merged |
 | `swept` | `pending`, `generating`, `delivering` → `failed` | `fix.failed` | stuck > 30 min |
@@ -274,22 +284,31 @@ stateDiagram-v2
     Ready --> Delivering: start_delivery / fix.delivering
     Ready --> Failed: precheck_failed / fix.failed
     Ready --> Superseded: supersede_closed_pr / fix.rejected
+    Ready --> SupersededDeletedFile: supersede_deleted_file / fix.rejected
     Ready --> Ready: mark_ready
 
     Delivering --> Delivered: delivery_succeeded / fix.delivered
     Delivering --> Failed: delivery_failed / fix.failed
+    Delivering --> SupersededDeletedFile: supersede_deleted_file / fix.rejected
 
     Delivered --> Ready: mark_ready
     Delivered --> Superseded: supersede_closed_pr / fix.rejected
+    Delivered --> SupersededDeletedFile: supersede_deleted_file / fix.rejected
     Delivered --> RejectedByUser: reject / fix.rejected
     Delivered --> Landed: land / fix.landed
 
     Superseded --> Ready: restore
     Superseded --> RejectedByUser: reject / fix.rejected
 
+    SupersededDeletedFile --> Ready: restore
+    SupersededDeletedFile --> RejectedByUser: reject / fix.rejected
+
     Pending --> Failed: swept / fix.failed
     Generating --> Failed: swept / fix.failed
     Delivering --> Failed: swept / fix.failed
+
+    Pending --> SupersededDeletedFile: supersede_deleted_file / fix.rejected
+    Generating --> SupersededDeletedFile: supersede_deleted_file / fix.rejected
 
     Ready --> RejectedByUser: reject / fix.rejected
     Pending --> RejectedByUser: reject / fix.rejected
@@ -306,7 +325,11 @@ so a delivered PR closed without merging withdraws its fix (restored on reopen)
 instead of stranding it; a `regenerate` edge (`failed` → `pending`) retries a
 failed fix in place, so `failed` is no longer terminal; a `land` edge
 (`delivered` → `landed`) fired from the PR-merge webhook gives a merged fix a
-terminal success state and resolves its issues with reason `merged`.
+terminal success state and resolves its issues with reason `merged`;
+`supersede_deleted_file` (§8) withdraws a fix whose target workflow file was
+deleted from the repo, from any non-terminal state, and `restore` brings it
+back if the path reappears — closing the fix half of the deleted-workflow-file
+gap.
 
 **Still open:** the `fix.skipped` SSE signal has no persisted status (dedup
 avoids row bloat — intentional).
@@ -400,9 +423,10 @@ evaluates the metrics (e.g. an oversized runner) and **persists** findings to
 
 - **States** — `DynamicAnalysisStatus`: `queued`(init), `running`, `enriched`
   (final), `failed`
-- **Events** — `started`, `enrich`, `fail`, `retry`
+- **Events** — `started`, `enrich`, `fail`, `retry`, `swept`
 - **Code** — `state_machines/telemetry.py`; `api/routes/telemetry.py`,
-  `workers/tasks/dynamic_analysis.py`
+  `workers/tasks/dynamic_analysis.py`, `maintenance.py`
+  (`sweep_stuck_states`)
 
 | Event | From → To | Output (SSE) |
 |---|---|---|
@@ -410,6 +434,7 @@ evaluates the metrics (e.g. an oversized runner) and **persists** findings to
 | `enrich` | `running` → `enriched` | `dynamic.enriched` |
 | `fail` | `running` → `failed` | `dynamic.failed` |
 | `retry` | `failed` → `queued` | `dynamic.queued` |
+| `swept` | `queued`, `running` → `failed` | `dynamic.failed` |
 
 ```mermaid
 stateDiagram-v2
@@ -417,13 +442,19 @@ stateDiagram-v2
     Queued --> Running: started / dynamic.running
     Running --> Enriched: enrich / dynamic.enriched
     Running --> Failed: fail / dynamic.failed
+    Queued --> Failed: swept / dynamic.failed
+    Running --> Failed: swept / dynamic.failed
     Failed --> Queued: retry / dynamic.queued
     Enriched --> [*]
 ```
 
 **Closed in this pass:** the dynamic-analysis lifecycle is now a formal machine
 with `enriched` / `failed` states (the worker previously wrote no status and let
-failures bubble); `started`-phase rows keep `dynamic_status` NULL.
+failures bubble); `started`-phase rows keep `dynamic_status` NULL;
+`maintenance.sweep_stuck_states` now also sweeps stuck `queued`/`running` rows
+(`collected_at` older than the same 30-minute cutoff used for Analysis/Fix,
+since `TelemetryRun` has no `updated_at`) to `failed` via `swept`, so a crashed
+`run_dynamic_analysis` worker no longer leaves the row stuck indefinitely.
 
 **Still open:** surfacing the persisted enrichments through the API / UI.
 
@@ -475,3 +506,57 @@ webhooks update `full_name` / `default_branch` without a status change.
 per-cause SSE signals; the old asymmetry (unsuspend restored `is_accessible` but
 not `enabled`) is now explicit — `enabled` is deliberately a separate user-owned
 flag, left untouched by accessibility transitions.
+
+---
+
+## 8. Workflow File (existence tracking, not a lifecycle)
+
+`WorkflowFile` rows are not modeled as a state machine — a workflow file
+either currently exists at a path in the repo or it doesn't; there is no
+persisted `status` column. Analysis upserts a row per path (keyed by
+`content_hash`) on every fetch. Three downstream entities point at a
+`workflow_file_id`: `Analysis`, `Issue` (via `Analysis`), and `Fix`.
+
+### What already happens on deletion
+
+A push webhook that touches `.github/workflows/**` (a `removed` entry counts)
+always re-fetches the **full** workflow set, never a single
+`workflow_file_id`, so `_resolve_issues_for_missing_files`
+(`static_analysis.py`) diffs the fetched paths against existing
+`WorkflowFile` rows for the repo and resolves every open `Issue` on a path
+that's gone, with `resolution_reason=file_removed`.
+
+### The gap (closed for Fix; deliberately not for the row itself)
+
+`_auto_queue_fix_generation` (`static_analysis.py`) only reconciles `Fix`
+rows for workflow files that have currently **open** issues in the latest
+completed analysis. A deleted file has none by the time reconciliation runs
+(its issues were just resolved above), so its `workflow_file_id` never used
+to appear in that target set — the existing `Fix` row, in *any* state
+(`ready`, `delivering`, `delivered`, …), was silently skipped.
+
+`_resolve_issues_for_missing_files` now also withdraws the fix directly: for
+every `WorkflowFile` whose path dropped out of `fetched_paths`, if it has a
+non-terminal `Fix`, `FixMachine`'s `supersede_deleted_file` event (§3) fires
+via `try_advance` — moving it to `superseded_by_deleted_file` regardless of
+which non-terminal state it was in. Symmetrically, when an existing
+`WorkflowFile` row is matched by path again (the file reappeared), `restore`
+fires on its fix if superseded. This closes:
+
+- **Not transitioned** — now has a dedicated event instead of silently
+  skipping.
+- **Not cleaned up** — a superseded fix is excluded from the "active fix"
+  filter (`REJECTED_STATUSES`, `fix.py:29`) the same way a user-rejected one
+  is, so it can't be manually delivered or ride along in a batch.
+- **PR left stale** — a `delivered` fix withdrawn this way stops being
+  re-included by the batch reset-and-reapply flow (§3), so its next
+  redelivery correctly drops the file.
+
+**Row never dies** is left open on purpose: `Issue.workflow_file_id` and
+`Fix.workflow_file_id` are both `ondelete="CASCADE"` on `WorkflowFile`.
+Physically deleting a `WorkflowFile` row to reclaim space would cascade-delete
+every `Issue` ever raised against it — including ones resolved with
+`resolution_reason=file_removed` — destroying audit history for a cosmetic
+row-count cleanup. Orphaned `WorkflowFile` rows are inert text blobs, not a
+correctness problem, so they're left in place; only a full `Repository`
+delete cascades them away.
