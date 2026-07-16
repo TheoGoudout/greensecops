@@ -10,16 +10,20 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
+    Fix,
+    FixStatus,
     Issue,
     IssueCategory,
     IssueResolutionReason,
     IssueSeverity,
+    LLMProvider,
     Organization,
     Repository,
     Rule,
     UserTier,
     WorkflowFile,
 )
+from app.services.github.app_client import WorkflowFileContent
 from app.workers.tasks.static_analysis import (
     _enrich_line_numbers,
     _reanalyze_all_repositories_impl,
@@ -665,6 +669,71 @@ def test_issues_of_deleted_workflow_files_are_resolved(
     db.refresh(issue)
     assert issue.resolved_at is not None
     assert issue.resolution_reason == IssueResolutionReason.file_removed
+
+
+def test_fix_is_superseded_when_its_workflow_file_is_deleted(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.ready,
+        full_content="on: push\n",
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    # The workflow file disappears from the repo (deleted or renamed).
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    db.refresh(fix)
+    assert fix.status == FixStatus.superseded_by_deleted_file
+
+
+def test_fix_is_restored_when_deleted_workflow_file_reappears(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.superseded_by_deleted_file,
+        full_content="on: push\n",
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    # A later push re-adds the same path: `_fetch_workflow_files` returns
+    # fresh GitHub content (not a `WorkflowFile` row), matched to the existing
+    # row by path — this is the "reappeared" branch, distinct from the
+    # already-`WorkflowFile`-instance shortcut other tests in this file use.
+    reappeared = WorkflowFileContent(
+        path=workflow_file.path,
+        content="on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: []\n",
+        content_hash="unused",
+        sha="deadbeef",
+    )
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[reappeared],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    db.refresh(fix)
+    assert fix.status == FixStatus.ready
 
 
 def test_completed_analysis_is_queryable_as_latest(

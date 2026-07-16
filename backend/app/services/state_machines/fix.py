@@ -10,6 +10,9 @@ The two rejection states are distinct (no longer disambiguated by a
   re-reject only).
 * ``superseded_by_closed_pr`` — the closed-PR delivery guard auto-rejected it;
   ``restore`` makes it deliverable again when the PR is reopened.
+* ``superseded_by_deleted_file`` — the workflow file the fix targets was
+  deleted from the repo; ``restore`` makes it deliverable again if a later
+  push re-adds the same path.
 """
 
 from __future__ import annotations
@@ -24,10 +27,15 @@ IN_FLIGHT_STATUSES: frozenset[FixStatus] = frozenset(
     {FixStatus.pending, FixStatus.generating, FixStatus.delivering}
 )
 
-# The two terminal rejection states — an issue whose fix is in either is not
-# actively being addressed. Single source of truth for the "active fix" filter.
+# The rejection/withdrawal states — an issue whose fix is in any of these is
+# not actively being addressed. Single source of truth for the "active fix"
+# filter.
 REJECTED_STATUSES: frozenset[FixStatus] = frozenset(
-    {FixStatus.rejected_by_user, FixStatus.superseded_by_closed_pr}
+    {
+        FixStatus.rejected_by_user,
+        FixStatus.superseded_by_closed_pr,
+        FixStatus.superseded_by_deleted_file,
+    }
 )
 
 
@@ -44,6 +52,7 @@ class FixMachine(StateMachine):
     failed = State(value=FixStatus.failed)
     rejected_by_user = State(value=FixStatus.rejected_by_user, final=True)
     superseded = State(value=FixStatus.superseded_by_closed_pr)
+    superseded_deleted_file = State(value=FixStatus.superseded_by_deleted_file)
     # Terminal success: the fix's PR was merged. Distinct from ``delivered``
     # (awaiting review) so "landed on the branch" is queryable.
     landed = State(value=FixStatus.landed, final=True)
@@ -62,6 +71,17 @@ class FixMachine(StateMachine):
     # from ``ready`` (the delivery-time guard) and from ``delivered`` (the
     # pull_request ``closed`` webhook withdrawing an already-delivered fix).
     supersede_closed_pr = ready.to(superseded) | delivered.to(superseded)
+    # The fix's target workflow file was deleted from the repo: fires from
+    # every non-terminal, non-superseded state during missing-file
+    # reconciliation. Distinct from ``supersede_closed_pr`` so it can be
+    # restored independently if the same path reappears.
+    supersede_deleted_file = (
+        pending.to(superseded_deleted_file)
+        | generating.to(superseded_deleted_file)
+        | ready.to(superseded_deleted_file)
+        | delivering.to(superseded_deleted_file)
+        | delivered.to(superseded_deleted_file)
+    )
     # User reject is legal from every state except the two terminal ones
     # (``failed`` and an already ``rejected_by_user`` fix). A repeated DELETE is
     # kept idempotent at the endpoint via ``try_advance`` rather than a
@@ -73,8 +93,9 @@ class FixMachine(StateMachine):
         | delivering.to(rejected_by_user)
         | delivered.to(rejected_by_user)
         | superseded.to(rejected_by_user)
+        | superseded_deleted_file.to(rejected_by_user)
     )
-    restore = superseded.to(ready)
+    restore = superseded.to(ready) | superseded_deleted_file.to(ready)
     # In-place recovery for a failed fix: re-queue the same row for generation
     # instead of discarding it and inserting a new one. Not offered from
     # ``rejected_by_user`` — an explicit user dismissal stays terminal.
@@ -95,6 +116,7 @@ class FixMachine(StateMachine):
         "delivery_succeeded": SSESignal.fix_delivered,
         "delivery_failed": SSESignal.fix_failed,
         "supersede_closed_pr": SSESignal.fix_rejected,
+        "supersede_deleted_file": SSESignal.fix_rejected,
         "reject": SSESignal.fix_rejected,
         "restore": None,
         "regenerate": SSESignal.fix_pending,

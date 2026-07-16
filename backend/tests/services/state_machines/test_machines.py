@@ -123,6 +123,7 @@ def test_fix_reject_lands_in_rejected_by_user() -> None:
         FixStatus.ready,
         FixStatus.delivered,
         FixStatus.superseded_by_closed_pr,
+        FixStatus.superseded_by_deleted_file,
     ):
         f = _Model(sm.FixMachine, src)
         assert sm.advance(f, sm.FixMachine, "reject") is FixStatus.rejected_by_user
@@ -151,6 +152,27 @@ def test_fix_supersede_from_ready_or_delivered() -> None:
         sm.advance(f2, sm.FixMachine, "supersede_closed_pr")
 
 
+def test_fix_supersede_deleted_file_from_any_non_terminal_state() -> None:
+    # Missing-file reconciliation may find the fix in any non-terminal state.
+    for src in (
+        FixStatus.pending,
+        FixStatus.generating,
+        FixStatus.ready,
+        FixStatus.delivering,
+        FixStatus.delivered,
+    ):
+        f = _Model(sm.FixMachine, src)
+        assert (
+            sm.advance(f, sm.FixMachine, "supersede_deleted_file")
+            is FixStatus.superseded_by_deleted_file
+        )
+    # Not legal once already rejected or landed.
+    for src in (FixStatus.rejected_by_user, FixStatus.landed):
+        f2 = _Model(sm.FixMachine, src)
+        with pytest.raises(sm.IllegalTransition):
+            sm.advance(f2, sm.FixMachine, "supersede_deleted_file")
+
+
 def test_fix_regenerate_from_failed_only() -> None:
     f = _Model(sm.FixMachine, FixStatus.failed)
     assert sm.advance(f, sm.FixMachine, "regenerate") is FixStatus.pending
@@ -161,8 +183,12 @@ def test_fix_regenerate_from_failed_only() -> None:
 
 
 def test_fix_restore_only_from_superseded_not_user_rejected() -> None:
-    f = _Model(sm.FixMachine, FixStatus.superseded_by_closed_pr)
-    assert sm.advance(f, sm.FixMachine, "restore") is FixStatus.ready
+    for src in (
+        FixStatus.superseded_by_closed_pr,
+        FixStatus.superseded_by_deleted_file,
+    ):
+        f = _Model(sm.FixMachine, src)
+        assert sm.advance(f, sm.FixMachine, "restore") is FixStatus.ready
     # A user rejection is final — reopening a PR must not resurrect it.
     f2 = _Model(sm.FixMachine, FixStatus.rejected_by_user)
     with pytest.raises(sm.IllegalTransition):
@@ -194,6 +220,16 @@ def test_fix_sweep_from_in_flight_only() -> None:
 def test_in_flight_statuses_constant() -> None:
     assert sm.IN_FLIGHT_STATUSES == frozenset(
         {FixStatus.pending, FixStatus.generating, FixStatus.delivering}
+    )
+
+
+def test_rejected_statuses_constant() -> None:
+    assert sm.REJECTED_STATUSES == frozenset(
+        {
+            FixStatus.rejected_by_user,
+            FixStatus.superseded_by_closed_pr,
+            FixStatus.superseded_by_deleted_file,
+        }
     )
 
 
@@ -290,6 +326,18 @@ def test_telemetry_failure_and_retry() -> None:
     e = _Model(sm.TelemetryMachine, DynamicAnalysisStatus.enriched)
     with pytest.raises(sm.IllegalTransition):
         sm.advance(e, sm.TelemetryMachine, "retry")
+
+
+def test_telemetry_sweep_from_queued_or_running() -> None:
+    for src in (DynamicAnalysisStatus.queued, DynamicAnalysisStatus.running):
+        t = _Model(sm.TelemetryMachine, src)
+        assert (
+            sm.advance(t, sm.TelemetryMachine, "swept") is DynamicAnalysisStatus.failed
+        )
+    # enriched is terminal, not sweepable.
+    e = _Model(sm.TelemetryMachine, DynamicAnalysisStatus.enriched)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(e, sm.TelemetryMachine, "swept")
 
 
 # ── Issue ────────────────────────────────────────────────────────────────────

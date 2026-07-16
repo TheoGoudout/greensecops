@@ -9,11 +9,13 @@ from app.models import (
     Analysis,
     AnalysisFailureKind,
     AnalysisStatus,
+    DynamicAnalysisStatus,
     Fix,
     FixStatus,
     PullRequest,
     PullRequestState,
     Repository,
+    TelemetryRun,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -33,6 +35,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     cutoff = now - timedelta(minutes=STUCK_AFTER_MINUTES)
     swept_analyses = 0
     swept_fixes = 0
+    swept_telemetry = 0
     with Session(engine) as session:
         stuck_analyses = session.exec(
             select(Analysis)
@@ -75,15 +78,37 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             session.add(fix)
             swept_fixes += 1
 
-        if swept_analyses or swept_fixes:
+        # TelemetryRun has no created_at/updated_at; collected_at (set at
+        # ingest) is the same kind of conservative proxy used for Fix above.
+        stuck_telemetry = session.exec(
+            select(TelemetryRun)
+            .where(
+                col(TelemetryRun.dynamic_status).in_(
+                    [DynamicAnalysisStatus.queued, DynamicAnalysisStatus.running]
+                )
+            )
+            .where(TelemetryRun.collected_at < cutoff)  # type: ignore[operator]
+        ).all()
+        for run in stuck_telemetry:
+            sm.advance(run, sm.TelemetryMachine, "swept")
+            session.add(run)
+            swept_telemetry += 1
+
+        if swept_analyses or swept_fixes or swept_telemetry:
             session.commit()
             logger.warning(
-                "Swept %d stuck analysis(es) and %d stuck fix(es) to failed",
+                "Swept %d stuck analysis(es), %d stuck fix(es) and %d stuck "
+                "telemetry run(s) to failed",
                 swept_analyses,
                 swept_fixes,
+                swept_telemetry,
             )
 
-    return {"swept_analyses": swept_analyses, "swept_fixes": swept_fixes}
+    return {
+        "swept_analyses": swept_analyses,
+        "swept_fixes": swept_fixes,
+        "swept_telemetry": swept_telemetry,
+    }
 
 
 @celery_app.task(name="maintenance.sweep_stuck_states", bind=True)

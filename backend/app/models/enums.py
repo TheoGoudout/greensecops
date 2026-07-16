@@ -125,6 +125,9 @@ class FixStatus(str, enum.Enum):
     #    it; it becomes deliverable again if that PR is reopened.
     rejected_by_user = "rejected_by_user"
     superseded_by_closed_pr = "superseded_by_closed_pr"
+    # The workflow file this fix targets was deleted from the repo; it becomes
+    # deliverable again (``restore``) if a later push re-adds the same path.
+    superseded_by_deleted_file = "superseded_by_deleted_file"
     # Terminal: the fix's PR was merged, so its change is on the branch. Distinct
     # from ``delivered`` (awaiting review) — set from the pull_request merge
     # webhook, and it resolves the fix's issues with reason ``merged``.
