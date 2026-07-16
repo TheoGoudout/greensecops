@@ -261,3 +261,84 @@ def test_exchange_oauth_code_raises_on_error(
     with patch("app.services.github.app_client.Github", github_cls):
         with pytest.raises(GithubException):
             asyncio.run(app_client.exchange_oauth_code("bad"))
+
+
+# ─── get_bot_login ───────────────────────────────────────────────────────────
+
+
+def test_get_bot_login_uses_configured_login() -> None:
+    from app.core.config import settings
+
+    redis = AsyncMock()
+    client = GitHubAppClient(redis_client=redis)
+
+    with patch.object(settings, "GITHUB_BOT_LOGIN", "greensecops-bot"):
+        login = asyncio.run(client.get_bot_login())
+
+    assert login == "greensecops-bot"
+    redis.get.assert_not_awaited()
+
+
+def test_get_bot_login_derives_and_caches() -> None:
+    from app.core.config import settings
+
+    redis = AsyncMock()
+    redis.get.return_value = None
+    client = GitHubAppClient(redis_client=redis)
+
+    mock_user = MagicMock(login="greensecops-bot")
+    mock_gh = MagicMock()
+    mock_gh.get_user.return_value = mock_user
+
+    with (
+        patch.object(settings, "GITHUB_BOT_LOGIN", None),
+        patch.object(settings, "GITHUB_BOT_TOKEN", "bot-tok"),
+        patch("app.services.github.app_client.Github", return_value=mock_gh),
+    ):
+        login = asyncio.run(client.get_bot_login())
+
+    assert login == "greensecops-bot"
+    redis.setex.assert_awaited_once()
+
+
+# ─── ensure_fork ─────────────────────────────────────────────────────────────
+
+
+def test_ensure_fork_reuses_existing_fork() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    parent = MagicMock()
+    parent.full_name = "facebook/react"
+    # ``parent`` is a reserved MagicMock constructor kwarg, so set it as an
+    # attribute after construction.
+    existing = MagicMock(fork=True)
+    existing.parent = parent
+    bot_user = MagicMock(login="greensecops-bot")
+    bot_user.get_repo.return_value = existing
+    bot = MagicMock()
+    bot.get_user.return_value = bot_user
+
+    result = client.ensure_fork(bot, "facebook/react")
+
+    assert result is existing
+    bot_user.get_repo.assert_called_once_with("react")
+    # No fork is created and the upstream is not fetched when a fork already exists.
+    bot.get_repo.assert_not_called()
+
+
+def test_ensure_fork_creates_when_missing() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    bot_user = MagicMock(login="greensecops-bot")
+    bot_user.get_repo.side_effect = GithubException(404, {}, None)
+    fork = MagicMock(default_branch="main")
+    fork.get_branch.return_value = MagicMock()  # ready immediately
+    upstream = MagicMock()
+    upstream.create_fork.return_value = fork
+    bot = MagicMock()
+    bot.get_user.return_value = bot_user
+    bot.get_repo.return_value = upstream
+
+    result = client.ensure_fork(bot, "facebook/react")
+
+    assert result is fork
+    bot.get_repo.assert_called_once_with("facebook/react")
+    upstream.create_fork.assert_called_once()

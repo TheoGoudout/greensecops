@@ -122,6 +122,7 @@ def _sync_open_pr_states_impl() -> dict[str, int]:
     Webhooks can be missed (downtime, broker failure); without this, a PR
     merged or closed while we were away stays "open" in the UI forever.
     """
+    from app.core.config import settings
     from app.services.github.app_client import parse_pr_url
 
     with Session(engine) as session:
@@ -132,14 +133,21 @@ def _sync_open_pr_states_impl() -> dict[str, int]:
             .where(col(PullRequest.pr_url).is_not(None))
         ).all()
 
-        targets = []
+        targets: list[tuple[object, int | None, str, int]] = []
         for pr_record, repo in rows:
             parsed = parse_pr_url(pr_record.pr_url or "")
-            if parsed and repo.installation_id:
-                full_name, pr_number = parsed
+            if not parsed:
+                continue
+            full_name, pr_number = parsed
+            if repo.installation_id:
                 targets.append(
                     (pr_record.id, repo.installation_id, full_name, pr_number)
                 )
+            elif repo.is_external and settings.GITHUB_BOT_TOKEN:
+                # External-repo PRs get no webhooks and have no installation, so
+                # reconcile their state with the bot credential (installation_id
+                # None signals the bot path in _fetch_pr_states).
+                targets.append((pr_record.id, None, full_name, pr_number))
 
         if not targets:
             return {"synced": 0, "updated": 0}
@@ -196,9 +204,18 @@ async def _fetch_pr_states(
         client = GitHubAppClient(redis_client=r)
         for pr_id, installation_id, full_name, pr_number in targets:
             try:
-                states[pr_id] = await client.get_pr_state(
-                    installation_id, full_name, pr_number
-                )
+                if installation_id is None:
+                    token = settings.GITHUB_BOT_TOKEN
+                    if not token:
+                        states[pr_id] = None
+                        continue
+                    states[pr_id] = await client.get_pr_state_with_token(
+                        token, full_name, pr_number
+                    )
+                else:
+                    states[pr_id] = await client.get_pr_state(
+                        installation_id, full_name, pr_number
+                    )
             except Exception:
                 logger.warning(
                     "Failed to fetch PR state for %s#%s",

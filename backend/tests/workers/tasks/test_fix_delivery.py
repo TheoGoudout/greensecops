@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.models import (
     Fix,
     FixDeliveryMode,
@@ -149,3 +150,65 @@ def test_comment_mode_delivery_failure_marks_failed(db: Session) -> None:
     # No comment record was created.
     records = db.exec(select(PullRequest).where(PullRequest.repo_id == repo.id)).all()
     assert records == []
+
+
+def _make_external(db: Session, repo: Repository) -> None:
+    repo.installation_id = None
+    repo.is_external = True
+    db.add(repo)
+    db.commit()
+
+
+def test_external_repo_routes_to_forked_delivery(db: Session) -> None:
+    repo, fix = _build_ready_fix(db)
+    _make_external(db, repo)
+    branch = f"greensecops/fixes-{uuid.uuid4().hex[:8]}"
+    pr_url = f"https://github.com/{repo.full_name}/pull/9"
+
+    with (
+        patch.object(settings, "GITHUB_BOT_TOKEN", "bot-tok"),
+        patch(
+            "app.workers.tasks.fix_delivery._deliver_batch_forked",
+            new=AsyncMock(return_value=FixDeliveryResult(pr_url=pr_url)),
+        ) as mock_forked,
+        patch(
+            "app.workers.tasks.fix_delivery._deliver_batch",
+            new=AsyncMock(),
+        ) as mock_direct,
+    ):
+        result = deliver_fixes_batch(
+            fix_ids=[str(fix.id)],
+            repo_id=str(repo.id),
+            pr_branch=branch,
+            pr_title="t",
+            pr_body="b",
+        )
+
+    assert result == {"status": "ok"}
+    # External repos go through the fork path, never the direct installation path.
+    mock_forked.assert_awaited_once()
+    mock_direct.assert_not_awaited()
+    db.refresh(fix)
+    assert fix.status == FixStatus.delivered
+    pr = db.get(PullRequest, fix.pr_id)
+    assert pr is not None
+    assert pr.pr_url == pr_url
+
+
+def test_external_repo_without_bot_token_skipped(db: Session) -> None:
+    repo, fix = _build_ready_fix(db)
+    _make_external(db, repo)
+
+    with patch.object(settings, "GITHUB_BOT_TOKEN", None):
+        result = deliver_fixes_batch(
+            fix_ids=[str(fix.id)],
+            repo_id=str(repo.id),
+            pr_branch="greensecops/fixes-x",
+            pr_title="t",
+            pr_body="b",
+        )
+
+    assert result == {"status": "skipped", "reason": "no_bot_credential"}
+    db.refresh(fix)
+    # The fix stays ready (untouched) so it can deliver once a credential exists.
+    assert fix.status == FixStatus.ready

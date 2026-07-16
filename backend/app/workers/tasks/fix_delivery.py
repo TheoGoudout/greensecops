@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Fix,
@@ -60,12 +61,21 @@ def deliver_fixes_batch(
             logger.info("Fix delivery disabled for repo %s", repo.full_name)
             return {"status": "skipped", "reason": "delivery_disabled"}
 
-        if repo.installation_id is None:
-            logger.warning(
-                "Fix delivery skipped for external repo %s: no GitHub App installation",
-                repo.full_name,
-            )
-            return {"status": "skipped", "reason": "no_installation"}
+        # External repos have no GitHub App installation, so a branch cannot be
+        # pushed to them directly. When a bot credential is configured we deliver
+        # via a fork + cross-repo PR instead; otherwise there is nothing to do.
+        external = repo.installation_id is None
+        if external:
+            if not (repo.is_external and settings.GITHUB_BOT_TOKEN):
+                logger.warning(
+                    "Fix delivery skipped for repo %s: no GitHub App installation "
+                    "and no bot credential configured",
+                    repo.full_name,
+                )
+                return {"status": "skipped", "reason": "no_bot_credential"}
+            # Comment mode needs write access we don't have on an external repo;
+            # outreach always goes out as a forked PR.
+            delivery_mode = FixDeliveryMode.pr
 
         org_id = str(repo.org_id)
         repo_id_str = repo_id
@@ -165,20 +175,36 @@ def deliver_fixes_batch(
             ev.fix_delivering_batch(org_id, repo_id_str, [str(f.id) for f in fixes])
         )
 
-        result = asyncio.run(
-            _deliver_batch(
-                installation_id=repo.installation_id,
-                full_name=repo.full_name,
-                base_branch=base_branch,
-                fix_branch=pr_branch,
-                file_changes=list(seen.values()),
-                pr_title=pr_title,
-                pr_body=pr_body,
-                expected_base_contents=expected_base_contents,
-                force=force,
-                commit_messages=commit_messages,
+        if external:
+            result = asyncio.run(
+                _deliver_batch_forked(
+                    full_name=repo.full_name,
+                    base_branch=base_branch,
+                    fix_branch=pr_branch,
+                    file_changes=list(seen.values()),
+                    pr_title=pr_title,
+                    pr_body=pr_body,
+                    expected_base_contents=expected_base_contents,
+                    force=force,
+                    commit_messages=commit_messages,
+                )
             )
-        )
+        else:
+            assert repo.installation_id is not None
+            result = asyncio.run(
+                _deliver_batch(
+                    installation_id=repo.installation_id,
+                    full_name=repo.full_name,
+                    base_branch=base_branch,
+                    fix_branch=pr_branch,
+                    file_changes=list(seen.values()),
+                    pr_title=pr_title,
+                    pr_body=pr_body,
+                    expected_base_contents=expected_base_contents,
+                    force=force,
+                    commit_messages=commit_messages,
+                )
+            )
 
         now = datetime.now(timezone.utc)
         delivered_fix_ids = []
@@ -283,6 +309,31 @@ async def _deliver_batch(
     async with _delivery_service() as svc:
         return await svc.update_or_create_workflow_action_pr(
             installation_id=installation_id,
+            full_name=full_name,
+            base_branch=base_branch,
+            fix_branch=fix_branch,
+            file_changes=file_changes,
+            pr_title=pr_title,
+            pr_body=pr_body,
+            expected_base_contents=expected_base_contents,
+            override_user_commits=force,
+            commit_messages=commit_messages,
+        )
+
+
+async def _deliver_batch_forked(
+    full_name: str,
+    base_branch: str,
+    fix_branch: str,
+    file_changes: list[tuple[str, str]],
+    pr_title: str,
+    pr_body: str,
+    expected_base_contents: dict[str, str] | None = None,
+    force: bool = False,
+    commit_messages: dict[str, str] | None = None,
+) -> FixDeliveryResult:
+    async with _delivery_service() as svc:
+        return await svc.update_or_create_forked_pr(
             full_name=full_name,
             base_branch=base_branch,
             fix_branch=fix_branch,

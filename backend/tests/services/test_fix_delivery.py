@@ -7,6 +7,7 @@ import pytest
 from github.GithubException import GithubException
 
 from app.services.github.fix_delivery import (
+    STALE_CONTENT_ERROR_CODE,
     USER_COMMITS_ERROR_CODE,
     FixDeliveryService,
     _DeliveryAborted,
@@ -257,3 +258,141 @@ def test_update_or_create_workflow_action_pr_resets_when_no_open_pr() -> None:
     assert result.pr_url == "https://github.com/org/repo/pull/136"
     repo.get_git_ref.return_value.edit.assert_called_once_with(sha="base1", force=True)
     repo.create_pull.assert_called_once()
+
+
+# ─── _update_or_create_open_pr (cross-repo head) ─────────────────────────────
+
+
+def test_update_or_create_open_pr_uses_cross_repo_head() -> None:
+    repo = MagicMock()
+    repo.create_pull.return_value.html_url = "https://github.com/up/stream/pull/1"
+
+    url = _update_or_create_open_pr(
+        repo,
+        [],
+        "greensecops/fixes-abc",
+        "main",
+        "t",
+        "b",
+        updated_paths=["wf.yml"],
+        head="bot:greensecops/fixes-abc",
+    )
+
+    assert url == "https://github.com/up/stream/pull/1"
+    repo.create_pull.assert_called_once_with(
+        title="t", body="b", head="bot:greensecops/fixes-abc", base="main"
+    )
+
+
+# ─── update_or_create_forked_pr (external outreach) ─────────────────────────
+
+BOT_ACCOUNT = "greensecops-bot"
+
+
+def _make_forked_app_client(bot: MagicMock, fork: MagicMock) -> MagicMock:
+    client = MagicMock()
+    client.get_bot_login = AsyncMock(return_value=BOT_ACCOUNT)
+    client.get_bot_github = MagicMock(return_value=bot)
+    client.ensure_fork = MagicMock(return_value=fork)
+    return client
+
+
+def test_forked_pr_creates_cross_repo_pr_when_none_open() -> None:
+    # Branch does not exist on the fork yet ⇒ created at the upstream base SHA.
+    fork = _make_repo(head_sha=None, author_login=None)
+    upstream = MagicMock()
+    upstream.get_branch.return_value.commit.sha = "base1"
+    upstream.get_pulls.return_value = []
+    upstream.create_pull.return_value.html_url = (
+        "https://github.com/facebook/react/pull/42"
+    )
+    bot = MagicMock()
+    bot.get_repo.return_value = upstream
+
+    svc = FixDeliveryService(app_client=_make_forked_app_client(bot, fork))
+    result = asyncio.run(
+        svc.update_or_create_forked_pr(
+            full_name="facebook/react",
+            base_branch="main",
+            fix_branch="greensecops/fixes-abc",
+            file_changes=[("wf.yml", "content")],
+            pr_title="title",
+            pr_body="body",
+        )
+    )
+
+    assert result.error is None
+    assert result.pr_url == "https://github.com/facebook/react/pull/42"
+    svc._app.ensure_fork.assert_called_once_with(bot, "facebook/react")
+    # Fix branch is created on the fork at the upstream base SHA.
+    fork.create_git_ref.assert_called_once_with(
+        ref="refs/heads/greensecops/fixes-abc", sha="base1"
+    )
+    # PR is opened on the upstream from the fork branch (cross-repo head format).
+    upstream.get_pulls.assert_called_once_with(
+        state="open", head="greensecops-bot:greensecops/fixes-abc", base="main"
+    )
+    upstream.create_pull.assert_called_once_with(
+        title="title",
+        body="body",
+        head="greensecops-bot:greensecops/fixes-abc",
+        base="main",
+    )
+
+
+def test_forked_pr_updates_existing_pr_without_resetting_branch() -> None:
+    # An already-open cross-repo PR must be updated in place; resetting the
+    # fork branch would auto-close it (same invariant as the same-repo path).
+    fork = _make_repo(head_sha="head1", author_login=BOT_ACCOUNT)
+    upstream = MagicMock()
+    upstream.get_branch.return_value.commit.sha = "base1"
+    existing_pr = MagicMock(html_url="https://github.com/facebook/react/pull/7")
+    upstream.get_pulls.return_value = [existing_pr]
+    bot = MagicMock()
+    bot.get_repo.return_value = upstream
+
+    svc = FixDeliveryService(app_client=_make_forked_app_client(bot, fork))
+    result = asyncio.run(
+        svc.update_or_create_forked_pr(
+            full_name="facebook/react",
+            base_branch="main",
+            fix_branch="greensecops/fixes-abc",
+            file_changes=[("wf.yml", "content")],
+            pr_title="title",
+            pr_body="body",
+        )
+    )
+
+    assert result.pr_url == "https://github.com/facebook/react/pull/7"
+    fork.get_git_ref.return_value.edit.assert_not_called()
+    existing_pr.edit.assert_called_once_with(body="body")
+    upstream.create_pull.assert_not_called()
+
+
+def test_forked_pr_aborts_on_stale_base_content() -> None:
+    fork = _make_repo(head_sha=None, author_login=None)
+    upstream = MagicMock()
+    upstream.get_branch.return_value.commit.sha = "base1"
+    upstream.get_pulls.return_value = []
+    # Upstream base file now differs from what the fix was generated against.
+    stale = MagicMock()
+    stale.decoded_content = b"changed upstream"
+    upstream.get_contents.return_value = stale
+    bot = MagicMock()
+    bot.get_repo.return_value = upstream
+
+    svc = FixDeliveryService(app_client=_make_forked_app_client(bot, fork))
+    result = asyncio.run(
+        svc.update_or_create_forked_pr(
+            full_name="facebook/react",
+            base_branch="main",
+            fix_branch="greensecops/fixes-abc",
+            file_changes=[("wf.yml", "content")],
+            pr_title="title",
+            pr_body="body",
+            expected_base_contents={"wf.yml": "original content"},
+        )
+    )
+
+    assert result.error_code == STALE_CONTENT_ERROR_CODE
+    upstream.create_pull.assert_not_called()

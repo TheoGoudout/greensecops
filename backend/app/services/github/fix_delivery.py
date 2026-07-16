@@ -177,7 +177,14 @@ def _update_or_create_open_pr(
     pr_title: str,
     pr_body: str,
     updated_paths: list[str],
+    head: str | None = None,
 ) -> str:
+    """Update the open PR or create one on ``repo`` (the base repo).
+
+    ``head`` defaults to ``fix_branch`` for same-repo delivery; cross-repo
+    (fork) delivery passes ``<bot_login>:<fix_branch>`` so GitHub opens the PR
+    from the fork's branch against the upstream base.
+    """
     if open_prs:
         pr = open_prs[0]
         pr.edit(body=pr_body)
@@ -187,7 +194,7 @@ def _update_or_create_open_pr(
     pr = repo.create_pull(
         title=pr_title,
         body=pr_body,
-        head=fix_branch,
+        head=head or fix_branch,
         base=base_branch,
     )
     return pr.html_url
@@ -273,6 +280,91 @@ class FixDeliveryService:
                 )
 
             return FixDeliveryResult(pr_url=await asyncio.to_thread(_upsert_batch_pr))
+        except _DeliveryAborted as exc:
+            return FixDeliveryResult(error=str(exc), error_code=exc.code)
+        except Exception as exc:
+            return FixDeliveryResult(error=str(exc))
+
+    async def update_or_create_forked_pr(
+        self,
+        full_name: str,
+        base_branch: str,
+        fix_branch: str,
+        file_changes: list[tuple[str, str]],
+        pr_title: str,
+        pr_body: str,
+        expected_base_contents: dict[str, str] | None = None,
+        override_user_commits: bool = False,
+        commit_messages: dict[str, str] | None = None,
+    ) -> FixDeliveryResult:
+        """Create or update a cross-repo fix PR on an external repo.
+
+        The GitHub App is not installed on ``full_name`` (an external
+        open-source project), so a branch cannot be pushed to it directly.
+        Instead the upstream is forked into the bot account, the fix branch is
+        pushed to the fork, and a PR is opened from ``<bot_login>:<fix_branch>``
+        against the upstream base branch.
+
+        Mirrors :meth:`update_or_create_workflow_action_pr` and reuses the same
+        helpers, but splits the work: the branch and file commits land on the
+        fork, while the freshness check and the PR itself target the upstream.
+        The fix branch is created at the upstream base SHA directly (forks share
+        the upstream's git objects), so no separate fork-sync step is needed.
+        """
+        try:
+            bot_login = await self._app.get_bot_login()
+
+            def _upsert_forked_pr() -> str:
+                bot = self._app.get_bot_github()
+                upstream = bot.get_repo(full_name)
+                fork = self._app.ensure_fork(bot, full_name)
+                base_sha = upstream.get_branch(base_branch).commit.sha
+
+                if expected_base_contents:
+                    for fp, expected in expected_base_contents.items():
+                        _check_base_content_fresh(upstream, fp, base_branch, expected)
+
+                head = f"{bot_login}:{fix_branch}"
+                # Fetched once, up front: the reset decision and the
+                # update-vs-create decision must agree on the same open-PR
+                # snapshot (see _prepare_fix_branch).
+                open_prs = list(
+                    upstream.get_pulls(
+                        state="open",
+                        head=head,
+                        base=base_branch,
+                    )
+                )
+                _prepare_fix_branch(
+                    fork,
+                    fix_branch,
+                    base_sha,
+                    override_user_commits,
+                    bot_login,
+                    reset_to_base=not open_prs,
+                )
+                for fp, new_content in file_changes:
+                    _upsert_file(
+                        fork,
+                        fp,
+                        new_content,
+                        fix_branch,
+                        (commit_messages or {}).get(
+                            fp, f"ci: add {settings.PROJECT_NAME} telemetry to {fp}"
+                        ),
+                    )
+                return _update_or_create_open_pr(
+                    upstream,
+                    open_prs,
+                    fix_branch,
+                    base_branch,
+                    pr_title,
+                    pr_body,
+                    updated_paths=[fp for fp, _ in file_changes],
+                    head=head,
+                )
+
+            return FixDeliveryResult(pr_url=await asyncio.to_thread(_upsert_forked_pr))
         except _DeliveryAborted as exc:
             return FixDeliveryResult(error=str(exc), error_code=exc.code)
         except Exception as exc:
