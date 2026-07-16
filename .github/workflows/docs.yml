@@ -15,6 +15,7 @@ permissions: {}
 
 jobs:
   build:
+    name: Build documentation
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -23,6 +24,8 @@ jobs:
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
 
       - name: Install docs dependencies
         run: uv sync --package docs
@@ -39,6 +42,7 @@ jobs:
           path: docs/_build/html
 
   deploy:
+    name: Deploy documentation
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
