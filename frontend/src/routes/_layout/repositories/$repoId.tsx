@@ -36,6 +36,7 @@ const navItems = [
   { label: "Workflow", shortLabel: "Workflow", to: "workflow" },
   { label: "Fixes", shortLabel: "Fixes", to: "fixes" },
   { label: "Pull Requests", shortLabel: "PRs", to: "pull-requests" },
+  { label: "Telemetry", shortLabel: "Telemetry", to: "telemetry" },
 ] as const
 
 function RepositoryLayout() {
