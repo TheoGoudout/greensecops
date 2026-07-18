@@ -19,6 +19,7 @@ from app.models import (
     PullRequest,
     Repository,
     ReviewDecision,
+    WorkflowFile,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -99,6 +100,8 @@ async def github_webhook(
     # 500 in GitHub's webhook log (a lost 200 would silently drop the event).
     if event == "push":
         _handle_push_event(session, payload)
+    elif event == "delete":
+        _handle_delete_event(session, payload)
     elif event == "workflow_run":
         _handle_workflow_run_event(session, payload)
     elif event == "issue_comment":
@@ -124,6 +127,10 @@ def _handle_push_event(
     payload: dict[str, Any],
 ) -> None:
     """Trigger analysis when a push touches .github/workflows/ files or creates a new branch."""
+    # Branch deletion also emits a push (after = 0-sha, empty commits); the
+    # dedicated ``delete`` handler owns cleanup.
+    if payload.get("deleted"):
+        return
     before: str = payload.get("before", "")
     is_new_branch = before == "0" * 40
     commits: list[dict[str, Any]] = payload.get("commits", [])
@@ -161,6 +168,103 @@ def _handle_push_event(
         trigger=AnalysisTrigger.webhook_push,
         org_id=str(repo.org_id),
     )
+
+
+def _handle_delete_event(
+    session: Session,
+    payload: dict[str, Any],
+) -> None:
+    """Reconcile state when a branch is deleted.
+
+    A ``greensecops/*`` fix branch deleted by hand closes its PR record and
+    withdraws its fixes (GitHub closes the PR too, but that webhook may never
+    come if no PR existed). Any other branch resolves that branch's open
+    issues with reason ``branch_deleted`` — their workflow files no longer
+    exist anywhere. WorkflowFile rows are kept (deleting would cascade the
+    audit history, see docs/state-machines.md §8).
+    """
+    if payload.get("ref_type") != "branch":
+        return
+    branch: str = payload.get("ref", "")
+    github_repo_id = payload.get("repository", {}).get("id")
+    if not branch or not github_repo_id:
+        return
+
+    from sqlmodel import select
+
+    # No ``enabled`` gate: cleanup applies to disabled repos too.
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if not repo:
+        return
+    # GitHub forbids deleting the default branch; guard anyway.
+    if branch == repo.default_branch:
+        return
+
+    if branch.startswith("greensecops/"):
+        pr_record = session.exec(
+            select(PullRequest)
+            .where(PullRequest.repo_id == repo.id)
+            .where(PullRequest.pr_branch == branch)
+        ).first()
+        if pr_record and sm.try_advance(pr_record, sm.PullRequestMachine, "close"):
+            session.add(pr_record)
+            session.commit()
+            logger.info(
+                "Fix branch %s deleted: closed PR record %s", branch, pr_record.id
+            )
+            _supersede_fixes_for_closed_pr(session, pr_record)
+            if pr_record.pr_url:
+                fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+                if fix:
+                    events_pub.publish_event(
+                        ev.pr_closed(
+                            str(repo.org_id),
+                            str(repo.id),
+                            str(fix.id),
+                            pr_record.pr_url,
+                            False,
+                        )
+                    )
+        return
+
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    wf_rows = session.exec(
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.branch == branch)
+    ).all()
+    resolved = 0
+    superseded = 0
+    for wf in wf_rows:
+        open_issues = session.exec(
+            select(Issue)
+            .where(Issue.workflow_file_id == wf.id)
+            .where(col(Issue.resolved_at).is_(None))
+        ).all()
+        for issue in open_issues:
+            issue.resolved_at = now
+            issue.resolution_reason = IssueResolutionReason.branch_deleted
+            session.add(issue)
+            resolved += 1
+        # Fixes are default-branch-only, but a legacy feature-branch fix (from
+        # before the branch dimension) is withdrawn defensively.
+        if wf.fix is not None and sm.try_advance(
+            wf.fix, sm.FixMachine, "supersede_deleted_file"
+        ):
+            session.add(wf.fix)
+            superseded += 1
+    if resolved or superseded:
+        session.commit()
+        logger.info(
+            "Branch %s of %s deleted: resolved %d issue(s)",
+            branch,
+            repo.full_name,
+            resolved,
+        )
 
 
 def _handle_workflow_run_event(
@@ -499,23 +603,7 @@ def _handle_pull_request_event(
                 session.add(pr_fix)
         session.commit()
     elif action == "closed" and not merged:
-        # A delivered PR closed without merging withdraws its fixes: move them to
-        # ``superseded_by_closed_pr`` so ``reopen`` (above) restores them. Only
-        # ``ready``/``delivered`` fixes are affected; try_advance keeps it a
-        # no-op for any already-terminal fix, and safe on redelivered events.
-        superseded_fixes: list[Fix] = []
-        for pr_fix in pr_fixes:
-            if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr"):
-                session.add(pr_fix)
-                superseded_fixes.append(pr_fix)
-        if superseded_fixes:
-            session.commit()
-            repo = session.get(Repository, pr_record.repo_id)
-            if repo:
-                for pr_fix in superseded_fixes:
-                    events_pub.publish_event(
-                        ev.fix_rejected(str(repo.org_id), str(repo.id), str(pr_fix.id))
-                    )
+        _supersede_fixes_for_closed_pr(session, pr_record)
     elif action == "closed" and merged:
         # The PR merged: land its delivered fixes (terminal) and resolve the
         # issues they addressed with reason ``merged`` — the code is now on the
@@ -554,6 +642,36 @@ def _handle_pull_request_event(
                         pr_url,
                         pr_record.pr_branch,
                     )
+                )
+
+
+def _supersede_fixes_for_closed_pr(
+    session: Session,
+    pr_record: PullRequest,
+) -> None:
+    """Withdraw a closed (unmerged) PR's fixes.
+
+    A delivered PR closed without merging withdraws its fixes: move them to
+    ``superseded_by_closed_pr`` so ``reopen`` restores them. Only
+    ``ready``/``delivered`` fixes are affected; try_advance keeps it a no-op
+    for any already-terminal fix, and safe on redelivered events. Shared by
+    the ``pull_request closed`` handler and the ``delete`` (branch) handler.
+    """
+    from sqlmodel import select
+
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    superseded_fixes: list[Fix] = []
+    for pr_fix in pr_fixes:
+        if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr"):
+            session.add(pr_fix)
+            superseded_fixes.append(pr_fix)
+    if superseded_fixes:
+        session.commit()
+        repo = session.get(Repository, pr_record.repo_id)
+        if repo:
+            for pr_fix in superseded_fixes:
+                events_pub.publish_event(
+                    ev.fix_rejected(str(repo.org_id), str(repo.id), str(pr_fix.id))
                 )
 
 

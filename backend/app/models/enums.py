@@ -105,11 +105,14 @@ class IssueResolutionReason(str, enum.Enum):
       disabled/removed rule — the two cannot be told apart after the fact).
     - ``file_removed``: the workflow file was deleted or renamed.
     - ``merged``: the fix PR was merged, applying the change to the branch.
+    - ``branch_deleted``: the branch carrying the issue's workflow file was
+      deleted; the violation no longer exists anywhere to fix.
     """
 
     no_longer_detected = "no_longer_detected"
     file_removed = "file_removed"
     merged = "merged"
+    branch_deleted = "branch_deleted"
 
 
 class FixStatus(str, enum.Enum):

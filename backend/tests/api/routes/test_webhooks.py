@@ -1781,3 +1781,178 @@ def test_github_webhook_installation_suspend_unsuspend(
     db.refresh(repo)
     assert repo.status == RepositoryStatus.active
     assert repo.is_accessible is True
+
+
+# ─── delete (branch) webhook ─────────────────────────────────────────────────
+
+
+def _seed_branch_issue(
+    db: Session, repo: Repository, branch: str, path: str = ".github/workflows/ci.yml"
+) -> tuple[WorkflowFile, Issue]:
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        branch=branch,
+        path=path,
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+        branch=branch,
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+    issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=wf.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message=f"issue on {branch}",
+        fingerprint=uuid.uuid4().hex[:16],
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    return wf, issue
+
+
+def _post_delete_event(
+    client: TestClient, repo: Repository, ref: str, ref_type: str = "branch"
+):  # type: ignore[no-untyped-def]
+    payload = {
+        "ref": ref,
+        "ref_type": ref_type,
+        "repository": {"id": repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        return client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "delete"},
+        )
+
+
+def test_delete_branch_resolves_only_that_branchs_issues(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    _main_wf, main_issue = _seed_branch_issue(db, enabled_repo, "main")
+    _feat_wf, feat_issue = _seed_branch_issue(db, enabled_repo, "feature")
+
+    response = _post_delete_event(client, enabled_repo, "feature")
+
+    assert response.status_code == 200
+    db.refresh(feat_issue)
+    assert feat_issue.resolved_at is not None
+    assert feat_issue.resolution_reason == IssueResolutionReason.branch_deleted
+    assert feat_issue.status == IssueStatus.resolved
+    # Default-branch issues untouched.
+    db.refresh(main_issue)
+    assert main_issue.resolved_at is None
+
+    # Redelivery is idempotent (no error, nothing re-resolved).
+    redelivery = _post_delete_event(client, enabled_repo, "feature")
+    assert redelivery.status_code == 200
+
+
+def test_delete_default_branch_is_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    _wf, issue = _seed_branch_issue(db, enabled_repo, "main")
+    response = _post_delete_event(client, enabled_repo, "main")
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.resolved_at is None
+
+
+def test_delete_tag_is_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    _wf, issue = _seed_branch_issue(db, enabled_repo, "v1-branch")
+    response = _post_delete_event(client, enabled_repo, "v1-branch", ref_type="tag")
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.resolved_at is None
+
+
+def test_delete_greensecops_branch_closes_pr_and_supersedes_fix(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    wf, _issue = _seed_branch_issue(db, enabled_repo, "main")
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fix-abc123",
+        pr_url="https://github.com/owner/repo/pull/42",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix = Fix(
+        workflow_file_id=wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_id=pr.id,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    response = _post_delete_event(client, enabled_repo, "greensecops/fix-abc123")
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.closed
+    db.refresh(fix)
+    assert fix.status == FixStatus.superseded_by_closed_pr
+
+    # Redelivery: close is a no-op on an already-closed PR.
+    redelivery = _post_delete_event(client, enabled_repo, "greensecops/fix-abc123")
+    assert redelivery.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.closed
+
+
+def test_push_with_deleted_flag_is_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "0" * 40,
+        "deleted": True,
+        "commits": [],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "push"},
+        )
+    assert response.status_code == 200
+    mock_enqueue.assert_not_called()
