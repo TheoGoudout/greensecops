@@ -17,6 +17,7 @@ from app.models import (
     IssueResolutionReason,
     Organization,
     PullRequest,
+    PullRequestState,
     Repository,
     ReviewDecision,
     WorkflowFile,
@@ -131,18 +132,6 @@ def _handle_push_event(
     # dedicated ``delete`` handler owns cleanup.
     if payload.get("deleted"):
         return
-    before: str = payload.get("before", "")
-    is_new_branch = before == "0" * 40
-    commits: list[dict[str, Any]] = payload.get("commits", [])
-    touches_workflows = any(
-        any(
-            f.startswith(".github/workflows/")
-            for f in (c.get("added", []) + c.get("modified", []) + c.get("removed", []))
-        )
-        for c in commits
-    )
-    if not touches_workflows and not is_new_branch:
-        return
 
     repo_payload = payload.get("repository", {})
     github_repo_id = repo_payload.get("id")
@@ -160,6 +149,25 @@ def _handle_push_event(
     branch = payload.get("ref", "").removeprefix("refs/heads/")
     if branch.startswith("greensecops/"):
         return
+
+    before: str = payload.get("before", "")
+    is_new_branch = before == "0" * 40
+    # A force-push (rebase, reset) can change the branch's effective workflow
+    # content while the payload's commits never mention a workflow path (the
+    # dropped commits aren't listed). Re-analyse unconditionally: branch-scoped
+    # content dedup makes an unchanged tree a cheap no-op.
+    forced = bool(payload.get("forced"))
+    commits: list[dict[str, Any]] = payload.get("commits", [])
+    touches_workflows = any(
+        any(
+            f.startswith(".github/workflows/")
+            for f in (c.get("added", []) + c.get("modified", []) + c.get("removed", []))
+        )
+        for c in commits
+    )
+    if not touches_workflows and not is_new_branch and not forced:
+        return
+
     commit_sha = payload.get("after", "")
     _enqueue_static_analysis(
         repo_id=str(repo.id),
@@ -449,7 +457,10 @@ def _handle_repository_event(
             repo.full_name = new_full_name
             changed = True
         new_default_branch = repo_payload.get("default_branch")
-        if new_default_branch and new_default_branch != repo.default_branch:
+        default_branch_changed = bool(
+            new_default_branch and new_default_branch != repo.default_branch
+        )
+        if default_branch_changed:
             logger.info(
                 "Repo %s default branch: %s -> %s",
                 repo.full_name,
@@ -461,6 +472,18 @@ def _handle_repository_event(
         if changed:
             session.add(repo)
             session.commit()
+        if default_branch_changed and repo.enabled:
+            # Everything default-branch-scoped (grades, fixes, the default
+            # issue listing) now keys off the new branch; analyse it so its
+            # WorkflowFile rows exist. Old-branch fixes/PRs retire naturally
+            # via the default-branch gates.
+            _enqueue_static_analysis(
+                repo_id=str(repo.id),
+                branch=repo.default_branch,
+                commit_sha="",
+                trigger=AnalysisTrigger.manual,
+                org_id=str(repo.org_id),
+            )
 
 
 def _handle_installation_event(
@@ -531,6 +554,7 @@ def _handle_pull_request_event(
 ) -> None:
     action = payload.get("action")
     if action not in (
+        "opened",
         "closed",
         "reopened",
         "synchronize",
@@ -546,6 +570,10 @@ def _handle_pull_request_event(
         return
 
     from sqlmodel import select
+
+    if action == "opened":
+        _handle_pull_request_opened(session, payload, pr, pr_url)
+        return
 
     pr_record = session.exec(
         select(PullRequest).where(PullRequest.pr_url == pr_url)
@@ -643,6 +671,58 @@ def _handle_pull_request_event(
                         pr_record.pr_branch,
                     )
                 )
+
+
+def _handle_pull_request_opened(
+    session: Session,
+    payload: dict[str, Any],
+    pr: dict[str, Any],
+    pr_url: str,
+) -> None:
+    """Link a manually opened PR from a ``greensecops/*`` fix branch.
+
+    Delivery normally creates the PR (and its record) itself; this covers a
+    user opening a PR by hand from a fix branch the bot pushed — without it
+    the PR's lifecycle (close/merge/reopen) would never be tracked.
+    """
+    head_ref: str = pr.get("head", {}).get("ref", "")
+    if not head_ref.startswith("greensecops/"):
+        return
+    github_repo_id = payload.get("repository", {}).get("id")
+    if not github_repo_id:
+        return
+
+    from sqlmodel import select
+
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if not repo:
+        return
+
+    pr_record = session.exec(
+        select(PullRequest)
+        .where(PullRequest.repo_id == repo.id)
+        .where(PullRequest.pr_branch == head_ref)
+    ).first()
+    if pr_record is None:
+        pr_record = PullRequest(
+            repo_id=repo.id,
+            pr_branch=head_ref,
+            pr_url=pr_url,
+            pr_state=PullRequestState.open,
+        )
+        session.add(pr_record)
+        session.commit()
+        logger.info("Linked externally opened fix PR %s (%s)", pr_url, head_ref)
+        return
+    # An existing record: fill a missing URL and reopen a closed record —
+    # opening a PR from a branch whose previous PR closed is a fresh start.
+    if not pr_record.pr_url:
+        pr_record.pr_url = pr_url
+    sm.try_advance(pr_record, sm.PullRequestMachine, "reopen")
+    session.add(pr_record)
+    session.commit()
 
 
 def _supersede_fixes_for_closed_pr(
