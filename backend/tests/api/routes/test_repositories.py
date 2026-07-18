@@ -818,3 +818,80 @@ def test_list_repository_branches(
 
     assert response.status_code == 200
     assert response.json() == ["dev", "main"]
+
+
+# ─── Branch scoping ───────────────────────────────────────────────────────────
+
+
+def test_grade_ignores_feature_branch_analyses(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    main_wf = _make_workflow_file(db, repo)
+    _make_completed_analysis(db, repo, main_wf, score=90.0, grade="A")
+
+    feature_wf = WorkflowFile(
+        repo_id=repo.id,
+        branch="feature",
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(feature_wf)
+    db.commit()
+    db.refresh(feature_wf)
+    bad = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=feature_wf.id,
+        content_hash=feature_wf.content_hash,
+        status=AnalysisStatus.completed,
+        score=10.0,
+        grade="F",
+        triggered_by=AnalysisTrigger.manual,
+        branch="feature",
+    )
+    db.add(bad)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    # Only the default-branch analysis counts (not the feature-branch F).
+    assert body["avg_score"] == 90.0
+
+
+def test_list_workflow_files_scoped_to_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    _make_workflow_file(db, repo, path=".github/workflows/main-only.yml")
+    feature_wf = WorkflowFile(
+        repo_id=repo.id,
+        branch="feature",
+        path=".github/workflows/feature-only.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(feature_wf)
+    db.commit()
+
+    url = f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files"
+    default_listing = client.get(url, headers=superuser_token_headers)
+    assert default_listing.status_code == 200
+    paths = [wf["path"] for wf in default_listing.json()]
+    assert paths == [".github/workflows/main-only.yml"]
+
+    feature_listing = client.get(
+        url, params={"branch": "feature"}, headers=superuser_token_headers
+    )
+    assert feature_listing.status_code == 200
+    feature_paths = [wf["path"] for wf in feature_listing.json()]
+    assert feature_paths == [".github/workflows/feature-only.yml"]
+    assert feature_listing.json()[0]["branch"] == "feature"

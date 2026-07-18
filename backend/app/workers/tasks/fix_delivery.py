@@ -151,11 +151,6 @@ def deliver_fixes_batch(
             commit_messages[wf.path] = (
                 f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {wf.path}"
             )
-            issue = fix.issues[0] if fix.issues else None
-            analysis = issue.analysis if issue else None
-            base_branch = (
-                (analysis.branch if analysis else None) or repo.default_branch or "main"
-            )
             deliverable.append(fix)
         session.commit()
 

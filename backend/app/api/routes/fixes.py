@@ -128,7 +128,11 @@ def _latest_unresolved_issues(
 
     Grouped by workflow file → one whole-file fix (one LLM call) per file.
     The latest-analysis correlation guarantees workflow_file_id is set.
+    Restricted to default-branch workflow files: fixes and PRs only ever
+    target the default branch.
     """
+    repo = session.get(Repository, repo_id)
+    default_branch = repo.default_branch if repo else "main"
     latest_analysis_subq = (
         select(Analysis.id)
         .where(Analysis.workflow_file_id == Issue.workflow_file_id)
@@ -141,7 +145,9 @@ def _latest_unresolved_issues(
     query = (
         select(Issue)
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        .join(WorkflowFile, Issue.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
+        .where(WorkflowFile.branch == default_branch)
         .where(Issue.analysis_id == latest_analysis_subq)
         .where(col(Issue.resolved_at).is_(None))
         .where(col(Issue.ignored_at).is_(None))

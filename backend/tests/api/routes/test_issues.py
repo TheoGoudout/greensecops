@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
@@ -519,3 +519,71 @@ def test_ignored_issue_hidden_by_default_shown_with_flag(
     )
     assert resp.status_code == 200
     assert str(issue.id) in [i["id"] for i in resp.json()]
+
+
+def test_repo_issue_listing_defaults_to_default_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    """Without an explicit ?branch=, a repo listing shows only default-branch
+    issues; feature-branch issues appear when their branch is requested."""
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+
+    def _seed(branch: str, path: str, message: str) -> Issue:
+        wf = WorkflowFile(
+            repo_id=repo.id,
+            branch=branch,
+            path=path,
+            content_hash=uuid.uuid4().hex,
+            raw_content="on: push\njobs: {}",
+        )
+        db.add(wf)
+        db.commit()
+        db.refresh(wf)
+        analysis = Analysis(
+            repo_id=repo.id,
+            workflow_file_id=wf.id,
+            content_hash=wf.content_hash,
+            status=AnalysisStatus.completed,
+            triggered_by=AnalysisTrigger.manual,
+            branch=branch,
+        )
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+        issue = Issue(
+            analysis_id=analysis.id,
+            workflow_file_id=wf.id,
+            rule_id=rule.id,
+            severity=rule.severity,
+            category=rule.category,
+            message=message,
+            fingerprint=uuid.uuid4().hex[:16],
+        )
+        db.add(issue)
+        db.commit()
+        return issue
+
+    _seed("main", ".github/workflows/ci.yml", "on main")
+    _seed("feature", ".github/workflows/ci.yml", "on feature")
+
+    url = f"{settings.API_V1_STR}/issues/"
+    default_listing = client.get(
+        url, params={"repo_id": str(repo.id)}, headers=superuser_token_headers
+    )
+    assert default_listing.status_code == 200
+    messages = [i["message"] for i in default_listing.json()]
+    assert "on main" in messages
+    assert "on feature" not in messages
+
+    feature_listing = client.get(
+        url,
+        params={"repo_id": str(repo.id), "branch": "feature"},
+        headers=superuser_token_headers,
+    )
+    assert feature_listing.status_code == 200
+    feature_messages = [i["message"] for i in feature_listing.json()]
+    assert feature_messages == ["on feature"]

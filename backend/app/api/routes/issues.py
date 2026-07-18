@@ -16,6 +16,7 @@ from app.models import (
     IssuePublic,
     IssueSeverity,
     Repository,
+    WorkflowFile,
 )
 from app.services.state_machines import REJECTED_STATUSES
 
@@ -55,10 +56,14 @@ def list_issues(
         query = query.where(col(Issue.resolved_at).is_(None))
     if not include_ignored:
         query = query.where(col(Issue.ignored_at).is_(None))
-    # Join Analysis once if either tenant scoping or repo/branch filtering needs it.
-    needs_analysis_join = (
-        repo_id is not None or branch is not None or not current_user.is_superuser
-    )
+    # Issues belong to a per-branch WorkflowFile row; a repo listing without an
+    # explicit branch shows the default branch (feature-branch issues only
+    # appear when asked for).
+    if repo_id is not None and branch is None:
+        repo = session.get(Repository, repo_id)
+        branch = repo.default_branch if repo else None
+    # Join Analysis once if either tenant scoping or repo filtering needs it.
+    needs_analysis_join = repo_id is not None or not current_user.is_superuser
     if needs_analysis_join:
         query = query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
     if not current_user.is_superuser:
@@ -72,19 +77,20 @@ def list_issues(
     if analysis_id:
         query = query.where(Issue.analysis_id == analysis_id)
     if branch:
-        query = query.where(Analysis.branch == branch)
+        query = query.join(
+            WorkflowFile,
+            Issue.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
+        ).where(WorkflowFile.branch == branch)
     if repo_id:
         query = query.where(Analysis.repo_id == repo_id)
         if latest_only:
+            # The workflow_file_id correlation is inherently branch-scoped now
+            # that WorkflowFile rows are per-branch.
             latest_subq = (
                 select(Analysis.id)
                 .where(Analysis.workflow_file_id == Issue.workflow_file_id)
                 .where(Analysis.status == AnalysisStatus.completed)
-            )
-            if branch:
-                latest_subq = latest_subq.where(Analysis.branch == branch)
-            latest_subq = (
-                latest_subq.order_by(
+                .order_by(
                     Analysis.completed_at.desc().nulls_last(),
                     Analysis.created_at.desc(),
                 )  # type: ignore[union-attr]

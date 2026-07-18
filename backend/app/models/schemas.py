@@ -150,6 +150,7 @@ class FixPublic(SQLModel):
 class WorkflowFilePublic(SQLModel):
     id: uuid.UUID
     path: str
+    branch: str | None = None
     raw_content: str | None = None
 
 

@@ -108,6 +108,9 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                     _select(Fix)
                     .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
                     .where(WorkflowFile.repo_id == repo.id)
+                    # Fixes are default-branch-only; never deliver a legacy
+                    # feature-branch fix.
+                    .where(WorkflowFile.branch == repo.default_branch)
                     .where(Fix.status == FixStatus.ready)
                     .order_by(col(WorkflowFile.path).asc())
                 ).all()

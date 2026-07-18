@@ -174,10 +174,18 @@ class Repository(SQLModel, table=True):
 
 class WorkflowFile(SQLModel, table=True):
     __tablename__ = "workflow_file"
+    __table_args__ = (
+        UniqueConstraint(
+            "repo_id", "branch", "path", name="uq_workflow_file_repo_branch_path"
+        ),
+    )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     repo_id: uuid.UUID = Field(
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
     )
+    # Workflow content is tracked per branch; issues hang off the per-branch
+    # row, so reconciliation on one branch cannot touch another branch's state.
+    branch: str = Field(default="main", max_length=255)
     path: str = Field(max_length=512)
     content_hash: str = Field(max_length=64, index=True)
     raw_content: str
