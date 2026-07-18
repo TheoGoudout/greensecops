@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 
 from github import Auth, Github
+from github.ContentFile import ContentFile
 from github.GithubException import GithubException
 from github.PullRequest import PullRequest as GithubPullRequest
 from github.Repository import Repository as GithubRepository
@@ -11,6 +12,8 @@ from app.services.github.app_client import GitHubAppClient
 
 STALE_CONTENT_ERROR_CODE = "stale_fix_workflow_changed"
 USER_COMMITS_ERROR_CODE = "user_commits_on_fix_branch"
+
+WORKFLOW_DIR = ".github/workflows"
 
 
 @dataclass
@@ -162,6 +165,61 @@ def _upsert_file(
         )
 
 
+def _list_workflow_files(repo: GithubRepository, ref: str) -> list[ContentFile]:
+    """Return the *.yml/*.yaml content files under .github/workflows at ref.
+
+    Yields an empty list when the directory is absent (404), mirroring
+    ``app_client.fetch_workflow_files``.
+    """
+    try:
+        contents = repo.get_contents(WORKFLOW_DIR, ref=ref)
+    except GithubException as exc:
+        if exc.status == 404:
+            return []
+        raise
+    if not isinstance(contents, list):
+        contents = [contents]
+    return [cf for cf in contents if cf.name.endswith((".yml", ".yaml"))]
+
+
+def _remove_outdated_workflow_files(
+    branch_repo: GithubRepository,
+    base_repo: GithubRepository,
+    fix_branch: str,
+    base_branch: str,
+) -> list[str]:
+    """Delete workflow files from the fix branch that no longer exist on base.
+
+    Updating an open PR does not reset the fix branch to base (that would
+    auto-close the PR — see ``_prepare_fix_branch``), so a workflow file the
+    branch modified but the user later deleted from the base branch lingers on
+    the branch as a modify/delete conflict that makes the PR unmergeable. Remove
+    such files with a forward-only ``delete_file`` commit so the PR stays
+    mergeable without rewriting history.
+
+    We only ever *modify* existing workflow files (never add new ones), so any
+    workflow file present on the fix branch but absent from the current base
+    branch must have been deleted on base after the branch was cut. Files in the
+    current delivery still exist on base (freshness was already checked), so
+    they are never removed. ``base_repo`` is the repo owning the base branch —
+    the same repo as ``branch_repo`` for same-repo delivery, or the upstream for
+    fork-based delivery.
+    """
+    base_paths = {cf.path for cf in _list_workflow_files(base_repo, base_branch)}
+    removed: list[str] = []
+    for cf in _list_workflow_files(branch_repo, fix_branch):
+        if cf.path in base_paths:
+            continue
+        branch_repo.delete_file(
+            path=cf.path,
+            message=f"chore: remove {cf.path} deleted from {base_branch}",
+            sha=cf.sha,
+            branch=fix_branch,
+        )
+        removed.append(cf.path)
+    return removed
+
+
 def _update_comment_body(updated_paths: list[str]) -> str:
     if len(updated_paths) == 1:
         return f"{settings.PROJECT_NAME} re-analyzed and updated `{updated_paths[0]}`."
@@ -259,6 +317,10 @@ class FixDeliveryService:
                     bot_login,
                     reset_to_base=not open_prs,
                 )
+                if open_prs:
+                    _remove_outdated_workflow_files(
+                        repo, repo, fix_branch, base_branch
+                    )
                 for fp, new_content in file_changes:
                     _upsert_file(
                         repo,
@@ -343,6 +405,10 @@ class FixDeliveryService:
                     bot_login,
                     reset_to_base=not open_prs,
                 )
+                if open_prs:
+                    _remove_outdated_workflow_files(
+                        fork, upstream, fix_branch, base_branch
+                    )
                 for fp, new_content in file_changes:
                     _upsert_file(
                         fork,
