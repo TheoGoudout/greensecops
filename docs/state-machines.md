@@ -98,10 +98,11 @@ flowchart TD
 - **States** — `AnalysisStatus`: `queued`, `running`, `completed`, `failed`,
   `no_workflows`
 - **Events** — `started`, `opa_succeeded`, `opa_failed`, `no_workflows_found`,
-  `swept`
+  `swept`, `retry`
 - **Code** — `state_machines/analysis.py`; `workers/tasks/static_analysis.py`,
   `maintenance.py`
-- **Initial** — `queued`. **Final** — `completed`, `failed`, `no_workflows`.
+- **Initial** — `queued`. **Final** — `completed`, `no_workflows` (`failed` is
+  retryable, not final).
 
 Rows are inserted as `queued` and advance to `running` (`started`) when the
 worker begins OPA evaluation, so a row that dies before the worker starts is
@@ -230,16 +231,16 @@ disabled/removed rule — the two are not distinguishable after re-analysis.
 
 - **States** — `FixStatus`: `pending`, `generating`, `ready`, `delivering`,
   `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`,
-  `superseded_by_deleted_file`
+  `superseded_by_deleted_file`, `landed`
 - **Events** — `start_generation`, `generation_succeeded`, `generation_failed`,
   `mark_ready`, `start_delivery`, `precheck_failed`, `delivery_succeeded`,
   `delivery_failed`, `supersede_closed_pr`, `supersede_deleted_file`, `reject`,
-  `restore`, `regenerate`, `swept`
+  `restore`, `regenerate`, `land`, `swept`
 - **Code** — `state_machines/fix.py`; `fix_generation.py`, `fix_delivery.py`,
   `api/routes/fixes.py`, `maintenance.py`, the `pull_request` webhook handler,
   `static_analysis.py` (`_resolve_issues_for_missing_files`)
-- **Initial** — `pending`. **Final** — `rejected_by_user` (`failed` is no longer
-  final — `regenerate` retries it in place).
+- **Initial** — `pending`. **Final** — `rejected_by_user`, `landed` (`failed`
+  is no longer final — `regenerate` retries it in place).
 
 The two withdrawal-by-the-system states sit alongside the one user rejection
 (no longer disambiguated by a `delivered_at IS NULL` convention):
@@ -379,7 +380,7 @@ stateDiagram-v2
     Open --> Closed: close / pr.closed
     Draft --> Closed: close / pr.closed
     Closed --> Open: reopen / pr.opened (guard-superseded fixes → ready)
-    Closed --> [*]: orphaned record deleted on regenerate
+    Closed --> [*]: record deleted on regenerate (physical cleanup, not a final state)
     Merged --> [*]
 ```
 
