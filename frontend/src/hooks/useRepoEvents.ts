@@ -46,6 +46,14 @@ function invalidateFixQueries(
   }
 }
 
+function invalidateTelemetryQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  repoId: string,
+) {
+  qc.invalidateQueries({ queryKey: ["telemetry", "summary", repoId] })
+  qc.invalidateQueries({ queryKey: ["telemetry", "findings", repoId] })
+}
+
 /**
  * Subscribes to SSE and invalidates TanStack Query caches + shows toasts
  * when the server emits events for repos, analyses, fixes, PRs, or installations.
@@ -408,8 +416,9 @@ export function useRepoEvents(): void {
           break
         }
 
-        // Dynamic analysis (TelemetryMachine). No dedicated UI yet, so keep
-        // this as forward-compatible invalidation only (no toast).
+        // Dynamic analysis (TelemetryMachine). Refresh the Telemetry tab and the
+        // Issues-page runtime section as runs advance; no toast (findings are
+        // low-signal recommendations, not actionable alerts).
         case "dynamic.queued":
         case "dynamic.running":
         case "dynamic.enriched":
@@ -417,6 +426,7 @@ export function useRepoEvents(): void {
           if (repoId) {
             invalidateRepoQueries(queryClient, repoId)
             invalidateAnalysisQueries(queryClient, repoId)
+            invalidateTelemetryQueries(queryClient, repoId)
           }
           break
       }

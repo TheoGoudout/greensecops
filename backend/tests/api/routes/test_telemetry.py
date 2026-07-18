@@ -12,12 +12,17 @@ from app.api.deps import verify_github_oidc_token
 from app.core.config import settings
 from app.main import app
 from app.models import (
+    DynamicEnrichment,
     Organization,
+    OrgMember,
+    OrgRole,
     Repository,
     TelemetryMetricSample,
+    TelemetryPhase,
     TelemetryRun,
     UserTier,
 )
+from tests.utils.user import authentication_token_from_email, create_random_user
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -326,3 +331,215 @@ def test_sample_multiple_inserts_no_dedup(
         .where(TelemetryMetricSample.workflow_run_id == 9001)
     ).all()
     assert len(samples) == 3
+
+
+# ─── Read / analyze helpers ──────────────────────────────────────────────────
+
+
+def _seed_run(
+    db: Session,
+    repo: Repository,
+    run_id: int,
+    *,
+    phase: TelemetryPhase = TelemetryPhase.completed,
+    vcpus: int = 8,
+    ram_percent: float = 20.0,
+) -> TelemetryRun:
+    run = TelemetryRun(
+        repo_id=repo.id,
+        workflow_run_id=run_id,
+        runner_specs=json.dumps({"vcpus": vcpus, "ram_total_gb": 16.0}),
+        metrics=json.dumps({"cpu_percent": 12.0, "ram_percent": ram_percent}),
+        phase=phase,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+def _seed_sample(db: Session, repo: Repository, run_id: int, cpu: float) -> None:
+    db.add(
+        TelemetryMetricSample(
+            repo_id=repo.id,
+            workflow_run_id=run_id,
+            cpu_percent=cpu,
+            ram_used_mb=2048.0,
+            disk_used_gb=4.0,
+            net_bytes_sent=1000,
+            net_bytes_recv=2000,
+        )
+    )
+    db.commit()
+
+
+def _seed_enrichment(db: Session, repo: Repository, run: TelemetryRun) -> None:
+    db.add(
+        DynamicEnrichment(
+            repo_id=repo.id,
+            telemetry_run_id=run.id,
+            rule_slug="runner_sizing",
+            evidence="vCPUs=8, CPU=12.0%, RAM=20.0%",
+            recommendation="Consider downsizing from 8 vCPUs — actual usage is low",
+        )
+    )
+    db.commit()
+
+
+# ─── GET /summary ────────────────────────────────────────────────────────────
+
+
+def test_summary_computes_averages_and_runs(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    run = _seed_run(db, repo, 10001, ram_percent=20.0)
+    _seed_run(db, repo, 10002, ram_percent=40.0)
+    _seed_sample(db, repo, 10001, cpu=10.0)
+    _seed_sample(db, repo, 10001, cpu=30.0)
+    _seed_enrichment(db, repo, run)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    avg = body["average"]
+    assert avg["run_count"] == 2
+    assert avg["sample_count"] == 2
+    assert avg["avg_cpu_percent"] == pytest.approx(20.0)  # (10 + 30) / 2
+    assert avg["avg_ram_percent"] == pytest.approx(30.0)  # (20 + 40) / 2
+    assert avg["avg_vcpus"] == pytest.approx(8.0)
+    assert len(body["runs"]) == 2
+
+    enriched_run = next(r for r in body["runs"] if r["workflow_run_id"] == 10001)
+    assert enriched_run["metrics"]["ram_percent"] == 20.0
+    assert enriched_run["runner_specs"]["vcpus"] == 8
+    assert len(enriched_run["enrichments"]) == 1
+    assert enriched_run["enrichments"][0]["rule_slug"] == "runner_sizing"
+
+
+def test_summary_empty_repo(
+    client: TestClient,
+    repo: Repository,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["average"]["run_count"] == 0
+    assert body["average"]["avg_cpu_percent"] is None
+    assert body["runs"] == []
+
+
+def test_summary_pagination(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    for i in range(3):
+        _seed_run(db, repo, 11000 + i)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}?limit=2&skip=0",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["average"]["run_count"] == 3  # averages cover all runs
+    assert len(body["runs"]) == 2  # page is limited
+
+
+def test_summary_foreign_repo_returns_404(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+) -> None:
+    """A user with no membership in the repo's org cannot read its telemetry."""
+    user = create_random_user(db)
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}",
+        headers=headers,
+    )
+    assert response.status_code == 404
+
+
+# ─── GET /findings ───────────────────────────────────────────────────────────
+
+
+def test_findings_returns_enrichments(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+    repo: Repository,
+) -> None:
+    run = _seed_run(db, repo, 12001)
+    _seed_enrichment(db, repo, run)
+
+    # A member of the repo's org (non-superuser) can read findings.
+    user = create_random_user(db)
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.member))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/telemetry/findings/{repo.id}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    findings = response.json()
+    assert len(findings) == 1
+    assert findings[0]["rule_slug"] == "runner_sizing"
+    assert findings[0]["workflow_run_id"] == 12001
+    assert "recommendation" in findings[0]
+
+
+# ─── POST /analyze ───────────────────────────────────────────────────────────
+
+
+def test_analyze_enqueues_completed_runs(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+    superuser_token_headers: dict[str, str],
+    _mock_dynamic_delay,
+) -> None:
+    _seed_run(db, repo, 13001, phase=TelemetryPhase.completed)
+    _seed_run(db, repo, 13002, phase=TelemetryPhase.completed)
+    _seed_run(db, repo, 13003, phase=TelemetryPhase.started)  # not enqueued
+
+    response = client.post(
+        f"{settings.API_V1_STR}/telemetry/analyze/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 202, response.json()
+    assert response.json()["runs"] == 2
+    assert _mock_dynamic_delay.call_count == 2
+
+
+def test_analyze_inaccessible_repo_returns_403(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    repo.is_accessible = False
+    db.add(repo)
+    db.commit()
+
+    response = client.post(
+        f"{settings.API_V1_STR}/telemetry/analyze/{repo.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 403

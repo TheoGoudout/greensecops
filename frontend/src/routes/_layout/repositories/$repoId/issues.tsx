@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Loader2, RefreshCw, Wand2, Zap } from "lucide-react"
+import { Activity, Loader2, RefreshCw, Wand2, Zap } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -9,8 +9,10 @@ import {
   type FixStatus,
   IssuesService,
   RepositoriesService,
+  TelemetryService,
 } from "@/client"
 import { IssueRow } from "@/components/IssueRow"
+import { RuntimeFindingRow } from "@/components/RuntimeFindingRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -64,6 +66,14 @@ function IssuesPage() {
         includeIgnored: showIgnored || undefined,
         limit: 200,
       }),
+  })
+
+  // Runtime (telemetry) findings are shown as a distinct, read-only section
+  // above the static issues — they carry no severity/status/fix lifecycle and
+  // must not be mistaken for or folded into static violations.
+  const { data: runtimeFindings } = useQuery({
+    queryKey: ["telemetry", "findings", repoId],
+    queryFn: () => TelemetryService.getTelemetryFindings({ repoId }),
   })
 
   const selectedIds = useMemo(() => {
@@ -271,6 +281,27 @@ function IssuesPage() {
         </div>
       )}
 
+      {!!runtimeFindings?.length && (
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Activity className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              Runtime recommendations
+              <span className="text-muted-foreground font-normal text-xs">
+                ({runtimeFindings.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {runtimeFindings.map((finding) => (
+                <RuntimeFindingRow key={finding.id} finding={finding} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <div className="flex flex-col gap-2">
           {[...Array(5)].map((_, i) => (
@@ -280,7 +311,9 @@ function IssuesPage() {
       ) : !issues?.length ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            No issues found.
+            {runtimeFindings?.length
+              ? "No static issues found."
+              : "No issues found."}
           </CardContent>
         </Card>
       ) : (

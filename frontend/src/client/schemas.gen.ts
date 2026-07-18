@@ -387,6 +387,77 @@ export const CIStatusSchema = {
     description: 'Aggregate CI outcome for a PR, from ``check_suite`` webhooks.'
 } as const;
 
+export const DynamicAnalysisStatusSchema = {
+    type: 'string',
+    enum: ['queued', 'running', 'enriched', 'failed'],
+    title: 'DynamicAnalysisStatus',
+    description: `Lifecycle of the dynamic-analysis enrichment for a \`\`completed\`\`-phase
+telemetry run.
+
+Distinct from \`\`TelemetryPhase\`\` (an ingest category — \`\`started\`\` and
+\`\`completed\`\` are separate rows): this tracks the worker that turns a
+completed run's metrics into persisted \`\`DynamicEnrichment\`\` findings.`
+} as const;
+
+export const DynamicEnrichmentPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        telemetry_run_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Telemetry Run Id'
+        },
+        workflow_run_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Workflow Run Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        evidence: {
+            type: 'string',
+            title: 'Evidence'
+        },
+        recommendation: {
+            type: 'string',
+            title: 'Recommendation'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'telemetry_run_id', 'rule_slug', 'evidence', 'recommendation'],
+    title: 'DynamicEnrichmentPublic',
+    description: `A runtime-telemetry finding, exposed for the frontend.
+
+Deliberately thinner than \`\`IssuePublic\`\`: enrichments carry no severity,
+category, status/lifecycle, line numbers, or fix linkage, so they are
+presented as their own "Runtime findings" class rather than merged into the
+static issue list.`
+} as const;
+
 export const ExternalRepositoryCreateSchema = {
     properties: {
         full_name: {
@@ -1348,6 +1419,106 @@ export const SamplePayloadSchema = {
     title: 'SamplePayload'
 } as const;
 
+export const TelemetryAveragePublicSchema = {
+    properties: {
+        run_count: {
+            type: 'integer',
+            title: 'Run Count',
+            default: 0
+        },
+        sample_count: {
+            type: 'integer',
+            title: 'Sample Count',
+            default: 0
+        },
+        avg_cpu_percent: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Cpu Percent'
+        },
+        avg_ram_used_mb: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Ram Used Mb'
+        },
+        avg_ram_percent: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Ram Percent'
+        },
+        avg_disk_used_gb: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Disk Used Gb'
+        },
+        avg_net_bytes_sent: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Net Bytes Sent'
+        },
+        avg_net_bytes_recv: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Net Bytes Recv'
+        },
+        avg_vcpus: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Vcpus'
+        }
+    },
+    type: 'object',
+    title: 'TelemetryAveragePublic',
+    description: `Averaged telemetry across a repo's runs.
+
+Sample-derived fields are averaged over \`\`TelemetryMetricSample\`\` rows;
+run-derived fields (\`\`avg_ram_percent\`\`, \`\`avg_vcpus\`\`) come from the
+per-run \`\`metrics\`\`/\`\`runner_specs\`\` JSON. Any field is \`\`None\`\` when no
+data supports it.`
+} as const;
+
 export const TelemetryPayloadSchema = {
     properties: {
         workflow_run_id: {
@@ -1395,6 +1566,94 @@ export const TelemetryPhaseSchema = {
     type: 'string',
     enum: ['started', 'completed'],
     title: 'TelemetryPhase'
+} as const;
+
+export const TelemetryRunPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        workflow_run_id: {
+            type: 'integer',
+            title: 'Workflow Run Id'
+        },
+        phase: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/TelemetryPhase'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        dynamic_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/DynamicAnalysisStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        runner_specs: {
+            additionalProperties: true,
+            type: 'object',
+            title: 'Runner Specs',
+            default: {}
+        },
+        metrics: {
+            additionalProperties: true,
+            type: 'object',
+            title: 'Metrics',
+            default: {}
+        },
+        collected_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Collected At'
+        },
+        enrichments: {
+            items: {
+                '$ref': '#/components/schemas/DynamicEnrichmentPublic'
+            },
+            type: 'array',
+            title: 'Enrichments',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['id', 'workflow_run_id'],
+    title: 'TelemetryRunPublic'
+} as const;
+
+export const TelemetrySummaryPublicSchema = {
+    properties: {
+        average: {
+            '$ref': '#/components/schemas/TelemetryAveragePublic'
+        },
+        runs: {
+            items: {
+                '$ref': '#/components/schemas/TelemetryRunPublic'
+            },
+            type: 'array',
+            title: 'Runs',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['average'],
+    title: 'TelemetrySummaryPublic'
 } as const;
 
 export const TokenSchema = {
