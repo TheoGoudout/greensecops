@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+from collections.abc import Awaitable, Callable
 
 import redis.asyncio as aioredis
 from github import Github
@@ -103,7 +104,7 @@ def _get_latest_version_sync(gh: Github, repo_name: str) -> str | None:
 async def _cached_fetch(
     cache: aioredis.Redis | None,
     cache_key: str,
-    fetch_fn,
+    fetch_fn: Callable[[], Awaitable[str | None]],
 ) -> str | None:
     """Get from cache, or fetch with a Redis lock to prevent cache stampede.
 
@@ -174,7 +175,7 @@ async def resolve_action_shas(
     try:
         from app.core.config import settings
 
-        cache = aioredis.from_url(settings.REDIS_URL)
+        cache = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     except Exception:
         logger.warning("Redis unavailable for action SHA cache", exc_info=True)
 

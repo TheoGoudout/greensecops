@@ -37,7 +37,7 @@ def _sync_installation_repositories_impl(
                 default_branch=repo.default_branch,
             )
             has_analysis = session.exec(
-                select(Analysis.id).where(Analysis.repo_id == db_repo.id).limit(1)  # type: ignore[arg-type]
+                select(Analysis.id).where(Analysis.repo_id == db_repo.id).limit(1)
             ).first()
             if has_analysis is None:
                 never_analyzed.append(str(db_repo.id))
@@ -121,7 +121,7 @@ def _fetch_installation_repositories(installation_id: int) -> list[InstallationR
     from app.services.github.app_client import GitHubAppClient
 
     async def _fetch() -> list[InstallationRepo]:
-        r = aioredis.from_url(settings.REDIS_URL)
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client = GitHubAppClient(redis_client=r)
             return await client.list_installation_repositories(installation_id)

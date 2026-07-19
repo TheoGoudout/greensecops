@@ -198,7 +198,7 @@ async def _fetch_pr_mergeable_state(
     from app.core.config import settings
     from app.services.github.app_client import GitHubAppClient
 
-    r = aioredis.from_url(settings.REDIS_URL)
+    r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:
         client = GitHubAppClient(redis_client=r)
         return await client.get_pr_mergeable_state(

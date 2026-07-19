@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter
 from fastapi.responses import Response
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api.deps import SessionDep
 from app.core.config import settings
@@ -33,7 +33,7 @@ def _avg_grade_for_branch(
         .where(Analysis.branch == branch)
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
+        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
     ).all()
 
     avg, _ = average_latest_scores(list(analyses))

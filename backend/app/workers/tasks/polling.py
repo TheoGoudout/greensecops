@@ -65,7 +65,7 @@ async def _fetch_repo_poll_data(
     from app.core.config import settings
     from app.services.github.app_client import GitHubAppClient
 
-    r = aioredis.from_url(settings.REDIS_URL)
+    r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     data = _RepoPollData(branch=None, head_sha=None, prs={})
     try:
         client = GitHubAppClient(redis_client=r)

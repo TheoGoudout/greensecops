@@ -46,8 +46,8 @@ def deliver_fixes_batch(
         if not repo:
             return {"status": "error", "detail": "repository_not_found"}
 
-        fixes = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
-        fixes = [f for f in fixes if f and (force or f.status == FixStatus.ready)]
+        loaded = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
+        fixes = [f for f in loaded if f and (force or f.status == FixStatus.ready)]
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
 
@@ -83,9 +83,7 @@ def deliver_fixes_batch(
         # `comment` mode surfaces the fixes on the base branch's HEAD commit
         # instead of opening a PR; it shares nothing with the PR branch flow.
         if delivery_mode == FixDeliveryMode.comment:
-            return _deliver_batch_as_comment(
-                session, repo, [f for f in fixes if f], org_id, repo_id_str
-            )
+            return _deliver_batch_as_comment(session, repo, fixes, org_id, repo_id_str)
 
         # A PR the user closed without merging is a rejection signal: do not
         # re-open it on the next delivery unless explicitly forced.
@@ -277,7 +275,7 @@ async def _delivery_service() -> AsyncGenerator[FixDeliveryService, None]:
     from app.core.config import settings
     from app.services.github.app_client import GitHubAppClient
 
-    r = aioredis.from_url(settings.REDIS_URL)
+    r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:
         yield FixDeliveryService(app_client=GitHubAppClient(redis_client=r))
     finally:

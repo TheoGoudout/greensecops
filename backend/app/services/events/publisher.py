@@ -24,7 +24,7 @@ def publish_event(event: SSEEvent) -> None:
 
         from app.core.config import settings
 
-        client = redis.from_url(settings.REDIS_URL)
+        client = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client.publish(_channel(event.org_id), event.to_wire())
         finally:

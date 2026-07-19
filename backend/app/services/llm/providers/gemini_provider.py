@@ -10,6 +10,6 @@ class GeminiProvider(BaseLLMProvider):
         self._model = model
         self._llm = ChatGoogleGenerativeAI(
             model=model,
-            google_api_key=api_key,  # type: ignore[arg-type]
+            google_api_key=api_key,
             temperature=0.1,
         )

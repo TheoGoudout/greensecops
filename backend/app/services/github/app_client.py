@@ -98,17 +98,18 @@ class GitHubAppClient:
 
     def _get_integration(self) -> GithubIntegration:
         return GithubIntegration(
-            auth=Auth.AppAuth(settings.GITHUB_APP_ID, self._decode_private_key())
+            # GITHUB_APP_ID is Optional in Settings but required for App auth.
+            auth=Auth.AppAuth(settings.GITHUB_APP_ID, self._decode_private_key())  # type: ignore[arg-type]
         )
 
     async def get_installation_token(self, installation_id: int) -> str:
         cache_key = f"gh:install_token:{installation_id}"
         cached = await self._redis.get(cache_key)
         if cached:
-            return cached.decode()
+            return str(cached.decode())
 
         def _exchange() -> str:
-            return self._get_integration().get_access_token(installation_id).token
+            return str(self._get_integration().get_access_token(installation_id).token)
 
         token = await asyncio.to_thread(_exchange)
         await self._redis.setex(cache_key, self._TOKEN_TTL, token)
@@ -451,7 +452,7 @@ class GitHubAppClient:
         def _get() -> dict[str, Any]:
             return (
                 self._get_integration().get_app_installation(installation_id).raw_data
-            )  # type: ignore[return-value]
+            )
 
         return await asyncio.to_thread(_get)
 
@@ -475,9 +476,10 @@ class GitHubAppClient:
         redirect_uri: str | None = None,  # noqa: ARG002
     ) -> str:
         def _exchange() -> str:
+            # Optional in Settings but required for the OAuth flow.
             app = Github().get_oauth_application(
-                settings.GITHUB_CLIENT_ID,
-                settings.GITHUB_CLIENT_SECRET,
+                settings.GITHUB_CLIENT_ID,  # type: ignore[arg-type]
+                settings.GITHUB_CLIENT_SECRET,  # type: ignore[arg-type]
             )
             token = app.get_access_token(code, code_verifier)
             return token.token

@@ -333,12 +333,12 @@ def list_fixes(
         query = query.where(
             col(Fix.id).in_(
                 select(Issue.fix_id)
-                .join(Analysis, Issue.analysis_id == Analysis.id)
-                .where(Analysis.branch == branch)  # type: ignore[arg-type]
+                .join(Analysis, col(Issue.analysis_id) == Analysis.id)
+                .where(Analysis.branch == branch)
             )
         )
     query = (
-        query.order_by(WorkflowFile.path.asc(), col(Fix.created_at).desc())
+        query.order_by(col(WorkflowFile.path).asc(), col(Fix.created_at).desc())
         .offset(skip)
         .limit(limit)
     )
@@ -429,9 +429,7 @@ def trigger_fix_generation_for_repo(
     session.exec(delete_stmt)
     session.commit()
 
-    repo = session.get(Repository, repo_id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = get_or_404(session, Repository, repo_id, detail="Repository not found")
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
 
@@ -763,10 +761,10 @@ def _relink_orphaned_fixes(session: SessionDep, repo: Repository) -> int:
         match = WF_FIX_BRANCH_RE.fullmatch(pr.pr_branch)
         if not match:
             continue
-        fix = fix_by_prefix.get(match.group(1))
-        if fix is not None and fix.pr_id is None:
-            fix.pr_id = pr.id
-            session.add(fix)
+        candidate = fix_by_prefix.get(match.group(1))
+        if candidate is not None and candidate.pr_id is None:
+            candidate.pr_id = pr.id
+            session.add(candidate)
             relinked += 1
 
     # Repo-wide batch PR: bundle-level match, only when unambiguous (exactly one

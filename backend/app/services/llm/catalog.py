@@ -1,6 +1,7 @@
 import functools
 import json
 from pathlib import Path
+from typing import Any
 
 from app.core.config import settings
 from app.models import LLMProvider
@@ -17,11 +18,12 @@ _KEY_MAP: dict[str, str | None] = {
 
 
 @functools.lru_cache(maxsize=1)
-def load_provider_catalog() -> list[dict]:
+def load_provider_catalog() -> list[dict[str, Any]]:
     config_path = settings.AI_PROVIDERS_CONFIG
     path = Path(config_path) if config_path else _DEFAULT_CONFIG
     with path.open() as f:
-        return json.load(f)["providers"]
+        providers: list[dict[str, Any]] = json.load(f)["providers"]
+    return providers
 
 
 def get_default_model(provider_id: str) -> str | None:

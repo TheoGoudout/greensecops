@@ -3,7 +3,7 @@ import uuid
 
 import stripe
 from fastapi import APIRouter, Header, HTTPException, Request
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
@@ -47,7 +47,7 @@ def _org_billing_owner(session: Session, org_id: uuid.UUID) -> User | None:
     member = session.exec(
         select(OrgMember)
         .where(OrgMember.org_id == org_id, OrgMember.role == OrgRole.owner)
-        .order_by(OrgMember.joined_at, OrgMember.user_id)
+        .order_by(col(OrgMember.joined_at), col(OrgMember.user_id))
     ).first()
     if member is None:
         return None
@@ -104,8 +104,8 @@ def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.U
         return 0, 0, []
     analyses_used = (
         session.exec(
-            select(func.count(Analysis.id)).where(
-                Analysis.repo_id.in_(all_repo_ids),  # type: ignore[attr-defined]
+            select(func.count(col(Analysis.id))).where(
+                col(Analysis.repo_id).in_(all_repo_ids),
                 Analysis.status == AnalysisStatus.completed,
             )
         ).one()
@@ -113,9 +113,9 @@ def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.U
     )
     fixes_used = (
         session.exec(
-            select(func.count(Fix.id))
+            select(func.count(col(Fix.id)))
             .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-            .where(WorkflowFile.repo_id.in_(all_repo_ids))  # type: ignore[attr-defined]
+            .where(col(WorkflowFile.repo_id).in_(all_repo_ids))
         ).one()
         or 0
     )
@@ -270,7 +270,7 @@ async def stripe_webhook(
     payload = await request.body()
     try:
         stripe.api_key = settings.STRIPE_SECRET_KEY
-        event = stripe.Webhook.construct_event(
+        event = stripe.Webhook.construct_event(  # type: ignore[no-untyped-call]
             payload, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
         )
     except stripe.SignatureVerificationError:

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from ruamel.yaml import YAML
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app import crud
 from app.api.deps import (
@@ -59,7 +59,7 @@ def _compute_repo_grade(
         .where(WorkflowFile.branch == Repository.default_branch)
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
+        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
     ).all()
 
     avg, count = average_latest_scores(list(analyses))
@@ -91,16 +91,16 @@ def _compute_grades_batch(
         .where(WorkflowFile.branch == Repository.default_branch)
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
+        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
     ).all()
 
     seen: set[uuid.UUID] = set()
     scores_by_repo: dict[uuid.UUID, list[float]] = defaultdict(list)
     for a in analyses:
-        if a.workflow_file_id not in seen:
+        if a.workflow_file_id is not None and a.workflow_file_id not in seen:
             seen.add(a.workflow_file_id)
             if a.score is not None:
-                scores_by_repo[a.repo_id].append(a.score)  # type: ignore[arg-type]
+                scores_by_repo[a.repo_id].append(a.score)
 
     repos_without_grades = [r for r in repo_ids if r not in scores_by_repo]
     no_workflows_repo_ids: set[uuid.UUID] = set()
@@ -146,7 +146,7 @@ def list_repositories(
         query = query.where(Repository.org_id == org_id)
     if enabled is not None:
         query = query.where(Repository.enabled == enabled)
-    query = query.order_by(Repository.full_name).offset(skip).limit(limit)  # type: ignore[arg-type]
+    query = query.order_by(Repository.full_name).offset(skip).limit(limit)
     repos = list(session.exec(query).all())
     grades = _compute_grades_batch(session, [r.id for r in repos])
     return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
@@ -163,7 +163,7 @@ def list_external_repositories(
         session.exec(
             select(Repository)
             .where(Repository.is_external == True)  # noqa: E712
-            .order_by(Repository.full_name)  # type: ignore[arg-type]
+            .order_by(Repository.full_name)
             .offset(skip)
             .limit(limit)
         ).all()
@@ -357,7 +357,7 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
 
         if not already_present:
             try:
-                first_step_line, first_step_val_col = steps.lc.data[0]
+                first_step_line, first_step_val_col = steps.lc.data[0]  # type: ignore[attr-defined]
             except (AttributeError, KeyError, IndexError):
                 continue
             # lc.data stores the column of the value (after "- "), so dash is 2 columns earlier.
@@ -378,8 +378,8 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
         if isinstance(permissions, dict):
             if permissions.get("id-token") != "write":
                 try:
-                    perm_line = job.lc.data["permissions"][0]
-                    perm_col = job.lc.data["permissions"][1]
+                    perm_line = job.lc.data["permissions"][0]  # type: ignore[attr-defined]
+                    perm_col = job.lc.data["permissions"][1]  # type: ignore[attr-defined]
                     perm_value_indent = " " * (perm_col + 2)
                     all_insertions.append(
                         (perm_line + 1, f"{perm_value_indent}id-token: write\n")
@@ -388,8 +388,8 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
                     pass
         elif permissions is None:
             try:
-                steps_line = job.lc.data["steps"][0]
-                steps_col = job.lc.data["steps"][1]
+                steps_line = job.lc.data["steps"][0]  # type: ignore[attr-defined]
+                steps_col = job.lc.data["steps"][1]  # type: ignore[attr-defined]
                 job_indent = " " * steps_col
                 perm_block = (
                     f"{job_indent}permissions:\n{job_indent}  id-token: write\n"

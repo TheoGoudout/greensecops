@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app.api.deps import (
     CurrentUser,
@@ -56,7 +56,7 @@ def list_analyses(
         query = query.where(Analysis.grade == grade)
     if status:
         query = query.where(Analysis.status == status)
-    query = query.order_by(Analysis.created_at.desc()).offset(skip).limit(limit)  # type: ignore[arg-type]
+    query = query.order_by(col(Analysis.created_at).desc()).offset(skip).limit(limit)
     return [to_analysis_public(a) for a in session.exec(query).all()]
 
 

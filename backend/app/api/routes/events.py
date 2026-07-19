@@ -38,7 +38,7 @@ async def _stream_events(
             yield ": keepalive\n\n"
         return
 
-    r = aioredis.from_url(settings.REDIS_URL)
+    r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     pubsub = r.pubsub()
     channels = [f"{_CHANNEL_PREFIX}:{org_id}" for org_id in org_ids]
 

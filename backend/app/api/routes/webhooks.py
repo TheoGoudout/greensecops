@@ -40,7 +40,7 @@ async def _is_duplicate_delivery(delivery_id: str | None) -> bool:
     import redis.asyncio as aioredis
 
     try:
-        r = aioredis.from_url(settings.REDIS_URL)
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             fresh = await r.set(
                 f"greensecops:webhook_delivery:{delivery_id}",
@@ -711,8 +711,8 @@ def _handle_installation_repositories_event(
         if github_repo_ids:
             repos = list(
                 session.exec(
-                    select(Repository).where(  # type: ignore[attr-defined]
-                        Repository.github_repo_id.in_(github_repo_ids)
+                    select(Repository).where(
+                        col(Repository.github_repo_id).in_(github_repo_ids)
                     )
                 ).all()
             )

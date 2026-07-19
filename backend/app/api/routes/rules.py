@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_current_active_superuser
 from app.models import IssueCategory, Rule, RulePublic
@@ -24,10 +24,10 @@ def list_rules(
     if enabled is not None:
         query = query.where(Rule.enabled == enabled)
     query = (
-        query.order_by(Rule.severity_weight.desc(), Rule.title)
+        query.order_by(col(Rule.severity_weight).desc(), Rule.title)
         .offset(skip)
         .limit(limit)
-    )  # type: ignore[union-attr]
+    )
     return list(session.exec(query).all())
 
 

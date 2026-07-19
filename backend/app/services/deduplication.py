@@ -1,7 +1,7 @@
 import hashlib
 import uuid
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import Analysis, AnalysisStatus
 
@@ -53,7 +53,7 @@ def find_completed_analysis(
         .where(Analysis.repo_id == repo_id)
         .where(Analysis.branch == branch)
         .where(Analysis.status == AnalysisStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        .order_by(col(Analysis.created_at).desc())
     ).first()
 
 

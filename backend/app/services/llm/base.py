@@ -30,7 +30,7 @@ class BaseLLMProvider(ABC):
             HumanMessage(content=user_prompt),
         ]
         response = await self._llm.ainvoke(messages)
-        usage = response.usage_metadata or {}
+        usage = getattr(response, "usage_metadata", None) or {}
         return LLMResponse(
             content=str(response.content),
             prompt_tokens=usage.get("input_tokens", 0),
