@@ -742,7 +742,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.commit()
     db.refresh(issue)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-merged",
@@ -843,7 +843,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.commit()
     db.refresh(issue)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-closed",
@@ -937,7 +937,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.commit()
     db.refresh(issue)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-reopen",
@@ -1006,7 +1006,7 @@ def test_github_webhook_pull_request_reopened_restores_guard_rejected_fix(
     db.commit()
     db.refresh(wf)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-restore",
@@ -1082,7 +1082,7 @@ def test_github_webhook_pull_request_synchronize_bumps_open_pr(
     db.commit()
     db.refresh(repo)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-sync",
@@ -1124,7 +1124,7 @@ def test_github_webhook_pull_request_synchronize_noop_on_closed_pr(
     db.commit()
     db.refresh(repo)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-sync-closed",
@@ -1629,7 +1629,7 @@ def _make_repo_with_open_pr(db: Session, org: Organization, branch: str) -> Pull
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch=branch,
-        pr_url=f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}",
+        pr_url=f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}",
         pr_state="open",
     )
     db.add(pr)
