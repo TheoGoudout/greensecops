@@ -229,16 +229,3 @@ def authorize_repo(
     ):
         raise HTTPException(status_code=404, detail=detail)
     return repo
-
-
-def require_org_membership(session: Session, user: User, org_id: uuid.UUID) -> None:
-    """Raise 404 unless ``user`` is a superuser or a member of ``org_id``."""
-    if user.is_superuser:
-        return
-    member = session.exec(
-        select(OrgMember).where(
-            OrgMember.org_id == org_id, OrgMember.user_id == user.id
-        )
-    ).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Organization not found")

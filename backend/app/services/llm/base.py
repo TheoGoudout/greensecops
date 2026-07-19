@@ -15,13 +15,3 @@ class BaseLLMProvider(ABC):
     @abstractmethod
     async def generate(self, system_prompt: str, user_prompt: str) -> LLMResponse:
         """Generate a completion."""
-
-    @property
-    @abstractmethod
-    def provider_name(self) -> str:
-        """Provider identifier (openai, anthropic, gemini, ollama)."""
-
-    @property
-    @abstractmethod
-    def model_name(self) -> str:
-        """Model identifier."""

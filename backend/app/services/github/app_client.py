@@ -146,9 +146,6 @@ class GitHubAppClient:
             await self._redis.setex(cache_key, self._APP_LOGIN_TTL, bot_login)
         return bot_login
 
-    def get_installation_github(self, token: str) -> Github:
-        return Github(auth=Auth.Token(token))
-
     # ─── Bot account (external outreach PRs) ─────────────────────────────────
 
     def get_bot_github(self) -> Github:

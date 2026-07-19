@@ -12,14 +12,6 @@ class OpenAIProvider(BaseLLMProvider):
             temperature=0.1,
         )
 
-    @property
-    def provider_name(self) -> str:
-        return "openai"
-
-    @property
-    def model_name(self) -> str:
-        return self._model
-
     async def generate(self, system_prompt: str, user_prompt: str) -> LLMResponse:
         from langchain_core.messages import HumanMessage, SystemMessage
 
