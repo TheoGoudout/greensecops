@@ -536,10 +536,13 @@ def test_list_external_repositories_returns_external_only(
     db: Session,
     org: Organization,
 ) -> None:
+    # "!" sorts before any real repo name: the endpoint pages by full_name
+    # (default limit 50), so this keeps the row on page one even when other
+    # tests have left repositories behind in the database.
     ext_repo = Repository(
         org_id=org.id,
         github_repo_id=int(uuid.uuid4().int % 10**9),
-        full_name=f"ext-owner/ext-{uuid.uuid4().hex[:8]}",
+        full_name=f"!ext-owner/ext-{uuid.uuid4().hex[:8]}",
         installation_id=None,
         enabled=True,
         is_external=True,
