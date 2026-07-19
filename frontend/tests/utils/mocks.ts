@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test"
+import type { RepositoryPublic, UserPublic } from "@/client"
 
 // ── Mock IDs ──────────────────────────────────────────────────────────
 const ID = {
@@ -592,13 +593,19 @@ export const MOCK_INSTALLATION = {
 
 // ── Route mock helpers ─────────────────────────────────────────────────
 
-export async function mockUserMe(page: Page, user = MOCK_SUPERUSER) {
+export async function mockUserMe(
+  page: Page,
+  user: UserPublic = MOCK_SUPERUSER,
+) {
   await page.route("**/api/v1/users/me", (route) => {
     route.fulfill({ json: user })
   })
 }
 
-export async function mockRepositories(page: Page, repos = [MOCK_REPO]) {
+export async function mockRepositories(
+  page: Page,
+  repos: RepositoryPublic[] = [MOCK_REPO],
+) {
   await page.route("**/api/v1/repositories/**", (route) => {
     const url = route.request().url()
     if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
