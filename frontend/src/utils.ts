@@ -1,4 +1,5 @@
 import { AxiosError } from "axios"
+import { toast } from "sonner"
 import { ApiError } from "./client"
 
 function extractErrorMessage(err: ApiError): string {
@@ -13,12 +14,17 @@ function extractErrorMessage(err: ApiError): string {
   return errDetail || "Something went wrong."
 }
 
-export const handleError = function (
-  this: (msg: string) => void,
-  err: ApiError,
-) {
-  const errorMessage = extractErrorMessage(err)
-  this(errorMessage)
+export function showSuccessToast(description: string) {
+  toast.success("Success!", { description })
+}
+
+export function showErrorToast(description: string) {
+  toast.error("Something went wrong!", { description })
+}
+
+/** Show the standard error toast with the message extracted from an ApiError. */
+export function handleApiError(err: ApiError) {
+  showErrorToast(extractErrorMessage(err))
 }
 
 export function apiErrorDetail(error: unknown): string | undefined {

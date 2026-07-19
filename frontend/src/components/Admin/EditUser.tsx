@@ -20,8 +20,7 @@ import {
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Form } from "@/components/ui/form"
 import { LoadingButton } from "@/components/ui/loading-button"
-import useCustomToast from "@/hooks/useCustomToast"
-import { handleError } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/utils"
 
 const formSchema = z
   .object({
@@ -51,7 +50,6 @@ interface EditUserProps {
 const EditUser = ({ user, onSuccess }: EditUserProps) => {
   const [isOpen, setIsOpen] = useState(false)
   const queryClient = useQueryClient()
-  const { showSuccessToast, showErrorToast } = useCustomToast()
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -73,7 +71,7 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
       setIsOpen(false)
       onSuccess()
     },
-    onError: handleError.bind(showErrorToast),
+    onError: handleApiError,
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
     },

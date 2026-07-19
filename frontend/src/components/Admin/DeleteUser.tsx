@@ -16,8 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { LoadingButton } from "@/components/ui/loading-button"
-import useCustomToast from "@/hooks/useCustomToast"
-import { handleError } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/utils"
 
 interface DeleteUserProps {
   id: string
@@ -27,7 +26,6 @@ interface DeleteUserProps {
 const DeleteUser = ({ id, onSuccess }: DeleteUserProps) => {
   const [isOpen, setIsOpen] = useState(false)
   const queryClient = useQueryClient()
-  const { showSuccessToast, showErrorToast } = useCustomToast()
   const { handleSubmit } = useForm()
 
   const deleteUser = async (id: string) => {
@@ -41,7 +39,7 @@ const DeleteUser = ({ id, onSuccess }: DeleteUserProps) => {
       setIsOpen(false)
       onSuccess()
     },
-    onError: handleError.bind(showErrorToast),
+    onError: handleApiError,
     onSettled: () => {
       queryClient.invalidateQueries()
     },

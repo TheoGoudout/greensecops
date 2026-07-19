@@ -4,12 +4,11 @@ import { useNavigate } from "@tanstack/react-router"
 import { FaGithub } from "react-icons/fa"
 import { AuthService } from "@/client"
 import { Button } from "@/components/ui/button"
-import useCustomToast from "@/hooks/useCustomToast"
+import { showErrorToast } from "@/utils"
 
 export function GitHubOAuthButton() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { showErrorToast } = useCustomToast()
 
   const { initiateGitHubLogin, isLoading } = useGitHubLogin({
     clientId: import.meta.env.VITE_GITHUB_OAUTH_CLIENT_ID,
