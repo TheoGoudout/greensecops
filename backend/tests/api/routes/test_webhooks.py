@@ -1379,7 +1379,12 @@ def test_github_webhook_repository_default_branch_change(
             "default_branch": "develop",
         },
     }
-    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        # The handler now enqueues an analysis of the new default branch;
+        # patched so the test stays hermetic (no Celery broker in CI).
+        patch("app.api.routes.webhooks._enqueue_static_analysis"),
+    ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
         )
