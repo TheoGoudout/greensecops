@@ -152,6 +152,14 @@ function PullRequestsPage() {
                         >
                           <GitPullRequest className="h-3 w-3 shrink-0" />
                           {pr.pr_url.replace("https://github.com/", "")}
+                          {pr.externally_modified && (
+                            <span
+                              className="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 shrink-0"
+                              title="A user pushed commits to this fix branch; automatic redelivery is paused"
+                            >
+                              user-edited
+                            </span>
+                          )}
                         </a>
                       ) : (
                         <span className="text-xs font-mono text-muted-foreground truncate flex items-center gap-1.5">
