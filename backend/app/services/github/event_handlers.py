@@ -231,6 +231,23 @@ def _resolve_issues_for_landed_fixes(
         session.add(issue)
 
 
+def _publish_pr_updated(session: Session, pr_record: PullRequest) -> None:
+    """Publish a ``pr.updated`` SSE event carrying all fixes on the PR."""
+    repo = session.get(Repository, pr_record.repo_id)
+    if not repo:
+        return
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    events_pub.publish_event(
+        ev.pr_updated(
+            str(repo.org_id),
+            str(repo.id),
+            [str(f.id) for f in pr_fixes],
+            pr_record.pr_url or "",
+            pr_record.pr_branch,
+        )
+    )
+
+
 def handle_pull_request_draft_toggle(
     session: Session,
     pr_record: PullRequest,
@@ -247,19 +264,7 @@ def handle_pull_request_draft_toggle(
     session.add(pr_record)
     session.commit()
 
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
     logger.info(
         "PR %s draft toggle %s recorded (record %s)",
         pr_record.pr_url,
@@ -283,19 +288,7 @@ def handle_pull_request_sync(
     session.add(pr_record)
     session.commit()
 
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
     logger.info(
         "PR %s external update recorded (record %s)", pr_record.pr_url, pr_record.id
     )
@@ -310,19 +303,7 @@ def handle_ci_status(
     pr_record.ci_status = ci_status
     session.add(pr_record)
     session.commit()
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
 
 
 def handle_review_decision(
@@ -334,19 +315,7 @@ def handle_review_decision(
     pr_record.review_decision = decision
     session.add(pr_record)
     session.commit()
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
 
 
 # ─── Slash commands ──────────────────────────────────────────────────────────
