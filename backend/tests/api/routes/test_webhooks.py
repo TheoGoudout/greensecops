@@ -1900,7 +1900,7 @@ def test_delete_greensecops_branch_closes_pr_and_supersedes_fix(
     pr = PullRequest(
         repo_id=enabled_repo.id,
         pr_branch="greensecops/fix-abc123",
-        pr_url="https://github.com/owner/repo/pull/42",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/42",
         pr_state="open",
     )
     db.add(pr)
@@ -2070,7 +2070,7 @@ def test_pull_request_opened_from_fix_branch_creates_record(
     db: Session,
     enabled_repo: Repository,
 ) -> None:
-    pr_url = "https://github.com/owner/repo/pull/77"
+    pr_url = f"https://github.com/{enabled_repo.full_name}/pull/77"
     payload = {
         "action": "opened",
         "pull_request": {
@@ -2108,7 +2108,7 @@ def test_pull_request_opened_reopens_closed_record(
     db.commit()
     db.refresh(pr_record)
 
-    pr_url = "https://github.com/owner/repo/pull/78"
+    pr_url = f"https://github.com/{enabled_repo.full_name}/pull/78"
     payload = {
         "action": "opened",
         "pull_request": {
@@ -2135,7 +2135,7 @@ def test_pull_request_opened_from_user_branch_ignored(
     payload = {
         "action": "opened",
         "pull_request": {
-            "html_url": "https://github.com/owner/repo/pull/79",
+            "html_url": f"https://github.com/{enabled_repo.full_name}/pull/79",
             "head": {"ref": "feature/user-branch"},
         },
         "repository": {"id": enabled_repo.github_repo_id},
@@ -2181,7 +2181,7 @@ def test_user_push_to_fix_branch_sets_externally_modified(
     pr = PullRequest(
         repo_id=enabled_repo.id,
         pr_branch="greensecops/fixes-abc",
-        pr_url="https://github.com/owner/repo/pull/91",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/91",
         pr_state="open",
     )
     db.add(pr)
@@ -2203,7 +2203,7 @@ def test_bot_push_to_fix_branch_does_not_set_externally_modified(
     pr = PullRequest(
         repo_id=enabled_repo.id,
         pr_branch="greensecops/fixes-abc",
-        pr_url="https://github.com/owner/repo/pull/92",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/92",
         pr_state="open",
     )
     db.add(pr)
@@ -2237,7 +2237,7 @@ def test_default_branch_push_enqueues_mergeable_refresh(
     pr = PullRequest(
         repo_id=enabled_repo.id,
         pr_branch="greensecops/fixes-xyz",
-        pr_url="https://github.com/owner/repo/pull/93",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/93",
         pr_state=PullRequestState.open,
     )
     db.add(pr)
@@ -2271,7 +2271,7 @@ def test_non_default_branch_push_no_mergeable_refresh(
     pr = PullRequest(
         repo_id=enabled_repo.id,
         pr_branch="greensecops/fixes-xyz",
-        pr_url="https://github.com/owner/repo/pull/94",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/94",
         pr_state=PullRequestState.open,
     )
     db.add(pr)
