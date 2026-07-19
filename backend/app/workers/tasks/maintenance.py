@@ -329,3 +329,99 @@ async def _fetch_pr_mergeable_state(
 @celery_app.task(name="maintenance.refresh_pr_mergeable_state", bind=True)
 def refresh_pr_mergeable_state(self: object, repo_id: str) -> dict[str, int]:  # noqa: ARG001
     return _refresh_pr_mergeable_state_impl(repo_id)
+
+
+# Retry a failed-transient analysis at most this many times per content hash;
+# repeated failures accumulate one failed row each, so the bound terminates.
+MAX_AUTO_RETRY_ATTEMPTS = 3
+# Only failures younger than this window are auto-retried.
+AUTO_RETRY_WINDOW_HOURS = 24
+_AUTO_RETRY_DEDUP_TTL = 3600  # seconds
+
+
+def _retry_transient_analyses_impl() -> dict[str, int]:
+    """Re-run recent transient analysis failures (OPA timeout, network error).
+
+    Enqueues a fresh repo/branch analysis rather than firing the machine's
+    ``retry`` event on the old rows: the worker creates new Analysis rows, so
+    a re-queued old row would only be swept back to ``failed``. The in-place
+    ``retry`` edge stays reserved for a future per-row worker (doc §1).
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=AUTO_RETRY_WINDOW_HOURS)
+    scheduled = 0
+    skipped_exhausted = 0
+    with Session(engine) as session:
+        candidates = session.exec(
+            select(Analysis, Repository)
+            .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
+            .where(Analysis.status == AnalysisStatus.failed)
+            .where(Analysis.failure_kind == AnalysisFailureKind.transient)
+            .where(col(Analysis.completed_at).is_not(None))
+            .where(Analysis.completed_at >= cutoff)  # type: ignore[operator]
+            .where(Repository.enabled)
+        ).all()
+
+        seen_targets: set[tuple[object, str]] = set()
+        for analysis, repo in candidates:
+            attempts = len(
+                session.exec(
+                    select(Analysis.id)
+                    .where(Analysis.repo_id == analysis.repo_id)
+                    .where(Analysis.workflow_file_id == analysis.workflow_file_id)
+                    .where(Analysis.content_hash == analysis.content_hash)
+                    .where(Analysis.status == AnalysisStatus.failed)
+                    .where(Analysis.failure_kind == AnalysisFailureKind.transient)
+                ).all()
+            )
+            if attempts >= MAX_AUTO_RETRY_ATTEMPTS:
+                skipped_exhausted += 1
+                continue
+            branch = analysis.branch or repo.default_branch or "main"
+            target = (repo.id, branch)
+            if target in seen_targets:
+                continue
+            seen_targets.add(target)
+            if not _try_acquire_auto_retry_slot(str(repo.id), branch):
+                continue
+            from app.workers.tasks.static_analysis import run_static_analysis
+
+            # force=True: a stale *completed* analysis for the same hash would
+            # otherwise dedup-skip the retry.
+            run_static_analysis.delay(
+                repo_id=str(repo.id),
+                branch=branch,
+                trigger="scheduled",
+                force=True,
+            )
+            scheduled += 1
+    if scheduled or skipped_exhausted:
+        logger.info(
+            "Auto-retry: scheduled %d repo/branch re-run(s), %d exhausted",
+            scheduled,
+            skipped_exhausted,
+        )
+    return {"scheduled": scheduled, "skipped_exhausted": skipped_exhausted}
+
+
+def _try_acquire_auto_retry_slot(repo_id: str, branch: str) -> bool:
+    """Redis dedup so hourly beats don't stack retries. Fails open."""
+    import redis as redis_sync
+
+    from app.core.config import settings
+
+    try:
+        r = redis_sync.Redis.from_url(settings.REDIS_URL)
+        try:
+            key = f"greensecops:queued:auto_retry:{repo_id}:{branch}"
+            return bool(r.set(key, "1", nx=True, ex=_AUTO_RETRY_DEDUP_TTL))
+        finally:
+            r.close()
+    except Exception:
+        logger.warning("Redis unavailable for auto-retry dedup", exc_info=True)
+        return True
+
+
+@celery_app.task(name="maintenance.retry_transient_analyses", bind=True)
+def retry_transient_analyses(self: object) -> dict[str, int]:  # noqa: ARG001
+    return _retry_transient_analyses_impl()

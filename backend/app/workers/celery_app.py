@@ -52,5 +52,11 @@ celery_app.conf.update(
             "schedule": crontab(minute=17, hour=3),
             "kwargs": {"force": False},
         },
+        # Re-run recent transient analysis failures (OPA timeouts, network
+        # errors) without waiting for the next push; bounded per content hash.
+        "retry-transient-analyses": {
+            "task": "maintenance.retry_transient_analyses",
+            "schedule": crontab(minute=50),  # hourly
+        },
     },
 )
