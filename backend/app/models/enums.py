@@ -165,7 +165,6 @@ class ReviewDecision(str, enum.Enum):
     approved = "approved"
     changes_requested = "changes_requested"
     review_required = "review_required"
-    none = "none"
 
 
 class TelemetryPhase(str, enum.Enum):

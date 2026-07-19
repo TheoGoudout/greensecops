@@ -1313,7 +1313,7 @@ export const RepositoryPublicSchema = {
 
 export const ReviewDecisionSchema = {
     type: 'string',
-    enum: ['approved', 'changes_requested', 'review_required', 'none'],
+    enum: ['approved', 'changes_requested', 'review_required'],
     title: 'ReviewDecision',
     description: 'Latest human review decision for a PR, from ``pull_request_review``.'
 } as const;
