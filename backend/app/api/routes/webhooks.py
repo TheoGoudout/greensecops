@@ -171,6 +171,12 @@ def _handle_push_event(
         )
         for c in commits
     )
+    # A push to the base branch can silently conflict our open fix PRs —
+    # GitHub sends no webhook for that. Refresh their mergeable_state
+    # (attribute only; never auto-rebase).
+    if branch == repo.default_branch:
+        _enqueue_pr_mergeable_refresh(session, repo)
+
     if not touches_workflows and not is_new_branch and not forced:
         return
 
@@ -1147,3 +1153,53 @@ def _enqueue_installation_sync(installation_id: int, org_id: str) -> None:
         installation_id=installation_id,
         org_id=org_id,
     )
+
+
+_PR_MERGEABLE_DEDUP_TTL = 300  # seconds
+
+
+def _enqueue_pr_mergeable_refresh(session: Session, repo: Repository) -> None:
+    """Queue a mergeable_state refresh of the repo's open fix PRs.
+
+    Redis-deduped (fail-open) so a burst of pushes to the default branch
+    yields one refresh per TTL window. Skipped when the repo has no open
+    fix PR — the common case for every default-branch push.
+    """
+    from sqlmodel import select
+
+    has_open_pr = (
+        session.exec(
+            select(PullRequest.id)
+            .where(PullRequest.repo_id == repo.id)
+            .where(
+                col(PullRequest.pr_state).in_(
+                    [PullRequestState.open, PullRequestState.draft]
+                )
+            )
+            .where(col(PullRequest.pr_url).is_not(None))
+            .limit(1)
+        ).first()
+        is not None
+    )
+    if not has_open_pr:
+        return
+
+    import redis as redis_sync
+
+    try:
+        r = redis_sync.Redis.from_url(settings.REDIS_URL)
+        try:
+            key = f"greensecops:queued:pr_mergeable:{repo.id}"
+            if not r.set(key, "1", nx=True, ex=_PR_MERGEABLE_DEDUP_TTL):
+                return
+        finally:
+            r.close()
+    except Exception:
+        logger.warning(
+            "Redis unavailable for PR mergeable refresh dedup; enqueuing anyway",
+            exc_info=True,
+        )
+
+    from app.workers.tasks.maintenance import refresh_pr_mergeable_state
+
+    refresh_pr_mergeable_state.delay(repo_id=str(repo.id))

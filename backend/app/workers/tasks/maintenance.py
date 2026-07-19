@@ -232,3 +232,100 @@ async def _fetch_pr_states(
 @celery_app.task(name="maintenance.sync_open_pr_states", bind=True)
 def sync_open_pr_states(self: object) -> dict[str, int]:  # noqa: ARG001
     return _sync_open_pr_states_impl()
+
+
+def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
+    """Refresh mergeable_state for a repo's open fix PRs after a base push.
+
+    GitHub sends no webhook when a push to the base branch makes an open PR
+    conflicted, so conflict *visibility* would otherwise wait for the
+    reconcile beat. Attribute-only: no lifecycle transition, and explicitly
+    no auto-rebase/redeliver (that would overwrite or spam the PR).
+    """
+    import uuid as _uuid
+
+    with Session(engine) as session:
+        repo = session.get(Repository, _uuid.UUID(repo_id))
+        if repo is None or not repo.installation_id:
+            return {"checked": 0, "updated": 0}
+        rows = list(
+            session.exec(
+                select(PullRequest)
+                .where(PullRequest.repo_id == repo.id)
+                .where(
+                    col(PullRequest.pr_state).in_(
+                        [PullRequestState.open, PullRequestState.draft]
+                    )
+                )
+                .where(col(PullRequest.pr_url).is_not(None))
+            ).all()
+        )
+        if not rows:
+            return {"checked": 0, "updated": 0}
+
+        from app.services.github.app_client import parse_pr_url
+
+        checked = 0
+        updated = 0
+        for pr_record in rows:
+            parsed = parse_pr_url(pr_record.pr_url or "")
+            if not parsed:
+                continue
+            full_name, pr_number = parsed
+            checked += 1
+            try:
+                mergeable_state = asyncio.run(
+                    _fetch_pr_mergeable_state(
+                        repo.installation_id, full_name, pr_number
+                    )
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to fetch mergeable_state for %s#%s",
+                    full_name,
+                    pr_number,
+                    exc_info=True,
+                )
+                continue
+            if mergeable_state is None or mergeable_state == pr_record.mergeable_state:
+                continue
+            pr_record.mergeable_state = mergeable_state
+            pr_record.updated_at = datetime.now(timezone.utc)
+            session.add(pr_record)
+            session.commit()
+            updated += 1
+            fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+            if fix and pr_record.pr_url:
+                events_pub.publish_event(
+                    ev.pr_updated(
+                        str(repo.org_id),
+                        str(repo.id),
+                        [str(fix.id)],
+                        pr_record.pr_url,
+                        pr_record.pr_branch,
+                    )
+                )
+        return {"checked": checked, "updated": updated}
+
+
+async def _fetch_pr_mergeable_state(
+    installation_id: int, full_name: str, pr_number: int
+) -> str | None:
+    import redis.asyncio as aioredis
+
+    from app.core.config import settings
+    from app.services.github.app_client import GitHubAppClient
+
+    r = aioredis.from_url(settings.REDIS_URL)
+    try:
+        client = GitHubAppClient(redis_client=r)
+        return await client.get_pr_mergeable_state(
+            installation_id, full_name, pr_number
+        )
+    finally:
+        await r.aclose()
+
+
+@celery_app.task(name="maintenance.refresh_pr_mergeable_state", bind=True)
+def refresh_pr_mergeable_state(self: object, repo_id: str) -> dict[str, int]:  # noqa: ARG001
+    return _refresh_pr_mergeable_state_impl(repo_id)

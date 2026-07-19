@@ -286,3 +286,94 @@ def test_sync_open_pr_states_task_wrapper(db: Session) -> None:  # noqa: ARG001
     ):
         result = sync_open_pr_states.apply()
     assert result.get() == {"synced": 0, "updated": 0}
+
+
+# ─── refresh_pr_mergeable_state ──────────────────────────────────────────────
+
+
+def test_refresh_pr_mergeable_state_updates_attribute_and_emits(
+    db: Session,
+) -> None:
+    from unittest.mock import patch
+
+    from app.workers.tasks.maintenance import _refresh_pr_mergeable_state_impl
+
+    analysis, fix = _build_chain(db)
+    repo = db.get(Repository, analysis.repo_id)
+    assert repo is not None
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/maint-{uuid.uuid4().hex[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/21",
+        pr_state=PullRequestState.open,
+        mergeable_state="clean",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix.pr_id = pr.id
+    db.add(fix)
+    db.commit()
+
+    events: list = []
+    with (
+        patch(
+            "app.workers.tasks.maintenance._fetch_pr_mergeable_state",
+            return_value="dirty",
+        ),
+        patch(
+            "app.workers.tasks.maintenance.events_pub.publish_event",
+            side_effect=events.append,
+        ),
+    ):
+        result = _refresh_pr_mergeable_state_impl(str(repo.id))
+
+    assert result["updated"] == 1
+    db.refresh(pr)
+    assert pr.mergeable_state == "dirty"
+    assert len(events) == 1
+
+
+def test_refresh_pr_mergeable_state_skips_unchanged_and_no_installation(
+    db: Session,
+) -> None:
+    from unittest.mock import patch
+
+    from app.workers.tasks.maintenance import _refresh_pr_mergeable_state_impl
+
+    analysis, _fix = _build_chain(db)
+    repo = db.get(Repository, analysis.repo_id)
+    assert repo is not None
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/maint-{uuid.uuid4().hex[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/22",
+        pr_state=PullRequestState.open,
+        mergeable_state="clean",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    # Unchanged state: no update, no event.
+    events: list = []
+    with (
+        patch(
+            "app.workers.tasks.maintenance._fetch_pr_mergeable_state",
+            return_value="clean",
+        ),
+        patch(
+            "app.workers.tasks.maintenance.events_pub.publish_event",
+            side_effect=events.append,
+        ),
+    ):
+        result = _refresh_pr_mergeable_state_impl(str(repo.id))
+    assert result == {"checked": 1, "updated": 0}
+    assert events == []
+
+    # No installation: nothing checked at all.
+    repo.installation_id = None
+    db.add(repo)
+    db.commit()
+    result = _refresh_pr_mergeable_state_impl(str(repo.id))
+    assert result == {"checked": 0, "updated": 0}

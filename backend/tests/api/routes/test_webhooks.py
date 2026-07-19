@@ -2227,3 +2227,96 @@ def test_push_to_fix_branch_never_enqueues_analysis(
         response = _post_push_to_fix_branch(client, enabled_repo, "some-human")
     assert response.status_code == 200
     mock_enqueue.assert_not_called()
+
+
+def test_default_branch_push_enqueues_mergeable_refresh(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-xyz",
+        pr_url="https://github.com/owner/repo/pull/93",
+        pr_state=PullRequestState.open,
+    )
+    db.add(pr)
+    db.commit()
+
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.maintenance.refresh_pr_mergeable_state.delay"
+        ) as mock_refresh,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_refresh.assert_called_once_with(repo_id=str(enabled_repo.id))
+
+
+def test_non_default_branch_push_no_mergeable_refresh(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-xyz",
+        pr_url="https://github.com/owner/repo/pull/94",
+        pr_state=PullRequestState.open,
+    )
+    db.add(pr)
+    db.commit()
+
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.maintenance.refresh_pr_mergeable_state.delay"
+        ) as mock_refresh,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_refresh.assert_not_called()
+
+
+def test_default_branch_push_without_open_pr_no_refresh(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.maintenance.refresh_pr_mergeable_state.delay"
+        ) as mock_refresh,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_refresh.assert_not_called()
