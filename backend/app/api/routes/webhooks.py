@@ -143,11 +143,17 @@ def _handle_push_event(
     repo = session.exec(
         select(Repository).where(Repository.github_repo_id == github_repo_id)
     ).first()
-    if not repo or not repo.enabled:
+    if not repo:
         return
 
     branch = payload.get("ref", "").removeprefix("refs/heads/")
     if branch.startswith("greensecops/"):
+        # Never analyse our own fix branches — but a push to one by anyone
+        # other than the bot means the user edited the fix PR, which must
+        # block auto-redelivery (it would overwrite their commits).
+        _flag_externally_modified_fix_branch(session, repo, branch, payload)
+        return
+    if not repo.enabled:
         return
 
     before: str = payload.get("before", "")
@@ -176,6 +182,60 @@ def _handle_push_event(
         trigger=AnalysisTrigger.webhook_push,
         org_id=str(repo.org_id),
     )
+
+
+def _flag_externally_modified_fix_branch(
+    session: Session,
+    repo: Repository,
+    branch: str,
+    payload: dict[str, Any],
+) -> None:
+    """Mark a fix PR as user-edited when a non-bot pushes to its branch.
+
+    ``externally_modified`` blocks auto-redelivery (fix_generation) so the
+    user's commits aren't overwritten; a successful forced delivery clears it.
+    The delivery service's own user-commit guard remains the backstop.
+    """
+    from app.services.github.fix_delivery import _is_bot_login
+
+    sender_login = payload.get("sender", {}).get("login")
+    if _is_bot_login(sender_login, settings.GITHUB_BOT_HANDLE):
+        return
+
+    from datetime import datetime, timezone
+
+    from sqlmodel import select
+
+    pr_record = session.exec(
+        select(PullRequest)
+        .where(PullRequest.repo_id == repo.id)
+        .where(PullRequest.pr_branch == branch)
+    ).first()
+    if pr_record is None or pr_record.externally_modified:
+        return
+    pr_record.externally_modified = True
+    pr_record.updated_at = datetime.now(timezone.utc)
+    sm.try_advance(pr_record, sm.PullRequestMachine, "external_update")
+    session.add(pr_record)
+    session.commit()
+    logger.info(
+        "Fix branch %s of %s modified by %s: auto-redelivery blocked",
+        branch,
+        repo.full_name,
+        sender_login,
+    )
+    if pr_record.pr_url:
+        fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+        if fix:
+            events_pub.publish_event(
+                ev.pr_updated(
+                    str(repo.org_id),
+                    str(repo.id),
+                    [str(fix.id)],
+                    pr_record.pr_url,
+                    pr_record.pr_branch,
+                )
+            )
 
 
 def _handle_delete_event(

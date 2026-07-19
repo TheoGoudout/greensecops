@@ -2151,3 +2151,79 @@ def test_pull_request_opened_from_user_branch_ignored(
         ).first()
         is None
     )
+
+
+# ─── externally_modified fix branches ────────────────────────────────────────
+
+
+def _post_push_to_fix_branch(client: TestClient, repo: Repository, sender_login: str):  # type: ignore[no-untyped-def]
+    payload = {
+        "ref": "refs/heads/greensecops/fixes-abc",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [
+            {"added": [], "modified": [".github/workflows/ci.yml"], "removed": []}
+        ],
+        "sender": {"login": sender_login},
+        "repository": {"id": repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        return client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+
+
+def test_user_push_to_fix_branch_sets_externally_modified(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-abc",
+        pr_url="https://github.com/owner/repo/pull/91",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    response = _post_push_to_fix_branch(client, enabled_repo, "some-human")
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.externally_modified is True
+
+
+def test_bot_push_to_fix_branch_does_not_set_externally_modified(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-abc",
+        pr_url="https://github.com/owner/repo/pull/92",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    bot_login = settings.GITHUB_BOT_HANDLE.lstrip("@") + "[bot]"
+    response = _post_push_to_fix_branch(client, enabled_repo, bot_login)
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.externally_modified is False
+
+
+def test_push_to_fix_branch_never_enqueues_analysis(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+) -> None:
+    with patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue:
+        response = _post_push_to_fix_branch(client, enabled_repo, "some-human")
+    assert response.status_code == 200
+    mock_enqueue.assert_not_called()

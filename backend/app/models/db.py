@@ -344,6 +344,12 @@ class PullRequest(SQLModel, table=True):
     ci_status: CIStatus | None = Field(default=None)
     review_decision: ReviewDecision | None = Field(default=None)
     mergeable_state: str | None = Field(default=None, max_length=32)
+    # A non-bot user pushed commits to the fix branch. Auto-redelivery is
+    # blocked while set (it would overwrite the user's edits); a successful
+    # forced delivery clears it.
+    externally_modified: bool = Field(
+        default=False, sa_column_kwargs={"server_default": sa.false()}
+    )
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )

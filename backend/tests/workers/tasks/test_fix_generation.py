@@ -352,3 +352,54 @@ def test_maybe_auto_deliver_body_keeps_previously_delivered_fixes(
     # ...but the body still reflects the sibling's already-delivered issue.
     assert delivered_issue.message in call_kwargs["pr_body"]
     assert ready_issue.message in call_kwargs["pr_body"]
+
+
+def test_maybe_auto_deliver_skips_externally_modified_pr(db: Session) -> None:
+    org = Organization(
+        name=f"auto-deliver-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+    repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"autodeliver/repo-{uuid.uuid4().hex[:8]}",
+        installation_id=99993,
+        auto_fix_enabled=True,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+    rule = Rule(
+        slug=f"auto-deliver-rule-{uuid.uuid4().hex[:8]}",
+        category=IssueCategory.reliability,
+        severity=IssueSeverity.medium,
+        title="Auto Deliver Rule",
+        description="A test rule",
+        enabled=True,
+        severity_weight=1.0,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/fixes-{str(repo.id)[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/136",
+        pr_state="open",
+        externally_modified=True,
+    )
+    db.add(pr)
+    db.commit()
+
+    _wf, ready_fix, _issue = _make_wf_fix_issue(db, repo, rule, FixStatus.ready, 1)
+
+    with patch(
+        "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
+    ) as mock_delay:
+        _maybe_auto_deliver(str(repo.id), [str(ready_fix.id)])
+
+    # The user's commits on the fix branch block auto-redelivery.
+    mock_delay.assert_not_called()
