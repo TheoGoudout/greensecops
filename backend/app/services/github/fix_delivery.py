@@ -36,7 +36,7 @@ def _normalize_bot_handle(handle: str | None) -> str:
     return (handle or "").lstrip("@").lower().removesuffix("[bot]")
 
 
-def _is_bot_login(login: str | None, bot_login: str) -> bool:
+def is_bot_login(login: str | None, bot_login: str) -> bool:
     """Whether a commit author login belongs to our GitHub App bot.
 
     ``bot_login`` is the authenticated App's own login (``<slug>[bot]``), which is
@@ -121,7 +121,7 @@ def _prepare_fix_branch(
     if not override_user_commits and branch_ref.object.sha != base_sha:
         head_commit = repo.get_commit(branch_ref.object.sha)
         author_login = head_commit.author.login if head_commit.author else None
-        if not _is_bot_login(author_login, bot_login):
+        if not is_bot_login(author_login, bot_login):
             raise _DeliveryAborted(
                 USER_COMMITS_ERROR_CODE,
                 f"branch {fix_branch} has commits by {author_login}; "

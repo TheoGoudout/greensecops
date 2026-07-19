@@ -211,10 +211,10 @@ def _flag_externally_modified_fix_branch(
     """
     from datetime import datetime, timezone
 
-    from app.services.github.fix_delivery import _is_bot_login
+    from app.services.github.fix_delivery import is_bot_login
 
     sender_login = payload.get("sender", {}).get("login")
-    if _is_bot_login(sender_login, settings.GITHUB_BOT_HANDLE):
+    if is_bot_login(sender_login, settings.GITHUB_BOT_HANDLE):
         return
 
     pr_record = session.exec(
@@ -361,14 +361,12 @@ def _handle_issue_comment_event(
     if payload.get("action") != "created":
         return
     body: str = payload.get("comment", {}).get("body", "")
-    stripped = body.strip()
-    if not stripped.startswith("/greensecops"):
+    if not body.strip().startswith("/greensecops"):
         return
     logger.info("Received GreenSecOps command comment: %s", body[:100])
 
-    command = stripped.removeprefix("/greensecops").strip().split()
-    if not command or command[0] not in ("reanalyze", "ignore", "unignore"):
-        # Other commands (fix, ...) are not implemented yet.
+    command = eh.parse_greensecops_command(body)
+    if not command:
         return
 
     repo = _resolve_repo_by_github_id(session, payload)

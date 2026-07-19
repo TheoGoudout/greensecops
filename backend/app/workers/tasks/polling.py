@@ -52,17 +52,6 @@ class _RepoPollData:
     prs: dict[uuid.UUID, _PRPollResult]
 
 
-def _parse_greensecops_command(body: str) -> list[str] | None:
-    """Parse a ``/greensecops <verb> ...`` comment; ``None`` if not a command."""
-    stripped = body.strip()
-    if not stripped.startswith("/greensecops"):
-        return None
-    command = stripped.removeprefix("/greensecops").strip().split()
-    if not command or command[0] not in ("reanalyze", "ignore", "unignore"):
-        return None
-    return command
-
-
 async def _fetch_repo_poll_data(
     repo: Repository, prs: list[PullRequest]
 ) -> _RepoPollData:
@@ -240,7 +229,7 @@ def _apply_command_comments(
     now: datetime,
 ) -> None:
     for body in result.command_comments:
-        command = _parse_greensecops_command(body)
+        command = eh.parse_greensecops_command(body)
         if command is not None:
             eh.handle_issue_command(session, repo, command)
     # Advance the cursor even when there were no commands, so the next poll's

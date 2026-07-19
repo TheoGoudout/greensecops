@@ -352,6 +352,22 @@ def handle_review_decision(
 # ─── Slash commands ──────────────────────────────────────────────────────────
 
 
+#: Verbs recognised by ``/greensecops`` comment commands. Other commands
+#: (fix, ...) are not implemented yet.
+GREENSECOPS_COMMAND_VERBS = ("reanalyze", "ignore", "unignore")
+
+
+def parse_greensecops_command(body: str) -> list[str] | None:
+    """Parse a ``/greensecops <verb> ...`` comment; ``None`` if not a command."""
+    stripped = body.strip()
+    if not stripped.startswith("/greensecops"):
+        return None
+    command = stripped.removeprefix("/greensecops").strip().split()
+    if not command or command[0] not in GREENSECOPS_COMMAND_VERBS:
+        return None
+    return command
+
+
 def handle_issue_command(
     session: Session,
     repo: Repository,
@@ -359,11 +375,10 @@ def handle_issue_command(
 ) -> None:
     """Dispatch a parsed ``/greensecops`` command (``command[0]`` is the verb).
 
-    Recognised verbs: ``reanalyze``, ``ignore``, ``unignore``. The caller has
-    already stripped the ``/greensecops`` prefix and split the arguments.
+    The caller has already stripped the ``/greensecops`` prefix and split the
+    arguments (see ``parse_greensecops_command``).
     """
-    if not command or command[0] not in ("reanalyze", "ignore", "unignore"):
-        # Other commands (fix, ...) are not implemented yet.
+    if not command or command[0] not in GREENSECOPS_COMMAND_VERBS:
         return
 
     if command[0] == "reanalyze":
