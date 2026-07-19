@@ -46,6 +46,17 @@ function invalidateFixQueries(
   }
 }
 
+function invalidateInstallationQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  orgId?: string,
+) {
+  qc.invalidateQueries({ queryKey: ["installations"] })
+  qc.invalidateQueries({ queryKey: ["repositories"] })
+  if (orgId) {
+    qc.invalidateQueries({ queryKey: ["organizations", orgId] })
+  }
+}
+
 function invalidateTelemetryQueries(
   qc: ReturnType<typeof useQueryClient>,
   repoId: string,
@@ -282,13 +293,7 @@ export function useRepoEvents(): void {
           break
 
         case "installation.synced": {
-          queryClient.invalidateQueries({ queryKey: ["installations"] })
-          queryClient.invalidateQueries({ queryKey: ["repositories"] })
-          if (orgId) {
-            queryClient.invalidateQueries({
-              queryKey: ["organizations", orgId],
-            })
-          }
+          invalidateInstallationQueries(queryClient, orgId)
           const repoCount = data.repo_count as number | undefined
           toast.success("Installation synced", {
             description:
@@ -300,57 +305,27 @@ export function useRepoEvents(): void {
         }
 
         case "installation.created":
-          queryClient.invalidateQueries({ queryKey: ["installations"] })
-          queryClient.invalidateQueries({ queryKey: ["repositories"] })
-          if (orgId) {
-            queryClient.invalidateQueries({
-              queryKey: ["organizations", orgId],
-            })
-          }
+          invalidateInstallationQueries(queryClient, orgId)
           toast.success("GitHub App installed")
           break
 
         case "installation.deleted":
-          queryClient.invalidateQueries({ queryKey: ["installations"] })
-          queryClient.invalidateQueries({ queryKey: ["repositories"] })
-          if (orgId) {
-            queryClient.invalidateQueries({
-              queryKey: ["organizations", orgId],
-            })
-          }
+          invalidateInstallationQueries(queryClient, orgId)
           toast.info("GitHub App uninstalled")
           break
 
         case "installation.suspended":
-          queryClient.invalidateQueries({ queryKey: ["installations"] })
-          queryClient.invalidateQueries({ queryKey: ["repositories"] })
-          if (orgId) {
-            queryClient.invalidateQueries({
-              queryKey: ["organizations", orgId],
-            })
-          }
+          invalidateInstallationQueries(queryClient, orgId)
           toast.warning("GitHub App suspended")
           break
 
         case "installation.unsuspended":
-          queryClient.invalidateQueries({ queryKey: ["installations"] })
-          queryClient.invalidateQueries({ queryKey: ["repositories"] })
-          if (orgId) {
-            queryClient.invalidateQueries({
-              queryKey: ["organizations", orgId],
-            })
-          }
+          invalidateInstallationQueries(queryClient, orgId)
           toast.success("GitHub App unsuspended")
           break
 
         case "installation.updated":
-          queryClient.invalidateQueries({ queryKey: ["installations"] })
-          queryClient.invalidateQueries({ queryKey: ["repositories"] })
-          if (orgId) {
-            queryClient.invalidateQueries({
-              queryKey: ["organizations", orgId],
-            })
-          }
+          invalidateInstallationQueries(queryClient, orgId)
           toast.info("GitHub App permissions updated")
           break
 
