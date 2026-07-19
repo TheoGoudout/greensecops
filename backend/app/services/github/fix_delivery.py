@@ -139,14 +139,23 @@ def _upsert_file(
 ) -> None:
     try:
         existing = repo.get_contents(file_path, ref=branch)
-        file_sha: str | None = (
-            existing.sha if not isinstance(existing, list) else existing[0].sha
+        if isinstance(existing, list):
+            existing = existing[0]
+        file_sha: str | None = existing.sha
+        existing_content: str | None = existing.decoded_content.decode(
+            "utf-8", errors="replace"
         )
     except GithubException:
         file_sha = None
+        existing_content = None
 
     if not new_content.endswith("\n"):
         new_content += "\n"
+    # The branch already carries this exact content (e.g. an unchanged fix
+    # re-included in the delivery set): committing it again would only add an
+    # empty, churny commit to the PR. Nothing to do.
+    if existing_content is not None and existing_content == new_content:
+        return
     encoded = new_content.encode("utf-8")
     if file_sha:
         repo.update_file(
@@ -187,37 +196,61 @@ def _remove_outdated_workflow_files(
     base_repo: GithubRepository,
     fix_branch: str,
     base_branch: str,
+    keep_paths: set[str],
 ) -> list[str]:
-    """Delete workflow files from the fix branch that no longer exist on base.
+    """Reconcile the fix branch so it modifies exactly ``keep_paths``.
 
     Updating an open PR does not reset the fix branch to base (that would
     auto-close the PR — see ``_prepare_fix_branch``), so a workflow file the
-    branch modified but the user later deleted from the base branch lingers on
-    the branch as a modify/delete conflict that makes the PR unmergeable. Remove
-    such files with a forward-only ``delete_file`` commit so the PR stays
-    mergeable without rewriting history.
+    branch changed in an earlier run lingers on the branch even after it drops
+    out of the current fix set (its issues were resolved, or it was deleted on
+    base). Left alone it keeps showing a stale change in the PR — or, for a file
+    deleted on base, a modify/delete conflict that makes the PR unmergeable.
 
-    We only ever *modify* existing workflow files (never add new ones), so any
-    workflow file present on the fix branch but absent from the current base
-    branch must have been deleted on base after the branch was cut. Files in the
-    current delivery still exist on base (freshness was already checked), so
-    they are never removed. ``base_repo`` is the repo owning the base branch —
-    the same repo as ``branch_repo`` for same-repo delivery, or the upstream for
-    fork-based delivery.
+    ``keep_paths`` is the set of workflow paths delivered this run; every one of
+    them is (re)written by the caller, so they are never touched here. For each
+    other ``*.yml``/``*.yaml`` file on the fix branch we compare it to base and
+    apply a forward-only commit (no history rewrite):
+
+    * absent on base → ``delete_file`` (deleted on base after the branch was cut);
+    * present on base but the branch content differs → an earlier fix we applied
+      that is no longer needed: revert it to the base content so it drops out of
+      the PR diff;
+    * identical to base → an untouched user workflow file inherited from base:
+      leave it alone (we never delete files the user owns).
+
+    ``base_repo`` owns the base branch — the same repo as ``branch_repo`` for
+    same-repo delivery, or the upstream for fork-based delivery. Returns the
+    paths that were removed or reverted.
     """
     base_paths = {cf.path for cf in _list_workflow_files(base_repo, base_branch)}
-    removed: list[str] = []
+    reconciled: list[str] = []
     for cf in _list_workflow_files(branch_repo, fix_branch):
-        if cf.path in base_paths:
+        if cf.path in keep_paths:
             continue
-        branch_repo.delete_file(
-            path=cf.path,
-            message=f"chore: remove {cf.path} deleted from {base_branch}",
-            sha=cf.sha,
-            branch=fix_branch,
+        if cf.path not in base_paths:
+            branch_repo.delete_file(
+                path=cf.path,
+                message=f"chore: remove {cf.path} deleted from {base_branch}",
+                sha=cf.sha,
+                branch=fix_branch,
+            )
+            reconciled.append(cf.path)
+            continue
+        base_content = _fetch_file_content(base_repo, cf.path, base_branch)
+        branch_content = _fetch_file_content(branch_repo, cf.path, fix_branch)
+        if base_content is None or branch_content == base_content:
+            # Untouched user file (branch matches base): leave it in place.
+            continue
+        _upsert_file(
+            branch_repo,
+            cf.path,
+            base_content,
+            fix_branch,
+            f"chore: revert {cf.path} no longer part of the fix set",
         )
-        removed.append(cf.path)
-    return removed
+        reconciled.append(cf.path)
+    return reconciled
 
 
 def _update_comment_body(updated_paths: list[str]) -> str:
@@ -318,7 +351,13 @@ class FixDeliveryService:
                     reset_to_base=not open_prs,
                 )
                 if open_prs:
-                    _remove_outdated_workflow_files(repo, repo, fix_branch, base_branch)
+                    _remove_outdated_workflow_files(
+                        repo,
+                        repo,
+                        fix_branch,
+                        base_branch,
+                        keep_paths={fp for fp, _ in file_changes},
+                    )
                 for fp, new_content in file_changes:
                     _upsert_file(
                         repo,
@@ -405,7 +444,11 @@ class FixDeliveryService:
                 )
                 if open_prs:
                     _remove_outdated_workflow_files(
-                        fork, upstream, fix_branch, base_branch
+                        fork,
+                        upstream,
+                        fix_branch,
+                        base_branch,
+                        keep_paths={fp for fp, _ in file_changes},
                     )
                 for fp, new_content in file_changes:
                     _upsert_file(

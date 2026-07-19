@@ -15,6 +15,7 @@ from app.services.github.fix_delivery import (
     _prepare_fix_branch,
     _remove_outdated_workflow_files,
     _update_or_create_open_pr,
+    _upsert_file,
 )
 
 BOT_LOGIN = "greensecops-staging[bot]"
@@ -136,9 +137,16 @@ def _cf(path: str, sha: str = "sha") -> MagicMock:
     return cf
 
 
-def _workflow_getter(files_by_ref: dict[str, list | GithubException]):
+def _workflow_getter(
+    files_by_ref: dict[str, list | GithubException],
+    contents: dict[tuple[str, str], str] | None = None,
+):
     """Build a get_contents side_effect that serves both directory listings
-    (keyed by ref) and single-file lookups (for _upsert_file)."""
+    (keyed by ref) and single-file lookups (for _fetch_file_content /
+    _upsert_file). ``contents`` maps (ref, path) -> decoded string for the
+    single-file reads that branch reconciliation makes; unlisted paths fall
+    back to a bare updatable stub."""
+    contents = contents or {}
 
     def _get_contents(path: str, ref: str | None = None):
         if path == ".github/workflows":
@@ -148,9 +156,11 @@ def _workflow_getter(files_by_ref: dict[str, list | GithubException]):
             if result is None:
                 raise GithubException(404, {}, None)
             return result
-        # Single-file lookup done by _upsert_file; return an updatable stub.
+        # Single-file lookup done by _fetch_file_content / _upsert_file.
         stub = MagicMock()
         stub.sha = "file-sha"
+        value = contents.get((ref or "", path))
+        stub.decoded_content = value.encode() if value is not None else b""
         return stub
 
     return _get_contents
@@ -168,7 +178,9 @@ def test_list_and_remove_deletes_files_absent_on_base() -> None:
         }
     )
 
-    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+    removed = _remove_outdated_workflow_files(
+        repo, repo, "fix", "main", keep_paths={".github/workflows/a.yml"}
+    )
 
     assert removed == [".github/workflows/b.yml"]
     repo.delete_file.assert_called_once_with(
@@ -179,7 +191,10 @@ def test_list_and_remove_deletes_files_absent_on_base() -> None:
     )
 
 
-def test_remove_outdated_noop_when_branch_subset_of_base() -> None:
+def test_remove_outdated_reverts_stale_file_still_on_base() -> None:
+    # b.yml exists on base and on the branch, but is no longer in the fix set
+    # (keep_paths). Its branch content differs from base (an earlier fix we
+    # applied), so it is reverted to the base content to drop it from the PR.
     repo = MagicMock()
     repo.get_contents.side_effect = _workflow_getter(
         {
@@ -187,19 +202,85 @@ def test_remove_outdated_noop_when_branch_subset_of_base() -> None:
                 _cf(".github/workflows/a.yml"),
                 _cf(".github/workflows/b.yml"),
             ],
+            "fix": [
+                _cf(".github/workflows/a.yml"),
+                _cf(".github/workflows/b.yml"),
+            ],
+        },
+        contents={
+            ("main", ".github/workflows/b.yml"): "base-b",
+            ("fix", ".github/workflows/b.yml"): "fixed-b",
+        },
+    )
+
+    removed = _remove_outdated_workflow_files(
+        repo, repo, "fix", "main", keep_paths={".github/workflows/a.yml"}
+    )
+
+    assert removed == [".github/workflows/b.yml"]
+    repo.delete_file.assert_not_called()
+    repo.update_file.assert_called_once_with(
+        path=".github/workflows/b.yml",
+        message="chore: revert .github/workflows/b.yml no longer part of the fix set",
+        content=b"base-b\n",
+        sha="file-sha",
+        branch="fix",
+    )
+
+
+def test_remove_outdated_keeps_file_in_keep_paths() -> None:
+    # A file still in the current fix set is written by the caller, never
+    # touched by reconciliation.
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [_cf(".github/workflows/a.yml")],
             "fix": [_cf(".github/workflows/a.yml")],
         }
     )
 
-    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+    removed = _remove_outdated_workflow_files(
+        repo, repo, "fix", "main", keep_paths={".github/workflows/a.yml"}
+    )
 
     assert removed == []
     repo.delete_file.assert_not_called()
+    repo.update_file.assert_not_called()
+
+
+def test_remove_outdated_leaves_untouched_user_file_alone() -> None:
+    # b.yml is not in the fix set but its branch content equals base (a user
+    # workflow file inherited from base): it must never be deleted or reverted.
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [
+                _cf(".github/workflows/a.yml"),
+                _cf(".github/workflows/b.yml"),
+            ],
+            "fix": [
+                _cf(".github/workflows/a.yml"),
+                _cf(".github/workflows/b.yml"),
+            ],
+        },
+        contents={
+            ("main", ".github/workflows/b.yml"): "same",
+            ("fix", ".github/workflows/b.yml"): "same",
+        },
+    )
+
+    removed = _remove_outdated_workflow_files(
+        repo, repo, "fix", "main", keep_paths={".github/workflows/a.yml"}
+    )
+
+    assert removed == []
+    repo.delete_file.assert_not_called()
+    repo.update_file.assert_not_called()
 
 
 def test_remove_outdated_ignores_non_workflow_yaml_extensions() -> None:
     # A README under the workflows dir is not a *.yml/*.yaml file and must be
-    # left untouched even though it is absent from base.
+    # left untouched even though it is absent from the fix set.
     repo = MagicMock()
     repo.get_contents.side_effect = _workflow_getter(
         {
@@ -211,7 +292,9 @@ def test_remove_outdated_ignores_non_workflow_yaml_extensions() -> None:
         }
     )
 
-    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+    removed = _remove_outdated_workflow_files(
+        repo, repo, "fix", "main", keep_paths={".github/workflows/a.yml"}
+    )
 
     assert removed == []
     repo.delete_file.assert_not_called()
@@ -228,7 +311,9 @@ def test_remove_outdated_treats_missing_base_dir_as_empty() -> None:
         }
     )
 
-    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+    removed = _remove_outdated_workflow_files(
+        repo, repo, "fix", "main", keep_paths=set()
+    )
 
     assert removed == [".github/workflows/a.yml"]
     repo.delete_file.assert_called_once()
@@ -241,7 +326,57 @@ def test_remove_outdated_reraises_non_404_listing_error() -> None:
     )
 
     with pytest.raises(GithubException):
-        _remove_outdated_workflow_files(repo, repo, "fix", "main")
+        _remove_outdated_workflow_files(repo, repo, "fix", "main", keep_paths=set())
+
+
+# ─── _upsert_file ────────────────────────────────────────────────────────────
+
+
+def test_upsert_file_skips_commit_when_content_unchanged() -> None:
+    # An unchanged fix re-included in the delivery set: the branch already has
+    # this exact content, so no (empty) commit is made.
+    repo = MagicMock()
+    existing = MagicMock()
+    existing.sha = "file-sha"
+    existing.decoded_content = b"content\n"
+    repo.get_contents.return_value = existing
+
+    _upsert_file(repo, "wf.yml", "content", "fix", "msg")
+
+    repo.update_file.assert_not_called()
+    repo.create_file.assert_not_called()
+
+
+def test_upsert_file_updates_when_content_changed() -> None:
+    repo = MagicMock()
+    existing = MagicMock()
+    existing.sha = "file-sha"
+    existing.decoded_content = b"old\n"
+    repo.get_contents.return_value = existing
+
+    _upsert_file(repo, "wf.yml", "new", "fix", "msg")
+
+    repo.update_file.assert_called_once_with(
+        path="wf.yml",
+        message="msg",
+        content=b"new\n",
+        sha="file-sha",
+        branch="fix",
+    )
+
+
+def test_upsert_file_creates_when_absent() -> None:
+    repo = MagicMock()
+    repo.get_contents.side_effect = GithubException(404, {}, None)
+
+    _upsert_file(repo, "wf.yml", "new", "fix", "msg")
+
+    repo.create_file.assert_called_once_with(
+        path="wf.yml",
+        message="msg",
+        content=b"new\n",
+        branch="fix",
+    )
 
 
 # ─── _update_or_create_open_pr ───────────────────────────────────────────────
