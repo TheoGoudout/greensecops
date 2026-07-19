@@ -318,9 +318,7 @@ class FixDeliveryService:
                     reset_to_base=not open_prs,
                 )
                 if open_prs:
-                    _remove_outdated_workflow_files(
-                        repo, repo, fix_branch, base_branch
-                    )
+                    _remove_outdated_workflow_files(repo, repo, fix_branch, base_branch)
                 for fp, new_content in file_changes:
                     _upsert_file(
                         repo,
