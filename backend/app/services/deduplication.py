@@ -37,24 +37,28 @@ def find_completed_analysis(
     session: Session,
     content_hash: str,
     repo_id: uuid.UUID,
+    branch: str,
 ) -> Analysis | None:
-    """Return the repo's most recent completed analysis for this content hash.
+    """Return the branch's most recent completed analysis for this content hash.
 
-    Scoped to the repository: identical workflow content in two different
-    repositories must not share analyses (issues and workflow files belong to
-    a single repo).
+    Scoped to the repository *and* branch: identical workflow content in two
+    different repositories must not share analyses (issues and workflow files
+    belong to a single repo), and identical content on two branches of the same
+    repo must not either — a dedup-skip would leave the other branch's
+    WorkflowFile row and issue reconciliation stale (e.g. right after a merge).
     """
     return session.exec(
         select(Analysis)
         .where(Analysis.content_hash == content_hash)
         .where(Analysis.repo_id == repo_id)
+        .where(Analysis.branch == branch)
         .where(Analysis.status == AnalysisStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
 
 
 def is_duplicate(
-    session: Session, content_hash: str, repo_id: uuid.UUID
+    session: Session, content_hash: str, repo_id: uuid.UUID, branch: str
 ) -> tuple[bool, Analysis | None]:
-    existing = find_completed_analysis(session, content_hash, repo_id)
+    existing = find_completed_analysis(session, content_hash, repo_id, branch)
     return (existing is not None, existing)

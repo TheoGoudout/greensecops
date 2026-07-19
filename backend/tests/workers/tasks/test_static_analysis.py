@@ -1606,3 +1606,170 @@ def test_auto_queue_is_noop_when_nothing_changed(
     assert fix.id == delivered_fix.id
     assert fix.status == FixStatus.delivered  # untouched
     mock_task.delay.assert_not_called()
+
+
+# ─── Branch dimension ────────────────────────────────────────────────────────
+
+
+def _fetched(path: str, content: str) -> WorkflowFileContent:
+    from app.services.deduplication import compute_content_hash
+
+    return WorkflowFileContent(
+        path=path,
+        content=content,
+        content_hash=compute_content_hash(content),
+        sha=uuid.uuid4().hex,
+    )
+
+
+def test_feature_branch_analysis_does_not_touch_default_branch_state(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    """The core cross-branch regression: analysing a feature branch must not
+    overwrite the default branch's workflow content, resolve its issues as
+    no_longer_detected, or file_removed-resolve files absent from the branch."""
+    violation = FakeViolation(
+        rule_slug=seeded_rule.slug,
+        severity=seeded_rule.severity.value,
+        category=seeded_rule.category.value,
+        line_start=1,
+        line_end=1,
+        message="present on main",
+        job="build",
+    )
+
+    # First run on the default branch — creates the issue on main's wf row.
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    issue = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).one()
+    main_content = workflow_file.raw_content
+
+    # Feature-branch run: a *different* file set — the violating file is
+    # "fixed" there, and main's path is missing entirely from another file's
+    # perspective (only one, clean, differently-named workflow exists).
+    feature_files = [
+        _fetched(".github/workflows/other.yml", "on: push\njobs: {}\n"),
+    ]
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=feature_files,
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id), branch="feature")
+
+    # Default-branch state is untouched.
+    db.refresh(issue)
+    db.refresh(workflow_file)
+    assert issue.resolved_at is None
+    assert workflow_file.raw_content == main_content
+    assert workflow_file.branch == "main"
+
+    # The feature branch got its own row instead of overwriting main's.
+    feature_wf = db.exec(
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.branch == "feature")
+    ).one()
+    assert feature_wf.path == ".github/workflows/other.yml"
+
+
+def test_same_path_on_two_branches_gets_separate_rows(
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    seeded_rule: Rule,  # noqa: ARG001
+) -> None:
+    fixed = _fetched(workflow_file.path, "on: push\njobs: {}\n")
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[fixed],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id), branch="feature")
+
+    rows = db.exec(
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.path == workflow_file.path)
+    ).all()
+    assert sorted(r.branch for r in rows) == ["feature", "main"]
+    db.refresh(workflow_file)
+    assert "# unique:" in workflow_file.raw_content  # main content untouched
+
+
+def test_content_dedup_is_branch_scoped(
+    db: Session,
+    repo: Repository,
+    seeded_rule: Rule,  # noqa: ARG001
+) -> None:
+    """Identical content on two branches must not dedup-skip across branches —
+    a skip would leave the second branch's row and reconciliation stale."""
+    content = "on: push\njobs:\n  b:\n    runs-on: ubuntu-latest\n"
+    fetched = _fetched(".github/workflows/ci.yml", content)
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[fetched],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        first = _run_static_analysis_impl(str(repo.id))
+        again_same_branch = _run_static_analysis_impl(str(repo.id))
+        other_branch = _run_static_analysis_impl(str(repo.id), branch="feature")
+
+    assert "completed" in str(first["results"])
+    assert "skipped_duplicate" in str(again_same_branch["results"])
+    # Same content, different branch: analysed, not skipped.
+    assert "skipped_duplicate" not in str(other_branch["results"])
+    assert "completed" in str(other_branch["results"])
+
+
+def test_feature_branch_analysis_never_queues_fix_generation(
+    db: Session, repo: Repository, seeded_rule: Rule
+) -> None:
+    repo.auto_fix_enabled = True
+    db.add(repo)
+    db.commit()
+    violation = FakeViolation(
+        rule_slug=seeded_rule.slug,
+        severity=seeded_rule.severity.value,
+        category=seeded_rule.category.value,
+        line_start=1,
+        line_end=1,
+        message="feature-branch issue",
+        job="build",
+    )
+    fetched = _fetched(".github/workflows/feat.yml", "on: push\njobs: {}\n")
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[fetched],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._auto_queue_fix_generation"
+        ) as mock_gen,
+    ):
+        _run_static_analysis_impl(str(repo.id), branch="feature")
+
+    mock_gen.assert_not_called()

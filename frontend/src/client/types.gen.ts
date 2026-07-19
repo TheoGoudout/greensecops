@@ -179,8 +179,10 @@ export type IssuePublic = {
  * disabled/removed rule — the two cannot be told apart after the fact).
  * - ``file_removed``: the workflow file was deleted or renamed.
  * - ``merged``: the fix PR was merged, applying the change to the branch.
+ * - ``branch_deleted``: the branch carrying the issue's workflow file was
+ * deleted; the violation no longer exists anywhere to fix.
  */
-export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged';
+export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged' | 'branch_deleted';
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -237,6 +239,7 @@ export type PullRequestPublic = {
     ci_status?: (CIStatus | null);
     review_decision?: (ReviewDecision | null);
     mergeable_state?: (string | null);
+    externally_modified?: boolean;
     comment_url?: (string | null);
     created_at?: (string | null);
     updated_at?: (string | null);
@@ -412,6 +415,7 @@ export type WorkflowDeliverRequest = {
 export type WorkflowFilePublic = {
     id: string;
     path: string;
+    branch?: (string | null);
     raw_content?: (string | null);
 };
 
@@ -698,6 +702,7 @@ export type RepositoriesGetRepositoryData = {
 export type RepositoriesGetRepositoryResponse = (RepositoryPublic);
 
 export type RepositoriesListWorkflowFilesData = {
+    branch?: (string | null);
     repoId: string;
 };
 

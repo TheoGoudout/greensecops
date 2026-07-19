@@ -84,7 +84,11 @@ def _auto_queue_fix_generation(
     issues = session.exec(
         select(Issue)
         .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        .join(WorkflowFile, Issue.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo.id)
+        # Fixes and PRs only ever target the default branch; feature-branch
+        # issues are tracked but never auto-fixed.
+        .where(WorkflowFile.branch == repo.default_branch)
         .where(Issue.analysis_id == latest_analysis_subq)
         .where(col(Issue.resolved_at).is_(None))
         .where(col(Issue.ignored_at).is_(None))
@@ -338,16 +342,21 @@ def _resolve_issues_for_missing_files(
     session: Session,
     repo: Repository,
     fetched_paths: set[str],
+    branch: str,
 ) -> None:
-    """Reconcile workflow files that no longer exist in the repo.
+    """Reconcile workflow files that no longer exist on the analysed branch.
 
     Resolves their open issues (``file_removed``) and withdraws any
     non-terminal fix targeting them, so a stale ``ready``/``delivered`` fix
-    can't later resurrect content the user deliberately deleted.
+    can't later resurrect content the user deliberately deleted. Scoped to the
+    branch that was fetched: a feature branch missing a file says nothing
+    about the default branch (and vice versa).
     """
     now = datetime.now(timezone.utc)
     wf_rows = session.exec(
-        select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.branch == branch)
     ).all()
     resolved = 0
     superseded = 0
@@ -412,6 +421,9 @@ def _run_static_analysis_impl(
             wf = session.get(WorkflowFile, uuid.UUID(workflow_file_id))
             if wf is None:
                 return {"status": "error", "detail": "workflow_file_not_found"}
+            # A single-file run analyses the row's own branch, whatever branch
+            # the caller passed.
+            effective_branch = wf.branch
             workflow_files_to_analyse: list[object] = [wf]
         else:
             try:
@@ -435,7 +447,9 @@ def _run_static_analysis_impl(
             # Workflow files deleted/renamed since the last run: resolve their
             # open issues so they stop showing up as current findings.
             fetched_paths = {f.path for f in workflow_files_to_analyse}
-            _resolve_issues_for_missing_files(session, repo, fetched_paths)
+            _resolve_issues_for_missing_files(
+                session, repo, fetched_paths, effective_branch
+            )
 
         if not workflow_files_to_analyse:
             now = datetime.now(timezone.utc)
@@ -476,7 +490,9 @@ def _run_static_analysis_impl(
             path = wf.path
             content_hash = compute_content_hash(content)
 
-            duplicate, existing = is_duplicate(session, content_hash, repo.id)
+            duplicate, existing = is_duplicate(
+                session, content_hash, repo.id, effective_branch
+            )
             if not force and duplicate and existing:
                 logger.info(
                     "Skipping duplicate for %s (hash=%s)", path, content_hash[:8]
@@ -509,11 +525,13 @@ def _run_static_analysis_impl(
                 wf_record = session.exec(
                     select(WorkflowFile)
                     .where(WorkflowFile.repo_id == repo.id)
+                    .where(WorkflowFile.branch == effective_branch)
                     .where(WorkflowFile.path == path)
                 ).first()
                 if wf_record is None:
                     wf_record = WorkflowFile(
                         repo_id=repo.id,
+                        branch=effective_branch,
                         path=path,
                         content_hash=content_hash,
                         raw_content=content,
@@ -719,7 +737,13 @@ def _run_static_analysis_impl(
         # Reconcile fixes and refresh the open PR for both single-file and batch
         # runs, but only when a workflow's content actually changed this run.
         # _auto_queue_fix_generation is a no-op when nothing needs regenerating.
-        if repo.auto_fix_enabled and changed_wf_ids:
+        # Fixes are default-branch-only: a feature-branch analysis never queues
+        # generation (the query inside is branch-gated too).
+        if (
+            repo.auto_fix_enabled
+            and changed_wf_ids
+            and effective_branch == repo.default_branch
+        ):
             try:
                 _auto_queue_fix_generation(
                     session, repo, org_id, changed_wf_ids=changed_wf_ids

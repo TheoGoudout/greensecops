@@ -181,10 +181,18 @@ class Repository(SQLModel, table=True):
 
 class WorkflowFile(SQLModel, table=True):
     __tablename__ = "workflow_file"
+    __table_args__ = (
+        UniqueConstraint(
+            "repo_id", "branch", "path", name="uq_workflow_file_repo_branch_path"
+        ),
+    )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     repo_id: uuid.UUID = Field(
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
     )
+    # Workflow content is tracked per branch; issues hang off the per-branch
+    # row, so reconciliation on one branch cannot touch another branch's state.
+    branch: str = Field(default="main", max_length=255)
     path: str = Field(max_length=512)
     content_hash: str = Field(max_length=64, index=True)
     raw_content: str
@@ -343,6 +351,12 @@ class PullRequest(SQLModel, table=True):
     ci_status: CIStatus | None = Field(default=None)
     review_decision: ReviewDecision | None = Field(default=None)
     mergeable_state: str | None = Field(default=None, max_length=32)
+    # A non-bot user pushed commits to the fix branch. Auto-redelivery is
+    # blocked while set (it would overwrite the user's edits); a successful
+    # forced delivery clears it.
+    externally_modified: bool = Field(
+        default=False, sa_column_kwargs={"server_default": sa.false()}
+    )
     # Polling cursors (external-repo PRs receive no webhooks): the PR head SHA
     # last seen by the poller (a change means new commits, i.e. ``synchronize``)
     # and the timestamp up to which command comments have been processed.

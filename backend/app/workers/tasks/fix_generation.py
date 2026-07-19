@@ -108,6 +108,9 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                     _select(Fix)
                     .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
                     .where(WorkflowFile.repo_id == repo.id)
+                    # Fixes are default-branch-only; never deliver a legacy
+                    # feature-branch fix.
+                    .where(WorkflowFile.branch == repo.default_branch)
                     .where(Fix.status == FixStatus.ready)
                     .order_by(col(WorkflowFile.path).asc())
                 ).all()
@@ -139,6 +142,17 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                 )
                 .limit(1)
             ).first()
+            if existing_pr and existing_pr.externally_modified:
+                # The user pushed their own commits onto the fix branch:
+                # auto-redelivery would overwrite them. Manual (forced)
+                # delivery via the API stays available and clears the flag.
+                logger.info(
+                    "Skipping auto-delivery for repo %s: PR branch %s was "
+                    "modified externally",
+                    repo_id,
+                    existing_pr.pr_branch,
+                )
+                return
             pr_branch = (
                 existing_pr.pr_branch
                 if existing_pr

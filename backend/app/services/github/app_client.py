@@ -228,6 +228,22 @@ class GitHubAppClient:
         token = await self.get_installation_token(installation_id)
         return await self.get_pr_state_with_token(token, full_name, pr_number)
 
+    async def get_pr_mergeable_state(
+        self, installation_id: int, full_name: str, pr_number: int
+    ) -> str | None:
+        """Return GitHub's mergeable_state (e.g. ``clean``, ``dirty``) for a PR.
+
+        GitHub sends no webhook when a base-branch push makes a PR conflicted,
+        so this is polled on demand. ``None`` when GitHub hasn't computed it.
+        """
+        token = await self.get_installation_token(installation_id)
+
+        def _fetch() -> str | None:
+            repo = Github(auth=Auth.Token(token)).get_repo(full_name)
+            return repo.get_pull(pr_number).mergeable_state
+
+        return await asyncio.to_thread(_fetch)
+
     # ─── Polling snapshots (external-repo reconciliation) ────────────────────
 
     async def resolve_repo_token(self, repo: "Repository") -> str | None:

@@ -153,6 +153,7 @@ class FixPublic(SQLModel):
 class WorkflowFilePublic(SQLModel):
     id: uuid.UUID
     path: str
+    branch: str | None = None
     raw_content: str | None = None
 
 
@@ -165,6 +166,7 @@ class PullRequestPublic(SQLModel):
     ci_status: CIStatus | None = None
     review_decision: ReviewDecision | None = None
     mergeable_state: str | None = None
+    externally_modified: bool = False
     comment_url: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

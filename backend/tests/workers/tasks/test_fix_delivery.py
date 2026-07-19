@@ -13,6 +13,7 @@ from app.models import (
     LLMProvider,
     Organization,
     PullRequest,
+    PullRequestState,
     Repository,
     UserTier,
     WorkflowFile,
@@ -212,3 +213,77 @@ def test_external_repo_without_bot_token_skipped(db: Session) -> None:
     db.refresh(fix)
     # The fix stays ready (untouched) so it can deliver once a credential exists.
     assert fix.status == FixStatus.ready
+
+
+def test_forced_delivery_clears_externally_modified_and_reopens_closed_pr(
+    db: Session,
+) -> None:
+    repo, fix = _build_ready_fix(db)
+    branch = f"greensecops/fixes-{uuid.uuid4().hex[:8]}"
+    pr_url = f"https://github.com/{repo.full_name}/pull/11"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=branch,
+        pr_url=pr_url,
+        pr_state="closed",
+        externally_modified=True,
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    with patch(
+        "app.workers.tasks.fix_delivery._deliver_batch",
+        new=AsyncMock(return_value=FixDeliveryResult(pr_url=pr_url)),
+    ):
+        result = deliver_fixes_batch(
+            fix_ids=[str(fix.id)],
+            repo_id=str(repo.id),
+            pr_branch=branch,
+            pr_title="t",
+            pr_body="b",
+            force=True,
+        )
+
+    assert result == {"status": "ok"}
+    db.refresh(pr)
+    # Forced redelivery onto a closed PR reopens the record through the
+    # machine, and the explicit override lifts the auto-redelivery block.
+    assert pr.pr_state == PullRequestState.open
+    assert pr.externally_modified is False
+    db.refresh(fix)
+    assert fix.status == FixStatus.delivered
+
+
+def test_unforced_redelivery_keeps_externally_modified(db: Session) -> None:
+    repo, fix = _build_ready_fix(db)
+    branch = f"greensecops/fixes-{uuid.uuid4().hex[:8]}"
+    pr_url = f"https://github.com/{repo.full_name}/pull/12"
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=branch,
+        pr_url=pr_url,
+        pr_state="open",
+        externally_modified=True,
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    with patch(
+        "app.workers.tasks.fix_delivery._deliver_batch",
+        new=AsyncMock(return_value=FixDeliveryResult(pr_url=pr_url)),
+    ):
+        result = deliver_fixes_batch(
+            fix_ids=[str(fix.id)],
+            repo_id=str(repo.id),
+            pr_branch=branch,
+            pr_title="t",
+            pr_body="b",
+        )
+
+    assert result == {"status": "ok"}
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.open
+    # Only a *forced* delivery clears the user-edit flag.
+    assert pr.externally_modified is True

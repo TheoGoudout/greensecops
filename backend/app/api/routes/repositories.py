@@ -46,10 +46,17 @@ def _get_repo_for_user(
 def _compute_repo_grade(
     session: Session, repo_id: uuid.UUID
 ) -> tuple[float | None, str | None, int]:
-    """Return (avg_score, grade, workflow_count) from latest analyses per workflow file."""
+    """Return (avg_score, grade, workflow_count) from latest analyses per workflow file.
+
+    Scoped to default-branch workflow files so feature-branch analyses don't
+    skew the repo grade.
+    """
     analyses = session.exec(
         select(Analysis)
+        .join(WorkflowFile, Analysis.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
+        .where(WorkflowFile.branch == Repository.default_branch)
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
@@ -77,7 +84,11 @@ def _compute_grades_batch(
 
     analyses = session.exec(
         select(Analysis)
+        .join(WorkflowFile, Analysis.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
+        # Default-branch scope: feature-branch analyses must not skew grades.
+        .where(WorkflowFile.branch == Repository.default_branch)
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(Analysis.workflow_file_id, Analysis.created_at.desc())  # type: ignore[arg-type]
@@ -229,15 +240,19 @@ def list_workflow_files(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
+    branch: str | None = None,
 ) -> list[WorkflowFilePublic]:
     repo = _get_repo_for_user(repo_id, session, current_user)
     wf_files = session.exec(
-        select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.branch == (branch or repo.default_branch))
     ).all()
     return [
         WorkflowFilePublic(
             id=wf.id,
             path=wf.path,
+            branch=wf.branch,
             raw_content=wf.raw_content,
         )
         for wf in wf_files
@@ -473,7 +488,9 @@ async def integrate_action(
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
 
-    workflow_files = repo.workflow_files
+    workflow_files = [
+        wf for wf in repo.workflow_files if wf.branch == (repo.default_branch or "main")
+    ]
     if not workflow_files:
         raise HTTPException(
             status_code=404, detail="No workflow files found for this repository"

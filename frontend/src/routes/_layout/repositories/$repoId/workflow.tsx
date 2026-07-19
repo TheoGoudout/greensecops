@@ -6,6 +6,7 @@ import { FixesService, IssuesService, RepositoriesService } from "@/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { WorkflowFileViewer } from "@/components/WorkflowFileViewer"
+import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/workflow")({
   component: WorkflowPage,
@@ -16,15 +17,25 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/workflow")({
 
 function WorkflowPage() {
   const { repoId } = Route.useParams()
+  const { branch } = RepoRoute.useSearch()
 
   const { data: workflowFiles, isLoading: wfLoading } = useQuery({
-    queryKey: ["workflow-files", repoId],
-    queryFn: () => RepositoriesService.listWorkflowFiles({ repoId }),
+    queryKey: ["workflow-files", repoId, { branch }],
+    queryFn: () =>
+      RepositoriesService.listWorkflowFiles({
+        repoId,
+        branch: branch || undefined,
+      }),
   })
 
   const { data: issues } = useQuery({
-    queryKey: ["issues", "repo", repoId, { unfixed: false }],
-    queryFn: () => IssuesService.listIssues({ repoId, limit: 200 }),
+    queryKey: ["issues", "repo", repoId, { unfixed: false, branch }],
+    queryFn: () =>
+      IssuesService.listIssues({
+        repoId,
+        limit: 200,
+        branch: branch || undefined,
+      }),
   })
 
   const { data: fixes } = useQuery({

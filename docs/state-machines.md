@@ -53,14 +53,15 @@ sm.force_to(fix, sm.FixMachine, FixStatus.delivering)   # admin override (forced
 ```mermaid
 flowchart TD
     subgraph Inputs["Incoming events / data"]
-        WH_push["webhook: push"]
+        WH_push["webhook: push (incl. forced; base-branch push refreshes PR mergeable_state; non-bot push to greensecops/* flags externally_modified)"]
+        WH_delete["webhook: delete (branch)"]
         WH_run["webhook: workflow_run"]
         WH_comment["webhook: issue_comment (/greensecops reanalyze)"]
         WH_install["webhook: installation / installation_repositories"]
-        WH_pr["webhook: pull_request (closed / reopened / synchronize / edited)"]
-        WH_repo["webhook: repository (renamed / archived / deleted)"]
+        WH_pr["webhook: pull_request (opened / closed / reopened / synchronize / edited)"]
+        WH_repo["webhook: repository (renamed / archived / deleted / default branch changed)"]
         API["REST API (trigger / generate / deliver / reject)"]
-        BEAT["Celery beat (nightly re-analysis, sweepers, PR sync)"]
+        BEAT["Celery beat (nightly re-analysis, sweepers, PR sync, transient-failure auto-retry)"]
         TELEM["Action telemetry ingest (/telemetry)"]
     end
 
@@ -78,13 +79,15 @@ flowchart TD
     DEL -->|PR mode| PR[Pull Request]
     DEL -->|comment mode| CM[Commit comment]
     WH_pr --> PR
+    WH_push -. "base-branch push: mergeable_state refresh; greensecops/* push: externally_modified" .-> PR
+    WH_delete -. "user branch: Issues resolved (branch_deleted); greensecops/* branch: PR closed, Fix superseded" .-> PR
     BEAT --> PR
     API --> PR
     WH_repo --> REPO[(Repository enabled / accessible)]
     REPO -. gates .-> AN
     REPO -. gates .-> DEL
 
-    AN -->|fetches & upserts| WF[(WorkflowFile)]
+    AN -->|fetches & upserts| WF[(WorkflowFile — per repo+branch+path)]
     WF -. "file deleted: Issue resolved, Fix superseded (see #8)" .-> FIX
 
     TELEM --> DYN[Dynamic Analysis]
@@ -98,10 +101,11 @@ flowchart TD
 - **States** — `AnalysisStatus`: `queued`, `running`, `completed`, `failed`,
   `no_workflows`
 - **Events** — `started`, `opa_succeeded`, `opa_failed`, `no_workflows_found`,
-  `swept`
+  `swept`, `retry`
 - **Code** — `state_machines/analysis.py`; `workers/tasks/static_analysis.py`,
   `maintenance.py`
-- **Initial** — `queued`. **Final** — `completed`, `failed`, `no_workflows`.
+- **Initial** — `queued`. **Final** — `completed`, `no_workflows` (`failed` is
+  retryable, not final).
 
 Rows are inserted as `queued` and advance to `running` (`started`) when the
 worker begins OPA evaluation, so a row that dies before the worker starts is
@@ -127,13 +131,19 @@ is `transient`, and parse/value errors (invalid workflow YAML) are `permanent`.
 
 | Source | `AnalysisTrigger` |
 |---|---|
-| webhook `push` (touches `.github/workflows/**` or new branch) | `webhook_push` |
+| webhook `push` (touches `.github/workflows/**`, new branch, or **forced** — a rebase can change workflow content without listing workflow paths) | `webhook_push` |
 | webhook `workflow_run` (`completed`) | `webhook_workflow_run` |
 | webhook `issue_comment` (`/greensecops reanalyze`) / REST trigger | `manual` |
+| webhook `repository` (`edited`, default branch changed → analyse the new default branch) | `manual` |
 | `reanalyze-all`, version ship | `release` |
 | `installation_sync` (first sync) | `manual` |
 | Celery beat `nightly-reanalysis` | `scheduled` |
+| Celery beat `retry-transient-analyses` (hourly, re-runs recent `failed`+`transient` rows; ≤3 attempts per content hash) | `scheduled` |
 | `fix_delivery` stale-content error | `manual` |
+
+Analyses run **per branch**: content dedup and the WorkflowFile upsert are
+scoped to (repo, branch), so identical content on two branches is analysed
+independently and a feature-branch run can never touch default-branch state.
 
 ### State machine
 
@@ -164,7 +174,10 @@ terminal); dynamic analysis is a formal machine (§6).
 **Still open:** the broker-queue window *before* the worker picks the task up is
 still SSE-only (a per-row `queued` would need a parent "analysis run" entity);
 in-place row-reuse on `retry` awaits a per-row worker — today users re-run via
-the repo-level `POST /analyses/trigger/{repo_id}`.
+the repo-level `POST /analyses/trigger/{repo_id}`, and the
+`retry-transient-analyses` beat re-runs transient failures at repo/branch
+scope with fresh rows (it deliberately does **not** fire `retry` on the old
+row, which would only be swept back to `failed`).
 
 ---
 
@@ -217,9 +230,11 @@ stateDiagram-v2
 **Closed in this pass:** an `ignored` state implements `/greensecops ignore`
 (and a REST `/ignore` endpoint), letting users mute false positives / accepted
 risk; the status is a real persisted column with `ignored_at` precedence; a
-`resolution_reason` attribute (`no_longer_detected` / `file_removed` / `merged`)
-records *why* an issue resolved, set alongside `resolved_at` and cleared on
-recur.
+`resolution_reason` attribute (`no_longer_detected` / `file_removed` /
+`merged` / `branch_deleted`) records *why* an issue resolved, set alongside
+`resolved_at` and cleared on recur. `branch_deleted` is set by the `delete`
+webhook when the branch carrying the issue's workflow file is deleted (see
+§8).
 
 **Still open:** `no_longer_detected` conflates a manual fix with a
 disabled/removed rule — the two are not distinguishable after re-analysis.
@@ -230,16 +245,16 @@ disabled/removed rule — the two are not distinguishable after re-analysis.
 
 - **States** — `FixStatus`: `pending`, `generating`, `ready`, `delivering`,
   `delivered`, `failed`, `rejected_by_user`, `superseded_by_closed_pr`,
-  `superseded_by_deleted_file`
+  `superseded_by_deleted_file`, `landed`
 - **Events** — `start_generation`, `generation_succeeded`, `generation_failed`,
   `mark_ready`, `start_delivery`, `precheck_failed`, `delivery_succeeded`,
   `delivery_failed`, `supersede_closed_pr`, `supersede_deleted_file`, `reject`,
-  `restore`, `regenerate`, `swept`
+  `restore`, `regenerate`, `land`, `swept`
 - **Code** — `state_machines/fix.py`; `fix_generation.py`, `fix_delivery.py`,
   `api/routes/fixes.py`, `maintenance.py`, the `pull_request` webhook handler,
   `static_analysis.py` (`_resolve_issues_for_missing_files`)
-- **Initial** — `pending`. **Final** — `rejected_by_user` (`failed` is no longer
-  final — `regenerate` retries it in place).
+- **Initial** — `pending`. **Final** — `rejected_by_user`, `landed` (`failed`
+  is no longer final — `regenerate` retries it in place).
 
 The two withdrawal-by-the-system states sit alongside the one user rejection
 (no longer disambiguated by a `delivered_at IS NULL` convention):
@@ -345,16 +360,26 @@ avoids row bloat — intentional).
   `mark_ready_for_review`, `merge`, `close`, `reopen`
 - **Attributes** (not states) — `ci_status`, `review_decision`,
   `mergeable_state`, populated by `check_suite` / `pull_request_review` /
-  `pull_request` webhooks (migration `0030`)
+  `pull_request` webhooks (migration `0030`); and `externally_modified`
+  (migration `0034`), set when a **non-bot** user pushes commits to the
+  `greensecops/*` fix branch — it blocks auto-redelivery (the rebase would
+  overwrite the user's commits) and is cleared by a successful **forced**
+  delivery. `mergeable_state` is additionally refreshed on pushes to the base
+  branch (`maintenance.refresh_pr_mergeable_state`, Redis-deduped), since
+  GitHub sends no webhook when a base push makes a PR conflicted.
 - **Code** — `state_machines/pull_request.py`; `fix_delivery.py`, the
-  `pull_request` webhook, `maintenance.sync_open_pr_states`,
-  `fixes.sync_pr_statuses`
+  `pull_request`, `push` and `delete` webhooks,
+  `maintenance.sync_open_pr_states`, `fixes.sync_pr_statuses`
 - **Initial** — `open`. **Final** — `merged`.
 
 Genuine lifecycle transitions (`merge`, `close`, `reopen`) go through the
-machine with `try_advance` at the webhook/reconcile boundaries. PR creation and
-the "ensure open on re-delivery" reconciliation happen at the delivery boundary
-as initialisation.
+machine with `try_advance` at the webhook/reconcile boundaries. PR creation is
+initialisation at the delivery boundary; on re-delivery the record advances
+through `reopen` (forced redelivery onto a closed PR) or the `redeliver`
+self-loop. A `pull_request opened` webhook for a manually opened PR from a
+`greensecops/*` branch upserts the record; a `delete` webhook for a
+`greensecops/*` branch closes it (and supersedes its fixes) even when GitHub's
+own PR-close webhook never arrives.
 
 ### Transitions (input → output)
 
@@ -365,8 +390,8 @@ as initialisation.
 | `convert_to_draft` | `open` → `draft` | `pr.updated` | webhook `converted_to_draft` |
 | `mark_ready_for_review` | `draft` → `open` | `pr.updated` | webhook `ready_for_review` |
 | `merge` | `open`, `draft` → `merged` | `pr.merged` | webhook `closed`+merged / reconcile |
-| `close` | `open`, `draft` → `closed` | `pr.closed` | webhook `closed` (not merged) / reconcile |
-| `reopen` | `closed` → `open` | `pr.opened` | webhook `reopened` |
+| `close` | `open`, `draft` → `closed` | `pr.closed` | webhook `closed` (not merged) / webhook `delete` (fix branch) / reconcile |
+| `reopen` | `closed` → `open` | `pr.opened` | webhook `reopened` / webhook `opened` (manual PR from fix branch) / forced redelivery |
 
 ```mermaid
 stateDiagram-v2
@@ -379,7 +404,7 @@ stateDiagram-v2
     Open --> Closed: close / pr.closed
     Draft --> Closed: close / pr.closed
     Closed --> Open: reopen / pr.opened (guard-superseded fixes → ready)
-    Closed --> [*]: orphaned record deleted on regenerate
+    Closed --> [*]: record deleted on regenerate (physical cleanup, not a final state)
     Merged --> [*]
 ```
 
@@ -391,8 +416,15 @@ review decision and mergeable-state are captured as **attributes** (via
 `check_suite` and `pull_request_review` webhooks) rather than as extra states,
 keeping the core graph small.
 
+**Closed in a later pass:** `externally_modified` protects user commits on the
+fix branch from being rebased away by auto-redelivery; base-branch pushes
+refresh `mergeable_state` on demand; manual PRs from fix branches and manual
+fix-branch deletion are reconciled (see above).
+
 **Still open:** CI/review are single-value attributes, not a full check-run
-history; no explicit `conflicted` state (surfaced through `mergeable_state`).
+history; no explicit `conflicted` state (surfaced through `mergeable_state`,
+and deliberately no auto-rebase on conflict — redelivery force-resets the
+branch and would clash with `externally_modified`).
 
 ---
 
@@ -499,31 +531,68 @@ stateDiagram-v2
 ```
 
 `enabled` gates analysis triggers; `is_accessible` (≡ `status == active`) +
-`installation_id` gate fix delivery. `repository` `renamed` / `transferred`
-webhooks update `full_name` / `default_branch` without a status change.
+`installation_id` gate fix delivery. `repository` `renamed` / `transferred` /
+`edited` webhooks update `full_name` / `default_branch` without a status
+change; a default-branch change additionally enqueues an analysis of the new
+default branch, since grades, fixes and the default issue listing all key off
+it (old-default-branch fixes/PRs retire naturally via the default-branch
+gates).
 
 **Closed in this pass:** the accessibility axis is a formal machine with
 per-cause SSE signals; the old asymmetry (unsuspend restored `is_accessible` but
 not `enabled`) is now explicit — `enabled` is deliberately a separate user-owned
 flag, left untouched by accessibility transitions.
 
+**Why `deleted` maps to `inaccessible` rather than a terminal state:** GitHub
+soft-deletes repositories (restorable for ~90 days with the *same*
+`github_repo_id`), so a restored repo comes back through `regain_access`
+exactly like a re-added one. `inaccessible` already blocks analysis and
+delivery; a terminal `deleted` state would add a migration and a machine state
+for zero extra gating.
+
 ---
 
 ## 8. Workflow File (existence tracking, not a lifecycle)
 
 `WorkflowFile` rows are not modeled as a state machine — a workflow file
-either currently exists at a path in the repo or it doesn't; there is no
-persisted `status` column. Analysis upserts a row per path (keyed by
-`content_hash`) on every fetch. Three downstream entities point at a
-`workflow_file_id`: `Analysis`, `Issue` (via `Analysis`), and `Fix`.
+either currently exists at a path on a branch or it doesn't; there is no
+persisted `status` column. Rows are keyed **(repo, branch, path)** (unique
+constraint since migration `0033`; pre-existing rows were backfilled to the
+repo's default branch). Analysis upserts the row for the analysed branch on
+every fetch. Three downstream entities point at a `workflow_file_id`:
+`Analysis`, `Issue` (via `Analysis`), and `Fix`.
 
-### What already happens on deletion
+### The branch dimension
+
+Analyses run for pushes on any branch, so without a branch key a
+feature-branch run would overwrite the default branch's content and
+mis-reconcile its issues. With per-branch rows:
+
+- **Reconciliation is branch-scoped.** `_resolve_stale_issues` is keyed by
+  `workflow_file_id` (inherently per-branch); `_resolve_issues_for_missing_files`
+  filters rows to the analysed branch. A file absent from a feature branch
+  says nothing about `main`.
+- **Content dedup is branch-scoped** (`is_duplicate`): identical content on
+  two branches is analysed independently, so a merge to `main` re-runs
+  reconciliation there instead of being dedup-skipped against the feature
+  branch's completed analysis.
+- **Fixes and PRs are default-branch-only.** Fix generation (auto and manual),
+  auto-delivery and the PR base branch are all gated to
+  `repo.default_branch`; feature-branch issues are tracked and displayed
+  (issues API `?branch=` filter) but never get Fix rows. Repo grades and the
+  default issue/workflow-file listings are likewise scoped to the default
+  branch.
+- **Branch deletion** (`delete` webhook): a user branch's open issues resolve
+  with `resolution_reason=branch_deleted` (rows are kept — see below); a
+  `greensecops/*` fix branch closes its PR record and supersedes its fixes.
+
+### What already happens on file deletion
 
 A push webhook that touches `.github/workflows/**` (a `removed` entry counts)
 always re-fetches the **full** workflow set, never a single
 `workflow_file_id`, so `_resolve_issues_for_missing_files`
-(`static_analysis.py`) diffs the fetched paths against existing
-`WorkflowFile` rows for the repo and resolves every open `Issue` on a path
+(`static_analysis.py`) diffs the fetched paths against the analysed branch's
+`WorkflowFile` rows and resolves every open `Issue` on a path
 that's gone, with `resolution_reason=file_removed`.
 
 ### The gap (closed for Fix; deliberately not for the row itself)

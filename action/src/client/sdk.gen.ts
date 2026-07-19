@@ -958,6 +958,7 @@ export class RepositoriesService {
      * List Workflow Files
      * @param data The data for the request.
      * @param data.repoId
+     * @param data.branch
      * @returns WorkflowFilePublic Successful Response
      * @throws ApiError
      */
@@ -967,6 +968,9 @@ export class RepositoriesService {
             url: '/api/v1/repositories/{repo_id}/workflow-files',
             path: {
                 repo_id: data.repoId
+            },
+            query: {
+                branch: data.branch
             },
             errors: {
                 422: 'Validation Error'

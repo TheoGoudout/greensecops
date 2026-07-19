@@ -7,6 +7,7 @@ from sqlmodel import Session
 
 from app.models import (
     Analysis,
+    AnalysisFailureKind,
     AnalysisStatus,
     DynamicAnalysisStatus,
     Fix,
@@ -16,6 +17,8 @@ from app.models import (
     IssueSeverity,
     LLMProvider,
     Organization,
+    PullRequest,
+    PullRequestState,
     Repository,
     Rule,
     TelemetryRun,
@@ -196,3 +199,221 @@ def test_sweeper_task_wrapper_runs(db: Session) -> None:  # noqa: ARG001
 
     result = sweep_stuck_states.apply()
     assert "swept_analyses" in result.get()
+
+
+# ─── refresh_pr_mergeable_state ──────────────────────────────────────────────
+
+
+def test_refresh_pr_mergeable_state_updates_attribute_and_emits(
+    db: Session,
+) -> None:
+    from unittest.mock import patch
+
+    from app.workers.tasks.maintenance import _refresh_pr_mergeable_state_impl
+
+    analysis, fix = _build_chain(db)
+    repo = db.get(Repository, analysis.repo_id)
+    assert repo is not None
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/maint-{uuid.uuid4().hex[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/21",
+        pr_state=PullRequestState.open,
+        mergeable_state="clean",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix.pr_id = pr.id
+    db.add(fix)
+    db.commit()
+
+    events: list = []
+    with (
+        patch(
+            "app.workers.tasks.maintenance._fetch_pr_mergeable_state",
+            return_value="dirty",
+        ),
+        patch(
+            "app.workers.tasks.maintenance.events_pub.publish_event",
+            side_effect=events.append,
+        ),
+    ):
+        result = _refresh_pr_mergeable_state_impl(str(repo.id))
+
+    assert result["updated"] == 1
+    db.refresh(pr)
+    assert pr.mergeable_state == "dirty"
+    assert len(events) == 1
+
+
+def test_refresh_pr_mergeable_state_skips_unchanged_and_no_installation(
+    db: Session,
+) -> None:
+    from unittest.mock import patch
+
+    from app.workers.tasks.maintenance import _refresh_pr_mergeable_state_impl
+
+    analysis, _fix = _build_chain(db)
+    repo = db.get(Repository, analysis.repo_id)
+    assert repo is not None
+    pr = PullRequest(
+        repo_id=repo.id,
+        pr_branch=f"greensecops/maint-{uuid.uuid4().hex[:8]}",
+        pr_url=f"https://github.com/{repo.full_name}/pull/22",
+        pr_state=PullRequestState.open,
+        mergeable_state="clean",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    # Unchanged state: no update, no event.
+    events: list = []
+    with (
+        patch(
+            "app.workers.tasks.maintenance._fetch_pr_mergeable_state",
+            return_value="clean",
+        ),
+        patch(
+            "app.workers.tasks.maintenance.events_pub.publish_event",
+            side_effect=events.append,
+        ),
+    ):
+        result = _refresh_pr_mergeable_state_impl(str(repo.id))
+    assert result == {"checked": 1, "updated": 0}
+    assert events == []
+
+    # No installation: nothing checked at all.
+    repo.installation_id = None
+    db.add(repo)
+    db.commit()
+    result = _refresh_pr_mergeable_state_impl(str(repo.id))
+    assert result == {"checked": 0, "updated": 0}
+
+
+# ─── retry_transient_analyses ────────────────────────────────────────────────
+
+
+def _failed_analysis(
+    db: Session,
+    repo: Repository,
+    wf: WorkflowFile,
+    kind: AnalysisFailureKind,
+    completed_at: datetime | None = None,
+) -> Analysis:
+    a = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.failed,
+        failure_kind=kind,
+        branch="main",
+        completed_at=completed_at or datetime.now(timezone.utc),
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+def test_retry_transient_analyses_schedules_rerun(db: Session) -> None:
+    from unittest.mock import patch
+
+    from app.workers.tasks.maintenance import _retry_transient_analyses_impl
+
+    analysis, _fix = _build_chain(db)
+    repo = db.get(Repository, analysis.repo_id)
+    assert repo is not None
+    repo.enabled = True
+    db.add(repo)
+    db.commit()
+    wf = db.get(WorkflowFile, analysis.workflow_file_id)
+    assert wf is not None
+    _failed_analysis(db, repo, wf, AnalysisFailureKind.transient)
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.run_static_analysis.delay"
+        ) as mock_delay,
+        patch(
+            "app.workers.tasks.maintenance._try_acquire_auto_retry_slot",
+            return_value=True,
+        ),
+    ):
+        result = _retry_transient_analyses_impl()
+
+    # The impl scans the whole (shared) test DB; assert on our repo's call.
+    assert result["scheduled"] >= 1
+    our_calls = [
+        c.kwargs
+        for c in mock_delay.call_args_list
+        if c.kwargs["repo_id"] == str(repo.id)
+    ]
+    assert len(our_calls) == 1
+    assert our_calls[0]["branch"] == "main"
+    assert our_calls[0]["force"] is True
+
+
+def test_retry_transient_analyses_skips_permanent_old_and_exhausted(
+    db: Session,
+) -> None:
+    from unittest.mock import patch
+
+    from app.workers.tasks.maintenance import (
+        MAX_AUTO_RETRY_ATTEMPTS,
+        _retry_transient_analyses_impl,
+    )
+
+    analysis, _fix = _build_chain(db)
+    repo = db.get(Repository, analysis.repo_id)
+    assert repo is not None
+    repo.enabled = True
+    db.add(repo)
+    db.commit()
+    wf = db.get(WorkflowFile, analysis.workflow_file_id)
+    assert wf is not None
+
+    # Permanent failure: never retried.
+    _failed_analysis(db, repo, wf, AnalysisFailureKind.permanent)
+    # Transient but too old: outside the window.
+    _failed_analysis(
+        db,
+        repo,
+        wf,
+        AnalysisFailureKind.transient,
+        completed_at=datetime.now(timezone.utc) - timedelta(hours=48),
+    )
+
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.run_static_analysis.delay"
+        ) as mock_delay,
+        patch(
+            "app.workers.tasks.maintenance._try_acquire_auto_retry_slot",
+            return_value=True,
+        ),
+    ):
+        _retry_transient_analyses_impl()
+    assert not any(
+        c.kwargs["repo_id"] == str(repo.id) for c in mock_delay.call_args_list
+    )
+
+    # Exhausted: MAX_AUTO_RETRY_ATTEMPTS recent transient failures for the
+    # same content hash stop further retries.
+    for _ in range(MAX_AUTO_RETRY_ATTEMPTS):
+        _failed_analysis(db, repo, wf, AnalysisFailureKind.transient)
+    with (
+        patch(
+            "app.workers.tasks.static_analysis.run_static_analysis.delay"
+        ) as mock_delay,
+        patch(
+            "app.workers.tasks.maintenance._try_acquire_auto_retry_slot",
+            return_value=True,
+        ),
+    ):
+        result = _retry_transient_analyses_impl()
+    assert result["skipped_exhausted"] >= 1
+    assert not any(
+        c.kwargs["repo_id"] == str(repo.id) for c in mock_delay.call_args_list
+    )

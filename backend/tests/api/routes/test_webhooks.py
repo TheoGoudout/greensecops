@@ -742,7 +742,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.commit()
     db.refresh(issue)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-merged",
@@ -843,7 +843,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.commit()
     db.refresh(issue)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-closed",
@@ -937,7 +937,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.commit()
     db.refresh(issue)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-reopen",
@@ -1006,7 +1006,7 @@ def test_github_webhook_pull_request_reopened_restores_guard_rejected_fix(
     db.commit()
     db.refresh(wf)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-test-restore",
@@ -1082,7 +1082,7 @@ def test_github_webhook_pull_request_synchronize_bumps_open_pr(
     db.commit()
     db.refresh(repo)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-sync",
@@ -1124,7 +1124,7 @@ def test_github_webhook_pull_request_synchronize_noop_on_closed_pr(
     db.commit()
     db.refresh(repo)
 
-    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}"
+    pr_url = f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}"
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch="greensecops/fix-sync-closed",
@@ -1387,7 +1387,12 @@ def test_github_webhook_repository_default_branch_change(
             "default_branch": "develop",
         },
     }
-    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        # The handler now enqueues an analysis of the new default branch;
+        # patched so the test stays hermetic (no Celery broker in CI).
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis"),
+    ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
         )
@@ -1641,7 +1646,7 @@ def _make_repo_with_open_pr(db: Session, org: Organization, branch: str) -> Pull
     pr = PullRequest(
         repo_id=repo.id,
         pr_branch=branch,
-        pr_url=f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10000}",
+        pr_url=f"https://github.com/owner/repo/pull/{uuid.uuid4().int % 10**9}",
         pr_state="open",
     )
     db.add(pr)
@@ -1793,3 +1798,542 @@ def test_github_webhook_installation_suspend_unsuspend(
     db.refresh(repo)
     assert repo.status == RepositoryStatus.active
     assert repo.is_accessible is True
+
+
+# ─── delete (branch) webhook ─────────────────────────────────────────────────
+
+
+def _seed_branch_issue(
+    db: Session, repo: Repository, branch: str, path: str = ".github/workflows/ci.yml"
+) -> tuple[WorkflowFile, Issue]:
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        branch=branch,
+        path=path,
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push",
+    )
+    db.add(wf)
+    db.commit()
+    db.refresh(wf)
+    analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+        branch=branch,
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    rule = db.exec(select(Rule)).first()
+    assert rule is not None
+    issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=wf.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message=f"issue on {branch}",
+        fingerprint=uuid.uuid4().hex[:16],
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    return wf, issue
+
+
+def _post_delete_event(
+    client: TestClient, repo: Repository, ref: str, ref_type: str = "branch"
+):  # type: ignore[no-untyped-def]
+    payload = {
+        "ref": ref,
+        "ref_type": ref_type,
+        "repository": {"id": repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        return client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "delete"},
+        )
+
+
+def test_delete_branch_resolves_only_that_branchs_issues(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    _main_wf, main_issue = _seed_branch_issue(db, enabled_repo, "main")
+    _feat_wf, feat_issue = _seed_branch_issue(db, enabled_repo, "feature")
+
+    response = _post_delete_event(client, enabled_repo, "feature")
+
+    assert response.status_code == 200
+    db.refresh(feat_issue)
+    assert feat_issue.resolved_at is not None
+    assert feat_issue.resolution_reason == IssueResolutionReason.branch_deleted
+    assert feat_issue.status == IssueStatus.resolved
+    # Default-branch issues untouched.
+    db.refresh(main_issue)
+    assert main_issue.resolved_at is None
+
+    # Redelivery is idempotent (no error, nothing re-resolved).
+    redelivery = _post_delete_event(client, enabled_repo, "feature")
+    assert redelivery.status_code == 200
+
+
+def test_delete_default_branch_is_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    _wf, issue = _seed_branch_issue(db, enabled_repo, "main")
+    response = _post_delete_event(client, enabled_repo, "main")
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.resolved_at is None
+
+
+def test_delete_tag_is_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    _wf, issue = _seed_branch_issue(db, enabled_repo, "v1-branch")
+    response = _post_delete_event(client, enabled_repo, "v1-branch", ref_type="tag")
+    assert response.status_code == 200
+    db.refresh(issue)
+    assert issue.resolved_at is None
+
+
+def test_delete_greensecops_branch_closes_pr_and_supersedes_fix(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    wf, _issue = _seed_branch_issue(db, enabled_repo, "main")
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fix-abc123",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/42",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+    fix = Fix(
+        workflow_file_id=wf.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.delivered,
+        pr_id=pr.id,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+
+    response = _post_delete_event(client, enabled_repo, "greensecops/fix-abc123")
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.closed
+    db.refresh(fix)
+    assert fix.status == FixStatus.superseded_by_closed_pr
+
+    # Redelivery: close is a no-op on an already-closed PR.
+    redelivery = _post_delete_event(client, enabled_repo, "greensecops/fix-abc123")
+    assert redelivery.status_code == 200
+    db.refresh(pr)
+    assert pr.pr_state == PullRequestState.closed
+
+
+def test_push_with_deleted_flag_is_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "0" * 40,
+        "deleted": True,
+        "commits": [],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL,
+            json=payload,
+            headers={"X-GitHub-Event": "push"},
+        )
+    assert response.status_code == 200
+    mock_enqueue.assert_not_called()
+
+
+# ─── forced push / default-branch change / PR opened ─────────────────────────
+
+
+def test_forced_push_without_workflow_commits_triggers_analysis(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+) -> None:
+    """A rebase can drop workflow changes without listing workflow paths in
+    the push commits — forced pushes re-analyse unconditionally."""
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "forced": True,
+        "commits": [{"added": [], "modified": ["src/app.py"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_enqueue.assert_called_once()
+    assert mock_enqueue.call_args.args[1] == "feature"
+
+
+def test_unforced_push_without_workflow_commits_still_ignored(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "forced": False,
+        "commits": [{"added": [], "modified": ["src/app.py"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_enqueue.assert_not_called()
+
+
+def test_default_branch_change_triggers_analysis_of_new_branch(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "action": "edited",
+        "repository": {
+            "id": enabled_repo.github_repo_id,
+            "full_name": enabled_repo.full_name,
+            "default_branch": "develop",
+        },
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+        )
+    assert response.status_code == 200
+    db.refresh(enabled_repo)
+    assert enabled_repo.default_branch == "develop"
+    mock_enqueue.assert_called_once()
+    assert mock_enqueue.call_args.args[1] == "develop"
+
+
+def test_default_branch_change_disabled_repo_no_analysis(
+    client: TestClient,
+    db: Session,
+    disabled_repo: Repository,
+) -> None:
+    payload = {
+        "action": "edited",
+        "repository": {
+            "id": disabled_repo.github_repo_id,
+            "full_name": disabled_repo.full_name,
+            "default_branch": "develop",
+        },
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
+        )
+    assert response.status_code == 200
+    db.refresh(disabled_repo)
+    assert disabled_repo.default_branch == "develop"  # still synced
+    mock_enqueue.assert_not_called()
+
+
+def test_pull_request_opened_from_fix_branch_creates_record(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr_url = f"https://github.com/{enabled_repo.full_name}/pull/77"
+    payload = {
+        "action": "opened",
+        "pull_request": {
+            "html_url": pr_url,
+            "head": {"ref": "greensecops/fix-manual"},
+        },
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "pull_request"}
+        )
+    assert response.status_code == 200
+    pr_record = db.exec(
+        select(PullRequest)
+        .where(PullRequest.repo_id == enabled_repo.id)
+        .where(PullRequest.pr_branch == "greensecops/fix-manual")
+    ).one()
+    assert pr_record.pr_url == pr_url
+    assert pr_record.pr_state == PullRequestState.open
+
+
+def test_pull_request_opened_reopens_closed_record(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr_record = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fix-was-closed",
+        pr_url=None,
+        pr_state=PullRequestState.closed,
+    )
+    db.add(pr_record)
+    db.commit()
+    db.refresh(pr_record)
+
+    pr_url = f"https://github.com/{enabled_repo.full_name}/pull/78"
+    payload = {
+        "action": "opened",
+        "pull_request": {
+            "html_url": pr_url,
+            "head": {"ref": "greensecops/fix-was-closed"},
+        },
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "pull_request"}
+        )
+    assert response.status_code == 200
+    db.refresh(pr_record)
+    assert pr_record.pr_state == PullRequestState.open
+    assert pr_record.pr_url == pr_url
+
+
+def test_pull_request_opened_from_user_branch_ignored(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "action": "opened",
+        "pull_request": {
+            "html_url": f"https://github.com/{enabled_repo.full_name}/pull/79",
+            "head": {"ref": "feature/user-branch"},
+        },
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "pull_request"}
+        )
+    assert response.status_code == 200
+    assert (
+        db.exec(
+            select(PullRequest).where(PullRequest.repo_id == enabled_repo.id)
+        ).first()
+        is None
+    )
+
+
+# ─── externally_modified fix branches ────────────────────────────────────────
+
+
+def _post_push_to_fix_branch(client: TestClient, repo: Repository, sender_login: str):  # type: ignore[no-untyped-def]
+    payload = {
+        "ref": "refs/heads/greensecops/fixes-abc",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [
+            {"added": [], "modified": [".github/workflows/ci.yml"], "removed": []}
+        ],
+        "sender": {"login": sender_login},
+        "repository": {"id": repo.github_repo_id},
+    }
+    with patch.object(settings, "GITHUB_WEBHOOK_SECRET", None):
+        return client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+
+
+def test_user_push_to_fix_branch_sets_externally_modified(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-abc",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/91",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    response = _post_push_to_fix_branch(client, enabled_repo, "some-human")
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.externally_modified is True
+
+
+def test_bot_push_to_fix_branch_does_not_set_externally_modified(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-abc",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/92",
+        pr_state="open",
+    )
+    db.add(pr)
+    db.commit()
+    db.refresh(pr)
+
+    bot_login = settings.GITHUB_BOT_HANDLE.lstrip("@") + "[bot]"
+    response = _post_push_to_fix_branch(client, enabled_repo, bot_login)
+
+    assert response.status_code == 200
+    db.refresh(pr)
+    assert pr.externally_modified is False
+
+
+def test_push_to_fix_branch_never_enqueues_analysis(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+) -> None:
+    with patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue:
+        response = _post_push_to_fix_branch(client, enabled_repo, "some-human")
+    assert response.status_code == 200
+    mock_enqueue.assert_not_called()
+
+
+def test_default_branch_push_enqueues_mergeable_refresh(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-xyz",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/93",
+        pr_state=PullRequestState.open,
+    )
+    db.add(pr)
+    db.commit()
+
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.maintenance.refresh_pr_mergeable_state.delay"
+        ) as mock_refresh,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_refresh.assert_called_once_with(repo_id=str(enabled_repo.id))
+
+
+def test_non_default_branch_push_no_mergeable_refresh(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+) -> None:
+    pr = PullRequest(
+        repo_id=enabled_repo.id,
+        pr_branch="greensecops/fixes-xyz",
+        pr_url=f"https://github.com/{enabled_repo.full_name}/pull/94",
+        pr_state=PullRequestState.open,
+    )
+    db.add(pr)
+    db.commit()
+
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.maintenance.refresh_pr_mergeable_state.delay"
+        ) as mock_refresh,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_refresh.assert_not_called()
+
+
+def test_default_branch_push_without_open_pr_no_refresh(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+) -> None:
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.maintenance.refresh_pr_mergeable_state.delay"
+        ) as mock_refresh,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_refresh.assert_not_called()

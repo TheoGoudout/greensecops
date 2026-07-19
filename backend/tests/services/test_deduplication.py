@@ -25,7 +25,7 @@ def test_compute_content_hash_different_content() -> None:
 
 def test_is_duplicate_no_match(db: Session) -> None:
     unique_hash = compute_content_hash(f"unique-{uuid.uuid4()}")
-    duplicate, existing = is_duplicate(db, unique_hash, uuid.uuid4())
+    duplicate, existing = is_duplicate(db, unique_hash, uuid.uuid4(), "main")
     assert duplicate is False
     assert existing is None
 

@@ -927,7 +927,7 @@ export const IssuePublicSchema = {
 
 export const IssueResolutionReasonSchema = {
     type: 'string',
-    enum: ['no_longer_detected', 'file_removed', 'merged'],
+    enum: ['no_longer_detected', 'file_removed', 'merged', 'branch_deleted'],
     title: 'IssueResolutionReason',
     description: `Why an issue was resolved — an attribute of the \`\`resolved\`\` state.
 
@@ -938,7 +938,9 @@ a resolved violation recurs.
 - \`\`no_longer_detected\`\`: absent from the latest analysis (a manual fix or a
   disabled/removed rule — the two cannot be told apart after the fact).
 - \`\`file_removed\`\`: the workflow file was deleted or renamed.
-- \`\`merged\`\`: the fix PR was merged, applying the change to the branch.`
+- \`\`merged\`\`: the fix PR was merged, applying the change to the branch.
+- \`\`branch_deleted\`\`: the branch carrying the issue's workflow file was
+  deleted; the violation no longer exists anywhere to fix.`
 } as const;
 
 export const IssueSeveritySchema = {
@@ -1172,6 +1174,11 @@ export const PullRequestPublicSchema = {
                 }
             ],
             title: 'Mergeable State'
+        },
+        externally_modified: {
+            type: 'boolean',
+            title: 'Externally Modified',
+            default: false
         },
         comment_url: {
             anyOf: [
@@ -2007,6 +2014,17 @@ export const WorkflowFilePublicSchema = {
         path: {
             type: 'string',
             title: 'Path'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
         },
         raw_content: {
             anyOf: [
