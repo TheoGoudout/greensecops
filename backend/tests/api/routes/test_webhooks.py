@@ -304,7 +304,7 @@ def test_github_webhook_push_enabled_repo_enqueues(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis"),
+        patch("app.services.github.event_handlers.enqueue_workflow_analysis"),
     ):
         response = client.post(
             WEBHOOK_URL,
@@ -390,7 +390,7 @@ def test_github_webhook_workflow_run_enabled_repo_enqueues(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis"),
+        patch("app.services.github.event_handlers.enqueue_workflow_analysis"),
     ):
         response = client.post(
             WEBHOOK_URL,
@@ -1270,14 +1270,22 @@ def test_github_webhook_installation_activate_publishes_correct_event(
 
 
 def test_enqueue_static_analysis_calls_celery_task() -> None:
+    import uuid
     from unittest.mock import MagicMock
 
-    from app.api.routes.webhooks import _enqueue_static_analysis
+    from app.models import Repository
+    from app.services.github import event_handlers as eh
 
+    repo = Repository(
+        org_id=uuid.uuid4(),
+        github_repo_id=123,
+        full_name="acme/widgets",
+        default_branch="main",
+    )
     mock_task = MagicMock()
     with patch("app.workers.tasks.static_analysis.run_static_analysis", mock_task):
-        _enqueue_static_analysis(
-            repo_id="abc-123",
+        eh.enqueue_workflow_analysis(
+            repo,
             branch="main",
             commit_sha="deadbeef",
             trigger=AnalysisTrigger.webhook_push,
@@ -1383,7 +1391,7 @@ def test_github_webhook_repository_default_branch_change(
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
         # The handler now enqueues an analysis of the new default branch;
         # patched so the test stays hermetic (no Celery broker in CI).
-        patch("app.api.routes.webhooks._enqueue_static_analysis"),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis"),
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
@@ -1466,7 +1474,9 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as enqueue,
+        patch(
+            "app.services.github.event_handlers.enqueue_workflow_analysis"
+        ) as enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
@@ -1474,7 +1484,7 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
 
     assert response.status_code == 200
     enqueue.assert_called_once()
-    assert enqueue.call_args.kwargs["repo_id"] == str(enabled_repo.id)
+    assert enqueue.call_args.args[0].id == enabled_repo.id
     assert enqueue.call_args.kwargs["force"] is True
 
 
@@ -1542,7 +1552,9 @@ def test_github_webhook_unknown_command_is_ignored(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as enqueue,
+        patch(
+            "app.services.github.event_handlers.enqueue_workflow_analysis"
+        ) as enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
@@ -1952,7 +1964,7 @@ def test_push_with_deleted_flag_is_ignored(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue,
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
     ):
         response = client.post(
             WEBHOOK_URL,
@@ -1983,14 +1995,14 @@ def test_forced_push_without_workflow_commits_triggers_analysis(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue,
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
         )
     assert response.status_code == 200
     mock_enqueue.assert_called_once()
-    assert mock_enqueue.call_args.kwargs["branch"] == "feature"
+    assert mock_enqueue.call_args.args[1] == "feature"
 
 
 def test_unforced_push_without_workflow_commits_still_ignored(
@@ -2008,7 +2020,7 @@ def test_unforced_push_without_workflow_commits_still_ignored(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue,
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
@@ -2032,7 +2044,7 @@ def test_default_branch_change_triggers_analysis_of_new_branch(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue,
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
@@ -2041,7 +2053,7 @@ def test_default_branch_change_triggers_analysis_of_new_branch(
     db.refresh(enabled_repo)
     assert enabled_repo.default_branch == "develop"
     mock_enqueue.assert_called_once()
-    assert mock_enqueue.call_args.kwargs["branch"] == "develop"
+    assert mock_enqueue.call_args.args[1] == "develop"
 
 
 def test_default_branch_change_disabled_repo_no_analysis(
@@ -2059,7 +2071,7 @@ def test_default_branch_change_disabled_repo_no_analysis(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue,
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "repository"}
@@ -2228,7 +2240,7 @@ def test_push_to_fix_branch_never_enqueues_analysis(
     db: Session,  # noqa: ARG001
     enabled_repo: Repository,
 ) -> None:
-    with patch("app.api.routes.webhooks._enqueue_static_analysis") as mock_enqueue:
+    with patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue:
         response = _post_push_to_fix_branch(client, enabled_repo, "some-human")
     assert response.status_code == 200
     mock_enqueue.assert_not_called()

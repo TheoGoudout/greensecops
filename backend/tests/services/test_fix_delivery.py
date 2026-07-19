@@ -13,6 +13,7 @@ from app.services.github.fix_delivery import (
     _DeliveryAborted,
     _is_bot_login,
     _prepare_fix_branch,
+    _remove_outdated_workflow_files,
     _update_or_create_open_pr,
 )
 
@@ -121,6 +122,126 @@ def test_prepare_fix_branch_skips_reset_when_pr_already_open() -> None:
 
     repo.get_commit.assert_not_called()
     repo.get_git_ref.return_value.edit.assert_not_called()
+
+
+# ─── _remove_outdated_workflow_files ─────────────────────────────────────────
+
+
+def _cf(path: str, sha: str = "sha") -> MagicMock:
+    """Build a fake ContentFile with the fields the helpers read."""
+    cf = MagicMock()
+    cf.path = path
+    cf.name = path.rsplit("/", 1)[-1]
+    cf.sha = sha
+    return cf
+
+
+def _workflow_getter(files_by_ref: dict[str, list | GithubException]):
+    """Build a get_contents side_effect that serves both directory listings
+    (keyed by ref) and single-file lookups (for _upsert_file)."""
+
+    def _get_contents(path: str, ref: str | None = None):
+        if path == ".github/workflows":
+            result = files_by_ref.get(ref)
+            if isinstance(result, GithubException):
+                raise result
+            if result is None:
+                raise GithubException(404, {}, None)
+            return result
+        # Single-file lookup done by _upsert_file; return an updatable stub.
+        stub = MagicMock()
+        stub.sha = "file-sha"
+        return stub
+
+    return _get_contents
+
+
+def test_list_and_remove_deletes_files_absent_on_base() -> None:
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [_cf(".github/workflows/a.yml")],
+            "fix": [
+                _cf(".github/workflows/a.yml"),
+                _cf(".github/workflows/b.yml", "b-sha"),
+            ],
+        }
+    )
+
+    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+
+    assert removed == [".github/workflows/b.yml"]
+    repo.delete_file.assert_called_once_with(
+        path=".github/workflows/b.yml",
+        message="chore: remove .github/workflows/b.yml deleted from main",
+        sha="b-sha",
+        branch="fix",
+    )
+
+
+def test_remove_outdated_noop_when_branch_subset_of_base() -> None:
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [
+                _cf(".github/workflows/a.yml"),
+                _cf(".github/workflows/b.yml"),
+            ],
+            "fix": [_cf(".github/workflows/a.yml")],
+        }
+    )
+
+    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+
+    assert removed == []
+    repo.delete_file.assert_not_called()
+
+
+def test_remove_outdated_ignores_non_workflow_yaml_extensions() -> None:
+    # A README under the workflows dir is not a *.yml/*.yaml file and must be
+    # left untouched even though it is absent from base.
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [_cf(".github/workflows/a.yml")],
+            "fix": [
+                _cf(".github/workflows/a.yml"),
+                _cf(".github/workflows/README.md"),
+            ],
+        }
+    )
+
+    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+
+    assert removed == []
+    repo.delete_file.assert_not_called()
+
+
+def test_remove_outdated_treats_missing_base_dir_as_empty() -> None:
+    # Base branch has no .github/workflows dir at all (404): every workflow file
+    # on the branch is outdated and removed.
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": GithubException(404, {}, None),
+            "fix": [_cf(".github/workflows/a.yml", "a-sha")],
+        }
+    )
+
+    removed = _remove_outdated_workflow_files(repo, repo, "fix", "main")
+
+    assert removed == [".github/workflows/a.yml"]
+    repo.delete_file.assert_called_once()
+
+
+def test_remove_outdated_reraises_non_404_listing_error() -> None:
+    repo = MagicMock()
+    repo.get_contents.side_effect = _workflow_getter(
+        {"main": GithubException(500, {}, None)}
+    )
+
+    with pytest.raises(GithubException):
+        _remove_outdated_workflow_files(repo, repo, "fix", "main")
 
 
 # ─── _update_or_create_open_pr ───────────────────────────────────────────────
@@ -260,6 +381,86 @@ def test_update_or_create_workflow_action_pr_resets_when_no_open_pr() -> None:
     repo.create_pull.assert_called_once()
 
 
+def test_update_pr_removes_workflow_file_deleted_on_base() -> None:
+    # An open PR is updated in place; a workflow file that the branch still
+    # modifies but the user deleted from base is dropped from the branch first,
+    # so the PR does not carry a modify/delete conflict.
+    repo = _make_repo(head_sha="head1", author_login="alice")
+    repo.get_branch.return_value.commit.sha = "base1"
+    repo.get_pulls.return_value = [MagicMock(html_url="https://x/pull/134")]
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [_cf(".github/workflows/wf.yml")],
+            "greensecops/fixes-abc": [
+                _cf(".github/workflows/wf.yml"),
+                _cf(".github/workflows/old.yml", "old-sha"),
+            ],
+        }
+    )
+
+    with patch("app.services.github.fix_delivery.Github") as mock_github_cls:
+        mock_github_cls.return_value.get_repo.return_value = repo
+        svc = FixDeliveryService(app_client=_make_app_client())
+        result = asyncio.run(
+            svc.update_or_create_workflow_action_pr(
+                installation_id=1,
+                full_name="org/repo",
+                base_branch="main",
+                fix_branch="greensecops/fixes-abc",
+                file_changes=[(".github/workflows/wf.yml", "content")],
+                pr_title="title",
+                pr_body="body",
+            )
+        )
+
+    assert result.error is None
+    repo.delete_file.assert_called_once_with(
+        path=".github/workflows/old.yml",
+        message="chore: remove .github/workflows/old.yml deleted from main",
+        sha="old-sha",
+        branch="greensecops/fixes-abc",
+    )
+    repo.get_git_ref.return_value.edit.assert_not_called()
+    repo.create_pull.assert_not_called()
+
+
+def test_create_pr_skips_outdated_removal_when_no_open_pr() -> None:
+    # With no open PR the branch is reset to base, so there is nothing stale to
+    # remove — the removal step must not run (no delete_file calls).
+    repo = _make_repo(head_sha="head1", author_login="greensecops-staging[bot]")
+    repo.get_branch.return_value.commit.sha = "base1"
+    repo.get_pulls.return_value = []
+    repo.create_pull.return_value.html_url = "https://x/pull/136"
+    repo.get_contents.side_effect = _workflow_getter(
+        {
+            "main": [_cf(".github/workflows/wf.yml")],
+            "greensecops/fixes-abc": [
+                _cf(".github/workflows/wf.yml"),
+                _cf(".github/workflows/old.yml"),
+            ],
+        }
+    )
+
+    with patch("app.services.github.fix_delivery.Github") as mock_github_cls:
+        mock_github_cls.return_value.get_repo.return_value = repo
+        svc = FixDeliveryService(app_client=_make_app_client())
+        result = asyncio.run(
+            svc.update_or_create_workflow_action_pr(
+                installation_id=1,
+                full_name="org/repo",
+                base_branch="main",
+                fix_branch="greensecops/fixes-abc",
+                file_changes=[(".github/workflows/wf.yml", "content")],
+                pr_title="title",
+                pr_body="body",
+            )
+        )
+
+    assert result.error is None
+    repo.delete_file.assert_not_called()
+    repo.create_pull.assert_called_once()
+
+
 # ─── _update_or_create_open_pr (cross-repo head) ─────────────────────────────
 
 
@@ -366,6 +567,51 @@ def test_forked_pr_updates_existing_pr_without_resetting_branch() -> None:
     assert result.pr_url == "https://github.com/facebook/react/pull/7"
     fork.get_git_ref.return_value.edit.assert_not_called()
     existing_pr.edit.assert_called_once_with(body="body")
+    upstream.create_pull.assert_not_called()
+
+
+def test_forked_pr_update_removes_workflow_file_deleted_on_upstream() -> None:
+    # Cross-repo update: the fix branch lives on the fork, but the base state is
+    # read from the upstream. A workflow file deleted upstream is dropped from
+    # the fork branch before the upstream PR is updated in place.
+    fork = _make_repo(head_sha="head1", author_login=BOT_ACCOUNT)
+    fork.get_contents.side_effect = _workflow_getter(
+        {
+            "greensecops/fixes-abc": [
+                _cf(".github/workflows/wf.yml"),
+                _cf(".github/workflows/old.yml", "old-sha"),
+            ],
+        }
+    )
+    upstream = MagicMock()
+    upstream.get_branch.return_value.commit.sha = "base1"
+    upstream.get_pulls.return_value = [MagicMock(html_url="https://x/pull/7")]
+    upstream.get_contents.side_effect = _workflow_getter(
+        {"main": [_cf(".github/workflows/wf.yml")]}
+    )
+    bot = MagicMock()
+    bot.get_repo.return_value = upstream
+
+    svc = FixDeliveryService(app_client=_make_forked_app_client(bot, fork))
+    result = asyncio.run(
+        svc.update_or_create_forked_pr(
+            full_name="facebook/react",
+            base_branch="main",
+            fix_branch="greensecops/fixes-abc",
+            file_changes=[(".github/workflows/wf.yml", "content")],
+            pr_title="title",
+            pr_body="body",
+        )
+    )
+
+    assert result.error is None
+    fork.delete_file.assert_called_once_with(
+        path=".github/workflows/old.yml",
+        message="chore: remove .github/workflows/old.yml deleted from main",
+        sha="old-sha",
+        branch="greensecops/fixes-abc",
+    )
+    fork.get_git_ref.return_value.edit.assert_not_called()
     upstream.create_pull.assert_not_called()
 
 

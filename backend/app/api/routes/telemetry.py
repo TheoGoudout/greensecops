@@ -1,18 +1,32 @@
 import json
 import logging
+import uuid
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlmodel import select
+from sqlmodel import col, select
 
-from app.api.deps import GitHubOidcClaims, SessionDep
+from app.api.deps import (
+    CurrentUser,
+    GitHubOidcClaims,
+    SessionDep,
+    authorize_repo,
+)
+from app.api.mappers import (
+    compute_telemetry_average,
+    to_dynamic_enrichment_public,
+    to_telemetry_run_public,
+)
 from app.models import (
     DynamicAnalysisStatus,
+    DynamicEnrichment,
+    DynamicEnrichmentPublic,
     Repository,
     TelemetryMetricSample,
     TelemetryPhase,
     TelemetryRun,
+    TelemetrySummaryPublic,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,3 +148,111 @@ async def ingest_sample(
         session.rollback()
 
     return {"status": "ok"}
+
+
+# ─── Read / analyze (user-session authenticated) ──────────────────────────────
+
+
+def _enrichments_by_run(
+    session: SessionDep, repo_id: uuid.UUID
+) -> dict[uuid.UUID, list[DynamicEnrichment]]:
+    """Group a repo's dynamic-enrichment findings by their telemetry run."""
+    grouped: dict[uuid.UUID, list[DynamicEnrichment]] = {}
+    rows = session.exec(
+        select(DynamicEnrichment)
+        .where(DynamicEnrichment.repo_id == repo_id)
+        .order_by(col(DynamicEnrichment.created_at).desc())
+    ).all()
+    for row in rows:
+        grouped.setdefault(row.telemetry_run_id, []).append(row)
+    return grouped
+
+
+@router.get("/summary/{repo_id}", response_model=TelemetrySummaryPublic)
+def get_telemetry_summary(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    limit: int = 50,
+    skip: int = 0,
+) -> TelemetrySummaryPublic:
+    """Average telemetry plus a per-run breakdown for a repository.
+
+    Averages are computed over every telemetry run/sample the repo has; the
+    ``runs`` list is paginated (most recent first) for the by-run table.
+    """
+    repo = authorize_repo(session, current_user, repo_id)
+
+    all_runs = session.exec(
+        select(TelemetryRun)
+        .where(TelemetryRun.repo_id == repo.id)
+        .order_by(col(TelemetryRun.collected_at).desc())
+    ).all()
+    samples = session.exec(
+        select(TelemetryMetricSample).where(TelemetryMetricSample.repo_id == repo.id)
+    ).all()
+
+    average = compute_telemetry_average(list(all_runs), list(samples))
+
+    enrichments = _enrichments_by_run(session, repo.id)
+    paged = all_runs[skip : skip + limit]
+    runs = [to_telemetry_run_public(run, enrichments.get(run.id, [])) for run in paged]
+    return TelemetrySummaryPublic(average=average, runs=runs)
+
+
+@router.get("/findings/{repo_id}", response_model=list[DynamicEnrichmentPublic])
+def get_telemetry_findings(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[DynamicEnrichmentPublic]:
+    """A repo's runtime findings, for the Issues-page "Runtime" section."""
+    repo = authorize_repo(session, current_user, repo_id)
+
+    run_ids = {
+        run.id: run.workflow_run_id
+        for run in session.exec(
+            select(TelemetryRun).where(TelemetryRun.repo_id == repo.id)
+        ).all()
+    }
+    findings = session.exec(
+        select(DynamicEnrichment)
+        .where(DynamicEnrichment.repo_id == repo.id)
+        .order_by(col(DynamicEnrichment.created_at).desc())
+    ).all()
+    return [
+        to_dynamic_enrichment_public(f, run_ids.get(f.telemetry_run_id))
+        for f in findings
+    ]
+
+
+@router.post("/analyze/{repo_id}", status_code=202)
+def analyze_telemetry(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, str | int]:
+    """Re-run dynamic analysis over the repo's completed telemetry runs.
+
+    The CI action collects telemetry during workflow runs; this re-derives
+    findings from what is already stored. ``_enrich`` replaces a run's prior
+    enrichments, so re-running is idempotent.
+    """
+    repo = authorize_repo(session, current_user, repo_id)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
+
+    from app.workers.tasks.dynamic_analysis import run_dynamic_analysis
+
+    runs = session.exec(
+        select(TelemetryRun)
+        .where(TelemetryRun.repo_id == repo.id)
+        .where(TelemetryRun.phase == TelemetryPhase.completed)
+    ).all()
+    for run in runs:
+        run.dynamic_status = DynamicAnalysisStatus.queued
+        session.add(run)
+        run_dynamic_analysis.delay(str(run.id))
+    session.commit()
+
+    return {"status": "queued", "runs": len(runs)}

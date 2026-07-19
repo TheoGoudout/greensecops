@@ -1,8 +1,8 @@
 """Pull-request lifecycle state machine (``python-statemachine``).
 
 States mirror ``PullRequestState``. Behaviour lives in ``fix_delivery.py``, the
-``pull_request`` webhook handler, ``maintenance.sync_open_pr_states`` and
-``fixes.sync_pr_statuses``.
+shared ``event_handlers`` (driven by both the ``pull_request`` webhook and the
+external-repo ``polling`` task) and ``fixes.sync_pr_statuses``.
 
 PR creation and the "ensure open on re-delivery" reconciliation happen at the
 delivery boundary as initialisation, not guarded transitions. ``pr_state`` is

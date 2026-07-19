@@ -1,7 +1,7 @@
 """Add workflow_file.branch
 
-Revision ID: 0033
-Revises: 0032
+Revision ID: 0034
+Revises: 0033
 Create Date: 2026-07-18
 
 Workflow files (and the issues hanging off them) are now tracked per branch:
@@ -26,8 +26,8 @@ issues) are deleted.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0033"
-down_revision = "0032"
+revision = "0034"
+down_revision = "0033"
 branch_labels = None
 depends_on = None
 

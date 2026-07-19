@@ -1,7 +1,7 @@
 """Add pull_request.externally_modified
 
-Revision ID: 0034
-Revises: 0033
+Revision ID: 0035
+Revises: 0034
 Create Date: 2026-07-18
 
 Set when a non-bot user pushes commits to a ``greensecops/*`` fix branch.
@@ -13,8 +13,8 @@ PullRequest record, not a lifecycle state.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0034"
-down_revision = "0033"
+revision = "0035"
+down_revision = "0034"
 branch_labels = None
 depends_on = None
 

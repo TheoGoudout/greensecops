@@ -31,7 +31,7 @@ export type AnalysisPublic = {
 
 export type AnalysisStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_workflows';
 
-export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled' | 'release';
+export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
 
 export type BatchFixRequest = {
     issue_ids?: (Array<(string)> | null);
@@ -68,6 +68,34 @@ export type Body_login_login_access_token = {
  * Aggregate CI outcome for a PR, from ``check_suite`` webhooks.
  */
 export type CIStatus = 'pending' | 'success' | 'failure' | 'none';
+
+/**
+ * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
+ * telemetry run.
+ *
+ * Distinct from ``TelemetryPhase`` (an ingest category — ``started`` and
+ * ``completed`` are separate rows): this tracks the worker that turns a
+ * completed run's metrics into persisted ``DynamicEnrichment`` findings.
+ */
+export type DynamicAnalysisStatus = 'queued' | 'running' | 'enriched' | 'failed';
+
+/**
+ * A runtime-telemetry finding, exposed for the frontend.
+ *
+ * Deliberately thinner than ``IssuePublic``: enrichments carry no severity,
+ * category, status/lifecycle, line numbers, or fix linkage, so they are
+ * presented as their own "Runtime findings" class rather than merged into the
+ * static issue list.
+ */
+export type DynamicEnrichmentPublic = {
+    id: string;
+    telemetry_run_id: string;
+    workflow_run_id?: (number | null);
+    rule_slug: string;
+    evidence: string;
+    recommendation: string;
+    created_at?: (string | null);
+};
 
 export type ExternalRepositoryCreate = {
     full_name: string;
@@ -259,6 +287,26 @@ export type SamplePayload = {
 
 export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed';
 
+/**
+ * Averaged telemetry across a repo's runs.
+ *
+ * Sample-derived fields are averaged over ``TelemetryMetricSample`` rows;
+ * run-derived fields (``avg_ram_percent``, ``avg_vcpus``) come from the
+ * per-run ``metrics``/``runner_specs`` JSON. Any field is ``None`` when no
+ * data supports it.
+ */
+export type TelemetryAveragePublic = {
+    run_count?: number;
+    sample_count?: number;
+    avg_cpu_percent?: (number | null);
+    avg_ram_used_mb?: (number | null);
+    avg_ram_percent?: (number | null);
+    avg_disk_used_gb?: (number | null);
+    avg_net_bytes_sent?: (number | null);
+    avg_net_bytes_recv?: (number | null);
+    avg_vcpus?: (number | null);
+};
+
 export type TelemetryPayload = {
     workflow_run_id: number;
     branch?: string;
@@ -274,6 +322,26 @@ export type TelemetryPayload = {
 };
 
 export type TelemetryPhase = 'started' | 'completed';
+
+export type TelemetryRunPublic = {
+    id: string;
+    workflow_run_id: number;
+    phase?: (TelemetryPhase | null);
+    dynamic_status?: (DynamicAnalysisStatus | null);
+    runner_specs?: {
+        [key: string]: unknown;
+    };
+    metrics?: {
+        [key: string]: unknown;
+    };
+    collected_at?: (string | null);
+    enrichments?: Array<DynamicEnrichmentPublic>;
+};
+
+export type TelemetrySummaryPublic = {
+    average: TelemetryAveragePublic;
+    runs?: Array<TelemetryRunPublic>;
+};
 
 export type Token = {
     access_token: string;
@@ -710,6 +778,28 @@ export type TelemetryIngestSampleData = {
 
 export type TelemetryIngestSampleResponse = ({
     [key: string]: (string);
+});
+
+export type TelemetryGetTelemetrySummaryData = {
+    limit?: number;
+    repoId: string;
+    skip?: number;
+};
+
+export type TelemetryGetTelemetrySummaryResponse = (TelemetrySummaryPublic);
+
+export type TelemetryGetTelemetryFindingsData = {
+    repoId: string;
+};
+
+export type TelemetryGetTelemetryFindingsResponse = (Array<DynamicEnrichmentPublic>);
+
+export type TelemetryAnalyzeTelemetryData = {
+    repoId: string;
+};
+
+export type TelemetryAnalyzeTelemetryResponse = ({
+    [key: string]: (string | number);
 });
 
 export type UsersReadUsersData = {
