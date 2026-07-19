@@ -8,7 +8,6 @@ import {
   type FixPublic,
   type FixStatus,
   IssuesService,
-  RepositoriesService,
   TelemetryService,
 } from "@/client"
 import { IssueRow } from "@/components/IssueRow"
@@ -17,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { severityRank } from "@/lib/severity"
 import {
   groupByWorkflowFile,
@@ -50,11 +50,7 @@ function IssuesPage() {
   const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(0)
 
-  const { data: repo } = useQuery({
-    queryKey: ["repository", repoId],
-    queryFn: () => RepositoriesService.getRepository({ repoId }),
-  })
-  const isAccessible = repo?.is_accessible ?? true
+  const { isAccessible } = useRepository(repoId)
 
   const { data: issues, isLoading } = useQuery({
     queryKey: ["issues", "repo", repoId, { unfixed, branch, showIgnored }],

@@ -12,15 +12,12 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import {
-  RepositoriesService,
-  type TelemetryRunPublic,
-  TelemetryService,
-} from "@/client"
+import { type TelemetryRunPublic, TelemetryService } from "@/client"
 import { RuntimeFindingRow } from "@/components/RuntimeFindingRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { dynamicStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
 import { apiErrorDetail } from "@/utils"
@@ -156,11 +153,7 @@ function TelemetryPage() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
 
-  const { data: repo } = useQuery({
-    queryKey: ["repository", repoId],
-    queryFn: () => RepositoriesService.getRepository({ repoId }),
-  })
-  const isAccessible = repo?.is_accessible ?? true
+  const { isAccessible } = useRepository(repoId)
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ["telemetry", "summary", repoId],

@@ -3,17 +3,13 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import {
-  FixesService,
-  type FixPublic,
-  type PullRequestPublic,
-  RepositoriesService,
-} from "@/client"
+import { FixesService, type FixPublic, type PullRequestPublic } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
@@ -82,11 +78,7 @@ function FixesPage() {
   const queryClient = useQueryClient()
   const [fixesPage, setFixesPage] = useState(0)
 
-  const { data: repo } = useQuery({
-    queryKey: ["repository", repoId],
-    queryFn: () => RepositoriesService.getRepository({ repoId }),
-  })
-  const isAccessible = repo?.is_accessible ?? true
+  const { isAccessible } = useRepository(repoId)
 
   const { data: fixes, isLoading: fixesLoading } = useQuery({
     queryKey: ["fixes", "repo", repoId, branch],
