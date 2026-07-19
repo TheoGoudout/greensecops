@@ -14,6 +14,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { type TelemetryRunPublic, TelemetryService } from "@/client"
 import { RuntimeFindingRow } from "@/components/RuntimeFindingRow"
+import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -127,11 +128,12 @@ function RunRow({ run }: { run: TelemetryRunPublic }) {
         </span>
         <div className="flex justify-end">
           {run.dynamic_status ? (
-            <span
-              className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${dynamicStatusColor(run.dynamic_status)}`}
+            <StatusPill
+              colorClass={dynamicStatusColor(run.dynamic_status)}
+              className="capitalize"
             >
               {run.dynamic_status}
-            </span>
+            </StatusPill>
           ) : (
             <span className="text-xs text-muted-foreground">{run.phase}</span>
           )}

@@ -3,7 +3,9 @@ import { Bell, BellOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { type IssuePublic, IssuesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
+import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { issueStatusColor, issueStatusLabel } from "@/lib/status-colors"
@@ -66,15 +68,14 @@ export function IssueRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <SeverityChip severity={issue.severity} />
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            {issue.rule_slug}
-          </span>
+          <RuleSlugChip>{issue.rule_slug}</RuleSlugChip>
           {issue.status && issue.status !== "open" && (
-            <span
-              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${issueStatusColor(issue.status)}`}
+            <StatusPill
+              colorClass={issueStatusColor(issue.status)}
+              className="inline-flex items-center capitalize"
             >
               {issueStatusLabel(issue.status)}
-            </span>
+            </StatusPill>
           )}
           <span className="text-sm break-words min-w-0">{issue.message}</span>
         </div>
