@@ -58,7 +58,6 @@ async function run(): Promise<void> {
 
   const ok = await ingestTelemetry(greensecopsUrl, oidcToken, {
     workflow_run_id: ctx.workflowRunId,
-    repository: ctx.repository,
     branch: ctx.branch,
     commit_sha: ctx.commitSha,
     workflow_name: ctx.workflowName,

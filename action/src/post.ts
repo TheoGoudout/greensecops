@@ -18,17 +18,11 @@ async function run(): Promise<void> {
 
   const ok = await ingestTelemetry(state.greensecopsUrl, state.oidcToken, {
     workflow_run_id: state.workflowRunId,
-    repository: state.repository,
     branch: ctx.branch,
     commit_sha: ctx.commitSha,
     workflow_name: ctx.workflowName,
     runner_specs: state.runnerSpecs,
-    metrics: {
-      ...finalMetrics,
-      duration_ms: durationMs,
-    } as typeof finalMetrics & {
-      duration_ms: number
-    },
+    metrics: { ...finalMetrics, duration_ms: durationMs },
     phase: "completed",
   })
 
