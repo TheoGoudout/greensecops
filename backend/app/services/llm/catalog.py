@@ -76,7 +76,4 @@ def get_provider(
 
         return OllamaProvider(model=resolved_model, base_url=settings.OLLAMA_BASE_URL)
 
-    # Default fallback
-    from app.services.llm.providers.openai_provider import OpenAIProvider
-
-    return OpenAIProvider(model="gpt-4o-mini", api_key=settings.OPENAI_API_KEY)
+    raise ValueError(f"Unknown LLM provider: {resolved_provider!r}")
