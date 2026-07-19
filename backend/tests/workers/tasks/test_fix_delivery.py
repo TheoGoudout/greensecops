@@ -169,13 +169,9 @@ def test_external_repo_routes_to_forked_delivery(db: Session) -> None:
     with (
         patch.object(settings, "GITHUB_BOT_TOKEN", "bot-tok"),
         patch(
-            "app.workers.tasks.fix_delivery._deliver_batch_forked",
-            new=AsyncMock(return_value=FixDeliveryResult(pr_url=pr_url)),
-        ) as mock_forked,
-        patch(
             "app.workers.tasks.fix_delivery._deliver_batch",
-            new=AsyncMock(),
-        ) as mock_direct,
+            new=AsyncMock(return_value=FixDeliveryResult(pr_url=pr_url)),
+        ) as mock_deliver,
     ):
         result = deliver_fixes_batch(
             fix_ids=[str(fix.id)],
@@ -186,9 +182,10 @@ def test_external_repo_routes_to_forked_delivery(db: Session) -> None:
         )
 
     assert result == {"status": "ok"}
-    # External repos go through the fork path, never the direct installation path.
-    mock_forked.assert_awaited_once()
-    mock_direct.assert_not_awaited()
+    # External repos go through the fork path (installation_id=None), never the
+    # direct installation path.
+    mock_deliver.assert_awaited_once()
+    assert mock_deliver.await_args.kwargs["installation_id"] is None
     db.refresh(fix)
     assert fix.status == FixStatus.delivered
     pr = db.get(PullRequest, fix.pr_id)

@@ -94,8 +94,7 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
 
         from app.core.config import settings
         from app.models import PullRequest, PullRequestState, WorkflowFile
-        from app.services.pr_body import IssueInfo, build_pr_body
-        from app.services.state_machines import DELIVERED_FIX_STATUSES
+        from app.services.delivery_pr import build_delivery_pr_body, repo_fix_branch
         from app.workers.tasks.fix_delivery import deliver_fixes_batch
 
         with Session(engine) as session:
@@ -154,53 +153,10 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                 )
                 return
             pr_branch = (
-                existing_pr.pr_branch
-                if existing_pr
-                else f"greensecops/fixes-{str(repo.id)[:8]}"
+                existing_pr.pr_branch if existing_pr else repo_fix_branch(repo.id)
             )
 
-            # The body must reflect every fix ever delivered onto this PR, not
-            # just this run's ready set — a fix already `delivered` in an
-            # earlier auto-run would otherwise vanish from the description.
-            body_fixes = list(fixes)
-            if existing_pr:
-                current_ids = {f.id for f in fixes}
-                prior_fixes = session.exec(
-                    _select(Fix)
-                    .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-                    .where(
-                        WorkflowFile.repo_id == repo.id,
-                        Fix.pr_id == existing_pr.id,
-                        col(Fix.status).in_(DELIVERED_FIX_STATUSES),
-                    )
-                ).all()
-                body_fixes.extend(f for f in prior_fixes if f.id not in current_ids)
-
-            issues_info: list[IssueInfo] = []
-            for fix in body_fixes:
-                wf_path = fix.workflow_file.path if fix.workflow_file else "unknown"
-                for issue in fix.issues or []:
-                    issues_info.append(
-                        IssueInfo(
-                            rule_slug=issue.rule.slug if issue.rule else "",
-                            rule_title=issue.rule.title if issue.rule else "",
-                            severity=issue.severity,
-                            category=issue.category,
-                            message=issue.message,
-                            workflow_path=wf_path,
-                            line_start=issue.line_start,
-                        )
-                    )
-
-            pr_body = build_pr_body(
-                issues=issues_info,
-                fix_ids=[str(f.id) for f in body_fixes],
-                wiki_base_url=settings.WIKI_BASE_URL,
-                frontend_host=settings.FRONTEND_HOST,
-                bot_handle=settings.GITHUB_BOT_HANDLE,
-                app_name=settings.PROJECT_NAME,
-                app_url=settings.APP_URL,
-            )
+            pr_body = build_delivery_pr_body(session, repo.id, fixes, existing_pr)
             deliver_fixes_batch.delay(
                 fix_ids=fix_ids,
                 repo_id=repo_id,
