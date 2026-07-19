@@ -1,6 +1,6 @@
-import * as core from "@actions/core"
 import { ingestTelemetry } from "./api"
 import { getGitHubContext, killDaemon, loadState, STATE_FILE } from "./state"
+import { reportIngest, runStep } from "./step"
 import { getMetricsSample } from "./telemetry"
 
 async function run(): Promise<void> {
@@ -18,31 +18,19 @@ async function run(): Promise<void> {
 
   const ok = await ingestTelemetry(state.greensecopsUrl, state.oidcToken, {
     workflow_run_id: state.workflowRunId,
-    repository: state.repository,
     branch: ctx.branch,
     commit_sha: ctx.commitSha,
     workflow_name: ctx.workflowName,
     runner_specs: state.runnerSpecs,
-    metrics: {
-      ...finalMetrics,
-      duration_ms: durationMs,
-    } as typeof finalMetrics & {
-      duration_ms: number
-    },
+    metrics: { ...finalMetrics, duration_ms: durationMs },
     phase: "completed",
   })
 
-  if (ok) {
-    core.info(
-      `GreenSecOps: telemetry completed (${Math.round(durationMs / 1000)}s)`,
-    )
-  } else {
-    core.warning(
-      "GreenSecOps: final telemetry send failed — workflow result unaffected",
-    )
-  }
+  reportIngest(
+    ok,
+    `GreenSecOps: telemetry completed (${Math.round(durationMs / 1000)}s)`,
+    "GreenSecOps: final telemetry send failed — workflow result unaffected",
+  )
 }
 
-run().catch((err: unknown) => {
-  core.warning(`GreenSecOps post step error: ${String(err)}`)
-})
+runStep("post", run)

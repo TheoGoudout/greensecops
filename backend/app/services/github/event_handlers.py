@@ -231,6 +231,23 @@ def _resolve_issues_for_landed_fixes(
         session.add(issue)
 
 
+def _publish_pr_updated(session: Session, pr_record: PullRequest) -> None:
+    """Publish a ``pr.updated`` SSE event carrying all fixes on the PR."""
+    repo = session.get(Repository, pr_record.repo_id)
+    if not repo:
+        return
+    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    events_pub.publish_event(
+        ev.pr_updated(
+            str(repo.org_id),
+            str(repo.id),
+            [str(f.id) for f in pr_fixes],
+            pr_record.pr_url or "",
+            pr_record.pr_branch,
+        )
+    )
+
+
 def handle_pull_request_draft_toggle(
     session: Session,
     pr_record: PullRequest,
@@ -247,19 +264,7 @@ def handle_pull_request_draft_toggle(
     session.add(pr_record)
     session.commit()
 
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
     logger.info(
         "PR %s draft toggle %s recorded (record %s)",
         pr_record.pr_url,
@@ -283,19 +288,7 @@ def handle_pull_request_sync(
     session.add(pr_record)
     session.commit()
 
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
     logger.info(
         "PR %s external update recorded (record %s)", pr_record.pr_url, pr_record.id
     )
@@ -310,19 +303,7 @@ def handle_ci_status(
     pr_record.ci_status = ci_status
     session.add(pr_record)
     session.commit()
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
 
 
 def handle_review_decision(
@@ -334,22 +315,26 @@ def handle_review_decision(
     pr_record.review_decision = decision
     session.add(pr_record)
     session.commit()
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    _publish_pr_updated(session, pr_record)
 
 
 # ─── Slash commands ──────────────────────────────────────────────────────────
+
+
+#: Verbs recognised by ``/greensecops`` comment commands. Other commands
+#: (fix, ...) are not implemented yet.
+GREENSECOPS_COMMAND_VERBS = ("reanalyze", "ignore", "unignore")
+
+
+def parse_greensecops_command(body: str) -> list[str] | None:
+    """Parse a ``/greensecops <verb> ...`` comment; ``None`` if not a command."""
+    stripped = body.strip()
+    if not stripped.startswith("/greensecops"):
+        return None
+    command = stripped.removeprefix("/greensecops").strip().split()
+    if not command or command[0] not in GREENSECOPS_COMMAND_VERBS:
+        return None
+    return command
 
 
 def handle_issue_command(
@@ -359,11 +344,10 @@ def handle_issue_command(
 ) -> None:
     """Dispatch a parsed ``/greensecops`` command (``command[0]`` is the verb).
 
-    Recognised verbs: ``reanalyze``, ``ignore``, ``unignore``. The caller has
-    already stripped the ``/greensecops`` prefix and split the arguments.
+    The caller has already stripped the ``/greensecops`` prefix and split the
+    arguments (see ``parse_greensecops_command``).
     """
-    if not command or command[0] not in ("reanalyze", "ignore", "unignore"):
-        # Other commands (fix, ...) are not implemented yet.
+    if not command or command[0] not in GREENSECOPS_COMMAND_VERBS:
         return
 
     if command[0] == "reanalyze":

@@ -4,6 +4,7 @@ import * as path from "node:path"
 import * as core from "@actions/core"
 import { ingestTelemetry } from "./api"
 import { getGitHubContext, STATE_FILE } from "./state"
+import { reportIngest, runStep } from "./step"
 import { getMetricsSample, getRunnerSpecs } from "./telemetry"
 import type { ActionState } from "./types"
 
@@ -57,7 +58,6 @@ async function run(): Promise<void> {
 
   const ok = await ingestTelemetry(greensecopsUrl, oidcToken, {
     workflow_run_id: ctx.workflowRunId,
-    repository: ctx.repository,
     branch: ctx.branch,
     commit_sha: ctx.commitSha,
     workflow_name: ctx.workflowName,
@@ -66,15 +66,11 @@ async function run(): Promise<void> {
     phase: "started",
   })
 
-  if (ok) {
-    core.info("GreenSecOps: telemetry collection started")
-  } else {
-    core.warning(
-      "GreenSecOps: initial telemetry send failed — workflow continues normally",
-    )
-  }
+  reportIngest(
+    ok,
+    "GreenSecOps: telemetry collection started",
+    "GreenSecOps: initial telemetry send failed — workflow continues normally",
+  )
 }
 
-run().catch((err: unknown) => {
-  core.warning(`GreenSecOps pre step error: ${String(err)}`)
-})
+runStep("pre", run)

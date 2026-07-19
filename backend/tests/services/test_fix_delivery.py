@@ -11,36 +11,36 @@ from app.services.github.fix_delivery import (
     USER_COMMITS_ERROR_CODE,
     FixDeliveryService,
     _DeliveryAborted,
-    _is_bot_login,
     _prepare_fix_branch,
     _remove_outdated_workflow_files,
     _update_or_create_open_pr,
     _upsert_file,
+    is_bot_login,
 )
 
 BOT_LOGIN = "greensecops-staging[bot]"
 
 
-# ─── _is_bot_login ───────────────────────────────────────────────────────────
+# ─── is_bot_login ───────────────────────────────────────────────────────────
 
 
 def test_is_bot_login_matches_derived_app_login() -> None:
     # The staging app's own commits must be recognized even though the
     # configured GITHUB_BOT_HANDLE (@greensecops) has no -staging suffix.
-    assert _is_bot_login("greensecops-staging[bot]", BOT_LOGIN) is True
+    assert is_bot_login("greensecops-staging[bot]", BOT_LOGIN) is True
 
 
 def test_is_bot_login_matches_configured_handle() -> None:
     # The configured handle is still accepted (union), e.g. a prod-authored branch.
-    assert _is_bot_login("greensecops[bot]", BOT_LOGIN) is True
+    assert is_bot_login("greensecops[bot]", BOT_LOGIN) is True
 
 
 def test_is_bot_login_rejects_human() -> None:
-    assert _is_bot_login("alice", BOT_LOGIN) is False
+    assert is_bot_login("alice", BOT_LOGIN) is False
 
 
 def test_is_bot_login_permissive_on_unknown_author() -> None:
-    assert _is_bot_login(None, BOT_LOGIN) is True
+    assert is_bot_login(None, BOT_LOGIN) is True
 
 
 # ─── _prepare_fix_branch ─────────────────────────────────────────────────────

@@ -40,7 +40,7 @@ async def _is_duplicate_delivery(delivery_id: str | None) -> bool:
     import redis.asyncio as aioredis
 
     try:
-        r = aioredis.from_url(settings.REDIS_URL)
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             fresh = await r.set(
                 f"greensecops:webhook_delivery:{delivery_id}",
@@ -211,10 +211,10 @@ def _flag_externally_modified_fix_branch(
     """
     from datetime import datetime, timezone
 
-    from app.services.github.fix_delivery import _is_bot_login
+    from app.services.github.fix_delivery import is_bot_login
 
     sender_login = payload.get("sender", {}).get("login")
-    if _is_bot_login(sender_login, settings.GITHUB_BOT_HANDLE):
+    if is_bot_login(sender_login, settings.GITHUB_BOT_HANDLE):
         return
 
     pr_record = session.exec(
@@ -361,14 +361,12 @@ def _handle_issue_comment_event(
     if payload.get("action") != "created":
         return
     body: str = payload.get("comment", {}).get("body", "")
-    stripped = body.strip()
-    if not stripped.startswith("/greensecops"):
+    if not body.strip().startswith("/greensecops"):
         return
     logger.info("Received GreenSecOps command comment: %s", body[:100])
 
-    command = stripped.removeprefix("/greensecops").strip().split()
-    if not command or command[0] not in ("reanalyze", "ignore", "unignore"):
-        # Other commands (fix, ...) are not implemented yet.
+    command = eh.parse_greensecops_command(body)
+    if not command:
         return
 
     repo = _resolve_repo_by_github_id(session, payload)
@@ -713,8 +711,8 @@ def _handle_installation_repositories_event(
         if github_repo_ids:
             repos = list(
                 session.exec(
-                    select(Repository).where(  # type: ignore[attr-defined]
-                        Repository.github_repo_id.in_(github_repo_ids)
+                    select(Repository).where(
+                        col(Repository.github_repo_id).in_(github_repo_ids)
                     )
                 ).all()
             )

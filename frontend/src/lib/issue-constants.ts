@@ -1,5 +1,6 @@
 import type { IssueCategory, IssueSeverity } from "@/client"
 import { IssueCategorySchema } from "@/client/schemas.gen"
+import { CATEGORY_META } from "@/components/CategoryIcon"
 
 export const ISSUE_CATEGORIES: IssueCategory[] = [...IssueCategorySchema.enum]
 
@@ -8,11 +9,10 @@ export const CATEGORY_SELECT_OPTIONS: Array<{
   label: string
 }> = [
   { value: "all", label: "All categories" },
-  { value: "energy", label: "⚡ Energy" },
-  { value: "reliability", label: "🛡️ Reliability" },
-  { value: "security", label: "🔒 Security" },
-  { value: "performance", label: "🚀 Performance" },
-  { value: "maintainability", label: "🔧 Maintainability" },
+  ...ISSUE_CATEGORIES.map((c) => ({
+    value: c,
+    label: `${CATEGORY_META[c].icon} ${CATEGORY_META[c].label}`,
+  })),
 ]
 
 export const SEVERITY_SELECT_OPTIONS: Array<{

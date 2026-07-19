@@ -10,8 +10,7 @@ import {
   type UserRegister,
   UsersService,
 } from "@/client"
-import { handleError } from "@/utils"
-import useCustomToast from "./useCustomToast"
+import { handleApiError, showSuccessToast } from "@/utils"
 
 const isLoggedIn = () => {
   return localStorage.getItem("access_token") !== null
@@ -20,7 +19,6 @@ const isLoggedIn = () => {
 const useAuth = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { showSuccessToast, showErrorToast } = useCustomToast()
 
   const { data: user, error: userError } = useQuery<
     UserPublic | null,
@@ -39,7 +37,7 @@ const useAuth = () => {
     onSuccess: () => {
       navigate({ to: "/login" })
     },
-    onError: handleError.bind(showErrorToast),
+    onError: handleApiError,
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
     },
@@ -69,7 +67,7 @@ const useAuth = () => {
       }
       navigate({ to: "/" })
     },
-    onError: handleError.bind(showErrorToast),
+    onError: handleApiError,
   })
 
   const logout = () => {

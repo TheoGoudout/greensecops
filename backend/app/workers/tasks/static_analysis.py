@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 import redis as redis_sync
 from ruamel.yaml import YAML as RuamelYAML
@@ -35,6 +39,10 @@ from app.services.deduplication import (
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
+
+if TYPE_CHECKING:
+    from app.services.github.app_client import WorkflowFileContent
+    from app.services.opa.evaluator import OpaViolation
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +119,9 @@ def _auto_queue_fix_generation(
     ).all()
     fix_by_wf: dict[uuid.UUID, Fix] = {}
     prstate_by_wf: dict[uuid.UUID, object] = {}
-    for existing_fix, pr_state in existing_rows:
-        fix_by_wf[existing_fix.workflow_file_id] = existing_fix
-        prstate_by_wf[existing_fix.workflow_file_id] = pr_state
+    for row_fix, pr_state in existing_rows:
+        fix_by_wf[row_fix.workflow_file_id] = row_fix
+        prstate_by_wf[row_fix.workflow_file_id] = pr_state
 
     # Split target workflow files into ones whose current fix can be reused as-is
     # and ones that must be (re)generated.
@@ -219,7 +227,7 @@ class WorkflowFetchError(Exception):
     """Raised when workflow files cannot be fetched from GitHub (transient)."""
 
 
-def _enrich_line_numbers(violations: list, raw_content: str) -> None:
+def _enrich_line_numbers(violations: list[OpaViolation], raw_content: str) -> None:
     """Populate line_start/line_end on violations using ruamel.yaml node positions."""
     ryaml = RuamelYAML()
     try:
@@ -240,7 +248,7 @@ def _enrich_line_numbers(violations: list, raw_content: str) -> None:
         if v.step is None:
             # Job-level: point to the job key line
             try:
-                line = jobs.lc.key(v.job)[0] + 1  # ruamel lc is 0-indexed
+                line = jobs.lc.key(v.job)[0] + 1  # type: ignore[attr-defined]
                 v.line_start = line
                 v.line_end = line
             except Exception:
@@ -257,10 +265,10 @@ def _enrich_line_numbers(violations: list, raw_content: str) -> None:
             if uses == v.step:
                 try:
                     # Point to the `uses:` key within the step, not the `-` bullet
-                    line = step.lc.key("uses")[0] + 1
+                    line = step.lc.key("uses")[0] + 1  # type: ignore[attr-defined]
                 except Exception:
                     try:
-                        line = steps.lc.item(i)[0] + 1
+                        line = steps.lc.item(i)[0] + 1  # type: ignore[attr-defined]
                     except Exception:
                         break
                 v.line_start = line
@@ -268,7 +276,9 @@ def _enrich_line_numbers(violations: list, raw_content: str) -> None:
                 break
 
 
-def _register_rule_from_violation(session: Session, violation: object) -> Rule | None:
+def _register_rule_from_violation(
+    session: Session, violation: OpaViolation
+) -> Rule | None:
     """Auto-register a Rule for a violation whose slug has no DB row yet.
 
     A newly shipped rego rule then works end-to-end without also having to be
@@ -424,7 +434,9 @@ def _run_static_analysis_impl(
             # A single-file run analyses the row's own branch, whatever branch
             # the caller passed.
             effective_branch = wf.branch
-            workflow_files_to_analyse: list[object] = [wf]
+            workflow_files_to_analyse: Sequence[WorkflowFile | WorkflowFileContent] = [
+                wf
+            ]
         else:
             try:
                 workflow_files_to_analyse = _fetch_workflow_files(
@@ -477,7 +489,7 @@ def _run_static_analysis_impl(
                 ev.analysis_started(org_id, repo_id, "", effective_branch)
             )
 
-        results: list[dict[str, str | int]] = []
+        results: list[dict[str, str | int | float]] = []
         batch_total_issues = 0
         batch_scores: list[float] = []
         batch_any_failed = False
@@ -485,9 +497,13 @@ def _run_static_analysis_impl(
         # duplicate-skipped file is absent): the "necessary" set to regenerate.
         changed_wf_ids: set[uuid.UUID] = set()
 
-        for wf in workflow_files_to_analyse:
-            content = wf.raw_content if isinstance(wf, WorkflowFile) else wf.content
-            path = wf.path
+        for wf_src in workflow_files_to_analyse:
+            content = (
+                wf_src.raw_content
+                if isinstance(wf_src, WorkflowFile)
+                else wf_src.content
+            )
+            path = wf_src.path
             content_hash = compute_content_hash(content)
 
             duplicate, existing = is_duplicate(
@@ -519,8 +535,9 @@ def _run_static_analysis_impl(
                 )
                 continue
 
-            if isinstance(wf, WorkflowFile):
-                wf_record = wf
+            wf_record: WorkflowFile | None
+            if isinstance(wf_src, WorkflowFile):
+                wf_record = wf_src
             else:
                 wf_record = session.exec(
                     select(WorkflowFile)
@@ -764,7 +781,7 @@ ANALYSIS_LOCK_TTL_SECONDS = 600
 
 @celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
 def run_static_analysis(
-    self,  # noqa: ANN001
+    self: Any,  # noqa: ANN401 — celery bound task instance
     repo_id: str,
     branch: str = "",
     commit_sha: str = "",
@@ -845,14 +862,16 @@ def reanalyze_all_repositories(
     return _reanalyze_all_repositories_impl(force=force)
 
 
-def _fetch_workflow_files(repo: Repository, ref: str | None = None) -> list[object]:
+def _fetch_workflow_files(
+    repo: Repository, ref: str | None = None
+) -> list[WorkflowFileContent]:
     """Synchronous wrapper for async GitHubAppClient.fetch_workflow_files."""
     import redis.asyncio as aioredis
 
     from app.services.github.app_client import GitHubAppClient
 
-    async def _fetch() -> list[object]:
-        r = aioredis.from_url(settings.REDIS_URL)
+    async def _fetch() -> list[WorkflowFileContent]:
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client = GitHubAppClient(redis_client=r)
             return list(
@@ -866,7 +885,7 @@ def _fetch_workflow_files(repo: Repository, ref: str | None = None) -> list[obje
     return asyncio.run(_fetch())
 
 
-async def _evaluate(content: str) -> list[object]:
+async def _evaluate(content: str) -> list[OpaViolation]:
     from app.services.opa.evaluator import evaluate_workflow
 
     return await evaluate_workflow(content)

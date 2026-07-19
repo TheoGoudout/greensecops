@@ -3,17 +3,15 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import {
-  FixesService,
-  type FixPublic,
-  type PullRequestPublic,
-  RepositoriesService,
-} from "@/client"
+import { FixesService, type FixPublic, type PullRequestPublic } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
+import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
@@ -28,7 +26,7 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/fixes")({
 })
 
 // Mirrors the deterministic branch names delivery mints server-side (see
-// backend/app/api/routes/fixes.py trigger_workflow_delivery / trigger_repo_delivery).
+// backend/app/services/delivery_pr.py wf_fix_branch / repo_fix_branch).
 export function workflowFixBranch(workflowFileId: string): string {
   return `greensecops/fixes-wf-${workflowFileId.slice(0, 8)}`
 }
@@ -82,11 +80,7 @@ function FixesPage() {
   const queryClient = useQueryClient()
   const [fixesPage, setFixesPage] = useState(0)
 
-  const { data: repo } = useQuery({
-    queryKey: ["repository", repoId],
-    queryFn: () => RepositoriesService.getRepository({ repoId }),
-  })
-  const isAccessible = repo?.is_accessible ?? true
+  const { isAccessible } = useRepository(repoId)
 
   const { data: fixes, isLoading: fixesLoading } = useQuery({
     queryKey: ["fixes", "repo", repoId, branch],
@@ -219,11 +213,12 @@ function FixesPage() {
                         >
                           {workflowLabel(fix.workflow_file_path ?? "")}
                         </Link>
-                        <span
-                          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full capitalize font-sans ${fixStatusColor(fix.status)}`}
+                        <StatusPill
+                          colorClass={fixStatusColor(fix.status)}
+                          className="shrink-0 capitalize font-sans"
                         >
                           {fix.status}
-                        </span>
+                        </StatusPill>
                       </CardTitle>
                       <div className="flex items-center gap-2 shrink-0">
                         {action && (
@@ -280,9 +275,9 @@ function FixesPage() {
                                     <SeverityChip severity={issue.severity} />
                                   )}
                                   {issue.rule_slug && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                    <RuleSlugChip>
                                       {issue.rule_slug}
-                                    </span>
+                                    </RuleSlugChip>
                                   )}
                                   <span className="text-sm break-words min-w-0">
                                     {issue.message}

@@ -4,7 +4,9 @@ import { AlertCircle, ArrowLeft, GitPullRequest, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { FixesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
+import { StatusPill } from "@/components/StatusPill"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -175,11 +177,12 @@ function FixDetail() {
               Issues addressed
             </CardTitle>
             {fix && (
-              <span
-                className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${fixStatusColor(fix.status)}`}
+              <StatusPill
+                colorClass={fixStatusColor(fix.status)}
+                className="capitalize"
               >
                 {fix.status}
-              </span>
+              </StatusPill>
             )}
           </div>
         </CardHeader>
@@ -209,9 +212,7 @@ function FixDetail() {
                         <SeverityChip severity={issue.severity} />
                       )}
                       {issue.rule_slug && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                          {issue.rule_slug}
-                        </span>
+                        <RuleSlugChip>{issue.rule_slug}</RuleSlugChip>
                       )}
                       <span className="text-sm">{issue.message}</span>
                     </div>

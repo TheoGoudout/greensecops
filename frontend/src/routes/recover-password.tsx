@@ -21,8 +21,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { isLoggedIn } from "@/hooks/useAuth"
-import useCustomToast from "@/hooks/useCustomToast"
-import { handleError } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/utils"
 
 const formSchema = z.object({
   email: z.email(),
@@ -55,7 +54,6 @@ function RecoverPassword() {
       email: "",
     },
   })
-  const { showSuccessToast, showErrorToast } = useCustomToast()
 
   const recoverPassword = async (data: FormData) => {
     await LoginService.recoverPassword({
@@ -69,7 +67,7 @@ function RecoverPassword() {
       showSuccessToast("Password recovery email sent successfully")
       form.reset()
     },
-    onError: handleError.bind(showErrorToast),
+    onError: handleApiError,
   })
 
   const onSubmit = async (data: FormData) => {

@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from typing import Annotated, Any, TypeVar
 
 import jwt
@@ -134,15 +134,15 @@ def get_current_active_superuser(current_user: CurrentUser) -> User:
     return current_user
 
 
-async def get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
-    client = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+async def get_redis() -> AsyncGenerator[aioredis.Redis, None]:
+    client = aioredis.from_url(settings.REDIS_URL, decode_responses=False)  # type: ignore[no-untyped-call]
     try:
         yield client
     finally:
         await client.aclose()
 
 
-RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]  # type: ignore[type-arg]
+RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]
 
 
 async def get_github_app_client(redis: RedisDep) -> GitHubAppClient:
@@ -154,7 +154,7 @@ GitHubAppClientDep = Annotated[GitHubAppClient, Depends(get_github_app_client)]
 
 async def verify_github_oidc_token(
     authorization: str | None = Header(default=None),
-) -> dict:
+) -> dict[str, Any]:
     """Verify a GitHub Actions OIDC JWT and return its claims.
 
     Raises HTTP 401 on any verification failure so telemetry endpoints
@@ -169,7 +169,7 @@ async def verify_github_oidc_token(
     try:
         client = _get_github_jwks_client()
         signing_key = client.get_signing_key_from_jwt(token)
-        claims: dict = jwt.decode(
+        claims: dict[str, Any] = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
@@ -184,7 +184,7 @@ async def verify_github_oidc_token(
         ) from exc
 
 
-GitHubOidcClaims = Annotated[dict, Depends(verify_github_oidc_token)]
+GitHubOidcClaims = Annotated[dict[str, Any], Depends(verify_github_oidc_token)]
 
 _T = TypeVar("_T")
 
@@ -229,16 +229,3 @@ def authorize_repo(
     ):
         raise HTTPException(status_code=404, detail=detail)
     return repo
-
-
-def require_org_membership(session: Session, user: User, org_id: uuid.UUID) -> None:
-    """Raise 404 unless ``user`` is a superuser or a member of ``org_id``."""
-    if user.is_superuser:
-        return
-    member = session.exec(
-        select(OrgMember).where(
-            OrgMember.org_id == org_id, OrgMember.user_id == user.id
-        )
-    ).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Organization not found")

@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId")({
@@ -47,10 +48,7 @@ function RepositoryLayout() {
     select: (s) => s.location.pathname,
   })
 
-  const { data: repo, isLoading: repoLoading } = useQuery({
-    queryKey: ["repository", repoId],
-    queryFn: () => RepositoriesService.getRepository({ repoId }),
-  })
+  const { repo, isLoading: repoLoading, isAccessible } = useRepository(repoId)
 
   const { data: branches } = useQuery({
     queryKey: ["branches", repoId],
@@ -59,7 +57,6 @@ function RepositoryLayout() {
   })
 
   const currentGrade = repo?.grade ?? null
-  const isAccessible = repo?.is_accessible ?? true
 
   const branchOptions = branches
     ? repo?.default_branch && !branches.includes(repo.default_branch)

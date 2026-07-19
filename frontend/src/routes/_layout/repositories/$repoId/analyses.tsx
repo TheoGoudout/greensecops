@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { AnalysesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
+import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -82,11 +83,9 @@ function AnalysesPage() {
                         {a.triggered_by.replace(/_/g, " ")}
                       </span>
                       <div className="flex justify-center">
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${analysisStatusColor(a.status)}`}
-                        >
+                        <StatusPill colorClass={analysisStatusColor(a.status)}>
                           {analysisStatusLabel(a.status)}
-                        </span>
+                        </StatusPill>
                       </div>
                       <div className="flex justify-center">
                         <GradeBadge grade={a.grade ?? null} />

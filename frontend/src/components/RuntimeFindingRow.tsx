@@ -1,5 +1,6 @@
 import { Activity } from "lucide-react"
 import type { DynamicEnrichmentPublic } from "@/client"
+import { RuleSlugChip } from "@/components/RuleSlugChip"
 
 interface RuntimeFindingRowProps {
   finding: DynamicEnrichmentPublic
@@ -20,9 +21,7 @@ export function RuntimeFindingRow({ finding }: RuntimeFindingRowProps) {
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
             Runtime
           </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            {finding.rule_slug}
-          </span>
+          <RuleSlugChip>{finding.rule_slug}</RuleSlugChip>
           <span className="text-sm break-words min-w-0">
             {finding.recommendation}
           </span>

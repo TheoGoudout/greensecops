@@ -1,10 +1,7 @@
 """Redis pub/sub event publisher.
 
-Celery tasks run in separate worker processes and cannot use async Redis.
-Route handlers run in FastAPI and can use async Redis.
-
-Both call publish_event() — it auto-detects the calling context and picks
-the right client.
+publish_event() is sync and fire-and-forget; it is called from both Celery
+workers and FastAPI route handlers.
 """
 
 import logging
@@ -21,35 +18,17 @@ def _channel(org_id: str) -> str:
 
 
 def publish_event(event: SSEEvent) -> None:
-    """Publish from a Celery worker (sync). Fire-and-forget — never raises."""
+    """Publish an event. Fire-and-forget — never raises."""
     try:
         import redis
 
         from app.core.config import settings
 
-        client = redis.from_url(settings.REDIS_URL)
+        client = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client.publish(_channel(event.org_id), event.to_wire())
         finally:
             client.close()
-    except Exception:
-        logger.exception(
-            "Failed to publish SSE event %s for org %s", event.event, event.org_id
-        )
-
-
-async def publish_event_async(event: SSEEvent) -> None:
-    """Publish from a FastAPI route handler (async). Fire-and-forget — never raises."""
-    try:
-        import redis.asyncio as aioredis
-
-        from app.core.config import settings
-
-        client = aioredis.from_url(settings.REDIS_URL)
-        try:
-            await client.publish(_channel(event.org_id), event.to_wire())
-        finally:
-            await client.aclose()
     except Exception:
         logger.exception(
             "Failed to publish SSE event %s for org %s", event.event, event.org_id

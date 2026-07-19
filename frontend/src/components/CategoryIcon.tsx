@@ -7,7 +7,10 @@ interface CategoryIconProps {
   withLabel?: boolean
 }
 
-const CATEGORY_META: Record<IssueCategory, { icon: string; label: string }> = {
+export const CATEGORY_META: Record<
+  IssueCategory,
+  { icon: string; label: string }
+> = {
   energy: { icon: "⚡", label: "Energy" },
   reliability: { icon: "🛡️", label: "Reliability" },
   security: { icon: "🔒", label: "Security" },

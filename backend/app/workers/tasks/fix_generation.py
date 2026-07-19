@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlmodel import Session, select
 
@@ -12,6 +13,9 @@ from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
+if TYPE_CHECKING:
+    from app.services.llm.base import LLMResponse
+
 logger = logging.getLogger(__name__)
 
 INVALID_YAML_ERROR = "LLM returned invalid YAML"
@@ -20,7 +24,7 @@ MISSING_CONTENT_ERROR = "LLM response missing workflow content"
 
 def _is_valid_workflow_yaml(content: str) -> bool:
     """True if ``content`` parses as a YAML mapping (a plausible workflow file)."""
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     try:
         return isinstance(yaml.safe_load(content), dict)
@@ -70,7 +74,7 @@ def init_fix_batch(batch_id: str, group_count: int) -> None:
 
         from app.core.config import settings
 
-        client = redis.from_url(settings.REDIS_URL)
+        client = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client.set(
                 _batch_key(batch_id, "remaining"), group_count, ex=_BATCH_KEY_TTL
@@ -94,8 +98,7 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
 
         from app.core.config import settings
         from app.models import PullRequest, PullRequestState, WorkflowFile
-        from app.services.pr_body import IssueInfo, build_pr_body
-        from app.services.state_machines import DELIVERED_FIX_STATUSES
+        from app.services.delivery_pr import build_delivery_pr_body, repo_fix_branch
         from app.workers.tasks.fix_delivery import deliver_fixes_batch
 
         with Session(engine) as session:
@@ -154,53 +157,10 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
                 )
                 return
             pr_branch = (
-                existing_pr.pr_branch
-                if existing_pr
-                else f"greensecops/fixes-{str(repo.id)[:8]}"
+                existing_pr.pr_branch if existing_pr else repo_fix_branch(repo.id)
             )
 
-            # The body must reflect every fix ever delivered onto this PR, not
-            # just this run's ready set — a fix already `delivered` in an
-            # earlier auto-run would otherwise vanish from the description.
-            body_fixes = list(fixes)
-            if existing_pr:
-                current_ids = {f.id for f in fixes}
-                prior_fixes = session.exec(
-                    _select(Fix)
-                    .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-                    .where(
-                        WorkflowFile.repo_id == repo.id,
-                        Fix.pr_id == existing_pr.id,
-                        col(Fix.status).in_(DELIVERED_FIX_STATUSES),
-                    )
-                ).all()
-                body_fixes.extend(f for f in prior_fixes if f.id not in current_ids)
-
-            issues_info: list[IssueInfo] = []
-            for fix in body_fixes:
-                wf_path = fix.workflow_file.path if fix.workflow_file else "unknown"
-                for issue in fix.issues or []:
-                    issues_info.append(
-                        IssueInfo(
-                            rule_slug=issue.rule.slug if issue.rule else "",
-                            rule_title=issue.rule.title if issue.rule else "",
-                            severity=issue.severity,
-                            category=issue.category,
-                            message=issue.message,
-                            workflow_path=wf_path,
-                            line_start=issue.line_start,
-                        )
-                    )
-
-            pr_body = build_pr_body(
-                issues=issues_info,
-                fix_ids=[str(f.id) for f in body_fixes],
-                wiki_base_url=settings.WIKI_BASE_URL,
-                frontend_host=settings.FRONTEND_HOST,
-                bot_handle=settings.GITHUB_BOT_HANDLE,
-                app_name=settings.PROJECT_NAME,
-                app_url=settings.APP_URL,
-            )
+            pr_body = build_delivery_pr_body(session, repo.id, fixes, existing_pr)
             deliver_fixes_batch.delay(
                 fix_ids=fix_ids,
                 repo_id=repo_id,
@@ -233,7 +193,7 @@ def _record_batch_result(
 
         from app.core.config import settings
 
-        client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        client = redis.from_url(settings.REDIS_URL, decode_responses=True)  # type: ignore[no-untyped-call]
         try:
             if ready_ids:
                 client.sadd(_batch_key(batch_id, "ready"), *ready_ids)
@@ -306,10 +266,10 @@ def resolve_llm_provider(repo: Repository) -> tuple[str, str]:
 def _load_generation_context(
     session: Session,
     issue_ids: list[str],
-) -> tuple[list[Issue], WorkflowFile, Repository] | dict:
+) -> tuple[list[Issue], WorkflowFile, Repository] | dict[str, object]:
     """Load and validate issues, workflow file, and repo. Returns error dict on failure."""
-    issues = [session.get(Issue, uuid.UUID(iid)) for iid in issue_ids]
-    issues = [i for i in issues if i is not None]
+    loaded = [session.get(Issue, uuid.UUID(iid)) for iid in issue_ids]
+    issues = [i for i in loaded if i is not None]
     if not issues:
         return {"status": "error", "detail": "no_issues_found"}
 
@@ -333,7 +293,7 @@ def run_fix_generation(
     self: object,  # noqa: ARG001
     issue_ids: list[str],
     batch_id: str | None = None,
-) -> dict:
+) -> dict[str, object]:
     """Single LLM call regenerating one workflow file to fix the given issues.
 
     The API routes create a pending Fix row per workflow file before queuing
@@ -499,11 +459,11 @@ def _configure_langchain() -> None:
 
 async def _generate_fixes(
     workflow_content: str,
-    issues: list,
+    issues: list[Issue],
     provider_str: str,
     model_str: str,
     installation_id: int | None = None,
-) -> object:
+) -> "LLMResponse":
     _configure_langchain()
 
     from app.services.github.sha_resolver import resolve_action_shas
@@ -519,7 +479,7 @@ async def _generate_fixes(
             from app.core.config import settings
             from app.services.github.app_client import GitHubAppClient
 
-            redis_client = aioredis.from_url(settings.REDIS_URL)
+            redis_client = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
             try:
                 token = await GitHubAppClient(redis_client).get_installation_token(
                     installation_id

@@ -3,6 +3,32 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import type { MetricsSample, RunnerSpecs } from "./types"
 
+/** Root-filesystem usage from `df`, or null when unavailable (not fatal). */
+function readDiskKb(): {
+  totalKb: number
+  usedKb: number
+  freeKb: number
+} | null {
+  try {
+    const dfOut = childProcess.execFileSync("df", ["-Pk", "/"], {
+      encoding: "utf8",
+    })
+    const parts = dfOut.trim().split("\n")[1]?.split(/\s+/)
+    if (!parts || parts.length < 4) return null
+    return {
+      totalKb: parseInt(parts[1] ?? "0", 10),
+      usedKb: parseInt(parts[2] ?? "0", 10),
+      freeKb: parseInt(parts[3] ?? "0", 10),
+    }
+  } catch {
+    return null
+  }
+}
+
+function kbToGb(kb: number): number {
+  return Math.round((kb / 1024 ** 2) * 100) / 100
+}
+
 export function getRunnerSpecs(): RunnerSpecs {
   const cpus = os.cpus()
   const totalMem = os.totalmem()
@@ -17,19 +43,10 @@ export function getRunnerSpecs(): RunnerSpecs {
     ram_total_gb: Math.round((totalMem / 1024 ** 3) * 100) / 100,
   }
 
-  try {
-    const dfOut = childProcess.execFileSync("df", ["-Pk", "/"], {
-      encoding: "utf8",
-    })
-    const parts = dfOut.trim().split("\n")[1]?.split(/\s+/)
-    if (parts && parts.length >= 4) {
-      const totalKb = parseInt(parts[1] ?? "0", 10)
-      const freeKb = parseInt(parts[3] ?? "0", 10)
-      specs.disk_total_gb = Math.round((totalKb / 1024 ** 2) * 100) / 100
-      specs.disk_free_gb = Math.round((freeKb / 1024 ** 2) * 100) / 100
-    }
-  } catch {
-    // disk info unavailable — not fatal
+  const disk = readDiskKb()
+  if (disk) {
+    specs.disk_total_gb = kbToGb(disk.totalKb)
+    specs.disk_free_gb = kbToGb(disk.freeKb)
   }
 
   return specs
@@ -54,17 +71,9 @@ export function getMetricsSample(): MetricsSample {
     )
   }
 
-  try {
-    const dfOut = childProcess.execFileSync("df", ["-Pk", "/"], {
-      encoding: "utf8",
-    })
-    const parts = dfOut.trim().split("\n")[1]?.split(/\s+/)
-    if (parts && parts.length >= 3) {
-      const usedKb = parseInt(parts[2] ?? "0", 10)
-      sample.disk_used_gb = Math.round((usedKb / 1024 ** 2) * 100) / 100
-    }
-  } catch {
-    // not fatal
+  const disk = readDiskKb()
+  if (disk) {
+    sample.disk_used_gb = kbToGb(disk.usedKb)
   }
 
   try {

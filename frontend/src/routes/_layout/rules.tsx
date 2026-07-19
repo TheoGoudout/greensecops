@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { IssueCategory, RulePublic } from "@/client"
 import { RulesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -47,9 +48,7 @@ function RuleRow({
       <div className="flex items-center gap-3 min-w-0">
         <CategoryIcon category={rule.category} className="shrink-0" />
         <div className="min-w-0">
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            {rule.slug}
-          </span>
+          <RuleSlugChip>{rule.slug}</RuleSlugChip>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
             {rule.description}
           </p>

@@ -154,34 +154,11 @@ def fix_generation_failed_batch(
 # ─── Fix delivery ────────────────────────────────────────────────────────────
 
 
-def fix_delivering(org_id: str, repo_id: str, fix_id: str) -> SSEEvent:
-    return SSEEvent(
-        event=SSESignal.fix_delivering,
-        org_id=org_id,
-        data={"repo_id": repo_id, "fix_id": fix_id},
-    )
-
-
 def fix_delivering_batch(org_id: str, repo_id: str, fix_ids: list[str]) -> SSEEvent:
     return SSEEvent(
         event=SSESignal.fix_delivering,
         org_id=org_id,
         data={"repo_id": repo_id, "fix_ids": fix_ids},
-    )
-
-
-def fix_delivered(
-    org_id: str, repo_id: str, fix_id: str, pr_url: str | None, pr_branch: str
-) -> SSEEvent:
-    return SSEEvent(
-        event=SSESignal.fix_delivered,
-        org_id=org_id,
-        data={
-            "repo_id": repo_id,
-            "fix_id": fix_id,
-            "pr_url": pr_url,
-            "pr_branch": pr_branch,
-        },
     )
 
 

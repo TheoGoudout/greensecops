@@ -91,9 +91,9 @@ def list_issues(
                 .where(Analysis.workflow_file_id == Issue.workflow_file_id)
                 .where(Analysis.status == AnalysisStatus.completed)
                 .order_by(
-                    Analysis.completed_at.desc().nulls_last(),
-                    Analysis.created_at.desc(),
-                )  # type: ignore[union-attr]
+                    col(Analysis.completed_at).desc().nulls_last(),
+                    col(Analysis.created_at).desc(),
+                )
                 .limit(1)
                 .correlate(Issue)
                 .scalar_subquery()
@@ -109,16 +109,18 @@ def list_issues(
     if severity:
         query = query.where(Issue.severity == severity)
     severity_rank = case(
-        (Issue.severity == IssueSeverity.critical, 0),
-        (Issue.severity == IssueSeverity.high, 1),
-        (Issue.severity == IssueSeverity.medium, 2),
-        (Issue.severity == IssueSeverity.low, 3),
-        (Issue.severity == IssueSeverity.info, 4),
+        (col(Issue.severity) == IssueSeverity.critical, 0),
+        (col(Issue.severity) == IssueSeverity.high, 1),
+        (col(Issue.severity) == IssueSeverity.medium, 2),
+        (col(Issue.severity) == IssueSeverity.low, 3),
+        (col(Issue.severity) == IssueSeverity.info, 4),
         else_=99,
     )
     query = (
-        query.order_by(severity_rank, Issue.created_at.desc()).offset(skip).limit(limit)
-    )  # type: ignore[arg-type]
+        query.order_by(severity_rank, col(Issue.created_at).desc())
+        .offset(skip)
+        .limit(limit)
+    )
     return [to_issue_public(issue) for issue in session.exec(query).all()]
 
 

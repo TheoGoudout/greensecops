@@ -96,7 +96,7 @@ def _enrich(session: Session, run: TelemetryRun) -> int:
         select(Analysis)
         .where(Analysis.repo_id == run.repo_id)
         .where(Analysis.status == AnalysisStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        .order_by(col(Analysis.created_at).desc())
     ).first()
 
     # Persist this run's enrichments, replacing any from a prior run of the

@@ -3,6 +3,7 @@ import Prism from "prismjs"
 import "prismjs/components/prism-yaml"
 import { useMemo, useState } from "react"
 import type { FixPublic, IssuePublic, IssueSeverity } from "@/client"
+import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 
 type FlatToken = { type: string; text: string }
@@ -311,9 +312,7 @@ function LineRow({
           className={`border-l-2 ${SEVERITY_BORDER[issue.severity]} bg-muted/40 flex flex-wrap items-start gap-x-2 gap-y-1 px-4 py-2`}
         >
           <SeverityChip severity={issue.severity} className="shrink-0" />
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 shrink-0">
-            {issue.rule_slug}
-          </span>
+          <RuleSlugChip className="shrink-0">{issue.rule_slug}</RuleSlugChip>
           <span className="text-xs text-foreground break-words">
             {issue.message}
           </span>

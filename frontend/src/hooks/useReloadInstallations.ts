@@ -1,13 +1,12 @@
 import { OAuthError, OAuthErrorCode, useGitHubLogin } from "@react-oauth/github"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { InstallationsService } from "@/client"
-import useCustomToast from "@/hooks/useCustomToast"
+import { showErrorToast, showSuccessToast } from "@/utils"
 
 const REDIRECT_URI = `${window.location.origin}/auth/github/callback`
 
 export function useReloadInstallations() {
   const queryClient = useQueryClient()
-  const { showSuccessToast, showErrorToast } = useCustomToast()
 
   const syncMutation = useMutation({
     mutationFn: (code: string) =>

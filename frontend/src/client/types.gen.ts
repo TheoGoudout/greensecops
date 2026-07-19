@@ -264,7 +264,7 @@ export type RepositoryPublic = {
 /**
  * Latest human review decision for a PR, from ``pull_request_review``.
  */
-export type ReviewDecision = 'approved' | 'changes_requested' | 'review_required' | 'none';
+export type ReviewDecision = 'approved' | 'changes_requested' | 'review_required';
 
 export type RulePublic = {
     id: string;
@@ -649,12 +649,6 @@ export type LoginResetPasswordData = {
 };
 
 export type LoginResetPasswordResponse = (Message);
-
-export type LoginRecoverPasswordHtmlContentData = {
-    email: string;
-};
-
-export type LoginRecoverPasswordHtmlContentResponse = (string);
 
 export type OrganizationsListAiProvidersResponse = (AIProvidersPublic);
 
