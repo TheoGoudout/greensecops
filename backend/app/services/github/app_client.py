@@ -4,7 +4,8 @@ import hashlib
 import re
 import time
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as aioredis
 from github import Auth, Github, GithubIntegration
@@ -12,7 +13,10 @@ from github.GithubException import GithubException
 from github.Repository import Repository as GithubRepository
 
 from app.core.config import settings
-from app.models.enums import PullRequestState
+from app.models.enums import CIStatus, PullRequestState, ReviewDecision
+
+if TYPE_CHECKING:
+    from app.models import Repository
 
 _PR_URL_RE = re.compile(
     r"https://github\.com/(?P<full_name>[^/]+/[^/]+)/pull/(?P<number>\d+)"
@@ -39,6 +43,26 @@ class InstallationRepo:
     github_repo_id: int
     full_name: str
     default_branch: str
+
+
+@dataclass
+class PRSnapshot:
+    """A poll's normalized view of a pull request.
+
+    Gathers, in one fetch, everything the poller needs to drive the same
+    handlers a webhook would: lifecycle state plus the CI/review/head-commit
+    attributes. The external-repo analogue of the several ``pull_request`` /
+    ``check_suite`` / ``pull_request_review`` webhook payloads.
+    """
+
+    state: PullRequestState
+    merged: bool
+    draft: bool
+    head_sha: str
+    mergeable_state: str | None
+    ci_status: CIStatus
+    # ``None`` means "no decisive review" — the caller leaves the current value.
+    review_decision: ReviewDecision | None
 
 
 @dataclass
@@ -203,6 +227,115 @@ class GitHubAppClient:
     ) -> PullRequestState:
         token = await self.get_installation_token(installation_id)
         return await self.get_pr_state_with_token(token, full_name, pr_number)
+
+    # ─── Polling snapshots (external-repo reconciliation) ────────────────────
+
+    async def resolve_repo_token(self, repo: "Repository") -> str | None:
+        """Return the credential to read a repo with, or ``None`` for public read.
+
+        Mirrors the fix-delivery path: an installed repo uses its installation
+        token; an external repo uses the configured bot token; a public external
+        repo with no bot token is read unauthenticated (``None``).
+        """
+        if repo.installation_id:
+            return await self.get_installation_token(repo.installation_id)
+        if repo.is_external and settings.GITHUB_BOT_TOKEN:
+            return settings.GITHUB_BOT_TOKEN
+        return None
+
+    async def get_default_branch_head(
+        self, token: str | None, full_name: str
+    ) -> tuple[str, str]:
+        """Return ``(default_branch, head_sha)`` for ``full_name``.
+
+        The polling analogue of a ``push`` webhook: a change in the head SHA
+        since the last poll means new commits landed on the default branch.
+        """
+
+        def _fetch() -> tuple[str, str]:
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            repo = gh.get_repo(full_name)
+            branch = repo.default_branch
+            return branch, repo.get_branch(branch).commit.sha
+
+        return await asyncio.to_thread(_fetch)
+
+    async def get_pull_request_snapshot(
+        self, token: str | None, full_name: str, pr_number: int
+    ) -> PRSnapshot:
+        """Fetch a PR's lifecycle + CI/review/head attributes in one call."""
+        from app.services.github.event_handlers import review_state_to_decision
+
+        def _fetch() -> PRSnapshot:
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            repo = gh.get_repo(full_name)
+            pr = repo.get_pull(pr_number)
+            head_sha = pr.head.sha if pr.head else ""
+
+            # CI: aggregate the head commit's check-runs into a single CIStatus,
+            # matching the webhook's check_suite semantics.
+            ci_status = CIStatus.none
+            if head_sha:
+                runs = list(repo.get_commit(head_sha).get_check_runs())
+                if not runs:
+                    ci_status = CIStatus.none
+                elif any(r.status != "completed" for r in runs):
+                    ci_status = CIStatus.pending
+                elif all(r.conclusion == "success" for r in runs):
+                    ci_status = CIStatus.success
+                elif any(
+                    r.conclusion
+                    in ("failure", "timed_out", "cancelled", "action_required")
+                    for r in runs
+                ):
+                    ci_status = CIStatus.failure
+
+            # Review decision: the most recent review carrying a decision, which
+            # is exactly what the pull_request_review webhook records.
+            decision: ReviewDecision | None = None
+            for review in pr.get_reviews():
+                mapped = review_state_to_decision(review.state or "")
+                if mapped is not None:
+                    decision = mapped
+
+            state = PullRequestState.merged if pr.merged else PullRequestState(pr.state)
+            return PRSnapshot(
+                state=state,
+                merged=bool(pr.merged),
+                draft=bool(pr.draft),
+                head_sha=head_sha,
+                mergeable_state=pr.mergeable_state,
+                ci_status=ci_status,
+                review_decision=decision,
+            )
+
+        return await asyncio.to_thread(_fetch)
+
+    async def list_pr_command_comments(
+        self,
+        token: str | None,
+        full_name: str,
+        pr_number: int,
+        since: datetime | None,
+    ) -> list[str]:
+        """Return PR comment bodies created after ``since`` (issue comments).
+
+        The polling analogue of the ``issue_comment`` webhook: lets the poller
+        pick up ``/greensecops`` commands on an external repo's fix PR.
+        """
+
+        def _fetch() -> list[str]:
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            repo = gh.get_repo(full_name)
+            issue = repo.get_issue(pr_number)
+            comments = (
+                issue.get_comments(since=since)
+                if since is not None
+                else issue.get_comments()
+            )
+            return [c.body for c in comments if c.body]
+
+        return await asyncio.to_thread(_fetch)
 
     async def fetch_workflow_files(
         self, installation_id: int | None, full_name: str, ref: str | None = None

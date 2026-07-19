@@ -147,6 +147,13 @@ class Repository(SQLModel, table=True):
         sa_column_kwargs={"server_default": RepositoryStatus.active.value},
     )
     default_branch: str = Field(default="main", max_length=255)
+    # Polling cursors (external repos receive no webhooks): the default-branch
+    # head last seen by the poller and when. A change in ``last_polled_head_sha``
+    # is what triggers a polled analysis, the way a ``push`` webhook would.
+    last_polled_head_sha: str | None = Field(default=None, max_length=40)
+    last_polled_at: datetime | None = Field(
+        default=None, sa_type=DateTime(timezone=True)
+    )
     fix_delivery_mode: FixDeliveryMode | None = Field(default=None)
     auto_fix_enabled: bool = Field(default=False)
     llm_provider: LLMProvider | None = Field(default=None)
@@ -336,6 +343,13 @@ class PullRequest(SQLModel, table=True):
     ci_status: CIStatus | None = Field(default=None)
     review_decision: ReviewDecision | None = Field(default=None)
     mergeable_state: str | None = Field(default=None, max_length=32)
+    # Polling cursors (external-repo PRs receive no webhooks): the PR head SHA
+    # last seen by the poller (a change means new commits, i.e. ``synchronize``)
+    # and the timestamp up to which command comments have been processed.
+    head_sha: str | None = Field(default=None, max_length=40)
+    last_polled_comment_at: datetime | None = Field(
+        default=None, sa_type=DateTime(timezone=True)
+    )
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
