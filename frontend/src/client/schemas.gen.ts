@@ -184,7 +184,7 @@ export const AnalysisStatusSchema = {
 
 export const AnalysisTriggerSchema = {
     type: 'string',
-    enum: ['webhook_push', 'webhook_workflow_run', 'manual', 'scheduled', 'release'],
+    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release'],
     title: 'AnalysisTrigger'
 } as const;
 

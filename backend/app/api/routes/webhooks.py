@@ -2,27 +2,21 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from sqlmodel import Session, col
+from sqlmodel import Session, select
 
 from app import crud
 from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import (
-    Analysis,
     AnalysisTrigger,
-    CIStatus,
-    Fix,
-    FixStatus,
-    Issue,
-    IssueResolutionReason,
     Organization,
     PullRequest,
     Repository,
-    ReviewDecision,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github import event_handlers as eh
 from app.services.github.webhook_verifier import verify_webhook_signature
 
 logger = logging.getLogger(__name__)
@@ -97,6 +91,9 @@ async def github_webhook(
 
     # Handlers enqueue work synchronously so an enqueue failure surfaces as a
     # 500 in GitHub's webhook log (a lost 200 would silently drop the event).
+    # Each handler only parses the payload and resolves the target row, then
+    # delegates the actual work to the source-agnostic ``event_handlers`` shared
+    # with the external-repo poller.
     if event == "push":
         _handle_push_event(session, payload)
     elif event == "workflow_run":
@@ -119,6 +116,21 @@ async def github_webhook(
     return {"status": "accepted", "event": event}
 
 
+def _resolve_repo_by_github_id(
+    session: Session, payload: dict[str, Any]
+) -> Repository | None:
+    """Resolve an enabled ``Repository`` from a payload's ``repository.id``."""
+    github_repo_id = payload.get("repository", {}).get("id")
+    if not github_repo_id:
+        return None
+    repo = session.exec(
+        select(Repository).where(Repository.github_repo_id == github_repo_id)
+    ).first()
+    if not repo or not repo.enabled:
+        return None
+    return repo
+
+
 def _handle_push_event(
     session: Session,
     payload: dict[str, Any],
@@ -137,30 +149,13 @@ def _handle_push_event(
     if not touches_workflows and not is_new_branch:
         return
 
-    repo_payload = payload.get("repository", {})
-    github_repo_id = repo_payload.get("id")
-    if not github_repo_id:
-        return
-
-    from sqlmodel import select
-
-    repo = session.exec(
-        select(Repository).where(Repository.github_repo_id == github_repo_id)
-    ).first()
-    if not repo or not repo.enabled:
+    repo = _resolve_repo_by_github_id(session, payload)
+    if not repo:
         return
 
     branch = payload.get("ref", "").removeprefix("refs/heads/")
-    if branch.startswith("greensecops/"):
-        return
     commit_sha = payload.get("after", "")
-    _enqueue_static_analysis(
-        repo_id=str(repo.id),
-        branch=branch,
-        commit_sha=commit_sha,
-        trigger=AnalysisTrigger.webhook_push,
-        org_id=str(repo.org_id),
-    )
+    eh.enqueue_workflow_analysis(repo, branch, commit_sha, AnalysisTrigger.webhook_push)
 
 
 def _handle_workflow_run_event(
@@ -170,30 +165,15 @@ def _handle_workflow_run_event(
     if payload.get("action") != "completed":
         return
 
-    repo_payload = payload.get("repository", {})
-    github_repo_id = repo_payload.get("id")
-    if not github_repo_id:
-        return
-
-    from sqlmodel import select
-
-    repo = session.exec(
-        select(Repository).where(Repository.github_repo_id == github_repo_id)
-    ).first()
-    if not repo or not repo.enabled:
+    repo = _resolve_repo_by_github_id(session, payload)
+    if not repo:
         return
 
     workflow_run = payload.get("workflow_run", {})
     branch = workflow_run.get("head_branch", "")
-    if branch.startswith("greensecops/"):
-        return
     commit_sha = workflow_run.get("head_sha", "")
-    _enqueue_static_analysis(
-        repo_id=str(repo.id),
-        branch=branch,
-        org_id=str(repo.org_id),
-        commit_sha=commit_sha,
-        trigger=AnalysisTrigger.webhook_workflow_run,
+    eh.enqueue_workflow_analysis(
+        repo, branch, commit_sha, AnalysisTrigger.webhook_workflow_run
     )
 
 
@@ -215,69 +195,11 @@ def _handle_issue_comment_event(
         # Other commands (fix, ...) are not implemented yet.
         return
 
-    github_repo_id = payload.get("repository", {}).get("id")
-    if not github_repo_id:
+    repo = _resolve_repo_by_github_id(session, payload)
+    if not repo:
         return
 
-    from sqlmodel import select
-
-    repo = session.exec(
-        select(Repository).where(Repository.github_repo_id == github_repo_id)
-    ).first()
-    if not repo or not repo.enabled:
-        return
-
-    if command[0] == "reanalyze":
-        _enqueue_static_analysis(
-            repo_id=str(repo.id),
-            branch=repo.default_branch,
-            commit_sha="",
-            trigger=AnalysisTrigger.manual,
-            org_id=str(repo.org_id),
-            force=True,
-        )
-    else:
-        # `/greensecops ignore|unignore <fingerprint>` mutes/un-mutes every issue
-        # in this repo carrying that fingerprint (a stable per-violation id). The
-        # status trigger recomputes `status` from `ignored_at`.
-        _handle_issue_ignore_command(session, repo, command)
-
-
-def _handle_issue_ignore_command(
-    session: Session,
-    repo: Repository,
-    command: list[str],
-) -> None:
-    from datetime import datetime, timezone
-
-    from sqlmodel import select
-
-    if len(command) < 2:
-        logger.info("`/greensecops %s` requires a fingerprint argument", command[0])
-        return
-    fingerprint = command[1]
-    issues = list(
-        session.exec(
-            select(Issue)
-            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-            .where(Analysis.repo_id == repo.id)
-            .where(Issue.fingerprint == fingerprint)
-        ).all()
-    )
-    if not issues:
-        return
-    now = datetime.now(timezone.utc) if command[0] == "ignore" else None
-    for issue in issues:
-        issue.ignored_at = now
-        session.add(issue)
-    session.commit()
-    logger.info(
-        "%s %d issue(s) with fingerprint %s in repo %s",
-        "Ignored" if now else "Un-ignored",
-        len(issues),
-        fingerprint,
-        repo.id,
-    )
+    eh.handle_issue_command(session, repo, command)
 
 
 def _handle_repository_event(
@@ -288,14 +210,14 @@ def _handle_repository_event(
 
     Without this, ``full_name``/``default_branch`` go stale and later fix
     deliveries fail when resolving the repo or its base branch.
+
+    Webhook-only: repository lifecycle has no external-repo polling analogue.
     """
     action = payload.get("action")
     repo_payload = payload.get("repository", {})
     github_repo_id = repo_payload.get("id")
     if not github_repo_id:
         return
-
-    from sqlmodel import select
 
     repo = session.exec(
         select(Repository).where(Repository.github_repo_id == github_repo_id)
@@ -363,7 +285,10 @@ def _handle_installation_event(
     session: Session,
     payload: dict[str, Any],
 ) -> None:
-    """Record GitHub App installation lifecycle events."""
+    """Record GitHub App installation lifecycle events.
+
+    Webhook-only: installations have no external-repo polling analogue.
+    """
     action = payload.get("action")
     installation = payload.get("installation", {})
     installation_id = installation.get("id")
@@ -441,8 +366,6 @@ def _handle_pull_request_event(
     if not pr_url:
         return
 
-    from sqlmodel import select
-
     pr_record = session.exec(
         select(PullRequest).where(PullRequest.pr_url == pr_url)
     ).first()
@@ -450,220 +373,29 @@ def _handle_pull_request_event(
         return
 
     # Draft toggles: converted_to_draft (open -> draft) / ready_for_review
-    # (draft -> open). try_advance keeps redeliveries idempotent.
+    # (draft -> open).
     if action in ("converted_to_draft", "ready_for_review"):
         draft_event = (
             "convert_to_draft"
             if action == "converted_to_draft"
             else "mark_ready_for_review"
         )
-        _handle_pull_request_draft_toggle(session, pr_record, pr_url, draft_event)
+        eh.handle_pull_request_draft_toggle(session, pr_record, draft_event)
         return
 
     # New commits pushed to the PR branch (synchronize) or a title/base edit
-    # (edited): record the update without changing lifecycle state, so the PR is
-    # no longer silently ignored. try_advance keeps it a no-op on a non-open PR.
+    # (edited): record the update without changing lifecycle state.
     if action in ("synchronize", "edited"):
-        _handle_pull_request_external_update(
-            session, pr_record, pr_url, mergeable_state=pr.get("mergeable_state")
+        eh.handle_pull_request_sync(
+            session, pr_record, mergeable_state=pr.get("mergeable_state")
         )
         return
 
     if action == "closed":
-        merged = pr.get("merged", False)
-        pr_event = "merge" if merged else "close"
+        pr_event = "merge" if pr.get("merged", False) else "close"
     else:
-        merged = False
         pr_event = "reopen"
-
-    # try_trigger: GitHub may redeliver or reorder pull_request events, so an
-    # already-applied transition (e.g. reopen on an open PR) is a no-op, not an
-    # error.
-    sm.try_advance(pr_record, sm.PullRequestMachine, pr_event)
-    session.add(pr_record)
-    session.commit()
-    logger.info(
-        "PR %s -> state=%s for PR record %s", pr_url, pr_record.pr_state, pr_record.id
-    )
-
-    # Notify for all fixes associated with this PR
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-
-    if action == "reopened":
-        # Reopening withdraws the close-as-rejection signal: fixes the closed-PR
-        # delivery guard auto-rejected (status ``superseded_by_closed_pr``)
-        # become deliverable again. User-rejected fixes keep their status.
-        for pr_fix in pr_fixes:
-            if pr_fix.status == FixStatus.superseded_by_closed_pr:
-                sm.advance(pr_fix, sm.FixMachine, "restore")
-                session.add(pr_fix)
-        session.commit()
-    elif action == "closed" and not merged:
-        # A delivered PR closed without merging withdraws its fixes: move them to
-        # ``superseded_by_closed_pr`` so ``reopen`` (above) restores them. Only
-        # ``ready``/``delivered`` fixes are affected; try_advance keeps it a
-        # no-op for any already-terminal fix, and safe on redelivered events.
-        superseded_fixes: list[Fix] = []
-        for pr_fix in pr_fixes:
-            if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr"):
-                session.add(pr_fix)
-                superseded_fixes.append(pr_fix)
-        if superseded_fixes:
-            session.commit()
-            repo = session.get(Repository, pr_record.repo_id)
-            if repo:
-                for pr_fix in superseded_fixes:
-                    events_pub.publish_event(
-                        ev.fix_rejected(str(repo.org_id), str(repo.id), str(pr_fix.id))
-                    )
-    elif action == "closed" and merged:
-        # The PR merged: land its delivered fixes (terminal) and resolve the
-        # issues they addressed with reason ``merged`` — the code is now on the
-        # branch. try_advance keeps non-``delivered`` fixes untouched.
-        landed_fixes: list[Fix] = []
-        for pr_fix in pr_fixes:
-            if sm.try_advance(pr_fix, sm.FixMachine, "land"):
-                session.add(pr_fix)
-                landed_fixes.append(pr_fix)
-        if landed_fixes:
-            _resolve_issues_for_landed_fixes(session, landed_fixes)
-            session.commit()
-            repo = session.get(Repository, pr_record.repo_id)
-            if repo:
-                for pr_fix in landed_fixes:
-                    events_pub.publish_event(
-                        ev.fix_landed(str(repo.org_id), str(repo.id), str(pr_fix.id))
-                    )
-
-    fix = pr_fixes[0] if pr_fixes else None
-    if fix:
-        repo = session.get(Repository, pr_record.repo_id)
-        if repo:
-            if action == "closed":
-                events_pub.publish_event(
-                    ev.pr_closed(
-                        str(repo.org_id), str(repo.id), str(fix.id), pr_url, merged
-                    )
-                )
-            else:
-                events_pub.publish_event(
-                    ev.pr_opened(
-                        str(repo.org_id),
-                        str(repo.id),
-                        [str(fix.id)],
-                        pr_url,
-                        pr_record.pr_branch,
-                    )
-                )
-
-
-def _resolve_issues_for_landed_fixes(
-    session: Session,
-    fixes: list[Fix],
-) -> None:
-    """Resolve the still-open issues addressed by merged (landed) fixes.
-
-    Sets ``resolved_at`` + ``resolution_reason = merged``. Idempotent: a later
-    re-analysis leaves already-resolved issues alone, and a recurring violation
-    reopens via the usual on-conflict path.
-    """
-    from datetime import datetime, timezone
-
-    from sqlmodel import select
-
-    now = datetime.now(timezone.utc)
-    fix_ids = [f.id for f in fixes]
-    issues = session.exec(
-        select(Issue)
-        .where(col(Issue.fix_id).in_(fix_ids))
-        .where(col(Issue.resolved_at).is_(None))
-    ).all()
-    for issue in issues:
-        issue.resolved_at = now
-        issue.resolution_reason = IssueResolutionReason.merged
-        session.add(issue)
-
-
-def _handle_pull_request_draft_toggle(
-    session: Session,
-    pr_record: PullRequest,
-    pr_url: str,
-    event: str,
-) -> None:
-    """Record a converted_to_draft / ready_for_review toggle (state + SSE)."""
-    from datetime import datetime, timezone
-
-    from sqlmodel import select
-
-    if not sm.try_advance(pr_record, sm.PullRequestMachine, event):
-        # Not in a state the toggle applies to (e.g. already merged/closed).
-        return
-    pr_record.updated_at = datetime.now(timezone.utc)
-    session.add(pr_record)
-    session.commit()
-
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_url,
-            pr_record.pr_branch,
-        )
-    )
-    logger.info(
-        "PR %s draft toggle %s recorded (record %s)", pr_url, event, pr_record.id
-    )
-
-
-def _handle_pull_request_external_update(
-    session: Session,
-    pr_record: PullRequest,
-    pr_url: str,
-    mergeable_state: str | None = None,
-) -> None:
-    """Record a synchronize/edited event on an open PR (updated_at + SSE)."""
-    from datetime import datetime, timezone
-
-    from sqlmodel import select
-
-    if not sm.try_advance(pr_record, sm.PullRequestMachine, "external_update"):
-        # PR is not open/draft (closed/merged/NULL): nothing to record.
-        return
-    pr_record.updated_at = datetime.now(timezone.utc)
-    if mergeable_state is not None:
-        pr_record.mergeable_state = mergeable_state[:32]
-    session.add(pr_record)
-    session.commit()
-
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_url,
-            pr_record.pr_branch,
-        )
-    )
-    logger.info("PR %s external update recorded (record %s)", pr_url, pr_record.id)
-
-
-def _ci_status_from_conclusion(status: str, conclusion: str | None) -> CIStatus:
-    if status != "completed":
-        return CIStatus.pending
-    if conclusion == "success":
-        return CIStatus.success
-    if conclusion in ("failure", "timed_out", "cancelled", "action_required"):
-        return CIStatus.failure
-    return CIStatus.none
+    eh.handle_pull_request_lifecycle(session, pr_record, pr_event)
 
 
 def _handle_check_suite_event(
@@ -671,8 +403,6 @@ def _handle_check_suite_event(
     payload: dict[str, Any],
 ) -> None:
     """Record CI outcome (an attribute, not a state) from a check_suite event."""
-    from sqlmodel import select
-
     suite = payload.get("check_suite", {})
     head_branch = suite.get("head_branch")
     github_repo_id = payload.get("repository", {}).get("id")
@@ -690,21 +420,10 @@ def _handle_check_suite_event(
     ).first()
     if not pr_record:
         return
-    pr_record.ci_status = _ci_status_from_conclusion(
+    ci_status = eh.ci_status_from_conclusion(
         suite.get("status", ""), suite.get("conclusion")
     )
-    session.add(pr_record)
-    session.commit()
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_record.pr_url or "",
-            pr_record.pr_branch,
-        )
-    )
+    eh.handle_ci_status(session, pr_record, ci_status)
 
 
 def _handle_pull_request_review_event(
@@ -712,16 +431,9 @@ def _handle_pull_request_review_event(
     payload: dict[str, Any],
 ) -> None:
     """Record the latest review decision (an attribute) from a review event."""
-    from sqlmodel import select
-
     if payload.get("action") not in ("submitted", "dismissed"):
         return
-    state = (payload.get("review", {}).get("state") or "").lower()
-    decision = {
-        "approved": ReviewDecision.approved,
-        "changes_requested": ReviewDecision.changes_requested,
-        "dismissed": ReviewDecision.review_required,
-    }.get(state)
+    decision = eh.review_state_to_decision(payload.get("review", {}).get("state") or "")
     if decision is None:
         # A plain comment review carries no decision — leave the current value.
         return
@@ -733,29 +445,17 @@ def _handle_pull_request_review_event(
     ).first()
     if not pr_record:
         return
-    pr_record.review_decision = decision
-    session.add(pr_record)
-    session.commit()
-    repo = session.get(Repository, pr_record.repo_id)
-    if not repo:
-        return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
-    events_pub.publish_event(
-        ev.pr_updated(
-            str(repo.org_id),
-            str(repo.id),
-            [str(f.id) for f in pr_fixes],
-            pr_url,
-            pr_record.pr_branch,
-        )
-    )
+    eh.handle_review_decision(session, pr_record, decision)
 
 
 def _handle_installation_repositories_event(
     session: Session,
     payload: dict[str, Any],
 ) -> None:
-    """Handle repos added/removed from an existing installation."""
+    """Handle repos added/removed from an existing installation.
+
+    Webhook-only: installation membership has no external-repo polling analogue.
+    """
     action = payload.get("action")
     installation = payload.get("installation", {})
     installation_id = installation.get("id")
@@ -769,8 +469,6 @@ def _handle_installation_repositories_event(
         added: list[dict[str, Any]] = payload.get("repositories_added", [])
         github_repo_ids = [r["id"] for r in added if r.get("id")]
         if github_repo_ids:
-            from sqlmodel import select
-
             repos = list(
                 session.exec(
                     select(Repository).where(  # type: ignore[attr-defined]
@@ -825,31 +523,6 @@ def _upsert_org_from_installation(
         name=account_login,
         installation_id=installation_id,
     )
-
-
-def _enqueue_static_analysis(
-    repo_id: str,
-    branch: str,
-    commit_sha: str,
-    trigger: AnalysisTrigger,
-    org_id: str = "",
-    force: bool = False,
-) -> None:
-    from app.services.events import publisher as events_pub
-    from app.services.events import schemas as ev
-    from app.workers.tasks.static_analysis import run_static_analysis
-
-    run_static_analysis.delay(
-        repo_id=repo_id,
-        branch=branch,
-        commit_sha=commit_sha,
-        trigger=trigger.value,
-        force=force,
-    )
-    if org_id:
-        events_pub.publish_event(
-            ev.analysis_queued(org_id, repo_id, branch, trigger.value)
-        )
 
 
 _INSTALLATION_SYNC_DEDUP_TTL = 90  # seconds

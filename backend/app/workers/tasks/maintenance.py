@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -12,14 +11,9 @@ from app.models import (
     DynamicAnalysisStatus,
     Fix,
     FixStatus,
-    PullRequest,
-    PullRequestState,
-    Repository,
     TelemetryRun,
 )
 from app.services import state_machines as sm
-from app.services.events import publisher as events_pub
-from app.services.events import schemas as ev
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -114,121 +108,3 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
 @celery_app.task(name="maintenance.sweep_stuck_states", bind=True)
 def sweep_stuck_states(self: object) -> dict[str, int]:  # noqa: ARG001
     return _sweep_stuck_states_impl()
-
-
-def _sync_open_pr_states_impl() -> dict[str, int]:
-    """Reconcile PR state with GitHub for all fix PRs we believe are open.
-
-    Webhooks can be missed (downtime, broker failure); without this, a PR
-    merged or closed while we were away stays "open" in the UI forever.
-    """
-    from app.core.config import settings
-    from app.services.github.app_client import parse_pr_url
-
-    with Session(engine) as session:
-        rows = session.exec(
-            select(PullRequest, Repository)
-            .join(Repository, PullRequest.repo_id == Repository.id)  # type: ignore[arg-type]
-            .where(PullRequest.pr_state == PullRequestState.open)
-            .where(col(PullRequest.pr_url).is_not(None))
-        ).all()
-
-        targets: list[tuple[object, int | None, str, int]] = []
-        for pr_record, repo in rows:
-            parsed = parse_pr_url(pr_record.pr_url or "")
-            if not parsed:
-                continue
-            full_name, pr_number = parsed
-            if repo.installation_id:
-                targets.append(
-                    (pr_record.id, repo.installation_id, full_name, pr_number)
-                )
-            elif repo.is_external and settings.GITHUB_BOT_TOKEN:
-                # External-repo PRs get no webhooks and have no installation, so
-                # reconcile their state with the bot credential (installation_id
-                # None signals the bot path in _fetch_pr_states).
-                targets.append((pr_record.id, None, full_name, pr_number))
-
-        if not targets:
-            return {"synced": 0, "updated": 0}
-
-        states = asyncio.run(_fetch_pr_states(targets))
-
-        updated = 0
-        for pr_id, new_state in states.items():
-            if new_state is None or new_state == PullRequestState.open:
-                continue
-            pr_record = session.get(PullRequest, pr_id)
-            if pr_record is None:
-                continue
-            pr_event = "merge" if new_state == PullRequestState.merged else "close"
-            if not sm.try_advance(pr_record, sm.PullRequestMachine, pr_event):
-                continue
-            pr_record.updated_at = datetime.now(timezone.utc)
-            session.add(pr_record)
-            updated += 1
-
-            repo = session.get(Repository, pr_record.repo_id)
-            pr_fixes = list(
-                session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all()
-            )
-            if repo:
-                events_pub.publish_event(
-                    ev.pr_closed(
-                        str(repo.org_id),
-                        str(repo.id),
-                        str(pr_fixes[0].id) if pr_fixes else str(pr_record.id),
-                        pr_record.pr_url or "",
-                        new_state == PullRequestState.merged,
-                    )
-                )
-
-        if updated:
-            session.commit()
-            logger.info("PR state reconciliation updated %d PR(s)", updated)
-
-        return {"synced": len(targets), "updated": updated}
-
-
-async def _fetch_pr_states(
-    targets: list,
-) -> dict[object, PullRequestState | None]:
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
-
-    r = aioredis.from_url(settings.REDIS_URL)
-    states: dict[object, PullRequestState | None] = {}
-    try:
-        client = GitHubAppClient(redis_client=r)
-        for pr_id, installation_id, full_name, pr_number in targets:
-            try:
-                if installation_id is None:
-                    token = settings.GITHUB_BOT_TOKEN
-                    if not token:
-                        states[pr_id] = None
-                        continue
-                    states[pr_id] = await client.get_pr_state_with_token(
-                        token, full_name, pr_number
-                    )
-                else:
-                    states[pr_id] = await client.get_pr_state(
-                        installation_id, full_name, pr_number
-                    )
-            except Exception:
-                logger.warning(
-                    "Failed to fetch PR state for %s#%s",
-                    full_name,
-                    pr_number,
-                    exc_info=True,
-                )
-                states[pr_id] = None
-    finally:
-        await r.aclose()
-    return states
-
-
-@celery_app.task(name="maintenance.sync_open_pr_states", bind=True)
-def sync_open_pr_states(self: object) -> dict[str, int]:  # noqa: ARG001
-    return _sync_open_pr_states_impl()

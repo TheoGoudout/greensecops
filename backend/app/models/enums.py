@@ -57,6 +57,9 @@ class AnalysisFailureKind(str, enum.Enum):
 class AnalysisTrigger(str, enum.Enum):
     webhook_push = "webhook_push"
     webhook_workflow_run = "webhook_workflow_run"
+    # A push detected by polling an external repo's default-branch head (external
+    # repos receive no webhooks); the polling analogue of ``webhook_push``.
+    polled_push = "polled_push"
     manual = "manual"
     scheduled = "scheduled"
     release = "release"

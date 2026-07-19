@@ -16,8 +16,6 @@ from app.models import (
     IssueSeverity,
     LLMProvider,
     Organization,
-    PullRequest,
-    PullRequestState,
     Repository,
     Rule,
     TelemetryRun,
@@ -198,91 +196,3 @@ def test_sweeper_task_wrapper_runs(db: Session) -> None:  # noqa: ARG001
 
     result = sweep_stuck_states.apply()
     assert "swept_analyses" in result.get()
-
-
-# ─── PR-state reconciliation ─────────────────────────────────────────────────
-
-
-def test_sync_open_pr_states_updates_merged_pr(db: Session) -> None:
-    analysis, fix = _build_chain(db)
-    repo = db.get(Repository, analysis.repo_id)
-    assert repo is not None
-    pr = PullRequest(
-        repo_id=repo.id,
-        pr_branch=f"greensecops/maint-{uuid.uuid4().hex[:8]}",
-        pr_url=f"https://github.com/{repo.full_name}/pull/12",
-        pr_state=PullRequestState.open,
-    )
-    db.add(pr)
-    db.commit()
-    db.refresh(pr)
-    fix.pr_id = pr.id
-    db.add(fix)
-    db.commit()
-
-    from unittest.mock import patch
-
-    from app.workers.tasks.maintenance import _sync_open_pr_states_impl
-
-    events: list = []
-    with (
-        # patch() replaces the async function with an AsyncMock automatically.
-        patch(
-            "app.workers.tasks.maintenance._fetch_pr_states",
-            return_value={pr.id: PullRequestState.merged},
-        ),
-        patch(
-            "app.workers.tasks.maintenance.events_pub.publish_event",
-            side_effect=events.append,
-        ),
-    ):
-        result = _sync_open_pr_states_impl()
-
-    assert result["updated"] >= 1
-    db.refresh(pr)
-    assert pr.pr_state == PullRequestState.merged
-    assert pr.updated_at is not None
-    assert len(events) >= 1
-
-
-def test_fetch_pr_states_handles_success_and_failure(db: Session) -> None:  # noqa: ARG001
-    import asyncio
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    from app.workers.tasks.maintenance import _fetch_pr_states
-
-    fake_redis = MagicMock()
-    fake_redis.aclose = AsyncMock()
-
-    ok_id = uuid.uuid4()
-    bad_id = uuid.uuid4()
-    targets = [
-        (ok_id, 123, "owner/repo", 1),
-        (bad_id, 123, "owner/repo", 2),
-    ]
-
-    with (
-        patch("redis.asyncio.from_url", return_value=fake_redis),
-        patch(
-            "app.services.github.app_client.GitHubAppClient.get_pr_state",
-            new=AsyncMock(side_effect=[PullRequestState.merged, RuntimeError("boom")]),
-        ),
-    ):
-        states = asyncio.run(_fetch_pr_states(targets))
-
-    assert states[ok_id] == PullRequestState.merged
-    assert states[bad_id] is None
-    fake_redis.aclose.assert_awaited()
-
-
-def test_sync_open_pr_states_task_wrapper(db: Session) -> None:  # noqa: ARG001
-    from unittest.mock import patch
-
-    from app.workers.tasks.maintenance import sync_open_pr_states
-
-    with patch(
-        "app.workers.tasks.maintenance._sync_open_pr_states_impl",
-        return_value={"synced": 0, "updated": 0},
-    ):
-        result = sync_open_pr_states.apply()
-    assert result.get() == {"synced": 0, "updated": 0}

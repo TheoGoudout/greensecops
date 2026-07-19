@@ -31,7 +31,7 @@ export type AnalysisPublic = {
 
 export type AnalysisStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_workflows';
 
-export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'manual' | 'scheduled' | 'release';
+export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
 
 export type BatchFixRequest = {
     issue_ids?: (Array<(string)> | null);

@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.workers.tasks.fix_delivery",
         "app.workers.tasks.installation_sync",
         "app.workers.tasks.maintenance",
+        "app.workers.tasks.polling",
     ],
 )
 
@@ -33,6 +34,7 @@ celery_app.conf.update(
         "fix_generation.*": {"queue": "fixes"},
         "fix_delivery.*": {"queue": "fixes"},
         "maintenance.*": {"queue": "analysis"},
+        "polling.*": {"queue": "analysis"},
         "app.workers.tasks.installation_sync.*": {"queue": "analysis"},
     },
     beat_schedule={
@@ -41,10 +43,21 @@ celery_app.conf.update(
             "task": "maintenance.sweep_stuck_states",
             "schedule": crontab(minute=5),  # hourly
         },
-        # Recover PR open/closed/merged transitions from missed webhooks.
-        "sync-open-pr-states": {
-            "task": "maintenance.sync_open_pr_states",
+        # External repos receive no webhooks: poll them frequently so pushes,
+        # PR state, CI, reviews and commands are picked up through the same
+        # handlers a webhook would use.
+        "poll-external-repositories": {
+            "task": "polling.poll_repositories",
+            "schedule": crontab(minute="*/10"),
+            "kwargs": {"external_only": True},
+        },
+        # Missed-webhook safety net: reconcile every enabled repo (installation
+        # repos too) through the same poller, less often. Replaces the former
+        # bespoke maintenance.sync_open_pr_states.
+        "reconcile-all-repositories": {
+            "task": "polling.poll_repositories",
             "schedule": crontab(minute=35, hour="*/6"),
+            "kwargs": {"external_only": False},
         },
         # Nightly reconciliation pass; content dedup keeps unchanged repos cheap.
         "nightly-reanalysis": {

@@ -304,7 +304,7 @@ def test_github_webhook_push_enabled_repo_enqueues(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis"),
+        patch("app.services.github.event_handlers.enqueue_workflow_analysis"),
     ):
         response = client.post(
             WEBHOOK_URL,
@@ -390,7 +390,7 @@ def test_github_webhook_workflow_run_enabled_repo_enqueues(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis"),
+        patch("app.services.github.event_handlers.enqueue_workflow_analysis"),
     ):
         response = client.post(
             WEBHOOK_URL,
@@ -1270,14 +1270,22 @@ def test_github_webhook_installation_activate_publishes_correct_event(
 
 
 def test_enqueue_static_analysis_calls_celery_task() -> None:
+    import uuid
     from unittest.mock import MagicMock
 
-    from app.api.routes.webhooks import _enqueue_static_analysis
+    from app.models import Repository
+    from app.services.github import event_handlers as eh
 
+    repo = Repository(
+        org_id=uuid.uuid4(),
+        github_repo_id=123,
+        full_name="acme/widgets",
+        default_branch="main",
+    )
     mock_task = MagicMock()
     with patch("app.workers.tasks.static_analysis.run_static_analysis", mock_task):
-        _enqueue_static_analysis(
-            repo_id="abc-123",
+        eh.enqueue_workflow_analysis(
+            repo,
             branch="main",
             commit_sha="deadbeef",
             trigger=AnalysisTrigger.webhook_push,
@@ -1461,7 +1469,9 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as enqueue,
+        patch(
+            "app.services.github.event_handlers.enqueue_workflow_analysis"
+        ) as enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
@@ -1469,7 +1479,7 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
 
     assert response.status_code == 200
     enqueue.assert_called_once()
-    assert enqueue.call_args.kwargs["repo_id"] == str(enabled_repo.id)
+    assert enqueue.call_args.args[0].id == enabled_repo.id
     assert enqueue.call_args.kwargs["force"] is True
 
 
@@ -1537,7 +1547,9 @@ def test_github_webhook_unknown_command_is_ignored(
     }
     with (
         patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
-        patch("app.api.routes.webhooks._enqueue_static_analysis") as enqueue,
+        patch(
+            "app.services.github.event_handlers.enqueue_workflow_analysis"
+        ) as enqueue,
     ):
         response = client.post(
             WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "issue_comment"}
