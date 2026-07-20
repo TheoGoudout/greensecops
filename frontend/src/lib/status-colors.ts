@@ -1,4 +1,10 @@
-import type { DynamicAnalysisStatus, FixStatus, IssueStatus } from "@/client"
+import type {
+  CIStatus,
+  DynamicAnalysisStatus,
+  FixStatus,
+  IssueStatus,
+  ReviewDecision,
+} from "@/client"
 
 // One palette of semantic status classes, mapped per domain below so the
 // Tailwind tokens are defined exactly once.
@@ -74,6 +80,54 @@ export function issueStatusLabel(status: IssueStatus): string {
       return "Fix in progress"
     default:
       return status.replace(/_/g, " ")
+  }
+}
+
+export function ciStatusColor(status: CIStatus): string {
+  switch (status) {
+    case "success":
+      return STATUS_CLASSES.success
+    case "failure":
+      return STATUS_CLASSES.failed
+    case "pending":
+      return STATUS_CLASSES.pending
+    default:
+      return STATUS_CLASSES.muted
+  }
+}
+
+export function ciStatusLabel(status: CIStatus): string {
+  switch (status) {
+    case "success":
+      return "CI passing"
+    case "failure":
+      return "CI failing"
+    case "pending":
+      return "CI running"
+    default:
+      return "No CI"
+  }
+}
+
+export function reviewDecisionColor(decision: ReviewDecision): string {
+  switch (decision) {
+    case "approved":
+      return STATUS_CLASSES.success
+    case "changes_requested":
+      return STATUS_CLASSES.failed
+    default:
+      return STATUS_CLASSES.pending
+  }
+}
+
+export function reviewDecisionLabel(decision: ReviewDecision): string {
+  switch (decision) {
+    case "approved":
+      return "Approved"
+    case "changes_requested":
+      return "Changes requested"
+    default:
+      return "Review required"
   }
 }
 

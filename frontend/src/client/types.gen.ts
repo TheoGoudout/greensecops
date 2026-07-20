@@ -446,6 +446,15 @@ export type AnalysesTriggerAnalysisResponse = ({
     [key: string]: (string);
 });
 
+export type AnalysesReanalyzeForWorkflowData = {
+    force?: boolean;
+    workflowFileId: string;
+};
+
+export type AnalysesReanalyzeForWorkflowResponse = ({
+    [key: string]: (string);
+});
+
 export type AnalysesReanalyzeAllResponse = ({
     [key: string]: (string);
 });

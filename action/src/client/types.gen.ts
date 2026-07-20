@@ -2139,6 +2139,44 @@ export type AnalysesTriggerAnalysisResponses = {
 
 export type AnalysesTriggerAnalysisResponse = AnalysesTriggerAnalysisResponses[keyof AnalysesTriggerAnalysisResponses];
 
+export type AnalysesReanalyzeForWorkflowData = {
+    body?: never;
+    path: {
+        /**
+         * Workflow File Id
+         */
+        workflow_file_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/analyses/reanalyze-for-workflow/{workflow_file_id}';
+};
+
+export type AnalysesReanalyzeForWorkflowErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnalysesReanalyzeForWorkflowError = AnalysesReanalyzeForWorkflowErrors[keyof AnalysesReanalyzeForWorkflowErrors];
+
+export type AnalysesReanalyzeForWorkflowResponses = {
+    /**
+     * Response Analyses-Reanalyze For Workflow
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type AnalysesReanalyzeForWorkflowResponse = AnalysesReanalyzeForWorkflowResponses[keyof AnalysesReanalyzeForWorkflowResponses];
+
 export type AnalysesReanalyzeAllData = {
     body?: never;
     path?: never;

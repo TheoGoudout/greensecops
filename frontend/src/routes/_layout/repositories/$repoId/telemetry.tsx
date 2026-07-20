@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_layout/repositories/$repoId/telemetry")(
   {
     component: TelemetryPage,
     head: () => ({
-      meta: [{ title: "Telemetry - GreenSecOps" }],
+      meta: [{ title: "Telemetry analysis - GreenSecOps" }],
     }),
   },
 )

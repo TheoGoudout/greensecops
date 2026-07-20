@@ -76,7 +76,9 @@ test.describe("Error Handling — Extended", () => {
   }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -84,13 +86,21 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
+    await page.route("**/api/v1/analyses/**", (route) => {
+      route.fulfill({ json: [] })
+    })
+    await page.route("**/api/v1/issues/**", (route) => {
+      route.fulfill({ json: [] })
+    })
     await page.route("**/api/v1/fixes/**", (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
-    await expect(page.getByText(/no fixes|error|failed/i).first()).toBeVisible({
+    await expect(
+      page.getByText(/no workflow files|no fixes|error|failed/i).first(),
+    ).toBeVisible({
       timeout: 15000,
     })
     await expect(page.locator("body")).not.toContainText("Unhandled")

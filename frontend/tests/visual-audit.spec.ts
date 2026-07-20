@@ -54,28 +54,18 @@ const PAGES: PageConfig[] = [
   { name: "repositories", route: "/repositories", auth: true },
   { name: "repository-detail", route: `/repositories/${REPO_ID}`, auth: true },
   {
-    name: "repository-analyses",
-    route: `/repositories/${REPO_ID}/analyses`,
+    name: "repository-static-analysis",
+    route: `/repositories/${REPO_ID}/static-analysis`,
     auth: true,
   },
   {
-    name: "repository-issues",
-    route: `/repositories/${REPO_ID}/issues`,
-    auth: true,
-  },
-  {
-    name: "repository-fixes",
-    route: `/repositories/${REPO_ID}/fixes`,
+    name: "repository-telemetry",
+    route: `/repositories/${REPO_ID}/telemetry`,
     auth: true,
   },
   {
     name: "repository-pull-requests",
     route: `/repositories/${REPO_ID}/pull-requests`,
-    auth: true,
-  },
-  {
-    name: "repository-workflow",
-    route: `/repositories/${REPO_ID}/workflow`,
     auth: true,
   },
   { name: "analysis-detail", route: `/analyses/${ANALYSIS_ID}`, auth: true },

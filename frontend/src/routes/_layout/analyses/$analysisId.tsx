@@ -94,11 +94,14 @@ function AnalysisDetail() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link
-            to={analysis?.repo_id ? "/repositories/$repoId" : "/repositories"}
+            to={
+              analysis?.repo_id
+                ? "/repositories/$repoId/static-analysis"
+                : "/repositories"
+            }
             params={
               analysis?.repo_id ? { repoId: analysis.repo_id } : undefined
             }
-            search={analysis?.repo_id ? { tab: "analyses" } : undefined}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

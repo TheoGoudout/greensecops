@@ -7,7 +7,9 @@ import {
   MOCK_ISSUE_RELIABILITY,
   MOCK_ISSUE_SECURITY,
   MOCK_ISSUE_WITH_FIX,
+  MOCK_PR_OPEN,
   MOCK_REPO,
+  MOCK_WORKFLOW_FILE,
   mockBilling,
   mockEvents,
   mockRules,
@@ -28,18 +30,24 @@ test.describe("Repository Detail", () => {
       analyses?: unknown[]
       issues?: unknown[]
       fixes?: unknown[]
+      workflowFiles?: unknown[]
+      pullRequests?: unknown[]
     } = {},
   ) {
     const {
       analyses = [MOCK_ANALYSIS],
       issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       fixes = [],
+      workflowFiles = [MOCK_WORKFLOW_FILE],
+      pullRequests = [],
     } = opts
 
     return Promise.all([
       page.route("**/api/v1/repositories/**", (route) => {
         const url = route.request().url()
-        if (url.includes("/integrate-action")) {
+        if (url.includes("/workflow-files")) {
+          route.fulfill({ json: workflowFiles })
+        } else if (url.includes("/integrate-action")) {
           route.fulfill({
             json: { pr_url: "https://github.com/acme/web-app/pull/99" },
           })
@@ -71,13 +79,17 @@ test.describe("Repository Detail", () => {
       page.route("**/api/v1/fixes/**", (route) => {
         const url = route.request().url()
         const method = route.request().method()
-        if (method === "POST" && url.includes("for-repo")) {
+        if (method === "POST" && url.includes("/sync-pr-status")) {
+          route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
+        } else if (method === "POST" && url.includes("for-repo")) {
           route.fulfill({
             status: 202,
             json: { queued: issues.length, skipped: 0 },
           })
         } else if (method === "POST" && url.includes("/deliver")) {
           route.fulfill({ json: { status: "delivering" } })
+        } else if (url.includes("/pull-requests/")) {
+          route.fulfill({ json: pullRequests })
         } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
           const id = url.split("/").pop()
           const fix = fixes.find((f: any) => f.id === id) ?? fixes[0]
@@ -102,104 +114,85 @@ test.describe("Repository Detail", () => {
     ).toBeVisible()
   })
 
-  test("Analyses tab shows analysis rows", async ({ page }) => {
+  test("Static analysis tab shows workflow card with status", async ({
+    page,
+  }) => {
     await setupRepoMocks(page)
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
-    await expect(page.getByText("completed")).toBeVisible()
-    await expect(page.getByText("ci.yml")).toBeVisible()
+    // Default route redirects to the merged Static analysis tab.
+    await expect(page).toHaveURL(new RegExp(`/${MOCK_REPO.id}/static-analysis`))
+    await expect(page.getByText("ci.yml").first()).toBeVisible()
+    await expect(page.getByText("completed").first()).toBeVisible()
   })
 
-  test("Analyses tab empty state", async ({ page }) => {
-    await setupRepoMocks(page, { analyses: [] })
-
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
-
-    await expect(page.getByText("No analyses found")).toBeVisible()
-  })
-
-  test("Issues tab shows issues grouped by workflow", async ({ page }) => {
+  test("Static analysis shows issues inside the workflow card", async ({
+    page,
+  }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
-    await expect(page.getByText("Workflow:")).toBeVisible()
-    await expect(page.getByText("ci.yml")).toBeVisible()
     await expect(
       page.getByText("Workflow uses overly permissive token permissions."),
     ).toBeVisible()
   })
 
-  test("Issues tab checkbox selection and Fix selected button", async ({
+  test("Static analysis empty state when no workflow files", async ({
     page,
   }) => {
-    const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
-    let fixCalled = false
-    await mockUserMe(page)
-    await page.route("**/api/v1/repositories/**", (route) => {
-      if (route.request().url().includes("/branches")) {
-        route.fulfill({ json: ["main"] })
-      } else {
-        route.fulfill({ json: MOCK_REPO })
-      }
-    })
-    await page.route("**/api/v1/analyses/**", (route) => {
-      route.fulfill({ json: [MOCK_ANALYSIS] })
-    })
-    await page.route("**/api/v1/issues/**", (route) => {
-      route.fulfill({ json: issues })
-    })
-    await page.route("**/api/v1/fixes/**", (route) => {
-      const method = route.request().method()
-      if (method === "POST") {
-        fixCalled = true
-        route.fulfill({
-          status: 202,
-          json: { queued: 2, skipped: 0 },
-        })
-      } else {
-        route.fulfill({ json: [] })
-      }
-    })
+    await setupRepoMocks(page, { workflowFiles: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+
+    await expect(page.getByText("No workflow files found")).toBeVisible()
+  })
+
+  test("Analysis history section lists analyses", async ({ page }) => {
+    await setupRepoMocks(page)
+
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+
+    await page.getByRole("button", { name: /Analysis history/ }).click()
+    await expect(page.getByText("manual")).toBeVisible()
+  })
+
+  test("Fix selected button queues fixes", async ({ page }) => {
+    const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
+    await setupRepoMocks(page, { issues })
+
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     const fixBtn = page.getByRole("button", { name: /Fix selected/ })
     await expect(fixBtn).toBeVisible()
     await fixBtn.click()
 
-    expect(fixCalled).toBe(true)
     await expect(page.getByText(/Queued 2 fix/)).toBeVisible()
   })
 
-  test("Issues tab empty state", async ({ page }) => {
-    await setupRepoMocks(page, { issues: [] })
-
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
-
-    await expect(page.getByText("No issues found.")).toBeVisible()
-  })
-
-  test("Fixes tab shows fixes with status and View PR link", async ({
+  test("Static analysis shows fix status and View PR in the card", async ({
     page,
   }) => {
     await setupRepoMocks(page, {
-      issues: [MOCK_ISSUE_WITH_FIX, MOCK_ISSUE_RELIABILITY],
-      fixes: [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
+      issues: [MOCK_ISSUE_WITH_FIX],
+      fixes: [MOCK_FIX_READY],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("ready").first()).toBeVisible()
-    await expect(page.getByText("delivered").first()).toBeVisible()
-    await expect(page.getByRole("link", { name: "View PR" })).toBeVisible()
   })
 
-  test("Fixes tab Create PR for all workflows button", async ({ page }) => {
+  test("Create PR for all workflows button delivers repo-wide", async ({
+    page,
+  }) => {
     let deliverCalled = false
     await page.route("**/api/v1/repositories/**", (route) => {
-      if (route.request().url().includes("/branches")) {
+      const url = route.request().url()
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else {
         route.fulfill({ json: MOCK_REPO })
@@ -217,12 +210,14 @@ test.describe("Repository Detail", () => {
       if (method === "POST" && url.includes("deliver-for-repo")) {
         deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })
+      } else if (url.includes("/pull-requests/")) {
+        route.fulfill({ json: [] })
       } else {
         route.fulfill({ json: [MOCK_FIX_READY] })
       }
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     const btn = page.getByRole("button", {
       name: "Create PR for all workflows",
@@ -234,18 +229,10 @@ test.describe("Repository Detail", () => {
     await expect(page.getByText("Repo-wide PR queued")).toBeVisible()
   })
 
-  test("Fixes tab empty state", async ({ page }) => {
-    await setupRepoMocks(page, { fixes: [] })
-
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
-
-    await expect(page.getByText("No fixes yet.")).toBeVisible()
-  })
-
-  test("Pull Requests tab shows PRs", async ({ page }) => {
+  test("PRs tab shows pull requests", async ({ page }) => {
     await setupRepoMocks(page, {
-      issues: [MOCK_ISSUE_RELIABILITY],
       fixes: [MOCK_FIX_DELIVERED],
+      pullRequests: [MOCK_PR_OPEN],
     })
 
     await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
@@ -254,8 +241,8 @@ test.describe("Repository Detail", () => {
     await expect(page.getByText("open").first()).toBeVisible()
   })
 
-  test("Pull Requests tab empty state", async ({ page }) => {
-    await setupRepoMocks(page, { fixes: [] })
+  test("PRs tab empty state", async ({ page }) => {
+    await setupRepoMocks(page, { fixes: [], pullRequests: [] })
 
     await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
 

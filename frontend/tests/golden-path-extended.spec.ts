@@ -5,6 +5,7 @@ import {
   MOCK_ISSUE_RELIABILITY,
   MOCK_ISSUE_SECURITY,
   MOCK_REPO,
+  MOCK_WORKFLOW_FILE,
   mockBilling,
   mockEvents,
   mockRules,
@@ -24,7 +25,9 @@ test.describe("Golden Path — Extended", () => {
   }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -74,9 +77,17 @@ test.describe("Golden Path — Extended", () => {
     await expect(page.getByText("Analysis queued")).toBeVisible()
 
     await page.getByText("acme/web-app").first().click()
-    await expect(page).toHaveURL(new RegExp(`/repositories/${MOCK_REPO.id}`))
+    await expect(page).toHaveURL(
+      new RegExp(`/repositories/${MOCK_REPO.id}/static-analysis`),
+    )
 
-    await page.getByText("ci.yml").first().click()
+    // Analysis rows live in the collapsible history; open it and follow the
+    // row into the analysis detail page.
+    await page.getByRole("button", { name: /Analysis history/ }).click()
+    await page
+      .getByRole("link", { name: /ci\.yml/ })
+      .first()
+      .click()
     await expect(page).toHaveURL(new RegExp(`/analyses/${MOCK_ANALYSIS.id}`))
 
     await expect(
@@ -91,7 +102,9 @@ test.describe("Golden Path — Extended", () => {
   test("repo detail: batch fix + workflow PR delivery", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -125,7 +138,7 @@ test.describe("Golden Path — Extended", () => {
       }
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     const fixBtn = page.getByRole("button", { name: /Fix selected/ })
     await expect(fixBtn).toBeVisible()
@@ -133,14 +146,16 @@ test.describe("Golden Path — Extended", () => {
     expect(batchFixCalled).toBe(true)
     await expect(page.getByText(/Queued 2 fix/)).toBeVisible()
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/fixes`)
+    // The ready fix now surfaces in the workflow card footer on the same tab.
     await expect(page.getByText("ready").first()).toBeVisible()
   })
 
   test("repo detail: integrate action flow", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/integrate-action")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/integrate-action")) {
         route.fulfill({
           json: { pr_url: "https://github.com/acme/web-app/pull/99" },
         })

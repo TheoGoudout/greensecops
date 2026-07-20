@@ -17,6 +17,7 @@ from app.models import (
     AnalysisPublic,
     AnalysisStatus,
     Repository,
+    WorkflowFile,
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
@@ -99,6 +100,41 @@ def trigger_analysis(
         ev.analysis_queued(str(repo.org_id), str(repo_id), effective_branch, "manual")
     )
     return {"status": "queued", "repo_id": str(repo_id)}
+
+
+@router.post("/reanalyze-for-workflow/{workflow_file_id}", status_code=202)
+def reanalyze_for_workflow(
+    workflow_file_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    force: bool = True,
+) -> dict[str, str]:
+    """Re-run static analysis for a single workflow file.
+
+    Per-workflow analog of ``trigger_analysis`` (which is repo/branch-wide):
+    the worker re-fetches and re-evaluates just this file on its own branch,
+    consistent with the per-workflow fix (``regenerate-for-workflow``) and
+    delivery (``deliver-for-workflow``) endpoints.
+    """
+    wf_file = get_or_404(session, WorkflowFile, workflow_file_id)
+    repo = authorize_repo(session, current_user, wf_file.repo_id)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    from app.api.routes.billing import enforce_quota
+
+    enforce_quota(session, current_user, repo.org_id, "analyses")
+    effective_branch = wf_file.branch or repo.default_branch
+    run_static_analysis.delay(
+        repo_id=str(repo.id),
+        branch=effective_branch,
+        trigger="manual",
+        workflow_file_id=str(workflow_file_id),
+        force=force,
+    )
+    events_pub.publish_event(
+        ev.analysis_queued(str(repo.org_id), str(repo.id), effective_branch, "manual")
+    )
+    return {"status": "queued", "workflow_file_id": str(workflow_file_id)}
 
 
 @router.post(

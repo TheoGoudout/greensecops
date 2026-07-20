@@ -30,11 +30,9 @@ import { NavGroup, type NavItem } from "./NavGroup"
 import { User } from "./User"
 
 const repoSubItems = [
-  { title: "Analyses", segment: "analyses" },
-  { title: "Issues", segment: "issues" },
-  { title: "Workflow", segment: "workflow" },
-  { title: "Fixes", segment: "fixes" },
-  { title: "Pull Requests", segment: "pull-requests" },
+  { title: "Static analysis", segment: "static-analysis" },
+  { title: "Telemetry analysis", segment: "telemetry" },
+  { title: "PRs", segment: "pull-requests" },
 ] as const
 
 function RepoSubNav({ repoId }: { repoId: string }) {

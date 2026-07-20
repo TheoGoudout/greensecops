@@ -241,7 +241,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     })
 
     await page.goto(
-      `/repositories/${MOCK_ISSUE_WITH_FIX.analysis_id.replace("analysis", "repo")}/fixes`,
+      `/repositories/${MOCK_ISSUE_WITH_FIX.analysis_id.replace("analysis", "repo")}/static-analysis`,
     )
 
     await expect(page.locator("body")).not.toContainText("Something went wrong")

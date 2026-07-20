@@ -123,6 +123,40 @@ export const MOCK_REPO_NO_ANALYSES = {
   grade: null,
 }
 
+// ── Workflow files ────────────────────────────────────────────────────
+const WORKFLOW_RAW_CONTENT =
+  "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4"
+
+export const MOCK_WORKFLOW_FILE = {
+  id: ID.workflowFile,
+  path: ".github/workflows/ci.yml",
+  branch: "main",
+  raw_content: WORKFLOW_RAW_CONTENT,
+}
+
+export const MOCK_WORKFLOW_FILE_DEPLOY = {
+  id: ID.workflowFileDeploy,
+  path: ".github/workflows/deploy.yml",
+  branch: "main",
+  raw_content: WORKFLOW_RAW_CONTENT,
+}
+
+// ── Pull requests (PullRequestPublic) ─────────────────────────────────
+export const MOCK_PR_OPEN = {
+  id: "00000000-0000-0000-0000-000000000090",
+  repo_id: ID.repo,
+  pr_branch: "greensecops/fixes-wf-00000000",
+  pr_url: "https://github.com/acme/web-app/pull/42",
+  pr_state: "open" as const,
+  ci_status: "success" as const,
+  review_decision: "approved" as const,
+  mergeable_state: "clean",
+  externally_modified: false,
+  comment_url: null,
+  created_at: "2024-01-02T10:03:00Z",
+  updated_at: "2024-01-02T10:04:00Z",
+}
+
 // ── Analyses ──────────────────────────────────────────────────────────
 export const MOCK_ANALYSIS = {
   id: ID.analysis,
@@ -608,7 +642,9 @@ export async function mockRepositories(
 ) {
   await page.route("**/api/v1/repositories/**", (route) => {
     const url = route.request().url()
-    if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+    if (url.includes("/workflow-files")) {
+      route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+    } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const repo = repos.find((r) => r.id === id) ?? repos[0]
       route.fulfill({ json: repo })
@@ -665,16 +701,23 @@ export async function mockIssues(
 export async function mockFixes(
   page: Page,
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
+  pullRequests: unknown[] = [],
 ) {
   await page.route("**/api/v1/fixes/**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
-    if (method === "POST" && url.includes("/generate")) {
+    if (method === "POST" && url.includes("/sync-pr-status")) {
+      route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
+    } else if (method === "POST" && url.includes("/regenerate")) {
       route.fulfill({ status: 202, json: { status: "queued" } })
+    } else if (method === "POST" && url.includes("/generate")) {
+      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
     } else if (method === "POST" && url.includes("/deliver")) {
       route.fulfill({ json: { status: "delivering" } })
     } else if (method === "DELETE") {
       route.fulfill({ status: 204 })
+    } else if (url.includes("/pull-requests/")) {
+      route.fulfill({ json: pullRequests })
     } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const fix = fixes.find((f) => f.id === id) ?? fixes[0]

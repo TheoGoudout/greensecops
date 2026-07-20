@@ -174,10 +174,12 @@ terminal); dynamic analysis is a formal machine (§6).
 **Still open:** the broker-queue window *before* the worker picks the task up is
 still SSE-only (a per-row `queued` would need a parent "analysis run" entity);
 in-place row-reuse on `retry` awaits a per-row worker — today users re-run via
-the repo-level `POST /analyses/trigger/{repo_id}`, and the
-`retry-transient-analyses` beat re-runs transient failures at repo/branch
-scope with fresh rows (it deliberately does **not** fire `retry` on the old
-row, which would only be swept back to `failed`).
+the repo-level `POST /analyses/trigger/{repo_id}` or, for a single workflow
+file, `POST /analyses/reanalyze-for-workflow/{workflow_file_id}` (the worker
+already accepts a `workflow_file_id` and scopes the run to that file's own
+branch), and the `retry-transient-analyses` beat re-runs transient failures at
+repo/branch scope with fresh rows (it deliberately does **not** fire `retry` on
+the old row, which would only be swept back to `failed`).
 
 ---
 
