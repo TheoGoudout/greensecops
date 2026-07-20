@@ -98,7 +98,7 @@ test.describe("Dashboard", () => {
     await page.getByText("acme/web-app").click()
 
     await expect(page).toHaveURL(
-      new RegExp(`/repositories/${MOCK_REPO.id}/analyses`),
+      new RegExp(`/repositories/${MOCK_REPO.id}/static-analysis`),
     )
   })
 

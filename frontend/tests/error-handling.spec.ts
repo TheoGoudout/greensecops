@@ -82,7 +82,9 @@ test.describe("Error Handling", () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 10000 })
   })
 
-  test("API 500 shows error state on repo issues page", async ({ page }) => {
+  test("API 500 shows error state on repo static analysis page", async ({
+    page,
+  }) => {
     await mockUserMe(page, MOCK_USER)
     await mockEvents(page)
     await mockBilling(page)
@@ -120,9 +122,9 @@ test.describe("Error Handling", () => {
       route.fulfill({ json: [] })
     })
 
-    await page.goto(`/repositories/${repoId}/issues`)
+    await page.goto(`/repositories/${repoId}/static-analysis`)
 
-    await expect(page.getByText("No issues found.")).toBeVisible({
+    await expect(page.getByText("No workflow files found")).toBeVisible({
       timeout: 15000,
     })
   })

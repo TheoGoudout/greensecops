@@ -313,3 +313,63 @@ def test_trigger_analysis_repo_not_found(
     # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Repository not found"
+
+
+# ─── POST /analyses/reanalyze-for-workflow/{workflow_file_id} ─────────────────
+
+
+def test_reanalyze_for_workflow_success(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    workflow_file: WorkflowFile,
+) -> None:
+    # Act
+    with patch(
+        "app.workers.tasks.static_analysis.run_static_analysis.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/analyses/reanalyze-for-workflow/{workflow_file.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert — the worker is scoped to just this workflow file, forced.
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["workflow_file_id"] == str(workflow_file.id)
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs.get("workflow_file_id") == str(workflow_file.id)
+    assert mock_delay.call_args.kwargs.get("repo_id") == str(repo.id)
+    assert mock_delay.call_args.kwargs.get("force") is True
+
+
+def test_reanalyze_for_workflow_can_opt_out_of_force(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    workflow_file: WorkflowFile,
+) -> None:
+    with patch(
+        "app.workers.tasks.static_analysis.run_static_analysis.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/analyses/reanalyze-for-workflow/{workflow_file.id}",
+            params={"force": "false"},
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert mock_delay.call_args.kwargs.get("force") is False
+
+
+def test_reanalyze_for_workflow_not_found(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    with patch("app.workers.tasks.static_analysis.run_static_analysis.delay"):
+        response = client.post(
+            f"{settings.API_V1_STR}/analyses/reanalyze-for-workflow/{uuid.uuid4()}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 404

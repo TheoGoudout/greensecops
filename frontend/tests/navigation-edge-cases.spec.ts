@@ -82,9 +82,14 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
     await mockUserMe(page, MOCK_SUPERUSER)
     await setupAllMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/analyses`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
-    await page.getByText("ci.yml").first().click()
+    // Analysis rows live in the collapsible history; the row links to detail.
+    await page.getByRole("button", { name: /Analysis history/ }).click()
+    await page
+      .getByRole("link", { name: /ci\.yml/ })
+      .first()
+      .click()
 
     await expect(page).toHaveURL(new RegExp(`/analyses/${MOCK_ANALYSIS.id}`))
     await expect(page.locator("body")).not.toContainText("Something went wrong")

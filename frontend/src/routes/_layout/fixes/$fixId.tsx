@@ -96,9 +96,10 @@ function FixDetail() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            to={repoId ? "/repositories/$repoId" : "/repositories"}
+            to={
+              repoId ? "/repositories/$repoId/static-analysis" : "/repositories"
+            }
             params={repoId ? { repoId } : undefined}
-            search={repoId ? { tab: "fixes" } : undefined}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

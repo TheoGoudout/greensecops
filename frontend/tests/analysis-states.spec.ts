@@ -128,6 +128,8 @@ test.describe("Analysis States", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
+    // The per-run analysis list is now the collapsible "Analysis history".
+    await page.getByRole("button", { name: /Analysis history/ }).click()
     await expect(page.getByText("pending").first()).toBeVisible()
     await expect(page.getByText("failed").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -154,6 +156,8 @@ test.describe("Analysis States", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
+    // Both files appear as rows in the collapsible "Analysis history".
+    await page.getByRole("button", { name: /Analysis history/ }).click()
     await expect(page.getByText("ci.yml").first()).toBeVisible()
     await expect(page.getByText("deploy.yml").first()).toBeVisible()
   })

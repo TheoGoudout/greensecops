@@ -37,10 +37,12 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
     await expect(
       page.getByText("Job 'build' has no timeout-minutes set."),
@@ -57,7 +59,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("critical").first()).toBeVisible()
     await expect(page.getByText("high").first()).toBeVisible()
@@ -71,7 +73,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("🔒").first()).toBeVisible()
     await expect(page.getByText("🛡️").first()).toBeVisible()
@@ -83,7 +85,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_CONTEXT] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText("Job 'build' has no timeout-minutes set."),
@@ -98,10 +100,12 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_PENDING_FIX] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
     await expect(page.getByText(/queued/i)).toHaveCount(0)
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -112,7 +116,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FAILED_FIX] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText("Job 'lint' has no timeout-minutes set."),
@@ -129,7 +133,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_DELIVERED_FIX] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText("Job 'deploy' has no timeout-minutes set."),
@@ -150,7 +154,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page
@@ -192,15 +196,17 @@ test.describe("Issue Filters and Display", () => {
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("empty issues state shown when all issues resolved", async ({
+  test("workflow card renders with no issues when all resolved", async ({
     page,
   }) => {
     await page.route("**/api/v1/issues/**", (route) => {
       route.fulfill({ json: [] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
-    await expect(page.getByText("No issues found.")).toBeVisible()
+    // The workflow file still renders; there are just no issue rows to manage.
+    await expect(page.getByText("ci.yml").first()).toBeVisible()
+    await expect(page.getByText(/Manage \d+ issue/)).toHaveCount(0)
   })
 })

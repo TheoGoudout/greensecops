@@ -21,6 +21,15 @@ const MOCK_ANALYSIS = {
   triggered_by: "push",
   created_at: "2024-01-02T10:00:00Z",
   workflow_file_id: "00000000-0000-0000-0000-000000000020",
+  workflow_file_path: ".github/workflows/ci.yml",
+}
+
+const MOCK_WORKFLOW_FILE = {
+  id: MOCK_ANALYSIS.workflow_file_id,
+  path: ".github/workflows/ci.yml",
+  branch: "main",
+  raw_content:
+    "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4",
 }
 
 const MOCK_ISSUE = {
@@ -30,10 +39,11 @@ const MOCK_ISSUE = {
   rule_slug: "missing_timeout",
   severity: "high",
   category: "reliability",
-  line_start: 12,
-  line_end: 12,
+  line_start: 5,
+  line_end: 5,
   message: "Job 'build' has no timeout-minutes set.",
   context: null,
+  workflow_file_path: ".github/workflows/ci.yml",
 }
 
 const MOCK_FIX = {
@@ -66,7 +76,9 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
     // (not the { data: [...], count: N } envelope).
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -116,11 +128,11 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   test("repo issues page loads and shows issue with severity", async ({
     page,
   }) => {
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
     await expect(page).toHaveURL(
-      new RegExp(`/repositories/${MOCK_REPO.id}/issues`),
+      new RegExp(`/repositories/${MOCK_REPO.id}/static-analysis`),
     )
-    await expect(page.getByText("missing_timeout")).toBeVisible()
+    await expect(page.getByText("missing_timeout").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
@@ -138,8 +150,8 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       route.fulfill({ json: { ...MOCK_FIX, status: "rejected" } })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/issues`)
-    await expect(page.getByText("missing_timeout")).toBeVisible()
+    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await expect(page.getByText("missing_timeout").first()).toBeVisible()
     expect(rejectCalled).toBe(false)
   })
 })

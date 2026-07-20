@@ -5,7 +5,7 @@ import {
   labelForBranch,
   repoFixBranch,
   workflowFixBranch,
-} from "./fixes"
+} from "@/lib/delivery"
 
 function makePr(overrides: Partial<PullRequestPublic> = {}): PullRequestPublic {
   return {

@@ -6,6 +6,7 @@ import {
   MOCK_REPO_DISABLED,
   MOCK_REPO_EXTERNAL,
   MOCK_REPO_NO_ANALYSES,
+  MOCK_WORKFLOW_FILE,
   mockBilling,
   mockEvents,
   mockFixes,
@@ -45,7 +46,10 @@ test.describe("Repository Edge Cases", () => {
 
   test("external repo detail page loads without crash", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
-      if (route.request().url().includes("/branches")) {
+      const url = route.request().url()
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else {
         route.fulfill({ json: MOCK_REPO_EXTERNAL })
@@ -85,7 +89,9 @@ test.describe("Repository Edge Cases", () => {
   test("repo with no analyses shows no grade", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO_NO_ANALYSES })
@@ -100,7 +106,7 @@ test.describe("Repository Edge Cases", () => {
     await page.goto(`/repositories/${MOCK_REPO_NO_ANALYSES.id}`)
 
     await expect(page.getByText("acme/new-repo")).toBeVisible()
-    await expect(page.getByText("No analyses found")).toBeVisible()
+    await expect(page.getByText("No workflow files found")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
@@ -109,7 +115,9 @@ test.describe("Repository Edge Cases", () => {
   }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -128,6 +136,7 @@ test.describe("Repository Edge Cases", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
+    // The workflow card surfaces the file's latest analysis status.
     await expect(page.getByText("failed").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
@@ -135,7 +144,9 @@ test.describe("Repository Edge Cases", () => {
   test("repo with pending analysis shows pending status", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -154,6 +165,7 @@ test.describe("Repository Edge Cases", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
+    // The workflow card surfaces the file's latest analysis status.
     await expect(page.getByText("pending").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
