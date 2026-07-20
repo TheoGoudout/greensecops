@@ -135,7 +135,9 @@ test.describe("Repository Detail", () => {
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
   })
 

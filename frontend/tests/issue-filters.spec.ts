@@ -40,7 +40,9 @@ test.describe("Issue Filters and Display", () => {
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
     await expect(
       page.getByText("Job 'build' has no timeout-minutes set."),
@@ -101,7 +103,9 @@ test.describe("Issue Filters and Display", () => {
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
     await expect(page.getByText(/queued/i)).toHaveCount(0)
     await expect(page.locator("body")).not.toContainText("Something went wrong")

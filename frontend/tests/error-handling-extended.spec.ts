@@ -109,7 +109,9 @@ test.describe("Error Handling — Extended", () => {
   test("analyses API 500 shows empty state not crash", async ({ page }) => {
     await page.route("**/api/v1/repositories/**", (route) => {
       const url = route.request().url()
-      if (url.includes("/branches")) {
+      if (url.includes("/workflow-files")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
       } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -123,7 +125,9 @@ test.describe("Error Handling — Extended", () => {
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
-    await expect(page.getByText(/no analyses|error/i).first()).toBeVisible({
+    await expect(
+      page.getByText(/no workflow files|no analyses|error/i).first(),
+    ).toBeVisible({
       timeout: 15000,
     })
     await expect(page.locator("body")).not.toContainText("Unhandled")
@@ -153,6 +157,15 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
+    // Delay the workflow-files fetch so the loading skeleton is observable
+    // (the static-analysis tab keys its skeleton off workflow files).
+    await page.route(
+      "**/api/v1/repositories/*/workflow-files*",
+      async (route) => {
+        await new Promise((r) => setTimeout(r, 3000))
+        route.fulfill({ json: [] })
+      },
+    )
     await page.route("**/api/v1/analyses/**", async (route) => {
       await new Promise((r) => setTimeout(r, 3000))
       route.fulfill({ json: [] })
@@ -163,7 +176,7 @@ test.describe("Error Handling — Extended", () => {
     await expect(
       page
         .locator(".animate-pulse, [data-loading]")
-        .or(page.getByText("No analyses found"))
+        .or(page.getByText(/no workflow files|no analyses/i))
         .first(),
     ).toBeVisible({
       timeout: 10000,
