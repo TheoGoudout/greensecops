@@ -9,10 +9,15 @@ import {
   MemoryStick,
   Network,
   Play,
+  Puzzle,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { type TelemetryRunPublic, TelemetryService } from "@/client"
+import {
+  RepositoriesService,
+  type TelemetryRunPublic,
+  TelemetryService,
+} from "@/client"
 import { RuntimeFindingRow } from "@/components/RuntimeFindingRow"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
@@ -184,6 +189,27 @@ function TelemetryPage() {
       }),
   })
 
+  // "Integrate action" opens a PR adding the GreenSecOps action to the repo.
+  // It lives on this tab because telemetry only flows once the action runs.
+  const integrateActionMutation = useMutation({
+    mutationFn: () => RepositoriesService.integrateAction({ repoId }),
+    onSuccess: (data) => {
+      toast.success("PR opened", {
+        description: data.pr_url,
+        action: data.pr_url
+          ? {
+              label: "Open",
+              onClick: () => window.open(data.pr_url, "_blank"),
+            }
+          : undefined,
+      })
+    },
+    onError: (error) =>
+      toast.error("Failed to integrate action", {
+        description: apiErrorDetail(error),
+      }),
+  })
+
   const avg = summary?.average
   const runs = useMemo(() => summary?.runs ?? [], [summary])
   const findings = useMemo(
@@ -205,16 +231,36 @@ function TelemetryPage() {
             : ""}
           .
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => analyzeMutation.mutate()}
-          disabled={!isAccessible || analyzeMutation.isPending}
-        >
-          <Play className="h-4 w-4" />
-          {analyzeMutation.isPending ? "Queuing…" : "Run telemetry analysis"}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => integrateActionMutation.mutate()}
+            disabled={
+              !isAccessible ||
+              integrateActionMutation.isPending ||
+              integrateActionMutation.isSuccess
+            }
+          >
+            <Puzzle className="h-4 w-4" />
+            {integrateActionMutation.isPending
+              ? "Opening PR…"
+              : integrateActionMutation.isSuccess
+                ? "PR opened"
+                : "Integrate action"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => analyzeMutation.mutate()}
+            disabled={!isAccessible || analyzeMutation.isPending}
+          >
+            <Play className="h-4 w-4" />
+            {analyzeMutation.isPending ? "Queuing…" : "Run telemetry analysis"}
+          </Button>
+        </div>
       </div>
 
       {/* Averages */}

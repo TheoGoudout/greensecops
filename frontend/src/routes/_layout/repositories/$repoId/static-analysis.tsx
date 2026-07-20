@@ -80,6 +80,12 @@ function StaticAnalysisPage() {
   const [collapsedIssueLists, setCollapsedIssueLists] = useState<Set<string>>(
     new Set(),
   )
+  // Per-workflow card collapse. Default open state is derived from data (a
+  // workflow with issues is expanded, one without is collapsed), so this map
+  // only records paths the user has explicitly toggled away from that default.
+  const [workflowOverrides, setWorkflowOverrides] = useState<
+    Map<string, boolean>
+  >(new Map())
 
   const invalidateStatic = () => {
     queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
@@ -268,6 +274,21 @@ function StaticAnalysisPage() {
       }),
   })
 
+  // Repo-wide "Run analysis" — moved here from the shared repo layout header so
+  // it lives on the tab it acts on.
+  const triggerMutation = useMutation({
+    mutationFn: () =>
+      AnalysesService.triggerAnalysis({ repoId, branch: branch || undefined }),
+    onSuccess: () => {
+      toast.success("Analysis queued")
+      invalidateStatic()
+    },
+    onError: (error) =>
+      toast.error("Failed to trigger analysis", {
+        description: apiErrorDetail(error),
+      }),
+  })
+
   const analyzeWorkflowMutation = useMutation({
     mutationFn: (workflowFileId: string) =>
       AnalysesService.reanalyzeForWorkflow({ workflowFileId, force: true }),
@@ -368,11 +389,28 @@ function StaticAnalysisPage() {
     })
   }
 
+  function toggleWorkflowCard(path: string, isOpen: boolean) {
+    setWorkflowOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(path, !isOpen)
+      return next
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Action bar: filters + repo-wide fix / PR actions. Repo-wide analyze
-          stays the header's "Run analysis" button. */}
+      {/* Action bar: repo-wide analyze + filters + repo-wide fix / PR actions. */}
       <div className="flex items-center gap-3 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => triggerMutation.mutate()}
+          disabled={!isAccessible || triggerMutation.isPending}
+        >
+          <Play className="h-4 w-4" />
+          {triggerMutation.isPending ? "Queuing…" : "Run analysis"}
+        </Button>
         <Button
           variant={unfixed ? "default" : "outline"}
           size="sm"
@@ -601,12 +639,28 @@ function StaticAnalysisPage() {
             deliverWorkflowMutation.variables?.fixId === fileFix?.id
           const selectable = selectablePaths.includes(wf.path)
           const issueListOpen = !collapsedIssueLists.has(wf.path)
+          // Workflows with issues open by default; issue-free ones start
+          // collapsed. `workflowOverrides` records explicit user toggles.
+          const wfOpen = workflowOverrides.get(wf.path) ?? fileIssues.length > 0
 
           return (
             <Card key={wf.id}>
               <CardHeader className="pb-2 pt-4">
-                <div className="flex items-center justify-between gap-4 min-w-0">
-                  <CardTitle className="text-sm font-mono flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 min-w-0">
+                  <CardTitle className="text-sm font-mono flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleWorkflowCard(wf.path, wfOpen)}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-expanded={wfOpen}
+                      title={wfOpen ? "Collapse workflow" : "Expand workflow"}
+                    >
+                      {wfOpen ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </button>
                     {selectable && (
                       <Checkbox
                         checked={!deselectedPaths.has(wf.path)}
@@ -726,82 +780,84 @@ function StaticAnalysisPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <WorkflowFileViewer
-                  path={wf.path}
-                  rawContent={wf.raw_content ?? ""}
-                  fullContent={
-                    showFix ? (fileFix?.full_content ?? undefined) : undefined
-                  }
-                  issues={fileIssues}
-                  fix={fileFix}
-                />
+              {wfOpen && (
+                <CardContent className="flex flex-col gap-3">
+                  <WorkflowFileViewer
+                    path={wf.path}
+                    rawContent={wf.raw_content ?? ""}
+                    fullContent={
+                      showFix ? (fileFix?.full_content ?? undefined) : undefined
+                    }
+                    issues={fileIssues}
+                    fix={fileFix}
+                  />
 
-                {fileIssues.length > 0 && (
-                  <div className="rounded-md border">
-                    <button
-                      type="button"
-                      onClick={() => toggleIssueList(wf.path)}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
-                    >
-                      {issueListOpen ? (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5" />
+                  {fileIssues.length > 0 && (
+                    <div className="rounded-md border">
+                      <button
+                        type="button"
+                        onClick={() => toggleIssueList(wf.path)}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
+                      >
+                        {issueListOpen ? (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        )}
+                        Manage {fileIssues.length} issue
+                        {fileIssues.length !== 1 ? "s" : ""}
+                      </button>
+                      {issueListOpen && (
+                        <div className="divide-y border-t">
+                          {fileIssues.map((issue) => (
+                            <IssueRow
+                              key={issue.id}
+                              issue={issue}
+                              repoId={repoId}
+                              isAccessible={isAccessible}
+                            />
+                          ))}
+                        </div>
                       )}
-                      Manage {fileIssues.length} issue
-                      {fileIssues.length !== 1 ? "s" : ""}
-                    </button>
-                    {issueListOpen && (
-                      <div className="divide-y border-t">
-                        {fileIssues.map((issue) => (
-                          <IssueRow
-                            key={issue.id}
-                            issue={issue}
-                            repoId={repoId}
-                            isAccessible={isAccessible}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {fileFix && (
-                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <StatusPill
-                        colorClass={fixStatusColor(fileFix.status)}
-                        className="capitalize shrink-0"
-                      >
-                        {fileFix.status}
-                      </StatusPill>
-                      <span className="truncate">{fileFix.llm_model}</span>
                     </div>
-                    {fileFix.pr_url && (
-                      <a
-                        href={fileFix.pr_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0"
-                      >
-                        <GitPullRequest className="h-3 w-3" />
-                        View PR
-                        {fileFix.pr_state === "closed" && (
-                          <span className="text-orange-500 dark:text-orange-400">
-                            (closed)
-                          </span>
-                        )}
-                        {fileFix.pr_state === "merged" && (
-                          <span className="text-purple-500 dark:text-purple-400">
-                            (merged)
-                          </span>
-                        )}
-                      </a>
-                    )}
-                  </div>
-                )}
-              </CardContent>
+                  )}
+
+                  {fileFix && (
+                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <StatusPill
+                          colorClass={fixStatusColor(fileFix.status)}
+                          className="capitalize shrink-0"
+                        >
+                          {fileFix.status}
+                        </StatusPill>
+                        <span className="truncate">{fileFix.llm_model}</span>
+                      </div>
+                      {fileFix.pr_url && (
+                        <a
+                          href={fileFix.pr_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0"
+                        >
+                          <GitPullRequest className="h-3 w-3" />
+                          View PR
+                          {fileFix.pr_state === "closed" && (
+                            <span className="text-orange-500 dark:text-orange-400">
+                              (closed)
+                            </span>
+                          )}
+                          {fileFix.pr_state === "merged" && (
+                            <span className="text-purple-500 dark:text-purple-400">
+                              (merged)
+                            </span>
+                          )}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              )}
             </Card>
           )
         })
