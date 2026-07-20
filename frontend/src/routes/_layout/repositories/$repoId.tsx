@@ -1,15 +1,13 @@
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import {
   createFileRoute,
   Link,
   Outlet,
   useRouterState,
 } from "@tanstack/react-router"
-import { ArrowLeft, GitBranch, Play, Puzzle, WifiOff } from "lucide-react"
-import { toast } from "sonner"
-import { AnalysesService, ApiError, RepositoriesService } from "@/client"
+import { ArrowLeft, GitBranch, WifiOff } from "lucide-react"
+import { RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
-import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -63,40 +61,9 @@ function RepositoryLayout() {
       ? [repo.default_branch]
       : []
 
-  const triggerMutation = useMutation({
-    mutationFn: () =>
-      AnalysesService.triggerAnalysis({ repoId, branch: branch || undefined }),
-    onSuccess: () => toast.success("Analysis queued"),
-    onError: () => toast.error("Failed to trigger analysis"),
-  })
-
-  const integrateActionMutation = useMutation({
-    mutationFn: () => RepositoriesService.integrateAction({ repoId }),
-    onSuccess: (data) => {
-      toast.success("PR opened", {
-        description: data.pr_url,
-        action: data.pr_url
-          ? {
-              label: "Open",
-              onClick: () => window.open(data.pr_url, "_blank"),
-            }
-          : undefined,
-      })
-    },
-    onError: (error) => {
-      const detail =
-        error instanceof ApiError
-          ? (error.body as { detail?: string })?.detail
-          : undefined
-      toast.error("Failed to integrate action", {
-        description: detail,
-      })
-    },
-  })
-
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
         <div className="flex items-center gap-3">
           <Link
             to="/repositories"
@@ -146,36 +113,6 @@ function RepositoryLayout() {
               </div>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => integrateActionMutation.mutate()}
-            disabled={
-              !isAccessible ||
-              integrateActionMutation.isPending ||
-              integrateActionMutation.isSuccess
-            }
-          >
-            <Puzzle className="h-4 w-4" />
-            {integrateActionMutation.isPending
-              ? "Opening PR…"
-              : integrateActionMutation.isSuccess
-                ? "PR opened"
-                : "Integrate action"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => triggerMutation.mutate()}
-            disabled={!isAccessible || triggerMutation.isPending}
-          >
-            <Play className="h-4 w-4" />
-            Run analysis
-          </Button>
         </div>
       </div>
 

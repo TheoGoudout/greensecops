@@ -235,52 +235,54 @@ export function WorkflowFileViewer({
       )}
 
       <div className="font-mono text-xs overflow-x-auto">
-        {segments.map((seg) => {
-          if (seg.kind === "collapsed") {
-            const count = seg.end - seg.start + 1
-            const key = `collapsed-${seg.start}-${seg.end}`
-            if (expandedBlocks.has(key)) {
-              return displayLines
-                .slice(seg.start, seg.end + 1)
-                .map((line) => (
-                  <LineRow
-                    key={line.key}
-                    line={line}
-                    issues={[]}
-                    fixedIssueIds={fixedIssueIds}
-                  />
-                ))
+        <div className="min-w-full w-max">
+          {segments.map((seg) => {
+            if (seg.kind === "collapsed") {
+              const count = seg.end - seg.start + 1
+              const key = `collapsed-${seg.start}-${seg.end}`
+              if (expandedBlocks.has(key)) {
+                return displayLines
+                  .slice(seg.start, seg.end + 1)
+                  .map((line) => (
+                    <LineRow
+                      key={line.key}
+                      line={line}
+                      issues={[]}
+                      fixedIssueIds={fixedIssueIds}
+                    />
+                  ))
+              }
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-muted-foreground hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleBlock(key)}
+                >
+                  <span className="w-10 shrink-0" />
+                  <span>
+                    ··· {count} line{count !== 1 ? "s" : ""} ···
+                  </span>
+                </button>
+              )
             }
-            return (
-              <button
-                key={key}
-                type="button"
-                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-muted-foreground hover:bg-muted/50 transition-colors"
-                onClick={() => toggleBlock(key)}
-              >
-                <span className="w-10 shrink-0" />
-                <span>
-                  ··· {count} line{count !== 1 ? "s" : ""} ···
-                </span>
-              </button>
-            )
-          }
 
-          return displayLines.slice(seg.start, seg.end + 1).map((line) => {
-            const lineIssues =
-              line.lineNum != null
-                ? (issuesByOrigLine.get(line.lineNum) ?? [])
-                : []
-            return (
-              <LineRow
-                key={line.key}
-                line={line}
-                issues={lineIssues}
-                fixedIssueIds={fixedIssueIds}
-              />
-            )
-          })
-        })}
+            return displayLines.slice(seg.start, seg.end + 1).map((line) => {
+              const lineIssues =
+                line.lineNum != null
+                  ? (issuesByOrigLine.get(line.lineNum) ?? [])
+                  : []
+              return (
+                <LineRow
+                  key={line.key}
+                  line={line}
+                  issues={lineIssues}
+                  fixedIssueIds={fixedIssueIds}
+                />
+              )
+            })
+          })}
+        </div>
       </div>
     </div>
   )
