@@ -176,8 +176,12 @@ test.describe("Golden Path — Extended", () => {
     await page.route("**/api/v1/fixes/**", (route) => {
       route.fulfill({ json: [] })
     })
+    await page.route("**/api/v1/telemetry/**", (route) => {
+      route.fulfill({ json: { runs: [], average: null } })
+    })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    // Integrate action lives on the Telemetry tab now.
+    await page.goto(`/repositories/${MOCK_REPO.id}/telemetry`)
 
     await page.getByRole("button", { name: "Integrate action" }).click()
 

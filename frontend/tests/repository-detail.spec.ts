@@ -265,8 +265,12 @@ test.describe("Repository Detail", () => {
 
   test("Integrate action button triggers PR", async ({ page }) => {
     await setupRepoMocks(page)
+    // Integrate action lives on the Telemetry tab now.
+    await page.route("**/api/v1/telemetry/**", (route) => {
+      route.fulfill({ json: { runs: [], average: null } })
+    })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/repositories/${MOCK_REPO.id}/telemetry`)
 
     await page.getByRole("button", { name: "Integrate action" }).click()
 
