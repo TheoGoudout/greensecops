@@ -19,6 +19,7 @@ Each file contains exact commands, prerequisites, caveats, and CI equivalents.
 | [greensecops-generate-client.md](greensecops-generate-client.md) | OpenAPI → TypeScript client codegen via `hey-api` | Any FastAPI route/schema change |
 | [greensecops-lint.md](greensecops-lint.md) | ruff, mypy, biome — backend and frontend lint/type-check | Before commit, after editing Python/TS |
 | [greensecops-pre-commit.md](greensecops-pre-commit.md) | `prek` hook runner, install, manual run | Fresh clone setup, hook troubleshooting |
+| [greensecops-pr.md](greensecops-pr.md) | Required PR label set, `check-labels` CI gate, which label to pick | Creating or editing a GitHub PR |
 
 ## Load order guidance
 
@@ -31,3 +32,4 @@ For a full feature cycle, read skills in this order:
 5. `greensecops-lint.md` — before committing
 6. `greensecops-pre-commit.md` — if hooks fail or need setup
 7. `greensecops-docker.md` — if stack needs restart or rebuild
+8. `greensecops-pr.md` — when opening the PR
