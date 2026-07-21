@@ -88,5 +88,5 @@ def build_delivery_pr_body(
         frontend_host=settings.FRONTEND_HOST,
         bot_handle=settings.GITHUB_BOT_HANDLE,
         app_name=settings.PROJECT_NAME,
-        app_url=settings.APP_URL,
+        app_url=settings.MARKETING_URL,
     )

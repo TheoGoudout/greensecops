@@ -25,12 +25,12 @@ def test_all_cors_origins_includes_frontend_host() -> None:
     ]
 
 
-def test_all_cors_origins_includes_webhook_tunnel_when_set() -> None:
-    settings = _settings(GITHUB_WEBHOOK_URL="https://example.ngrok.io/")
+def test_all_cors_origins_includes_public_url_when_set() -> None:
+    settings = _settings(GREENSECOPS_PUBLIC_URL="https://example.ngrok.io/")
     assert "https://example.ngrok.io" in settings.all_cors_origins
 
 
-def test_all_cors_origins_omits_webhook_tunnel_when_unset() -> None:
+def test_all_cors_origins_omits_public_url_when_unset() -> None:
     settings = _settings()
-    assert settings.GITHUB_WEBHOOK_URL is None
+    assert settings.GREENSECOPS_PUBLIC_URL == ""
     assert all("ngrok" not in origin for origin in settings.all_cors_origins)

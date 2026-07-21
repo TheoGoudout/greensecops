@@ -584,7 +584,7 @@ async def integrate_action(
     fix_branch = "greensecops/integrate-action"
 
     pr_body_parts = [
-        f"This PR adds the [{app_name} Telemetry]({settings.APP_URL}) action "
+        f"This PR adds the [{app_name} Telemetry]({settings.MARKETING_URL}) action "
         "to your workflow files.\n\n"
         "Set the `GREENSECOPS_URL` repository variable to your GreenSecOps instance URL.",
     ]

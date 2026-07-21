@@ -24,8 +24,11 @@ jobs:
       SERVICE_PASSWORD_POSTGRES: testpassword
       SERVICE_PASSWORD_64_SECRETKEY: changethischangethischangethischangethischangethischangethischanget
       SERVICE_PASSWORD_FIRSTSUPERUSER: testpassword
+      SERVICE_HEX_40_GITHUBWEBHOOKSECRET: 0000000000000000000000000000000000000000
       SERVICE_URL_BACKEND: http://localhost:8000
       SERVICE_URL_FRONTEND: http://localhost
+      SERVICE_URL_DOCS: http://localhost:3002
+      SERVICE_URL_LANDING: http://localhost:3001
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

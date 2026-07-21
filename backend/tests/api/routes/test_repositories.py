@@ -910,14 +910,14 @@ def test_integrate_action_already_present(
     assert "already present" in response.json()["detail"]
 
 
-def test_integrate_action_badge_url_prefers_github_webhook_url(
+def test_integrate_action_badge_url_prefers_greensecops_public_url(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
     org: Organization,
 ) -> None:
-    """The badge URL embedded in the README uses GITHUB_WEBHOOK_URL (the dev
-    tunnel base) when it's set, instead of always falling back to
+    """The badge URL embedded in the README uses GREENSECOPS_PUBLIC_URL (the
+    dev tunnel base) when it's set, instead of always falling back to
     BACKEND_HOST — otherwise a badge added during local dev points at
     localhost, which GitHub can't reach."""
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -976,7 +976,7 @@ def test_integrate_action_badge_url_prefers_github_webhook_url(
                 ".update_or_create_workflow_action_pr",
                 mock_deliver,
             ),
-            patch.object(settings, "GITHUB_WEBHOOK_URL", "https://tunnel.ngrok.io"),
+            patch.object(settings, "GREENSECOPS_PUBLIC_URL", "https://tunnel.ngrok.io"),
             patch(
                 "app.services.github.sha_resolver.resolve_pinned_ref",
                 AsyncMock(return_value=settings.GITHUB_ACTION_REF),

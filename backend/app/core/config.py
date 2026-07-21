@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     # Set this to the canonical production URL so customer workflows point to prod
     # by default. vars.GREENSECOPS_URL in the customer repo overrides for dev/staging.
     GREENSECOPS_PUBLIC_URL: str = ""
-    APP_URL: str = "https://greensecops.com"
+    # Marketing/landing site URL: embedded in PR body attribution links and
+    # used for the landing page's own legal-copy self-references.
+    MARKETING_URL: str = "https://greensecops.com"
     GITHUB_ACTION_REF: str = "greensecops/greensecops-action@v1"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
@@ -57,8 +59,8 @@ class Settings(BaseSettings):
         origins = [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
             self.FRONTEND_HOST
         ]
-        if self.GITHUB_WEBHOOK_URL:
-            origins.append(self.GITHUB_WEBHOOK_URL.rstrip("/"))
+        if self.GREENSECOPS_PUBLIC_URL:
+            origins.append(self.GREENSECOPS_PUBLIC_URL.rstrip("/"))
         return origins
 
     PROJECT_NAME: str
@@ -116,9 +118,6 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
-    # Dev only: public tunnel base URL (e.g. ngrok) for webhook delivery to
-    # localhost. When set, the tunnel origin is added to the allowed CORS origins.
-    GITHUB_WEBHOOK_URL: str | None = None
 
     # Bot account credential for outreach PRs on *external* repos. The GitHub App
     # is not installed on arbitrary open-source projects, so those repos cannot
