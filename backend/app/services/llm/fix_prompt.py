@@ -10,9 +10,12 @@ Return your answer using EXACTLY this format — no JSON, no markdown, no extra 
 <full_content>
 <complete fixed YAML with ALL issues addressed>
 </full_content>
+<unfixed>
+<one line per issue number you could NOT resolve in the diff, format "N: short reason">
+</unfixed>
 
 Rules for <full_content>:
-- Must be the complete fixed YAML with ALL issues addressed
+- Must be the complete fixed YAML with every issue you are able to resolve addressed
 - Preserve ALL existing YAML comments exactly as they appear
 - Preserve the trailing newline at the end of the file
 - Ensure the result is valid GitHub Actions YAML syntax
@@ -20,9 +23,14 @@ Rules for <full_content>:
 - CRITICAL: Only use SHAs from the "Known action commit SHAs" section. If you add an action whose SHA is NOT listed there, use its tag reference (e.g., `uses: actions/cache@v4`) — do NOT invent or guess a SHA.
 - When adding a new action or upgrading one, prefer the latest version listed in the "Known action commit SHAs" section
 - CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`
-- Make the minimum changes required to fix the listed issues; leave unrelated lines untouched"""
+- Make the minimum changes required to fix the listed issues; leave unrelated lines untouched
 
-FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow:
+Rules for <unfixed>:
+- List an issue here ONLY when it genuinely cannot be resolved by editing this workflow file — e.g. it requires setting up cloud IAM/OIDC trust, creating repository secrets/variables outside this file, or a multi-file refactor
+- Do NOT list an issue here just because it was tedious; if you can express the fix as a diff to this file, fix it and leave it out of <unfixed>
+- Leave the block empty if every issue was fixed"""
+
+FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow that can be resolved by editing this file. For any that genuinely cannot, list them in <unfixed> instead:
 
 **Issues to fix:**
 {issues_block}
@@ -32,7 +40,7 @@ FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Act
 {workflow_content}
 ```
 
-Return only the <full_content> block — no markdown, no explanation."""
+Return the <full_content> and <unfixed> blocks — no markdown, no explanation."""
 
 
 def build_fix_prompt(

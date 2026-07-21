@@ -33,7 +33,11 @@ def repo_fix_branch(repo_id: uuid.UUID) -> str:
 
 
 def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
-    """Build PR-body issue summaries from the issues each fix addresses."""
+    """Build PR-body issue summaries from the issues each fix actually resolved.
+
+    An issue the LLM flagged as ``needs_manual_work`` was never fixed in this
+    diff, so it's excluded here rather than listed as "fixed".
+    """
     return [
         IssueInfo(
             rule_slug=issue.rule.slug if issue.rule else "fix",
@@ -46,6 +50,7 @@ def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
         )
         for fix in fixes
         for issue in fix.issues
+        if not issue.needs_manual_work
     ]
 
 

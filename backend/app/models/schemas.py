@@ -119,6 +119,8 @@ class IssuePublic(SQLModel):
     created_at: datetime | None = None
     resolved_at: datetime | None = None
     resolution_reason: IssueResolutionReason | None = None
+    needs_manual_work: bool = False
+    manual_work_note: str | None = None
     fix_id: uuid.UUID | None = None
     fix_status: FixStatus | None = None
     workflow_file_path: str | None = None

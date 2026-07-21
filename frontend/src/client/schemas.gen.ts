@@ -886,6 +886,22 @@ export const IssuePublicSchema = {
                 }
             ]
         },
+        needs_manual_work: {
+            type: 'boolean',
+            title: 'Needs Manual Work',
+            default: false
+        },
+        manual_work_note: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Manual Work Note'
+        },
         fix_id: {
             anyOf: [
                 {

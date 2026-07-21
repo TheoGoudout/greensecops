@@ -77,6 +77,18 @@ export function IssueRow({
               {issueStatusLabel(issue.status)}
             </StatusPill>
           )}
+          {issue.needs_manual_work && (
+            <StatusPill
+              colorClass="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+              className="inline-flex items-center"
+              title={
+                issue.manual_work_note ??
+                "The AI fix couldn't resolve this automatically"
+              }
+            >
+              Needs manual work
+            </StatusPill>
+          )}
           <span className="text-sm break-words min-w-0">{issue.message}</span>
         </div>
         {issue.line_start != null && (

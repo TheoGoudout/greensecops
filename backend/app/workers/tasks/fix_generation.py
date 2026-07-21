@@ -387,6 +387,14 @@ def run_fix_generation(
         else:
             fix.full_content = full_content
             sm.advance(fix, sm.FixMachine, "generation_succeeded")
+            # The LLM's own report of which issues it couldn't resolve in this
+            # diff. Re-evaluated on every attempt so a retry that succeeds
+            # clears a manual-work flag left over from an earlier attempt.
+            unfixed = _parse_unfixed_issues(result.content)
+            for i, issue in enumerate(issues, start=1):
+                issue.needs_manual_work = i in unfixed
+                issue.manual_work_note = unfixed.get(i)
+                session.add(issue)
         session.add(fix)
         session.commit()
 
@@ -445,6 +453,25 @@ def _parse_llm_response(content: str) -> str:
         )
     logger.info("Parsed LLM response: full_content=%d chars", len(full_content))
     return full_content
+
+
+def _parse_unfixed_issues(content: str) -> dict[int, str]:
+    """Extract the ``<unfixed>`` block: 1-based prompt issue index -> reason.
+
+    Absent or empty block (every issue was fixed) returns ``{}``.
+    """
+    import re
+
+    match = re.search(r"<unfixed>\n?(.*?)</unfixed>", content, re.DOTALL)
+    if not match:
+        return {}
+    line_re = re.compile(r"^\s*(\d+)\s*:\s*(.+?)\s*$")
+    unfixed: dict[int, str] = {}
+    for line in match.group(1).splitlines():
+        line_match = line_re.match(line)
+        if line_match:
+            unfixed[int(line_match.group(1))] = line_match.group(2)[:1024]
+    return unfixed
 
 
 def _configure_langchain() -> None:

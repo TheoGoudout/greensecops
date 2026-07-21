@@ -487,6 +487,56 @@ def test_generate_fixes_for_repo_with_issue_ids_filter(
     assert mock_delay.call_args.kwargs["batch_id"]
 
 
+def test_generate_fixes_for_repo_bulk_skips_needs_manual_work_issue(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    """Implicit bulk generation must not keep re-spending on an issue the LLM
+    already reported it can't fix."""
+    issue.needs_manual_work = True
+    issue.manual_work_note = "requires external OIDC trust setup"
+    db.add(issue)
+    db.commit()
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 0
+    mock_delay.assert_not_called()
+
+
+def test_generate_fixes_for_repo_explicit_issue_ids_retries_needs_manual_work(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    """An explicit issue selection is a deliberate retry — it must still queue."""
+    issue.needs_manual_work = True
+    issue.manual_work_note = "requires external OIDC trust setup"
+    db.add(issue)
+    db.commit()
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+            json={"issue_ids": [str(issue.id)]},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    mock_delay.assert_called_once()
+
+
 def test_generate_fixes_for_repo_with_nonexistent_issue_ids_returns_zero(
     client: TestClient,
     superuser_token_headers: dict[str, str],
@@ -1908,6 +1958,32 @@ def test_regenerate_for_workflow_replaces_fix(
         sql_select(Fix).where(Fix.workflow_file_id == workflow_file.id)
     ).one()
     assert new_fix.status == FixStatus.pending
+
+
+def test_regenerate_for_workflow_retries_needs_manual_work_issue(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    ready_fix: Fix,
+    issue: Issue,
+) -> None:
+    """Explicit regenerate on a single workflow gives the LLM another attempt
+    even if a prior run flagged the issue as needing manual work."""
+    issue.needs_manual_work = True
+    issue.manual_work_note = "requires external OIDC trust setup"
+    db.add(issue)
+    db.commit()
+
+    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/regenerate-for-workflow/{ready_fix.id}",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs["issue_ids"] == [str(issue.id)]
 
 
 def test_regenerate_for_workflow_rejects_in_flight_fix(

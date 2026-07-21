@@ -256,6 +256,82 @@ def test_fix_generation_skips_workflow_without_pending_fix(
     mock_generate.assert_not_called()
 
 
+def test_full_fix_generation_flags_llm_reported_unfixed_issue(
+    db: Session,
+    analysis: Analysis,
+    rule: Rule,
+    workflow_file: WorkflowFile,
+    issue: Issue,
+) -> None:
+    """An issue the LLM lists in <unfixed> is flagged, not silently treated as resolved."""
+    unfixed_issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=workflow_file.id,
+        rule_id=rule.id,
+        severity=IssueSeverity.medium,
+        category=IssueCategory.security,
+        message="Long-lived cloud credentials instead of OIDC",
+        fingerprint="deadbeef12345678",
+    )
+    db.add(unfixed_issue)
+    db.commit()
+    db.refresh(unfixed_issue)
+
+    fix = Fix(
+        workflow_file_id=workflow_file.id,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.pending,
+    )
+    db.add(fix)
+    db.flush()
+    issue.fix_id = fix.id
+    unfixed_issue.fix_id = fix.id
+    db.add(issue)
+    db.add(unfixed_issue)
+    db.commit()
+
+    llm_response_content = (
+        f"<full_content>\n{_HTTPX_WORKFLOW}</full_content>\n"
+        "<unfixed>\n2: requires external cloud IAM/OIDC trust setup\n</unfixed>"
+    )
+
+    class _FakeLLMResult:
+        content = llm_response_content
+        prompt_tokens = 10
+        completion_tokens = 10
+        run_id = None
+
+    with patch(
+        "app.workers.tasks.fix_generation._generate_fixes",
+        new=AsyncMock(return_value=_FakeLLMResult()),
+    ):
+        run_fix_generation.apply(
+            kwargs={"issue_ids": [str(issue.id), str(unfixed_issue.id)]}
+        )
+
+    db.expire_all()
+    db.refresh(issue)
+    db.refresh(unfixed_issue)
+    assert issue.needs_manual_work is False
+    assert unfixed_issue.needs_manual_work is True
+    assert (
+        unfixed_issue.manual_work_note == "requires external cloud IAM/OIDC trust setup"
+    )
+
+    stored_fix = db.exec(
+        select(Fix).where(Fix.workflow_file_id == workflow_file.id)
+    ).first()
+    assert stored_fix is not None
+    assert stored_fix.status == FixStatus.ready
+
+    from app.services.delivery_pr import issues_info_for_fixes
+
+    infos = issues_info_for_fixes([stored_fix])
+    assert all(i.message != unfixed_issue.message for i in infos)
+    assert any(i.message == issue.message for i in infos)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Generate endpoint — mocked Celery delay
 # ═══════════════════════════════════════════════════════════════════════════════

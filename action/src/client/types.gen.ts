@@ -455,6 +455,14 @@ export type IssuePublic = {
     resolved_at?: string | null;
     resolution_reason?: IssueResolutionReason | null;
     /**
+     * Needs Manual Work
+     */
+    needs_manual_work?: boolean;
+    /**
+     * Manual Work Note
+     */
+    manual_work_note?: string | null;
+    /**
      * Fix Id
      */
     fix_id?: string | null;

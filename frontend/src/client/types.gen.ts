@@ -163,6 +163,8 @@ export type IssuePublic = {
     created_at?: (string | null);
     resolved_at?: (string | null);
     resolution_reason?: (IssueResolutionReason | null);
+    needs_manual_work?: boolean;
+    manual_work_note?: (string | null);
     fix_id?: (string | null);
     fix_status?: (FixStatus | null);
     workflow_file_path?: (string | null);

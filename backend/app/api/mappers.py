@@ -59,6 +59,8 @@ def to_issue_public(issue: Issue) -> IssuePublic:
         created_at=issue.created_at,
         resolved_at=issue.resolved_at,
         resolution_reason=issue.resolution_reason,
+        needs_manual_work=issue.needs_manual_work,
+        manual_work_note=issue.manual_work_note,
         fix_id=fix.id if fix else None,
         fix_status=fix.status if fix else None,
         workflow_file_path=workflow_file_path,

@@ -27,6 +27,7 @@ from app.workers.tasks.fix_generation import (
     _is_valid_workflow_yaml,
     _maybe_auto_deliver,
     _parse_llm_response,
+    _parse_unfixed_issues,
     _record_batch_result,
     init_fix_batch,
     resolve_llm_provider,
@@ -65,6 +66,39 @@ def test_parse_llm_response_ignores_surrounding_prose() -> None:
         "All issues addressed."
     )
     assert _parse_llm_response(response) == "name: CI\non: push\n"
+
+
+# ─── _parse_unfixed_issues ───────────────────────────────────────────────────
+
+
+def test_parse_unfixed_issues_extracts_index_and_reason() -> None:
+    response = (
+        f"<full_content>\n{_WORKFLOW}</full_content>\n"
+        "<unfixed>\n2: requires manual OIDC trust setup in AWS IAM\n</unfixed>"
+    )
+    assert _parse_unfixed_issues(response) == {
+        2: "requires manual OIDC trust setup in AWS IAM"
+    }
+
+
+def test_parse_unfixed_issues_multiple_entries() -> None:
+    response = (
+        "<unfixed>\n1: needs a repo secret\n3: cross-file refactor needed\n</unfixed>"
+    )
+    assert _parse_unfixed_issues(response) == {
+        1: "needs a repo secret",
+        3: "cross-file refactor needed",
+    }
+
+
+def test_parse_unfixed_issues_missing_block_returns_empty() -> None:
+    response = f"<full_content>\n{_WORKFLOW}</full_content>"
+    assert _parse_unfixed_issues(response) == {}
+
+
+def test_parse_unfixed_issues_empty_block_returns_empty() -> None:
+    response = f"<full_content>\n{_WORKFLOW}</full_content>\n<unfixed>\n</unfixed>"
+    assert _parse_unfixed_issues(response) == {}
 
 
 # ─── _is_valid_workflow_yaml ─────────────────────────────────────────────────

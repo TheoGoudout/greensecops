@@ -136,6 +136,7 @@ def _latest_unresolved_issues(
     repo_id: uuid.UUID,
     wf_file_ids: list[uuid.UUID] | None = None,
     issue_ids: list[uuid.UUID] | None = None,
+    exclude_manual: bool = True,
 ) -> dict[uuid.UUID, list[Issue]]:
     """Unresolved issues from each workflow file's latest completed analysis.
 
@@ -143,6 +144,12 @@ def _latest_unresolved_issues(
     The latest-analysis correlation guarantees workflow_file_id is set.
     Restricted to default-branch workflow files: fixes and PRs only ever
     target the default branch.
+
+    ``exclude_manual`` skips issues a prior LLM attempt flagged as
+    ``needs_manual_work``, so an implicit bulk selection doesn't keep
+    re-spending fix generations on issues it already reported it can't fix.
+    An explicit retry on a specific workflow/issue set passes ``False`` to
+    give the LLM another attempt.
     """
     repo = session.get(Repository, repo_id)
     default_branch = repo.default_branch if repo else "main"
@@ -165,6 +172,8 @@ def _latest_unresolved_issues(
         .where(col(Issue.resolved_at).is_(None))
         .where(col(Issue.ignored_at).is_(None))
     )
+    if exclude_manual:
+        query = query.where(col(Issue.needs_manual_work).is_(False))
     if wf_file_ids is not None:
         query = query.where(col(Issue.workflow_file_id).in_(wf_file_ids))
     if issue_ids is not None:
@@ -410,7 +419,14 @@ def trigger_fix_generation_for_repo(
     repo = authorize_repo(session, current_user, repo_id)
     from app.api.routes.billing import enforce_quota
 
-    by_wf_file = _latest_unresolved_issues(session, repo_id, issue_ids=body.issue_ids)
+    by_wf_file = _latest_unresolved_issues(
+        session,
+        repo_id,
+        issue_ids=body.issue_ids,
+        # An explicit issue selection is a deliberate retry request; only the
+        # implicit "generate for everything" path skips manual-flagged issues.
+        exclude_manual=body.issue_ids is None,
+    )
     if not by_wf_file:
         return {"queued": 0}
 
@@ -657,6 +673,9 @@ def regenerate_fixes_for_workflow(
         session,
         repo.id,
         wf_file_ids=[fix.workflow_file_id],
+        # Explicit retry of this one workflow's fix — give the LLM another
+        # attempt even if a prior run flagged it as needing manual work.
+        exclude_manual=False,
     )
     if not by_wf_file:
         raise HTTPException(
