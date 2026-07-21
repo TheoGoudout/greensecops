@@ -14,6 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import useAuth from "@/hooks/useAuth"
 import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
 
 export const Route = createFileRoute("/_layout/repositories/")({
@@ -25,7 +26,13 @@ export const Route = createFileRoute("/_layout/repositories/")({
 
 function RepoRow({ repo }: { repo: RepositoryPublic }) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const isAccessible = repo.is_accessible ?? true
+  // Auto-fix is a paid feature: only a superuser or a user on a paid tier may
+  // enable it. The API enforces this too (HTTP 402); the disabled control is
+  // just the UX affordance.
+  const canAutoFix =
+    (user?.is_superuser ?? false) || (user?.tier ?? "free") !== "free"
 
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
@@ -98,11 +105,29 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
         </span>
       </div>
       <div className="hidden sm:flex items-center gap-2">
-        <Switch
-          checked={repo.auto_fix_enabled ?? false}
-          onCheckedChange={(enabled) => autoFixMutation.mutate(enabled)}
-          disabled={autoFixMutation.isPending || !isAccessible}
-        />
+        {canAutoFix ? (
+          <Switch
+            checked={repo.auto_fix_enabled ?? false}
+            onCheckedChange={(enabled) => autoFixMutation.mutate(enabled)}
+            disabled={autoFixMutation.isPending || !isAccessible}
+          />
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Switch
+                  checked={repo.auto_fix_enabled ?? false}
+                  onCheckedChange={() => {}}
+                  disabled
+                  aria-label="Auto-fix (upgrade required)"
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              Auto-fix is available on paid plans. Upgrade to enable it.
+            </TooltipContent>
+          </Tooltip>
+        )}
         <span className="text-xs text-muted-foreground">Auto-fix</span>
       </div>
       <Button

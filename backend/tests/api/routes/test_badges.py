@@ -84,6 +84,23 @@ def repo(db: Session, org: Organization) -> Repository:
 
 
 @pytest.fixture()
+def private_repo(db: Session, org: Organization) -> Repository:
+    suffix = uuid.uuid4().hex[:8]
+    repository = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"privowner-{suffix}/repo-{suffix}",
+        installation_id=11113,
+        default_branch="main",
+        is_private=True,
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+    return repository
+
+
+@pytest.fixture()
 def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
     wf = WorkflowFile(
         repo_id=repo.id,
@@ -225,6 +242,88 @@ def test_json_badge_with_grade(
     assert body["message"] == "A+"
     assert "color" in body
     assert body.get("cacheSeconds") == 300
+
+
+# ─── Private-repo signature enforcement ───────────────────────────────────────
+
+
+def _add_grade(db: Session, repo: Repository) -> None:
+    _add_workflow_analysis(db, repo, ".github/workflows/ci.yml", score=92.0, grade="A+")
+
+
+def test_private_svg_without_sig_returns_unknown(
+    client: TestClient, db: Session, private_repo: Repository
+) -> None:
+    _add_grade(db, private_repo)
+    owner, name = private_repo.full_name.split("/", 1)
+
+    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg")
+
+    assert response.status_code == 200
+    # Grade is hidden without a valid signature.
+    assert b"A+" not in response.content
+    assert b"?" in response.content
+
+
+def test_private_svg_with_valid_sig_returns_grade(
+    client: TestClient, db: Session, private_repo: Repository
+) -> None:
+    from app.services.badge_signing import sign_badge
+
+    _add_grade(db, private_repo)
+    owner, name = private_repo.full_name.split("/", 1)
+    sig = sign_badge(owner, name, "main")
+
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg", params={"sig": sig}
+    )
+
+    assert response.status_code == 200
+    assert b"A+" in response.content
+
+
+def test_private_svg_with_wrong_sig_returns_unknown(
+    client: TestClient, db: Session, private_repo: Repository
+) -> None:
+    _add_grade(db, private_repo)
+    owner, name = private_repo.full_name.split("/", 1)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg",
+        params={"sig": "deadbeef"},
+    )
+
+    assert response.status_code == 200
+    assert b"A+" not in response.content
+
+
+def test_private_json_without_sig_not_configured(
+    client: TestClient, db: Session, private_repo: Repository
+) -> None:
+    _add_grade(db, private_repo)
+    owner, name = private_repo.full_name.split("/", 1)
+
+    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{name}/main.json")
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "not configured"
+
+
+def test_private_json_with_valid_sig_returns_grade(
+    client: TestClient, db: Session, private_repo: Repository
+) -> None:
+    from app.services.badge_signing import sign_badge
+
+    _add_grade(db, private_repo)
+    owner, name = private_repo.full_name.split("/", 1)
+    sig = sign_badge(owner, name, "main")
+
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/{owner}/{name}/main.json", params={"sig": sig}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "A+"
 
 
 # ─── Multi-workflow average grade ─────────────────────────────────────────────

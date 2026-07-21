@@ -34,6 +34,15 @@ _TIER_LIMITS: dict[str, dict[str, int | None]] = {
 }
 
 
+# Tiers permitted to enable auto-fix (automatic PR delivery). ``free`` is
+# excluded — it is a paid feature. A platform superuser bypasses this gate
+# entirely, which is also how a sponsored open-source repo gets auto-fix
+# without upgrading the whole org's tier.
+_AUTO_FIX_TIERS: frozenset[UserTier] = frozenset(
+    {UserTier.starter, UserTier.pro, UserTier.ultimate, UserTier.open_source}
+)
+
+
 def _org_billing_owner(session: Session, org_id: uuid.UUID) -> User | None:
     """Return the user whose tier/subscription an org's usage counts against.
 
@@ -166,6 +175,34 @@ def enforce_quota(
             detail=(
                 f"{kind.capitalize()} quota reached for the {user.tier.value} tier "
                 f"({limit}). Upgrade your plan to continue."
+            ),
+        )
+
+
+def enforce_auto_fix_enable(
+    session: Session,
+    current_user: User,
+    org_id: uuid.UUID,
+) -> None:
+    """Raise HTTP 402 unless auto-fix may be enabled for ``org_id``.
+
+    Auto-fix (automatic PR delivery) is a paid feature: only a platform
+    superuser or an org whose billing owner is on a paid tier may enable it.
+    A superuser caller (or superuser billing owner) is exempt — that is the
+    mechanism for force-enabling auto-fix on a sponsored open-source repo
+    without upgrading its org's tier. Measured against the org's billing owner,
+    like ``enforce_quota``, so a non-owner teammate can't bypass the gate.
+    """
+    if current_user.is_superuser:
+        return
+    user = _org_billing_owner(session, org_id)
+    if user is None or user.is_superuser:
+        return
+    if user.tier not in _AUTO_FIX_TIERS:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                "Auto-fix is available on paid plans. Upgrade your plan to enable it."
             ),
         )
 

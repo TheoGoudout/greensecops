@@ -134,6 +134,7 @@ def upsert_repository(
     full_name: str,
     installation_id: int,
     default_branch: str,
+    is_private: bool = False,
 ) -> Repository:
     """Upsert a repository by its unique github_repo_id; preserves enabled state on update."""
     stmt = (
@@ -146,6 +147,7 @@ def upsert_repository(
             installation_id=installation_id,
             default_branch=default_branch,
             enabled=False,
+            is_private=is_private,
         )
         .on_conflict_do_update(
             index_elements=["github_repo_id"],
@@ -154,6 +156,7 @@ def upsert_repository(
                 "full_name": full_name,
                 "installation_id": installation_id,
                 "default_branch": default_branch,
+                "is_private": is_private,
             },
         )
         .returning(Repository)

@@ -253,9 +253,11 @@ export type RepositoryPublic = {
     enabled: boolean;
     is_accessible?: boolean;
     is_external?: boolean;
+    is_private?: boolean;
     default_branch: string;
     auto_fix_enabled?: boolean;
     tier?: (UserTier | null);
+    badge_sig?: (string | null);
     created_at?: (string | null);
     avg_score?: (number | null);
     grade?: (string | null);
@@ -469,6 +471,7 @@ export type BadgesGetBadgeData = {
     branch: string;
     owner: string;
     repo: string;
+    sig?: (string | null);
 };
 
 export type BadgesGetBadgeResponse = (unknown);
@@ -477,6 +480,7 @@ export type BadgesGetBadgeJsonData = {
     branch: string;
     owner: string;
     repo: string;
+    sig?: (string | null);
 };
 
 export type BadgesGetBadgeJsonResponse = ({

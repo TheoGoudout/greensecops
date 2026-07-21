@@ -1252,6 +1252,11 @@ export const RepositoryPublicSchema = {
             title: 'Is External',
             default: false
         },
+        is_private: {
+            type: 'boolean',
+            title: 'Is Private',
+            default: false
+        },
         default_branch: {
             type: 'string',
             title: 'Default Branch'
@@ -1270,6 +1275,17 @@ export const RepositoryPublicSchema = {
                     type: 'null'
                 }
             ]
+        },
+        badge_sig: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Badge Sig'
         },
         created_at: {
             anyOf: [

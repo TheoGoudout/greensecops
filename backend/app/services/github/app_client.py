@@ -43,6 +43,7 @@ class InstallationRepo:
     github_repo_id: int
     full_name: str
     default_branch: str
+    private: bool = False
 
 
 @dataclass
@@ -405,6 +406,7 @@ class GitHubAppClient:
                 github_repo_id=repo.id,
                 full_name=repo.full_name,
                 default_branch=repo.default_branch or "main",
+                private=bool(repo.private),
             )
 
         try:
@@ -422,6 +424,7 @@ class GitHubAppClient:
                     github_repo_id=repo.id,
                     full_name=repo.full_name,
                     default_branch=repo.default_branch or "main",
+                    private=bool(repo.private),
                 )
                 for repo in installation.get_repos()
             ]

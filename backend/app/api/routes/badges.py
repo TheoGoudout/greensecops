@@ -8,6 +8,7 @@ from app.api.deps import SessionDep
 from app.core.config import settings
 from app.models import Analysis, AnalysisStatus, Repository
 from app.services.badge_renderer import render_badge, render_unknown_badge
+from app.services.badge_signing import verify_badge
 from app.services.scoring import average_latest_scores, score_to_grade
 
 router = APIRouter(prefix="/badges", tags=["badges"])
@@ -57,6 +58,7 @@ def get_badge(
     repo: str,
     branch: str,
     session: SessionDep,
+    sig: str | None = None,
 ) -> Response:
     full_name = f"{owner}/{repo}"
 
@@ -64,7 +66,11 @@ def get_badge(
         select(Repository).where(Repository.full_name == full_name)
     ).first()
 
-    if not db_repo:
+    # Private repos require a valid signature so a guessed full_name can't leak
+    # their grade; public repos are served on plain URLs.
+    if not db_repo or (
+        db_repo.is_private and not verify_badge(owner, repo, branch, sig)
+    ):
         return Response(
             content=render_unknown_badge(),
             headers=_CACHE_HEADERS,
@@ -82,6 +88,7 @@ def get_badge_json(
     repo: str,
     branch: str,
     session: SessionDep,
+    sig: str | None = None,
 ) -> dict[str, object]:
     """Shields.io-compatible JSON endpoint."""
     full_name = f"{owner}/{repo}"
@@ -90,7 +97,9 @@ def get_badge_json(
         select(Repository).where(Repository.full_name == full_name)
     ).first()
 
-    if not db_repo:
+    if not db_repo or (
+        db_repo.is_private and not verify_badge(owner, repo, branch, sig)
+    ):
         return {
             "schemaVersion": 1,
             "label": settings.PROJECT_NAME,
