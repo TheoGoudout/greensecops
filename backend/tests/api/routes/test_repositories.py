@@ -1,6 +1,7 @@
 """Tests for the /api/v1/repositories/ endpoints."""
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -739,6 +740,67 @@ def test_list_workflow_files_returns_files(
     assert len(data) >= 1
     paths = [f["path"] for f in data]
     assert ".github/workflows/ci.yml" in paths
+
+
+def test_list_workflow_files_excludes_soft_deleted(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — one present file and one soft-deleted (removed from the repo).
+    present = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    deleted = WorkflowFile(
+        repo_id=repo.id,
+        path=".github/workflows/gone.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+        deleted_at=datetime.now(timezone.utc),
+    )
+    db.add(present)
+    db.add(deleted)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    paths = [f["path"] for f in response.json()]
+    assert ".github/workflows/ci.yml" in paths
+    assert ".github/workflows/gone.yml" not in paths
+
+
+def test_grade_excludes_soft_deleted_workflow_file(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    # Arrange — a present file scored 80 and a deleted file scored 40. The
+    # deleted file's stale analysis must not drag the grade down.
+    present = _make_workflow_file(db, repo, ".github/workflows/ci.yml")
+    deleted = _make_workflow_file(db, repo, ".github/workflows/gone.yml")
+    _make_completed_analysis(db, repo, present, score=80.0, grade="B")
+    _make_completed_analysis(db, repo, deleted, score=40.0, grade="F")
+    deleted.deleted_at = datetime.now(timezone.utc)
+    db.add(deleted)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    # Only the present file's score counts → avg 80, not (80+40)/2 = 60.
+    assert response.json()["avg_score"] == 80.0
 
 
 def test_list_workflow_files_not_found(

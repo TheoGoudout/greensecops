@@ -97,6 +97,11 @@ export function useRepoEvents(): void {
             invalidateRepoQueries(queryClient, repoId)
             invalidateAnalysisQueries(queryClient, repoId, analysisId)
             invalidateIssueQueries(queryClient, repoId, analysisId)
+            // A completed run may have soft-deleted workflow files that vanished
+            // from the repo; refresh the list so their cards drop out.
+            queryClient.invalidateQueries({
+              queryKey: ["workflow-files", repoId],
+            })
           }
           const grade = data.grade as string | undefined
           const score = data.score as number | undefined
@@ -124,6 +129,11 @@ export function useRepoEvents(): void {
         case "analysis.skipped":
           if (repoId) {
             invalidateAnalysisQueries(queryClient, repoId, analysisId)
+            // A per-file re-analysis of a since-deleted workflow reports
+            // "skipped"; refresh the list so its card drops out.
+            queryClient.invalidateQueries({
+              queryKey: ["workflow-files", repoId],
+            })
           }
           break
 
@@ -131,6 +141,9 @@ export function useRepoEvents(): void {
           if (repoId) {
             invalidateRepoQueries(queryClient, repoId)
             invalidateAnalysisQueries(queryClient, repoId, analysisId)
+            queryClient.invalidateQueries({
+              queryKey: ["workflow-files", repoId],
+            })
           }
           toast.info("No workflow files", {
             description:
