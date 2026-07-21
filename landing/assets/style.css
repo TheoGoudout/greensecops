@@ -45,19 +45,21 @@
   --border: oklch(0.88 0.015 152);
   --accent: #0ea5e9;
 
-  /* Grade colors */
+  /* Grade colors — matches backend/app/services/scoring.py's 8-tier scale exactly */
   --grade-aaa-bg: #d1fae5;
   --grade-aaa-fg: #065f46;
-  --grade-a-bg: #c5e8d5;
-  --grade-a-fg: #114f30;
+  --grade-app-bg: #bbf7d0;
+  --grade-app-fg: #047857;
+  --grade-apl-bg: #c5e8d5;
+  --grade-apl-fg: #114f30;
+  --grade-a-bg: #dcfce7;
+  --grade-a-fg: #166534;
   --grade-b-bg: #ecfccb;
   --grade-b-fg: #4d7c0f;
   --grade-c-bg: #fef9c3;
   --grade-c-fg: #a16207;
   --grade-d-bg: #ffedd5;
   --grade-d-fg: #c2410c;
-  --grade-e-bg: #fee2e2;
-  --grade-e-fg: #b91c1c;
   --grade-f-bg: #fecaca;
   --grade-f-fg: #7f1d1d;
 
@@ -87,6 +89,59 @@
   /* Typography */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ============================================================
+   DARK THEME — mirrors frontend/src/index.css .dark block
+   (landing has no --popover, --sidebar-*, or --chart-* tokens, skip those)
+   ============================================================ */
+.dark {
+  --background: oklch(0.145 0.02 253);
+  --foreground: oklch(0.97 0.005 152);
+  --card: oklch(0.19 0.02 253);
+  --card-foreground: oklch(0.97 0.005 152);
+  /* --green-50/--green-100 are used throughout as light hover/surface tints;
+     override so every consumer picks up a dark-appropriate tint automatically
+     instead of touching each selector individually. --green-900 is left
+     unchanged — it's used for intentionally-always-dark mockup surfaces
+     (code preview cards), not theme-dependent light surfaces. */
+  --green-50: rgba(95, 188, 139, 0.12);
+  --green-100: rgba(95, 188, 139, 0.22);
+  --primary: #5fbc8b;
+  --primary-dark: #114f30;
+  --primary-light: rgba(26, 122, 74, 0.18);
+  --primary-foreground: #0c3a23;
+  --secondary: oklch(0.24 0.02 253);
+  --muted: oklch(0.24 0.02 253);
+  --muted-foreground: #94a3b8;
+  --border: oklch(1 0 0 / 10%);
+  --accent: #38bdf8;
+
+  /* Grade colors — dark, matches backend/app/services/scoring.py's 8-tier scale exactly */
+  --grade-aaa-bg: rgba(16, 185, 129, 0.18);
+  --grade-aaa-fg: #6ee7b7;
+  --grade-app-bg: rgba(16, 185, 129, 0.15);
+  --grade-app-fg: #34d399;
+  --grade-apl-bg: rgba(26, 122, 74, 0.22);
+  --grade-apl-fg: #6ee7b7;
+  --grade-a-bg: rgba(26, 122, 74, 0.2);
+  --grade-a-fg: #5fbc8b;
+  --grade-b-bg: rgba(101, 163, 13, 0.2);
+  --grade-b-fg: #bef264;
+  --grade-c-bg: rgba(234, 179, 8, 0.18);
+  --grade-c-fg: #fde047;
+  --grade-d-bg: rgba(249, 115, 22, 0.18);
+  --grade-d-fg: #fdba74;
+  --grade-f-bg: rgba(127, 29, 29, 0.45);
+  --grade-f-fg: #fca5a5;
+
+  /* Shadows — dark (softer, on dark bg) */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 28px -8px rgba(0, 0, 0, 0.5), 0 6px 12px -6px rgba(0, 0, 0, 0.3);
+  --shadow-focus: 0 0 0 3px rgba(95, 188, 139, 0.35);
+  --glow-primary: 0 4px 16px -4px rgba(95, 188, 139, 0.4);
 }
 
 /* ============================================================
@@ -142,6 +197,10 @@ a { color: inherit; }
   border-bottom: 1px solid var(--border);
 }
 
+.dark .nav {
+  background: rgba(15, 23, 42, 0.85);
+}
+
 .nav__inner {
   display: flex;
   align-items: center;
@@ -167,11 +226,121 @@ a { color: inherit; }
   flex-shrink: 0;
 }
 
+.nav__logo img[data-logo="dark"] {
+  display: none;
+}
+
+.dark .nav__logo img[data-logo="light"] {
+  display: none;
+}
+
+.dark .nav__logo img[data-logo="dark"] {
+  display: block;
+}
+
 .nav__links {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   margin-left: auto;
+}
+
+/* ============================================================
+   THEME TOGGLE
+   ============================================================ */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
+}
+
+.theme-toggle:hover {
+  color: var(--foreground);
+  background: var(--green-50);
+}
+
+.theme-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.theme-toggle .icon-sun {
+  display: block;
+}
+
+.theme-toggle .icon-moon {
+  display: none;
+}
+
+.dark .theme-toggle .icon-sun {
+  display: none;
+}
+
+.dark .theme-toggle .icon-moon {
+  display: block;
+}
+
+.theme-menu {
+  position: relative;
+}
+
+.theme-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  min-width: 9.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.25rem;
+  display: none;
+  flex-direction: column;
+  z-index: 110;
+}
+
+.theme-menu__dropdown[data-open="true"] {
+  display: flex;
+}
+
+.theme-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: pointer;
+  text-align: left;
+}
+
+.theme-menu__item svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+}
+
+.theme-menu__item:hover {
+  background: var(--green-50);
+}
+
+.theme-menu__item[data-active="true"] {
+  color: var(--primary);
 }
 
 .nav__link {
@@ -763,11 +932,12 @@ a { color: inherit; }
 }
 
 .grade-badge--aaa { background: var(--grade-aaa-bg); color: var(--grade-aaa-fg); }
+.grade-badge--app { background: var(--grade-app-bg); color: var(--grade-app-fg); }
+.grade-badge--apl { background: var(--grade-apl-bg); color: var(--grade-apl-fg); }
 .grade-badge--a   { background: var(--grade-a-bg);   color: var(--grade-a-fg); }
 .grade-badge--b   { background: var(--grade-b-bg);   color: var(--grade-b-fg); }
 .grade-badge--c   { background: var(--grade-c-bg);   color: var(--grade-c-fg); }
 .grade-badge--d   { background: var(--grade-d-bg);   color: var(--grade-d-fg); }
-.grade-badge--e   { background: var(--grade-e-bg);   color: var(--grade-e-fg); }
 .grade-badge--f   { background: var(--grade-f-bg);   color: var(--grade-f-fg); }
 
 .grade-row__info {}
@@ -792,6 +962,97 @@ a { color: inherit; }
   gap: 0.625rem;
   flex-wrap: wrap;
   margin-bottom: 2.5rem;
+}
+
+/* ============================================================
+   BEFORE / AFTER COMPARISON
+   ============================================================ */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1.75rem;
+  align-items: center;
+}
+
+.compare-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.compare-panel__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.85rem;
+  border-radius: 100px;
+  width: fit-content;
+}
+
+.compare-panel__label--before {
+  color: var(--grade-d-fg);
+  background: var(--grade-d-bg);
+}
+
+.compare-panel__label--after {
+  color: var(--grade-aaa-fg);
+  background: var(--grade-aaa-bg);
+}
+
+.compare-panel__grade {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.compare-panel__grade-text {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.compare-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary);
+  padding: 0 0.25rem;
+}
+
+.compare-arrow svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+}
+
+.compare-arrow span {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-align: center;
+  max-width: 9ch;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 900px) {
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-arrow {
+    flex-direction: row;
+    justify-self: center;
+  }
+
+  .compare-arrow svg {
+    transform: rotate(90deg);
+  }
 }
 
 /* ============================================================
