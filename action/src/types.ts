@@ -10,6 +10,14 @@ export interface RunnerSpecs {
   disk_free_gb?: number
 }
 
+export interface TopProcess {
+  pid: number
+  name: string
+  cpu_percent: number
+  mem_percent: number
+  mem_rss_mb: number
+}
+
 export interface MetricsSample {
   collected_at: number
   cpu_load_percent?: number
@@ -20,6 +28,9 @@ export interface MetricsSample {
   net_bytes_recv?: number
   // set by the post step only: wall-clock duration of the workflow run
   duration_ms?: number
+  // Linux-only, from the proc-sampler binary; absent on other platforms or
+  // if the binary is unavailable/fails.
+  top_processes?: TopProcess[]
 }
 
 import type { TelemetryPhase } from "./client/types.gen"

@@ -1,0 +1,73 @@
+name: Build proc-sampler
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "action/native/proc-sampler/**"
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths:
+      - "action/native/proc-sampler/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Vet and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: action/native/proc-sampler
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Go version
+        run: go version
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -v
+
+  build:
+    name: Build linux/${{ matrix.arch }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        arch:
+          - "386"
+          - amd64
+          - arm64
+    defaults:
+      run:
+        working-directory: action/native/proc-sampler
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Cross-compile
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: go build -o build/proc-sampler-linux-${{ matrix.arch }} .
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: proc-sampler-linux-${{ matrix.arch }}
+          path: action/native/proc-sampler/build/proc-sampler-linux-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 7

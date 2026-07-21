@@ -1503,6 +1503,21 @@ export const SamplePayloadSchema = {
                 }
             ],
             title: 'Net Bytes Recv'
+        },
+        top_processes: {
+            anyOf: [
+                {
+                    items: {
+                        additionalProperties: true,
+                        type: 'object'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Top Processes'
         }
     },
     type: 'object',

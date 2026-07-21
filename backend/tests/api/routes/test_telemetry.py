@@ -288,6 +288,60 @@ def test_sample_stores_metrics(
     assert samples[0].ram_used_mb == pytest.approx(1024.0)
 
 
+def test_sample_stores_top_processes_as_json(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    _override_oidc(_oidc_claims(repo.full_name, run_id=6002))
+    top_processes = [
+        {"pid": 1, "name": "node", "cpu_percent": 42.0, "mem_percent": 5.0},
+        {"pid": 2, "name": "bash", "cpu_percent": 1.0, "mem_percent": 0.1},
+    ]
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/telemetry/sample",
+            json={
+                "workflow_run_id": 6002,
+                "cpu_percent": 12.0,
+                "top_processes": top_processes,
+            },
+            headers={"Authorization": "Bearer mock-oidc-token"},
+        )
+    finally:
+        _clear_oidc()
+
+    assert response.status_code == 200
+
+    sample = db.exec(
+        select(TelemetryMetricSample)
+        .where(TelemetryMetricSample.repo_id == repo.id)
+        .where(TelemetryMetricSample.workflow_run_id == 6002)
+    ).one()
+    assert json.loads(sample.top_processes) == top_processes
+
+
+def test_sample_omits_top_processes_when_absent(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    _override_oidc(_oidc_claims(repo.full_name, run_id=6003))
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/telemetry/sample",
+            json={"workflow_run_id": 6003, "cpu_percent": 12.0},
+            headers={"Authorization": "Bearer mock-oidc-token"},
+        )
+    finally:
+        _clear_oidc()
+
+    assert response.status_code == 200
+
+    sample = db.exec(
+        select(TelemetryMetricSample)
+        .where(TelemetryMetricSample.repo_id == repo.id)
+        .where(TelemetryMetricSample.workflow_run_id == 6003)
+    ).one()
+    assert sample.top_processes is None
+
+
 def test_sample_unknown_repo_returns_ok(client: TestClient) -> None:
     _override_oidc(_oidc_claims("ghost/repo", run_id=7001))
     try:

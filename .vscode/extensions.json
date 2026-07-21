@@ -10,6 +10,7 @@
         "mjmlio.vscode-mjml",
         "ms-playwright.playwright",
         "ms-python.python",
-        "tombi-toml.tombi"
+        "tombi-toml.tombi",
+        "golang.go"
     ]
 }

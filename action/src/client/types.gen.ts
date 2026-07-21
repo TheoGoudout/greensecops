@@ -809,6 +809,12 @@ export type SamplePayload = {
      * Net Bytes Recv
      */
     net_bytes_recv?: number | null;
+    /**
+     * Top Processes
+     */
+    top_processes?: Array<{
+        [key: string]: unknown;
+    }> | null;
 };
 
 /**

@@ -51,6 +51,9 @@ class SamplePayload(BaseModel):
     disk_used_gb: float | None = None
     net_bytes_sent: int | None = None
     net_bytes_recv: int | None = None
+    # Top 5-10% resource-consuming processes from the proc-sampler binary
+    # (Linux runners only); absent elsewhere or if sampling failed.
+    top_processes: list[dict[str, Any]] | None = None
 
 
 def _lookup_repo(session: SessionDep, repository: str) -> Repository | None:
@@ -138,6 +141,9 @@ async def ingest_sample(
         disk_used_gb=payload.disk_used_gb,
         net_bytes_sent=payload.net_bytes_sent,
         net_bytes_recv=payload.net_bytes_recv,
+        top_processes=(
+            json.dumps(payload.top_processes) if payload.top_processes else None
+        ),
     )
 
     try:
