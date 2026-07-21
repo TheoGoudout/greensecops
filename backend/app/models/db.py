@@ -205,6 +205,11 @@ class WorkflowFile(SQLModel, table=True):
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
+    # Soft-delete marker: set when the path no longer exists on its branch (the
+    # file was deleted/renamed in the repo). The row is kept so its resolved
+    # issues and analysis history stay queryable, but it is filtered out of the
+    # static-analysis view and repo grade. Cleared when the same path reappears.
+    deleted_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # Cumulative count of AI fix generations (initial + regenerate) billed
     # against this workflow file. Survives the Fix row being deleted and
     # recreated on regenerate, unlike a live-row count.

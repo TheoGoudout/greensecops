@@ -356,11 +356,14 @@ def _resolve_issues_for_missing_files(
 ) -> None:
     """Reconcile workflow files that no longer exist on the analysed branch.
 
-    Resolves their open issues (``file_removed``) and withdraws any
-    non-terminal fix targeting them, so a stale ``ready``/``delivered`` fix
-    can't later resurrect content the user deliberately deleted. Scoped to the
-    branch that was fetched: a feature branch missing a file says nothing
-    about the default branch (and vice versa).
+    Soft-deletes the row (``deleted_at``) so it drops out of the
+    static-analysis view and repo grade, resolves its open issues
+    (``file_removed``), and withdraws any non-terminal fix targeting it, so a
+    stale ``ready``/``delivered`` fix can't later resurrect content the user
+    deliberately deleted. The row itself is kept (not hard-deleted) so its
+    resolved issues and analysis history stay queryable, and so a re-added path
+    can be cleanly restored. Scoped to the branch that was fetched: a feature
+    branch missing a file says nothing about the default branch (and vice versa).
     """
     now = datetime.now(timezone.utc)
     wf_rows = session.exec(
@@ -370,9 +373,14 @@ def _resolve_issues_for_missing_files(
     ).all()
     resolved = 0
     superseded = 0
+    deleted = 0
     for wf in wf_rows:
         if wf.path in fetched_paths:
             continue
+        if wf.deleted_at is None:
+            wf.deleted_at = now
+            session.add(wf)
+            deleted += 1
         open_issues = session.exec(
             select(Issue)
             .where(Issue.workflow_file_id == wf.id)
@@ -388,11 +396,12 @@ def _resolve_issues_for_missing_files(
         ):
             session.add(wf.fix)
             superseded += 1
-    if resolved or superseded:
+    if resolved or superseded or deleted:
         session.commit()
         logger.info(
-            "Resolved %d issue(s) and superseded %d fix(es) for deleted "
-            "workflow files in repo %s",
+            "Soft-deleted %d workflow file(s), resolved %d issue(s) and "
+            "superseded %d fix(es) for deleted workflow files in repo %s",
+            deleted,
             resolved,
             superseded,
             repo.full_name,
@@ -427,6 +436,12 @@ def _run_static_analysis_impl(
         org_id = str(repo.org_id)
         effective_branch = branch or repo.default_branch
 
+        # Both paths re-fetch the current workflow files from GitHub and
+        # reconcile deletions; a single-file run just narrows the analysed set
+        # to its own file afterwards. Re-fetching (rather than re-using the
+        # stored ``raw_content``) is what keeps a deleted file from being
+        # re-analysed off stale content.
+        single_path: str | None = None
         if workflow_file_id:
             wf = session.get(WorkflowFile, uuid.UUID(workflow_file_id))
             if wf is None:
@@ -434,34 +449,51 @@ def _run_static_analysis_impl(
             # A single-file run analyses the row's own branch, whatever branch
             # the caller passed.
             effective_branch = wf.branch
-            workflow_files_to_analyse: Sequence[WorkflowFile | WorkflowFileContent] = [
-                wf
-            ]
+            single_path = wf.path
+            fetch_ref = commit_sha or wf.branch or None
         else:
-            try:
-                workflow_files_to_analyse = _fetch_workflow_files(
-                    repo, ref=commit_sha or branch or None
-                )
-            except Exception as exc:
-                logger.exception(
-                    "Failed to fetch workflow files for %s: %s", repo.full_name, exc
-                )
-                events_pub.publish_event(
-                    ev.analysis_failed(
-                        org_id,
-                        repo_id,
-                        "",
-                        f"could not fetch workflow files: {exc}"[:200],
-                    )
-                )
-                raise WorkflowFetchError(str(exc)) from exc
+            fetch_ref = commit_sha or branch or None
 
-            # Workflow files deleted/renamed since the last run: resolve their
-            # open issues so they stop showing up as current findings.
-            fetched_paths = {f.path for f in workflow_files_to_analyse}
-            _resolve_issues_for_missing_files(
-                session, repo, fetched_paths, effective_branch
+        try:
+            fetched = _fetch_workflow_files(repo, ref=fetch_ref)
+        except Exception as exc:
+            logger.exception(
+                "Failed to fetch workflow files for %s: %s", repo.full_name, exc
             )
+            events_pub.publish_event(
+                ev.analysis_failed(
+                    org_id,
+                    repo_id,
+                    "",
+                    f"could not fetch workflow files: {exc}"[:200],
+                )
+            )
+            raise WorkflowFetchError(str(exc)) from exc
+
+        # Workflow files deleted/renamed since the last run: soft-delete them
+        # and resolve their open issues so they stop showing up as current
+        # findings.
+        fetched_paths = {f.path for f in fetched}
+        _resolve_issues_for_missing_files(
+            session, repo, fetched_paths, effective_branch
+        )
+
+        workflow_files_to_analyse: Sequence[WorkflowFile | WorkflowFileContent]
+        if single_path is not None:
+            # Per-file re-analysis: only the target file, using its freshly
+            # fetched content. If the path is gone it was just reconciled above,
+            # so there is nothing to re-analyse and no issues to regenerate.
+            match = next((f for f in fetched if f.path == single_path), None)
+            if match is None:
+                events_pub.publish_event(ev.analysis_skipped(org_id, repo_id, ""))
+                return {
+                    "status": "workflow_file_removed",
+                    "repo_id": repo_id,
+                    "results": "[]",
+                }
+            workflow_files_to_analyse = [match]
+        else:
+            workflow_files_to_analyse = fetched
 
         if not workflow_files_to_analyse:
             now = datetime.now(timezone.utc)
@@ -557,6 +589,9 @@ def _run_static_analysis_impl(
                 else:
                     wf_record.content_hash = content_hash
                     wf_record.raw_content = content
+                    # The path reappeared on its branch: clear the soft-delete
+                    # marker so it shows in the static-analysis view again.
+                    wf_record.deleted_at = None
                     session.add(wf_record)
                     # The path reappeared: give a fix withdrawn for its
                     # deletion a path back to `ready` instead of leaving it

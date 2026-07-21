@@ -2,6 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -139,12 +140,17 @@ def test_no_workflow_files_returns_terminal_status_and_event(
     assert len(events_published) == 1
 
 
-def test_with_workflow_file_id_skips_fetch(
+def test_with_workflow_file_id_refetches_to_verify_existence(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
-    # Arrange — pass workflow_file_id directly; _fetch should NOT be called
+    # A single-file re-analysis re-fetches from GitHub (rather than trusting the
+    # stored content) so a since-deleted file is not re-analysed off stale data.
+    # When the file is still present, analysis completes normally.
     with (
-        patch("app.workers.tasks.static_analysis._fetch_workflow_files") as mock_fetch,
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ) as mock_fetch,
         patch(
             "app.workers.tasks.static_analysis._evaluate",
             return_value=[],
@@ -155,8 +161,8 @@ def test_with_workflow_file_id_skips_fetch(
             workflow_file_id=str(workflow_file.id),
         )
 
-    # Assert — fetch was never called
-    mock_fetch.assert_not_called()
+    # Assert — fetch WAS called (existence check) and analysis completed.
+    mock_fetch.assert_called_once()
     assert result["status"] == "done"
 
 
@@ -669,6 +675,103 @@ def test_issues_of_deleted_workflow_files_are_resolved(
     db.refresh(issue)
     assert issue.resolved_at is not None
     assert issue.resolution_reason == IssueResolutionReason.file_removed
+    # The row is soft-deleted so it drops out of the static-analysis view.
+    db.refresh(workflow_file)
+    assert workflow_file.deleted_at is not None
+
+
+def test_reappearing_workflow_file_clears_soft_delete(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> None:
+    # Arrange — the file was previously deleted from the repo.
+    workflow_file.deleted_at = datetime.now(timezone.utc)
+    db.add(workflow_file)
+    db.commit()
+
+    # A later push re-adds the same path: fetch returns fresh GitHub content
+    # matched to the existing row by path.
+    reappeared = WorkflowFileContent(
+        path=workflow_file.path,
+        content="on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: []\n",
+        content_hash="unused",
+        sha="deadbeef",
+    )
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[reappeared],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    db.refresh(workflow_file)
+    assert workflow_file.deleted_at is None
+
+
+def test_single_file_reanalysis_of_deleted_file_does_not_regenerate_issues(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    # Arrange — an initial run produces an open issue on the file.
+    violation = FakeViolation(
+        rule_slug=seeded_rule.slug,
+        severity=seeded_rule.severity.value,
+        category=seeded_rule.category.value,
+        line_start=1,
+        line_end=1,
+        message="workflow will be deleted",
+        job="build",
+    )
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[workflow_file],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    issue = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).first()
+    assert issue is not None
+    analyses_before = len(
+        db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
+    )
+
+    # The file has since been deleted from the repo: fetch returns nothing.
+    # A per-file "Re-analyze" must NOT re-run OPA on the stale stored content
+    # and resurrect the issue.
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[],
+        ),
+        patch(
+            "app.workers.tasks.static_analysis._evaluate",
+            return_value=[violation],
+        ) as evaluate_mock,
+    ):
+        result = _run_static_analysis_impl(
+            str(repo.id), workflow_file_id=str(workflow_file.id), force=True
+        )
+
+    assert result["status"] == "workflow_file_removed"
+    # OPA was never invoked and no new analysis row was created.
+    evaluate_mock.assert_not_called()
+    analyses_after = len(
+        db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
+    )
+    assert analyses_after == analyses_before
+    # The issue stays resolved (file_removed), not reopened.
+    db.refresh(issue)
+    assert issue.resolved_at is not None
+    assert issue.resolution_reason == IssueResolutionReason.file_removed
+    db.refresh(workflow_file)
+    assert workflow_file.deleted_at is not None
 
 
 def test_fix_is_superseded_when_its_workflow_file_is_deleted(

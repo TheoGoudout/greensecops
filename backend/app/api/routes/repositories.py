@@ -58,6 +58,9 @@ def _compute_repo_grade(
         .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
         .where(Analysis.repo_id == repo_id)
         .where(WorkflowFile.branch == Repository.default_branch)
+        # Exclude workflow files deleted from the repo: their stale analysis
+        # must not skew the grade.
+        .where(col(WorkflowFile.deleted_at).is_(None))
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
@@ -90,6 +93,9 @@ def _compute_grades_batch(
         .where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
         # Default-branch scope: feature-branch analyses must not skew grades.
         .where(WorkflowFile.branch == Repository.default_branch)
+        # Exclude workflow files deleted from the repo: stale analysis of a
+        # removed file must not skew the grade.
+        .where(col(WorkflowFile.deleted_at).is_(None))
         .where(Analysis.status == AnalysisStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
@@ -249,6 +255,9 @@ def list_workflow_files(
         select(WorkflowFile)
         .where(WorkflowFile.repo_id == repo.id)
         .where(WorkflowFile.branch == (branch or repo.default_branch))
+        # Soft-deleted files (path removed from the repo) are kept for history
+        # but must not show as current workflows.
+        .where(col(WorkflowFile.deleted_at).is_(None))
     ).all()
     return [
         WorkflowFilePublic(
