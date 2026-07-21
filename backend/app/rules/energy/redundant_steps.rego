@@ -2,7 +2,7 @@
 # title: Redundant steps across jobs
 # description: Identical setup steps (checkout, dependency install) are duplicated across jobs without using reusable workflows or job outputs.
 # custom:
-#   severity: medium
+#   severity: low
 #   detection: heuristic
 #   examples:
 #     bad: |

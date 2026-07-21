@@ -1,6 +1,6 @@
 # METADATA
 # title: Excessive GITHUB_TOKEN permissions
-# description: "Workflow uses permissions: write-all or does not restrict token scope. The GITHUB_TOKEN should follow least privilege — declare only the permissions actually needed."
+# description: "Workflow uses permissions: write-all (critical), grants write access to more than 3 scopes at the workflow level (high), or a job uses GitHub Actions without declaring any explicit permissions block (medium). The GITHUB_TOKEN should follow least privilege — declare only the permissions actually needed."
 # custom:
 #   severity: critical
 #   detection: static_analysis

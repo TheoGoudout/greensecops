@@ -2,7 +2,7 @@
 # title: Duplicated workflow blocks
 # description: Identical job definitions appear across multiple workflow files without using reusable workflows (workflow_call trigger).
 # custom:
-#   severity: medium
+#   severity: info
 #   detection: heuristic
 #   examples:
 #     bad: |

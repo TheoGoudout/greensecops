@@ -2,7 +2,7 @@
 # title: Duplicated jobs without matrix strategy
 # description: Multiple nearly-identical jobs differ only in a parameter (OS, Node version, etc.) but do not use a matrix strategy.
 # custom:
-#   severity: low
+#   severity: medium
 #   detection: heuristic
 #   examples:
 #     bad: |

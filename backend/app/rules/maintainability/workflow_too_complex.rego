@@ -2,7 +2,7 @@
 # title: Workflow exceeds complexity threshold
 # description: Workflow has more than 20 steps across jobs without using reusable workflows or composite actions to reduce complexity.
 # custom:
-#   severity: low
+#   severity: info
 #   detection: heuristic
 #   examples:
 #     bad: |

@@ -2,7 +2,7 @@
 # title: Large runner without justification
 # description: A GPU or large runner is used but no compute-intensive steps (model training, heavy compilation) are present.
 # custom:
-#   severity: low
+#   severity: high
 #   detection: pattern_matching
 #   examples:
 #     bad: |

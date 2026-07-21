@@ -2,7 +2,7 @@
 # title: No retry on flaky network step
 # description: Steps that download external dependencies or call external APIs have no retry logic, making the pipeline fragile to transient network failures.
 # custom:
-#   severity: low
+#   severity: medium
 #   detection: pattern_matching
 #   examples:
 #     bad: |
