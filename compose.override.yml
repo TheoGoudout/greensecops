@@ -38,13 +38,13 @@ services:
       - "8000:8000"
     environment: &backend-required-env
       FRONTEND_HOST: ${FRONTEND_HOST?Variable not set}
+      GREENSECOPS_PUBLIC_URL: ${GREENSECOPS_PUBLIC_URL:-}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS?Variable not set}
       SECRET_KEY: ${SECRET_KEY?Variable not set}
       FIRST_SUPERUSER: ${FIRST_SUPERUSER?Variable not set}
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD?Variable not set}
       POSTGRES_USER: ${POSTGRES_USER?Variable not set}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Variable not set}
-      GITHUB_WEBHOOK_URL: ${GITHUB_WEBHOOK_URL:-}
       SMTP_HOST: "mailcatcher"
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
@@ -150,8 +150,8 @@ services:
       target: dev-stage
     environment:
       - VITE_API_URL=http://localhost:8000
-      - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
       - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
+      - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
     develop:
       watch:
         - path: ./frontend/src
@@ -171,8 +171,8 @@ services:
       - "3001:80"
     environment:
       APP_URL: ${FRONTEND_HOST:-http://localhost:5173}
-      DOCS_URL: ${DOCS_URL:-http://localhost:3002}
       MARKETING_URL: ${MARKETING_URL:-https://greensecops.com}
+      DOCS_URL: ${DOCS_URL:-http://localhost:3002}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@greensecops.com}
       SALES_EMAIL: ${SALES_EMAIL:-sales@greensecops.com}
       LEGAL_EMAIL: ${LEGAL_EMAIL:-legal@greensecops.com}

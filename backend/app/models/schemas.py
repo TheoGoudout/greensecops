@@ -119,9 +119,28 @@ class IssuePublic(SQLModel):
     created_at: datetime | None = None
     resolved_at: datetime | None = None
     resolution_reason: IssueResolutionReason | None = None
+    needs_manual_work: bool = False
+    manual_work_note: str | None = None
     fix_id: uuid.UUID | None = None
     fix_status: FixStatus | None = None
     workflow_file_path: str | None = None
+
+
+class IssueCategoryStat(SQLModel):
+    category: IssueCategory
+    open: int
+    resolved: int
+    critical_open: int
+
+
+class IssueStatsPublic(SQLModel):
+    """Exact issue counts, computed by SQL aggregation rather than fetched and
+    counted client-side — unaffected by any page's ``skip``/``limit``."""
+
+    total_open: int
+    total_resolved: int
+    critical_open: int
+    by_category: list[IssueCategoryStat]
 
 
 class FixIssueSummary(SQLModel):

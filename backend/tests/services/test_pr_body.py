@@ -70,7 +70,7 @@ def test_build_pr_body_includes_issue_row(single_issue: IssueInfo) -> None:
     )
 
     assert "Unpinned Actions" in body
-    assert "https://wiki.example.com/rules/unpinned-actions" in body
+    assert "https://wiki.example.com/rules/security/unpinned-actions.html" in body
     assert "Security" in body
     assert "High" in body
     assert "Action uses a mutable tag instead of a pinned SHA" in body

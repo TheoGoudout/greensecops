@@ -2,7 +2,7 @@
 # title: Long-lived cloud credentials instead of OIDC
 # description: Workflow uses static cloud credentials (AWS_ACCESS_KEY_ID, etc.) stored as secrets instead of OIDC short-lived tokens.
 # custom:
-#   severity: medium
+#   severity: high
 #   detection: static_analysis
 #   examples:
 #     bad: |

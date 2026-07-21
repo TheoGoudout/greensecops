@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CreditCard,
   GitBranch,
+  PieChart,
   TrendingDown,
   TrendingUp,
 } from "lucide-react"
@@ -17,9 +18,11 @@ import {
   IssuesService,
   RepositoriesService,
 } from "@/client"
+import { CategoryIcon } from "@/components/CategoryIcon"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/_layout/dashboard")({
@@ -153,15 +156,11 @@ function Dashboard() {
     queryFn: () => AnalysesService.listAnalyses({ limit: 200 }),
   })
 
-  const { data: openIssues, isLoading: openIssuesLoading } = useQuery({
-    queryKey: ["issues", "open"],
-    queryFn: () => IssuesService.listIssues({ limit: 200 }),
-  })
-
-  const { data: allIssues, isLoading: allIssuesLoading } = useQuery({
-    queryKey: ["issues", "all"],
-    queryFn: () =>
-      IssuesService.listIssues({ includeResolved: true, limit: 200 }),
+  // Exact counts from SQL aggregation — unlike a listIssues(limit: 200) fetch,
+  // this never undercounts once an org crosses 200 issues.
+  const { data: issueStats, isLoading: issueStatsLoading } = useQuery({
+    queryKey: ["issues", "stats"],
+    queryFn: () => IssuesService.getIssueStats(),
   })
 
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
@@ -188,16 +187,29 @@ function Dashboard() {
       ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
       : null
 
-  const openCount = openIssues?.length ?? 0
-  const totalIssueCount = allIssues?.length ?? 0
-  const resolvedCount = Math.max(totalIssueCount - openCount, 0)
-  const criticalCount =
-    openIssues?.filter((i) => i.severity === "critical").length ?? 0
+  const openCount = issueStats?.total_open ?? 0
+  const resolvedCount = issueStats?.total_resolved ?? 0
+  const totalIssueCount = openCount + resolvedCount
+  const criticalCount = issueStats?.critical_open ?? 0
 
   const fixRate =
     totalIssueCount > 0
       ? Math.round((resolvedCount / totalIssueCount) * 100)
       : 0
+
+  // Per-category open-issue breakdown for the health diagram, in a stable
+  // category order regardless of which categories have issues right now.
+  const categoryHealth = useMemo(() => {
+    return ISSUE_CATEGORIES.map((category) => {
+      const stat = issueStats?.by_category?.find((c) => c.category === category)
+      return {
+        category,
+        open: stat?.open ?? 0,
+        criticalOpen: stat?.critical_open ?? 0,
+      }
+    })
+  }, [issueStats])
+  const maxCategoryOpen = Math.max(...categoryHealth.map((c) => c.open), 1)
 
   // Per-repo first vs. latest score averaged across all workflow files
   const repoHealthData = useMemo(() => {
@@ -287,17 +299,18 @@ function Dashboard() {
           loading={reposLoading}
         />
         <StatCard
-          icon={TrendingUp}
-          title="Average score"
-          value={avgScore !== null ? `${avgScore}/100` : "—/100"}
-          loading={analysesLoading}
-        />
-        <StatCard
           icon={AlertCircle}
           title="Open issues"
           value={openCount}
-          hint={`${resolvedCount} resolved · ${criticalCount} critical`}
-          loading={openIssuesLoading || allIssuesLoading}
+          hint={`${criticalCount} critical`}
+          loading={issueStatsLoading}
+        />
+        <StatCard
+          icon={CheckCircle2}
+          title="Fix rate"
+          value={`${fixRate}%`}
+          hint={`${resolvedCount} of ${totalIssueCount} resolved`}
+          loading={issueStatsLoading}
         />
       </div>
 
@@ -305,7 +318,15 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Repository Health</CardTitle>
+            <CardTitle className="text-base flex items-center justify-between">
+              Repository Health
+              <span className="text-xs font-normal text-muted-foreground">
+                Avg score:{" "}
+                <span className="font-medium tabular-nums text-foreground">
+                  {avgScore !== null ? `${avgScore}/100` : "—/100"}
+                </span>
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {analysesLoading || reposLoading ? (
@@ -403,6 +424,15 @@ function Dashboard() {
                   used={subscription.repos_used ?? 0}
                   limit={limits?.repos ?? null}
                 />
+                {subscription.period_end && (
+                  <p className="text-xs text-muted-foreground text-right">
+                    Analyses/fixes reset{" "}
+                    {new Date(subscription.period_end).toLocaleDateString(
+                      undefined,
+                      { year: "numeric", month: "short", day: "numeric" },
+                    )}
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
@@ -413,41 +443,65 @@ function Dashboard() {
         </Card>
       </div>
 
-      {/* Fix Rate + Grade Distribution */}
+      {/* Category Health + Grade Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-              Fix Rate
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+              Category Health
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center gap-3 pt-4 pb-6">
-            {openIssuesLoading || allIssuesLoading ? (
-              <Skeleton className="h-16 w-24" />
+          <CardContent className="space-y-2">
+            {issueStatsLoading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-5 w-full" />
+                ))}
+              </div>
+            ) : totalIssueCount === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                No open issues — nothing to show yet.
+              </p>
             ) : (
-              <>
-                <span className="text-5xl font-bold tabular-nums">
-                  {fixRate}%
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  of issues resolved
-                </span>
-                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all"
-                    style={{ width: `${fixRate}%` }}
-                  />
+              categoryHealth.map(({ category, open, criticalOpen }) => (
+                <div key={category} className="flex items-center gap-3">
+                  <div className="w-32 flex-shrink-0">
+                    <CategoryIcon
+                      category={category}
+                      withLabel
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        criticalOpen > 0
+                          ? "bg-red-500"
+                          : open > 0
+                            ? "bg-amber-500"
+                            : "bg-emerald-500",
+                      )}
+                      style={{
+                        width:
+                          open > 0
+                            ? `${Math.round((open / maxCategoryOpen) * 100)}%`
+                            : "4px",
+                      }}
+                    />
+                  </div>
+                  <span className="w-20 text-right text-xs text-muted-foreground tabular-nums">
+                    {open} open
+                    {criticalOpen > 0 ? ` · ${criticalOpen} crit.` : ""}
+                  </span>
                 </div>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {resolvedCount} resolved · {openCount} open
-                </span>
-              </>
+              ))
             )}
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Grade Distribution</CardTitle>
           </CardHeader>

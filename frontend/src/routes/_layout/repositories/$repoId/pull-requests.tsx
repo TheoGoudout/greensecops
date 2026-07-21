@@ -16,7 +16,11 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
-import { repoFixBranch, workflowFixBranch } from "@/lib/delivery"
+import {
+  INTEGRATE_ACTION_BRANCH,
+  repoFixBranch,
+  workflowFixBranch,
+} from "@/lib/delivery"
 import {
   ciStatusColor,
   ciStatusLabel,
@@ -283,13 +287,15 @@ function PullRequestsPage() {
                   const lastActivity = pr.updated_at ?? pr.created_at
                   const wfName =
                     pr.pr_branch === repoBranch
-                      ? "all workflows"
-                      : fixByBranch.get(pr.pr_branch)?.workflow_file_path
-                        ? workflowLabel(
-                            fixByBranch.get(pr.pr_branch)!.workflow_file_path ??
-                              "",
-                          )
-                        : null
+                      ? "All workflows"
+                      : pr.pr_branch === INTEGRATE_ACTION_BRANCH
+                        ? "Integrate action"
+                        : fixByBranch.get(pr.pr_branch)?.workflow_file_path
+                          ? workflowLabel(
+                              fixByBranch.get(pr.pr_branch)!
+                                .workflow_file_path ?? "",
+                            )
+                          : null
                   const mergeable = mergeableIndicator(pr.mergeable_state)
                   const action = prAction(pr)
                   return (
@@ -325,7 +331,12 @@ function PullRequestsPage() {
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground min-w-0">
                           {wfName && (
-                            <span className="font-mono truncate">{wfName}</span>
+                            <>
+                              <span className="font-mono truncate">
+                                {wfName}
+                              </span>
+                              <span className="shrink-0">—</span>
+                            </>
                           )}
                           {pr.ci_status && pr.ci_status !== "none" && (
                             <StatusPill

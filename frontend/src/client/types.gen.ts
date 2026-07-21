@@ -148,6 +148,13 @@ export type InstallationSyncRequest = {
 
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
 
+export type IssueCategoryStat = {
+    category: IssueCategory;
+    open: number;
+    resolved: number;
+    critical_open: number;
+};
+
 export type IssuePublic = {
     id: string;
     analysis_id: string;
@@ -163,6 +170,8 @@ export type IssuePublic = {
     created_at?: (string | null);
     resolved_at?: (string | null);
     resolution_reason?: (IssueResolutionReason | null);
+    needs_manual_work?: boolean;
+    manual_work_note?: (string | null);
     fix_id?: (string | null);
     fix_status?: (FixStatus | null);
     workflow_file_path?: (string | null);
@@ -185,6 +194,17 @@ export type IssuePublic = {
 export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged' | 'branch_deleted';
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+/**
+ * Exact issue counts, computed by SQL aggregation rather than fetched and
+ * counted client-side — unaffected by any page's ``skip``/``limit``.
+ */
+export type IssueStatsPublic = {
+    total_open: number;
+    total_resolved: number;
+    critical_open: number;
+    by_category: Array<IssueCategoryStat>;
+};
 
 /**
  * Derived lifecycle of an issue.
@@ -285,6 +305,9 @@ export type SamplePayload = {
     disk_used_gb?: (number | null);
     net_bytes_sent?: (number | null);
     net_bytes_recv?: (number | null);
+    top_processes?: (Array<{
+    [key: string]: unknown;
+}> | null);
 };
 
 export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed';
@@ -624,6 +647,14 @@ export type IssuesListIssuesData = {
 };
 
 export type IssuesListIssuesResponse = (Array<IssuePublic>);
+
+export type IssuesGetIssueStatsData = {
+    branch?: (string | null);
+    latestOnly?: boolean;
+    repoId?: (string | null);
+};
+
+export type IssuesGetIssueStatsResponse = (IssueStatsPublic);
 
 export type IssuesGetIssueData = {
     issueId: string;

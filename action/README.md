@@ -30,6 +30,23 @@ Add it as the **last step** in your job to capture accurate resource usage.
 - RAM usage (used MB, %)
 - Disk usage
 - Network I/O counters
-- Top 5 processes by CPU time
+- Top 5-10% resource-consuming processes by CPU/RAM (Linux runners only, via
+  the bundled `proc-sampler` binary — silently omitted elsewhere)
 
 All data is sent to your GreenSecOps instance only. Nothing is shared externally.
+
+## Development
+
+`dist/` is committed (this action ships without a consumer-side build step,
+same as every other `uses:`-able action). `dist/bin/proc-sampler-linux-*` are
+prebuilt Go binaries, not bundled by `ncc` — cross-compile them first, then
+`bun run build` copies them in:
+
+```bash
+cd native/proc-sampler
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/proc-sampler-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o build/proc-sampler-linux-arm64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=386   go build -o build/proc-sampler-linux-386 .
+cd ../..
+bun run build
+```

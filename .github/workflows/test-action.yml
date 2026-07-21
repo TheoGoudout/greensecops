@@ -50,3 +50,11 @@ jobs:
 
       - name: Test
         run: bun run test:coverage
+
+      - name: Vet proc-sampler (Go)
+        working-directory: action/native/proc-sampler
+        run: go vet ./...
+
+      - name: Test proc-sampler (Go)
+        working-directory: action/native/proc-sampler
+        run: go test ./...

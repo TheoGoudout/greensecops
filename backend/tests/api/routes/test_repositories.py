@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from app.api.routes.repositories import _inject_action_into_workflow
 from app.core.config import settings
 from app.models import (
     Analysis,
@@ -752,6 +753,45 @@ def test_list_workflow_files_not_found(
     assert response.status_code == 404
 
 
+# ─── _inject_action_into_workflow ───────────────────────────────────────────
+
+_WORKFLOW_NO_ACTION = (
+    "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+    "    steps:\n      - uses: actions/checkout@v4\n"
+)
+
+
+def test_inject_action_uses_default_ref_when_omitted() -> None:
+    new_content, modified = _inject_action_into_workflow(_WORKFLOW_NO_ACTION)
+    assert modified is True
+    assert f"uses: {settings.GITHUB_ACTION_REF}\n" in new_content
+
+
+def test_inject_action_uses_pinned_ref_when_provided() -> None:
+    pinned_ref = "greensecops/greensecops-action@" + "a" * 40 + " # v1"
+    new_content, modified = _inject_action_into_workflow(
+        _WORKFLOW_NO_ACTION, action_ref=pinned_ref
+    )
+    assert modified is True
+    assert f"uses: {pinned_ref}\n" in new_content
+
+
+def test_inject_action_already_present_detected_with_pinned_ref() -> None:
+    # "already present" detection compares by owner/repo prefix, so a
+    # previously-injected pinned step is still recognized on a second pass.
+    # (permissions already set too, else that insertion alone would report modified.)
+    pinned_ref = "greensecops/greensecops-action@" + "a" * 40 + " # v1"
+    already_injected = (
+        "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+        "    permissions:\n      id-token: write\n"
+        f"    steps:\n      - uses: {pinned_ref}\n"
+    )
+    _new_content, modified = _inject_action_into_workflow(
+        already_injected, action_ref=pinned_ref
+    )
+    assert modified is False
+
+
 # ─── POST /repositories/{id}/integrate-action ───────────────────────────────
 
 
@@ -852,7 +892,13 @@ def test_integrate_action_already_present(
 
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
     try:
-        with patch("github.Github", return_value=gh_instance):
+        with (
+            patch("github.Github", return_value=gh_instance),
+            patch(
+                "app.services.github.sha_resolver.resolve_pinned_ref",
+                AsyncMock(return_value=settings.GITHUB_ACTION_REF),
+            ),
+        ):
             response = client.post(
                 f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
                 headers=superuser_token_headers,
@@ -862,6 +908,97 @@ def test_integrate_action_already_present(
 
     assert response.status_code == 409
     assert "already present" in response.json()["detail"]
+
+
+def test_integrate_action_badge_url_prefers_greensecops_public_url(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+) -> None:
+    """The badge URL embedded in the README uses GREENSECOPS_PUBLIC_URL (the
+    dev tunnel base) when it's set, instead of always falling back to
+    BACKEND_HOST — otherwise a badge added during local dev points at
+    localhost, which GitHub can't reach."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from github.GithubException import GithubException
+
+    from app.api.deps import get_github_app_client
+    from app.main import app as fastapi_app
+    from app.services.github.fix_delivery import FixDeliveryResult
+
+    repo_with_install = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/badge-url-{uuid.uuid4().hex[:8]}",
+        installation_id=99999,
+        enabled=True,
+    )
+    db.add(repo_with_install)
+    db.commit()
+    db.refresh(repo_with_install)
+    wf = WorkflowFile(
+        repo_id=repo_with_install.id,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs:\n  build:\n    steps:\n      - run: echo hi\n",
+    )
+    db.add(wf)
+    db.commit()
+
+    mock_client = AsyncMock()
+    mock_client.get_installation_token = AsyncMock(return_value="tok")
+
+    gh_readme = MagicMock()
+    gh_readme.decoded_content = b"# owner/repo\n\nSome description.\n"
+    gh_readme.path = "README.md"
+    gh_repo = MagicMock()
+    gh_repo.get_contents.side_effect = GithubException(404, "Not Found", None)
+    gh_repo.get_readme.return_value = gh_readme
+    gh_instance = MagicMock()
+    gh_instance.get_repo.return_value = gh_repo
+
+    mock_deliver = AsyncMock(
+        return_value=FixDeliveryResult(pr_url="https://github.com/o/r/pull/1")
+    )
+
+    fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        with (
+            patch("github.Github", return_value=gh_instance),
+            patch(
+                "app.api.routes.repositories._inject_badge_via_llm",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.github.fix_delivery.FixDeliveryService"
+                ".update_or_create_workflow_action_pr",
+                mock_deliver,
+            ),
+            patch.object(settings, "GREENSECOPS_PUBLIC_URL", "https://tunnel.ngrok.io"),
+            patch(
+                "app.services.github.sha_resolver.resolve_pinned_ref",
+                AsyncMock(return_value=settings.GITHUB_ACTION_REF),
+            ),
+        ):
+            response = client.post(
+                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
+                headers=superuser_token_headers,
+            )
+    finally:
+        fastapi_app.dependency_overrides.clear()
+
+    assert response.status_code == 202
+    assert mock_deliver.await_count == 1
+    file_changes = mock_deliver.await_args.kwargs["file_changes"]
+    readme_content = dict(file_changes)["README.md"]
+    owner, name = repo_with_install.full_name.split("/", 1)
+    assert (
+        f"https://tunnel.ngrok.io{settings.API_V1_STR}/badges/{owner}/{name}/"
+        in readme_content
+    )
+    assert "localhost:8000" not in readme_content
 
 
 # ─── auto-fix toggle and branches listing ────────────────────────────────────

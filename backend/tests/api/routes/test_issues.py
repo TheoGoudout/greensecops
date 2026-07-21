@@ -302,6 +302,149 @@ def test_list_issues_includes_fix_status(
     assert found["fix_status"] is None
 
 
+# ─── GET /issues/stats ────────────────────────────────────────────────────────
+
+
+def test_issue_stats_counts_open_by_category(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_open"] == 1
+    assert body["total_resolved"] == 0
+    assert body["critical_open"] == 0
+    security = next(c for c in body["by_category"] if c["category"] == "security")
+    assert security["open"] == 1
+    assert security["resolved"] == 0
+
+
+def test_issue_stats_counts_critical_separately(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    analysis: Analysis,
+    rule: Rule,
+    repo: Repository,
+) -> None:
+    critical_issue = Issue(
+        analysis_id=analysis.id,
+        workflow_file_id=analysis.workflow_file_id,
+        rule_id=rule.id,
+        severity=IssueSeverity.critical,
+        category=IssueCategory.security,
+        message="Critical test issue",
+    )
+    db.add(critical_issue)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["critical_open"] == 1
+    assert body["total_open"] == 1
+
+
+def test_issue_stats_splits_resolved_from_open(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    from datetime import datetime, timezone
+
+    issue.resolved_at = datetime.now(timezone.utc)
+    db.add(issue)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_open"] == 0
+    assert body["total_resolved"] == 1
+
+
+def test_issue_stats_excludes_ignored_issues(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    from datetime import datetime, timezone
+
+    issue.ignored_at = datetime.now(timezone.utc)
+    db.add(issue)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_open"] == 0
+    assert body["total_resolved"] == 0
+    assert body["by_category"] == []
+
+
+def test_issue_stats_not_capped_by_pagination(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    analysis: Analysis,
+    rule: Rule,
+    repo: Repository,
+) -> None:
+    # Regression guard for the bug this endpoint fixes: a client-side count
+    # from a paginated list_issues fetch (limit=200) would silently undercount
+    # once an org crosses that many open issues.
+    n = 205
+    for _ in range(n):
+        db.add(
+            Issue(
+                analysis_id=analysis.id,
+                workflow_file_id=analysis.workflow_file_id,
+                rule_id=rule.id,
+                severity=IssueSeverity.low,
+                category=IssueCategory.maintainability,
+                message="Bulk stats test issue",
+            )
+        )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_open"] == n
+
+
 # ─── GET /issues/{id} ─────────────────────────────────────────────────────────
 
 
@@ -447,6 +590,63 @@ def test_list_issues_latest_only_false_includes_all(
     ids = [i["id"] for i in response.json()]
     assert str(new_issue.id) in ids
     assert str(issue.id) in ids
+
+
+def test_list_issues_latest_only_applies_without_repo_id(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    rule: Rule,
+    analysis: Analysis,
+    issue: Issue,
+) -> None:
+    """latest_only must filter stale issue rows from an org-wide listing
+    (no repo_id), the same as it does when scoped to one repo — otherwise
+    a dashboard summing across repos counts issues from every past analysis
+    of a workflow file, not just its current one."""
+    from datetime import datetime, timezone
+
+    new_analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=workflow_file.id,
+        content_hash=uuid.uuid4().hex,
+        status=AnalysisStatus.completed,
+        score=90.0,
+        grade="A",
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(new_analysis)
+    db.commit()
+    db.refresh(new_analysis)
+
+    new_issue = Issue(
+        analysis_id=new_analysis.id,
+        workflow_file_id=new_analysis.workflow_file_id,
+        rule_id=rule.id,
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        line_start=5,
+        line_end=7,
+        message="New analysis issue",
+        context=None,
+    )
+    db.add(new_issue)
+    db.commit()
+
+    # Act — no repo_id, default latest_only=True (org-wide, e.g. dashboard)
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    ids = [i["id"] for i in response.json()]
+    assert str(new_issue.id) in ids
+    assert str(issue.id) not in ids
 
 
 # ─── POST /issues/{id}/ignore & /unignore ─────────────────────────────────────

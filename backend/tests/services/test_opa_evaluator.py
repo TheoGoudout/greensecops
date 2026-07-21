@@ -28,7 +28,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
         "hardcoded_secrets",
         "untrusted_actions",
         "oidc_not_used",
-        "world_writable_artifact",
+        "public_artifact_exposure",
     ):
         assert f"greensecops/security/{slug}" in packages
     assert set(POLICY_PACKAGES) == set(packages)

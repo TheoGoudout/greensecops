@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 openapi.json
+native/proc-sampler/build/
 
 # Editor directories and files
 .vscode/*

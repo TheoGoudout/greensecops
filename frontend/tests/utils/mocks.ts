@@ -688,6 +688,52 @@ export async function mockIssues(
 ) {
   await page.route("**/api/v1/issues/**", (route) => {
     const url = route.request().url()
+    if (url.includes("/issues/stats")) {
+      // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
+      // per category), computed from the same fixture list the dashboard's
+      // other issue-driven assertions use.
+      const active = issues.filter(
+        (i: { ignored_at?: string | null }) => !i.ignored_at,
+      )
+      type Bucket = { open: number; resolved: number; critical_open: number }
+      const byCategory = new Map<string, Bucket>()
+      for (const i of active as Array<{
+        category: string
+        severity: string
+        resolved_at?: string | null
+      }>) {
+        const entry = byCategory.get(i.category) ?? {
+          open: 0,
+          resolved: 0,
+          critical_open: 0,
+        }
+        if (i.resolved_at) {
+          entry.resolved += 1
+        } else {
+          entry.open += 1
+          if (i.severity === "critical") entry.critical_open += 1
+        }
+        byCategory.set(i.category, entry)
+      }
+      const byCategoryList = Array.from(byCategory.entries()).map(
+        ([category, bucket]) => ({ category, ...bucket }),
+      )
+      route.fulfill({
+        json: {
+          total_open: byCategoryList.reduce((sum, c) => sum + c.open, 0),
+          total_resolved: byCategoryList.reduce(
+            (sum, c) => sum + c.resolved,
+            0,
+          ),
+          critical_open: byCategoryList.reduce(
+            (sum, c) => sum + c.critical_open,
+            0,
+          ),
+          by_category: byCategoryList,
+        },
+      })
+      return
+    }
     if (url.match(/\/issues\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const issue = issues.find((i) => i.id === id) ?? issues[0]

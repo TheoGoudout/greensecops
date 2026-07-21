@@ -4,7 +4,6 @@ from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlmodel import col, delete, or_, select
 
 from app.api.deps import (
@@ -100,6 +99,12 @@ def _create_pending_fixes(
         ).all()
     )
     provider_str, model_str = resolve_llm_provider(repo)
+    wf_files = {
+        wf.id: wf
+        for wf in session.exec(
+            select(WorkflowFile).where(col(WorkflowFile.id).in_(list(by_wf_file)))
+        ).all()
+    }
     created: list[Fix] = []
     for wf_id, issues in by_wf_file.items():
         if wf_id in taken:
@@ -115,6 +120,10 @@ def _create_pending_fixes(
         for issue in issues:
             issue.fix_id = fix.id
             session.add(issue)
+        wf_file = wf_files.get(wf_id)
+        if wf_file is not None:
+            wf_file.fix_generation_count += 1
+            session.add(wf_file)
         created.append(fix)
     session.commit()
     for fix in created:
@@ -127,6 +136,7 @@ def _latest_unresolved_issues(
     repo_id: uuid.UUID,
     wf_file_ids: list[uuid.UUID] | None = None,
     issue_ids: list[uuid.UUID] | None = None,
+    exclude_manual: bool = True,
 ) -> dict[uuid.UUID, list[Issue]]:
     """Unresolved issues from each workflow file's latest completed analysis.
 
@@ -134,6 +144,12 @@ def _latest_unresolved_issues(
     The latest-analysis correlation guarantees workflow_file_id is set.
     Restricted to default-branch workflow files: fixes and PRs only ever
     target the default branch.
+
+    ``exclude_manual`` skips issues a prior LLM attempt flagged as
+    ``needs_manual_work``, so an implicit bulk selection doesn't keep
+    re-spending fix generations on issues it already reported it can't fix.
+    An explicit retry on a specific workflow/issue set passes ``False`` to
+    give the LLM another attempt.
     """
     repo = session.get(Repository, repo_id)
     default_branch = repo.default_branch if repo else "main"
@@ -156,6 +172,8 @@ def _latest_unresolved_issues(
         .where(col(Issue.resolved_at).is_(None))
         .where(col(Issue.ignored_at).is_(None))
     )
+    if exclude_manual:
+        query = query.where(col(Issue.needs_manual_work).is_(False))
     if wf_file_ids is not None:
         query = query.where(col(Issue.workflow_file_id).in_(wf_file_ids))
     if issue_ids is not None:
@@ -401,26 +419,28 @@ def trigger_fix_generation_for_repo(
     repo = authorize_repo(session, current_user, repo_id)
     from app.api.routes.billing import enforce_quota
 
-    by_wf_file = _latest_unresolved_issues(session, repo_id, issue_ids=body.issue_ids)
+    by_wf_file = _latest_unresolved_issues(
+        session,
+        repo_id,
+        issue_ids=body.issue_ids,
+        # An explicit issue selection is a deliberate retry request; only the
+        # implicit "generate for everything" path skips manual-flagged issues.
+        exclude_manual=body.issue_ids is None,
+    )
     if not by_wf_file:
         return {"queued": 0}
 
     wf_file_ids = list(by_wf_file)
 
-    # Fixes already attached to the target workflow files are deleted below
-    # (or kept and skipped by the worker), so they don't add to the total.
-    existing_fix_count = session.exec(
-        select(func.count())
-        .select_from(Fix)
-        .where(col(Fix.workflow_file_id).in_(wf_file_ids))
-    ).one()
+    # Regenerating (force=True) bills as new generations, same as a first-time
+    # generate — usage is a cumulative count of generation events, not a live
+    # row count, so a discard-and-recreate here still adds to the total.
     enforce_quota(
         session,
         current_user,
         repo.org_id,
         "fixes",
         requested=len(by_wf_file),
-        replacing=existing_fix_count,
     )
 
     delete_stmt = delete(Fix).where(col(Fix.workflow_file_id).in_(wf_file_ids))
@@ -606,7 +626,6 @@ def regenerate_fixes_for_repo(
         repo.org_id,
         "fixes",
         requested=len(by_wf_file),
-        replacing=len(fixes_to_delete),
     )
 
     session.exec(delete(Fix).where(col(Fix.id).in_([f.id for f in fixes_to_delete])))
@@ -651,7 +670,12 @@ def regenerate_fixes_for_workflow(
         raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     by_wf_file = _latest_unresolved_issues(
-        session, repo.id, wf_file_ids=[fix.workflow_file_id]
+        session,
+        repo.id,
+        wf_file_ids=[fix.workflow_file_id],
+        # Explicit retry of this one workflow's fix — give the LLM another
+        # attempt even if a prior run flagged it as needing manual work.
+        exclude_manual=False,
     )
     if not by_wf_file:
         raise HTTPException(
@@ -659,7 +683,7 @@ def regenerate_fixes_for_workflow(
             detail="No unresolved issues found for this workflow file",
         )
 
-    enforce_quota(session, current_user, repo.org_id, "fixes", requested=1, replacing=1)
+    enforce_quota(session, current_user, repo.org_id, "fixes", requested=1)
 
     session.delete(fix)
     _delete_orphaned_closed_prs(session, repo.id)

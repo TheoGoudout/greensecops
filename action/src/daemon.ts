@@ -1,6 +1,8 @@
 import { refreshOidcToken, sendSample } from "./api"
+import { getTopProcesses } from "./native"
 import { loadState, STATE_FILE } from "./state"
 import { getMetricsSample } from "./telemetry"
+import type { SamplePayload } from "./types"
 
 const SAMPLE_INTERVAL_MS =
   parseInt(process.env.INPUT_SAMPLE_INTERVAL ?? "30", 10) * 1000
@@ -36,6 +38,7 @@ async function run(): Promise<void> {
     try {
       await maybeRefreshToken()
       const metrics = getMetricsSample()
+      const topProcesses = getTopProcesses()
       await sendSample(greensecopsUrl, oidcToken, {
         workflow_run_id: workflowRunId,
         cpu_percent: metrics.cpu_load_percent,
@@ -43,6 +46,12 @@ async function run(): Promise<void> {
         disk_used_gb: metrics.disk_used_gb,
         net_bytes_sent: metrics.net_bytes_sent,
         net_bytes_recv: metrics.net_bytes_recv,
+        ...(topProcesses
+          ? {
+              top_processes:
+                topProcesses as unknown as SamplePayload["top_processes"],
+            }
+          : {}),
       })
     } catch {
       // swallow all errors — daemon must never crash the runner

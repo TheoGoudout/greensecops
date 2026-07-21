@@ -2,7 +2,7 @@
 # title: Hardcoded environment-specific values
 # description: Values like URLs, bucket names, or region names are hardcoded in the workflow instead of being referenced from repository variables or secrets.
 # custom:
-#   severity: medium
+#   severity: info
 #   detection: pattern_matching
 #   examples:
 #     bad: |

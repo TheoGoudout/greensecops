@@ -18,11 +18,15 @@ The production Compose file (`compose.yml`) is written for [Coolify](https://coo
 * `SERVICE_PASSWORD_POSTGRES`: Generated PostgreSQL password, passed as `POSTGRES_PASSWORD`.
 * `SERVICE_PASSWORD_64_SECRETKEY`: Generated 64-character secret, passed to the backend as `SECRET_KEY` (signs JWTs).
 * `SERVICE_PASSWORD_FIRSTSUPERUSER`: Generated password for the first superuser account, passed as `FIRST_SUPERUSER_PASSWORD`.
-* `SERVICE_URL_FRONTEND`: Public URL (scheme included) of the frontend dashboard. Used as the default for `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and as the landing page's `APP_URL`.
-* `SERVICE_URL_BACKEND`: Public URL of the backend API. Used as the default for `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
-* `SERVICE_URL_DOCS`: Public URL of the docs site. Used as the default for `DOCS_URL` and the docs image's `DOCS_BASE_URL` build arg.
+* `SERVICE_HEX_40_GITHUBWEBHOOKSECRET`: Generated 40-character hex secret, passed to the backend as `GITHUB_WEBHOOK_SECRET`. Copy this value into your GitHub App's webhook secret field after the first deploy.
+* `SERVICE_URL_FRONTEND`: Public URL (scheme included) of the frontend dashboard. Passed directly as `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and baked into the frontend build as `VITE_API_URL`'s counterpart on the landing page's `APP_URL`.
+* `SERVICE_URL_BACKEND`: Public URL of the backend API. Passed directly as `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
+* `SERVICE_URL_DOCS`: Public URL of the docs site. Passed directly as `DOCS_URL` (backend + landing) and the docs image's `DOCS_BASE_URL` build arg.
+* `SERVICE_URL_LANDING`: Public URL of the landing page. Passed directly as `MARKETING_URL` to both the backend (PR body attribution links) and the landing service itself (legal-copy self-references).
 
-**Deploying without Coolify:** export these seven variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
+These `SERVICE_URL_*`/`FRONTEND_HOST`/`BACKEND_HOST`/`DOCS_URL`/`MARKETING_URL`/`BACKEND_CORS_ORIGINS` pairs are wired with flat `${SERVICE_URL_X}` references (no `${VAR:-default}` fallback chain) so Coolify's variable scanner reliably detects them — nested `${VAR:-${OTHER}}` defaults aren't documented as supported by Coolify's UI. This means these values are fixed to the corresponding magic variable in `compose.yml`; they're only independently overridable when running the compose file by hand without Coolify (see below), or in local dev via `compose.override.yml`.
+
+**Deploying without Coolify:** export these nine variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
 
 ## Environment Variables
 
@@ -46,7 +50,7 @@ Copy the output and use it as the password / secret key. Run it again to generat
 * `FIRST_SUPERUSER`: The email of the first superuser, this superuser will be the one that can create new users. Default: `admin@example.com`.
 * `GITHUB_APP_ID`: The numeric ID of your GitHub App.
 * `GITHUB_APP_PRIVATE_KEY`: The full PEM content of your GitHub App's private key.
-* `GITHUB_WEBHOOK_SECRET`: The secret used to verify incoming webhook payloads from GitHub.
+* `GITHUB_WEBHOOK_SECRET`: The secret used to verify incoming webhook payloads from GitHub. Set to `SERVICE_HEX_40_GITHUBWEBHOOKSECRET` by `compose.yml` — after the first deploy, copy the generated value from Coolify's Environment Variables tab into your GitHub App's webhook secret field.
 * `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: OAuth credentials for GitHub login. The client ID is also baked into the frontend build as `VITE_GITHUB_OAUTH_CLIENT_ID`.
 * `GITHUB_APP_NAME`: The GitHub App slug, baked into the frontend build as `VITE_GITHUB_APP_NAME` (used for the install URL `github.com/apps/<slug>/installations/new`).
 * At least one LLM provider: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or a reachable Ollama instance via `OLLAMA_BASE_URL`.
@@ -57,26 +61,38 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **Hosts and URLs**
 
-* `FRONTEND_HOST`: Public URL of the frontend dashboard. Default: `${SERVICE_URL_FRONTEND}`.
-* `BACKEND_HOST`: Public URL of the backend API. Default: `${SERVICE_URL_BACKEND}`.
-* `GREENSECOPS_PUBLIC_URL`: Public backend URL embedded in generated customer workflow files. Empty by default, which falls back to `BACKEND_HOST`.
-* `APP_URL`: Marketing/landing site URL used in PR messages. Default: `https://greensecops.com`.
-* `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Default: `${SERVICE_URL_DOCS}`.
-* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Default: `${SERVICE_URL_FRONTEND}`.
+* `FRONTEND_HOST`: Public URL of the frontend dashboard. Fixed to `${SERVICE_URL_FRONTEND}` in `compose.yml`.
+* `BACKEND_HOST`: Public URL of the backend API. Fixed to `${SERVICE_URL_BACKEND}` in `compose.yml`.
+* `GREENSECOPS_PUBLIC_URL`: Public backend URL embedded in generated customer workflow files, added to the allowed CORS origins, and used as the badge-image host — when set, it overrides `BACKEND_HOST` for all three. Empty by default. Useful as a dev tunnel (e.g. ngrok) base URL so GitHub can reach a local backend; independently overridable even under Coolify since it has no matching magic var.
+* `MARKETING_URL`: Marketing/landing site URL, embedded in PR body attribution links and used by the landing page for its own legal-copy self-references. Fixed to `${SERVICE_URL_LANDING}` in `compose.yml`.
+* `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Fixed to `${SERVICE_URL_DOCS}` in `compose.yml`.
+* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Fixed to `${SERVICE_URL_FRONTEND}` in `compose.yml`.
 
 **Branding**
 
 * `PROJECT_NAME`: The name of the project, used in the API for the docs and emails. Default: `GreenSecOps`.
 * `GITHUB_BOT_HANDLE`: The bot handle mentioned in PR messages. Default: `@greensecops`.
-* `GITHUB_ACTION_REF`: The action reference written into generated customer workflows. Default: `greensecops/greensecops-action@v1`.
+* `GITHUB_ACTION_REF`: The action reference written into generated customer workflows. Default: `greensecops/telemetry@v1`.
+
+**Auth tokens**
+
+* `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT access token lifetime, in minutes. Default: `11520` (8 days).
+* `EMAIL_RESET_TOKEN_EXPIRE_HOURS`: Password-reset token lifetime, in hours. Default: `48`.
+
+**GitHub bot (optional — outreach PRs on external repos)**
+
+* `GITHUB_BOT_TOKEN`, `GITHUB_BOT_LOGIN`: Only needed to deliver fixes to open-source repos the GitHub App isn't installed on. See the setup steps in `.env.example`.
 
 **Landing page**
 
-* `MARKETING_URL`: Marketing site domain referenced in the landing page's legal copy. Default: `https://greensecops.com`.
 * `SUPPORT_EMAIL`: Support contact address shown on the landing page. Default: `support@greensecops.com`.
 * `SALES_EMAIL`: Sales contact address shown on the pricing page. Default: `sales@greensecops.com`.
 * `LEGAL_EMAIL`: Legal contact address shown on the terms page. Default: `legal@greensecops.com`.
 * `PRIVACY_EMAIL`: Privacy contact address shown on the privacy page. Default: `privacy@greensecops.com`.
+
+**Image tag**
+
+* `TAG`: Docker image tag to deploy (e.g. a released version or git SHA). Default: `latest`.
 
 **Emails**
 
@@ -121,7 +137,7 @@ There are some environment variables only used by GitHub Actions (as repository 
 
 ## Deploy with Docker Compose
 
-With the environment variables in place (including the seven `SERVICE_*` variables if you are not using Coolify), you can deploy with Docker Compose:
+With the environment variables in place (including the nine `SERVICE_*` variables if you are not using Coolify), you can deploy with Docker Compose:
 
 ```bash
 docker compose -f compose.yml build

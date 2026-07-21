@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import case
+from sqlalchemy import case, func
 from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
@@ -13,8 +13,10 @@ from app.models import (
     Fix,
     Issue,
     IssueCategory,
+    IssueCategoryStat,
     IssuePublic,
     IssueSeverity,
+    IssueStatsPublic,
     Repository,
     WorkflowFile,
 )
@@ -83,22 +85,24 @@ def list_issues(
         ).where(WorkflowFile.branch == branch)
     if repo_id:
         query = query.where(Analysis.repo_id == repo_id)
-        if latest_only:
-            # The workflow_file_id correlation is inherently branch-scoped now
-            # that WorkflowFile rows are per-branch.
-            latest_subq = (
-                select(Analysis.id)
-                .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-                .where(Analysis.status == AnalysisStatus.completed)
-                .order_by(
-                    col(Analysis.completed_at).desc().nulls_last(),
-                    col(Analysis.created_at).desc(),
-                )
-                .limit(1)
-                .correlate(Issue)
-                .scalar_subquery()
+    if latest_only:
+        # The workflow_file_id correlation is inherently branch-scoped now
+        # that WorkflowFile rows are per-branch. Applies regardless of repo_id
+        # scoping so org-wide listings (e.g. the dashboard) don't count stale
+        # issue rows left over from a workflow file's earlier analyses.
+        latest_subq = (
+            select(Analysis.id)
+            .where(Analysis.workflow_file_id == Issue.workflow_file_id)
+            .where(Analysis.status == AnalysisStatus.completed)
+            .order_by(
+                col(Analysis.completed_at).desc().nulls_last(),
+                col(Analysis.created_at).desc(),
             )
-            query = query.where(Issue.analysis_id == latest_subq)
+            .limit(1)
+            .correlate(Issue)
+            .scalar_subquery()
+        )
+        query = query.where(Issue.analysis_id == latest_subq)
     if unfixed:
         active_fix_ids = select(Fix.id).where(col(Fix.status).not_in(REJECTED_STATUSES))
         query = query.where(
@@ -122,6 +126,90 @@ def list_issues(
         .limit(limit)
     )
     return [to_issue_public(issue) for issue in session.exec(query).all()]
+
+
+@router.get("/stats", response_model=IssueStatsPublic)
+def get_issue_stats(
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID | None = None,
+    branch: str | None = None,
+    latest_only: bool = True,
+) -> IssueStatsPublic:
+    """Exact open/resolved issue counts by category, aggregated in SQL.
+
+    Powers the dashboard's stat cards and category health breakdown without
+    the pagination cap a plain ``list_issues`` fetch would hit on a large
+    org — every matching row is summed server-side, never materialized into
+    a capped page of ``IssuePublic`` objects.
+    """
+    query = select(Issue).where(col(Issue.ignored_at).is_(None))
+
+    if repo_id is not None and branch is None:
+        repo = session.get(Repository, repo_id)
+        branch = repo.default_branch if repo else None
+
+    needs_analysis_join = repo_id is not None or not current_user.is_superuser
+    if needs_analysis_join:
+        query = query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+    if not current_user.is_superuser:
+        query = query.where(
+            Analysis.repo_id.in_(  # type: ignore[attr-defined]
+                select(Repository.id).where(
+                    Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
+                )
+            )
+        )
+    if branch:
+        query = query.join(
+            WorkflowFile,
+            Issue.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
+        ).where(WorkflowFile.branch == branch)
+    if repo_id:
+        query = query.where(Analysis.repo_id == repo_id)
+    if latest_only:
+        latest_subq = (
+            select(Analysis.id)
+            .where(Analysis.workflow_file_id == Issue.workflow_file_id)
+            .where(Analysis.status == AnalysisStatus.completed)
+            .order_by(
+                col(Analysis.completed_at).desc().nulls_last(),
+                col(Analysis.created_at).desc(),
+            )
+            .limit(1)
+            .correlate(Issue)
+            .scalar_subquery()
+        )
+        query = query.where(Issue.analysis_id == latest_subq)
+
+    is_open = col(Issue.resolved_at).is_(None)
+    is_critical = Issue.severity == IssueSeverity.critical
+    grouped = query.with_only_columns(  # type: ignore[call-overload]
+        Issue.category,
+        func.sum(case((is_open, 1), else_=0)).label("open"),
+        func.sum(case((~is_open, 1), else_=0)).label("resolved"),
+        func.sum(case((is_open & is_critical, 1), else_=0)).label("critical_open"),
+    ).group_by(Issue.category)
+
+    # session.exec() would scalarize this to just the first column: the
+    # original select(Issue) statement stays a sqlmodel SelectOfScalar even
+    # after with_only_columns() swaps in the aggregate columns. session.execute()
+    # (the underlying SQLAlchemy call) returns full Row tuples instead.
+    by_category = [
+        IssueCategoryStat(
+            category=row.category,
+            open=row.open or 0,
+            resolved=row.resolved or 0,
+            critical_open=row.critical_open or 0,
+        )
+        for row in session.execute(grouped).all()
+    ]
+    return IssueStatsPublic(
+        total_open=sum(r.open for r in by_category),
+        total_resolved=sum(r.resolved for r in by_category),
+        critical_open=sum(r.critical_open for r in by_category),
+        by_category=by_category,
+    )
 
 
 @router.get("/{issue_id}", response_model=IssuePublic)
