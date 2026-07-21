@@ -201,7 +201,7 @@ function Dashboard() {
   // category order regardless of which categories have issues right now.
   const categoryHealth = useMemo(() => {
     return ISSUE_CATEGORIES.map((category) => {
-      const stat = issueStats?.by_category.find((c) => c.category === category)
+      const stat = issueStats?.by_category?.find((c) => c.category === category)
       return {
         category,
         open: stat?.open ?? 0,
