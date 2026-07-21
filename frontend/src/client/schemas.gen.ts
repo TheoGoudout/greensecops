@@ -785,6 +785,29 @@ export const IssueCategorySchema = {
     title: 'IssueCategory'
 } as const;
 
+export const IssueCategoryStatSchema = {
+    properties: {
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        open: {
+            type: 'integer',
+            title: 'Open'
+        },
+        resolved: {
+            type: 'integer',
+            title: 'Resolved'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        }
+    },
+    type: 'object',
+    required: ['category', 'open', 'resolved', 'critical_open'],
+    title: 'IssueCategoryStat'
+} as const;
+
 export const IssuePublicSchema = {
     properties: {
         id: {
@@ -963,6 +986,35 @@ export const IssueSeveritySchema = {
     type: 'string',
     enum: ['critical', 'high', 'medium', 'low', 'info'],
     title: 'IssueSeverity'
+} as const;
+
+export const IssueStatsPublicSchema = {
+    properties: {
+        total_open: {
+            type: 'integer',
+            title: 'Total Open'
+        },
+        total_resolved: {
+            type: 'integer',
+            title: 'Total Resolved'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        },
+        by_category: {
+            items: {
+                '$ref': '#/components/schemas/IssueCategoryStat'
+            },
+            type: 'array',
+            title: 'By Category'
+        }
+    },
+    type: 'object',
+    required: ['total_open', 'total_resolved', 'critical_open', 'by_category'],
+    title: 'IssueStatsPublic',
+    description: `Exact issue counts, computed by SQL aggregation rather than fetched and
+counted client-side — unaffected by any page's \`\`skip\`\`/\`\`limit\`\`.`
 } as const;
 
 export const IssueStatusSchema = {

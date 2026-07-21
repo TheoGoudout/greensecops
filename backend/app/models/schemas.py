@@ -126,6 +126,23 @@ class IssuePublic(SQLModel):
     workflow_file_path: str | None = None
 
 
+class IssueCategoryStat(SQLModel):
+    category: IssueCategory
+    open: int
+    resolved: int
+    critical_open: int
+
+
+class IssueStatsPublic(SQLModel):
+    """Exact issue counts, computed by SQL aggregation rather than fetched and
+    counted client-side — unaffected by any page's ``skip``/``limit``."""
+
+    total_open: int
+    total_resolved: int
+    critical_open: int
+    by_category: list[IssueCategoryStat]
+
+
 class FixIssueSummary(SQLModel):
     id: uuid.UUID
     rule_slug: str | None = None

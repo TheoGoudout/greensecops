@@ -148,6 +148,13 @@ export type InstallationSyncRequest = {
 
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
 
+export type IssueCategoryStat = {
+    category: IssueCategory;
+    open: number;
+    resolved: number;
+    critical_open: number;
+};
+
 export type IssuePublic = {
     id: string;
     analysis_id: string;
@@ -187,6 +194,17 @@ export type IssuePublic = {
 export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged' | 'branch_deleted';
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+/**
+ * Exact issue counts, computed by SQL aggregation rather than fetched and
+ * counted client-side — unaffected by any page's ``skip``/``limit``.
+ */
+export type IssueStatsPublic = {
+    total_open: number;
+    total_resolved: number;
+    critical_open: number;
+    by_category: Array<IssueCategoryStat>;
+};
 
 /**
  * Derived lifecycle of an issue.
@@ -626,6 +644,14 @@ export type IssuesListIssuesData = {
 };
 
 export type IssuesListIssuesResponse = (Array<IssuePublic>);
+
+export type IssuesGetIssueStatsData = {
+    branch?: (string | null);
+    latestOnly?: boolean;
+    repoId?: (string | null);
+};
+
+export type IssuesGetIssueStatsResponse = (IssueStatsPublic);
 
 export type IssuesGetIssueData = {
     issueId: string;

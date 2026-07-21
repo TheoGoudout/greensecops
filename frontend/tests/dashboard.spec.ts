@@ -36,8 +36,9 @@ test.describe("Dashboard", () => {
 
     await expect(page.getByText("Total analyses")).toBeVisible()
     await expect(page.getByText("Active repositories")).toBeVisible()
-    await expect(page.getByText("Average score")).toBeVisible()
     await expect(page.getByText("Open issues")).toBeVisible()
+    await expect(page.getByText("Fix rate")).toBeVisible()
+    await expect(page.getByText("Avg score:")).toBeVisible()
 
     const activeCard = page.locator("text=Active repositories").locator("..")
     await expect(activeCard.locator("..")).toContainText("1")
@@ -123,6 +124,24 @@ test.describe("Dashboard", () => {
     await page.goto("/dashboard")
 
     await expect(page.locator(".animate-pulse").first()).toBeVisible()
+  })
+
+  test("category health shows per-category open issue counts", async ({
+    page,
+  }) => {
+    await mockRepositories(page, [MOCK_REPO])
+    await mockAnalyses(page, [MOCK_ANALYSIS])
+    await mockIssues(page, [
+      MOCK_ISSUE_SECURITY,
+      MOCK_ISSUE_RELIABILITY,
+      MOCK_ISSUE_ENERGY,
+    ])
+
+    await page.goto("/dashboard")
+
+    await expect(page.getByText("Category Health")).toBeVisible()
+    // MOCK_ISSUE_SECURITY is the only critical issue, in the security category.
+    await expect(page.getByText("1 open · 1 crit.")).toBeVisible()
   })
 
   test("stat card shows critical count in hint", async ({ page }) => {

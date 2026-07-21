@@ -407,6 +407,25 @@ export type InstallationSyncRequest = {
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
 
 /**
+ * IssueCategoryStat
+ */
+export type IssueCategoryStat = {
+    category: IssueCategory;
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Resolved
+     */
+    resolved: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+};
+
+/**
  * IssuePublic
  */
 export type IssuePublic = {
@@ -494,6 +513,30 @@ export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'mer
  * IssueSeverity
  */
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+/**
+ * IssueStatsPublic
+ * Exact issue counts, computed by SQL aggregation rather than fetched and
+ * counted client-side — unaffected by any page's ``skip``/``limit``.
+ */
+export type IssueStatsPublic = {
+    /**
+     * Total Open
+     */
+    total_open: number;
+    /**
+     * Total Resolved
+     */
+    total_resolved: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+    /**
+     * By Category
+     */
+    by_category: Array<IssueCategoryStat>;
+};
 
 /**
  * IssueStatus
@@ -2282,6 +2325,44 @@ export type IssuesListIssuesResponses = {
 };
 
 export type IssuesListIssuesResponse = IssuesListIssuesResponses[keyof IssuesListIssuesResponses];
+
+export type IssuesGetIssueStatsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Repo Id
+         */
+        repo_id?: string | null;
+        /**
+         * Branch
+         */
+        branch?: string | null;
+        /**
+         * Latest Only
+         */
+        latest_only?: boolean;
+    };
+    url: '/api/v1/issues/stats';
+};
+
+export type IssuesGetIssueStatsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type IssuesGetIssueStatsError = IssuesGetIssueStatsErrors[keyof IssuesGetIssueStatsErrors];
+
+export type IssuesGetIssueStatsResponses = {
+    /**
+     * Successful Response
+     */
+    200: IssueStatsPublic;
+};
+
+export type IssuesGetIssueStatsResponse = IssuesGetIssueStatsResponses[keyof IssuesGetIssueStatsResponses];
 
 export type IssuesGetIssueData = {
     body?: never;
