@@ -1,0 +1,101 @@
+name: Sync Action Repo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "action/**"
+  release:
+    types:
+      - published
+      - prereleased
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync action/ to the public action repo
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ vars.ACTION_PUBLIC_REPO != '' }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+          no-cache: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "greensecops-bot"
+          git config user.email "bot@greensecops.com"
+
+      - name: Push action/ subtree to the public repo
+        env:
+          TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
+          TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
+        run: |
+          git remote add public-action "https://x-access-token:${TOKEN}@github.com/${TARGET}.git"
+          git subtree push --prefix=action public-action main
+
+      - name: Build and commit dist/ in the public repo
+        id: build_dist
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
+          TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
+        run: |
+          rm -rf /tmp/public-action
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${TARGET}.git" /tmp/public-action
+          cd /tmp/public-action
+          git config user.name "greensecops-bot"
+          git config user.email "bot@greensecops.com"
+
+          # dist/bin/* aren't bundled by ncc — cross-compile them first so
+          # the build step below has something to copy in.
+          mkdir -p native/proc-sampler/build
+          for arch in 386 amd64 arm64; do
+            (cd native/proc-sampler && CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build -o "build/proc-sampler-linux-${arch}" .)
+          done
+
+          bun install
+          bun run build
+          git add -f dist
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore: rebuild dist for ${{ github.sha }}"
+            git push origin main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tag and release on the public repo
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
+          TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          cd /tmp/public-action
+          major="v$(echo "${TAG}" | sed -E 's/^v?([0-9]+).*/\1/')"
+          git tag -f "${TAG}"
+          git tag -f "${major}"
+          git push origin "refs/tags/${TAG}" --force
+          git push origin "refs/tags/${major}" --force
+          prerelease_flag=""
+          if [ "${PRERELEASE}" = "true" ]; then
+            prerelease_flag="--prerelease"
+          fi
+          gh release create "${TAG}" \
+            --repo "${TARGET}" \
+            --title "${TAG}" \
+            --notes "Synced from ${{ github.repository }}@${{ github.sha }}" \
+            ${prerelease_flag}
