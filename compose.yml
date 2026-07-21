@@ -171,21 +171,6 @@ services:
       start_period: 30s
     environment: *backend-required-env
 
-  flower:
-    image: mher/flower:2.0.1
-    restart: always
-    depends_on:
-      - redis
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5555/')\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - FLOWER_PORT=5555
-
   opa:
     image: greensecops/opa:${TAG:-latest}
     build:

@@ -112,10 +112,22 @@ services:
     environment: *backend-required-env
 
   flower:
-    restart: "no"
+    image: mher/flower:2.0.1
+    restart: always
     # Unauthenticated Celery dashboard — localhost only.
     ports:
       - "127.0.0.1:5555:5555"
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5555/')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
 
   opa:
     restart: "no"
