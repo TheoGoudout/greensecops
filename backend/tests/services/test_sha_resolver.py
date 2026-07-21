@@ -362,15 +362,13 @@ def _resolve_single(ref: str, gh: FakeGithub, cache: MagicMock) -> str:
 
 def test_resolve_pinned_ref_resolves_tag_to_sha() -> None:
     gh = FakeGithub(default_repo=FakeRepo(refs={"tags/v1": ("action_sha", "commit")}))
-    result = _resolve_single("greensecops/greensecops-action@v1", gh, _fake_cache())
-    assert result == "greensecops/greensecops-action@action_sha # v1"
+    result = _resolve_single("greensecops/telemetry@v1", gh, _fake_cache())
+    assert result == "greensecops/telemetry@action_sha # v1"
 
 
 def test_resolve_pinned_ref_leaves_as_is_when_unresolvable() -> None:
-    result = _resolve_single(
-        "greensecops/greensecops-action@v1", FakeGithub(), _fake_cache()
-    )
-    assert result == "greensecops/greensecops-action@v1"
+    result = _resolve_single("greensecops/telemetry@v1", FakeGithub(), _fake_cache())
+    assert result == "greensecops/telemetry@v1"
 
 
 def test_resolve_pinned_ref_leaves_already_pinned_sha_as_is() -> None:

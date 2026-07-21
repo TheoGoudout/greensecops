@@ -72,7 +72,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 * `PROJECT_NAME`: The name of the project, used in the API for the docs and emails. Default: `GreenSecOps`.
 * `GITHUB_BOT_HANDLE`: The bot handle mentioned in PR messages. Default: `@greensecops`.
-* `GITHUB_ACTION_REF`: The action reference written into generated customer workflows. Default: `greensecops/greensecops-action@v1`.
+* `GITHUB_ACTION_REF`: The action reference written into generated customer workflows. Default: `greensecops/telemetry@v1`.
 
 **Auth tokens**
 

@@ -1,7 +1,7 @@
 """Add billing_subscription.fixes_used_baseline
 
-Revision ID: 0038
-Revises: 0037
+Revision ID: 0039
+Revises: 0038
 Create Date: 2026-07-20
 
 Usage now resets monthly instead of accumulating forever. Analyses are
@@ -14,8 +14,8 @@ where the baseline is snapshotted each time the period rolls over.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0038"
-down_revision = "0037"
+revision = "0039"
+down_revision = "0038"
 branch_labels = None
 depends_on = None
 

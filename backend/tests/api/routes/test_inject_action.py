@@ -15,7 +15,7 @@ def test_inject_into_simple_workflow() -> None:
     )
     result, modified = _inject_action_into_workflow(raw)
     assert modified is True
-    assert "greensecops/greensecops-action@v1" in result
+    assert "greensecops/telemetry@v1" in result
     assert "GreenSecOps Telemetry" in result
 
 
@@ -26,12 +26,12 @@ def test_inject_already_present_adds_permissions_only() -> None:
         "  build:\n"
         "    runs-on: ubuntu-latest\n"
         "    steps:\n"
-        "      - uses: greensecops/greensecops-action@v1\n"
+        "      - uses: greensecops/telemetry@v1\n"
         "      - run: echo hello\n"
     )
     result, modified = _inject_action_into_workflow(raw)
     assert modified is True
-    assert result.count("greensecops/greensecops-action@v1") == 1
+    assert result.count("greensecops/telemetry@v1") == 1
     assert "id-token: write" in result
 
 
@@ -44,7 +44,7 @@ def test_inject_action_and_permissions_present_skips() -> None:
         "    permissions:\n"
         "      id-token: write\n"
         "    steps:\n"
-        "      - uses: greensecops/greensecops-action@v1\n"
+        "      - uses: greensecops/telemetry@v1\n"
         "      - run: echo hello\n"
     )
     result, modified = _inject_action_into_workflow(raw)
@@ -95,7 +95,7 @@ def test_inject_multiple_jobs() -> None:
     )
     result, modified = _inject_action_into_workflow(raw)
     assert modified is True
-    assert result.count("greensecops/greensecops-action@v1") == 2
+    assert result.count("greensecops/telemetry@v1") == 2
 
 
 def test_inject_job_no_steps_skipped() -> None:
@@ -117,7 +117,7 @@ def test_inject_mixed_jobs_some_already_present() -> None:
         "  build:\n"
         "    runs-on: ubuntu-latest\n"
         "    steps:\n"
-        "      - uses: greensecops/greensecops-action@v1\n"
+        "      - uses: greensecops/telemetry@v1\n"
         "      - run: echo build\n"
         "  test:\n"
         "    runs-on: ubuntu-latest\n"
@@ -126,7 +126,7 @@ def test_inject_mixed_jobs_some_already_present() -> None:
     )
     result, modified = _inject_action_into_workflow(raw)
     assert modified is True
-    assert result.count("greensecops/greensecops-action@v1") == 2
+    assert result.count("greensecops/telemetry@v1") == 2
 
 
 def test_inject_job_value_not_dict_skipped() -> None:
