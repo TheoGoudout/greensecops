@@ -10,6 +10,11 @@ export function repoFixBranch(repoId: string): string {
   return `greensecops/fixes-${repoId.slice(0, 8)}`
 }
 
+// Mirrors the fixed branch name delivery mints server-side for the
+// "Integrate action" PR (see backend/app/api/routes/repositories.py
+// integrate_action).
+export const INTEGRATE_ACTION_BRANCH = "greensecops/integrate-action"
+
 // A ready fix never carries pr_id/pr_state (it never had a PR through the
 // Fix record), so whether a PR already exists for its branch must come from
 // the real PullRequest rows, not from the fix itself.
