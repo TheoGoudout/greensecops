@@ -153,6 +153,25 @@ async def _cached_get_latest_version(
     )
 
 
+def _open_cache() -> aioredis.Redis | None:
+    try:
+        from app.core.config import settings
+
+        return aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call,no-any-return]
+    except Exception:
+        logger.warning("Redis unavailable for action SHA cache", exc_info=True)
+        return None
+
+
+async def _close_cache(cache: aioredis.Redis | None) -> None:
+    if cache is None:
+        return
+    try:
+        await cache.aclose()
+    except Exception:
+        pass
+
+
 async def resolve_action_shas(
     workflow_content: str, gh: Github | None = None
 ) -> dict[str, str]:
@@ -171,14 +190,7 @@ async def resolve_action_shas(
     refs = _parse_action_refs(workflow_content)
     repos = {repo for repo, _ in refs} | set(WELL_KNOWN_ACTIONS)
 
-    cache: aioredis.Redis | None = None
-    try:
-        from app.core.config import settings
-
-        cache = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
-    except Exception:
-        logger.warning("Redis unavailable for action SHA cache", exc_info=True)
-
+    cache = _open_cache()
     if gh is None:
         gh = Github()
 
@@ -193,10 +205,66 @@ async def resolve_action_shas(
             if sha:
                 sha_map[f"{repo}@{ref}"] = sha
     finally:
-        if cache is not None:
-            try:
-                await cache.aclose()
-            except Exception:
-                pass
+        await _close_cache(cache)
 
     return sha_map
+
+
+async def resolve_and_pin_refs(content: str, gh: Github | None = None) -> str:
+    """Pin every unpinned ``uses: owner/repo@tag`` reference in ``content`` to
+    its commit SHA, appending the original tag as a comment.
+
+    This is the deterministic backstop for actions the fix-generation LLM adds
+    that aren't in ``WELL_KNOWN_ACTIONS`` or the workflow's own pre-existing
+    refs (so the LLM had no SHA to pin to and left it as a mutable tag,
+    tripping ``unpinned_actions``/``untrusted_actions`` right back). A ref that
+    doesn't resolve (private repo, unknown tag, network failure) is left
+    untouched — this never invents a SHA.
+    """
+    refs = _parse_action_refs(content)
+    if not refs:
+        return content
+
+    cache = _open_cache()
+    if gh is None:
+        gh = Github()
+
+    pinned = content
+    try:
+        for repo, ref in sorted(refs):
+            sha = await _cached_resolve_ref_to_sha(gh, cache, repo, ref)
+            if not sha:
+                continue
+            pattern = re.compile(
+                rf"uses:(\s+){re.escape(repo)}@{re.escape(ref)}(?=\s|$)"
+            )
+            pinned = pattern.sub(rf"uses:\g<1>{repo}@{sha} # {ref}", pinned)
+    finally:
+        await _close_cache(cache)
+
+    return pinned
+
+
+async def resolve_pinned_ref(ref: str, gh: Github | None = None) -> str:
+    """Resolve a single ``owner/repo@tag`` ref to ``owner/repo@sha # tag``.
+
+    Returns ``ref`` unchanged if it's already a commit SHA or can't be
+    resolved (private repo, unknown tag, network failure) — this never
+    invents a SHA, matching ``resolve_and_pin_refs``.
+    """
+    match = re.fullmatch(r"([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)@(.+)", ref)
+    if not match:
+        return ref
+    repo, tag = match.group(1), match.group(2)
+    if re.fullmatch(r"[0-9a-f]{40}", tag):
+        return ref
+
+    cache = _open_cache()
+    if gh is None:
+        gh = Github()
+    try:
+        sha = await _cached_resolve_ref_to_sha(gh, cache, repo, tag)
+    finally:
+        await _close_cache(cache)
+
+    return f"{repo}@{sha} # {tag}" if sha else ref

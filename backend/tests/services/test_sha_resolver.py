@@ -12,6 +12,8 @@ from app.services.github.sha_resolver import (
     _parse_action_refs,
     _resolve_ref_to_sha_sync,
     resolve_action_shas,
+    resolve_and_pin_refs,
+    resolve_pinned_ref,
 )
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -293,6 +295,94 @@ def test_resolve_action_shas_uses_provided_gh_instance() -> None:
         )
     mock_gh_cls.assert_not_called()
     assert result["actions/checkout@v4"] == "auth_sha"
+
+
+# ─── resolve_and_pin_refs ────────────────────────────────────────────────────
+
+
+def _pin(content: str, gh: FakeGithub, cache: MagicMock) -> str:
+    with patch(
+        "app.services.github.sha_resolver.aioredis.from_url",
+        return_value=cache,
+    ):
+        return asyncio.run(resolve_and_pin_refs(content, gh=gh))
+
+
+def test_resolve_and_pin_refs_pins_new_unpinned_action() -> None:
+    # A third-party action the LLM added — not in WELL_KNOWN_ACTIONS, not
+    # already in the workflow — must still get pinned deterministically.
+    workflow = "      - uses: nick-fields/retry@v2\n"
+    gh = FakeGithub(default_repo=FakeRepo(refs={"tags/v2": ("retry_sha", "commit")}))
+    result = _pin(workflow, gh, _fake_cache())
+    assert "uses: nick-fields/retry@retry_sha # v2\n" in result
+
+
+def test_resolve_and_pin_refs_leaves_unresolvable_ref_untouched() -> None:
+    workflow = "      - uses: someorg/private-action@v1\n"
+    result = _pin(workflow, FakeGithub(), _fake_cache())
+    assert result == workflow
+
+
+def test_resolve_and_pin_refs_leaves_already_pinned_sha_untouched() -> None:
+    sha = "a" * 40
+    workflow = f"      - uses: actions/checkout@{sha}  # v4\n"
+    result = _pin(workflow, FakeGithub(), _fake_cache())
+    assert result == workflow
+
+
+def test_resolve_and_pin_refs_no_refs_returns_content_unchanged() -> None:
+    content = "name: CI\non: push\n"
+    result = _pin(content, FakeGithub(), _fake_cache())
+    assert result == content
+
+
+def test_resolve_and_pin_refs_pins_multiple_refs() -> None:
+    workflow = "      - uses: nick-fields/retry@v2\n      - uses: actions/checkout@v4\n"
+    gh = FakeGithub(
+        repos={
+            "nick-fields/retry": FakeRepo(refs={"tags/v2": ("retry_sha", "commit")}),
+            "actions/checkout": FakeRepo(refs={"tags/v4": ("checkout_sha", "commit")}),
+        }
+    )
+    result = _pin(workflow, gh, _fake_cache())
+    assert "uses: nick-fields/retry@retry_sha # v2" in result
+    assert "uses: actions/checkout@checkout_sha # v4" in result
+
+
+# ─── resolve_pinned_ref ──────────────────────────────────────────────────────
+
+
+def _resolve_single(ref: str, gh: FakeGithub, cache: MagicMock) -> str:
+    with patch(
+        "app.services.github.sha_resolver.aioredis.from_url",
+        return_value=cache,
+    ):
+        return asyncio.run(resolve_pinned_ref(ref, gh=gh))
+
+
+def test_resolve_pinned_ref_resolves_tag_to_sha() -> None:
+    gh = FakeGithub(default_repo=FakeRepo(refs={"tags/v1": ("action_sha", "commit")}))
+    result = _resolve_single("greensecops/greensecops-action@v1", gh, _fake_cache())
+    assert result == "greensecops/greensecops-action@action_sha # v1"
+
+
+def test_resolve_pinned_ref_leaves_as_is_when_unresolvable() -> None:
+    result = _resolve_single(
+        "greensecops/greensecops-action@v1", FakeGithub(), _fake_cache()
+    )
+    assert result == "greensecops/greensecops-action@v1"
+
+
+def test_resolve_pinned_ref_leaves_already_pinned_sha_as_is() -> None:
+    sha = "b" * 40
+    ref = f"greensecops/greensecops-action@{sha}"
+    result = _resolve_single(ref, FakeGithub(), _fake_cache())
+    assert result == ref
+
+
+def test_resolve_pinned_ref_leaves_malformed_ref_as_is() -> None:
+    result = _resolve_single("not-a-valid-ref", FakeGithub(), _fake_cache())
+    assert result == "not-a-valid-ref"
 
 
 def test_resolve_action_shas_acquires_lock_on_cache_miss() -> None:

@@ -322,7 +322,9 @@ def list_repository_branches(
     return [b for b in branches if b]
 
 
-def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
+def _inject_action_into_workflow(
+    raw_content: str, action_ref: str | None = None
+) -> tuple[str, bool]:
     """Parse workflow YAML to find insertion points, then insert the action step as raw text.
 
     Uses ruamel.yaml only for parsing (to get line numbers and detect duplicates).
@@ -330,7 +332,12 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     Also injects `permissions: id-token: write` into each modified job, since the
     action authenticates via GitHub OIDC and requires that permission.
     Returns (new_content, was_modified).
+
+    ``action_ref`` defaults to ``settings.GITHUB_ACTION_REF``; callers pass a
+    SHA-resolved ref (see ``resolve_pinned_ref``) so the injected step doesn't
+    trip our own unpinned-action rule the moment it's installed.
     """
+    action_ref = action_ref or settings.GITHUB_ACTION_REF
     yaml_rt = YAML()
     try:
         workflow = yaml_rt.load(raw_content)
@@ -344,7 +351,7 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
     if not isinstance(jobs, dict):
         return raw_content, False
 
-    action_prefix = settings.GITHUB_ACTION_REF.split("@")[0]
+    action_prefix = action_ref.split("@")[0]
 
     # All text insertions as (line_index, text) pairs — processed in reverse order.
     all_insertions: list[tuple[int, str]] = []
@@ -372,7 +379,7 @@ def _inject_action_into_workflow(raw_content: str) -> tuple[str, bool]:
             default_url = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
             step_text = (
                 f"{indent}- name: {settings.PROJECT_NAME} Telemetry\n"
-                f"{indent}  uses: {settings.GITHUB_ACTION_REF}\n"
+                f"{indent}  uses: {action_ref}\n"
                 f"{indent}  with:\n"
                 f"{indent}    greensecops_url: ${{{{ vars.GREENSECOPS_URL || '{default_url}' }}}}\n"
             )
@@ -509,8 +516,17 @@ async def integrate_action(
         )
 
     token = await github_client.get_installation_token(repo.installation_id)
-    gh_repo = Github(auth=Auth.Token(token)).get_repo(repo.full_name)
+    gh_client = Github(auth=Auth.Token(token))
+    gh_repo = gh_client.get_repo(repo.full_name)
     branch = repo.default_branch or "main"
+
+    # Resolved once per call — the action ref names our own action's repo,
+    # not the installation's, so an unauthenticated client is used unless it
+    # turns out to need auth once that repo exists. Leaves the tag as-is (no
+    # pin) if the repo/tag can't be resolved, per resolve_pinned_ref.
+    from app.services.github.sha_resolver import resolve_pinned_ref
+
+    pinned_action_ref = await resolve_pinned_ref(settings.GITHUB_ACTION_REF)
 
     # Use live file content from the base branch so the PR diff is scoped to
     # only the telemetry step + OIDC permissions — not any pending fix changes
@@ -522,7 +538,9 @@ async def integrate_action(
             live_content = gh_file.decoded_content.decode("utf-8")  # type: ignore[union-attr]
         except GithubException:
             live_content = wf.raw_content
-        new_content, modified = _inject_action_into_workflow(live_content)
+        new_content, modified = _inject_action_into_workflow(
+            live_content, action_ref=pinned_action_ref
+        )
         if modified:
             file_changes.append((wf.path, new_content))
 

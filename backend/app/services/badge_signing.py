@@ -42,8 +42,9 @@ def build_badge_svg_url(owner: str, repo: str, branch: str, *, private: bool) ->
     """
     from app.core.config import settings
 
+    badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
     base = (
-        f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
+        f"{badge_host.rstrip('/')}{settings.API_V1_STR}"
         f"/badges/{owner}/{repo}/{branch}.svg"
     )
     if not private:
