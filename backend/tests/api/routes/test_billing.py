@@ -101,6 +101,9 @@ def _make_completed_analysis(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
+        # Real completion code always sets this (static_analysis.py); usage
+        # is now scoped to the current billing period by this timestamp.
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(analysis)
     db.commit()
@@ -115,6 +118,11 @@ def _make_fix(db: Session, wf: WorkflowFile) -> Fix:
         status=FixStatus.ready,
     )
     db.add(fix)
+    # fixes_used counts this cumulative counter, not live Fix rows (a
+    # regenerate deletes and recreates the row) — mirror what the real
+    # generation route does when it creates a Fix.
+    wf.fix_generation_count += 1
+    db.add(wf)
     db.commit()
     return fix
 
@@ -152,7 +160,7 @@ def test_enforce_quota_superuser_actor_bypasses_even_at_owners_limit(
     _link_owner(db, org, owner)
     with (
         patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}),
-        patch.object(billing, "_usage_for_user", return_value=(0, 0, [])),
+        patch.object(billing, "_usage_for_user", return_value=(0, 0, [], None)),
     ):
         billing.enforce_quota(db, actor, org.id, "fixes")  # must not raise
 
@@ -175,19 +183,19 @@ def test_enforce_quota_no_billing_owner_does_not_raise(db: Session) -> None:
         billing.enforce_quota(db, user, uuid.uuid4(), "fixes")  # must not raise
 
 
-def test_enforce_quota_replacing_does_not_count(db: Session) -> None:
+def test_enforce_quota_regenerate_counts_as_new_usage(db: Session) -> None:
+    # Usage is a cumulative generation-event count, not a live-row count, so
+    # regenerating existing fixes has no "replacing" offset anymore — it must
+    # be blocked exactly like a brand-new generation once at the limit.
     user = _make_user(db)
     org = _make_org(db)
     _link_owner(db, org, user)
     with (
         patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 5}}),
-        patch.object(billing, "_usage_for_user", return_value=(0, 5, [])),
+        patch.object(billing, "_usage_for_user", return_value=(0, 5, [], None)),
+        pytest.raises(HTTPException) as exc,
     ):
-        # Regenerating all 5 existing fixes keeps the total at the limit → OK.
-        billing.enforce_quota(db, user, org.id, "fixes", requested=5, replacing=5)
-        # One net-new fix on top of the replaced ones exceeds the limit.
-        with pytest.raises(HTTPException) as exc:
-            billing.enforce_quota(db, user, org.id, "fixes", requested=6, replacing=5)
+        billing.enforce_quota(db, user, org.id, "fixes", requested=1)
     assert exc.value.status_code == 402
 
 
@@ -197,7 +205,7 @@ def test_enforce_quota_default_still_blocks_at_limit(db: Session) -> None:
     _link_owner(db, org, user)
     with (
         patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 5}}),
-        patch.object(billing, "_usage_for_user", return_value=(0, 5, [])),
+        patch.object(billing, "_usage_for_user", return_value=(0, 5, [], None)),
         pytest.raises(HTTPException) as exc,
     ):
         billing.enforce_quota(db, user, org.id, "fixes")
@@ -221,7 +229,7 @@ def test_enforce_quota_repos_kind_blocks_at_limit(db: Session) -> None:
         patch.object(
             billing,
             "_usage_for_user",
-            return_value=(0, 0, [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()]),
+            return_value=(0, 0, [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()], None),
         ),
         pytest.raises(HTTPException) as exc,
     ):
@@ -242,7 +250,9 @@ def test_disabling_repo_does_not_change_analyses_or_fixes_used(db: Session) -> N
     _make_completed_analysis(db, repo, wf)
     _make_fix(db, wf)
 
-    analyses_before, fixes_before, repos_before = billing._usage_for_user(db, user)
+    analyses_before, fixes_before, repos_before, _sub = billing._usage_for_user(
+        db, user
+    )
     assert analyses_before == 1
     assert fixes_before == 1
     assert repos_before == [repo.id]
@@ -251,7 +261,7 @@ def test_disabling_repo_does_not_change_analyses_or_fixes_used(db: Session) -> N
     db.add(repo)
     db.commit()
 
-    analyses_after, fixes_after, repos_after = billing._usage_for_user(db, user)
+    analyses_after, fixes_after, repos_after, _sub = billing._usage_for_user(db, user)
     assert analyses_after == 1
     assert fixes_after == 1
     assert repos_after == []  # repos_used is a live "currently enabled" count
@@ -260,7 +270,7 @@ def test_disabling_repo_does_not_change_analyses_or_fixes_used(db: Session) -> N
     db.add(repo)
     db.commit()
 
-    analyses_final, fixes_final, repos_final = billing._usage_for_user(db, user)
+    analyses_final, fixes_final, repos_final, _sub = billing._usage_for_user(db, user)
     assert analyses_final == 1
     assert fixes_final == 1
     assert repos_final == [repo.id]
@@ -279,17 +289,62 @@ def test_second_org_owner_does_not_inherit_pooled_usage(db: Session) -> None:
     _make_completed_analysis(db, repo, wf)
     _make_fix(db, wf)
 
-    analyses_first, fixes_first, repos_first = billing._usage_for_user(db, first_owner)
+    analyses_first, fixes_first, repos_first, _sub = billing._usage_for_user(
+        db, first_owner
+    )
     assert analyses_first == 1
     assert fixes_first == 1
     assert repos_first == [repo.id]
 
-    analyses_second, fixes_second, repos_second = billing._usage_for_user(
+    analyses_second, fixes_second, repos_second, _sub = billing._usage_for_user(
         db, second_owner
     )
     assert analyses_second == 0
     assert fixes_second == 0
     assert repos_second == []
+
+
+def test_fixes_used_pools_across_all_orgs_owned_by_user(db: Session) -> None:
+    # A user who owns two separate orgs (e.g. two linked GitHub accounts) has
+    # their fixes_used pooled across both, not scoped to just one.
+    user = _make_user(db)
+    org_a = _make_org(db)
+    org_b = _make_org(db)
+    _link_owner(db, org_a, user)
+    _link_owner(db, org_b, user)
+
+    repo_a = _make_repo(db, org_a)
+    wf_a = _make_workflow_file(db, repo_a)
+    _make_fix(db, wf_a)
+
+    repo_b = _make_repo(db, org_b)
+    wf_b = _make_workflow_file(db, repo_b)
+    _make_fix(db, wf_b)
+
+    _, fixes_used, _, _sub = billing._usage_for_user(db, user)
+    assert fixes_used == 2
+
+
+def test_fixes_used_survives_fix_row_delete_and_recreate(db: Session) -> None:
+    # Regenerating a fix deletes and recreates its Fix row (see
+    # _create_pending_fixes) — fixes_used must still grow with each
+    # generation event instead of resetting to the live row count.
+    user = _make_user(db)
+    org = _make_org(db)
+    _link_owner(db, org, user)
+    repo = _make_repo(db, org)
+    wf = _make_workflow_file(db, repo)
+
+    fix = _make_fix(db, wf)
+    _, fixes_used, _, _sub = billing._usage_for_user(db, user)
+    assert fixes_used == 1
+
+    db.delete(fix)
+    db.commit()
+    _make_fix(db, wf)  # regenerate: new row, same workflow file
+
+    _, fixes_used, _, _sub = billing._usage_for_user(db, user)
+    assert fixes_used == 2
 
 
 def test_enforce_quota_debits_billing_owner_not_acting_teammate(db: Session) -> None:
@@ -305,6 +360,163 @@ def test_enforce_quota_debits_billing_owner_not_acting_teammate(db: Session) -> 
     ):
         billing.enforce_quota(db, teammate, org.id, "fixes")
     assert exc.value.status_code == 402
+
+
+# ─── monthly usage reset ─────────────────────────────────────────────────────
+
+
+def test_month_bounds_mid_month() -> None:
+    now = datetime(2026, 7, 20, 15, 30, tzinfo=timezone.utc)
+    start, end = billing._month_bounds(now)
+    assert start == datetime(2026, 7, 1, tzinfo=timezone.utc)
+    assert end == datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+
+def test_month_bounds_december_rolls_into_next_year() -> None:
+    now = datetime(2026, 12, 25, tzinfo=timezone.utc)
+    start, end = billing._month_bounds(now)
+    assert start == datetime(2026, 12, 1, tzinfo=timezone.utc)
+    assert end == datetime(2027, 1, 1, tzinfo=timezone.utc)
+
+
+def test_first_ever_period_does_not_baseline_away_existing_usage(db: Session) -> None:
+    # A user who already generated fixes before their subscription's first
+    # period check must still see that usage counted — there is no prior
+    # period to exclude it from.
+    user = _make_user(db)
+    org = _make_org(db)
+    _link_owner(db, org, user)
+    repo = _make_repo(db, org)
+    wf = _make_workflow_file(db, repo)
+    _make_fix(db, wf)
+
+    _, fixes_used, _, sub = billing._usage_for_user(db, user)
+    assert fixes_used == 1
+    assert sub.fixes_used_baseline == 0
+    assert sub.period_start is not None
+    assert sub.period_end is not None
+
+
+def test_rollover_resets_period_usage_but_keeps_lifetime_count(db: Session) -> None:
+    # Simulated month crossing (not real elapsed time) — a real calendar
+    # rollover can't be forced just by editing period_end while "now" is
+    # still in the same month _month_bounds would recompute.
+    user = _make_user(db)
+    org = _make_org(db)
+    _link_owner(db, org, user)
+    repo = _make_repo(db, org)
+    wf = _make_workflow_file(db, repo)
+
+    with patch.object(
+        billing,
+        "get_datetime_utc",
+        return_value=datetime(2026, 6, 15, tzinfo=timezone.utc),
+    ):
+        fix = _make_fix(db, wf)
+        _, fixes_used, _, sub = billing._usage_for_user(db, user)
+    assert fixes_used == 1
+    assert sub.period_start == datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+    with patch.object(
+        billing,
+        "get_datetime_utc",
+        return_value=datetime(2026, 7, 5, tzinfo=timezone.utc),
+    ):
+        # Rollover is checked first — same order enforce_quota always uses in
+        # production (quota check precedes fix creation in the same request),
+        # so the baseline snapshot never includes usage from the new period.
+        _, _, _, rolled_sub = billing._usage_for_user(db, user)
+        assert rolled_sub.fixes_used_baseline == 1
+
+        # Regenerate (delete + recreate, same as the real fix-generation
+        # flow — Fix.workflow_file_id is unique) one more fix in the new month.
+        db.delete(fix)
+        db.commit()
+        _make_fix(db, wf)
+        _, fixes_used_after_rollover, _, sub_after = billing._usage_for_user(db, user)
+
+    # Only the fix generated in the new period counts...
+    assert fixes_used_after_rollover == 1
+    # ...but the lifetime baseline reflects everything generated before rollover.
+    assert sub_after.fixes_used_baseline == 1
+    assert sub_after.period_start == datetime(2026, 7, 1, tzinfo=timezone.utc)
+
+
+def test_analyses_used_excludes_completions_from_before_current_period(
+    db: Session,
+) -> None:
+    user = _make_user(db)
+    org = _make_org(db)
+    _link_owner(db, org, user)
+    repo = _make_repo(db, org)
+    wf = _make_workflow_file(db, repo)
+    analysis = Analysis(
+        repo_id=repo.id,
+        workflow_file_id=wf.id,
+        content_hash=wf.content_hash,
+        status=AnalysisStatus.completed,
+        # Fixed in "June" so the "July" period check below can exclude it —
+        # a real datetime.now() here would defeat the simulated month crossing.
+        completed_at=datetime(2026, 6, 15, tzinfo=timezone.utc),
+    )
+    db.add(analysis)
+    db.commit()
+
+    with patch.object(
+        billing,
+        "get_datetime_utc",
+        return_value=datetime(2026, 6, 15, tzinfo=timezone.utc),
+    ):
+        analyses_used, _, _, _sub = billing._usage_for_user(db, user)
+    assert analyses_used == 1
+
+    # Simulated month crossing — the analysis completed in June no longer
+    # falls within July's period.
+    with patch.object(
+        billing,
+        "get_datetime_utc",
+        return_value=datetime(2026, 7, 5, tzinfo=timezone.utc),
+    ):
+        analyses_used_after, _, _, _ = billing._usage_for_user(db, user)
+    assert analyses_used_after == 0
+
+
+def test_stripe_sync_sets_period_from_current_period_fields(db: Session) -> None:
+    user = _make_user(db)
+    org = _make_org(db)
+    _link_owner(db, org, user)
+    repo = _make_repo(db, org)
+    wf = _make_workflow_file(db, repo)
+    _make_fix(db, wf)
+
+    from app.models import BillingSubscription
+
+    sub = billing._get_or_create_subscription(db, user)
+    sub.stripe_customer_id = "cus_123"
+    db.add(sub)
+    db.commit()
+
+    period_start_ts = int(datetime(2026, 6, 1, tzinfo=timezone.utc).timestamp())
+    period_end_ts = int(datetime(2026, 7, 1, tzinfo=timezone.utc).timestamp())
+    billing._sync_subscription(
+        db,
+        "cus_123",
+        "sub_123",
+        settings.STRIPE_PRICE_STARTER or "price_starter",
+        active=True,
+        current_period_start=period_start_ts,
+        current_period_end=period_end_ts,
+    )
+
+    db.refresh(sub)
+    assert sub.period_start == datetime(2026, 6, 1, tzinfo=timezone.utc)
+    assert sub.period_end == datetime(2026, 7, 1, tzinfo=timezone.utc)
+    # Prior usage is frozen out of the freshly-set Stripe period.
+    assert sub.fixes_used_baseline == 1
+
+    refetched = db.get(BillingSubscription, sub.id)
+    assert refetched is not None
+    assert refetched.stripe_subscription_id == "sub_123"
 
 
 # ─── GET /billing/subscription ───────────────────────────────────────────────

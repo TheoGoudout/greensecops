@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import datetime, timezone
 
 import stripe
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -12,13 +13,13 @@ from app.models import (
     AnalysisStatus,
     BillingSubscription,
     BillingSubscriptionPublic,
-    Fix,
     OrgMember,
     OrgRole,
     Repository,
     User,
     UserTier,
     WorkflowFile,
+    get_datetime_utc,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 _TIER_LIMITS: dict[str, dict[str, int | None]] = {
-    UserTier.free: {"analyses": 50, "fixes": 5, "repos": 3},
+    UserTier.free: {"analyses": 50, "fixes": 10, "repos": 3},
     UserTier.starter: {"analyses": 500, "fixes": 50, "repos": 10},
     UserTier.pro: {"analyses": None, "fixes": 500, "repos": None},
     UserTier.ultimate: {"analyses": None, "fixes": None, "repos": None},
@@ -83,19 +84,96 @@ def _billing_owner_org_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UU
     ]
 
 
-def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.UUID]]:
-    """Return (analyses_used, fixes_used, enabled_repo_ids) for ``user``.
+def _get_or_create_subscription(session: Session, user: User) -> BillingSubscription:
+    sub = session.exec(
+        select(BillingSubscription).where(BillingSubscription.user_id == user.id)
+    ).first()
+    if not sub:
+        sub = BillingSubscription(user_id=user.id, tier=UserTier.free)
+        session.add(sub)
+        session.commit()
+        session.refresh(sub)
+    return sub
 
-    ``analyses_used`` and ``fixes_used`` count every repo ever attached to an
-    org this user is the billing owner of, enabled or not — disabling a repo
-    doesn't erase its history, so it must not erase its usage either.
-    ``enabled_repo_ids`` (backing the "repos" limit and display count) is the
-    live, current set of enabled repos — a capacity metric, not a cumulative
-    one, so it's expected to change as repos are toggled.
+
+def _month_bounds(now: datetime) -> tuple[datetime, datetime]:
+    """UTC calendar-month bounds containing ``now``: [start, end)."""
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0, day=1)
+    end = (
+        start.replace(year=start.year + 1, month=1)
+        if start.month == 12
+        else start.replace(month=start.month + 1)
+    )
+    return start, end
+
+
+def _lifetime_fixes_used(session: Session, repo_ids: list[uuid.UUID]) -> int:
+    """All-time sum of billable fix generations across ``repo_ids``.
+
+    Monotonic by design (see ``WorkflowFile.fix_generation_count``) — this is
+    what makes a baseline snapshot in ``_ensure_current_period`` a valid way to
+    derive period-scoped usage without re-tagging every past generation.
     """
+    return (
+        session.exec(
+            select(func.coalesce(func.sum(WorkflowFile.fix_generation_count), 0)).where(
+                col(WorkflowFile.repo_id).in_(repo_ids)
+            )
+        ).one()
+        or 0
+    )
+
+
+def _ensure_current_period(
+    session: Session, sub: BillingSubscription, lifetime_fixes_used: int
+) -> BillingSubscription:
+    """Roll ``sub`` onto the current billing period if the previous one ended.
+
+    A Stripe-paying tier's ``period_end`` is kept current by the webhook
+    (``_sync_subscription`` reads ``current_period_end``); this calendar-month
+    rollover is the fallback for tiers with no Stripe cycle (free,
+    open_source) and for a brand-new subscription no webhook has touched yet.
+    ``fixes_used_baseline`` is snapshotted at the lifetime sum so period usage
+    is computed as ``lifetime_sum - baseline`` without needing to timestamp
+    every individual past generation — but only on a genuine rollover
+    (``period_end`` existed and passed). On the very first period a
+    subscription ever has, there is no prior period to exclude, so the
+    baseline stays 0 and any usage generated before this first check still
+    counts within it.
+    """
+    now = get_datetime_utc()
+    if sub.period_end is not None and now < sub.period_end:
+        return sub
+    is_rollover = sub.period_end is not None
+    period_start, period_end = _month_bounds(now)
+    sub.period_start = period_start
+    sub.period_end = period_end
+    sub.fixes_used_baseline = lifetime_fixes_used if is_rollover else 0
+    session.add(sub)
+    session.commit()
+    session.refresh(sub)
+    return sub
+
+
+def _usage_for_user(
+    session: Session, user: User
+) -> tuple[int, int, list[uuid.UUID], BillingSubscription]:
+    """Return (analyses_used, fixes_used, enabled_repo_ids, subscription) for
+    the current billing period.
+
+    ``analyses_used`` and ``fixes_used`` are scoped to the current period
+    (reset monthly — see ``_ensure_current_period``); they still draw from
+    every repo ever attached to an org this user is the billing owner of,
+    enabled or not, since disabling a repo doesn't erase its history.
+    ``enabled_repo_ids`` (backing the "repos" limit and display count) is the
+    live, current set of enabled repos — a capacity metric, not a period one,
+    so it's expected to change as repos are toggled regardless of period.
+    """
+    sub = _get_or_create_subscription(session, user)
     org_ids = _billing_owner_org_ids(session, user.id)
     if not org_ids:
-        return 0, 0, []
+        sub = _ensure_current_period(session, sub, 0)
+        return 0, 0, [], sub
     all_repo_ids = list(
         session.exec(
             select(Repository.id).where(Repository.org_id.in_(org_ids))  # type: ignore[attr-defined]
@@ -110,25 +188,24 @@ def _usage_for_user(session: Session, user: User) -> tuple[int, int, list[uuid.U
         ).all()
     )
     if not all_repo_ids:
-        return 0, 0, []
+        sub = _ensure_current_period(session, sub, 0)
+        return 0, 0, [], sub
+
+    lifetime_fixes_used = _lifetime_fixes_used(session, all_repo_ids)
+    sub = _ensure_current_period(session, sub, lifetime_fixes_used)
+
     analyses_used = (
         session.exec(
             select(func.count(col(Analysis.id))).where(
                 col(Analysis.repo_id).in_(all_repo_ids),
                 Analysis.status == AnalysisStatus.completed,
+                col(Analysis.completed_at) >= sub.period_start,
             )
         ).one()
         or 0
     )
-    fixes_used = (
-        session.exec(
-            select(func.count(col(Fix.id)))
-            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-            .where(col(WorkflowFile.repo_id).in_(all_repo_ids))
-        ).one()
-        or 0
-    )
-    return analyses_used, fixes_used, enabled_repo_ids
+    fixes_used = max(lifetime_fixes_used - sub.fixes_used_baseline, 0)
+    return analyses_used, fixes_used, enabled_repo_ids, sub
 
 
 def enforce_quota(
@@ -138,7 +215,6 @@ def enforce_quota(
     kind: str,
     *,
     requested: int = 1,
-    replacing: int = 0,
 ) -> None:
     """Raise HTTP 402 if creating ``requested`` new items would exceed the
     tier limit for ``kind`` of ``org_id``'s billing owner.
@@ -146,9 +222,8 @@ def enforce_quota(
     ``kind`` is one of "analyses", "fixes", or "repos". ``current_user`` being
     a superuser exempts the call outright (admin override); the org's billing
     owner being a superuser exempts it too. A ``None`` limit means unlimited.
-    ``replacing`` is the number of existing items the operation deletes and
-    recreates (e.g. regenerating fixes), which must not count against the
-    quota since the resulting total is unchanged.
+    Usage for every kind is cumulative (it never decreases as items are
+    deleted or replaced), so regenerating a fix bills like a new one.
 
     Usage is measured against the org's billing owner rather than
     ``current_user`` directly, so a non-owner teammate triggering an action on
@@ -163,13 +238,13 @@ def enforce_quota(
     limit = _TIER_LIMITS.get(user.tier, _TIER_LIMITS[UserTier.free]).get(kind)
     if limit is None:
         return
-    analyses_used, fixes_used, enabled_repo_ids = _usage_for_user(session, user)
+    analyses_used, fixes_used, enabled_repo_ids, _sub = _usage_for_user(session, user)
     used = {
         "analyses": analyses_used,
         "fixes": fixes_used,
         "repos": len(enabled_repo_ids),
     }[kind]
-    if max(used - replacing, 0) + requested > limit:
+    if used + requested > limit:
         raise HTTPException(
             status_code=402,
             detail=(
@@ -212,18 +287,7 @@ def get_subscription(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> BillingSubscriptionPublic:
-    sub = session.exec(
-        select(BillingSubscription).where(
-            BillingSubscription.user_id == current_user.id
-        )
-    ).first()
-    if not sub:
-        sub = BillingSubscription(user_id=current_user.id, tier=UserTier.free)
-        session.add(sub)
-        session.commit()
-        session.refresh(sub)
-
-    analyses_used, fixes_used, repo_ids = _usage_for_user(session, current_user)
+    analyses_used, fixes_used, repo_ids, sub = _usage_for_user(session, current_user)
 
     return BillingSubscriptionPublic(
         id=sub.id,
@@ -261,6 +325,8 @@ def _sync_subscription(
     stripe_sub_id: str,
     price_id: str,
     active: bool,
+    current_period_start: int | None = None,
+    current_period_end: int | None = None,
 ) -> None:
     tier = _price_to_tier(price_id) if active else UserTier.free
     if tier is None:
@@ -285,6 +351,26 @@ def _sync_subscription(
     sub.tier = tier
     sub.stripe_subscription_id = stripe_sub_id
     sub.stripe_customer_id = customer_id
+
+    # A paid tier's reset date follows its actual Stripe billing cycle rather
+    # than the calendar-month fallback _ensure_current_period otherwise uses.
+    # The baseline is re-snapshotted here too, else the first quota check of
+    # the new cycle would still see the old period's usage.
+    if current_period_start is not None and current_period_end is not None:
+        sub.period_start = datetime.fromtimestamp(current_period_start, tz=timezone.utc)
+        sub.period_end = datetime.fromtimestamp(current_period_end, tz=timezone.utc)
+        org_ids = _billing_owner_org_ids(session, sub.user_id)
+        repo_ids = (
+            list(
+                session.exec(
+                    select(Repository.id).where(Repository.org_id.in_(org_ids))  # type: ignore[attr-defined]
+                ).all()
+            )
+            if org_ids
+            else []
+        )
+        sub.fixes_used_baseline = _lifetime_fixes_used(session, repo_ids)
+
     session.add(sub)
 
     user = session.get(User, sub.user_id)
@@ -324,7 +410,24 @@ async def stripe_webhook(
         active: bool = data["status"] in ("active", "trialing")
         items = data.get("items", {}).get("data", [])
         price_id: str = items[0]["price"]["id"] if items else ""
-        _sync_subscription(session, customer_id, stripe_sub_id, price_id, active)
+        # Newer Stripe API versions moved these onto the subscription item;
+        # fall back to the top-level subscription fields for older ones.
+        item = items[0] if items else {}
+        current_period_start = item.get("current_period_start") or data.get(
+            "current_period_start"
+        )
+        current_period_end = item.get("current_period_end") or data.get(
+            "current_period_end"
+        )
+        _sync_subscription(
+            session,
+            customer_id,
+            stripe_sub_id,
+            price_id,
+            active,
+            current_period_start=current_period_start,
+            current_period_end=current_period_end,
+        )
 
     elif event_type == "customer.subscription.deleted":
         customer_id = data["customer"]

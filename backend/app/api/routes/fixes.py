@@ -4,7 +4,6 @@ from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlmodel import col, delete, or_, select
 
 from app.api.deps import (
@@ -100,6 +99,12 @@ def _create_pending_fixes(
         ).all()
     )
     provider_str, model_str = resolve_llm_provider(repo)
+    wf_files = {
+        wf.id: wf
+        for wf in session.exec(
+            select(WorkflowFile).where(col(WorkflowFile.id).in_(list(by_wf_file)))
+        ).all()
+    }
     created: list[Fix] = []
     for wf_id, issues in by_wf_file.items():
         if wf_id in taken:
@@ -115,6 +120,10 @@ def _create_pending_fixes(
         for issue in issues:
             issue.fix_id = fix.id
             session.add(issue)
+        wf_file = wf_files.get(wf_id)
+        if wf_file is not None:
+            wf_file.fix_generation_count += 1
+            session.add(wf_file)
         created.append(fix)
     session.commit()
     for fix in created:
@@ -407,20 +416,15 @@ def trigger_fix_generation_for_repo(
 
     wf_file_ids = list(by_wf_file)
 
-    # Fixes already attached to the target workflow files are deleted below
-    # (or kept and skipped by the worker), so they don't add to the total.
-    existing_fix_count = session.exec(
-        select(func.count())
-        .select_from(Fix)
-        .where(col(Fix.workflow_file_id).in_(wf_file_ids))
-    ).one()
+    # Regenerating (force=True) bills as new generations, same as a first-time
+    # generate — usage is a cumulative count of generation events, not a live
+    # row count, so a discard-and-recreate here still adds to the total.
     enforce_quota(
         session,
         current_user,
         repo.org_id,
         "fixes",
         requested=len(by_wf_file),
-        replacing=existing_fix_count,
     )
 
     delete_stmt = delete(Fix).where(col(Fix.workflow_file_id).in_(wf_file_ids))
@@ -606,7 +610,6 @@ def regenerate_fixes_for_repo(
         repo.org_id,
         "fixes",
         requested=len(by_wf_file),
-        replacing=len(fixes_to_delete),
     )
 
     session.exec(delete(Fix).where(col(Fix.id).in_([f.id for f in fixes_to_delete])))
@@ -651,7 +654,9 @@ def regenerate_fixes_for_workflow(
         raise HTTPException(status_code=403, detail="Repository is not accessible")
 
     by_wf_file = _latest_unresolved_issues(
-        session, repo.id, wf_file_ids=[fix.workflow_file_id]
+        session,
+        repo.id,
+        wf_file_ids=[fix.workflow_file_id],
     )
     if not by_wf_file:
         raise HTTPException(
@@ -659,7 +664,7 @@ def regenerate_fixes_for_workflow(
             detail="No unresolved issues found for this workflow file",
         )
 
-    enforce_quota(session, current_user, repo.org_id, "fixes", requested=1, replacing=1)
+    enforce_quota(session, current_user, repo.org_id, "fixes", requested=1)
 
     session.delete(fix)
     _delete_orphaned_closed_prs(session, repo.id)

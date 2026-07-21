@@ -403,6 +403,15 @@ function Dashboard() {
                   used={subscription.repos_used ?? 0}
                   limit={limits?.repos ?? null}
                 />
+                {subscription.period_end && (
+                  <p className="text-xs text-muted-foreground text-right">
+                    Analyses/fixes reset{" "}
+                    {new Date(subscription.period_end).toLocaleDateString(
+                      undefined,
+                      { year: "numeric", month: "short", day: "numeric" },
+                    )}
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">

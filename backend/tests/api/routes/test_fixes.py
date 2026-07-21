@@ -564,7 +564,7 @@ def test_generate_fixes_for_repo_blocks_net_new_over_quota(
     db.commit()
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
-    free_fix_limit = 5
+    free_fix_limit = 10
     for n in range(free_fix_limit + 1):
         _make_wf_with_issue(db, repo, rule, n)
 

@@ -205,6 +205,10 @@ class WorkflowFile(SQLModel, table=True):
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
+    # Cumulative count of AI fix generations (initial + regenerate) billed
+    # against this workflow file. Survives the Fix row being deleted and
+    # recreated on regenerate, unlike a live-row count.
+    fix_generation_count: int = Field(default=0)
     repository: Repository | None = Relationship(back_populates="workflow_files")
     analyses: list["Analysis"] = Relationship(
         back_populates="workflow_file",
@@ -315,6 +319,13 @@ class Issue(SQLModel, table=True):
     # Set when a user dismisses the violation (false positive / accepted risk);
     # takes precedence in the status trigger so the issue reads ``ignored``.
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # Set from the fix-generation LLM's own <unfixed> report: it could not
+    # resolve this issue within the workflow-file diff (too many steps,
+    # requires external setup, etc). Excluded from the PR body's "fixed"
+    # table and from implicit bulk auto-fix selection; an explicit retry on
+    # this issue/workflow clears it and gives the LLM another attempt.
+    needs_manual_work: bool = Field(default=False)
+    manual_work_note: str | None = Field(default=None, max_length=1024)
     fix_id: uuid.UUID | None = Field(
         default=None,
         sa_column=sa.Column(
@@ -487,6 +498,9 @@ class TelemetryMetricSample(SQLModel, table=True):
     disk_used_gb: float | None = Field(default=None)
     net_bytes_sent: int | None = Field(default=None)
     net_bytes_recv: int | None = Field(default=None)
+    # JSON-encoded list of the top 5-10% resource-consuming processes from
+    # the proc-sampler binary (Linux runners only); NULL elsewhere.
+    top_processes: str | None = Field(default=None)
 
 
 # ─── BillingSubscription ─────────────────────────────────────────────────────
@@ -507,6 +521,10 @@ class BillingSubscription(SQLModel, table=True):
     fixes_used: int = Field(default=0)
     period_start: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     period_end: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    # Lifetime fix-generation sum snapshotted at the start of the current
+    # period. Period usage = lifetime sum - this baseline, since the lifetime
+    # counter itself is intentionally monotonic (see WorkflowFile.fix_generation_count).
+    fixes_used_baseline: int = Field(default=0)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
