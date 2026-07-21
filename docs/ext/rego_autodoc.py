@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -215,6 +216,11 @@ def generate_rule_pages(app: Sphinx) -> None:
         logger.warning(f"rego_autodoc: rules directory not found: {rules_base}")
         return
 
+    # Fully generated output — wipe before regenerating so a renamed or
+    # removed rule doesn't leave an orphaned page behind (an orphan isn't
+    # linked from any toctree, which -W turns into a hard build failure).
+    if rules_out.exists():
+        shutil.rmtree(rules_out)
     rules_out.mkdir(exist_ok=True)
     categories: dict[str, list[dict[str, Any]]] = {}
 

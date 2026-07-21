@@ -85,7 +85,7 @@ Badges issued per repo + per branch. SVG endpoint: `/badges/{owner}/{repo}/{bran
 - `untrusted_actions` — third-party actions not pinned to SHA
 - `pr_target_injection` — `pull_request_target` with checkout of PR head
 - `oidc_not_used` — long-lived cloud credentials instead of OIDC
-- `world_writable_artifact` — artifacts uploaded without access control
+- `public_artifact_exposure` — artifacts uploaded without an explicit retention window, extending public exposure
 
 ### 4. Performance (`performance/`)
 - `cache_key_too_broad` — cache keys that never miss (defeating the purpose)

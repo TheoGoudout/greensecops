@@ -24,7 +24,7 @@
 #                 retention-days: 3
 #     fix: |
 #       Set retention-days on every actions/upload-artifact step to limit the window during which build outputs are publicly accessible. Use the shortest duration sufficient for downstream consumption.
-package greensecops.security.world_writable_artifact
+package greensecops.security.public_artifact_exposure
 
 import rego.v1
 
@@ -36,7 +36,7 @@ violations contains violation if {
 	with_block := step["with"]
 	not _has_retention(with_block)
 	violation := {
-		"rule": "world_writable_artifact",
+		"rule": "public_artifact_exposure",
 		"severity": "medium",
 		"category": "security",
 		"job": job_name,
