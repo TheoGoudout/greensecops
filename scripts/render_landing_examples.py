@@ -118,20 +118,62 @@ def _highlight_line(line: str) -> str:
     return f"{indent}{prefix}{body}{comment_html}"
 
 
-def _render_example(path: Path) -> str:
+def _example_lines(path: Path) -> list[str]:
+    """Return the workflow's raw lines with header/full-line comments dropped."""
     lines = path.read_text(encoding="utf-8").splitlines()
-    # Drop full-line comments (file headers / explanations); keep trailing ones.
     kept = [ln for ln in lines if ln.lstrip()[:1] != "#"]
-    # Trim leading/trailing blank lines introduced by the removal.
     while kept and not kept[0].strip():
         kept.pop(0)
     while kept and not kept[-1].strip():
         kept.pop()
-    return "\n".join(_highlight_line(ln) for ln in kept)
+    return kept
+
+
+def _render_example(path: Path) -> str:
+    return "\n".join(_highlight_line(ln) for ln in _example_lines(path))
+
+
+# Patterns that make the "before" workflow non-compliant — highlighted in red
+# during the flagged phase of the hero animation.
+def _is_flagged(line: str) -> bool:
+    s = line.strip()
+    if "uses:" in s and re.search(r"@v\d+$", s):  # unpinned action (mutable tag)
+        return True
+    if s.startswith("API_KEY:") and '"' in s:  # hardcoded secret literal
+        return True
+    if "run:" in s and "npm install" in s:  # deps without cache/retry
+        return True
+    return False
+
+
+def _render_anim_lines(path: Path, flag: bool) -> str:
+    """Render each workflow line as a `.tw-ln` block the hero animation types."""
+    out: list[str] = []
+    for raw in _example_lines(path):
+        html = _highlight_line(raw)
+        cls = "tw-ln"
+        if flag and _is_flagged(raw):
+            cls += " tw-ln--flag"
+        # A blank line still needs to occupy its row: emit a single space.
+        out.append(f'<span class="{cls}">{html or " "}</span>')
+    return "".join(out)
+
+
+def _render_hero_anim() -> str:
+    """Two stacked layers the hero animation swaps between: the flagged
+    ("before") workflow and the fixed ("after") one that is typed out."""
+    after = _render_anim_lines(REGIONS["after"], flag=False)
+    before = _render_anim_lines(REGIONS["before"], flag=True)
+    return (
+        '<div class="wf-anim">'
+        f'<div class="wf-anim__code wf-anim__after">{after}</div>'
+        f'<div class="wf-anim__code wf-anim__before" aria-hidden="true">{before}</div>'
+        "</div>"
+    )
 
 
 def render(html: str) -> str:
-    for name, source in REGIONS.items():
+    for name in REGIONS:
         start = f"<!-- codegen:{name}:start -->"
         end = f"<!-- codegen:{name}:end -->"
         pattern = re.compile(re.escape(start) + r".*?" + re.escape(end), re.DOTALL)
@@ -139,7 +181,8 @@ def render(html: str) -> str:
             raise SystemExit(
                 f"markers for region '{name}' not found in {INDEX_HTML.name}"
             )
-        replacement = start + _render_example(source) + end
+        content = _render_hero_anim() if name == "hero" else _render_example(REGIONS[name])
+        replacement = start + content + end
         html = pattern.sub(lambda _m, r=replacement: r, html, count=1)
     return html
 

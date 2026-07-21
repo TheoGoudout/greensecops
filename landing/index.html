@@ -101,36 +101,11 @@
             <span class="hero__dot hero__dot--yellow"></span>
             <span class="hero__dot hero__dot--green"></span>
             <span class="hero__code-filename">.github/workflows/deploy.yml</span>
+            <button type="button" class="hero__replay" tabindex="-1" title="Replay the AI fix">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
           </div>
-          <div class="hero__code-body"><!-- codegen:hero:start --><span class="token-key">name</span>: <span class="token-str">Deploy to Production</span>
-
-<span class="token-key">on</span>:
-  <span class="token-key">push</span>:
-    <span class="token-key">branches</span>: [<span class="token-str">main</span>]
-
-<span class="token-key">permissions</span>: {}
-
-<span class="token-key">jobs</span>:
-  <span class="token-key">deploy</span>:
-    <span class="token-key">name</span>: <span class="token-str">Deploy</span>
-    <span class="token-key">runs-on</span>: <span class="token-str">ubuntu-latest</span>
-    <span class="token-key">timeout-minutes</span>: <span class="token-num">15</span>
-    <span class="token-key">permissions</span>:
-      <span class="token-key">contents</span>: <span class="token-str">read</span>
-    <span class="token-key">steps</span>:
-      - <span class="token-key">name</span>: <span class="token-str">Checkout</span>
-        <span class="token-key">uses</span>: <span class="token-str">actions/checkout@11bd719…</span> <span class="token-comment"># v4.2.2</span>
-      - <span class="token-key">name</span>: <span class="token-str">Set up Node.js</span>
-        <span class="token-key">uses</span>: <span class="token-str">actions/setup-node@39370e3…</span> <span class="token-comment"># v4.1.0</span>
-        <span class="token-key">with</span>:
-          <span class="token-key">node-version</span>: <span class="token-num">20</span>
-          <span class="token-key">cache</span>: <span class="token-str">npm</span>
-      - <span class="token-key">name</span>: <span class="token-str">Install &amp; build</span>
-        <span class="token-key">run</span>: <span class="token-val">npm ci &amp;&amp; npm run build</span>
-      - <span class="token-key">name</span>: <span class="token-str">Deploy</span>
-        <span class="token-key">run</span>: <span class="token-val">./deploy.sh</span>
-        <span class="token-key">env</span>:
-          <span class="token-key">API_KEY</span>: <span class="token-str">${{ secrets.API_KEY }}</span><!-- codegen:hero:end --></div>
+          <div class="hero__code-body hero__code-body--anim"><!-- codegen:hero:start --><div class="wf-anim"><div class="wf-anim__code wf-anim__after"><span class="tw-ln"><span class="token-key">name</span>: <span class="token-str">Deploy to Production</span></span><span class="tw-ln"> </span><span class="tw-ln"><span class="token-key">on</span>:</span><span class="tw-ln">  <span class="token-key">push</span>:</span><span class="tw-ln">    <span class="token-key">branches</span>: [<span class="token-str">main</span>]</span><span class="tw-ln"> </span><span class="tw-ln"><span class="token-key">permissions</span>: {}</span><span class="tw-ln"> </span><span class="tw-ln"><span class="token-key">jobs</span>:</span><span class="tw-ln">  <span class="token-key">deploy</span>:</span><span class="tw-ln">    <span class="token-key">name</span>: <span class="token-str">Deploy</span></span><span class="tw-ln">    <span class="token-key">runs-on</span>: <span class="token-str">ubuntu-latest</span></span><span class="tw-ln">    <span class="token-key">timeout-minutes</span>: <span class="token-num">15</span></span><span class="tw-ln">    <span class="token-key">permissions</span>:</span><span class="tw-ln">      <span class="token-key">contents</span>: <span class="token-str">read</span></span><span class="tw-ln">    <span class="token-key">steps</span>:</span><span class="tw-ln">      - <span class="token-key">name</span>: <span class="token-str">Checkout</span></span><span class="tw-ln">        <span class="token-key">uses</span>: <span class="token-str">actions/checkout@11bd719…</span> <span class="token-comment"># v4.2.2</span></span><span class="tw-ln">      - <span class="token-key">name</span>: <span class="token-str">Set up Node.js</span></span><span class="tw-ln">        <span class="token-key">uses</span>: <span class="token-str">actions/setup-node@39370e3…</span> <span class="token-comment"># v4.1.0</span></span><span class="tw-ln">        <span class="token-key">with</span>:</span><span class="tw-ln">          <span class="token-key">node-version</span>: <span class="token-num">20</span></span><span class="tw-ln">          <span class="token-key">cache</span>: <span class="token-str">npm</span></span><span class="tw-ln">      - <span class="token-key">name</span>: <span class="token-str">Install &amp; build</span></span><span class="tw-ln">        <span class="token-key">run</span>: <span class="token-val">npm ci &amp;&amp; npm run build</span></span><span class="tw-ln">      - <span class="token-key">name</span>: <span class="token-str">Deploy</span></span><span class="tw-ln">        <span class="token-key">run</span>: <span class="token-val">./deploy.sh</span></span><span class="tw-ln">        <span class="token-key">env</span>:</span><span class="tw-ln">          <span class="token-key">API_KEY</span>: <span class="token-str">${{ secrets.API_KEY }}</span></span></div><div class="wf-anim__code wf-anim__before" aria-hidden="true"><span class="tw-ln"><span class="token-key">name</span>: <span class="token-str">Deploy to Production</span></span><span class="tw-ln"> </span><span class="tw-ln"><span class="token-key">on</span>:</span><span class="tw-ln">  <span class="token-key">push</span>:</span><span class="tw-ln">    <span class="token-key">branches</span>: [<span class="token-str">main</span>]</span><span class="tw-ln"> </span><span class="tw-ln"><span class="token-key">jobs</span>:</span><span class="tw-ln">  <span class="token-key">deploy</span>:</span><span class="tw-ln">    <span class="token-key">runs-on</span>: <span class="token-str">ubuntu-latest</span></span><span class="tw-ln">    <span class="token-key">steps</span>:</span><span class="tw-ln tw-ln--flag">      - <span class="token-key">uses</span>: <span class="token-str">actions/checkout@v4</span></span><span class="tw-ln tw-ln--flag">      - <span class="token-key">uses</span>: <span class="token-str">actions/setup-node@v4</span></span><span class="tw-ln tw-ln--flag">      - <span class="token-key">run</span>: <span class="token-val">npm install &amp;&amp; npm run build</span></span><span class="tw-ln">      - <span class="token-key">run</span>: <span class="token-val">./deploy.sh</span></span><span class="tw-ln">        <span class="token-key">env</span>:</span><span class="tw-ln tw-ln--flag">          <span class="token-key">API_KEY</span>: <span class="token-str">"sk-prod-abc123def456"</span></span></div></div><!-- codegen:hero:end --></div>
         </div>
 
         <div class="hero__result-card">
@@ -587,6 +562,7 @@
   </div>
 </footer>
 
+<script src="./assets/hero-anim.js" defer></script>
 <script src="./assets/theme.js" defer></script>
 </body>
 </html>

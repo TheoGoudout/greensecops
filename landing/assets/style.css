@@ -570,6 +570,106 @@ a { color: inherit; }
 .hero__code-body .token-comment { color: rgba(255,255,255,0.35); font-style: italic; }
 .hero__code-body .token-num { color: #fde68a; }
 
+/* ---- Hero "flagged -> fixed" typewriter animation ---- */
+.hero__replay {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.hero__replay:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* The animated variant lays lines out as blocks instead of one pre run, so a
+   single line can be clipped/typed without disturbing the others. */
+.hero__code-body--anim {
+  white-space: normal;
+  position: relative;
+}
+.wf-anim {
+  position: relative;
+}
+.tw-ln {
+  display: block;
+  white-space: pre;
+  box-sizing: content-box;
+}
+
+/* The flagged "before" workflow overlays the fixed one and is shown only
+   during the first phase of the animation. */
+.wf-anim__before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.wf-anim.is-showing-before .wf-anim__before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* While typing, each fixed line is clipped to its animated width. */
+.wf-anim.is-typing .tw-ln {
+  overflow: hidden;
+}
+.wf-anim__after .tw-ln.is-caret {
+  border-right: 0.55em solid rgba(190, 242, 100, 0.9);
+  animation: tw-caret 0.7s steps(1, end) infinite;
+}
+@keyframes tw-caret {
+  50% {
+    border-right-color: transparent;
+  }
+}
+
+/* Flagged lines pulse red while the "before" workflow is on screen. */
+.tw-ln--flag {
+  border-radius: 3px;
+  box-shadow: inset 3px 0 0 #ff5f57;
+  background: rgba(255, 95, 87, 0.12);
+}
+.wf-anim.is-showing-before .tw-ln--flag {
+  animation: tw-flag 0.9s ease-in-out infinite alternate;
+}
+@keyframes tw-flag {
+  from {
+    background: rgba(255, 95, 87, 0.1);
+  }
+  to {
+    background: rgba(255, 95, 87, 0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__replay {
+    display: none;
+  }
+  .wf-anim__before {
+    display: none;
+  }
+  .wf-anim.is-typing .tw-ln,
+  .wf-anim__after .tw-ln.is-caret {
+    overflow: visible;
+    border-right: 0;
+    animation: none;
+  }
+}
+
 .hero__result-card {
   background: var(--card);
   border: 1px solid var(--border);
