@@ -27,6 +27,7 @@ from app.models import (
     WorkflowFile,
     WorkflowFilePublic,
 )
+from app.services.badge_signing import build_badge_svg_url
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.scoring import average_latest_scores, score_to_grade
@@ -217,6 +218,7 @@ async def create_external_repository(
         default_branch=target.default_branch,
         enabled=False,
         is_external=True,
+        is_private=target.private,
     )
     session.add(repo)
     session.commit()
@@ -288,6 +290,10 @@ def toggle_auto_fix(
     enabled: bool,
 ) -> dict[str, str | bool]:
     repo = _get_repo_for_user(repo_id, session, current_user)
+    if enabled and not repo.auto_fix_enabled:
+        from app.api.routes.billing import enforce_auto_fix_enable
+
+        enforce_auto_fix_enable(session, current_user, repo.org_id)
     repo.auto_fix_enabled = enabled
     session.add(repo)
     session.commit()
@@ -525,10 +531,7 @@ async def integrate_action(
         readme_file = gh_repo.get_readme(ref=branch)
         readme_content = readme_file.decoded_content.decode("utf-8")
         owner, name = repo.full_name.split("/", 1)
-        badge_url = (
-            f"{settings.BACKEND_HOST}{settings.API_V1_STR}"
-            f"/badges/{owner}/{name}/{branch}.svg"
-        )
+        badge_url = build_badge_svg_url(owner, name, branch, private=repo.is_private)
         link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
         badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
 

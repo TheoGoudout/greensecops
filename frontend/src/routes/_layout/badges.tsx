@@ -19,7 +19,10 @@ const API_BASE = import.meta.env.VITE_API_URL
 
 function badgeSvgUrl(repo: RepositoryPublic): string {
   const [owner, name] = repo.full_name.split("/")
-  return `${API_BASE}/api/v1/badges/${owner}/${name}/${repo.default_branch}.svg`
+  const base = `${API_BASE}/api/v1/badges/${owner}/${name}/${repo.default_branch}.svg`
+  // Private repos require the server-minted HMAC signature; public repos use
+  // the plain URL.
+  return repo.badge_sig ? `${base}?sig=${repo.badge_sig}` : base
 }
 
 function badgeMarkdown(repo: RepositoryPublic): string {

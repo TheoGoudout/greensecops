@@ -157,6 +157,7 @@ export class BadgesService {
      * @param data.owner
      * @param data.repo
      * @param data.branch
+     * @param data.sig
      * @returns unknown Successful Response
      * @throws ApiError
      */
@@ -168,6 +169,9 @@ export class BadgesService {
                 owner: data.owner,
                 repo: data.repo,
                 branch: data.branch
+            },
+            query: {
+                sig: data.sig
             },
             errors: {
                 422: 'Validation Error'
@@ -182,6 +186,7 @@ export class BadgesService {
      * @param data.owner
      * @param data.repo
      * @param data.branch
+     * @param data.sig
      * @returns unknown Successful Response
      * @throws ApiError
      */
@@ -193,6 +198,9 @@ export class BadgesService {
                 owner: data.owner,
                 repo: data.repo,
                 branch: data.branch
+            },
+            query: {
+                sig: data.sig
             },
             errors: {
                 422: 'Validation Error'

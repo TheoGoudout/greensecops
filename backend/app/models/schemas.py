@@ -69,9 +69,14 @@ class RepositoryPublic(SQLModel):
     enabled: bool
     is_accessible: bool = True
     is_external: bool = False
+    is_private: bool = False
     default_branch: str
     auto_fix_enabled: bool = False
     tier: UserTier | None = None
+    # HMAC signature for the badge on the repo's default branch. Only set for
+    # private repos (whose badge URLs must be signed); ``None`` for public
+    # repos, which use plain badge URLs. The frontend appends it as ``?sig=``.
+    badge_sig: str | None = None
     created_at: datetime | None = None
     avg_score: float | None = None
     grade: str | None = None

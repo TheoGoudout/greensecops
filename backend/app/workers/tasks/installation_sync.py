@@ -35,6 +35,7 @@ def _sync_installation_repositories_impl(
                 full_name=repo.full_name,
                 installation_id=installation_id,
                 default_branch=repo.default_branch,
+                is_private=repo.private,
             )
             has_analysis = session.exec(
                 select(Analysis.id).where(Analysis.repo_id == db_repo.id).limit(1)

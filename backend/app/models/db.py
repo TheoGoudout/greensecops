@@ -139,6 +139,12 @@ class Repository(SQLModel, table=True):
     enabled: bool = Field(default=False)
     is_accessible: bool = Field(default=True)
     is_external: bool = Field(default=False)
+    # GitHub repo visibility, synced from the API. Drives badge-URL signing:
+    # private repos require an HMAC-signed badge URL to serve a real grade,
+    # public repos are served on plain URLs.
+    is_private: bool = Field(
+        default=False, sa_column_kwargs={"server_default": "false"}
+    )
     # Accessibility / lifecycle axis, owned by the RepositoryMachine (migration
     # 0031). ``is_accessible`` is a machine-synced cache of ``status == active``;
     # ``enabled`` (user opt-in) stays an independent flag.

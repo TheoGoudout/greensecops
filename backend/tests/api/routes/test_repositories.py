@@ -333,6 +333,127 @@ def test_toggle_repository_disable_never_blocked_by_quota(
     assert over_cap_repo.enabled is False
 
 
+# ─── Auto-fix tier gate ──────────────────────────────────────────────────────
+
+
+def _auto_fix_repo(db: Session, org: Organization) -> Repository:
+    repository = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/autofix-{uuid.uuid4().hex[:8]}",
+        installation_id=55555,
+        enabled=True,
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+    return repository
+
+
+def test_toggle_auto_fix_blocked_on_free_tier(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """A free-tier owner cannot enable auto-fix (paid feature)."""
+    user = create_random_user(db)
+    user.tier = UserTier.free
+    db.add(user)
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+    repo = _auto_fix_repo(db, org)
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
+        params={"enabled": "true"},
+        headers=headers,
+    )
+
+    assert response.status_code == 402
+    assert "paid" in response.json()["detail"].lower()
+    db.refresh(repo)
+    assert repo.auto_fix_enabled is False
+
+
+def test_toggle_auto_fix_allowed_on_paid_tier(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """A starter-tier owner can enable auto-fix."""
+    user = create_random_user(db)
+    user.tier = UserTier.starter
+    db.add(user)
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+    repo = _auto_fix_repo(db, org)
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
+        params={"enabled": "true"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    db.refresh(repo)
+    assert repo.auto_fix_enabled is True
+
+
+def test_toggle_auto_fix_superuser_bypasses_gate(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    """A superuser can force-enable auto-fix on a free-tier org's repo (OSS)."""
+    owner = create_random_user(db)
+    owner.tier = UserTier.free
+    db.add(owner)
+    db.add(OrgMember(org_id=org.id, user_id=owner.id, role=OrgRole.owner))
+    db.commit()
+    repo = _auto_fix_repo(db, org)
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
+        params={"enabled": "true"},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    db.refresh(repo)
+    assert repo.auto_fix_enabled is True
+
+
+def test_toggle_auto_fix_disable_never_blocked(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+) -> None:
+    """Disabling auto-fix is always allowed, even for a free-tier owner."""
+    user = create_random_user(db)
+    user.tier = UserTier.free
+    db.add(user)
+    db.add(OrgMember(org_id=org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=user.email, db=db)
+    repo = _auto_fix_repo(db, org)
+    repo.auto_fix_enabled = True
+    db.add(repo)
+    db.commit()
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
+        params={"enabled": "false"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    db.refresh(repo)
+    assert repo.auto_fix_enabled is False
+
+
 # ─── Org-scoped access for non-superusers ────────────────────────────────────
 
 

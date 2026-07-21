@@ -661,6 +661,10 @@ export type RepositoryPublic = {
      */
     is_external?: boolean;
     /**
+     * Is Private
+     */
+    is_private?: boolean;
+    /**
      * Default Branch
      */
     default_branch: string;
@@ -669,6 +673,10 @@ export type RepositoryPublic = {
      */
     auto_fix_enabled?: boolean;
     tier?: UserTier | null;
+    /**
+     * Badge Sig
+     */
+    badge_sig?: string | null;
     /**
      * Created At
      */
@@ -2902,7 +2910,12 @@ export type BadgesGetBadgeData = {
          */
         branch: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
     url: '/api/v1/badges/{owner}/{repo}/{branch}.svg';
 };
 
@@ -2938,7 +2951,12 @@ export type BadgesGetBadgeJsonData = {
          */
         branch: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
     url: '/api/v1/badges/{owner}/{repo}/{branch}.json';
 };
 
