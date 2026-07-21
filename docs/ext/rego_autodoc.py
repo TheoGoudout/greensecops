@@ -269,9 +269,8 @@ def generate_reference_page(app: Sphinx) -> None:
         return
 
     indented = "\n".join(
-        f"   {line}" if line.strip() else "" for line in example.read_text(
-            encoding="utf-8"
-        ).splitlines()
+        f"   {line}" if line.strip() else ""
+        for line in example.read_text(encoding="utf-8").splitlines()
     )
     title = "Reference workflow"
     page = (

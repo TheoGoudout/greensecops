@@ -15,6 +15,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY docs/ docs/
 COPY backend/app/rules/ backend/app/rules/
+# The reference-workflow doc page is generated from the canonical example file.
+COPY examples/ examples/
 
 ARG DOCS_BASE_URL=""
 ENV DOCS_BASE_URL=${DOCS_BASE_URL}
