@@ -6,14 +6,32 @@
 #   detection: heuristic
 #   examples:
 #     bad: |
+#       # One monolithic job with 21 steps (threshold is 20).
 #       jobs:
-#         lint:
-#           steps: []   # 6 steps
-#         test:
-#           steps: []   # 8 steps
-#         build:
-#           steps: []   # 7 steps
-#         # total: 21 steps — exceeds threshold
+#         everything:
+#           runs-on: ubuntu-latest
+#           steps:
+#             - run: npm ci
+#             - run: npm run lint
+#             - run: npm run typecheck
+#             - run: npm run build
+#             - run: npm test
+#             - run: npm run test:integration
+#             - run: npm run test:e2e
+#             - run: npm run bundle
+#             - run: ./scripts/build-image.sh
+#             - run: ./scripts/scan-image.sh
+#             - run: ./scripts/push-image.sh
+#             - run: ./scripts/deploy-staging.sh
+#             - run: ./scripts/smoke-test.sh
+#             - run: ./scripts/deploy-prod.sh
+#             - run: ./scripts/healthcheck.sh
+#             - run: ./scripts/purge-cache.sh
+#             - run: ./scripts/tag-release.sh
+#             - run: ./scripts/changelog.sh
+#             - run: ./scripts/publish-docs.sh
+#             - run: ./scripts/notify-slack.sh
+#             - run: ./scripts/cleanup.sh
 #     good: |
 #       # ci.yml — lint + test only
 #       jobs:

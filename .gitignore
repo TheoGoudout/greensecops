@@ -15,3 +15,4 @@ frontend/.env
 # Sphinx build output and generated rule pages
 docs/_build/
 docs/rules/
+docs/reference.rst

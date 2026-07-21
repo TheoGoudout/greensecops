@@ -6,10 +6,12 @@ on:
     paths:
       - "backend/app/rules/**"
       - "docs/**"
+      - "examples/**"
   pull_request:
     paths:
       - "backend/app/rules/**"
       - "docs/**"
+      - "examples/**"
 
 permissions: {}
 

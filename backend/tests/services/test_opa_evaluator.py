@@ -101,6 +101,32 @@ def test_parse_empty_workflow() -> None:
     assert result is None
 
 
+def test_parse_on_key_is_not_coerced_to_boolean() -> None:
+    """Regression: the bare ``on:`` key must stay the string "on".
+
+    PyYAML's ``safe_load`` follows YAML 1.1 and coerces ``on`` to the boolean
+    ``True``, so the JSON sent to OPA had a ``true`` key and ``input.on`` in the
+    Rego rules never matched a real workflow — silently disabling
+    pr_target_injection (critical) and missing_concurrency. ruamel.yaml uses the
+    YAML 1.2 core schema and keeps it a string.
+    """
+    result = parse_workflow_yaml(
+        "name: CI\n"
+        "on:\n"
+        "  pull_request_target:\n"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: echo hi\n"
+    )
+    assert result is not None
+    assert "on" in result
+    assert True not in result
+    assert isinstance(result["on"], dict)
+    assert "pull_request_target" in result["on"]
+
+
 def test_evaluate_workflow_returns_violations_when_policy_matches() -> None:
     violation = {
         "rule": "unpinned_actions",

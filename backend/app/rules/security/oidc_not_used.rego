@@ -20,7 +20,7 @@
 #       jobs:
 #         deploy:
 #           steps:
-#             - uses: aws-actions/configure-aws-credentials@v4
+#             - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
 #               with:
 #                 role-to-assume: arn:aws:iam::123456789:role/github-actions
 #                 aws-region: us-east-1

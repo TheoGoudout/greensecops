@@ -1,0 +1,23 @@
+# Intentionally insecure "before" workflow used in the landing-page comparison.
+#
+# This is the counterpart to deploy.yml: the same pipeline before GreenSecOps
+# hardening. CI (scripts/validate_examples.py) asserts that it STILL trips the
+# advertised violations — a hardcoded secret (critical), unpinned actions
+# (high) and a missing dependency cache (high) — so the before/after story on
+# the landing page stays truthful.
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm install && npm run build
+      - run: ./deploy.sh
+        env:
+          API_KEY: "sk-prod-abc123def456"

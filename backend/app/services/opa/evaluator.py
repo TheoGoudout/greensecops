@@ -1,10 +1,12 @@
+import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
-import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from app.core.config import settings
 
@@ -72,14 +74,22 @@ POLICY_PACKAGES = _discover_policy_packages() or [
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
+    # ruamel.yaml defaults to the YAML 1.2 core schema, where the bare `on:`
+    # key stays the string "on" instead of being coerced to the boolean True
+    # (the YAML 1.1 behaviour of PyYAML's safe_load). That coercion silently
+    # broke every rule that reads `input.on` — e.g. pr_target_injection and
+    # missing_concurrency never matched a real workflow. typ="safe" returns
+    # plain dict/list/scalar types, so the result stays JSON-serialisable for
+    # the OPA request body.
+    yaml_parser = YAML(typ="safe")
     try:
-        parsed = yaml.safe_load(raw_content)
-        if not isinstance(parsed, dict):
-            return None
-        return parsed
-    except yaml.YAMLError as exc:
+        parsed = yaml_parser.load(io.StringIO(raw_content))
+    except YAMLError as exc:
         logger.warning("Failed to parse workflow YAML: %s", exc)
         return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
 
 
 async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:

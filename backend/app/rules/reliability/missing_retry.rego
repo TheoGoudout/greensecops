@@ -15,7 +15,7 @@
 #       jobs:
 #         build:
 #           steps:
-#             - uses: nick-fields/retry@v3
+#             - uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
 #               with:
 #                 timeout_minutes: 5
 #                 max_attempts: 3
