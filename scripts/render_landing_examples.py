@@ -42,6 +42,8 @@ REGIONS = {
 _NUM_RE = re.compile(r"^-?\d+(\.\d+)?$")
 # A trailing comment: one or more spaces, then '#', to end of line.
 _TRAILING_COMMENT_RE = re.compile(r"\s+#.*$")
+# A full 40-char commit SHA pin (…@<sha>): keep the first 7 chars for display.
+_SHA_RE = re.compile(r"@([0-9a-f]{7})[0-9a-f]{33}(?![0-9a-f])")
 
 
 def _esc(text: str) -> str:
@@ -69,6 +71,9 @@ def _render_value(key: str | None, value: str) -> str:
             elif entry:
                 parts.append(_esc(entry))
         return "{" + ", ".join(parts) + "}"
+    # Abbreviate full commit SHAs so a pinned `uses:` ref does not overflow the
+    # card. The untruncated SHA remains in examples/deploy.yml and the docs.
+    v = _SHA_RE.sub(r"@\1…", v)
     if key == "run":
         cls = "token-val"
     elif _NUM_RE.match(v):
@@ -84,6 +89,9 @@ def _highlight_line(line: str) -> str:
     indent = line[: len(line) - len(line.lstrip(" "))]
     rest = line[len(indent) :]
 
+    # Keep trailing "# ..." comments (e.g. a pinned action's version note),
+    # rendered as a comment token. The SHA itself is abbreviated in
+    # _render_value, so the line still fits the card.
     comment_html = ""
     match = _TRAILING_COMMENT_RE.search(rest)
     if match and "${{" not in rest[match.start() :]:
