@@ -29,7 +29,7 @@ def _issue_table(issues: list[IssueInfo], wiki_base_url: str) -> str:
         issues, key=lambda i: (_SEVERITY_ORDER.get(i.severity, 99), i.rule_title)
     )
     rows = "\n".join(
-        f"| [{i.rule_title}]({wiki_base_url}/{i.rule_slug}) "
+        f"| [{i.rule_title}]({wiki_base_url}/{i.category}/{i.rule_slug}.html) "
         f"| {i.category.title()} "
         f"| {_SEVERITY_EMOJI.get(i.severity, '')} {i.severity.title()} "
         f"| {i.message} |"
