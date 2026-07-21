@@ -1,0 +1,37 @@
+# Reference "state of the art" deployment workflow.
+#
+# This file is the single source of truth for the compliant workflow shown on
+# the marketing landing page and in the documentation. It is validated in CI
+# (scripts/validate_examples.py) to produce ZERO GreenSecOps violations across
+# every rule, so it can never silently drift as new rules are added.
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+# Least privilege by default: the workflow grants nothing, and each job opts
+# into exactly the scopes it needs.
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install & build
+        run: npm ci && npm run build
+      - name: Deploy
+        run: ./deploy.sh
+        env:
+          API_KEY: ${{ secrets.API_KEY }}

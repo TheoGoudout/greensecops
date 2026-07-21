@@ -7,4 +7,5 @@ security, reliability, performance, maintainability, and energy efficiency.
 .. toctree::
    :maxdepth: 2
 
+   reference
    rules/index

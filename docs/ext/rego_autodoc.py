@@ -253,6 +253,42 @@ def generate_rule_pages(app: Sphinx) -> None:
     )
 
 
+def generate_reference_page(app: Sphinx) -> None:
+    """Generate the reference-workflow page from examples/deploy.yml.
+
+    The example file is the single source of truth for the compliant workflow
+    shown on the landing page; embedding it here (rather than a hand-copied
+    snippet) keeps the docs in lock-step, and CI validates that it produces zero
+    violations against every rule.
+    """
+    example = Path(app.srcdir).parent / "examples" / "deploy.yml"
+    out_path = Path(app.srcdir) / "reference.rst"
+
+    if not example.exists():
+        logger.warning(f"rego_autodoc: reference example not found: {example}")
+        return
+
+    indented = "\n".join(
+        f"   {line}" if line.strip() else "" for line in example.read_text(
+            encoding="utf-8"
+        ).splitlines()
+    )
+    title = "Reference workflow"
+    page = (
+        f"{title}\n{'=' * len(title)}\n\n"
+        "A complete GitHub Actions workflow that passes every GreenSecOps rule "
+        "across all five categories. It is validated in CI "
+        "(``scripts/validate_examples.py``) to produce zero violations, so it "
+        "stays state of the art as new rules are added. This is the same file "
+        "shown on the landing page — the single source of truth lives at "
+        "``examples/deploy.yml``.\n\n"
+        ".. code-block:: yaml\n\n"
+        f"{indented}\n"
+    )
+    out_path.write_text(page, encoding="utf-8")
+
+
 def setup(app: Sphinx) -> dict[str, Any]:
     app.connect("builder-inited", generate_rule_pages)
+    app.connect("builder-inited", generate_reference_page)
     return {"version": "0.1", "parallel_read_safe": True}

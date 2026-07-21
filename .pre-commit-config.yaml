@@ -102,6 +102,15 @@ repos:
         files: ^backend/app/rules/.*\.rego$
         pass_filenames: false
 
+      # Regenerate the landing-page workflow snippets from examples/*.yml so the
+      # marketing page always shows the canonical, rule-validated workflows.
+      - id: render-landing-examples
+        name: Render landing examples from examples/
+        entry: python3 scripts/render_landing_examples.py
+        language: system
+        files: ^(examples/.*\.ya?ml|landing/index\.html|scripts/render_landing_examples\.py)$
+        pass_filenames: false
+
   # Conventional commits enforcement
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0

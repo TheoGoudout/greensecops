@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Validate the shipped workflow examples against the full OPA rule suite.
+
+Run in CI (``.github/workflows/opa.yml``) and locally. Two independent checks:
+
+1. **Canonical examples** (``examples/``) — the single source of truth rendered
+   into the landing page and docs:
+     * ``deploy.yml`` must produce **zero** violations across every rule, so the
+       "reference-quality" workflow can never silently drift as new rules land.
+     * ``deploy-insecure.yml`` (the "before" workflow) must still trip the
+       advertised violations, keeping the before/after story truthful.
+
+2. **Per-rule METADATA examples** (both directions) — for every rule, its
+   ``good`` example must NOT violate its own rule and its ``bad`` example MUST
+   trigger it. This catches inverted/broken rules (e.g. a "compliant" snippet
+   that fails the very rule it illustrates) as the ruleset evolves.
+
+Workflow YAML is parsed with ruamel.yaml (YAML 1.2 core schema), mirroring
+``app.services.opa.evaluator.parse_workflow_yaml`` so that the bare ``on:`` key
+stays the string "on" (PyYAML's YAML 1.1 ``safe_load`` coerces it to boolean
+True, which silently disables every ``input.on`` rule).
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from ruamel.yaml import YAML
+
+ROOT = Path(__file__).resolve().parents[1]
+RULES_DIR = ROOT / "backend" / "app" / "rules"
+AGGREGATE_REGO = ROOT / "scripts" / "opa" / "aggregate.rego"
+EXAMPLES_DIR = ROOT / "examples"
+OPA_BIN = os.environ.get("OPA_BIN", "opa")
+
+# deploy-insecure.yml must keep tripping at least these (the landing page's
+# "1 critical, 2 high-severity issues" caption).
+INSECURE_EXPECTED = {"hardcoded_secrets", "unpinned_actions", "caching_missing"}
+
+
+def _parse_yaml(text: str) -> object:
+    return YAML(typ="safe").load(io.StringIO(text))
+
+
+def _opa_eval(workflow: object, query: str, *, with_aggregate: bool = False) -> list:
+    """Run one `opa eval` and return the raw result list for `query`."""
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".json", delete=False, encoding="utf-8"
+    ) as handle:
+        json.dump(workflow, handle)
+        input_path = handle.name
+    cmd = [OPA_BIN, "eval", "-d", str(RULES_DIR)]
+    if with_aggregate:
+        cmd += ["-d", str(AGGREGATE_REGO)]
+    cmd += ["-f", "raw", "-i", input_path, query]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    finally:
+        os.unlink(input_path)
+    if proc.returncode != 0:
+        raise RuntimeError(f"opa eval failed ({query}):\n{proc.stderr.strip()}")
+    return json.loads(proc.stdout or "[]")
+
+
+def _slugs(violations: list) -> list[str]:
+    return sorted({v["rule"] for v in violations})
+
+
+def _parse_metadata(rego_path: Path) -> dict:
+    """Extract the `# METADATA` YAML block from a .rego file."""
+    meta_lines: list[str] = []
+    in_block = False
+    for line in rego_path.read_text(encoding="utf-8").splitlines():
+        if line.rstrip() == "# METADATA":
+            in_block = True
+            continue
+        if in_block:
+            if line.startswith("# "):
+                meta_lines.append(line[2:])
+            elif line.rstrip() == "#":
+                meta_lines.append("")
+            else:
+                break
+    if not meta_lines:
+        return {}
+    return YAML(typ="safe").load("\n".join(meta_lines)) or {}
+
+
+def check_canonical_examples() -> list[str]:
+    errors: list[str] = []
+
+    reference = EXAMPLES_DIR / "deploy.yml"
+    violations = _opa_eval(
+        _parse_yaml(reference.read_text(encoding="utf-8")),
+        "data.aggregate.all_violations",
+        with_aggregate=True,
+    )
+    if violations:
+        errors.append(
+            f"{reference.name}: reference workflow must be violation-free, "
+            f"but tripped {_slugs(violations)}"
+        )
+
+    insecure = EXAMPLES_DIR / "deploy-insecure.yml"
+    tripped = set(
+        _slugs(
+            _opa_eval(
+                _parse_yaml(insecure.read_text(encoding="utf-8")),
+                "data.aggregate.all_violations",
+                with_aggregate=True,
+            )
+        )
+    )
+    missing = INSECURE_EXPECTED - tripped
+    if missing:
+        errors.append(
+            f"{insecure.name}: expected to still trip {sorted(INSECURE_EXPECTED)}, "
+            f"but {sorted(missing)} did not fire"
+        )
+    return errors
+
+
+def check_rule_metadata_examples() -> list[str]:
+    errors: list[str] = []
+    for rego in sorted(RULES_DIR.glob("*/*.rego")):
+        if rego.name.endswith("_test.rego"):
+            continue
+        category, name = rego.parent.name, rego.stem
+        examples = (_parse_metadata(rego).get("custom") or {}).get("examples") or {}
+        query = f"data.greensecops.{category}.{name}.violations"
+
+        good = examples.get("good")
+        if good:
+            self_hits = _opa_eval(_parse_yaml(good), query)
+            if self_hits:
+                errors.append(
+                    f"{category}/{name}: 'good' example violates its own rule "
+                    f"({len(self_hits)} violation(s)) — a compliant example must pass."
+                )
+
+        bad = examples.get("bad")
+        if bad:
+            self_hits = _opa_eval(_parse_yaml(bad), query)
+            if not self_hits:
+                errors.append(
+                    f"{category}/{name}: 'bad' example does not trigger its own rule "
+                    "— a non-compliant example must demonstrate the violation."
+                )
+    return errors
+
+
+def main() -> int:
+    errors = check_canonical_examples() + check_rule_metadata_examples()
+    if errors:
+        print("Example validation FAILED:\n", file=sys.stderr)
+        for err in errors:
+            print(f"  ✗ {err}", file=sys.stderr)
+        print(f"\n{len(errors)} problem(s) found.", file=sys.stderr)
+        return 1
+    print("All workflow examples validated against the OPA rule suite ✅")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
