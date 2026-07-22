@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import {
   MOCK_REPO,
   MOCK_REPO_DISABLED,
+  MOCK_REPO_PRIVATE,
   mockAnalyses,
   mockBilling,
   mockEvents,
@@ -32,6 +33,21 @@ test.describe("Repositories", () => {
     await expect(page.getByText("acme/web-app")).toBeVisible()
     await expect(page.getByText("acme/old-service")).toBeVisible()
     await expect(page.getByText("main").first()).toBeVisible()
+  })
+
+  test("shows lock icon for private repos only", async ({ page }) => {
+    await mockRepositories(page, [MOCK_REPO, MOCK_REPO_PRIVATE])
+
+    await page.goto("/repositories")
+
+    const publicRow = page.getByText("acme/web-app").locator("..")
+    const privateRow = page.getByText("acme/secret-service").locator("..")
+    await expect(
+      privateRow.locator('[aria-label="Private repository"]'),
+    ).toBeVisible()
+    await expect(
+      publicRow.locator('[aria-label="Private repository"]'),
+    ).toHaveCount(0)
   })
 
   test("empty state when no repos", async ({ page }) => {

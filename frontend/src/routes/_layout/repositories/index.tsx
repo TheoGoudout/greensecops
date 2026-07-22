@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { GitBranch, Play, WifiOff } from "lucide-react"
+import { GitBranch, Lock, Play, WifiOff } from "lucide-react"
 import { toast } from "sonner"
 import type { RepositoryPublic } from "@/client"
 import { AnalysesService, RepositoriesService } from "@/client"
@@ -84,6 +84,17 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
               GitHub App access lost. Reinstall the GitHub App to restore
               access.
             </TooltipContent>
+          </Tooltip>
+        )}
+        {repo.is_private && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Lock
+                aria-label="Private repository"
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              />
+            </TooltipTrigger>
+            <TooltipContent>Private repository</TooltipContent>
           </Tooltip>
         )}
       </div>

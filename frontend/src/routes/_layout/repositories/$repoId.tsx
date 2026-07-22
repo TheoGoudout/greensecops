@@ -5,7 +5,7 @@ import {
   Outlet,
   useRouterState,
 } from "@tanstack/react-router"
-import { ArrowLeft, GitBranch, WifiOff } from "lucide-react"
+import { ArrowLeft, GitBranch, Lock, WifiOff } from "lucide-react"
 import { RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import {
@@ -16,6 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useRepository } from "@/hooks/useRepository"
 import { cn } from "@/lib/utils"
 
@@ -79,6 +84,17 @@ function RepositoryLayout() {
                 <h1 className="text-2xl font-bold tracking-tight font-mono">
                   {repo?.full_name}
                 </h1>
+              )}
+              {repo?.is_private && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Lock
+                      aria-label="Private repository"
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Private repository</TooltipContent>
+                </Tooltip>
               )}
               <GradeBadge grade={currentGrade} />
             </div>

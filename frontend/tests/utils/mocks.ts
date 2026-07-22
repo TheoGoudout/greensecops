@@ -10,6 +10,7 @@ const ID = {
   repoDisabled: "00000000-0000-0000-0000-000000000021",
   repoExternal: "00000000-0000-0000-0000-000000000022",
   repoNoAnalyses: "00000000-0000-0000-0000-000000000023",
+  repoPrivate: "00000000-0000-0000-0000-000000000024",
   workflowFile: "00000000-0000-0000-0000-000000000030",
   workflowFileDeploy: "00000000-0000-0000-0000-000000000031",
   workflowFileRelease: "00000000-0000-0000-0000-000000000032",
@@ -121,6 +122,19 @@ export const MOCK_REPO_NO_ANALYSES = {
   created_at: "2024-06-01T00:00:00Z",
   avg_score: null,
   grade: null,
+}
+
+export const MOCK_REPO_PRIVATE = {
+  id: ID.repoPrivate,
+  full_name: "acme/secret-service",
+  enabled: true,
+  is_external: false,
+  is_private: true,
+  default_branch: "main",
+  tier: "free" as const,
+  created_at: "2024-01-01T00:00:00Z",
+  avg_score: 90,
+  grade: "A",
 }
 
 // ── Workflow files ────────────────────────────────────────────────────
