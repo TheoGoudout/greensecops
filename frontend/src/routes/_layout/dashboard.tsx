@@ -11,14 +11,16 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
+import type { IssueCategory } from "@/client"
 import {
   AnalysesService,
   BillingService,
   IssuesService,
   RepositoriesService,
 } from "@/client"
-import { CategoryIcon } from "@/components/CategoryIcon"
+import { CategoryHealthRadar } from "@/components/CategoryHealthRadar"
+import { WidgetPagination } from "@/components/Common/WidgetPagination"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/_layout/dashboard")({
 })
 
 const GRADE_ORDER = ["A+++", "A++", "A+", "A", "B", "C", "D", "E", "F"]
+const REPO_HEALTH_PAGE_SIZE = 8
 
 const TIER_LABELS: Record<string, string> = {
   free: "Free",
@@ -197,19 +200,71 @@ function Dashboard() {
       ? Math.round((resolvedCount / totalIssueCount) * 100)
       : 0
 
-  // Per-category open-issue breakdown for the health diagram, in a stable
-  // category order regardless of which categories have issues right now.
-  const categoryHealth = useMemo(() => {
-    return ISSUE_CATEGORIES.map((category) => {
-      const stat = issueStats?.by_category?.find((c) => c.category === category)
-      return {
-        category,
-        open: stat?.open ?? 0,
-        criticalOpen: stat?.critical_open ?? 0,
+  // Per-repo, per-category health for the star diagram. Scores come straight
+  // from the backend (app/services/scoring.py compute_category_scores),
+  // severity-weighted and constructed so the 5 categories average back to
+  // the repo's own grade. A repo with no matching issues at all gets no
+  // `by_repo` entry from the backend — fall back to its own avg_score for
+  // every axis (a flat pentagon at the repo's actual grade).
+  const repoCategoryHealth = useMemo(() => {
+    if (!repos || !issueStats?.by_repo) return []
+
+    const statsByRepoId = new Map(issueStats.by_repo.map((r) => [r.repo_id, r]))
+
+    // listRepositories returns grade "N/A" (never null) for a repo with no
+    // CI workflows at all — nothing to plot, so it would only ever render
+    // an uninformative full-100 pentagon.
+    return repos
+      .filter((repo) => repo.grade !== "N/A")
+      .map((repo) => {
+        const repoStats = statsByRepoId.get(repo.id)
+        const categoryByName = new Map(
+          repoStats?.categories?.map((c) => [c.category, c]) ?? [],
+        )
+        let totalOpen = 0
+        const values = Object.fromEntries(
+          ISSUE_CATEGORIES.map((category) => {
+            const categoryStat = categoryByName.get(category)
+            totalOpen += categoryStat?.open ?? 0
+            const score =
+              categoryStat?.score ?? repoStats?.score ?? repo.avg_score ?? 100
+            return [category, score]
+          }),
+        ) as Record<IssueCategory, number>
+        return {
+          repoId: repo.id,
+          name: repo.full_name,
+          values,
+          totalOpen,
+        }
+      })
+      .sort((a, b) => b.totalOpen - a.totalOpen)
+  }, [repos, issueStats])
+
+  const DEFAULT_TOGGLED_REPO_COUNT = 8
+  const [toggledRepoIds, setToggledRepoIds] = useState<Set<string> | null>(null)
+  const defaultToggledRepoIds = useMemo(
+    () =>
+      new Set(
+        repoCategoryHealth
+          .slice(0, DEFAULT_TOGGLED_REPO_COUNT)
+          .map((s) => s.repoId),
+      ),
+    [repoCategoryHealth],
+  )
+  const effectiveToggledRepoIds = toggledRepoIds ?? defaultToggledRepoIds
+  const toggleRepo = (repoId: string) => {
+    setToggledRepoIds((prev) => {
+      const base = prev ?? defaultToggledRepoIds
+      const next = new Set(base)
+      if (next.has(repoId)) {
+        next.delete(repoId)
+      } else {
+        next.add(repoId)
       }
+      return next
     })
-  }, [issueStats])
-  const maxCategoryOpen = Math.max(...categoryHealth.map((c) => c.open), 1)
+  }
 
   // Per-repo first vs. latest score averaged across all workflow files
   const repoHealthData = useMemo(() => {
@@ -254,6 +309,19 @@ function Dashboard() {
       .filter((d): d is NonNullable<typeof d> => d != null)
       .sort((a, b) => b.delta - a.delta)
   }, [analyses, repos])
+
+  const [repoHealthPageIndex, setRepoHealthPageIndex] = useState(0)
+  const repoHealthPageCount = Math.ceil(
+    repoHealthData.length / REPO_HEALTH_PAGE_SIZE,
+  )
+  const clampedRepoHealthPageIndex = Math.min(
+    repoHealthPageIndex,
+    Math.max(repoHealthPageCount - 1, 0),
+  )
+  const pagedRepoHealthData = repoHealthData.slice(
+    clampedRepoHealthPageIndex * REPO_HEALTH_PAGE_SIZE,
+    (clampedRepoHealthPageIndex + 1) * REPO_HEALTH_PAGE_SIZE,
+  )
 
   // Grade distribution across repos
   const gradeDistribution = useMemo(() => {
@@ -349,7 +417,7 @@ function Dashboard() {
                   <span className="text-right">Delta</span>
                 </div>
                 <div className="divide-y">
-                  {repoHealthData.map(
+                  {pagedRepoHealthData.map(
                     ({
                       repoId,
                       repo,
@@ -381,6 +449,19 @@ function Dashboard() {
                     ),
                   )}
                 </div>
+                <WidgetPagination
+                  pageIndex={clampedRepoHealthPageIndex}
+                  pageSize={REPO_HEALTH_PAGE_SIZE}
+                  totalItems={repoHealthData.length}
+                  onPrevious={() =>
+                    setRepoHealthPageIndex((i) => Math.max(i - 1, 0))
+                  }
+                  onNext={() =>
+                    setRepoHealthPageIndex((i) =>
+                      Math.min(i + 1, repoHealthPageCount - 1),
+                    )
+                  }
+                />
               </>
             )}
           </CardContent>
@@ -452,51 +533,24 @@ function Dashboard() {
               Category Health
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {issueStatsLoading ? (
+          <CardContent>
+            {issueStatsLoading || reposLoading ? (
               <div className="space-y-3">
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-5 w-full" />
                 ))}
               </div>
-            ) : totalIssueCount === 0 ? (
+            ) : totalIssueCount === 0 || repoCategoryHealth.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
                 No open issues — nothing to show yet.
               </p>
             ) : (
-              categoryHealth.map(({ category, open, criticalOpen }) => (
-                <div key={category} className="flex items-center gap-3">
-                  <div className="w-32 flex-shrink-0">
-                    <CategoryIcon
-                      category={category}
-                      withLabel
-                      className="text-sm"
-                    />
-                  </div>
-                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all",
-                        criticalOpen > 0
-                          ? "bg-red-500"
-                          : open > 0
-                            ? "bg-amber-500"
-                            : "bg-emerald-500",
-                      )}
-                      style={{
-                        width:
-                          open > 0
-                            ? `${Math.round((open / maxCategoryOpen) * 100)}%`
-                            : "4px",
-                      }}
-                    />
-                  </div>
-                  <span className="w-20 text-right text-xs text-muted-foreground tabular-nums">
-                    {open} open
-                    {criticalOpen > 0 ? ` · ${criticalOpen} crit.` : ""}
-                  </span>
-                </div>
-              ))
+              <CategoryHealthRadar
+                categories={ISSUE_CATEGORIES}
+                series={repoCategoryHealth}
+                toggledIds={effectiveToggledRepoIds}
+                onToggle={toggleRepo}
+              />
             )}
           </CardContent>
         </Card>

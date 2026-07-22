@@ -230,7 +230,7 @@ def test_resolve_action_shas_skips_unresolvable_action() -> None:
 def test_resolve_action_shas_uses_cached_values() -> None:
     workflow = "      - uses: actions/checkout@v4\n"
     store = {"action_sha:actions/checkout@v4": "cached_sha"}
-    for repo in WELL_KNOWN_ACTIONS:
+    for repo in set(WELL_KNOWN_ACTIONS) - {"actions/checkout"}:
         store.setdefault(f"action_version:latest:{repo}", "v9")
         store.setdefault(f"action_sha:{repo}@v9", "cached_latest_sha")
 
@@ -238,8 +238,25 @@ def test_resolve_action_shas_uses_cached_values() -> None:
     result = _resolve(workflow, gh, _fake_cache(store))
 
     assert result["actions/checkout@v4"] == "cached_sha"
-    assert result["actions/checkout@v9"] == "cached_latest_sha"
+    assert "actions/checkout@v9" not in result
     assert gh.get_repo_calls == []
+
+
+def test_resolve_action_shas_does_not_bump_already_referenced_action() -> None:
+    """An action already pinned to an older tag keeps that exact tag — no
+
+    'latest' lookup or injection happens for it, even though it's in
+    WELL_KNOWN_ACTIONS and a newer release exists upstream.
+    """
+    gh = FakeGithub(
+        default_repo=FakeRepo(
+            refs={"tags/v3": ("old_sha", "commit")},
+            latest_release="v9",
+        )
+    )
+    result = _resolve("      - uses: actions/checkout@v3\n", gh, _fake_cache())
+    assert result == {"actions/checkout@v3": "old_sha"}
+    assert "actions/checkout@v9" not in result
 
 
 def test_resolve_action_shas_populates_cache() -> None:
@@ -255,7 +272,7 @@ def test_resolve_action_shas_populates_cache() -> None:
     cache = _fake_cache()
     _resolve("      - uses: actions/checkout@v4\n", gh, cache)
     assert cache._store["action_sha:actions/checkout@v4"] == "fresh_sha"
-    assert cache._store["action_version:latest:actions/checkout"] == "v9"
+    assert "action_version:latest:actions/checkout" not in cache._store
 
 
 def test_resolve_action_shas_survives_redis_failure() -> None:

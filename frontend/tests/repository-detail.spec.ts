@@ -9,6 +9,7 @@ import {
   MOCK_ISSUE_WITH_FIX,
   MOCK_PR_OPEN,
   MOCK_REPO,
+  MOCK_REPO_PRIVATE,
   MOCK_WORKFLOW_FILE,
   mockBilling,
   mockEvents,
@@ -27,6 +28,7 @@ test.describe("Repository Detail", () => {
   function setupRepoMocks(
     page: import("@playwright/test").Page,
     opts: {
+      repo?: typeof MOCK_REPO
       analyses?: unknown[]
       issues?: unknown[]
       fixes?: unknown[]
@@ -35,6 +37,7 @@ test.describe("Repository Detail", () => {
     } = {},
   ) {
     const {
+      repo = MOCK_REPO,
       analyses = [MOCK_ANALYSIS],
       issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       fixes = [],
@@ -54,9 +57,9 @@ test.describe("Repository Detail", () => {
         } else if (url.includes("/branches")) {
           route.fulfill({ json: ["main"] })
         } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
-          route.fulfill({ json: MOCK_REPO })
+          route.fulfill({ json: repo })
         } else {
-          route.fulfill({ json: [MOCK_REPO] })
+          route.fulfill({ json: [repo] })
         }
       }),
       page.route("**/api/v1/analyses/**", (route) => {
@@ -112,6 +115,28 @@ test.describe("Repository Detail", () => {
     await expect(
       page.getByRole("combobox").filter({ hasText: "main" }),
     ).toBeVisible()
+  })
+
+  test("header shows lock icon for private repos", async ({ page }) => {
+    await setupRepoMocks(page, { repo: MOCK_REPO_PRIVATE })
+
+    await page.goto(`/repositories/${MOCK_REPO_PRIVATE.id}`)
+
+    await expect(page.getByText("acme/secret-service")).toBeVisible()
+    await expect(
+      page.locator('[aria-label="Private repository"]'),
+    ).toBeVisible()
+  })
+
+  test("header hides lock icon for public repos", async ({ page }) => {
+    await setupRepoMocks(page)
+
+    await page.goto(`/repositories/${MOCK_REPO.id}`)
+
+    await expect(page.getByText("acme/web-app")).toBeVisible()
+    await expect(page.locator('[aria-label="Private repository"]')).toHaveCount(
+      0,
+    )
   })
 
   test("Static analysis tab shows workflow card with status", async ({

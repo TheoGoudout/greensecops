@@ -1,5 +1,4 @@
 import uuid
-from collections import defaultdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -30,7 +29,11 @@ from app.models import (
 from app.services.badge_signing import build_badge_svg_url
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
-from app.services.scoring import average_latest_scores, score_to_grade
+from app.services.scoring import (
+    average_latest_scores,
+    compute_avg_scores_batch,
+    score_to_grade,
+)
 
 SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
 
@@ -86,30 +89,9 @@ def _compute_grades_batch(
     if not repo_ids:
         return {}
 
-    analyses = session.exec(
-        select(Analysis)
-        .join(WorkflowFile, Analysis.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
-        # Default-branch scope: feature-branch analyses must not skew grades.
-        .where(WorkflowFile.branch == Repository.default_branch)
-        # Exclude workflow files deleted from the repo: stale analysis of a
-        # removed file must not skew the grade.
-        .where(col(WorkflowFile.deleted_at).is_(None))
-        .where(Analysis.status == AnalysisStatus.completed)
-        .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
-    ).all()
+    avg_scores = compute_avg_scores_batch(session, repo_ids)
 
-    seen: set[uuid.UUID] = set()
-    scores_by_repo: dict[uuid.UUID, list[float]] = defaultdict(list)
-    for a in analyses:
-        if a.workflow_file_id is not None and a.workflow_file_id not in seen:
-            seen.add(a.workflow_file_id)
-            if a.score is not None:
-                scores_by_repo[a.repo_id].append(a.score)
-
-    repos_without_grades = [r for r in repo_ids if r not in scores_by_repo]
+    repos_without_grades = [r for r in repo_ids if avg_scores.get(r) is None]
     no_workflows_repo_ids: set[uuid.UUID] = set()
     if repos_without_grades:
         rows = session.exec(
@@ -122,9 +104,9 @@ def _compute_grades_batch(
 
     result: dict[uuid.UUID, tuple[float | None, str | None]] = {}
     for repo_id in repo_ids:
-        scores = scores_by_repo.get(repo_id, [])
-        if scores:
-            avg = round(sum(scores) / len(scores), 1)
+        avg_score = avg_scores.get(repo_id)
+        if avg_score is not None:
+            avg = round(avg_score, 1)
             result[repo_id] = (avg, score_to_grade(avg))
         elif repo_id in no_workflows_repo_ids:
             result[repo_id] = (None, "N/A")

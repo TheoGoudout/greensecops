@@ -177,10 +177,13 @@ async def resolve_action_shas(
 ) -> dict[str, str]:
     """Return a map of 'owner/repo@ref' -> commit SHA for the LLM prompt.
 
-    Covers every pinnable ref in the workflow, plus the latest version of each
-    referenced and well-known action (fetched online). All lookups are cached
-    in Redis with a 24-hour TTL; on cache failure the resolver falls back to
-    direct API calls.
+    Resolves every ref already present in the workflow to its exact commit SHA
+    — never a newer version — so the fix keeps the version pinned as-is
+    (upgrades are Dependabot's job, not ours). For well-known actions the LLM
+    might introduce fresh (not already referenced anywhere in the workflow),
+    the latest version is also resolved so the LLM has a sensible default to
+    pin to. All lookups are cached in Redis with a 24-hour TTL; on cache
+    failure the resolver falls back to direct API calls.
 
     Pass an authenticated ``gh`` instance (e.g. built from a GitHub App
     installation token) to use the 5 000 req/h authenticated rate limit instead
@@ -188,7 +191,8 @@ async def resolve_action_shas(
     client is created as a fallback.
     """
     refs = _parse_action_refs(workflow_content)
-    repos = {repo for repo, _ in refs} | set(WELL_KNOWN_ACTIONS)
+    referenced_repos = {repo for repo, _ in refs}
+    new_well_known_repos = set(WELL_KNOWN_ACTIONS) - referenced_repos
 
     cache = _open_cache()
     if gh is None:
@@ -196,7 +200,7 @@ async def resolve_action_shas(
 
     sha_map: dict[str, str] = {}
     try:
-        for repo in sorted(repos):
+        for repo in sorted(new_well_known_repos):
             latest = await _cached_get_latest_version(gh, cache, repo)
             if latest:
                 refs.add((repo, latest))

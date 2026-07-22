@@ -43,7 +43,16 @@ jobs:
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
         run: |
           git remote add public-action "https://x-access-token:${TOKEN}@github.com/${TARGET}.git"
-          git subtree push --prefix=action public-action main
+          git fetch public-action main
+
+          # public main is one commit ahead after every run (the dist rebuild
+          # commit added below), so the freshly split source commit is never
+          # a descendant of it. Merge that prior state in before pushing so
+          # the push stays a plain fast-forward instead of a non-ff rejection.
+          SPLIT_SHA=$(git subtree split --prefix=action)
+          git checkout -b sync-branch "${SPLIT_SHA}"
+          git merge public-action/main -m "chore: merge public main" --no-edit
+          git push public-action sync-branch:main
 
       - name: Build and commit dist/ in the public repo
         id: build_dist

@@ -1008,6 +1008,14 @@ export const IssueStatsPublicSchema = {
             },
             type: 'array',
             title: 'By Category'
+        },
+        by_repo: {
+            items: {
+                '$ref': '#/components/schemas/RepoIssueStats'
+            },
+            type: 'array',
+            title: 'By Repo',
+            default: []
         }
     },
     type: 'object',
@@ -1293,6 +1301,105 @@ export const PullRequestStateSchema = {
     type: 'string',
     enum: ['open', 'draft', 'merged', 'closed'],
     title: 'PullRequestState'
+} as const;
+
+export const RepoCategoryStatSchema = {
+    properties: {
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        open: {
+            type: 'integer',
+            title: 'Open'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        }
+    },
+    type: 'object',
+    required: ['category', 'open', 'critical_open'],
+    title: 'RepoCategoryStat',
+    description: `A repo's open-issue counts and severity-weighted grade for one category.
+
+\`\`score\`\`/\`\`grade\`\` are \`\`None\`\` when the repo has no overall grade yet
+(e.g. no completed analysis). See \`\`RepoIssueStats\`\` for how categories
+are grouped per repo.`
+} as const;
+
+export const RepoIssueStatsSchema = {
+    properties: {
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        categories: {
+            items: {
+                '$ref': '#/components/schemas/RepoCategoryStat'
+            },
+            type: 'array',
+            title: 'Categories',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['repo_id'],
+    title: 'RepoIssueStats',
+    description: `Per-repo issue breakdown — powers the dashboard's category health star
+diagram. Only populated on the unscoped (all-repos) stats call;
+meaningless once already filtered to a single \`\`repo_id\`\`.
+
+\`\`score\`\`/\`\`grade\`\` here are the repo's own overall grade (same values as
+\`\`RepositoryPublic.avg_score\`\`/\`\`grade\`\`), repeated so the frontend
+doesn't need a second lookup to size the radar's "no issues" fallback.
+Each entry in \`\`categories\`\` covers every \`\`IssueCategory\`\`, including
+categories with zero open issues, so their scores average out to exactly
+the repo's overall score (see \`\`compute_category_scores\`\`).`
 } as const;
 
 export const RepositoryPublicSchema = {

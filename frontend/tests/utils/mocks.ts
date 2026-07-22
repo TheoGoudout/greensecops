@@ -1,5 +1,17 @@
 import type { Page } from "@playwright/test"
 import type { RepositoryPublic, UserPublic } from "@/client"
+import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
+
+// Mirrors the backend's severity-penalty weighting (app/services/scoring.py
+// _SEVERITY_PENALTY) so mocked per-category scores/grades look realistic.
+const MOCK_SEVERITY_PENALTY: Record<string, number> = {
+  critical: 20,
+  high: 10,
+  medium: 5,
+  low: 2,
+  info: 0.5,
+}
+const MOCK_REPO_BASE_SCORE = 90
 
 // ── Mock IDs ──────────────────────────────────────────────────────────
 const ID = {
@@ -10,6 +22,7 @@ const ID = {
   repoDisabled: "00000000-0000-0000-0000-000000000021",
   repoExternal: "00000000-0000-0000-0000-000000000022",
   repoNoAnalyses: "00000000-0000-0000-0000-000000000023",
+  repoPrivate: "00000000-0000-0000-0000-000000000024",
   workflowFile: "00000000-0000-0000-0000-000000000030",
   workflowFileDeploy: "00000000-0000-0000-0000-000000000031",
   workflowFileRelease: "00000000-0000-0000-0000-000000000032",
@@ -121,6 +134,19 @@ export const MOCK_REPO_NO_ANALYSES = {
   created_at: "2024-06-01T00:00:00Z",
   avg_score: null,
   grade: null,
+}
+
+export const MOCK_REPO_PRIVATE = {
+  id: ID.repoPrivate,
+  full_name: "acme/secret-service",
+  enabled: true,
+  is_external: false,
+  is_private: true,
+  default_branch: "main",
+  tier: "free" as const,
+  created_at: "2024-01-01T00:00:00Z",
+  avg_score: 90,
+  grade: "A",
 }
 
 // ── Workflow files ────────────────────────────────────────────────────
@@ -685,19 +711,29 @@ export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
 export async function mockIssues(
   page: Page,
   issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
+  analyses: Array<{ id: string; repo_id: string }> = [MOCK_ANALYSIS],
 ) {
   await page.route("**/api/v1/issues/**", (route) => {
     const url = route.request().url()
     if (url.includes("/issues/stats")) {
       // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
-      // per category), computed from the same fixture list the dashboard's
+      // per category, plus a nested per-repo breakdown for the dashboard's
+      // star diagram), computed from the same fixture list the dashboard's
       // other issue-driven assertions use.
       const active = issues.filter(
         (i: { ignored_at?: string | null }) => !i.ignored_at,
       )
       type Bucket = { open: number; resolved: number; critical_open: number }
       const byCategory = new Map<string, Bucket>()
+      type RepoCategoryBucket = {
+        open: number
+        critical_open: number
+        penalty: number
+      }
+      const byRepo = new Map<string, Map<string, RepoCategoryBucket>>()
+      const analysisToRepo = new Map(analyses.map((a) => [a.id, a.repo_id]))
       for (const i of active as Array<{
+        analysis_id: string
         category: string
         severity: string
         resolved_at?: string | null
@@ -712,11 +748,61 @@ export async function mockIssues(
         } else {
           entry.open += 1
           if (i.severity === "critical") entry.critical_open += 1
+
+          const repoId = analysisToRepo.get(i.analysis_id)
+          if (repoId) {
+            const categories =
+              byRepo.get(repoId) ?? new Map<string, RepoCategoryBucket>()
+            const repoEntry = categories.get(i.category) ?? {
+              open: 0,
+              critical_open: 0,
+              penalty: 0,
+            }
+            repoEntry.open += 1
+            if (i.severity === "critical") repoEntry.critical_open += 1
+            repoEntry.penalty += MOCK_SEVERITY_PENALTY[i.severity] ?? 5
+            categories.set(i.category, repoEntry)
+            byRepo.set(repoId, categories)
+          }
         }
         byCategory.set(i.category, entry)
       }
       const byCategoryList = Array.from(byCategory.entries()).map(
         ([category, bucket]) => ({ category, ...bucket }),
+      )
+      // Per-category score deviates from a fixed repo baseline by how far its
+      // penalty sits from the mean across all 5 categories, so the 5 scores
+      // always average back to the repo's own score — same invariant the
+      // real backend enforces (app/services/scoring.py compute_category_scores).
+      const byRepoList = Array.from(byRepo.entries()).map(
+        ([repoId, categories]) => {
+          const penalties = ISSUE_CATEGORIES.map(
+            (c) => categories.get(c)?.penalty ?? 0,
+          )
+          const meanPenalty =
+            penalties.reduce((sum, p) => sum + p, 0) / penalties.length
+          const categoryStats = ISSUE_CATEGORIES.map((category) => {
+            const bucket = categories.get(category)
+            const penalty = bucket?.penalty ?? 0
+            const score = Math.max(
+              0,
+              Math.min(100, MOCK_REPO_BASE_SCORE - (penalty - meanPenalty)),
+            )
+            return {
+              category,
+              open: bucket?.open ?? 0,
+              critical_open: bucket?.critical_open ?? 0,
+              score,
+              grade: "B",
+            }
+          })
+          return {
+            repo_id: repoId,
+            score: MOCK_REPO_BASE_SCORE,
+            grade: "A+",
+            categories: categoryStats,
+          }
+        },
       )
       route.fulfill({
         json: {
@@ -730,6 +816,7 @@ export async function mockIssues(
             0,
           ),
           by_category: byCategoryList,
+          by_repo: byRepoList,
         },
       })
       return
