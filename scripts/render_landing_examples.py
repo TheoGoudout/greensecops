@@ -24,6 +24,7 @@ headers — are dropped so the marketing card stays clean, while trailing
 
 from __future__ import annotations
 
+import difflib
 import re
 import sys
 from pathlib import Path
@@ -146,30 +147,67 @@ def _is_flagged(line: str) -> bool:
     return False
 
 
-def _render_anim_lines(path: Path, flag: bool) -> str:
-    """Render each workflow line as a `.tw-ln` block the hero animation types."""
-    out: list[str] = []
-    for raw in _example_lines(path):
-        html = _highlight_line(raw)
-        cls = "tw-ln"
-        if flag and _is_flagged(raw):
-            cls += " tw-ln--flag"
-        # A blank line still needs to occupy its row: emit a single space.
-        out.append(f'<span class="{cls}">{html or " "}</span>')
-    return "".join(out)
+# Lines in the fixed ("after") workflow that resolve each advertised issue. The
+# category lets the hero animation count issues down (3 -> 0) once as each
+# distinct fix is typed in — the two pinned `uses:` lines share the "pinning"
+# category so they only decrement the count once.
+def _fix_category(line: str) -> str | None:
+    s = line.strip()
+    if "uses:" in s and re.search(r"@[0-9a-f]{7}", s):  # pinned to a commit SHA
+        return "pinning"
+    if s.startswith("cache:"):  # dependency cache enabled
+        return "cache"
+    if s.startswith("API_KEY:") and "secrets." in s:  # secret referenced, not inlined
+        return "secret"
+    return None
+
+
+def _diff_span(raw: str, diff: str, *, flag: bool, fix: str | None) -> str:
+    """Render one workflow line as a `.tw-ln` block tagged for the animation.
+
+    ``data-diff`` is ``equal`` (unchanged — always shown), ``del`` (a flagged
+    line the fix removes) or ``ins`` (a line the fix adds/rewrites). ``del``
+    lines carry ``tw-ln--del`` (and ``tw-ln--flag`` when non-compliant); ``ins``
+    lines carry ``tw-ln--ins`` and, when they resolve an issue, ``data-fix``.
+    """
+    html = _highlight_line(raw)
+    cls = "tw-ln"
+    if diff == "ins":
+        cls += " tw-ln--ins"
+    elif diff == "del":
+        cls += " tw-ln--del"
+    if flag:
+        cls += " tw-ln--flag"
+    attrs = f' data-diff="{diff}"'
+    if fix:
+        attrs += f' data-fix="{fix}"'
+    # A blank line still needs to occupy its row: emit a single space.
+    return f'<span class="{cls}"{attrs}>{html or " "}</span>'
 
 
 def _render_hero_anim() -> str:
-    """Two stacked layers the hero animation swaps between: the flagged
-    ("before") workflow and the fixed ("after") one that is typed out."""
-    after = _render_anim_lines(REGIONS["after"], flag=False)
-    before = _render_anim_lines(REGIONS["before"], flag=True)
-    return (
-        '<div class="wf-anim">'
-        f'<div class="wf-anim__code wf-anim__after">{after}</div>'
-        f'<div class="wf-anim__code wf-anim__before" aria-hidden="true">{before}</div>'
-        "</div>"
-    )
+    """Render the hero workflow as a single unified diff the animation morphs
+    in place: unchanged (``equal``) lines stay put, flagged (``del``) lines
+    collapse away and the fix's new (``ins``) lines are typed in — so the file
+    is edited, never blanked and retyped."""
+    before_lines = _example_lines(REGIONS["before"])
+    after_lines = _example_lines(REGIONS["after"])
+    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
+
+    out: list[str] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for k in range(i1, i2):
+                out.append(_diff_span(before_lines[k], "equal", flag=False, fix=None))
+        else:  # delete / insert / replace — emit removed lines then added ones
+            for k in range(i1, i2):
+                raw = before_lines[k]
+                out.append(_diff_span(raw, "del", flag=_is_flagged(raw), fix=None))
+            for k in range(j1, j2):
+                raw = after_lines[k]
+                out.append(_diff_span(raw, "ins", flag=False, fix=_fix_category(raw)))
+
+    return '<div class="wf-anim"><div class="wf-anim__code">' + "".join(out) + "</div></div>"
 
 
 def render(html: str) -> str:

@@ -592,12 +592,9 @@ a { color: inherit; }
 }
 
 /* The animated variant lays lines out as blocks instead of one pre run, so a
-   single line can be clipped/typed without disturbing the others. */
+   single line can be clipped/typed and collapsed/opened on its own. */
 .hero__code-body--anim {
   white-space: normal;
-  position: relative;
-}
-.wf-anim {
   position: relative;
 }
 .tw-ln {
@@ -606,28 +603,42 @@ a { color: inherit; }
   box-sizing: content-box;
 }
 
-/* The flagged "before" workflow overlays the fixed one and is shown only
-   during the first phase of the animation. */
-.wf-anim__before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.28s ease;
-}
-.wf-anim.is-showing-before .wf-anim__before {
-  opacity: 1;
-  visibility: visible;
+/* Resting / no-JS / reduced-motion state is the fixed "after" workflow: the
+   removed (flagged) lines are hidden and the added lines are shown. The
+   animation flips into `is-editing` to replay the before -> after edit. */
+.wf-anim__code .tw-ln--del {
+  display: none;
 }
 
-/* While typing, each fixed line is clipped to its animated width. */
-.wf-anim.is-typing .tw-ln {
+/* Editing: start on the "before" view (removed lines shown, added lines
+   collapsed) and morph in place — del lines collapse away, ins lines open and
+   are typed. */
+.wf-anim.is-editing .tw-ln {
   overflow: hidden;
 }
-.wf-anim__after .tw-ln.is-caret {
+.wf-anim.is-editing .tw-ln--del {
+  display: block;
+  max-height: 2em;
+  opacity: 1;
+  border-radius: 3px;
+  transition: max-height 0.22s ease, opacity 0.18s ease;
+}
+.wf-anim.is-editing .tw-ln--del.is-out {
+  max-height: 0;
+  opacity: 0;
+}
+.wf-anim.is-editing .tw-ln--ins {
+  max-height: 0;
+  opacity: 0;
+}
+.wf-anim.is-editing .tw-ln--ins.is-in {
+  max-height: 2em;
+  opacity: 1;
+  transition: max-height 0.16s ease, opacity 0.16s ease;
+}
+
+/* Blinking caret on the line currently being typed. */
+.wf-anim .tw-ln.is-caret {
   border-right: 0.55em solid rgba(190, 242, 100, 0.9);
   animation: tw-caret 0.7s steps(1, end) infinite;
 }
@@ -637,36 +648,28 @@ a { color: inherit; }
   }
 }
 
-/* Flagged lines pulse red while the "before" workflow is on screen. */
-.tw-ln--flag {
-  border-radius: 3px;
+/* Flagged (removed) lines start plain and are highlighted one by one (JS adds
+   `is-flag-on`). The red sweeps in left-to-right, echoing the typing caret. */
+.tw-ln--flag.is-flag-on {
   box-shadow: inset 3px 0 0 #ff5f57;
-  background: rgba(255, 95, 87, 0.12);
+  background-image: linear-gradient(
+    rgba(255, 95, 87, 0.16),
+    rgba(255, 95, 87, 0.16)
+  );
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 0% 100%;
+  animation: tw-flag-wipe 0.34s steps(18, end) forwards;
 }
-.wf-anim.is-showing-before .tw-ln--flag {
-  animation: tw-flag 0.9s ease-in-out infinite alternate;
-}
-@keyframes tw-flag {
-  from {
-    background: rgba(255, 95, 87, 0.1);
-  }
+@keyframes tw-flag-wipe {
   to {
-    background: rgba(255, 95, 87, 0.22);
+    background-size: 100% 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hero__replay {
     display: none;
-  }
-  .wf-anim__before {
-    display: none;
-  }
-  .wf-anim.is-typing .tw-ln,
-  .wf-anim__after .tw-ln.is-caret {
-    overflow: visible;
-    border-right: 0;
-    animation: none;
   }
 }
 
@@ -711,6 +714,14 @@ a { color: inherit; }
   font-size: 0.75rem;
   color: var(--muted-foreground);
   margin-top: 0.125rem;
+}
+
+/* The grade badge cross-fades as the animation moves ? -> D -> A+++. */
+.hero__result-grade {
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+.hero__result-check {
+  transition: opacity 0.3s ease;
 }
 
 /* ============================================================
@@ -1031,6 +1042,7 @@ a { color: inherit; }
   border-radius: var(--radius-xl);
 }
 
+.grade-badge--unknown { background: var(--muted); color: var(--muted-foreground); }
 .grade-badge--aaa { background: var(--grade-aaa-bg); color: var(--grade-aaa-fg); }
 .grade-badge--app { background: var(--grade-app-bg); color: var(--grade-app-fg); }
 .grade-badge--apl { background: var(--grade-apl-bg); color: var(--grade-apl-fg); }
