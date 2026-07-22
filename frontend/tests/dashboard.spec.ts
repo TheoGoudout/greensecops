@@ -6,6 +6,7 @@ import {
   MOCK_ISSUE_SECURITY,
   MOCK_REPO,
   MOCK_REPO_DISABLED,
+  MOCK_REPO_NO_ANALYSES,
   mockAnalyses,
   mockBilling,
   mockEvents,
@@ -126,7 +127,7 @@ test.describe("Dashboard", () => {
     await expect(page.locator(".animate-pulse").first()).toBeVisible()
   })
 
-  test("category health shows per-category open issue counts", async ({
+  test("category health renders a star diagram axis per category", async ({
     page,
   }) => {
     await mockRepositories(page, [MOCK_REPO])
@@ -140,8 +141,125 @@ test.describe("Dashboard", () => {
     await page.goto("/dashboard")
 
     await expect(page.getByText("Category Health")).toBeVisible()
-    // MOCK_ISSUE_SECURITY is the only critical issue, in the security category.
-    await expect(page.getByText("1 open · 1 crit.")).toBeVisible()
+    const radar = page.getByRole("img", {
+      name: "Category health by repository",
+    })
+    await expect(radar).toBeVisible()
+    for (const label of [
+      "Energy",
+      "Reliability",
+      "Security",
+      "Performance",
+      "Maintainability",
+    ]) {
+      await expect(radar.getByText(label)).toBeVisible()
+    }
+  })
+
+  test("category health excludes repos with no workflows (grade N/A)", async ({
+    page,
+  }) => {
+    // listRepositories returns the literal string "N/A" (never null) for a
+    // repo with no CI workflows at all — MOCK_REPO_NO_ANALYSES predates that
+    // and stubs grade: null, so build the real shape here.
+    const repoNoWorkflows = {
+      ...MOCK_REPO_NO_ANALYSES,
+      grade: "N/A" as const,
+    }
+
+    await mockRepositories(page, [MOCK_REPO, repoNoWorkflows])
+    await mockAnalyses(page, [MOCK_ANALYSIS])
+    await mockIssues(page, [MOCK_ISSUE_SECURITY])
+
+    await page.goto("/dashboard")
+
+    const legend = page.getByTestId("category-health-legend")
+    await expect(legend.getByText(MOCK_REPO.full_name)).toBeVisible()
+    await expect(legend.getByText(repoNoWorkflows.full_name)).not.toBeAttached()
+    await expect(
+      page.locator(`path[data-repo-id="${repoNoWorkflows.id}"]`),
+    ).not.toBeAttached()
+  })
+
+  test("toggling a repo checkbox shows/hides its polygon", async ({ page }) => {
+    const repoB = {
+      ...MOCK_REPO,
+      id: "00000000-0000-0000-0000-000000000200",
+      full_name: "acme/api-service",
+    }
+    const analysisB = {
+      ...MOCK_ANALYSIS,
+      id: "00000000-0000-0000-0000-000000000201",
+      repo_id: repoB.id,
+    }
+    const issueB = {
+      ...MOCK_ISSUE_ENERGY,
+      id: "00000000-0000-0000-0000-000000000202",
+      analysis_id: analysisB.id,
+    }
+
+    await mockRepositories(page, [MOCK_REPO, repoB])
+    await mockAnalyses(page, [MOCK_ANALYSIS, analysisB])
+    await mockIssues(
+      page,
+      [MOCK_ISSUE_SECURITY, issueB],
+      [MOCK_ANALYSIS, analysisB],
+    )
+
+    await page.goto("/dashboard")
+
+    const polygonA = page.locator(`path[data-repo-id="${MOCK_REPO.id}"]`)
+    const polygonB = page.locator(`path[data-repo-id="${repoB.id}"]`)
+    await expect(polygonA).toBeAttached()
+    await expect(polygonB).toBeAttached()
+
+    await page.getByLabel(MOCK_REPO.full_name).uncheck()
+
+    await expect(polygonA).not.toBeAttached()
+    await expect(polygonB).toBeAttached()
+  })
+
+  test("hovering a repo name dims other repos in the star diagram", async ({
+    page,
+  }) => {
+    const repoB = {
+      ...MOCK_REPO,
+      id: "00000000-0000-0000-0000-000000000200",
+      full_name: "acme/api-service",
+    }
+    const analysisB = {
+      ...MOCK_ANALYSIS,
+      id: "00000000-0000-0000-0000-000000000201",
+      repo_id: repoB.id,
+    }
+    const issueB = {
+      ...MOCK_ISSUE_ENERGY,
+      id: "00000000-0000-0000-0000-000000000202",
+      analysis_id: analysisB.id,
+    }
+
+    await mockRepositories(page, [MOCK_REPO, repoB])
+    await mockAnalyses(page, [MOCK_ANALYSIS, analysisB])
+    await mockIssues(
+      page,
+      [MOCK_ISSUE_SECURITY, issueB],
+      [MOCK_ANALYSIS, analysisB],
+    )
+
+    await page.goto("/dashboard")
+
+    const polygonA = page.locator(`path[data-repo-id="${MOCK_REPO.id}"]`)
+    const polygonB = page.locator(`path[data-repo-id="${repoB.id}"]`)
+    const legend = page.getByTestId("category-health-legend")
+
+    await legend.getByText(repoB.full_name).hover()
+
+    await expect
+      .poll(() => polygonA.evaluate((el) => getComputedStyle(el).opacity))
+      .toBe("0.15")
+    await expect
+      .poll(() => polygonB.evaluate((el) => getComputedStyle(el).opacity))
+      .toBe("1")
   })
 
   test("stat card shows critical count in hint", async ({ page }) => {
@@ -155,5 +273,79 @@ test.describe("Dashboard", () => {
     await page.goto("/dashboard")
 
     await expect(page.getByText("2 critical")).toBeVisible()
+  })
+
+  test("repository health table paginates past 8 repos", async ({ page }) => {
+    const repos = []
+    const analyses = []
+    for (let i = 0; i < 10; i++) {
+      const id = `00000000-0000-0000-0000-00000000030${i}`
+      repos.push({ ...MOCK_REPO, id, full_name: `acme/service-${i}` })
+      analyses.push({ ...MOCK_ANALYSIS, id: `${id}a`, repo_id: id })
+    }
+
+    await mockRepositories(page, repos)
+    await mockAnalyses(page, analyses)
+    await mockIssues(page, [])
+
+    await page.goto("/dashboard")
+
+    const healthCard = page.getByText("Repository Health").locator("../..")
+    await expect(healthCard.getByText("acme/service-0")).toBeVisible()
+    await expect(healthCard.getByText("acme/service-8")).not.toBeVisible()
+    await expect(healthCard.getByText("Showing 1-8 of 10")).toBeVisible()
+
+    await healthCard.getByRole("button", { name: "Go to next page" }).click()
+
+    await expect(healthCard.getByText("acme/service-0")).not.toBeVisible()
+    await expect(healthCard.getByText("acme/service-8")).toBeVisible()
+    await expect(healthCard.getByText("Showing 9-10 of 10")).toBeVisible()
+  })
+
+  test("repository health pagination hidden at 8 or fewer repos", async ({
+    page,
+  }) => {
+    await mockRepositories(page, [MOCK_REPO])
+    await mockAnalyses(page, [MOCK_ANALYSIS])
+    await mockIssues(page, [])
+
+    await page.goto("/dashboard")
+
+    await expect(page.getByText("Repository Health")).toBeVisible()
+    await expect(page.getByText(/^Showing/)).not.toBeVisible()
+  })
+
+  test("category health legend paginates past 8 repos", async ({ page }) => {
+    const repos = []
+    const analyses = []
+    const issues = []
+    for (let i = 0; i < 10; i++) {
+      const id = `00000000-0000-0000-0000-00000000030${i}`
+      repos.push({ ...MOCK_REPO, id, full_name: `acme/service-${i}` })
+      analyses.push({ ...MOCK_ANALYSIS, id: `${id}a`, repo_id: id })
+      issues.push({
+        ...MOCK_ISSUE_ENERGY,
+        id: `${id}b`,
+        analysis_id: `${id}a`,
+      })
+    }
+
+    await mockRepositories(page, repos)
+    await mockAnalyses(page, analyses)
+    await mockIssues(page, issues, analyses)
+
+    await page.goto("/dashboard")
+
+    const legend = page.getByTestId("category-health-legend")
+    await expect(legend.getByText("acme/service-0")).toBeVisible()
+    await expect(legend.getByText("acme/service-8")).not.toBeVisible()
+
+    const legendPagination = legend.locator("..")
+    await legendPagination
+      .getByRole("button", { name: "Go to next page" })
+      .click()
+
+    await expect(legend.getByText("acme/service-0")).not.toBeVisible()
+    await expect(legend.getByText("acme/service-8")).toBeVisible()
   })
 })
