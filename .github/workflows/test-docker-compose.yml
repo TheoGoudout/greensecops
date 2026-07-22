@@ -29,7 +29,13 @@ jobs:
       SERVICE_URL_FRONTEND: http://localhost
       SERVICE_URL_DOCS: http://localhost:3002
       SERVICE_URL_LANDING: http://localhost:3001
+    permissions:
+      id-token: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: green-sec-ops/telemetry@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL || 'https://api.greensecops.goudout.com' }}
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
