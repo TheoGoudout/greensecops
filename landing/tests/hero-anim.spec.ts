@@ -37,7 +37,7 @@ test.describe("hero fix animation", () => {
     // Flips to D and highlights all four flagged lines one by one.
     await expect(grade).toHaveText("D", { timeout: 5000 })
     await expect(
-      page.locator(".wf-anim__before .tw-ln--flag.is-flag-on"),
+      page.locator(".wf-anim__code .tw-ln--flag.is-flag-on"),
     ).toHaveCount(4, { timeout: 5000 })
 
     // Then fixes everything and returns to A+++.
@@ -56,7 +56,7 @@ test.describe("hero fix animation", () => {
 
     // The flagged phase never runs.
     await expect(
-      page.locator(".wf-anim__before .tw-ln--flag.is-flag-on"),
+      page.locator(".wf-anim__code .tw-ln--flag.is-flag-on"),
     ).toHaveCount(0)
   })
 })

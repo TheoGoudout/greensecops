@@ -162,57 +162,52 @@ def _fix_category(line: str) -> str | None:
     return None
 
 
-def _render_before_anim_lines(path: Path) -> str:
-    """Render the flagged ("before") layer: each line a `.tw-ln`, with the
-    non-compliant ones marked `tw-ln--flag` so they can be highlighted."""
-    out: list[str] = []
-    for raw in _example_lines(path):
-        html = _highlight_line(raw)
-        cls = "tw-ln tw-ln--flag" if _is_flagged(raw) else "tw-ln"
-        # A blank line still needs to occupy its row: emit a single space.
-        out.append(f'<span class="{cls}">{html or " "}</span>')
-    return "".join(out)
+def _diff_span(raw: str, diff: str, *, flag: bool, fix: str | None) -> str:
+    """Render one workflow line as a `.tw-ln` block tagged for the animation.
 
-
-def _render_after_anim_lines(before: Path, after: Path) -> str:
-    """Render the fixed ("after") layer, tagging each line for the animation.
-
-    ``data-op`` distinguishes unchanged scaffolding (``same`` — snaps in
-    instantly) from new or rewritten lines (``add`` — typed out), computed by
-    diffing the before/after workflows. ``data-fix`` marks the lines that
-    resolve an advertised issue so the count can tick down as they are typed.
+    ``data-diff`` is ``equal`` (unchanged — always shown), ``del`` (a flagged
+    line the fix removes) or ``ins`` (a line the fix adds/rewrites). ``del``
+    lines carry ``tw-ln--del`` (and ``tw-ln--flag`` when non-compliant); ``ins``
+    lines carry ``tw-ln--ins`` and, when they resolve an issue, ``data-fix``.
     """
-    before_lines = _example_lines(before)
-    after_lines = _example_lines(after)
-    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
-    ops = ["add"] * len(after_lines)
-    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
-        if tag == "equal":
-            for j in range(j1, j2):
-                ops[j] = "same"
-
-    out: list[str] = []
-    for raw, op in zip(after_lines, ops):
-        html = _highlight_line(raw)
-        attrs = f' data-op="{op}"'
-        category = _fix_category(raw)
-        if category:
-            attrs += f' data-fix="{category}"'
-        out.append(f'<span class="tw-ln"{attrs}>{html or " "}</span>')
-    return "".join(out)
+    html = _highlight_line(raw)
+    cls = "tw-ln"
+    if diff == "ins":
+        cls += " tw-ln--ins"
+    elif diff == "del":
+        cls += " tw-ln--del"
+    if flag:
+        cls += " tw-ln--flag"
+    attrs = f' data-diff="{diff}"'
+    if fix:
+        attrs += f' data-fix="{fix}"'
+    # A blank line still needs to occupy its row: emit a single space.
+    return f'<span class="{cls}"{attrs}>{html or " "}</span>'
 
 
 def _render_hero_anim() -> str:
-    """Two stacked layers the hero animation swaps between: the flagged
-    ("before") workflow and the fixed ("after") one that is typed out."""
-    after = _render_after_anim_lines(REGIONS["before"], REGIONS["after"])
-    before = _render_before_anim_lines(REGIONS["before"])
-    return (
-        '<div class="wf-anim">'
-        f'<div class="wf-anim__code wf-anim__after">{after}</div>'
-        f'<div class="wf-anim__code wf-anim__before" aria-hidden="true">{before}</div>'
-        "</div>"
-    )
+    """Render the hero workflow as a single unified diff the animation morphs
+    in place: unchanged (``equal``) lines stay put, flagged (``del``) lines
+    collapse away and the fix's new (``ins``) lines are typed in — so the file
+    is edited, never blanked and retyped."""
+    before_lines = _example_lines(REGIONS["before"])
+    after_lines = _example_lines(REGIONS["after"])
+    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
+
+    out: list[str] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for k in range(i1, i2):
+                out.append(_diff_span(before_lines[k], "equal", flag=False, fix=None))
+        else:  # delete / insert / replace — emit removed lines then added ones
+            for k in range(i1, i2):
+                raw = before_lines[k]
+                out.append(_diff_span(raw, "del", flag=_is_flagged(raw), fix=None))
+            for k in range(j1, j2):
+                raw = after_lines[k]
+                out.append(_diff_span(raw, "ins", flag=False, fix=_fix_category(raw)))
+
+    return '<div class="wf-anim"><div class="wf-anim__code">' + "".join(out) + "</div></div>"
 
 
 def render(html: str) -> str:

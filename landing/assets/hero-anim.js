@@ -7,12 +7,16 @@
 //      reads grade "?" (scanning).
 //   2. flagging  — each non-compliant line is highlighted one by one; the grade
 //      drops to "D" and the issue count appears.
-//   3. fixing    — the fixed workflow is typed in: unchanged scaffolding snaps
-//      in, new/rewritten lines type out, and the issue count ticks down to 0.
+//   3. fixing    — the fix is applied in place: unchanged lines stay put, the
+//      flagged lines collapse away and the new lines are typed in where they
+//      belong. The issue count ticks down to 0 as each fix lands.
 //   4. fixed     — the card rests on the compliant workflow at grade "A+++".
 //
-// Honours prefers-reduced-motion by staying on the static fixed state (the
-// card's resting markup already shows the fixed workflow and A+++).
+// The card markup is a single unified diff: `data-diff="equal"` lines are
+// always shown, `data-diff="del"` lines are the flagged lines the fix removes,
+// and `data-diff="ins"` lines are the ones it adds. The resting DOM (no JS /
+// reduced-motion) shows the fixed "after" view; the animation flips the card
+// into `is-editing` to replay the before -> after edit.
 (function () {
   "use strict";
 
@@ -21,11 +25,11 @@
   var anim = card.querySelector(".wf-anim");
   if (!anim) return;
 
-  var afterLines = Array.prototype.slice.call(
-    anim.querySelectorAll(".wf-anim__after .tw-ln")
+  var lines = Array.prototype.slice.call(
+    anim.querySelectorAll(".wf-anim__code .tw-ln")
   );
   var flagLines = Array.prototype.slice.call(
-    anim.querySelectorAll(".wf-anim__before .tw-ln--flag")
+    anim.querySelectorAll(".wf-anim__code .tw-ln--del.tw-ln--flag")
   );
   var replay = card.querySelector(".hero__replay");
 
@@ -45,7 +49,8 @@
   var ANALYZE_HOLD = 750; // ms the unfixed workflow is shown before flagging
   var FLAG_STAGGER = 260; // ms between each error highlight
   var FLAG_HOLD = 550; // ms the fully-flagged workflow is held before fixing
-  var SAME_BEAT = 22; // ms pause when an unchanged line snaps in
+  var DEL_BEAT = 120; // ms between collapsing successive removed lines
+  var OPEN_MS = 150; // ms an inserted row takes to open before it types
 
   var ISSUE_TOTAL = 3; // distinct issues advertised (1 critical, 2 high)
 
@@ -88,19 +93,10 @@
     );
   }
 
-  // Reset all animated state back to the flagged/unfixed view.
-  function reset() {
-    clearTimers();
-    anim.classList.remove("is-typing", "is-showing-before");
-    afterLines.forEach(function (line) {
-      line.style.transition = "";
-      line.style.width = "";
-      line.classList.remove("is-caret");
-    });
-    flagLines.forEach(function (line) {
-      line.classList.remove("is-flag-on");
-    });
-    playing = false;
+  function clearLineStyles(line) {
+    line.style.transition = "";
+    line.style.width = "";
+    line.classList.remove("is-caret", "is-in", "is-out");
   }
 
   // Result card at its resting "fixed" values (A+++, no issues, check shown).
@@ -113,74 +109,90 @@
     );
   }
 
-  // Rest on the compliant workflow (also the reduced-motion / no-JS-fallback state).
+  // Reset to the resting fixed view (also the reduced-motion / no-JS fallback).
+  function reset() {
+    clearTimers();
+    anim.classList.remove("is-editing");
+    lines.forEach(clearLineStyles);
+    flagLines.forEach(function (line) {
+      line.classList.remove("is-flag-on");
+    });
+    playing = false;
+  }
+
   function showFixed() {
     reset();
     showFixedResult();
   }
 
-  // --- Phase 3: type the fixed workflow in line by line ---
-  function typeLine(i, remaining, seen, done) {
-    if (i >= afterLines.length) {
+  // --- Phase 3: apply the fix in place, line by line ---
+  function typeIns(line, cb) {
+    line.classList.add("is-in"); // open the row
+    later(function () {
+      var chars = line.textContent.replace(/​/g, "").trim().length;
+      if (chars === 0) {
+        line.style.width = "";
+        later(cb, 40);
+        return;
+      }
+      var full = line.scrollWidth;
+      var dur = Math.min(MAX_LINE, Math.max(110, chars * PER_CHAR));
+      line.classList.add("is-caret");
+      line.style.width = "0px";
+      line.getBoundingClientRect(); // force reflow so the transition runs
+      line.style.transition = "width " + dur + "ms steps(" + chars + ", end)";
+      line.style.width = full + "px";
+      later(function () {
+        line.classList.remove("is-caret");
+        line.style.transition = "";
+        line.style.width = "";
+        cb();
+      }, dur + 40);
+    }, OPEN_MS);
+  }
+
+  function applyDiff(i, remaining, seen, done) {
+    if (i >= lines.length) {
       done();
       return;
     }
-    var line = afterLines[i];
+    var line = lines[i];
+    var diff = line.getAttribute("data-diff");
 
-    // Unchanged scaffolding: reveal instantly, small beat before the next line.
-    if (line.getAttribute("data-op") === "same") {
-      line.style.transition = "";
-      line.style.width = "";
-      line.classList.remove("is-caret");
-      later(function () {
-        typeLine(i + 1, remaining, seen, done);
-      }, SAME_BEAT);
+    if (diff === "equal") {
+      // Unchanged line — already in place, move straight on.
+      applyDiff(i + 1, remaining, seen, done);
       return;
     }
 
-    var chars = line.textContent.replace(/​/g, "").trim().length;
-    if (chars === 0) {
-      line.style.width = "";
+    if (diff === "del") {
+      // Flagged line the fix removes — collapse it away.
+      line.classList.add("is-out");
       later(function () {
-        typeLine(i + 1, remaining, seen, done);
-      }, 45);
+        applyDiff(i + 1, remaining, seen, done);
+      }, DEL_BEAT);
       return;
     }
 
-    var full = line.scrollWidth;
-    var dur = Math.min(MAX_LINE, Math.max(110, chars * PER_CHAR));
-    line.classList.add("is-caret");
-    line.style.width = "0px";
-    line.getBoundingClientRect(); // force reflow so the transition runs
-    line.style.transition = "width " + dur + "ms steps(" + chars + ", end)";
-    line.style.width = full + "px";
-    later(function () {
-      line.classList.remove("is-caret");
-      line.style.transition = "";
-      line.style.width = "";
-
-      // Each new fix resolves an issue — tick the count down once per category.
+    // Inserted line — open the row and type it in.
+    typeIns(line, function () {
       var category = line.getAttribute("data-fix");
       if (category && !seen[category]) {
         seen[category] = true;
         remaining -= 1;
         setResult("Applying AI fix — deploy.yml", fixingSub(remaining), false);
       }
-      typeLine(i + 1, remaining, seen, done);
-    }, dur + 40);
+      applyDiff(i + 1, remaining, seen, done);
+    });
   }
 
   function enterFixing() {
     setGrade("grade-badge--d", "D");
     setResult("Applying AI fix — deploy.yml", fixingSub(ISSUE_TOTAL), false);
-
-    // Fade the flagged overlay out; the fixed lines type in underneath it.
-    anim.classList.remove("is-showing-before");
-    typeLine(0, ISSUE_TOTAL, {}, function () {
-      anim.classList.remove("is-typing");
-      afterLines.forEach(function (line) {
-        line.style.width = "";
-      });
+    applyDiff(0, ISSUE_TOTAL, {}, function () {
+      // Settle on the clean fixed view.
+      anim.classList.remove("is-editing");
+      lines.forEach(clearLineStyles);
       flagLines.forEach(function (line) {
         line.classList.remove("is-flag-on");
       });
@@ -209,11 +221,8 @@
     reset();
     playing = true;
 
-    // Reveal the flagged "before" layer and clip the fixed lines to width 0.
-    anim.classList.add("is-typing", "is-showing-before");
-    afterLines.forEach(function (line) {
-      line.style.width = "0px";
-    });
+    // Flip to the "before" view: removed lines shown, inserted lines collapsed.
+    anim.classList.add("is-editing");
 
     setGrade("grade-badge--unknown", "?");
     setResult("Analyzing deploy.yml…", "Scanning…", false);
