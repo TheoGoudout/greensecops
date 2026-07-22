@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -17,8 +18,17 @@ from app.models import (
     IssuePublic,
     IssueSeverity,
     IssueStatsPublic,
+    RepoCategoryStat,
+    RepoIssueStats,
     Repository,
+    Rule,
     WorkflowFile,
+)
+from app.services.scoring import (
+    compute_avg_scores_batch,
+    compute_category_scores,
+    score_to_grade,
+    severity_penalty_case,
 )
 from app.services.state_machines import REJECTED_STATUSES
 
@@ -204,11 +214,91 @@ def get_issue_stats(
         )
         for row in session.execute(grouped).all()
     ]
+
+    # Per-repo breakdown for the dashboard's category health star diagram.
+    # Only meaningful when not already scoped to a single repo; needs
+    # Analysis (and Rule, for severity_weight) joined regardless of the
+    # superuser/org-filter branch above.
+    by_repo: list[RepoIssueStats] = []
+    if repo_id is None:
+        repo_query = (
+            query
+            if needs_analysis_join
+            else query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        )
+        repo_query = repo_query.join(Rule, Issue.rule_id == Rule.id)  # type: ignore[arg-type]
+        repo_grouped = repo_query.with_only_columns(  # type: ignore[call-overload]
+            Analysis.repo_id,  # type: ignore[attr-defined]
+            Issue.category,
+            func.sum(case((is_open, 1), else_=0)).label("open"),
+            func.sum(case((is_open & is_critical, 1), else_=0)).label("critical_open"),
+            func.sum(
+                case(
+                    (
+                        is_open,
+                        severity_penalty_case(Issue.severity) * Rule.severity_weight,
+                    ),
+                    else_=0.0,
+                )
+            ).label("weighted_penalty"),
+        ).group_by(Analysis.repo_id, Issue.category)  # type: ignore[attr-defined]
+        rows = session.execute(repo_grouped).all()
+
+        counts_by_repo: dict[uuid.UUID, dict[IssueCategory, tuple[int, int]]] = (
+            defaultdict(dict)
+        )
+        penalties_by_repo: dict[uuid.UUID, dict[IssueCategory, float]] = defaultdict(
+            lambda: dict.fromkeys(IssueCategory, 0.0)
+        )
+        for row in rows:
+            counts_by_repo[row.repo_id][row.category] = (
+                row.open or 0,
+                row.critical_open or 0,
+            )
+            penalties_by_repo[row.repo_id][row.category] = row.weighted_penalty or 0.0
+
+        # Only repos with at least one matching issue appear here; a repo
+        # with none gets no row at all, and the frontend falls back to that
+        # repo's own overall score for every axis (all-clean pentagon).
+        repo_ids = sorted(counts_by_repo, key=str)
+        avg_scores = compute_avg_scores_batch(session, repo_ids)
+
+        for repo_id_ in repo_ids:
+            repo_avg_score = avg_scores.get(repo_id_)
+            category_scores = (
+                compute_category_scores(repo_avg_score, penalties_by_repo[repo_id_])
+                if repo_avg_score is not None
+                else {}
+            )
+            categories = [
+                RepoCategoryStat(
+                    category=category,
+                    open=counts_by_repo[repo_id_].get(category, (0, 0))[0],
+                    critical_open=counts_by_repo[repo_id_].get(category, (0, 0))[1],
+                    score=category_scores.get(category, (None, None))[0],
+                    grade=category_scores.get(category, (None, None))[1],
+                )
+                for category in IssueCategory
+            ]
+            by_repo.append(
+                RepoIssueStats(
+                    repo_id=repo_id_,
+                    score=round(repo_avg_score, 1)
+                    if repo_avg_score is not None
+                    else None,
+                    grade=score_to_grade(repo_avg_score)
+                    if repo_avg_score is not None
+                    else None,
+                    categories=categories,
+                )
+            )
+
     return IssueStatsPublic(
         total_open=sum(r.open for r in by_category),
         total_resolved=sum(r.resolved for r in by_category),
         critical_open=sum(r.critical_open for r in by_category),
         by_category=by_category,
+        by_repo=by_repo,
     )
 
 

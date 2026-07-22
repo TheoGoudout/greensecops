@@ -445,6 +445,116 @@ def test_issue_stats_not_capped_by_pagination(
     assert body["total_open"] == n
 
 
+def test_issue_stats_by_repo_breakdown(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+    repo: Repository,
+    issue: Issue,
+    rule: Rule,
+) -> None:
+    # `repo`/`issue` fixtures give repo #1 one open `security` issue.
+    # Build a second repo with an `energy` issue in a different category.
+    other_repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"issuesowner/other-repo-{uuid.uuid4().hex[:8]}",
+        installation_id=77778,
+    )
+    db.add(other_repo)
+    db.commit()
+    db.refresh(other_repo)
+
+    other_wf = WorkflowFile(
+        repo_id=other_repo.id,
+        path=".github/workflows/other-issues-test.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\njobs: {}",
+    )
+    db.add(other_wf)
+    db.commit()
+    db.refresh(other_wf)
+
+    other_analysis = Analysis(
+        repo_id=other_repo.id,
+        workflow_file_id=other_wf.id,
+        content_hash=other_wf.content_hash,
+        status=AnalysisStatus.completed,
+        score=60.0,
+        grade="D",
+        triggered_by=AnalysisTrigger.manual,
+        branch="main",
+    )
+    db.add(other_analysis)
+    db.commit()
+    db.refresh(other_analysis)
+
+    db.add(
+        Issue(
+            analysis_id=other_analysis.id,
+            workflow_file_id=other_wf.id,
+            rule_id=rule.id,
+            severity=IssueSeverity.medium,
+            category=IssueCategory.energy,
+            message="Other repo energy issue",
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    by_repo = {r["repo_id"]: r for r in body["by_repo"]}
+
+    repo_stats = by_repo[str(repo.id)]
+    assert repo_stats["score"] == 75.0
+    assert repo_stats["grade"] == "B"
+    repo_categories = {c["category"]: c for c in repo_stats["categories"]}
+
+    repo_security = repo_categories["security"]
+    assert repo_security["open"] == 1
+    assert repo_security["critical_open"] == 0
+    # security carries the repo's only penalty (high, weight 1.0 -> 10.0),
+    # so it scores below the repo average while the other 4 (zero-penalty)
+    # categories score above it, and the 5 average back to 75.0 exactly.
+    assert repo_security["score"] == pytest.approx(67.0)
+    assert repo_categories["energy"]["open"] == 0
+    assert repo_categories["energy"]["score"] == pytest.approx(77.0)
+    scores = [c["score"] for c in repo_categories.values()]
+    assert sum(scores) / len(scores) == pytest.approx(repo_stats["score"])
+
+    other_repo_stats = by_repo[str(other_repo.id)]
+    assert other_repo_stats["score"] == 60.0
+    other_repo_categories = {c["category"]: c for c in other_repo_stats["categories"]}
+    assert other_repo_categories["energy"]["open"] == 1
+    assert other_repo_categories["security"]["open"] == 0
+    other_scores = [c["score"] for c in other_repo_categories.values()]
+    assert sum(other_scores) / len(other_scores) == pytest.approx(
+        other_repo_stats["score"]
+    )
+
+
+def test_issue_stats_by_repo_empty_when_scoped_to_single_repo(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    issue: Issue,
+    repo: Repository,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/issues/stats",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["by_repo"] == []
+
+
 # ─── GET /issues/{id} ─────────────────────────────────────────────────────────
 
 

@@ -536,6 +536,10 @@ export type IssueStatsPublic = {
      * By Category
      */
     by_category: Array<IssueCategoryStat>;
+    /**
+     * By Repo
+     */
+    by_repo?: Array<RepoIssueStats>;
 };
 
 /**
@@ -686,6 +690,66 @@ export type PullRequestPublic = {
  * PullRequestState
  */
 export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
+
+/**
+ * RepoCategoryStat
+ * A repo's open-issue counts and severity-weighted grade for one category.
+ *
+ * ``score``/``grade`` are ``None`` when the repo has no overall grade yet
+ * (e.g. no completed analysis). See ``RepoIssueStats`` for how categories
+ * are grouped per repo.
+ */
+export type RepoCategoryStat = {
+    category: IssueCategory;
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+};
+
+/**
+ * RepoIssueStats
+ * Per-repo issue breakdown — powers the dashboard's category health star
+ * diagram. Only populated on the unscoped (all-repos) stats call;
+ * meaningless once already filtered to a single ``repo_id``.
+ *
+ * ``score``/``grade`` here are the repo's own overall grade (same values as
+ * ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
+ * doesn't need a second lookup to size the radar's "no issues" fallback.
+ * Each entry in ``categories`` covers every ``IssueCategory``, including
+ * categories with zero open issues, so their scores average out to exactly
+ * the repo's overall score (see ``compute_category_scores``).
+ */
+export type RepoIssueStats = {
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Categories
+     */
+    categories?: Array<RepoCategoryStat>;
+};
 
 /**
  * RepositoryPublic
