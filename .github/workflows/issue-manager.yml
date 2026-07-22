@@ -23,9 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      id-token: write
       issues: write
       pull-requests: write
     steps:
+      - name: GreenSecOps Telemetry
+        uses: green-sec-ops/telemetry@v1
+        with:
+          greensecops_url: ${{ vars.GREENSECOPS_URL || 'https://api.greensecops.goudout.com' }}
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
