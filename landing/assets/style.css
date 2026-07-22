@@ -637,21 +637,25 @@ a { color: inherit; }
   }
 }
 
-/* Flagged lines pulse red while the "before" workflow is on screen. */
+/* Flagged lines start plain and are highlighted one by one (JS adds
+   `is-flag-on`). The red sweeps in left-to-right, echoing the typing caret. */
 .tw-ln--flag {
   border-radius: 3px;
+}
+.tw-ln--flag.is-flag-on {
   box-shadow: inset 3px 0 0 #ff5f57;
-  background: rgba(255, 95, 87, 0.12);
+  background-image: linear-gradient(
+    rgba(255, 95, 87, 0.16),
+    rgba(255, 95, 87, 0.16)
+  );
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 0% 100%;
+  animation: tw-flag-wipe 0.34s steps(18, end) forwards;
 }
-.wf-anim.is-showing-before .tw-ln--flag {
-  animation: tw-flag 0.9s ease-in-out infinite alternate;
-}
-@keyframes tw-flag {
-  from {
-    background: rgba(255, 95, 87, 0.1);
-  }
+@keyframes tw-flag-wipe {
   to {
-    background: rgba(255, 95, 87, 0.22);
+    background-size: 100% 100%;
   }
 }
 
@@ -667,6 +671,10 @@ a { color: inherit; }
     overflow: visible;
     border-right: 0;
     animation: none;
+  }
+  .tw-ln--flag.is-flag-on {
+    animation: none;
+    background-size: 100% 100%;
   }
 }
 
@@ -711,6 +719,14 @@ a { color: inherit; }
   font-size: 0.75rem;
   color: var(--muted-foreground);
   margin-top: 0.125rem;
+}
+
+/* The grade badge cross-fades as the animation moves ? -> D -> A+++. */
+.hero__result-grade {
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+.hero__result-check {
+  transition: opacity 0.3s ease;
 }
 
 /* ============================================================
@@ -1031,6 +1047,7 @@ a { color: inherit; }
   border-radius: var(--radius-xl);
 }
 
+.grade-badge--unknown { background: var(--muted); color: var(--muted-foreground); }
 .grade-badge--aaa { background: var(--grade-aaa-bg); color: var(--grade-aaa-fg); }
 .grade-badge--app { background: var(--grade-app-bg); color: var(--grade-app-fg); }
 .grade-badge--apl { background: var(--grade-apl-bg); color: var(--grade-apl-fg); }

@@ -24,6 +24,7 @@ headers — are dropped so the marketing card stays clean, while trailing
 
 from __future__ import annotations
 
+import difflib
 import re
 import sys
 from pathlib import Path
@@ -146,24 +147,66 @@ def _is_flagged(line: str) -> bool:
     return False
 
 
-def _render_anim_lines(path: Path, flag: bool) -> str:
-    """Render each workflow line as a `.tw-ln` block the hero animation types."""
+# Lines in the fixed ("after") workflow that resolve each advertised issue. The
+# category lets the hero animation count issues down (3 -> 0) once as each
+# distinct fix is typed in — the two pinned `uses:` lines share the "pinning"
+# category so they only decrement the count once.
+def _fix_category(line: str) -> str | None:
+    s = line.strip()
+    if "uses:" in s and re.search(r"@[0-9a-f]{7}", s):  # pinned to a commit SHA
+        return "pinning"
+    if s.startswith("cache:"):  # dependency cache enabled
+        return "cache"
+    if s.startswith("API_KEY:") and "secrets." in s:  # secret referenced, not inlined
+        return "secret"
+    return None
+
+
+def _render_before_anim_lines(path: Path) -> str:
+    """Render the flagged ("before") layer: each line a `.tw-ln`, with the
+    non-compliant ones marked `tw-ln--flag` so they can be highlighted."""
     out: list[str] = []
     for raw in _example_lines(path):
         html = _highlight_line(raw)
-        cls = "tw-ln"
-        if flag and _is_flagged(raw):
-            cls += " tw-ln--flag"
+        cls = "tw-ln tw-ln--flag" if _is_flagged(raw) else "tw-ln"
         # A blank line still needs to occupy its row: emit a single space.
         out.append(f'<span class="{cls}">{html or " "}</span>')
+    return "".join(out)
+
+
+def _render_after_anim_lines(before: Path, after: Path) -> str:
+    """Render the fixed ("after") layer, tagging each line for the animation.
+
+    ``data-op`` distinguishes unchanged scaffolding (``same`` — snaps in
+    instantly) from new or rewritten lines (``add`` — typed out), computed by
+    diffing the before/after workflows. ``data-fix`` marks the lines that
+    resolve an advertised issue so the count can tick down as they are typed.
+    """
+    before_lines = _example_lines(before)
+    after_lines = _example_lines(after)
+    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
+    ops = ["add"] * len(after_lines)
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for j in range(j1, j2):
+                ops[j] = "same"
+
+    out: list[str] = []
+    for raw, op in zip(after_lines, ops):
+        html = _highlight_line(raw)
+        attrs = f' data-op="{op}"'
+        category = _fix_category(raw)
+        if category:
+            attrs += f' data-fix="{category}"'
+        out.append(f'<span class="tw-ln"{attrs}>{html or " "}</span>')
     return "".join(out)
 
 
 def _render_hero_anim() -> str:
     """Two stacked layers the hero animation swaps between: the flagged
     ("before") workflow and the fixed ("after") one that is typed out."""
-    after = _render_anim_lines(REGIONS["after"], flag=False)
-    before = _render_anim_lines(REGIONS["before"], flag=True)
+    after = _render_after_anim_lines(REGIONS["before"], REGIONS["after"])
+    before = _render_before_anim_lines(REGIONS["before"])
     return (
         '<div class="wf-anim">'
         f'<div class="wf-anim__code wf-anim__after">{after}</div>'
