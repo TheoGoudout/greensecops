@@ -15,7 +15,8 @@ export const Route = createFileRoute("/_layout/badges")({
   }),
 })
 
-const API_BASE = import.meta.env.VITE_API_URL
+const API_BASE =
+  import.meta.env.VITE_GREENSECOPS_PUBLIC_URL || import.meta.env.VITE_API_URL
 
 function badgeSvgUrl(repo: RepositoryPublic): string {
   const [owner, name] = repo.full_name.split("/")

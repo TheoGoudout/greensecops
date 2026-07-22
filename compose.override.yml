@@ -162,6 +162,7 @@ services:
       target: dev-stage
     environment:
       - VITE_API_URL=http://localhost:8000
+      - VITE_GREENSECOPS_PUBLIC_URL=${GREENSECOPS_PUBLIC_URL:-}
       - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
       - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
     develop:
