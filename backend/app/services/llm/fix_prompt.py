@@ -21,7 +21,7 @@ Rules for <full_content>:
 - Ensure the result is valid GitHub Actions YAML syntax
 - When pinning an action to a commit SHA, append the original tag as an inline comment: `uses: owner/action@<SHA> # <tag>`
 - CRITICAL: Only use SHAs from the "Known action commit SHAs" section. If you add an action whose SHA is NOT listed there, use its tag reference (e.g., `uses: actions/cache@v4`) — do NOT invent or guess a SHA.
-- When adding a new action or upgrading one, prefer the latest version listed in the "Known action commit SHAs" section
+- CRITICAL: Never change the version/tag of an action already referenced in the workflow (e.g. do not bump `actions/checkout@v3` to `@v4`) — pin it to a SHA at its existing tag only. Version upgrades are handled by Dependabot, not by this fix. Only use a "latest" entry from the list below when introducing an action that isn't already used anywhere in the workflow
 - CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`
 - Make the minimum changes required to fix the listed issues; leave unrelated lines untouched
 
@@ -65,7 +65,9 @@ def build_fix_prompt(
             for ref, sha in sorted(action_sha_map.items())
         )
         user_prompt += (
-            f"\n\n**Known action commit SHAs — use these exact replacements when pinning"
-            f" (SHA + tag comment), do not invent SHAs:**\n{sha_block}"
+            f"\n\n**Known action commit SHAs for the exact versions already used in this"
+            f" workflow (plus defaults for well-known actions you introduce fresh) — use"
+            f" these exact replacements when pinning (SHA + tag comment), do not invent"
+            f" SHAs:**\n{sha_block}"
         )
     return FIX_SYSTEM_PROMPT, user_prompt
