@@ -1124,6 +1124,10 @@ export type TerraformRootPublic = {
      */
     repo_id: string;
     /**
+     * Repo Full Name
+     */
+    repo_full_name?: string | null;
+    /**
      * Root Path
      */
     root_path: string;
@@ -3560,11 +3564,11 @@ export type BillingStripeWebhookResponse = BillingStripeWebhookResponses[keyof B
 export type TerraformListTerraformRootsData = {
     body?: never;
     path?: never;
-    query: {
+    query?: {
         /**
          * Repo Id
          */
-        repo_id: string;
+        repo_id?: string | null;
     };
     url: '/api/v1/terraform-roots/';
 };

@@ -2034,6 +2034,17 @@ export const TerraformRootPublicSchema = {
             format: 'uuid',
             title: 'Repo Id'
         },
+        repo_full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Full Name'
+        },
         root_path: {
             type: 'string',
             title: 'Root Path'

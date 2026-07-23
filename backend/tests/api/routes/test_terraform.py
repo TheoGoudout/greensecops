@@ -13,6 +13,8 @@ from app.models import (
     IssueCategory,
     IssueSeverity,
     Organization,
+    OrgMember,
+    OrgRole,
     Repository,
     Rule,
     RuleDomain,
@@ -20,6 +22,7 @@ from app.models import (
     TerraformFinding,
     TerraformRoot,
     TerraformScan,
+    User,
     UserTier,
 )
 
@@ -172,6 +175,91 @@ def test_list_terraform_roots_includes_latest_grade(
     body = response.json()
     assert body[0]["latest_score"] == 72.0
     assert body[0]["latest_grade"] == "B"
+
+
+def test_list_terraform_roots_includes_repo_full_name(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    terraform_root: TerraformRoot,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform-roots/",
+        headers=superuser_token_headers,
+        params={"repo_id": str(repo.id)},
+    )
+    body = response.json()
+    assert body[0]["repo_full_name"] == repo.full_name
+    assert body[0]["id"] == str(terraform_root.id)
+
+
+def test_list_terraform_roots_without_repo_id_is_org_wide(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    terraform_root: TerraformRoot,
+) -> None:
+    # No repo_id filter — the org-wide Infrastructure page's default query.
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform-roots/",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    ids = {r["id"] for r in response.json()}
+    assert str(terraform_root.id) in ids
+
+
+def test_list_terraform_roots_without_repo_id_scoped_to_user_orgs(
+    client: TestClient,
+    db: Session,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    user = db.exec(select(User).where(User.email == settings.EMAIL_TEST_USER)).first()
+    assert user is not None
+
+    my_org = Organization(name=f"tfapi-mine-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
+    other_org = Organization(
+        name=f"tfapi-theirs-{uuid.uuid4().hex[:8]}", tier=UserTier.free
+    )
+    db.add(my_org)
+    db.add(other_org)
+    db.commit()
+    db.refresh(my_org)
+    db.refresh(other_org)
+    db.add(OrgMember(org_id=my_org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+
+    my_repo = Repository(
+        org_id=my_org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"mine/repo-{uuid.uuid4().hex[:8]}",
+    )
+    other_repo = Repository(
+        org_id=other_org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"theirs/repo-{uuid.uuid4().hex[:8]}",
+    )
+    db.add(my_repo)
+    db.add(other_repo)
+    db.commit()
+    db.refresh(my_repo)
+    db.refresh(other_repo)
+
+    my_root = TerraformRoot(repo_id=my_repo.id, root_path="infra")
+    other_root = TerraformRoot(repo_id=other_repo.id, root_path="infra")
+    db.add(my_root)
+    db.add(other_root)
+    db.commit()
+    db.refresh(my_root)
+    db.refresh(other_root)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform-roots/", headers=normal_user_token_headers
+    )
+
+    assert response.status_code == 200
+    ids = {r["id"] for r in response.json()}
+    assert str(my_root.id) in ids
+    assert str(other_root.id) not in ids
 
 
 # ─── PATCH /terraform-roots/{id}/toggle ────────────────────────────────────────

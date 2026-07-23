@@ -18,6 +18,7 @@ def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
     return TerraformRootPublic(
         id=root.id,
         repo_id=root.repo_id,
+        repo_full_name=root.repository.full_name if root.repository else None,
         root_path=root.root_path,
         enabled=root.enabled,
         last_scanned_at=root.last_scanned_at,

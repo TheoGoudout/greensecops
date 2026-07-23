@@ -1332,12 +1332,15 @@ export class TerraformService {
 
     /**
      * List Terraform Roots
+     * List Terraform roots. Omit ``repo_id`` for the org-wide Infrastructure
+     * page (every root across every repo the user can access); pass it to
+     * scope to one repo.
      * @param data The data for the request.
      * @param data.repoId
      * @returns TerraformRootPublic Successful Response
      * @throws ApiError
      */
-    public static listTerraformRoots(data: TerraformListTerraformRootsData): CancelablePromise<TerraformListTerraformRootsResponse> {
+    public static listTerraformRoots(data: TerraformListTerraformRootsData = {}): CancelablePromise<TerraformListTerraformRootsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/terraform-roots/',

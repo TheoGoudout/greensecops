@@ -227,6 +227,7 @@ class TerraformRootCreate(SQLModel):
 class TerraformRootPublic(SQLModel):
     id: uuid.UUID
     repo_id: uuid.UUID
+    repo_full_name: str | None = None
     root_path: str
     enabled: bool
     last_scanned_at: datetime | None = None

@@ -451,6 +451,7 @@ export type TerraformRootCreate = {
 export type TerraformRootPublic = {
     id: string;
     repo_id: string;
+    repo_full_name?: (string | null);
     root_path: string;
     enabled: boolean;
     last_scanned_at?: (string | null);
@@ -952,7 +953,7 @@ export type TerraformCreateTerraformRootData = {
 export type TerraformCreateTerraformRootResponse = (TerraformRootPublic);
 
 export type TerraformListTerraformRootsData = {
-    repoId: string;
+    repoId?: (string | null);
 };
 
 export type TerraformListTerraformRootsResponse = (Array<TerraformRootPublic>);

@@ -8,6 +8,7 @@ from app.api.deps import (
     SessionDep,
     authorize_repo,
     get_or_404,
+    user_org_ids,
 )
 from app.api.mappers import (
     to_terraform_finding_public,
@@ -15,6 +16,7 @@ from app.api.mappers import (
     to_terraform_scan_public,
 )
 from app.models import (
+    Repository,
     TerraformFinding,
     TerraformFindingPublic,
     TerraformRoot,
@@ -73,14 +75,24 @@ def create_terraform_root(
 
 @router.get("/", response_model=list[TerraformRootPublic])
 def list_terraform_roots(
-    repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
+    repo_id: uuid.UUID | None = None,
 ) -> list[TerraformRootPublic]:
-    authorize_repo(session, current_user, repo_id)
-    roots = session.exec(
-        select(TerraformRoot).where(TerraformRoot.repo_id == repo_id)
-    ).all()
+    """List Terraform roots. Omit ``repo_id`` for the org-wide Infrastructure
+    page (every root across every repo the user can access); pass it to
+    scope to one repo."""
+    if repo_id:
+        authorize_repo(session, current_user, repo_id)
+        query = select(TerraformRoot).where(TerraformRoot.repo_id == repo_id)
+    else:
+        query = select(TerraformRoot)
+        if not current_user.is_superuser:
+            query = query.join(
+                Repository,
+                TerraformRoot.repo_id == Repository.id,  # type: ignore[arg-type]
+            ).where(Repository.org_id.in_(user_org_ids(session, current_user)))  # type: ignore[attr-defined]
+    roots = session.exec(query.order_by(col(TerraformRoot.root_path))).all()
     return [to_terraform_root_public(r) for r in roots]
 
 
