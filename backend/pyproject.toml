@@ -64,7 +64,7 @@ disable_error_code = ["untyped-decorator"]
 # sqlmodel's Field() stub overloads don't accept default_factory/sa_type
 # combinations that are valid at runtime.
 [[tool.mypy.overrides]]
-module = "app.models.db"
+module = "app.models.db.*"
 disable_error_code = ["call-overload"]
 
 [tool.ruff]
@@ -92,6 +92,12 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ARG001"]
+# SQLModel needs quoted, bracket-wrapped forward refs (Optional["X"], list["X"])
+# for cross-module Relationship() targets — a real typing.ForwardRef it can
+# introspect structurally without importing the target class. UP037/UP045
+# "helpfully" collapse those into a bare `X | None` union string that
+# SQLAlchemy's registry resolver cannot parse, breaking mapper configuration.
+"app/models/db/**" = ["UP037", "UP045"]
 
 [tool.ruff.lint.pyupgrade]
 # Preserve types, even if a file imports `from __future__ import annotations`.
