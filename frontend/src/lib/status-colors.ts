@@ -4,6 +4,7 @@ import type {
   FixStatus,
   IssueStatus,
   ReviewDecision,
+  ScanStatus,
 } from "@/client"
 
 // One palette of semantic status classes, mapped per domain below so the
@@ -128,6 +129,30 @@ export function reviewDecisionLabel(decision: ReviewDecision): string {
       return "Changes requested"
     default:
       return "Review required"
+  }
+}
+
+export function scanStatusColor(status: ScanStatus): string {
+  switch (status) {
+    case "completed":
+      return STATUS_CLASSES.success
+    case "running":
+      return STATUS_CLASSES.running
+    case "failed":
+      return STATUS_CLASSES.failed
+    case "queued":
+      return STATUS_CLASSES.pending
+    default:
+      return STATUS_CLASSES.muted
+  }
+}
+
+export function scanStatusLabel(status: ScanStatus): string {
+  switch (status) {
+    case "no_targets":
+      return "No targets"
+    default:
+      return status.replace(/_/g, " ")
   }
 }
 

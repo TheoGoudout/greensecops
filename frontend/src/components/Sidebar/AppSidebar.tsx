@@ -1,6 +1,7 @@
 import { Link as RouterLink, useRouterState } from "@tanstack/react-router"
 import {
   Award,
+  Boxes,
   CreditCard,
   GitBranch,
   LayoutDashboard,
@@ -96,6 +97,10 @@ export function AppSidebar() {
     { icon: Award, title: "Badges", path: "/badges" },
   ]
 
+  const infrastructureItems: NavItem[] = [
+    { icon: Boxes, title: "Terraform", path: "/infrastructure" },
+  ]
+
   const configItems: NavItem[] = [
     { icon: ListChecks, title: "Rules", path: "/rules" },
     { icon: CreditCard, title: "Billing", path: "/billing" },
@@ -130,6 +135,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <NavGroup label="CI/CD Analysis" items={analysisItems} />
+        <NavGroup label="Infrastructure" items={infrastructureItems} />
         <NavGroup label="Configuration" items={configItems} />
       </SidebarContent>
       <SidebarFooter>

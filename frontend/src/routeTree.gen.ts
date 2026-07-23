@@ -18,6 +18,7 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutRulesRouteImport } from './routes/_layout/rules'
 import { Route as LayoutRepositoriesRouteImport } from './routes/_layout/repositories'
+import { Route as LayoutInfrastructureRouteImport } from './routes/_layout/infrastructure'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutBillingRouteImport } from './routes/_layout/billing'
 import { Route as LayoutBadgesRouteImport } from './routes/_layout/badges'
@@ -75,6 +76,11 @@ const LayoutRulesRoute = LayoutRulesRouteImport.update({
 const LayoutRepositoriesRoute = LayoutRepositoriesRouteImport.update({
   id: '/repositories',
   path: '/repositories',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutInfrastructureRoute = LayoutInfrastructureRouteImport.update({
+  id: '/infrastructure',
+  path: '/infrastructure',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/badges': typeof LayoutBadgesRoute
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
+  '/infrastructure': typeof LayoutInfrastructureRoute
   '/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/badges': typeof LayoutBadgesRoute
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
+  '/infrastructure': typeof LayoutInfrastructureRoute
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/_layout/badges': typeof LayoutBadgesRoute
   '/_layout/billing': typeof LayoutBillingRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
+  '/_layout/infrastructure': typeof LayoutInfrastructureRoute
   '/_layout/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/_layout/rules': typeof LayoutRulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/badges'
     | '/billing'
     | '/dashboard'
+    | '/infrastructure'
     | '/repositories'
     | '/rules'
     | '/settings'
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/badges'
     | '/billing'
     | '/dashboard'
+    | '/infrastructure'
     | '/rules'
     | '/settings'
     | '/'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/_layout/badges'
     | '/_layout/billing'
     | '/_layout/dashboard'
+    | '/_layout/infrastructure'
     | '/_layout/repositories'
     | '/_layout/rules'
     | '/_layout/settings'
@@ -373,6 +385,13 @@ declare module '@tanstack/react-router' {
       path: '/repositories'
       fullPath: '/repositories'
       preLoaderRoute: typeof LayoutRepositoriesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/infrastructure': {
+      id: '/_layout/infrastructure'
+      path: '/infrastructure'
+      fullPath: '/infrastructure'
+      preLoaderRoute: typeof LayoutInfrastructureRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/dashboard': {
@@ -517,6 +536,7 @@ interface LayoutRouteChildren {
   LayoutBadgesRoute: typeof LayoutBadgesRoute
   LayoutBillingRoute: typeof LayoutBillingRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
+  LayoutInfrastructureRoute: typeof LayoutInfrastructureRoute
   LayoutRepositoriesRoute: typeof LayoutRepositoriesRouteWithChildren
   LayoutRulesRoute: typeof LayoutRulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
@@ -530,6 +550,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutBadgesRoute: LayoutBadgesRoute,
   LayoutBillingRoute: LayoutBillingRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
+  LayoutInfrastructureRoute: LayoutInfrastructureRoute,
   LayoutRepositoriesRoute: LayoutRepositoriesRouteWithChildren,
   LayoutRulesRoute: LayoutRulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
