@@ -21,23 +21,32 @@ class OpaUnavailableError(Exception):
     """Raised when the OPA service cannot be reached or returns an error."""
 
 
-# Rego rules live at app/rules/<category>/<name>.rego and each declares
-# package greensecops.<category>.<name> exposing `violations`.
+# Workflow rules live at app/rules/<category>/<name>.rego; IaC/cloud rules
+# live one level deeper at app/rules/<domain_dir>/<category>/<name>.rego
+# (e.g. app/rules/iac_terraform/security/s3_public_bucket.rego). Every file
+# declares package greensecops.<...path.../name> exposing `violations`.
 _RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
 
 
-def _discover_policy_packages() -> list[str]:
-    """Enumerate every OPA package path from the shipped Rego rule files.
+def _discover_policy_packages(domain_dir: str | None = None) -> list[str]:
+    """Enumerate OPA package paths from the shipped Rego rule files.
 
     Deriving this from the filesystem (rather than a hand-maintained list)
     guarantees that every rule which is seeded and shown as enabled is also
     actually evaluated — the two can no longer silently drift apart.
+
+    ``domain_dir`` scopes discovery to one IaC/cloud domain subdirectory
+    (e.g. ``"iac_terraform"``); omitted, discovers the original CI-workflow
+    rules directly under ``app/rules/<category>/<name>.rego``. The package
+    path returned always mirrors the file's location relative to
+    ``_RULES_DIR``, so it matches that file's own ``package`` declaration.
     """
-    if not _RULES_DIR.is_dir():
+    search_root = _RULES_DIR / domain_dir if domain_dir else _RULES_DIR
+    if not search_root.is_dir():
         return []
     packages = sorted(
-        f"greensecops/{rego.parent.name}/{rego.stem}"
-        for rego in _RULES_DIR.glob("*/*.rego")
+        f"greensecops/{rego.relative_to(_RULES_DIR).with_suffix('').as_posix()}"
+        for rego in search_root.glob("*/*.rego")
         if not rego.name.endswith("_test.rego")
     )
     return packages
@@ -58,6 +67,18 @@ class OpaViolation:
     discriminator: str | None = None
 
 
+@dataclass
+class TerraformOpaViolation:
+    rule_slug: str
+    severity: str
+    category: str
+    message: str
+    resource_address: str | None = None
+    file_path: str = ""
+    context: str | None = None
+    discriminator: str | None = None
+
+
 # All registered policy packages to evaluate against, discovered from the
 # shipped Rego rule files so no rule is left unevaluated. Falls back to the
 # core set if the rules directory is unavailable at runtime.
@@ -71,6 +92,8 @@ POLICY_PACKAGES = _discover_policy_packages() or [
     "greensecops/performance/unnecessary_full_checkout",
     "greensecops/maintainability/missing_workflow_description",
 ]
+
+IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
@@ -92,14 +115,18 @@ def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
     return parsed
 
 
-async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
-    parsed = parse_workflow_yaml(raw_content)
-    if parsed is None:
-        raise WorkflowParseError("Workflow file is not a valid YAML mapping")
+async def _evaluate_packages(
+    parsed: dict[str, Any], package_paths: list[str]
+) -> list[dict[str, Any]]:
+    """POST ``parsed`` as OPA input to each package; return raw violation dicts.
 
-    violations: list[OpaViolation] = []
+    Shared by :func:`evaluate_workflow` and :func:`evaluate_terraform` — the
+    HTTP/error-handling shape is identical, only the input document, package
+    list, and the dataclass each raw violation gets mapped into differ.
+    """
+    raw_violations: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=10.0) as client:
-        for package_path in POLICY_PACKAGES:
+        for package_path in package_paths:
             url = f"{settings.OPA_URL}/v1/data/{package_path}"
             try:
                 response = await client.post(url, json={"input": parsed})
@@ -120,22 +147,57 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
                     package_path,
                 )
                 continue
-            raw_violations: list[dict[str, Any]] = data["result"].get("violations", [])
-            for v in raw_violations:
-                violations.append(
-                    OpaViolation(
-                        rule_slug=v.get("rule", "unknown"),
-                        severity=v.get("severity", "medium"),
-                        category=v.get("category", "reliability"),
-                        message=v.get("message", ""),
-                        job=v.get("job"),
-                        step=v.get("step"),
-                        step_index=v.get("step_index"),
-                        line_start=v.get("line_start"),
-                        line_end=v.get("line_end"),
-                        context=v.get("context"),
-                        discriminator=v.get("discriminator"),
-                    )
-                )
+            raw_violations.extend(data["result"].get("violations", []))
+    return raw_violations
 
-    return violations
+
+async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
+    parsed = parse_workflow_yaml(raw_content)
+    if parsed is None:
+        raise WorkflowParseError("Workflow file is not a valid YAML mapping")
+
+    raw_violations = await _evaluate_packages(parsed, POLICY_PACKAGES)
+    return [
+        OpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "reliability"),
+            message=v.get("message", ""),
+            job=v.get("job"),
+            step=v.get("step"),
+            step_index=v.get("step_index"),
+            line_start=v.get("line_start"),
+            line_end=v.get("line_end"),
+            context=v.get("context"),
+            discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]
+
+
+async def evaluate_terraform(
+    parsed_config: dict[str, Any],
+) -> list[TerraformOpaViolation]:
+    """Evaluate an already-merged Terraform root config against IaC rules.
+
+    Unlike ``evaluate_workflow``, parsing happens upstream (see
+    ``services/terraform/hcl_parser.py``) since a Terraform root is multiple
+    files merged into one logical document before evaluation, not a single
+    raw string.
+    """
+    raw_violations = await _evaluate_packages(
+        parsed_config, IAC_TERRAFORM_POLICY_PACKAGES
+    )
+    return [
+        TerraformOpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "security"),
+            message=v.get("message", ""),
+            resource_address=v.get("resource_address"),
+            file_path=v.get("file_path", ""),
+            context=v.get("context"),
+            discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]

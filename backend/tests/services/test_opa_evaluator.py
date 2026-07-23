@@ -6,10 +6,12 @@ import httpx
 import pytest
 
 from app.services.opa.evaluator import (
+    IAC_TERRAFORM_POLICY_PACKAGES,
     POLICY_PACKAGES,
     OpaUnavailableError,
     WorkflowParseError,
     _discover_policy_packages,
+    evaluate_terraform,
     evaluate_workflow,
     parse_workflow_yaml,
 )
@@ -195,3 +197,88 @@ def test_evaluate_workflow_raises_when_opa_unreachable() -> None:
 def test_discover_policy_packages_excludes_test_files() -> None:
     packages = _discover_policy_packages()
     assert not any(pkg.endswith("_test") for pkg in packages)
+
+
+# ─── Terraform ────────────────────────────────────────────────────────────────
+
+
+def test_all_seeded_terraform_rules_are_evaluated() -> None:
+    packages = _discover_policy_packages("iac_terraform")
+    assert len(packages) == 8
+    for slug in (
+        "s3_bucket_public_acl",
+        "open_ingress_security_group",
+        "unencrypted_ebs_volume",
+        "rds_not_encrypted",
+        "hardcoded_credentials_in_tf",
+    ):
+        assert f"greensecops/iac_terraform/security/{slug}" in packages
+    assert "greensecops/iac_terraform/reliability/s3_bucket_missing_versioning" in (
+        packages
+    )
+    for slug in ("resource_missing_tags", "variable_missing_description"):
+        assert f"greensecops/iac_terraform/maintainability/{slug}" in packages
+    assert set(IAC_TERRAFORM_POLICY_PACKAGES) == set(packages)
+
+
+def test_discover_policy_packages_scopes_domains_independently() -> None:
+    # Workflow discovery must not pick up the iac_terraform tree, and vice
+    # versa — they're different domains evaluated by different engines.
+    workflow_packages = _discover_policy_packages()
+    terraform_packages = _discover_policy_packages("iac_terraform")
+    assert not any(
+        p.startswith("greensecops/iac_terraform/") for p in workflow_packages
+    )
+    assert all(p.startswith("greensecops/iac_terraform/") for p in terraform_packages)
+
+
+def test_evaluate_terraform_returns_violations_when_policy_matches() -> None:
+    violation = {
+        "rule": "s3_bucket_public_acl",
+        "severity": "high",
+        "category": "security",
+        "resource_address": "aws_s3_bucket.data",
+        "file_path": "main.tf",
+        "message": "Bucket is public",
+    }
+    mock_cm = _mock_client(
+        {
+            "iac_terraform/security/s3_bucket_public_acl": {
+                "result": {"violations": [violation]}
+            }
+        }
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(evaluate_terraform({"resource": []}))
+
+    assert len(violations) == 1
+    assert violations[0].rule_slug == "s3_bucket_public_acl"
+    assert violations[0].resource_address == "aws_s3_bucket.data"
+    assert violations[0].file_path == "main.tf"
+
+
+def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
+    mock_cm = _mock_client(
+        {pkg: {"result": {}} for pkg in IAC_TERRAFORM_POLICY_PACKAGES}
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(evaluate_terraform({"resource": []}))
+
+    assert violations == []
+
+
+def test_evaluate_terraform_raises_when_opa_unreachable() -> None:
+    async def _post(url: str, **_kwargs: Any) -> MagicMock:
+        raise httpx.ConnectError("connection refused")
+
+    client = AsyncMock()
+    client.post = _post
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=cm),
+        pytest.raises(OpaUnavailableError),
+    ):
+        asyncio.run(evaluate_terraform({"resource": []}))
