@@ -15,6 +15,7 @@ from app.api.routes import (
     repositories,
     rules,
     telemetry,
+    terraform,
     users,
     utils,
     webhooks,
@@ -38,6 +39,7 @@ api_router.include_router(webhooks.router)
 api_router.include_router(badges.router)
 api_router.include_router(telemetry.router)
 api_router.include_router(billing.router)
+api_router.include_router(terraform.router)
 
 if settings.ENVIRONMENT == "local":
     api_router.include_router(private.router)

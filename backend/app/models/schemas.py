@@ -10,6 +10,8 @@ from .enums import (
     AnalysisTrigger,
     CIStatus,
     DynamicAnalysisStatus,
+    FindingResolutionReason,
+    FindingStatus,
     FixDeliveryMode,
     FixStatus,
     IssueCategory,
@@ -19,6 +21,7 @@ from .enums import (
     LLMProvider,
     PullRequestState,
     ReviewDecision,
+    ScanStatus,
     TelemetryPhase,
     UserTier,
 )
@@ -214,6 +217,57 @@ class WorkflowFilePublic(SQLModel):
     path: str
     branch: str | None = None
     raw_content: str | None = None
+
+
+class TerraformRootCreate(SQLModel):
+    repo_id: uuid.UUID
+    root_path: str = Field(max_length=512)
+
+
+class TerraformRootPublic(SQLModel):
+    id: uuid.UUID
+    repo_id: uuid.UUID
+    root_path: str
+    enabled: bool
+    last_scanned_at: datetime | None = None
+    last_scanned_head_sha: str | None = None
+    # Populated from the root's latest scan, mirroring how RepositoryPublic
+    # surfaces the workflow-engine's grade — a root's grade IS its latest
+    # scan's grade, there's no separate aggregation.
+    latest_score: float | None = None
+    latest_grade: str | None = None
+
+
+class TerraformScanPublic(SQLModel):
+    id: uuid.UUID
+    terraform_root_id: uuid.UUID
+    status: ScanStatus
+    triggered_by: AnalysisTrigger
+    branch: str | None = None
+    commit_sha: str | None = None
+    score: float | None = None
+    grade: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class TerraformFindingPublic(SQLModel):
+    id: uuid.UUID
+    scan_id: uuid.UUID
+    terraform_root_id: uuid.UUID
+    rule_id: uuid.UUID
+    rule_slug: str
+    resource_address: str | None = None
+    file_path: str
+    severity: IssueSeverity
+    category: IssueCategory
+    message: str
+    context: str | None = None
+    status: FindingStatus
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution_reason: FindingResolutionReason | None = None
 
 
 class PullRequestPublic(SQLModel):

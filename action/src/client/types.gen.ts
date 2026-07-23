@@ -271,6 +271,22 @@ export type ExternalRepositoryCreate = {
 };
 
 /**
+ * FindingResolutionReason
+ */
+export type FindingResolutionReason = 'no_longer_detected' | 'target_removed';
+
+/**
+ * FindingStatus
+ * Lifecycle of a TerraformFinding or CloudFinding.
+ *
+ * Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
+ * findings in this delivery have no fix/PR concept yet (see plan Phase 7),
+ * so the application sets this column directly alongside resolved_at/
+ * ignored_at rather than needing trigger-derived state.
+ */
+export type FindingStatus = 'open' | 'resolved' | 'ignored';
+
+/**
  * FixDeliveryMode
  */
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
@@ -882,6 +898,17 @@ export type SamplePayload = {
 };
 
 /**
+ * ScanStatus
+ * Lifecycle of a TerraformScan or CloudScan.
+ *
+ * Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
+ * value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
+ * files under this root" and "no resources of the scanned types in this
+ * account/region".
+ */
+export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
  * TelemetryAveragePublic
  * Averaged telemetry across a repo's runs.
  *
@@ -1014,6 +1041,156 @@ export type TelemetrySummaryPublic = {
      * Runs
      */
     runs?: Array<TelemetryRunPublic>;
+};
+
+/**
+ * TerraformFindingPublic
+ */
+export type TerraformFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    /**
+     * Resource Address
+     */
+    resource_address?: string | null;
+    /**
+     * File Path
+     */
+    file_path: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * TerraformRootCreate
+ */
+export type TerraformRootCreate = {
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Root Path
+     */
+    root_path: string;
+};
+
+/**
+ * TerraformRootPublic
+ */
+export type TerraformRootPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Root Path
+     */
+    root_path: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Last Scanned At
+     */
+    last_scanned_at?: string | null;
+    /**
+     * Last Scanned Head Sha
+     */
+    last_scanned_head_sha?: string | null;
+    /**
+     * Latest Score
+     */
+    latest_score?: number | null;
+    /**
+     * Latest Grade
+     */
+    latest_grade?: string | null;
+};
+
+/**
+ * TerraformScanPublic
+ */
+export type TerraformScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
 };
 
 /**
@@ -3379,6 +3556,235 @@ export type BillingStripeWebhookResponses = {
 };
 
 export type BillingStripeWebhookResponse = BillingStripeWebhookResponses[keyof BillingStripeWebhookResponses];
+
+export type TerraformListTerraformRootsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Repo Id
+         */
+        repo_id: string;
+    };
+    url: '/api/v1/terraform-roots/';
+};
+
+export type TerraformListTerraformRootsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformRootsError = TerraformListTerraformRootsErrors[keyof TerraformListTerraformRootsErrors];
+
+export type TerraformListTerraformRootsResponses = {
+    /**
+     * Response Terraform-List Terraform Roots
+     * Successful Response
+     */
+    200: Array<TerraformRootPublic>;
+};
+
+export type TerraformListTerraformRootsResponse = TerraformListTerraformRootsResponses[keyof TerraformListTerraformRootsResponses];
+
+export type TerraformCreateTerraformRootData = {
+    body: TerraformRootCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/terraform-roots/';
+};
+
+export type TerraformCreateTerraformRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformCreateTerraformRootError = TerraformCreateTerraformRootErrors[keyof TerraformCreateTerraformRootErrors];
+
+export type TerraformCreateTerraformRootResponses = {
+    /**
+     * Successful Response
+     */
+    201: TerraformRootPublic;
+};
+
+export type TerraformCreateTerraformRootResponse = TerraformCreateTerraformRootResponses[keyof TerraformCreateTerraformRootResponses];
+
+export type TerraformToggleTerraformRootData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query: {
+        /**
+         * Enabled
+         */
+        enabled: boolean;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/toggle';
+};
+
+export type TerraformToggleTerraformRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformToggleTerraformRootError = TerraformToggleTerraformRootErrors[keyof TerraformToggleTerraformRootErrors];
+
+export type TerraformToggleTerraformRootResponses = {
+    /**
+     * Response Terraform-Toggle Terraform Root
+     * Successful Response
+     */
+    200: {
+        [key: string]: string | boolean;
+    };
+};
+
+export type TerraformToggleTerraformRootResponse = TerraformToggleTerraformRootResponses[keyof TerraformToggleTerraformRootResponses];
+
+export type TerraformDeleteTerraformRootData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform-roots/{root_id}';
+};
+
+export type TerraformDeleteTerraformRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformDeleteTerraformRootError = TerraformDeleteTerraformRootErrors[keyof TerraformDeleteTerraformRootErrors];
+
+export type TerraformDeleteTerraformRootResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type TerraformDeleteTerraformRootResponse = TerraformDeleteTerraformRootResponses[keyof TerraformDeleteTerraformRootResponses];
+
+export type TerraformTriggerTerraformScanData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/scan';
+};
+
+export type TerraformTriggerTerraformScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformTriggerTerraformScanError = TerraformTriggerTerraformScanErrors[keyof TerraformTriggerTerraformScanErrors];
+
+export type TerraformTriggerTerraformScanResponses = {
+    /**
+     * Response Terraform-Trigger Terraform Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type TerraformTriggerTerraformScanResponse = TerraformTriggerTerraformScanResponses[keyof TerraformTriggerTerraformScanResponses];
+
+export type TerraformListTerraformScansData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform-roots/{root_id}/scans';
+};
+
+export type TerraformListTerraformScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformScansError = TerraformListTerraformScansErrors[keyof TerraformListTerraformScansErrors];
+
+export type TerraformListTerraformScansResponses = {
+    /**
+     * Response Terraform-List Terraform Scans
+     * Successful Response
+     */
+    200: Array<TerraformScanPublic>;
+};
+
+export type TerraformListTerraformScansResponse = TerraformListTerraformScansResponses[keyof TerraformListTerraformScansResponses];
+
+export type TerraformListTerraformFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/findings';
+};
+
+export type TerraformListTerraformFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformFindingsError = TerraformListTerraformFindingsErrors[keyof TerraformListTerraformFindingsErrors];
+
+export type TerraformListTerraformFindingsResponses = {
+    /**
+     * Response Terraform-List Terraform Findings
+     * Successful Response
+     */
+    200: Array<TerraformFindingPublic>;
+};
+
+export type TerraformListTerraformFindingsResponse = TerraformListTerraformFindingsResponses[keyof TerraformListTerraformFindingsResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;

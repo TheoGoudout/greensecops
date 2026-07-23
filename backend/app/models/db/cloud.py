@@ -20,6 +20,7 @@ from .base import get_datetime_utc
 
 if TYPE_CHECKING:
     from .organization import Organization
+    from .rule import Rule
 
 
 class CloudAccount(SQLModel, table=True):
@@ -138,3 +139,5 @@ class CloudFinding(SQLModel, table=True):
     resolution_reason: FindingResolutionReason | None = Field(default=None)
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     scan: CloudScan | None = Relationship(back_populates="findings")
+    # One-directional (no back_populates on Rule), mirrors TerraformFinding.rule.
+    rule: Optional["Rule"] = Relationship()

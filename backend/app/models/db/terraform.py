@@ -18,6 +18,7 @@ from .base import get_datetime_utc
 
 if TYPE_CHECKING:
     from .repository import Repository
+    from .rule import Rule
 
 
 class TerraformRoot(SQLModel, table=True):
@@ -127,3 +128,6 @@ class TerraformFinding(SQLModel, table=True):
     resolution_reason: FindingResolutionReason | None = Field(default=None)
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     scan: TerraformScan | None = Relationship(back_populates="findings")
+    # One-directional (no back_populates on Rule): findings look up their rule,
+    # Rule doesn't need to know about the finding tables that reference it.
+    rule: Optional["Rule"] = Relationship()

@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -1302,6 +1302,159 @@ export class TelemetryService {
             url: '/api/v1/telemetry/analyze/{repo_id}',
             path: {
                 repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class TerraformService {
+    /**
+     * Create Terraform Root
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns TerraformRootPublic Successful Response
+     * @throws ApiError
+     */
+    public static createTerraformRoot(data: TerraformCreateTerraformRootData): CancelablePromise<TerraformCreateTerraformRootResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/terraform-roots/',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Terraform Roots
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns TerraformRootPublic Successful Response
+     * @throws ApiError
+     */
+    public static listTerraformRoots(data: TerraformListTerraformRootsData): CancelablePromise<TerraformListTerraformRootsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/terraform-roots/',
+            query: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Toggle Terraform Root
+     * @param data The data for the request.
+     * @param data.rootId
+     * @param data.enabled
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static toggleTerraformRoot(data: TerraformToggleTerraformRootData): CancelablePromise<TerraformToggleTerraformRootResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/terraform-roots/{root_id}/toggle',
+            path: {
+                root_id: data.rootId
+            },
+            query: {
+                enabled: data.enabled
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Delete Terraform Root
+     * @param data The data for the request.
+     * @param data.rootId
+     * @returns void Successful Response
+     * @throws ApiError
+     */
+    public static deleteTerraformRoot(data: TerraformDeleteTerraformRootData): CancelablePromise<TerraformDeleteTerraformRootResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/terraform-roots/{root_id}',
+            path: {
+                root_id: data.rootId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Terraform Scan
+     * @param data The data for the request.
+     * @param data.rootId
+     * @param data.branch
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerTerraformScan(data: TerraformTriggerTerraformScanData): CancelablePromise<TerraformTriggerTerraformScanResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/terraform-roots/{root_id}/scan',
+            path: {
+                root_id: data.rootId
+            },
+            query: {
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Terraform Scans
+     * @param data The data for the request.
+     * @param data.rootId
+     * @returns TerraformScanPublic Successful Response
+     * @throws ApiError
+     */
+    public static listTerraformScans(data: TerraformListTerraformScansData): CancelablePromise<TerraformListTerraformScansResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/terraform-roots/{root_id}/scans',
+            path: {
+                root_id: data.rootId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Terraform Findings
+     * @param data The data for the request.
+     * @param data.rootId
+     * @param data.includeResolved
+     * @returns TerraformFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static listTerraformFindings(data: TerraformListTerraformFindingsData): CancelablePromise<TerraformListTerraformFindingsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/terraform-roots/{root_id}/findings',
+            path: {
+                root_id: data.rootId
+            },
+            query: {
+                include_resolved: data.includeResolved
             },
             errors: {
                 422: 'Validation Error'
