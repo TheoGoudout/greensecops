@@ -342,3 +342,127 @@ def test_ensure_fork_creates_when_missing() -> None:
     assert result is fork
     bot.get_repo.assert_called_once_with("facebook/react")
     upstream.create_fork.assert_called_once()
+
+
+# ─── fetch_terraform_files ───────────────────────────────────────────────────
+
+
+def _content_file(
+    path: str, *, is_dir: bool = False, content: str | None = None
+) -> MagicMock:
+    cf = MagicMock()
+    cf.path = path
+    cf.name = path.rsplit("/", 1)[-1]
+    cf.type = "dir" if is_dir else "file"
+    cf.sha = f"sha-{path}"
+    if content is not None:
+        cf.decoded_content = content.encode()
+    return cf
+
+
+def test_fetch_terraform_files_recurses_and_filters_by_extension() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    tree = {
+        "infra": [
+            _content_file("infra/main.tf", content="resource {}"),
+            _content_file("infra/README.md"),
+            _content_file("infra/modules", is_dir=True),
+        ],
+        "infra/modules": [
+            _content_file("infra/modules/network.tf.json", content="{}"),
+        ],
+    }
+    repo = MagicMock()
+    repo.get_contents.side_effect = lambda path, ref=None: tree[path]  # noqa: ARG005
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with patch("app.services.github.app_client.Github", return_value=gh):
+        result = asyncio.run(client.fetch_terraform_files(None, "acme/infra", "infra"))
+
+    paths = {f.path for f in result}
+    assert paths == {"infra/main.tf", "infra/modules/network.tf.json"}
+
+
+def test_fetch_terraform_files_skips_dotfiles_and_terraform_cache_dirs() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    tree = {
+        "infra": [
+            _content_file("infra/main.tf", content="resource {}"),
+            _content_file("infra/.terraform", is_dir=True),
+            _content_file("infra/.git", is_dir=True),
+        ],
+    }
+    repo = MagicMock()
+    repo.get_contents.side_effect = lambda path, ref=None: tree[path]  # noqa: ARG005
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with patch("app.services.github.app_client.Github", return_value=gh):
+        result = asyncio.run(client.fetch_terraform_files(None, "acme/infra", "infra"))
+
+    assert {f.path for f in result} == {"infra/main.tf"}
+    # Only the root dir was ever listed — the skipped dirs were never walked.
+    repo.get_contents.assert_called_once()
+
+
+def test_fetch_terraform_files_missing_root_returns_empty() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    repo = MagicMock()
+    repo.get_contents.side_effect = GithubException(404, {}, None)
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with patch("app.services.github.app_client.Github", return_value=gh):
+        result = asyncio.run(
+            client.fetch_terraform_files(None, "acme/infra", "does-not-exist")
+        )
+
+    assert result == []
+
+
+def test_fetch_terraform_files_stops_at_file_cap() -> None:
+    from app.services.github import app_client as app_client_module
+
+    client = GitHubAppClient(redis_client=AsyncMock())
+    many_files = [_content_file(f"infra/f{i}.tf", content="x") for i in range(10)]
+    repo = MagicMock()
+    repo.get_contents.return_value = many_files
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with (
+        patch("app.services.github.app_client.Github", return_value=gh),
+        patch.object(app_client_module, "_TERRAFORM_MAX_FILES", 3),
+    ):
+        result = asyncio.run(client.fetch_terraform_files(None, "acme/infra", "infra"))
+
+    assert len(result) == 3
+
+
+def test_fetch_terraform_files_stops_at_depth_cap() -> None:
+    from app.services.github import app_client as app_client_module
+
+    client = GitHubAppClient(redis_client=AsyncMock())
+    # Each level has one subdirectory named after its own depth, so a call
+    # for "infra/lvl0/.../lvlN" only happens if the walk actually reached it.
+    calls: list[str] = []
+
+    def _get_contents(path: str, ref: str | None = None) -> list[MagicMock]:  # noqa: ARG001
+        calls.append(path)
+        depth = path.count("/")
+        return [_content_file(f"{path}/lvl{depth}", is_dir=True)]
+
+    repo = MagicMock()
+    repo.get_contents.side_effect = _get_contents
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with (
+        patch("app.services.github.app_client.Github", return_value=gh),
+        patch.object(app_client_module, "_TERRAFORM_MAX_DEPTH", 2),
+    ):
+        asyncio.run(client.fetch_terraform_files(None, "acme/infra", "infra"))
+
+    # depth 0 (root) + 2 more levels = 3 calls; the 4th (over the cap) never happens.
+    assert len(calls) == 3

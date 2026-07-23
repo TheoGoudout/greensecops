@@ -39,6 +39,24 @@ class WorkflowFileContent:
 
 
 @dataclass
+class TerraformFileContent:
+    path: str
+    content: str
+    content_hash: str
+    sha: str
+
+
+# A pathological repo (a huge module tree, or a committed .terraform/ provider
+# cache) must not turn one scan into thousands of GitHub API calls.
+_TERRAFORM_MAX_FILES = 200
+_TERRAFORM_MAX_DEPTH = 12
+_TERRAFORM_EXTENSIONS = (".tf", ".tf.json")
+# .terraform/ is Terraform's own local provider/module cache — huge, binary,
+# never meant to be committed, and if it is, never worth scanning.
+_TERRAFORM_SKIP_DIRS = {".terraform", ".git"}
+
+
+@dataclass
 class InstallationRepo:
     github_repo_id: int
     full_name: str
@@ -392,6 +410,70 @@ class GitHubAppClient:
                         sha=cf.sha,
                     )
                 )
+            return results
+
+        return await asyncio.to_thread(_fetch)
+
+    async def fetch_terraform_files(
+        self,
+        installation_id: int | None,
+        full_name: str,
+        root_path: str,
+        ref: str | None = None,
+    ) -> list[TerraformFileContent]:
+        """Recursively fetch ``.tf``/``.tf.json`` files under ``root_path`` at ``ref``.
+
+        Unlike ``fetch_workflow_files`` (a single, non-recursive directory),
+        Terraform roots can nest submodules arbitrarily deep, so this walks
+        the tree — bounded by ``_TERRAFORM_MAX_FILES``/``_TERRAFORM_MAX_DEPTH``.
+        Returns ``[]`` if ``root_path`` doesn't exist at ``ref``.
+        """
+        if installation_id is not None:
+            token: str | None = await self.get_installation_token(installation_id)
+        else:
+            token = None
+
+        def _fetch() -> list[TerraformFileContent]:
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            repo = gh.get_repo(full_name)
+            results: list[TerraformFileContent] = []
+
+            def _walk(path: str, depth: int) -> None:
+                if depth > _TERRAFORM_MAX_DEPTH or len(results) >= _TERRAFORM_MAX_FILES:
+                    return
+                try:
+                    contents = (
+                        repo.get_contents(path, ref=ref)
+                        if ref
+                        else repo.get_contents(path)
+                    )
+                except GithubException as exc:
+                    if exc.status == 404:
+                        return
+                    raise
+                if not isinstance(contents, list):
+                    contents = [contents]
+                for cf in contents:
+                    if len(results) >= _TERRAFORM_MAX_FILES:
+                        return
+                    if cf.type == "dir":
+                        if cf.name in _TERRAFORM_SKIP_DIRS or cf.name.startswith("."):
+                            continue
+                        _walk(cf.path, depth + 1)
+                    elif cf.name.endswith(_TERRAFORM_EXTENSIONS):
+                        decoded = cf.decoded_content.decode("utf-8", errors="replace")
+                        results.append(
+                            TerraformFileContent(
+                                path=cf.path,
+                                content=decoded,
+                                content_hash=hashlib.sha256(
+                                    decoded.encode()
+                                ).hexdigest(),
+                                sha=cf.sha,
+                            )
+                        )
+
+            _walk(root_path, 0)
             return results
 
         return await asyncio.to_thread(_fetch)
