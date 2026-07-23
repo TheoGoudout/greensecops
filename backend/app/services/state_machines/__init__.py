@@ -1,4 +1,4 @@
-"""Formal state machines for the four GreenSecOps lifecycles.
+"""Formal state machines for GreenSecOps's persisted lifecycles.
 
 Built on ``python-statemachine``. Each machine declares its states (the existing
 status enums), its input events, the legal transitions between them, and — via
@@ -23,6 +23,8 @@ from .base import (
     output_for,
     try_advance,
 )
+from .cloud_account import CloudAccountMachine
+from .finding import FindingMachine
 from .fix import (
     DELIVERED_FIX_STATUSES,
     IN_FLIGHT_STATUSES,
@@ -32,6 +34,7 @@ from .fix import (
 from .issue import IssueMachine
 from .pull_request import PullRequestMachine
 from .repository import RepositoryMachine, sync_access_flag
+from .scan import ScanMachine
 from .telemetry import TelemetryMachine
 
 __all__ = [
@@ -44,10 +47,13 @@ __all__ = [
     "sync_access_flag",
     # machines
     "AnalysisMachine",
+    "CloudAccountMachine",
+    "FindingMachine",
     "FixMachine",
     "IssueMachine",
     "PullRequestMachine",
     "RepositoryMachine",
+    "ScanMachine",
     "TelemetryMachine",
     "IN_FLIGHT_STATUSES",
     "REJECTED_STATUSES",

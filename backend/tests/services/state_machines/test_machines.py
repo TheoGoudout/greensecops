@@ -1,25 +1,31 @@
-"""Behavioural tests for the four lifecycle state machines."""
+"""Behavioural tests for the GreenSecOps lifecycle state machines."""
 
 import pytest
 from statemachine import StateMachine
 
 from app.models.enums import (
     AnalysisStatus,
+    CloudAccountStatus,
     DynamicAnalysisStatus,
+    FindingStatus,
     FixStatus,
     IssueStatus,
     PullRequestState,
     RepositoryStatus,
+    ScanStatus,
     SSESignal,
 )
 from app.services import state_machines as sm
 
 ALL_MACHINES = [
     sm.AnalysisMachine,
+    sm.CloudAccountMachine,
+    sm.FindingMachine,
     sm.FixMachine,
     sm.PullRequestMachine,
     sm.IssueMachine,
     sm.RepositoryMachine,
+    sm.ScanMachine,
     sm.TelemetryMachine,
 ]
 
@@ -367,3 +373,112 @@ def test_issue_cannot_ignore_when_resolved() -> None:
     i = _Model(sm.IssueMachine, IssueStatus.resolved)
     with pytest.raises(sm.IllegalTransition):
         sm.advance(i, sm.IssueMachine, "ignore")
+
+
+# ── Scan (Terraform / cloud) ─────────────────────────────────────────────────
+
+
+def test_scan_happy_path() -> None:
+    s = _Model(sm.ScanMachine, ScanStatus.queued)
+    assert sm.advance(s, sm.ScanMachine, "started") is ScanStatus.running
+    assert sm.advance(s, sm.ScanMachine, "succeeded") is ScanStatus.completed
+
+
+def test_scan_no_targets_edge() -> None:
+    s = _Model(sm.ScanMachine, ScanStatus.running)
+    assert sm.advance(s, sm.ScanMachine, "no_targets_found") is ScanStatus.no_targets
+
+
+def test_scan_sweep_from_queued_or_running() -> None:
+    for src in (ScanStatus.queued, ScanStatus.running):
+        s = _Model(sm.ScanMachine, src)
+        assert sm.advance(s, sm.ScanMachine, "swept") is ScanStatus.failed
+
+
+def test_scan_cannot_advance_from_terminal() -> None:
+    s = _Model(sm.ScanMachine, ScanStatus.completed)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(s, sm.ScanMachine, "succeeded")
+
+
+def test_scan_retry_requeues_a_failed_row() -> None:
+    s = _Model(sm.ScanMachine, ScanStatus.failed)
+    assert sm.advance(s, sm.ScanMachine, "retry") is ScanStatus.queued
+    s2 = _Model(sm.ScanMachine, ScanStatus.completed)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(s2, sm.ScanMachine, "retry")
+
+
+# ── Cloud account ─────────────────────────────────────────────────────────────
+
+
+def test_cloud_account_verify_from_pending() -> None:
+    a = _Model(sm.CloudAccountMachine, CloudAccountStatus.pending_verification)
+    assert (
+        sm.advance(a, sm.CloudAccountMachine, "verify") is CloudAccountStatus.connected
+    )
+
+
+def test_cloud_account_verification_failed_from_pending_or_connected() -> None:
+    for src in (
+        CloudAccountStatus.pending_verification,
+        CloudAccountStatus.connected,
+    ):
+        a = _Model(sm.CloudAccountMachine, src)
+        assert (
+            sm.advance(a, sm.CloudAccountMachine, "verification_failed")
+            is CloudAccountStatus.error
+        )
+
+
+def test_cloud_account_recovers_from_error() -> None:
+    a = _Model(sm.CloudAccountMachine, CloudAccountStatus.error)
+    assert (
+        sm.advance(a, sm.CloudAccountMachine, "verify") is CloudAccountStatus.connected
+    )
+
+
+def test_cloud_account_disable_from_any_non_disabled_state() -> None:
+    for src in (
+        CloudAccountStatus.pending_verification,
+        CloudAccountStatus.connected,
+        CloudAccountStatus.error,
+    ):
+        a = _Model(sm.CloudAccountMachine, src)
+        assert (
+            sm.advance(a, sm.CloudAccountMachine, "disable")
+            is CloudAccountStatus.disabled
+        )
+
+
+def test_cloud_account_enable_requires_re_verification() -> None:
+    a = _Model(sm.CloudAccountMachine, CloudAccountStatus.disabled)
+    assert (
+        sm.advance(a, sm.CloudAccountMachine, "enable")
+        is CloudAccountStatus.pending_verification
+    )
+    # A disabled account cannot jump straight back to connected.
+    a2 = _Model(sm.CloudAccountMachine, CloudAccountStatus.disabled)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(a2, sm.CloudAccountMachine, "verify")
+
+
+# ── Finding (Terraform / cloud) ───────────────────────────────────────────────
+
+
+def test_finding_resolve_and_recur() -> None:
+    f = _Model(sm.FindingMachine, FindingStatus.open)
+    assert sm.advance(f, sm.FindingMachine, "resolve") is FindingStatus.resolved
+    assert sm.advance(f, sm.FindingMachine, "recur") is FindingStatus.open
+
+
+def test_finding_ignore_and_unignore() -> None:
+    f = _Model(sm.FindingMachine, FindingStatus.open)
+    assert sm.advance(f, sm.FindingMachine, "ignore") is FindingStatus.ignored
+    assert sm.advance(f, sm.FindingMachine, "unignore") is FindingStatus.open
+
+
+def test_finding_cannot_ignore_when_resolved() -> None:
+    f = _Model(sm.FindingMachine, FindingStatus.resolved)
+    with pytest.raises(sm.IllegalTransition):
+        sm.advance(f, sm.FindingMachine, "ignore")
