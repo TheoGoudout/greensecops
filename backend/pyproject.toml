@@ -33,6 +33,7 @@ dependencies = [
     "langsmith>=0.2.0,<0.3.0",
     "stripe>=10.0.0,<11.0.0",
     "python-statemachine>=2.3,<3.0",
+    "boto3>=1.34,<2.0",
 ]
 
 [dependency-groups]
@@ -66,6 +67,11 @@ disable_error_code = ["untyped-decorator"]
 [[tool.mypy.overrides]]
 module = "app.models.db.*"
 disable_error_code = ["call-overload"]
+
+# boto3/botocore ship no py.typed marker or bundled stubs (unlike PyGithub).
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py310"

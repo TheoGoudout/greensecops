@@ -134,6 +134,15 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     OPA_URL: str = "http://localhost:8181"
 
+    # Object storage (MinIO / S3-compatible) — large IaC/cloud scan artifacts
+    # (Terraform file bundles, cloud resource snapshots) that don't belong in
+    # a Postgres column the way WorkflowFile.raw_content does for small YAML.
+    S3_ENDPOINT_URL: str = "http://localhost:9000"
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+    S3_BUCKET: str = "greensecops-artifacts"
+    S3_REGION: str = "us-east-1"
+
     # Email / SMTP
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
