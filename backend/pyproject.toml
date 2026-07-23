@@ -34,6 +34,7 @@ dependencies = [
     "stripe>=10.0.0,<11.0.0",
     "python-statemachine>=2.3,<3.0",
     "boto3>=1.34,<2.0",
+    "python-hcl2>=6.1,<7.0",
 ]
 
 [dependency-groups]
@@ -72,6 +73,13 @@ disable_error_code = ["call-overload"]
 [[tool.mypy.overrides]]
 module = ["boto3.*", "botocore.*"]
 ignore_missing_imports = true
+
+# python-hcl2 ships py.typed but re-exports loads/load/etc from .api without
+# `as`-syntax, so strict mode's implicit-reexport check doesn't see them as
+# public despite being genuinely part of the package's documented API.
+[[tool.mypy.overrides]]
+module = "hcl2"
+implicit_reexport = true
 
 [tool.ruff]
 target-version = "py310"
