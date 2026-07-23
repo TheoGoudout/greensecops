@@ -79,6 +79,14 @@ class IssueCategory(str, enum.Enum):
     security = "security"
     performance = "performance"
     maintainability = "maintainability"
+    # NOTE: a "cost" category for IaC/cloud rules is deliberately not added
+    # yet. services/scoring.py:compute_category_scores iterates every
+    # IssueCategory member against a penalties dict that workflow analysis
+    # builds with exactly the 5 categories above — adding a 6th here without
+    # also updating that function (and deciding whether the *workflow*
+    # per-category radar should even show a "Cost" spoke) breaks every
+    # repo's grade computation. Add it in the phase that ships a rule
+    # actually using it, alongside that fix.
 
 
 class IssueStatus(str, enum.Enum):
@@ -246,3 +254,64 @@ class SSESignal(str, enum.Enum):
     dynamic_running = "dynamic.running"
     dynamic_enriched = "dynamic.enriched"
     dynamic_failed = "dynamic.failed"
+
+
+class RuleDomain(str, enum.Enum):
+    """Which analysis engine a Rule belongs to.
+
+    Lets the single ``rule`` table and its admin UI serve the CI-workflow
+    engine and the new IaC/cloud engines without three parallel Rule tables.
+    Existing rows default to ``workflow`` (see migration 0042).
+    """
+
+    workflow = "workflow"
+    iac_terraform = "iac_terraform"
+    cloud_aws = "cloud_aws"
+
+
+class ScanStatus(str, enum.Enum):
+    """Lifecycle of a TerraformScan or CloudScan.
+
+    Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
+    value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
+    files under this root" and "no resources of the scanned types in this
+    account/region".
+    """
+
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+    no_targets = "no_targets"
+
+
+class FindingStatus(str, enum.Enum):
+    """Lifecycle of a TerraformFinding or CloudFinding.
+
+    Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
+    findings in this delivery have no fix/PR concept yet (see plan Phase 7),
+    so the application sets this column directly alongside resolved_at/
+    ignored_at rather than needing trigger-derived state.
+    """
+
+    open = "open"
+    resolved = "resolved"
+    ignored = "ignored"
+
+
+class FindingResolutionReason(str, enum.Enum):
+    no_longer_detected = "no_longer_detected"
+    # The Terraform file/resource block was removed, or the cloud resource no
+    # longer exists on the provider side.
+    target_removed = "target_removed"
+
+
+class CloudProvider(str, enum.Enum):
+    aws = "aws"
+
+
+class CloudAccountStatus(str, enum.Enum):
+    pending_verification = "pending_verification"
+    connected = "connected"
+    error = "error"
+    disabled = "disabled"
