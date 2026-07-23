@@ -31,6 +31,7 @@ from app.models import (
     RepositoryStatus,
     ReviewDecision,
     Rule,
+    TerraformRoot,
     UserTier,
     WorkflowFile,
 )
@@ -2337,3 +2338,175 @@ def test_default_branch_push_without_open_pr_no_refresh(
         )
     assert response.status_code == 200
     mock_refresh.assert_not_called()
+
+
+# ─── push → Terraform scan ─────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def enabled_terraform_root(db: Session, enabled_repo: Repository) -> TerraformRoot:
+    root = TerraformRoot(
+        repo_id=enabled_repo.id, root_path=f"infra/{uuid.uuid4().hex[:8]}", enabled=True
+    )
+    db.add(root)
+    db.commit()
+    db.refresh(root)
+    return root
+
+
+def test_push_to_default_branch_touching_root_path_triggers_scan(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+    enabled_terraform_root: TerraformRoot,
+) -> None:
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [
+            {
+                "added": [],
+                "modified": [f"{enabled_terraform_root.root_path}/main.tf"],
+                "removed": [],
+            }
+        ],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis"),
+        patch(
+            "app.workers.tasks.terraform_analysis.run_terraform_scan.delay"
+        ) as mock_delay,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs["terraform_root_id"] == str(
+        enabled_terraform_root.id
+    )
+
+
+def test_push_to_default_branch_not_touching_root_path_skips_scan(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+    enabled_terraform_root: TerraformRoot,  # noqa: ARG001
+) -> None:
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [{"added": [], "modified": ["README.md"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis"),
+        patch(
+            "app.workers.tasks.terraform_analysis.run_terraform_scan.delay"
+        ) as mock_delay,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_delay.assert_not_called()
+
+
+def test_push_to_feature_branch_never_triggers_terraform_scan(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+    enabled_terraform_root: TerraformRoot,
+) -> None:
+    payload = {
+        "ref": "refs/heads/feature",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "commits": [
+            {
+                "added": [],
+                "modified": [f"{enabled_terraform_root.root_path}/main.tf"],
+                "removed": [],
+            }
+        ],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch(
+            "app.workers.tasks.terraform_analysis.run_terraform_scan.delay"
+        ) as mock_delay,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_delay.assert_not_called()
+
+
+def test_forced_push_to_default_branch_triggers_scan_unconditionally(
+    client: TestClient,
+    db: Session,  # noqa: ARG001
+    enabled_repo: Repository,
+    enabled_terraform_root: TerraformRoot,
+) -> None:
+    # Mirrors the workflow-analysis forced-push behaviour: a rebase can drop
+    # the Terraform-path commits from the payload without the tree actually
+    # being unchanged, so a forced push re-scans regardless of listed paths.
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "forced": True,
+        "commits": [{"added": [], "modified": ["unrelated.txt"], "removed": []}],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis"),
+        patch(
+            "app.workers.tasks.terraform_analysis.run_terraform_scan.delay"
+        ) as mock_delay,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_delay.assert_called_once()
+
+
+def test_push_disabled_terraform_root_never_scanned(
+    client: TestClient,
+    db: Session,
+    enabled_repo: Repository,
+    enabled_terraform_root: TerraformRoot,
+) -> None:
+    enabled_terraform_root.enabled = False
+    db.add(enabled_terraform_root)
+    db.commit()
+
+    payload = {
+        "ref": f"refs/heads/{enabled_repo.default_branch}",
+        "before": "a" * 40,
+        "after": "b" * 40,
+        "forced": True,
+        "commits": [],
+        "repository": {"id": enabled_repo.github_repo_id},
+    }
+    with (
+        patch.object(settings, "GITHUB_WEBHOOK_SECRET", None),
+        patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis"),
+        patch(
+            "app.workers.tasks.terraform_analysis.run_terraform_scan.delay"
+        ) as mock_delay,
+    ):
+        response = client.post(
+            WEBHOOK_URL, json=payload, headers={"X-GitHub-Event": "push"}
+        )
+    assert response.status_code == 200
+    mock_delay.assert_not_called()

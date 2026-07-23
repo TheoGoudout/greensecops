@@ -102,6 +102,51 @@ def enqueue_workflow_analysis(
     )
 
 
+def enqueue_terraform_scans(
+    session: Session,
+    repo: Repository,
+    branch: str,
+    commit_sha: str,
+    trigger: AnalysisTrigger,
+    changed_paths: set[str] | None,
+) -> None:
+    """Enqueue a scan for every enabled TerraformRoot a push touched.
+
+    ``changed_paths`` is the set of file paths the push added/modified/
+    removed; ``None`` means "unknown" (a new branch, or a force-push whose
+    payload can't be trusted to list every changed file — the workflow-
+    analysis push handler applies the same unconditional-rescan rule for
+    the same reason) and scans every enabled root regardless of path.
+
+    Only fires on the default branch: unlike workflow analysis (which tracks
+    every branch so PR-branch issues stay visible), TerraformRoot has no
+    per-branch tracking yet — last_scanned_head_sha assumes one branch.
+    """
+    if branch != repo.default_branch or branch.startswith("greensecops/"):
+        return
+    from app.models import TerraformRoot
+
+    roots = session.exec(
+        select(TerraformRoot)
+        .where(TerraformRoot.repo_id == repo.id)
+        .where(TerraformRoot.enabled == True)  # noqa: E712
+    ).all()
+    for root in roots:
+        if changed_paths is not None and not any(
+            p == root.root_path or p.startswith(f"{root.root_path}/")
+            for p in changed_paths
+        ):
+            continue
+        from app.workers.tasks.terraform_analysis import run_terraform_scan
+
+        run_terraform_scan.delay(
+            terraform_root_id=str(root.id),
+            branch=branch,
+            commit_sha=commit_sha,
+            trigger=trigger.value,
+        )
+
+
 # ─── Pull-request lifecycle ──────────────────────────────────────────────────
 
 
