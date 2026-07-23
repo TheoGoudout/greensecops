@@ -7,13 +7,14 @@ import pytest
 from sqlmodel import Session, select
 
 from app.core import db as db_module
-from app.core.db import _seed_rules
+from app.core.db import TERRAFORM_INITIAL_RULES, _seed_rules
 from app.models import (
     IssueCategory,
     IssueSeverity,
     Organization,
     Repository,
     Rule,
+    RuleDomain,
     UserTier,
 )
 
@@ -21,6 +22,13 @@ from app.models import (
 def test_seed_rules_returns_empty_when_all_present(db: Session) -> None:
     # The session-scoped `db` fixture already ran init_db, so every rule exists.
     assert _seed_rules(db) == []
+
+
+def test_terraform_rules_seeded_with_iac_terraform_domain(db: Session) -> None:
+    for rule_data in TERRAFORM_INITIAL_RULES:
+        rule = db.exec(select(Rule).where(Rule.slug == rule_data["slug"])).first()
+        assert rule is not None
+        assert rule.domain == RuleDomain.iac_terraform
 
 
 def test_seed_rules_returns_newly_inserted_slug(db: Session) -> None:

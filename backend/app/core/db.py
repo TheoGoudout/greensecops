@@ -6,6 +6,7 @@ from app.models import (
     IssueCategory,
     IssueSeverity,
     Rule,
+    RuleDomain,
     User,
     UserCreate,
 )
@@ -220,6 +221,85 @@ INITIAL_RULES: list[dict[str, object]] = [
     },
 ]
 
+# Mirrors INITIAL_RULES for the Terraform static-analysis engine — the two
+# stay separate lists (rather than one combined list with mixed domains)
+# so each is easy to scan/diff on its own, and are merged for seeding in
+# _seed_rules.
+TERRAFORM_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "s3_bucket_public_acl",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "S3 bucket with a public ACL",
+        "description": 'An aws_s3_bucket resource sets acl to "public-read" or "public-read-write", making every object in the bucket readable (or writable) by anyone on the internet by default.',
+    },
+    {
+        "slug": "open_ingress_security_group",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Security group open to the world",
+        "description": "An aws_security_group ingress rule allows traffic from 0.0.0.0/0, exposing the port to the entire internet rather than a scoped CIDR range.",
+    },
+    {
+        "slug": "unencrypted_ebs_volume",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Unencrypted EBS volume",
+        "description": "An aws_ebs_volume resource has no encrypted = true, leaving data at rest unencrypted.",
+    },
+    {
+        "slug": "rds_not_encrypted",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "RDS instance not encrypted at rest",
+        "description": "An aws_db_instance resource has no storage_encrypted = true, leaving the database's data at rest unencrypted.",
+    },
+    {
+        "slug": "hardcoded_credentials_in_tf",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 4.0,
+        "title": "Hardcoded AWS access key",
+        "description": "A resource attribute contains a literal string matching the AWS access key ID format (AKIA...), rather than a variable or a secrets-manager reference.",
+    },
+    {
+        "slug": "s3_bucket_missing_versioning",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "S3 bucket without versioning",
+        "description": "An aws_s3_bucket resource has no versioning block, so an accidental overwrite or delete of an object can't be recovered.",
+    },
+    {
+        "slug": "resource_missing_tags",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Resource missing tags",
+        "description": "A resource of a type that supports the tags argument has none set, making cost attribution and ownership harder to track.",
+    },
+    {
+        "slug": "variable_missing_description",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.4,
+        "title": "Variable without a description",
+        "description": "A variable block has no description, making it harder for other authors (and module consumers) to understand its purpose without reading the whole config.",
+    },
+]
+
 
 def _seed_rules(session: Session) -> list[str]:
     """Insert any rules from INITIAL_RULES not already present.
@@ -228,7 +308,7 @@ def _seed_rules(session: Session) -> list[str]:
     detect when a release has shipped new rules.
     """
     new_slugs: list[str] = []
-    for rule_data in INITIAL_RULES:
+    for rule_data in INITIAL_RULES + TERRAFORM_INITIAL_RULES:
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])
         ).first()
