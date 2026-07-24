@@ -28,6 +28,7 @@ import { Route as LayoutInfrastructureIndexRouteImport } from './routes/_layout/
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as AuthGithubAppCallbackRouteImport } from './routes/auth/github/app-callback'
 import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
+import { Route as LayoutInfrastructureCloudRouteImport } from './routes/_layout/infrastructure/cloud'
 import { Route as LayoutInfrastructureBadgesRouteImport } from './routes/_layout/infrastructure/badges'
 import { Route as LayoutFixesFixIdRouteImport } from './routes/_layout/fixes/$fixId'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
@@ -132,6 +133,12 @@ const LayoutRepositoriesRepoIdRoute =
     path: '/$repoId',
     getParentRoute: () => LayoutRepositoriesRoute,
   } as any)
+const LayoutInfrastructureCloudRoute =
+  LayoutInfrastructureCloudRouteImport.update({
+    id: '/cloud',
+    path: '/cloud',
+    getParentRoute: () => LayoutInfrastructureRoute,
+  } as any)
 const LayoutInfrastructureBadgesRoute =
   LayoutInfrastructureBadgesRouteImport.update({
     id: '/badges',
@@ -191,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
+  '/infrastructure/cloud': typeof LayoutInfrastructureCloudRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -216,6 +224,7 @@ export interface FileRoutesByTo {
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
+  '/infrastructure/cloud': typeof LayoutInfrastructureCloudRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/infrastructure': typeof LayoutInfrastructureIndexRoute
@@ -244,6 +253,7 @@ export interface FileRoutesById {
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/_layout/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/_layout/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
+  '/_layout/infrastructure/cloud': typeof LayoutInfrastructureCloudRoute
   '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -273,6 +283,7 @@ export interface FileRouteTypes {
     | '/analyses/$analysisId'
     | '/fixes/$fixId'
     | '/infrastructure/badges'
+    | '/infrastructure/cloud'
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
@@ -298,6 +309,7 @@ export interface FileRouteTypes {
     | '/analyses/$analysisId'
     | '/fixes/$fixId'
     | '/infrastructure/badges'
+    | '/infrastructure/cloud'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/infrastructure'
@@ -325,6 +337,7 @@ export interface FileRouteTypes {
     | '/_layout/analyses/$analysisId'
     | '/_layout/fixes/$fixId'
     | '/_layout/infrastructure/badges'
+    | '/_layout/infrastructure/cloud'
     | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
@@ -481,6 +494,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdRouteImport
       parentRoute: typeof LayoutRepositoriesRoute
     }
+    '/_layout/infrastructure/cloud': {
+      id: '/_layout/infrastructure/cloud'
+      path: '/cloud'
+      fullPath: '/infrastructure/cloud'
+      preLoaderRoute: typeof LayoutInfrastructureCloudRouteImport
+      parentRoute: typeof LayoutInfrastructureRoute
+    }
     '/_layout/infrastructure/badges': {
       id: '/_layout/infrastructure/badges'
       path: '/badges'
@@ -535,11 +555,13 @@ declare module '@tanstack/react-router' {
 
 interface LayoutInfrastructureRouteChildren {
   LayoutInfrastructureBadgesRoute: typeof LayoutInfrastructureBadgesRoute
+  LayoutInfrastructureCloudRoute: typeof LayoutInfrastructureCloudRoute
   LayoutInfrastructureIndexRoute: typeof LayoutInfrastructureIndexRoute
 }
 
 const LayoutInfrastructureRouteChildren: LayoutInfrastructureRouteChildren = {
   LayoutInfrastructureBadgesRoute: LayoutInfrastructureBadgesRoute,
+  LayoutInfrastructureCloudRoute: LayoutInfrastructureCloudRoute,
   LayoutInfrastructureIndexRoute: LayoutInfrastructureIndexRoute,
 }
 

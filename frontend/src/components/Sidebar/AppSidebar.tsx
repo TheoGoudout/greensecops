@@ -2,6 +2,7 @@ import { Link as RouterLink, useRouterState } from "@tanstack/react-router"
 import {
   Award,
   Boxes,
+  Cloud,
   CreditCard,
   GitBranch,
   LayoutDashboard,
@@ -99,6 +100,7 @@ export function AppSidebar() {
 
   const infrastructureItems: NavItem[] = [
     { icon: Boxes, title: "Terraform", path: "/infrastructure" },
+    { icon: Cloud, title: "Cloud", path: "/infrastructure/cloud" },
     { icon: Award, title: "Badges", path: "/infrastructure/badges" },
   ]
 

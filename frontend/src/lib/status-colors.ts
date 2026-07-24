@@ -1,5 +1,6 @@
 import type {
   CIStatus,
+  CloudAccountStatus,
   DynamicAnalysisStatus,
   FixStatus,
   IssueStatus,
@@ -167,4 +168,21 @@ export function dynamicStatusColor(status: DynamicAnalysisStatus): string {
     default:
       return STATUS_CLASSES.pending
   }
+}
+
+export function cloudAccountStatusColor(status: CloudAccountStatus): string {
+  switch (status) {
+    case "connected":
+      return STATUS_CLASSES.success
+    case "error":
+      return STATUS_CLASSES.failed
+    case "disabled":
+      return STATUS_CLASSES.mutedStruck
+    default:
+      return STATUS_CLASSES.pending
+  }
+}
+
+export function cloudAccountStatusLabel(status: CloudAccountStatus): string {
+  return status.replace(/_/g, " ")
 }
