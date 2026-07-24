@@ -24,6 +24,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 _SESSION_NAME = "greensecops-cloud-scan"
@@ -34,8 +36,29 @@ class CloudCollectionError(Exception):
     """Raised when assuming the customer's role fails outright."""
 
 
+def _base_sts_client() -> Any:  # noqa: ANN401 — boto3 client has no public stub type
+    """The STS client for GreenSecOps's own identity — the one customer IAM
+    roles grant ``sts:AssumeRole`` trust to.
+
+    Explicit credentials when configured (``AWS_ACCESS_KEY_ID``/
+    ``AWS_SECRET_ACCESS_KEY``), mirroring how ``services/storage/object_store``
+    is explicit about its own S3 credentials rather than relying on an
+    ambient chain. Falls back to boto3's default credential chain when unset,
+    so a deployment that already runs on an AWS instance/task role (rather
+    than static keys) still works without configuring anything.
+    """
+    if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+        return boto3.client(
+            "sts",
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_DEFAULT_REGION,
+        )
+    return boto3.client("sts", region_name=settings.AWS_DEFAULT_REGION)
+
+
 def _assume_role_session(role_arn: str, external_id: str) -> boto3.Session:
-    sts = boto3.client("sts")
+    sts = _base_sts_client()
     try:
         resp = sts.assume_role(
             RoleArn=role_arn,

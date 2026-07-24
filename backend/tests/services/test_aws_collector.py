@@ -11,9 +11,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from app.core.config import settings
 from app.services.cloud.aws_collector import (
     CloudCollectionError,
     _assume_role_session,
+    _base_sts_client,
     _collect_ebs_volumes,
     _collect_iam,
     _collect_rds_instances,
@@ -25,6 +27,39 @@ from app.services.cloud.aws_collector import (
 
 def _client_error(code: str, operation: str) -> ClientError:
     return ClientError({"Error": {"Code": code, "Message": "boom"}}, operation)
+
+
+class TestBaseStsClient:
+    @patch("app.services.cloud.aws_collector.boto3")
+    def test_uses_explicit_credentials_when_configured(
+        self, mock_boto3: MagicMock
+    ) -> None:
+        with (
+            patch.object(settings, "AWS_ACCESS_KEY_ID", "AKIA_BASE"),
+            patch.object(settings, "AWS_SECRET_ACCESS_KEY", "base-secret"),
+            patch.object(settings, "AWS_DEFAULT_REGION", "eu-west-1"),
+        ):
+            _base_sts_client()
+
+        mock_boto3.client.assert_called_once_with(
+            "sts",
+            aws_access_key_id="AKIA_BASE",
+            aws_secret_access_key="base-secret",
+            region_name="eu-west-1",
+        )
+
+    @patch("app.services.cloud.aws_collector.boto3")
+    def test_falls_back_to_default_chain_when_unconfigured(
+        self, mock_boto3: MagicMock
+    ) -> None:
+        with (
+            patch.object(settings, "AWS_ACCESS_KEY_ID", ""),
+            patch.object(settings, "AWS_SECRET_ACCESS_KEY", ""),
+            patch.object(settings, "AWS_DEFAULT_REGION", "us-east-1"),
+        ):
+            _base_sts_client()
+
+        mock_boto3.client.assert_called_once_with("sts", region_name="us-east-1")
 
 
 class TestAssumeRoleSession:

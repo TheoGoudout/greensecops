@@ -73,6 +73,15 @@ services:
       - S3_SECRET_KEY=${SERVICE_PASSWORD_MINIO}
       - S3_BUCKET=${S3_BUCKET:-greensecops-artifacts}
       - S3_REGION=${S3_REGION:-us-east-1}
+      # AWS (cloud posture scanning) — GreenSecOps's own identity, distinct
+      # from S3_* above (which authenticates to MinIO, not AWS). Not a
+      # Coolify magic var: unlike SERVICE_USER_MINIO/SERVICE_PASSWORD_MINIO,
+      # this is a real external AWS account's credentials, which Coolify has
+      # no way to generate — it must be a real IAM user you create yourself.
+      # Optional: unset disables cloud-posture scanning only.
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       # Email / SMTP
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_USER=${SMTP_USER}

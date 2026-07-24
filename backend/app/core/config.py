@@ -143,6 +143,17 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "greensecops-artifacts"
     S3_REGION: str = "us-east-1"
 
+    # GreenSecOps's own AWS identity — distinct from S3_ACCESS_KEY/SECRET_KEY
+    # above, which authenticate to the (usually self-hosted) object store, not
+    # AWS. This is the identity customer IAM roles grant sts:AssumeRole trust
+    # to for cloud-posture scanning (see services/cloud/aws_collector.py).
+    # Empty by default — the feature is opt-in; an unset value surfaces as a
+    # clear "could not assume role" CloudCollectionError per scan, not a
+    # startup failure, since most deployments won't use it.
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_DEFAULT_REGION: str = "us-east-1"
+
     # Email / SMTP
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False

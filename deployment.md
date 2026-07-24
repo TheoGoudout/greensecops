@@ -117,6 +117,11 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `OLLAMA_BASE_URL`: Base URL of an Ollama instance, when using the `ollama` provider. Default: `http://localhost:11434`.
 * `AI_PROVIDERS_CONFIG`: Path to a JSON file defining available providers and model lists. Defaults to the file bundled in the backend image.
 
+**AWS cloud posture scanning (optional)**
+
+* `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: GreenSecOps's own AWS IAM user credentials — the identity a customer's IAM role grants `sts:AssumeRole` trust to for cloud-posture scanning. Distinct from the `S3_*` variables above, which authenticate to MinIO, not AWS. Not a Coolify magic variable: unlike `SERVICE_USER_MINIO`/`SERVICE_PASSWORD_MINIO` (an internal service Coolify also deploys), this is a real external AWS account's credentials, which Coolify has no way to generate — create an IAM user yourself and paste in its access key. Leave unset to disable cloud-posture scanning; every other feature works without it.
+* `AWS_DEFAULT_REGION`: Region for the base STS client. Default: `us-east-1`.
+
 **Billing (optional)**
 
 * `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`: Stripe API credentials.
