@@ -1,54 +1,52 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Check, Copy } from "lucide-react"
-import type { RepositoryPublic } from "@/client"
-import { RepositoriesService } from "@/client"
+import type { TerraformRootPublic } from "@/client"
+import { TerraformService } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
 
-export const Route = createFileRoute("/_layout/badges")({
-  component: Badges,
+export const Route = createFileRoute("/_layout/infrastructure/badges")({
+  component: TerraformBadges,
   head: () => ({
-    meta: [{ title: "Badges - GreenSecOps" }],
+    meta: [{ title: "Terraform Badges - GreenSecOps" }],
   }),
 })
 
 const API_BASE =
   import.meta.env.VITE_GREENSECOPS_PUBLIC_URL || import.meta.env.VITE_API_URL
 
-function badgeSvgUrl(repo: RepositoryPublic): string {
-  const [owner, name] = repo.full_name.split("/")
-  const base = `${API_BASE}/api/v1/badges/${owner}/${name}/${repo.default_branch}.svg`
-  // Private repos require the server-minted HMAC signature; public repos use
-  // the plain URL.
-  return repo.badge_sig ? `${base}?sig=${repo.badge_sig}` : base
+function terraformBadgeSvgUrl(root: TerraformRootPublic): string {
+  const base = `${API_BASE}/api/v1/badges/terraform/${root.id}.svg`
+  return root.badge_sig ? `${base}?sig=${root.badge_sig}` : base
 }
 
-function badgeMarkdown(repo: RepositoryPublic): string {
-  const url = badgeSvgUrl(repo)
-  return `![GreenSecOps](${url})`
+function terraformBadgeMarkdown(root: TerraformRootPublic): string {
+  const url = terraformBadgeSvgUrl(root)
+  return `![GreenSecOps Terraform](${url})`
 }
 
-function BadgeCard({ repo }: { repo: RepositoryPublic }) {
+function TerraformBadgeCard({ root }: { root: TerraformRootPublic }) {
   const [copiedText, copy] = useCopyToClipboard()
-  const markdown = badgeMarkdown(repo)
-  const svgUrl = badgeSvgUrl(repo)
+  const markdown = terraformBadgeMarkdown(root)
+  const svgUrl = terraformBadgeSvgUrl(root)
   const copied = copiedText === markdown
+  const label = root.repo_full_name
+    ? `${root.repo_full_name} / ${root.root_path}`
+    : root.root_path
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold">
-          {repo.full_name}
-        </CardTitle>
+        <CardTitle className="text-sm font-semibold">{label}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div>
           <img
             src={svgUrl}
-            alt={`GreenSecOps badge for ${repo.full_name}`}
+            alt={`Terraform badge for ${label}`}
             className="h-5"
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.display = "none"
@@ -76,14 +74,14 @@ function BadgeCard({ repo }: { repo: RepositoryPublic }) {
   )
 }
 
-function Badges() {
+function TerraformBadges() {
   const {
-    data: repos,
+    data: terraformRoots,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["repositories"],
-    queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
+    queryKey: ["terraform-roots"],
+    queryFn: () => TerraformService.listTerraformRoots({}),
   })
 
   return (
@@ -91,7 +89,7 @@ function Badges() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Badges</h1>
         <p className="text-muted-foreground">
-          Embed GreenSecOps grade badges in your repository READMEs
+          Embed Terraform grade badges in your repository READMEs
         </p>
       </div>
 
@@ -102,15 +100,17 @@ function Badges() {
           ))}
         </div>
       ) : isError ? (
-        <p className="text-sm text-destructive">Failed to load repositories.</p>
-      ) : !repos?.length ? (
+        <p className="text-sm text-destructive">
+          Failed to load Terraform roots.
+        </p>
+      ) : !terraformRoots?.length ? (
         <p className="text-sm text-muted-foreground text-center">
-          No repositories found.
+          No Terraform roots configured.
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {repos.map((repo) => (
-            <BadgeCard key={repo.id} repo={repo} />
+          {terraformRoots.map((root) => (
+            <TerraformBadgeCard key={root.id} root={root} />
           ))}
         </div>
       )}

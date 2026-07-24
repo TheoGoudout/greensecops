@@ -99,6 +99,7 @@ export function AppSidebar() {
 
   const infrastructureItems: NavItem[] = [
     { icon: Boxes, title: "Terraform", path: "/infrastructure" },
+    { icon: Award, title: "Badges", path: "/infrastructure/badges" },
   ]
 
   const configItems: NavItem[] = [
