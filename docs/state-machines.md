@@ -1,10 +1,11 @@
 # GreenSecOps — Workflow State Machines
 
-This document formalizes the six core lifecycles — **Analysis**, **Issue**,
-**Fix**, **Pull Request**, **Repository** and **Telemetry (dynamic analysis)** —
-as state machines: their **states**, the **input events** that drive
-transitions, and the **outputs** (SSE signals) each transition emits. It is kept
-in sync with the code in
+This document formalizes the core lifecycles — **Analysis**, **Issue**,
+**Fix**, **Pull Request**, **Repository**, **Telemetry (dynamic analysis)**,
+and the IaC/cloud-posture engines' **Scan**, **Finding**, and **Cloud
+Account** — as state machines: their **states**, the **input events** that
+drive transitions, and the **outputs** (SSE signals) each transition emits.
+It is kept in sync with the code in
 [`backend/app/services/state_machines/`](../backend/app/services/state_machines),
 which is the single source of truth.
 
@@ -12,9 +13,10 @@ which is the single source of truth.
 
 Each lifecycle is a [`python-statemachine`](https://pypi.org/project/python-statemachine/)
 `StateMachine` subclass (`analysis.py`, `fix.py`, `pull_request.py`,
-`issue.py`, `repository.py`, `telemetry.py`). States carry the persisted
-status-enum value they map to; events declare the transitions; a per-machine
-`outputs` map records the `SSESignal` each event emits.
+`issue.py`, `repository.py`, `telemetry.py`, `scan.py`, `finding.py`,
+`cloud_account.py`). States carry the persisted status-enum value they map
+to; events declare the transitions; a per-machine `outputs` map records the
+`SSESignal` each event emits.
 
 | Concept | In code |
 |---|---|
@@ -631,3 +633,121 @@ every `Issue` ever raised against it — including ones resolved with
 row-count cleanup. Orphaned `WorkflowFile` rows are inert text blobs, not a
 correctness problem, so they're left in place; only a full `Repository`
 delete cascades them away.
+
+---
+
+## 9. IaC / cloud posture — `ScanMachine`, `FindingMachine`, `CloudAccountMachine`
+
+The Terraform and AWS cloud-posture engines (`TerraformRoot`/`TerraformScan`/
+`TerraformFinding` and `CloudAccount`/`CloudScan`/`CloudFinding`) share their
+lifecycle machines across both domains rather than each domain declaring its
+own — the two engines' scan/finding lifecycles are identical, only the source
+of the input differs (fetched `.tf` files vs. a live AWS API sweep).
+
+### `ScanMachine` — mirrors `AnalysisMachine`
+
+- **States** — `ScanStatus`: `queued`(init), `running`, `completed`(final),
+  `failed`, `no_targets`(final)
+- **Events** — `started`, `succeeded`, `scan_failed`, `no_targets_found`,
+  `swept`, `retry`
+- **Code** — `state_machines/scan.py`; `workers/tasks/terraform_analysis.py`,
+  `workers/tasks/cloud_scan.py`
+
+| Event | From → To |
+|---|---|
+| `started` | `queued` → `running` |
+| `succeeded` | `running` → `completed` |
+| `scan_failed` | `running` → `failed` |
+| `no_targets_found` | `running` → `no_targets` |
+| `swept` | `queued`, `running` → `failed` |
+| `retry` | `failed` → `queued` |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Queued
+    Queued --> Running: started
+    Running --> Completed: succeeded
+    Running --> Failed: scan_failed
+    Running --> NoTargets: no_targets_found
+    Queued --> Failed: swept
+    Running --> Failed: swept
+    Failed --> Queued: retry
+    Completed --> [*]
+    NoTargets --> [*]
+```
+
+**Asymmetry between the two domains:** `no_targets_found` only ever fires for
+`TerraformScan` (a root with no `.tf` files fetched). `CloudScan` never fires
+it — an AWS account with zero resources of the curated types is still a valid
+(clean) scan, not a "nothing to scan" state, so `cloud_scan.py` always
+proceeds through to `succeeded`.
+
+No SSE wiring yet — same as `AnalysisMachine` before the frontend consumed
+its signals; lands with whichever phase adds live scan-status updates to the
+Infrastructure/Cloud pages.
+
+### `FindingMachine`
+
+Unlike `Issue.status` (a DB-trigger-derived column reacting to
+`fix_id`/`resolved_at`/`ignored_at`, with `IssueMachine` only documenting the
+graph), `TerraformFinding`/`CloudFinding` have no fix/PR concept yet, so this
+machine directly drives writes via `sm.advance`/`sm.try_advance` the way
+`AnalysisMachine` does — there is no trigger to keep in sync.
+
+- **States** — `FindingStatus`: `open`(init), `resolved`, `ignored`
+- **Events** — `resolve`, `recur`, `ignore`, `unignore`
+- **Code** — `state_machines/finding.py`; the rescan `resolve` path is wired
+  in both worker tasks (`_resolve_stale_findings`)
+
+| Event | From → To | Meaning |
+|---|---|---|
+| `resolve` | `open` → `resolved` | not seen in the latest scan (fixed or target removed) |
+| `recur` | `resolved` → `open` | the violation reappeared on a later scan |
+| `ignore` | `open` → `ignored` | user dismissed it |
+| `unignore` | `ignored` → `open` | user un-dismissed it |
+
+**Still open:** only `resolve` is wired (rescan finding-becomes-stale
+detection). `recur`, `ignore`, and `unignore` are declared but have no API
+route or worker call site yet — no ignore/unignore endpoint exists for
+Terraform or Cloud findings, and a resolved finding that recurs on a rescan
+is currently re-inserted as a fresh row via the fingerprint upsert
+(`ON CONFLICT ... resolved_at = NULL`) rather than going through `recur`
+explicitly. Tightening that to fire the event is future cleanup, not a
+correctness gap — the persisted end state is the same either way.
+
+### `CloudAccountMachine`
+
+Tracks the AssumeRole+ExternalId connection wizard: a newly created
+`CloudAccount` starts unverified, the first (or any subsequent) scan verifies
+or fails it, and an admin can disable/re-enable it.
+
+- **States** — `CloudAccountStatus`: `pending_verification`(init),
+  `connected`, `error`, `disabled`
+- **Events** — `verify`, `verification_failed`, `disable`, `enable`
+- **Code** — `state_machines/cloud_account.py`; `workers/tasks/cloud_scan.py`,
+  `api/routes/cloud.py`
+
+| Event | From → To |
+|---|---|
+| `verify` | `pending_verification`, `error` → `connected` |
+| `verification_failed` | `pending_verification`, `connected` → `error` |
+| `disable` | `pending_verification`, `connected`, `error` → `disabled` |
+| `enable` | `disabled` → `pending_verification` |
+
+```mermaid
+stateDiagram-v2
+    [*] --> PendingVerification
+    PendingVerification --> Connected: verify
+    Connected --> Error: verification_failed
+    PendingVerification --> Error: verification_failed
+    Error --> Connected: verify
+    PendingVerification --> Disabled: disable
+    Connected --> Disabled: disable
+    Error --> Disabled: disable
+    Disabled --> PendingVerification: enable
+```
+
+**Why `enable` lands on `pending_verification`, not `connected`:** the role's
+trust policy or permissions may have changed while the account sat disabled,
+so re-enabling forces a re-verify (the next scan) before it's trusted as
+`connected` again, rather than resuming on stale trust.
