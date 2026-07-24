@@ -3,6 +3,11 @@
 ``from app.api.mappers import X`` is unaffected by the internal split.
 """
 
+from .cloud import (
+    to_cloud_account_public,
+    to_cloud_finding_public,
+    to_cloud_scan_public,
+)
 from .repository import to_repo_public
 from .telemetry import (
     compute_telemetry_average,
@@ -26,4 +31,7 @@ __all__ = [
     "to_terraform_root_public",
     "to_terraform_scan_public",
     "to_terraform_finding_public",
+    "to_cloud_account_public",
+    "to_cloud_scan_public",
+    "to_cloud_finding_public",
 ]

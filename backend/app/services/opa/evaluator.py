@@ -76,6 +76,19 @@ class TerraformOpaViolation:
     discriminator: str | None = None
 
 
+@dataclass
+class CloudOpaViolation:
+    rule_slug: str
+    severity: str
+    category: str
+    message: str
+    resource_type: str = ""
+    resource_id: str = ""
+    region: str | None = None
+    context: str | None = None
+    discriminator: str | None = None
+
+
 # All registered policy packages to evaluate against, discovered from the
 # shipped Rego rule files so no rule is left unevaluated. Falls back to the
 # core set if the rules directory is unavailable at runtime.
@@ -91,6 +104,7 @@ POLICY_PACKAGES = _discover_policy_packages("ci_workflow") or [
 ]
 
 IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
+CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages("cloud_aws")
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
@@ -193,6 +207,31 @@ async def evaluate_terraform(
             message=v.get("message", ""),
             resource_address=v.get("resource_address"),
             file_path=v.get("file_path", ""),
+            context=v.get("context"),
+            discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]
+
+
+async def evaluate_cloud(resources: dict[str, Any]) -> list[CloudOpaViolation]:
+    """Evaluate a normalized AWS resource snapshot against cloud posture rules.
+
+    ``resources`` is the dict built by
+    ``services/cloud/aws_collector.collect_account_resources`` — already
+    normalized/merged across regions, mirroring how ``evaluate_terraform``
+    takes an already-merged root config rather than raw files.
+    """
+    raw_violations = await _evaluate_packages(resources, CLOUD_AWS_POLICY_PACKAGES)
+    return [
+        CloudOpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "security"),
+            message=v.get("message", ""),
+            resource_type=v.get("resource_type", ""),
+            resource_id=v.get("resource_id", ""),
+            region=v.get("region"),
             context=v.get("context"),
             discriminator=v.get("discriminator"),
         )

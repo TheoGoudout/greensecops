@@ -69,6 +69,65 @@ export type Body_login_login_access_token = {
  */
 export type CIStatus = 'pending' | 'success' | 'failure' | 'none';
 
+export type CloudAccountCreate = {
+    org_id: string;
+    display_name: string;
+    role_arn: string;
+    regions?: Array<(string)>;
+};
+
+export type CloudAccountPublic = {
+    id: string;
+    org_id: string;
+    provider: CloudProvider;
+    display_name: string;
+    role_arn?: (string | null);
+    external_id: string;
+    regions?: Array<(string)>;
+    status: CloudAccountStatus;
+    last_synced_at?: (string | null);
+    latest_score?: (number | null);
+    latest_grade?: (string | null);
+    created_at?: (string | null);
+};
+
+export type CloudAccountStatus = 'pending_verification' | 'connected' | 'error' | 'disabled';
+
+export type CloudFindingPublic = {
+    id: string;
+    scan_id: string;
+    cloud_account_id: string;
+    rule_id: string;
+    rule_slug: string;
+    resource_type: string;
+    resource_id: string;
+    region?: (string | null);
+    severity: IssueSeverity;
+    category: IssueCategory;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type CloudProvider = 'aws';
+
+export type CloudScanPublic = {
+    id: string;
+    cloud_account_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    region?: (string | null);
+    resource_count?: number;
+    score?: (number | null);
+    grade?: (string | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
+};
+
 /**
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
@@ -646,6 +705,54 @@ export type BillingStripeWebhookData = {
 export type BillingStripeWebhookResponse = ({
     [key: string]: (string);
 });
+
+export type CloudCreateCloudAccountData = {
+    requestBody: CloudAccountCreate;
+};
+
+export type CloudCreateCloudAccountResponse = (CloudAccountPublic);
+
+export type CloudListCloudAccountsData = {
+    orgId?: (string | null);
+};
+
+export type CloudListCloudAccountsResponse = (Array<CloudAccountPublic>);
+
+export type CloudToggleCloudAccountData = {
+    accountId: string;
+    enabled: boolean;
+};
+
+export type CloudToggleCloudAccountResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type CloudDeleteCloudAccountData = {
+    accountId: string;
+};
+
+export type CloudDeleteCloudAccountResponse = (void);
+
+export type CloudTriggerCloudScanData = {
+    accountId: string;
+};
+
+export type CloudTriggerCloudScanResponse = ({
+    [key: string]: (string);
+});
+
+export type CloudListCloudScansData = {
+    accountId: string;
+};
+
+export type CloudListCloudScansResponse = (Array<CloudScanPublic>);
+
+export type CloudListCloudFindingsData = {
+    accountId: string;
+    includeResolved?: boolean;
+};
+
+export type CloudListCloudFindingsResponse = (Array<CloudFindingPublic>);
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 

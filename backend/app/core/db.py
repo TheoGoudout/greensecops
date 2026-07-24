@@ -300,6 +300,130 @@ TERRAFORM_INITIAL_RULES: list[dict[str, object]] = [
     },
 ]
 
+# Mirrors TERRAFORM_INITIAL_RULES for the AWS cloud-posture engine — checks
+# the same curated resource set the collector describes (see
+# services/cloud/aws_collector.py), evaluated against live account state
+# rather than static HCL.
+CLOUD_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "s3_public_access_block_disabled",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "S3 bucket without a full public access block",
+        "description": "A live S3 bucket does not have all four Block Public Access settings enabled, leaving a path for the bucket or its objects to become publicly accessible.",
+    },
+    {
+        "slug": "s3_bucket_unencrypted",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "S3 bucket without default encryption",
+        "description": "A live S3 bucket has no server-side encryption configuration, leaving objects stored unencrypted at rest unless a caller opts in per-object.",
+    },
+    {
+        "slug": "open_ingress_security_group",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Live security group open to the world",
+        "description": "A live EC2 security group has an ingress rule allowing traffic from 0.0.0.0/0 or ::/0, exposing the port to the entire internet rather than a scoped CIDR range.",
+    },
+    {
+        "slug": "iam_policy_wildcard_action",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 4.0,
+        "title": "IAM policy grants a wildcard action",
+        "description": 'A customer-managed IAM policy has an Allow statement with Action set to "*" (or a service-wide "service:*"), granting far more permission than almost any real workload needs.',
+    },
+    {
+        "slug": "iam_user_no_mfa",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "IAM user without MFA",
+        "description": "A live IAM user has no MFA device registered, so a leaked password alone is sufficient to authenticate as them.",
+    },
+    {
+        "slug": "rds_publicly_accessible",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "RDS instance is publicly accessible",
+        "description": "A live RDS instance has PubliclyAccessible set to true, giving it a public endpoint reachable from the internet rather than only from within its VPC.",
+    },
+    {
+        "slug": "rds_not_encrypted",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "RDS instance not encrypted at rest",
+        "description": "A live RDS instance has StorageEncrypted set to false, leaving its data at rest unencrypted.",
+    },
+    {
+        "slug": "ebs_volume_unencrypted",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "EBS volume not encrypted",
+        "description": "A live EBS volume has Encrypted set to false, leaving its data at rest unencrypted.",
+    },
+    {
+        "slug": "lambda_public_function_url",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Lambda function URL with no auth",
+        "description": "A live Lambda function has a Function URL configured with AuthType NONE, making it callable by anyone on the internet without any IAM authentication.",
+    },
+    {
+        "slug": "s3_bucket_missing_versioning",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "S3 bucket without versioning",
+        "description": "A live S3 bucket has no versioning enabled, so an accidental overwrite or delete of an object can't be recovered.",
+    },
+    {
+        "slug": "cloudtrail_logging_disabled",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "CloudTrail trail not logging",
+        "description": "A live CloudTrail trail exists but is not actively logging, leaving API activity in the account unrecorded and unavailable for incident investigation.",
+    },
+    {
+        "slug": "ebs_volume_unattached",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Unattached EBS volume",
+        "description": "A live EBS volume is not attached to any instance, and is very likely a forgotten leftover still incurring storage cost with no owner tracking whether it's safe to delete.",
+    },
+    {
+        "slug": "lambda_deprecated_runtime",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Lambda function on a deprecated runtime",
+        "description": "A live Lambda function runs on a runtime AWS has deprecated (past its official end-of-support date), so it no longer receives security patches and is blocked from configuration updates until migrated.",
+    },
+]
+
 
 def _seed_rules(session: Session) -> list[str]:
     """Insert any rules from INITIAL_RULES not already present.
@@ -308,7 +432,7 @@ def _seed_rules(session: Session) -> list[str]:
     detect when a release has shipped new rules.
     """
     new_slugs: list[str] = []
-    for rule_data in INITIAL_RULES + TERRAFORM_INITIAL_RULES:
+    for rule_data in INITIAL_RULES + TERRAFORM_INITIAL_RULES + CLOUD_INITIAL_RULES:
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])
         ).first()

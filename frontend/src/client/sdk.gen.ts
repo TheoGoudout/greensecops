@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -296,6 +296,157 @@ export class BillingService {
             url: '/api/v1/billing/webhook/stripe',
             headers: {
                 'stripe-signature': data.stripeSignature
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class CloudService {
+    /**
+     * Create Cloud Account
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns CloudAccountPublic Successful Response
+     * @throws ApiError
+     */
+    public static createCloudAccount(data: CloudCreateCloudAccountData): CancelablePromise<CloudCreateCloudAccountResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/cloud-accounts/',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Cloud Accounts
+     * List cloud accounts. Omit ``org_id`` for every org the user can access;
+     * pass it to scope to one org.
+     * @param data The data for the request.
+     * @param data.orgId
+     * @returns CloudAccountPublic Successful Response
+     * @throws ApiError
+     */
+    public static listCloudAccounts(data: CloudListCloudAccountsData = {}): CancelablePromise<CloudListCloudAccountsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/cloud-accounts/',
+            query: {
+                org_id: data.orgId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Toggle Cloud Account
+     * @param data The data for the request.
+     * @param data.accountId
+     * @param data.enabled
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static toggleCloudAccount(data: CloudToggleCloudAccountData): CancelablePromise<CloudToggleCloudAccountResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/cloud-accounts/{account_id}/toggle',
+            path: {
+                account_id: data.accountId
+            },
+            query: {
+                enabled: data.enabled
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Delete Cloud Account
+     * @param data The data for the request.
+     * @param data.accountId
+     * @returns void Successful Response
+     * @throws ApiError
+     */
+    public static deleteCloudAccount(data: CloudDeleteCloudAccountData): CancelablePromise<CloudDeleteCloudAccountResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/cloud-accounts/{account_id}',
+            path: {
+                account_id: data.accountId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Cloud Scan
+     * @param data The data for the request.
+     * @param data.accountId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerCloudScan(data: CloudTriggerCloudScanData): CancelablePromise<CloudTriggerCloudScanResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/cloud-accounts/{account_id}/scan',
+            path: {
+                account_id: data.accountId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Cloud Scans
+     * @param data The data for the request.
+     * @param data.accountId
+     * @returns CloudScanPublic Successful Response
+     * @throws ApiError
+     */
+    public static listCloudScans(data: CloudListCloudScansData): CancelablePromise<CloudListCloudScansResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/cloud-accounts/{account_id}/scans',
+            path: {
+                account_id: data.accountId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Cloud Findings
+     * @param data The data for the request.
+     * @param data.accountId
+     * @param data.includeResolved
+     * @returns CloudFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static listCloudFindings(data: CloudListCloudFindingsData): CancelablePromise<CloudListCloudFindingsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/cloud-accounts/{account_id}/findings',
+            path: {
+                account_id: data.accountId
+            },
+            query: {
+                include_resolved: data.includeResolved
             },
             errors: {
                 422: 'Validation Error'

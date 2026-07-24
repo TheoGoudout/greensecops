@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 from app.core import security
 from app.core.config import settings
 from app.core.db import engine
-from app.models import OrgMember, Repository, TokenPayload, User
+from app.models import Organization, OrgMember, Repository, TokenPayload, User
 from app.services.github.app_client import GitHubAppClient
 
 _GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
@@ -229,3 +229,22 @@ def authorize_repo(
     ):
         raise HTTPException(status_code=404, detail=detail)
     return repo
+
+
+def authorize_org(
+    session: Session,
+    user: User,
+    org_id: uuid.UUID,
+    *,
+    detail: str = "Organization not found",
+) -> Organization:
+    """Load an organization, enforcing that ``user`` may access it.
+
+    Same shape as ``authorize_repo`` for org-level (not repo-scoped) resources
+    like ``CloudAccount`` — superusers bypass the check, everyone else must be
+    a member.
+    """
+    org = session.get(Organization, org_id)
+    if not org or (not user.is_superuser and org_id not in user_org_ids(session, user)):
+        raise HTTPException(status_code=404, detail=detail)
+    return org

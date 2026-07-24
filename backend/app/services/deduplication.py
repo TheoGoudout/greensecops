@@ -52,6 +52,23 @@ def compute_terraform_finding_fingerprint(
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+def compute_cloud_finding_fingerprint(
+    cloud_account_id: uuid.UUID,
+    rule_id: uuid.UUID,
+    resource_id: str,
+    discriminator: str | None = None,
+) -> str:
+    """Stable 16-char hex key for (account, rule, resource_id[, discriminator]).
+
+    The cloud-posture analogue of ``compute_terraform_finding_fingerprint``:
+    scoped to the account (not one scan), so re-scans recognize "the same"
+    finding across the resource's lifetime rather than creating a duplicate.
+    """
+    disc_part = "" if discriminator is None else discriminator
+    key = f"{cloud_account_id}:{rule_id}:{resource_id}:{disc_part}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
 def find_completed_analysis(
     session: Session,
     content_hash: str,

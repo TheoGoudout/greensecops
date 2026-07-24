@@ -206,6 +206,188 @@ export type BodyLoginLoginAccessToken = {
 export type CiStatus = 'pending' | 'success' | 'failure' | 'none';
 
 /**
+ * CloudAccountCreate
+ */
+export type CloudAccountCreate = {
+    /**
+     * Org Id
+     */
+    org_id: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Role Arn
+     */
+    role_arn: string;
+    /**
+     * Regions
+     */
+    regions?: Array<string>;
+};
+
+/**
+ * CloudAccountPublic
+ */
+export type CloudAccountPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Org Id
+     */
+    org_id: string;
+    provider: CloudProvider;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Role Arn
+     */
+    role_arn?: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Regions
+     */
+    regions?: Array<string>;
+    status: CloudAccountStatus;
+    /**
+     * Last Synced At
+     */
+    last_synced_at?: string | null;
+    /**
+     * Latest Score
+     */
+    latest_score?: number | null;
+    /**
+     * Latest Grade
+     */
+    latest_grade?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * CloudAccountStatus
+ */
+export type CloudAccountStatus = 'pending_verification' | 'connected' | 'error' | 'disabled';
+
+/**
+ * CloudFindingPublic
+ */
+export type CloudFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Cloud Account Id
+     */
+    cloud_account_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    /**
+     * Resource Type
+     */
+    resource_type: string;
+    /**
+     * Resource Id
+     */
+    resource_id: string;
+    /**
+     * Region
+     */
+    region?: string | null;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * CloudProvider
+ */
+export type CloudProvider = 'aws';
+
+/**
+ * CloudScanPublic
+ */
+export type CloudScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Cloud Account Id
+     */
+    cloud_account_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    /**
+     * Region
+     */
+    region?: string | null;
+    /**
+     * Resource Count
+     */
+    resource_count?: number;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
+};
+
+/**
  * DynamicAnalysisStatus
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
@@ -3864,6 +4046,230 @@ export type TerraformListTerraformFindingsResponses = {
 };
 
 export type TerraformListTerraformFindingsResponse = TerraformListTerraformFindingsResponses[keyof TerraformListTerraformFindingsResponses];
+
+export type CloudListCloudAccountsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Org Id
+         */
+        org_id?: string | null;
+    };
+    url: '/api/v1/cloud-accounts/';
+};
+
+export type CloudListCloudAccountsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListCloudAccountsError = CloudListCloudAccountsErrors[keyof CloudListCloudAccountsErrors];
+
+export type CloudListCloudAccountsResponses = {
+    /**
+     * Response Cloud-List Cloud Accounts
+     * Successful Response
+     */
+    200: Array<CloudAccountPublic>;
+};
+
+export type CloudListCloudAccountsResponse = CloudListCloudAccountsResponses[keyof CloudListCloudAccountsResponses];
+
+export type CloudCreateCloudAccountData = {
+    body: CloudAccountCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/cloud-accounts/';
+};
+
+export type CloudCreateCloudAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudCreateCloudAccountError = CloudCreateCloudAccountErrors[keyof CloudCreateCloudAccountErrors];
+
+export type CloudCreateCloudAccountResponses = {
+    /**
+     * Successful Response
+     */
+    201: CloudAccountPublic;
+};
+
+export type CloudCreateCloudAccountResponse = CloudCreateCloudAccountResponses[keyof CloudCreateCloudAccountResponses];
+
+export type CloudToggleCloudAccountData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query: {
+        /**
+         * Enabled
+         */
+        enabled: boolean;
+    };
+    url: '/api/v1/cloud-accounts/{account_id}/toggle';
+};
+
+export type CloudToggleCloudAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudToggleCloudAccountError = CloudToggleCloudAccountErrors[keyof CloudToggleCloudAccountErrors];
+
+export type CloudToggleCloudAccountResponses = {
+    /**
+     * Response Cloud-Toggle Cloud Account
+     * Successful Response
+     */
+    200: {
+        [key: string]: string | boolean;
+    };
+};
+
+export type CloudToggleCloudAccountResponse = CloudToggleCloudAccountResponses[keyof CloudToggleCloudAccountResponses];
+
+export type CloudDeleteCloudAccountData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud-accounts/{account_id}';
+};
+
+export type CloudDeleteCloudAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudDeleteCloudAccountError = CloudDeleteCloudAccountErrors[keyof CloudDeleteCloudAccountErrors];
+
+export type CloudDeleteCloudAccountResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type CloudDeleteCloudAccountResponse = CloudDeleteCloudAccountResponses[keyof CloudDeleteCloudAccountResponses];
+
+export type CloudTriggerCloudScanData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud-accounts/{account_id}/scan';
+};
+
+export type CloudTriggerCloudScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudTriggerCloudScanError = CloudTriggerCloudScanErrors[keyof CloudTriggerCloudScanErrors];
+
+export type CloudTriggerCloudScanResponses = {
+    /**
+     * Response Cloud-Trigger Cloud Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type CloudTriggerCloudScanResponse = CloudTriggerCloudScanResponses[keyof CloudTriggerCloudScanResponses];
+
+export type CloudListCloudScansData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud-accounts/{account_id}/scans';
+};
+
+export type CloudListCloudScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListCloudScansError = CloudListCloudScansErrors[keyof CloudListCloudScansErrors];
+
+export type CloudListCloudScansResponses = {
+    /**
+     * Response Cloud-List Cloud Scans
+     * Successful Response
+     */
+    200: Array<CloudScanPublic>;
+};
+
+export type CloudListCloudScansResponse = CloudListCloudScansResponses[keyof CloudListCloudScansResponses];
+
+export type CloudListCloudFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/cloud-accounts/{account_id}/findings';
+};
+
+export type CloudListCloudFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListCloudFindingsError = CloudListCloudFindingsErrors[keyof CloudListCloudFindingsErrors];
+
+export type CloudListCloudFindingsResponses = {
+    /**
+     * Response Cloud-List Cloud Findings
+     * Successful Response
+     */
+    200: Array<CloudFindingPublic>;
+};
+
+export type CloudListCloudFindingsResponse = CloudListCloudFindingsResponses[keyof CloudListCloudFindingsResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;

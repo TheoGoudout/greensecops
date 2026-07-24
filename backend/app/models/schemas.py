@@ -9,6 +9,8 @@ from .enums import (
     AnalysisStatus,
     AnalysisTrigger,
     CIStatus,
+    CloudAccountStatus,
+    CloudProvider,
     DynamicAnalysisStatus,
     FindingResolutionReason,
     FindingStatus,
@@ -265,6 +267,62 @@ class TerraformFindingPublic(SQLModel):
     rule_slug: str
     resource_address: str | None = None
     file_path: str
+    severity: IssueSeverity
+    category: IssueCategory
+    message: str
+    context: str | None = None
+    status: FindingStatus
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution_reason: FindingResolutionReason | None = None
+
+
+class CloudAccountCreate(SQLModel):
+    org_id: uuid.UUID
+    display_name: str = Field(max_length=255)
+    role_arn: str = Field(max_length=512)
+    regions: list[str] = Field(default_factory=list)
+
+
+class CloudAccountPublic(SQLModel):
+    id: uuid.UUID
+    org_id: uuid.UUID
+    provider: CloudProvider
+    display_name: str
+    role_arn: str | None = None
+    external_id: str
+    regions: list[str] = []
+    status: CloudAccountStatus
+    last_synced_at: datetime | None = None
+    # Populated from the account's latest scan, mirroring TerraformRootPublic.
+    latest_score: float | None = None
+    latest_grade: str | None = None
+    created_at: datetime | None = None
+
+
+class CloudScanPublic(SQLModel):
+    id: uuid.UUID
+    cloud_account_id: uuid.UUID
+    status: ScanStatus
+    triggered_by: AnalysisTrigger
+    region: str | None = None
+    resource_count: int = 0
+    score: float | None = None
+    grade: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class CloudFindingPublic(SQLModel):
+    id: uuid.UUID
+    scan_id: uuid.UUID
+    cloud_account_id: uuid.UUID
+    rule_id: uuid.UUID
+    rule_slug: str
+    resource_type: str
+    resource_id: str
+    region: str | None = None
     severity: IssueSeverity
     category: IssueCategory
     message: str
