@@ -6,11 +6,13 @@ import httpx
 import pytest
 
 from app.services.opa.evaluator import (
+    CI_TELEMETRY_POLICY_PACKAGES,
     IAC_TERRAFORM_POLICY_PACKAGES,
     POLICY_PACKAGES,
     OpaUnavailableError,
     WorkflowParseError,
     _discover_policy_packages,
+    evaluate_ci_telemetry,
     evaluate_terraform,
     evaluate_workflow,
     parse_workflow_yaml,
@@ -263,6 +265,56 @@ def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
     )
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(evaluate_terraform({"resource": []}))
+
+    assert violations == []
+
+
+# ─── CI telemetry ───────────────────────────────────────────────────────────
+
+
+def test_all_seeded_ci_telemetry_rules_are_evaluated() -> None:
+    packages = _discover_policy_packages("ci_telemetry")
+    assert len(packages) == 3
+    assert "greensecops/ci_telemetry/energy/runner_underutilized" in packages
+    for slug in ("high_memory_pressure", "runner_disk_pressure"):
+        assert f"greensecops/ci_telemetry/reliability/{slug}" in packages
+    assert set(CI_TELEMETRY_POLICY_PACKAGES) == set(packages)
+
+
+def test_evaluate_ci_telemetry_returns_violations_when_policy_matches() -> None:
+    violation = {
+        "rule": "runner_underutilized",
+        "severity": "medium",
+        "category": "energy",
+        "evidence": "vCPUs=8, CPU=10.0%, RAM=15.0%",
+        "recommendation": "Consider downsizing",
+    }
+    mock_cm = _mock_client(
+        {
+            "ci_telemetry/energy/runner_underutilized": {
+                "result": {"violations": [violation]}
+            }
+        }
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_ci_telemetry({"runner_specs": {}, "metrics": {}})
+        )
+
+    assert len(violations) == 1
+    assert violations[0].rule_slug == "runner_underutilized"
+    assert violations[0].evidence == "vCPUs=8, CPU=10.0%, RAM=15.0%"
+    assert violations[0].recommendation == "Consider downsizing"
+
+
+def test_evaluate_ci_telemetry_returns_empty_when_no_violations() -> None:
+    mock_cm = _mock_client(
+        {pkg: {"result": {}} for pkg in CI_TELEMETRY_POLICY_PACKAGES}
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_ci_telemetry({"runner_specs": {}, "metrics": {}})
+        )
 
     assert violations == []
 

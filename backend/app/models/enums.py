@@ -267,6 +267,7 @@ class RuleDomain(str, enum.Enum):
     workflow = "workflow"
     iac_terraform = "iac_terraform"
     cloud_aws = "cloud_aws"
+    ci_telemetry = "ci_telemetry"
 
 
 class ScanStatus(str, enum.Enum):

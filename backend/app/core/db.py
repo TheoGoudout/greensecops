@@ -424,6 +424,43 @@ CLOUD_INITIAL_RULES: list[dict[str, object]] = [
     },
 ]
 
+# Mirrors TERRAFORM_INITIAL_RULES/CLOUD_INITIAL_RULES for the CI-workflow
+# dynamic-telemetry engine — evaluated against a completed TelemetryRun's
+# measured runner_specs/metrics (see workers/tasks/dynamic_analysis.py),
+# not static YAML. Seeded for admin visibility/toggling like every other
+# domain, even though DynamicEnrichment itself stays deliberately thinner
+# than Issue/TerraformFinding/CloudFinding (no severity/category/rule_id
+# columns — see its docstring) and isn't scored into a grade.
+CI_TELEMETRY_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "runner_underutilized",
+        "domain": RuleDomain.ci_telemetry,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Runner underutilized during the run",
+        "description": "Actual telemetry from a completed workflow run shows a large runner (8+ vCPUs) with low measured CPU and RAM usage throughout the job, indicating the runner size is not justified by the real workload.",
+    },
+    {
+        "slug": "high_memory_pressure",
+        "domain": RuleDomain.ci_telemetry,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Runner ran under high memory pressure",
+        "description": "Telemetry from a completed workflow run shows RAM usage above 90% at collection time, which risks the OS OOM-killer terminating a build step or test process non-deterministically.",
+    },
+    {
+        "slug": "runner_disk_pressure",
+        "domain": RuleDomain.ci_telemetry,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Runner ran low on free disk space",
+        "description": 'The runner\'s declared free disk space at job start was below 2 GB, a common cause of intermittent "no space left on device" failures.',
+    },
+]
+
 
 def _seed_rules(session: Session) -> list[str]:
     """Insert any rules from INITIAL_RULES not already present.
@@ -432,7 +469,12 @@ def _seed_rules(session: Session) -> list[str]:
     detect when a release has shipped new rules.
     """
     new_slugs: list[str] = []
-    for rule_data in INITIAL_RULES + TERRAFORM_INITIAL_RULES + CLOUD_INITIAL_RULES:
+    for rule_data in (
+        INITIAL_RULES
+        + TERRAFORM_INITIAL_RULES
+        + CLOUD_INITIAL_RULES
+        + CI_TELEMETRY_INITIAL_RULES
+    ):
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])
         ).first()

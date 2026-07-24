@@ -1,6 +1,8 @@
+import asyncio
 import json
 import logging
 import uuid
+from typing import Any
 
 from sqlmodel import Session, col, delete, select
 
@@ -77,20 +79,15 @@ def _enrich(session: Session, run: TelemetryRun) -> int:
     metrics = json.loads(run.metrics or "{}")
     specs = json.loads(run.runner_specs or "{}")
 
-    enrichments: list[dict[str, str | float]] = []
-
-    vcpus = specs.get("vcpus", 0)
-    cpu_percent = metrics.get("cpu_percent", 100.0)
-    ram_percent = metrics.get("ram_percent", 100.0)
-
-    if vcpus >= 8 and cpu_percent < 25.0 and ram_percent < 30.0:
-        enrichments.append(
-            {
-                "rule_slug": "runner_sizing",
-                "evidence": f"vCPUs={vcpus}, CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%",
-                "recommendation": f"Consider downsizing from {vcpus} vCPUs — actual usage is low",
-            }
-        )
+    violations = asyncio.run(_evaluate({"runner_specs": specs, "metrics": metrics}))
+    enrichments: list[dict[str, str | float]] = [
+        {
+            "rule_slug": v.rule_slug,
+            "evidence": v.evidence,
+            "recommendation": v.recommendation,
+        }
+        for v in violations
+    ]
 
     latest_analysis = session.exec(
         select(Analysis)
@@ -132,3 +129,9 @@ def _enrich(session: Session, run: TelemetryRun) -> int:
 @celery_app.task(name="dynamic_analysis.run", bind=True, max_retries=3)
 def run_dynamic_analysis(self: object, telemetry_run_id: str) -> dict[str, str | float]:  # noqa: ARG001
     return _run_dynamic_analysis_impl(telemetry_run_id)
+
+
+async def _evaluate(telemetry: dict[str, Any]) -> Any:
+    from app.services.opa.evaluator import evaluate_ci_telemetry
+
+    return await evaluate_ci_telemetry(telemetry)

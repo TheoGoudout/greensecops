@@ -89,6 +89,19 @@ class CloudOpaViolation:
     discriminator: str | None = None
 
 
+@dataclass
+class CiTelemetryOpaViolation:
+    rule_slug: str
+    severity: str
+    category: str
+    # DynamicEnrichment persists evidence/recommendation rather than a single
+    # message (see its docstring: deliberately thinner than the other
+    # domains' findings — no severity/category/status persisted either), so
+    # this dataclass mirrors that shape instead of message/context.
+    evidence: str
+    recommendation: str
+
+
 # All registered policy packages to evaluate against, discovered from the
 # shipped Rego rule files so no rule is left unevaluated. Falls back to the
 # core set if the rules directory is unavailable at runtime.
@@ -105,6 +118,7 @@ POLICY_PACKAGES = _discover_policy_packages("ci_workflow") or [
 
 IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
 CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages("cloud_aws")
+CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages("ci_telemetry")
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
@@ -209,6 +223,29 @@ async def evaluate_terraform(
             file_path=v.get("file_path", ""),
             context=v.get("context"),
             discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]
+
+
+async def evaluate_ci_telemetry(
+    telemetry: dict[str, Any],
+) -> list[CiTelemetryOpaViolation]:
+    """Evaluate a completed telemetry run's runner_specs/metrics.
+
+    ``telemetry`` is ``{"runner_specs": {...}, "metrics": {...}}`` — the same
+    two JSON blobs ``TelemetryRun`` stores, decoded. Dynamic (runtime)
+    counterpart of ``evaluate_workflow``'s static YAML analysis: same engine,
+    same rule-authoring model, different signal.
+    """
+    raw_violations = await _evaluate_packages(telemetry, CI_TELEMETRY_POLICY_PACKAGES)
+    return [
+        CiTelemetryOpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "reliability"),
+            evidence=v.get("evidence", ""),
+            recommendation=v.get("recommendation", ""),
         )
         for v in raw_violations
     ]
