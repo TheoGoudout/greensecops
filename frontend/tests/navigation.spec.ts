@@ -37,7 +37,7 @@ test.describe("Navigation", () => {
       "Billing",
     ]) {
       await expect(
-        page.locator('[data-sidebar="menu"]').getByText(label),
+        page.locator('[data-sidebar="menu"]').getByText(label, { exact: true }),
       ).toBeVisible()
     }
     await expect(
@@ -92,7 +92,10 @@ test.describe("Navigation", () => {
     ]
 
     for (const [label, pattern] of navLinks) {
-      await page.locator('[data-sidebar="menu"]').getByText(label).click()
+      await page
+        .locator('[data-sidebar="menu"]')
+        .getByText(label, { exact: true })
+        .click()
       await expect(page).toHaveURL(pattern)
     }
   })
