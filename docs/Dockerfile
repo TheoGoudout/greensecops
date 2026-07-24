@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -24,7 +24,7 @@ ENV DOCS_BASE_URL=${DOCS_BASE_URL}
 RUN uv run sphinx-build -b html -W docs docs/_build/html
 
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 
 COPY docs/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /build/docs/_build/html /usr/share/nginx/html
