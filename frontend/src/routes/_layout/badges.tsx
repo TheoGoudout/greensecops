@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Check, Copy } from "lucide-react"
-import type { RepositoryPublic } from "@/client"
-import { RepositoriesService } from "@/client"
+import type { RepositoryPublic, TerraformRootPublic } from "@/client"
+import { RepositoriesService, TerraformService } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -76,6 +76,62 @@ function BadgeCard({ repo }: { repo: RepositoryPublic }) {
   )
 }
 
+function terraformBadgeSvgUrl(root: TerraformRootPublic): string {
+  const base = `${API_BASE}/api/v1/badges/terraform/${root.id}.svg`
+  return root.badge_sig ? `${base}?sig=${root.badge_sig}` : base
+}
+
+function terraformBadgeMarkdown(root: TerraformRootPublic): string {
+  const url = terraformBadgeSvgUrl(root)
+  return `![GreenSecOps Terraform](${url})`
+}
+
+function TerraformBadgeCard({ root }: { root: TerraformRootPublic }) {
+  const [copiedText, copy] = useCopyToClipboard()
+  const markdown = terraformBadgeMarkdown(root)
+  const svgUrl = terraformBadgeSvgUrl(root)
+  const copied = copiedText === markdown
+  const label = root.repo_full_name
+    ? `${root.repo_full_name} / ${root.root_path}`
+    : root.root_path
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold">{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div>
+          <img
+            src={svgUrl}
+            alt={`Terraform badge for ${label}`}
+            className="h-5"
+            onError={(e) => {
+              ;(e.target as HTMLImageElement).style.display = "none"
+            }}
+          />
+        </div>
+        <code className="text-xs text-muted-foreground bg-muted rounded px-2 py-1.5 break-all block">
+          {markdown}
+        </code>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 w-fit"
+          onClick={() => copy(markdown)}
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-primary" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+          {copied ? "Copied" : "Copy Markdown"}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 function Badges() {
   const {
     data: repos,
@@ -86,8 +142,17 @@ function Badges() {
     queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
   })
 
+  const {
+    data: terraformRoots,
+    isLoading: isLoadingTerraform,
+    isError: isErrorTerraform,
+  } = useQuery({
+    queryKey: ["terraform-roots"],
+    queryFn: () => TerraformService.listTerraformRoots({}),
+  })
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-10">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Badges</h1>
         <p className="text-muted-foreground">
@@ -95,25 +160,59 @@ function Badges() {
         </p>
       </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full" />
-          ))}
-        </div>
-      ) : isError ? (
-        <p className="text-sm text-destructive">Failed to load repositories.</p>
-      ) : !repos?.length ? (
-        <p className="text-sm text-muted-foreground text-center">
-          No repositories found.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {repos.map((repo) => (
-            <BadgeCard key={repo.id} repo={repo} />
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold tracking-tight">
+          CI/CD workflows
+        </h2>
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-40 w-full" />
+            ))}
+          </div>
+        ) : isError ? (
+          <p className="text-sm text-destructive">
+            Failed to load repositories.
+          </p>
+        ) : !repos?.length ? (
+          <p className="text-sm text-muted-foreground text-center">
+            No repositories found.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {repos.map((repo) => (
+              <BadgeCard key={repo.id} repo={repo} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Terraform roots
+        </h2>
+        {isLoadingTerraform ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[...Array(2)].map((_, i) => (
+              <Skeleton key={i} className="h-40 w-full" />
+            ))}
+          </div>
+        ) : isErrorTerraform ? (
+          <p className="text-sm text-destructive">
+            Failed to load Terraform roots.
+          </p>
+        ) : !terraformRoots?.length ? (
+          <p className="text-sm text-muted-foreground text-center">
+            No Terraform roots configured.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {terraformRoots.map((root) => (
+              <TerraformBadgeCard key={root.id} root={root} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
