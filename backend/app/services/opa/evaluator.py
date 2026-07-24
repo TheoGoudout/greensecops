@@ -21,27 +21,24 @@ class OpaUnavailableError(Exception):
     """Raised when the OPA service cannot be reached or returns an error."""
 
 
-# Workflow rules live at app/rules/<category>/<name>.rego; IaC/cloud rules
-# live one level deeper at app/rules/<domain_dir>/<category>/<name>.rego
-# (e.g. app/rules/iac_terraform/security/s3_public_bucket.rego). Every file
-# declares package greensecops.<...path.../name> exposing `violations`.
+# Every analysis domain gets its own named directory:
+# app/rules/<domain_dir>/<category>/<name>.rego (e.g.
+# app/rules/iac_terraform/security/s3_public_bucket.rego). Every file
+# declares package greensecops.<domain_dir>.<category>.<name> exposing
+# `violations`.
 _RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
 
 
-def _discover_policy_packages(domain_dir: str | None = None) -> list[str]:
-    """Enumerate OPA package paths from the shipped Rego rule files.
+def _discover_policy_packages(domain_dir: str) -> list[str]:
+    """Enumerate OPA package paths from one domain's shipped Rego rule files.
 
     Deriving this from the filesystem (rather than a hand-maintained list)
     guarantees that every rule which is seeded and shown as enabled is also
-    actually evaluated — the two can no longer silently drift apart.
-
-    ``domain_dir`` scopes discovery to one IaC/cloud domain subdirectory
-    (e.g. ``"iac_terraform"``); omitted, discovers the original CI-workflow
-    rules directly under ``app/rules/<category>/<name>.rego``. The package
-    path returned always mirrors the file's location relative to
+    actually evaluated — the two can no longer silently drift apart. The
+    package path returned always mirrors the file's location relative to
     ``_RULES_DIR``, so it matches that file's own ``package`` declaration.
     """
-    search_root = _RULES_DIR / domain_dir if domain_dir else _RULES_DIR
+    search_root = _RULES_DIR / domain_dir
     if not search_root.is_dir():
         return []
     packages = sorted(
@@ -82,15 +79,15 @@ class TerraformOpaViolation:
 # All registered policy packages to evaluate against, discovered from the
 # shipped Rego rule files so no rule is left unevaluated. Falls back to the
 # core set if the rules directory is unavailable at runtime.
-POLICY_PACKAGES = _discover_policy_packages() or [
-    "greensecops/energy/caching_missing",
-    "greensecops/energy/runner_sizing",
-    "greensecops/reliability/missing_timeout",
-    "greensecops/reliability/unpinned_actions",
-    "greensecops/security/excessive_token_permissions",
-    "greensecops/security/pr_target_injection",
-    "greensecops/performance/unnecessary_full_checkout",
-    "greensecops/maintainability/missing_workflow_description",
+POLICY_PACKAGES = _discover_policy_packages("ci_workflow") or [
+    "greensecops/ci_workflow/energy/caching_missing",
+    "greensecops/ci_workflow/energy/runner_sizing",
+    "greensecops/ci_workflow/reliability/missing_timeout",
+    "greensecops/ci_workflow/reliability/unpinned_actions",
+    "greensecops/ci_workflow/security/excessive_token_permissions",
+    "greensecops/ci_workflow/security/pr_target_injection",
+    "greensecops/ci_workflow/performance/unnecessary_full_checkout",
+    "greensecops/ci_workflow/maintainability/missing_workflow_description",
 ]
 
 IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")

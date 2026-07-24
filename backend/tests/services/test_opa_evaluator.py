@@ -23,7 +23,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
     Guards against seeded rules silently never firing (the pre-fix state where
     only 8 of 26 packages — and 2 of 6 security rules — were evaluated).
     """
-    packages = _discover_policy_packages()
+    packages = _discover_policy_packages("ci_workflow")
     assert len(packages) == 26
     # The security rules that were previously unwired must now be evaluated.
     for slug in (
@@ -32,7 +32,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
         "oidc_not_used",
         "public_artifact_exposure",
     ):
-        assert f"greensecops/security/{slug}" in packages
+        assert f"greensecops/ci_workflow/security/{slug}" in packages
     assert set(POLICY_PACKAGES) == set(packages)
 
 
@@ -195,7 +195,7 @@ def test_evaluate_workflow_raises_when_opa_unreachable() -> None:
 
 
 def test_discover_policy_packages_excludes_test_files() -> None:
-    packages = _discover_policy_packages()
+    packages = _discover_policy_packages("ci_workflow")
     assert not any(pkg.endswith("_test") for pkg in packages)
 
 
@@ -224,7 +224,7 @@ def test_all_seeded_terraform_rules_are_evaluated() -> None:
 def test_discover_policy_packages_scopes_domains_independently() -> None:
     # Workflow discovery must not pick up the iac_terraform tree, and vice
     # versa — they're different domains evaluated by different engines.
-    workflow_packages = _discover_policy_packages()
+    workflow_packages = _discover_policy_packages("ci_workflow")
     terraform_packages = _discover_policy_packages("iac_terraform")
     assert not any(
         p.startswith("greensecops/iac_terraform/") for p in workflow_packages
