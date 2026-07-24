@@ -2,9 +2,11 @@
   "name": "landing",
   "private": true,
   "scripts": {
+    "lint": "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./",
     "test": "bunx playwright test"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
     "@playwright/test": "1.61.1"
   }
 }
