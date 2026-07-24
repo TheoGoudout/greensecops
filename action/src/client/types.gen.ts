@@ -206,6 +206,188 @@ export type BodyLoginLoginAccessToken = {
 export type CiStatus = 'pending' | 'success' | 'failure' | 'none';
 
 /**
+ * CloudAccountCreate
+ */
+export type CloudAccountCreate = {
+    /**
+     * Org Id
+     */
+    org_id: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Role Arn
+     */
+    role_arn: string;
+    /**
+     * Regions
+     */
+    regions?: Array<string>;
+};
+
+/**
+ * CloudAccountPublic
+ */
+export type CloudAccountPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Org Id
+     */
+    org_id: string;
+    provider: CloudProvider;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Role Arn
+     */
+    role_arn?: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Regions
+     */
+    regions?: Array<string>;
+    status: CloudAccountStatus;
+    /**
+     * Last Synced At
+     */
+    last_synced_at?: string | null;
+    /**
+     * Latest Score
+     */
+    latest_score?: number | null;
+    /**
+     * Latest Grade
+     */
+    latest_grade?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * CloudAccountStatus
+ */
+export type CloudAccountStatus = 'pending_verification' | 'connected' | 'error' | 'disabled';
+
+/**
+ * CloudFindingPublic
+ */
+export type CloudFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Cloud Account Id
+     */
+    cloud_account_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    /**
+     * Resource Type
+     */
+    resource_type: string;
+    /**
+     * Resource Id
+     */
+    resource_id: string;
+    /**
+     * Region
+     */
+    region?: string | null;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * CloudProvider
+ */
+export type CloudProvider = 'aws';
+
+/**
+ * CloudScanPublic
+ */
+export type CloudScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Cloud Account Id
+     */
+    cloud_account_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    /**
+     * Region
+     */
+    region?: string | null;
+    /**
+     * Resource Count
+     */
+    resource_count?: number;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
+};
+
+/**
  * DynamicAnalysisStatus
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
@@ -269,6 +451,22 @@ export type ExternalRepositoryCreate = {
      */
     installation_id?: number | null;
 };
+
+/**
+ * FindingResolutionReason
+ */
+export type FindingResolutionReason = 'no_longer_detected' | 'target_removed';
+
+/**
+ * FindingStatus
+ * Lifecycle of a TerraformFinding or CloudFinding.
+ *
+ * Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
+ * findings in this delivery have no fix/PR concept yet (see plan Phase 7),
+ * so the application sets this column directly alongside resolved_at/
+ * ignored_at rather than needing trigger-derived state.
+ */
+export type FindingStatus = 'open' | 'resolved' | 'ignored';
 
 /**
  * FixDeliveryMode
@@ -882,6 +1080,17 @@ export type SamplePayload = {
 };
 
 /**
+ * ScanStatus
+ * Lifecycle of a TerraformScan or CloudScan.
+ *
+ * Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
+ * value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
+ * files under this root" and "no resources of the scanned types in this
+ * account/region".
+ */
+export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
  * TelemetryAveragePublic
  * Averaged telemetry across a repo's runs.
  *
@@ -1014,6 +1223,164 @@ export type TelemetrySummaryPublic = {
      * Runs
      */
     runs?: Array<TelemetryRunPublic>;
+};
+
+/**
+ * TerraformFindingPublic
+ */
+export type TerraformFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    /**
+     * Resource Address
+     */
+    resource_address?: string | null;
+    /**
+     * File Path
+     */
+    file_path: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * TerraformRootCreate
+ */
+export type TerraformRootCreate = {
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Root Path
+     */
+    root_path: string;
+};
+
+/**
+ * TerraformRootPublic
+ */
+export type TerraformRootPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Repo Full Name
+     */
+    repo_full_name?: string | null;
+    /**
+     * Root Path
+     */
+    root_path: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Last Scanned At
+     */
+    last_scanned_at?: string | null;
+    /**
+     * Last Scanned Head Sha
+     */
+    last_scanned_head_sha?: string | null;
+    /**
+     * Latest Score
+     */
+    latest_score?: number | null;
+    /**
+     * Latest Grade
+     */
+    latest_grade?: string | null;
+    /**
+     * Badge Sig
+     */
+    badge_sig?: string | null;
+};
+
+/**
+ * TerraformScanPublic
+ */
+export type TerraformScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
 };
 
 /**
@@ -3140,6 +3507,77 @@ export type BadgesGetBadgeJsonResponses = {
 
 export type BadgesGetBadgeJsonResponse = BadgesGetBadgeJsonResponses[keyof BadgesGetBadgeJsonResponses];
 
+export type BadgesGetTerraformRootBadgeData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/terraform/{root_id}.svg';
+};
+
+export type BadgesGetTerraformRootBadgeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetTerraformRootBadgeError = BadgesGetTerraformRootBadgeErrors[keyof BadgesGetTerraformRootBadgeErrors];
+
+export type BadgesGetTerraformRootBadgeResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type BadgesGetTerraformRootBadgeJsonData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/terraform/{root_id}.json';
+};
+
+export type BadgesGetTerraformRootBadgeJsonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetTerraformRootBadgeJsonError = BadgesGetTerraformRootBadgeJsonErrors[keyof BadgesGetTerraformRootBadgeJsonErrors];
+
+export type BadgesGetTerraformRootBadgeJsonResponses = {
+    /**
+     * Response Badges-Get Terraform Root Badge Json
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type BadgesGetTerraformRootBadgeJsonResponse = BadgesGetTerraformRootBadgeJsonResponses[keyof BadgesGetTerraformRootBadgeJsonResponses];
+
 export type TelemetryIngestTelemetryData = {
     body: TelemetryPayload;
     headers?: {
@@ -3379,6 +3817,459 @@ export type BillingStripeWebhookResponses = {
 };
 
 export type BillingStripeWebhookResponse = BillingStripeWebhookResponses[keyof BillingStripeWebhookResponses];
+
+export type TerraformListTerraformRootsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Repo Id
+         */
+        repo_id?: string | null;
+    };
+    url: '/api/v1/terraform-roots/';
+};
+
+export type TerraformListTerraformRootsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformRootsError = TerraformListTerraformRootsErrors[keyof TerraformListTerraformRootsErrors];
+
+export type TerraformListTerraformRootsResponses = {
+    /**
+     * Response Terraform-List Terraform Roots
+     * Successful Response
+     */
+    200: Array<TerraformRootPublic>;
+};
+
+export type TerraformListTerraformRootsResponse = TerraformListTerraformRootsResponses[keyof TerraformListTerraformRootsResponses];
+
+export type TerraformCreateTerraformRootData = {
+    body: TerraformRootCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/terraform-roots/';
+};
+
+export type TerraformCreateTerraformRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformCreateTerraformRootError = TerraformCreateTerraformRootErrors[keyof TerraformCreateTerraformRootErrors];
+
+export type TerraformCreateTerraformRootResponses = {
+    /**
+     * Successful Response
+     */
+    201: TerraformRootPublic;
+};
+
+export type TerraformCreateTerraformRootResponse = TerraformCreateTerraformRootResponses[keyof TerraformCreateTerraformRootResponses];
+
+export type TerraformToggleTerraformRootData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query: {
+        /**
+         * Enabled
+         */
+        enabled: boolean;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/toggle';
+};
+
+export type TerraformToggleTerraformRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformToggleTerraformRootError = TerraformToggleTerraformRootErrors[keyof TerraformToggleTerraformRootErrors];
+
+export type TerraformToggleTerraformRootResponses = {
+    /**
+     * Response Terraform-Toggle Terraform Root
+     * Successful Response
+     */
+    200: {
+        [key: string]: string | boolean;
+    };
+};
+
+export type TerraformToggleTerraformRootResponse = TerraformToggleTerraformRootResponses[keyof TerraformToggleTerraformRootResponses];
+
+export type TerraformDeleteTerraformRootData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform-roots/{root_id}';
+};
+
+export type TerraformDeleteTerraformRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformDeleteTerraformRootError = TerraformDeleteTerraformRootErrors[keyof TerraformDeleteTerraformRootErrors];
+
+export type TerraformDeleteTerraformRootResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type TerraformDeleteTerraformRootResponse = TerraformDeleteTerraformRootResponses[keyof TerraformDeleteTerraformRootResponses];
+
+export type TerraformTriggerTerraformScanData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/scan';
+};
+
+export type TerraformTriggerTerraformScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformTriggerTerraformScanError = TerraformTriggerTerraformScanErrors[keyof TerraformTriggerTerraformScanErrors];
+
+export type TerraformTriggerTerraformScanResponses = {
+    /**
+     * Response Terraform-Trigger Terraform Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type TerraformTriggerTerraformScanResponse = TerraformTriggerTerraformScanResponses[keyof TerraformTriggerTerraformScanResponses];
+
+export type TerraformListTerraformScansData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform-roots/{root_id}/scans';
+};
+
+export type TerraformListTerraformScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformScansError = TerraformListTerraformScansErrors[keyof TerraformListTerraformScansErrors];
+
+export type TerraformListTerraformScansResponses = {
+    /**
+     * Response Terraform-List Terraform Scans
+     * Successful Response
+     */
+    200: Array<TerraformScanPublic>;
+};
+
+export type TerraformListTerraformScansResponse = TerraformListTerraformScansResponses[keyof TerraformListTerraformScansResponses];
+
+export type TerraformListTerraformFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/findings';
+};
+
+export type TerraformListTerraformFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformFindingsError = TerraformListTerraformFindingsErrors[keyof TerraformListTerraformFindingsErrors];
+
+export type TerraformListTerraformFindingsResponses = {
+    /**
+     * Response Terraform-List Terraform Findings
+     * Successful Response
+     */
+    200: Array<TerraformFindingPublic>;
+};
+
+export type TerraformListTerraformFindingsResponse = TerraformListTerraformFindingsResponses[keyof TerraformListTerraformFindingsResponses];
+
+export type CloudListCloudAccountsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Org Id
+         */
+        org_id?: string | null;
+    };
+    url: '/api/v1/cloud-accounts/';
+};
+
+export type CloudListCloudAccountsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListCloudAccountsError = CloudListCloudAccountsErrors[keyof CloudListCloudAccountsErrors];
+
+export type CloudListCloudAccountsResponses = {
+    /**
+     * Response Cloud-List Cloud Accounts
+     * Successful Response
+     */
+    200: Array<CloudAccountPublic>;
+};
+
+export type CloudListCloudAccountsResponse = CloudListCloudAccountsResponses[keyof CloudListCloudAccountsResponses];
+
+export type CloudCreateCloudAccountData = {
+    body: CloudAccountCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/cloud-accounts/';
+};
+
+export type CloudCreateCloudAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudCreateCloudAccountError = CloudCreateCloudAccountErrors[keyof CloudCreateCloudAccountErrors];
+
+export type CloudCreateCloudAccountResponses = {
+    /**
+     * Successful Response
+     */
+    201: CloudAccountPublic;
+};
+
+export type CloudCreateCloudAccountResponse = CloudCreateCloudAccountResponses[keyof CloudCreateCloudAccountResponses];
+
+export type CloudToggleCloudAccountData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query: {
+        /**
+         * Enabled
+         */
+        enabled: boolean;
+    };
+    url: '/api/v1/cloud-accounts/{account_id}/toggle';
+};
+
+export type CloudToggleCloudAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudToggleCloudAccountError = CloudToggleCloudAccountErrors[keyof CloudToggleCloudAccountErrors];
+
+export type CloudToggleCloudAccountResponses = {
+    /**
+     * Response Cloud-Toggle Cloud Account
+     * Successful Response
+     */
+    200: {
+        [key: string]: string | boolean;
+    };
+};
+
+export type CloudToggleCloudAccountResponse = CloudToggleCloudAccountResponses[keyof CloudToggleCloudAccountResponses];
+
+export type CloudDeleteCloudAccountData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud-accounts/{account_id}';
+};
+
+export type CloudDeleteCloudAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudDeleteCloudAccountError = CloudDeleteCloudAccountErrors[keyof CloudDeleteCloudAccountErrors];
+
+export type CloudDeleteCloudAccountResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type CloudDeleteCloudAccountResponse = CloudDeleteCloudAccountResponses[keyof CloudDeleteCloudAccountResponses];
+
+export type CloudTriggerCloudScanData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud-accounts/{account_id}/scan';
+};
+
+export type CloudTriggerCloudScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudTriggerCloudScanError = CloudTriggerCloudScanErrors[keyof CloudTriggerCloudScanErrors];
+
+export type CloudTriggerCloudScanResponses = {
+    /**
+     * Response Cloud-Trigger Cloud Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type CloudTriggerCloudScanResponse = CloudTriggerCloudScanResponses[keyof CloudTriggerCloudScanResponses];
+
+export type CloudListCloudScansData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud-accounts/{account_id}/scans';
+};
+
+export type CloudListCloudScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListCloudScansError = CloudListCloudScansErrors[keyof CloudListCloudScansErrors];
+
+export type CloudListCloudScansResponses = {
+    /**
+     * Response Cloud-List Cloud Scans
+     * Successful Response
+     */
+    200: Array<CloudScanPublic>;
+};
+
+export type CloudListCloudScansResponse = CloudListCloudScansResponses[keyof CloudListCloudScansResponses];
+
+export type CloudListCloudFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/cloud-accounts/{account_id}/findings';
+};
+
+export type CloudListCloudFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListCloudFindingsError = CloudListCloudFindingsErrors[keyof CloudListCloudFindingsErrors];
+
+export type CloudListCloudFindingsResponses = {
+    /**
+     * Response Cloud-List Cloud Findings
+     * Successful Response
+     */
+    200: Array<CloudFindingPublic>;
+};
+
+export type CloudListCloudFindingsResponse = CloudListCloudFindingsResponses[keyof CloudListCloudFindingsResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;

@@ -60,8 +60,8 @@ test.describe("theme toggle", () => {
       await page.click('.theme-menu__item[data-theme="dark"]')
       await expect(page.locator("html")).toHaveClass("dark")
 
-      const background = await page.evaluate(() =>
-        getComputedStyle(document.body).backgroundColor,
+      const background = await page.evaluate(
+        () => getComputedStyle(document.body).backgroundColor,
       )
       expect(background).not.toBe("oklch(0.985 0.002 152)")
     })

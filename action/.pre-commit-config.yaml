@@ -19,7 +19,7 @@ repos:
     hooks:
       - id: biome-check-action
         name: Biome lint & format (action)
-        entry: bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/
+        entry: bunx biome check --config-path=. --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/
         language: system
         files: \.(ts|js|json)$
         exclude: ^src/client/

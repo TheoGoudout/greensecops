@@ -49,6 +49,10 @@ services:
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
       EMAILS_FROM_EMAIL: "noreply@example.com"
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-greensecops-artifacts}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -128,6 +132,15 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - FLOWER_PORT=5555
+
+  minio:
+    restart: "no"
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
 
   opa:
     restart: "no"

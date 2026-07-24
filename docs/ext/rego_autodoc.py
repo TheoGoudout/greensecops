@@ -20,9 +20,33 @@ _DETECTION_LABELS = {
     "static_analysis": "Checks field presence or value in the workflow YAML.",
     "pattern_matching": "Regex or keyword matching on string field values.",
     "heuristic": "Structural comparison across multiple jobs or steps.",
+    "cloud_posture": "Checks a live AWS resource's described state.",
+    "dynamic_analysis": "Checks measured runtime telemetry from a completed workflow run.",
 }
 
 _VALID_DETECTION_METHODS = set(_DETECTION_LABELS)
+
+# Every rule file lives at app/rules/<domain>/<category>/<name>.rego — one
+# analysis engine per domain. Human-friendly titles for the domain-level
+# index pages; falls back to a title-cased slug for any domain added here
+# without an entry.
+_DOMAIN_LABELS = {
+    "ci_workflow": "CI Workflow (static)",
+    "ci_telemetry": "CI Telemetry (dynamic)",
+    "iac_terraform": "Terraform (IaC)",
+    "cloud_aws": "AWS Cloud Posture (dynamic)",
+}
+
+
+def _rst_escape(text: str) -> str:
+    """Escape characters reStructuredText treats as inline markup.
+
+    Rule titles/descriptions are free text pulled from YAML METADATA blocks,
+    not authored as RST — an unmatched ``*`` (e.g. a wildcard IAM action like
+    ``"service:*"``) or stray backtick breaks the generated page's parsing.
+    Only escapes what's actually free text; code-block content is untouched.
+    """
+    return text.replace("\\", "\\\\").replace("*", "\\*").replace("`", "\\`")
 
 
 def _parse_metadata(filepath: Path) -> dict[str, Any] | None:
@@ -55,15 +79,17 @@ def _rule_info(filepath: Path, rules_base: Path) -> dict[str, Any] | None:
     if not meta:
         return None
 
+    # <domain>/<category>/<name>.rego for every rule in every engine.
     rel = filepath.relative_to(rules_base)
-    category = rel.parts[0]
+    domain, category = rel.parts[0], rel.parts[1]
     rule_id = filepath.stem
     custom = meta.get("custom") or {}
 
     return {
-        "title": meta.get("title", rule_id),
-        "description": meta.get("description", ""),
+        "title": _rst_escape(meta.get("title", rule_id)),
+        "description": _rst_escape(meta.get("description", "")),
         "severity": custom.get("severity", "unknown"),
+        "domain": domain,
         "category": category,
         "rule_id": rule_id,
         "related_resources": meta.get("related_resources") or [],
@@ -89,7 +115,7 @@ def _render_rule_page(rule: dict[str, Any]) -> str:
         parts: list[str] = ["\nExamples\n--------\n"]
         bad = (examples.get("bad") or "").rstrip()
         good = (examples.get("good") or "").rstrip()
-        fix = (examples.get("fix") or "").strip()
+        fix = _rst_escape((examples.get("fix") or "").strip())
         if bad:
             indented = "\n".join("   " + ln for ln in bad.splitlines())
             parts.append(f"**Non-compliant:**\n\n.. code-block:: yaml\n\n{indented}\n")
@@ -108,6 +134,10 @@ def _render_rule_page(rule: dict[str, Any]) -> str:
         )
         resources_section = f"\nSee also\n--------\n\n{refs}\n"
 
+    domain_label = _DOMAIN_LABELS.get(
+        rule["domain"], rule["domain"].replace("_", " ").title()
+    )
+
     return f"""{title}
 {underline}
 
@@ -117,6 +147,8 @@ def _render_rule_page(rule: dict[str, Any]) -> str:
 
    * - Rule ID
      - ``{rule["rule_id"]}``
+   * - Engine
+     - {domain_label}
    * - Category
      - {rule["category"]}
    * - Severity
@@ -164,21 +196,53 @@ def _render_category_index(category: str, rules: list[dict[str, Any]]) -> str:
 """
 
 
-def _render_rules_index(categories: dict[str, list[dict[str, Any]]]) -> str:
-    toctree_entries = "\n".join(f"   {cat}/index" for cat in sorted(categories))
+def _render_domain_index(
+    domain: str, categories: dict[str, list[dict[str, Any]]]
+) -> str:
+    title = _DOMAIN_LABELS.get(domain, domain.replace("_", " ").title())
+    underline = "=" * len(title)
 
+    toctree_entries = "\n".join(f"   {cat}/index" for cat in sorted(categories))
     category_summaries = "\n\n".join(
         f"**{cat.capitalize()}** — {len(rules)} rule{'s' if len(rules) != 1 else ''}"
         for cat, rules in sorted(categories.items())
     )
 
-    return f"""Rules Reference
-===============
+    return f"""{title}
+{underline}
 
 {category_summaries}
 
 .. toctree::
    :maxdepth: 2
+
+{toctree_entries}
+"""
+
+
+def _render_rules_index(domains: dict[str, dict[str, list[dict[str, Any]]]]) -> str:
+    toctree_entries = "\n".join(f"   {domain}/index" for domain in sorted(domains))
+
+    domain_summaries = "\n\n".join(
+        f"**{_DOMAIN_LABELS.get(domain, domain.replace('_', ' ').title())}** — "
+        f"{sum(len(rules) for rules in categories.values())} rule"
+        f"{'s' if sum(len(rules) for rules in categories.values()) != 1 else ''} "
+        f"across {len(categories)} categor{'y' if len(categories) == 1 else 'ies'}"
+        for domain, categories in sorted(domains.items())
+    )
+
+    return f"""Rules Reference
+===============
+
+Four analysis engines share this rule catalog: static CI-workflow YAML
+analysis, dynamic CI-telemetry analysis, static Terraform (IaC) analysis, and
+live AWS cloud-posture scanning. Each rule is a Rego policy evaluated by the
+same OPA-backed engine.
+
+{domain_summaries}
+
+.. toctree::
+   :maxdepth: 3
 
 {toctree_entries}
 """
@@ -222,7 +286,7 @@ def generate_rule_pages(app: Sphinx) -> None:
     if rules_out.exists():
         shutil.rmtree(rules_out)
     rules_out.mkdir(exist_ok=True)
-    categories: dict[str, list[dict[str, Any]]] = {}
+    domains: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
     for rego_file in sorted(rules_base.glob("**/*.rego")):
         if rego_file.name.endswith("_test.rego"):
@@ -234,23 +298,26 @@ def generate_rule_pages(app: Sphinx) -> None:
             )
             continue
         _warn_rule(info, rego_file.relative_to(rules_base), app)
+        categories = domains.setdefault(info["domain"], {})
         categories.setdefault(info["category"], []).append(info)
 
-        cat_dir = rules_out / info["category"]
-        cat_dir.mkdir(exist_ok=True)
+        cat_dir = rules_out / info["domain"] / info["category"]
+        cat_dir.mkdir(parents=True, exist_ok=True)
         (cat_dir / f"{info['rule_id']}.rst").write_text(
             _render_rule_page(info), encoding="utf-8"
         )
 
-    for cat, rules in categories.items():
-        cat_dir = rules_out / cat
-        (cat_dir / "index.rst").write_text(
-            _render_category_index(cat, rules), encoding="utf-8"
+    for domain, categories in domains.items():
+        domain_dir = rules_out / domain
+        for cat, rules in categories.items():
+            (domain_dir / cat / "index.rst").write_text(
+                _render_category_index(cat, rules), encoding="utf-8"
+            )
+        (domain_dir / "index.rst").write_text(
+            _render_domain_index(domain, categories), encoding="utf-8"
         )
 
-    (rules_out / "index.rst").write_text(
-        _render_rules_index(categories), encoding="utf-8"
-    )
+    (rules_out / "index.rst").write_text(_render_rules_index(domains), encoding="utf-8")
 
 
 def generate_reference_page(app: Sphinx) -> None:

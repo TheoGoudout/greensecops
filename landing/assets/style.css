@@ -70,6 +70,10 @@
   --cat-energy: #f59e0b;
   --cat-maintainability: #64748b;
 
+  /* Analysis surface accents */
+  --surface-terraform: #0284c7;
+  --surface-cloud: #ea580c;
+
   /* Shadows */
   --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
@@ -984,6 +988,93 @@ a { color: inherit; }
   color: var(--muted-foreground);
   line-height: 1.55;
   flex: 1;
+}
+
+/* ============================================================
+   ANALYSIS SURFACES
+   ============================================================ */
+.surfaces-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.surface-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.75rem 1.5rem;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--duration-normal) var(--ease-standard),
+              transform var(--duration-normal) var(--ease-standard);
+  position: relative;
+  overflow: hidden;
+}
+
+.surface-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.surface-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+.surface-card--terraform { border-top-color: var(--surface-terraform); }
+.surface-card--terraform::before { background: var(--surface-terraform); }
+.surface-card--terraform .surface-card__icon { color: var(--surface-terraform); background: var(--blue-50); }
+.surface-card--terraform .surface-card__tag { color: var(--surface-terraform); background: var(--blue-50); }
+
+.surface-card--cloud { border-top-color: var(--surface-cloud); }
+.surface-card--cloud::before { background: var(--surface-cloud); }
+.surface-card--cloud .surface-card__icon { color: var(--surface-cloud); background: #ffedd5; }
+.surface-card--cloud .surface-card__tag { color: var(--surface-cloud); background: #ffedd5; }
+
+.surface-card__icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.surface-card__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.surface-card__desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+.surface-card__tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 720px) {
+  .surfaces-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ============================================================

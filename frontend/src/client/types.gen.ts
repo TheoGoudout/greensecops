@@ -69,6 +69,65 @@ export type Body_login_login_access_token = {
  */
 export type CIStatus = 'pending' | 'success' | 'failure' | 'none';
 
+export type CloudAccountCreate = {
+    org_id: string;
+    display_name: string;
+    role_arn: string;
+    regions?: Array<(string)>;
+};
+
+export type CloudAccountPublic = {
+    id: string;
+    org_id: string;
+    provider: CloudProvider;
+    display_name: string;
+    role_arn?: (string | null);
+    external_id: string;
+    regions?: Array<(string)>;
+    status: CloudAccountStatus;
+    last_synced_at?: (string | null);
+    latest_score?: (number | null);
+    latest_grade?: (string | null);
+    created_at?: (string | null);
+};
+
+export type CloudAccountStatus = 'pending_verification' | 'connected' | 'error' | 'disabled';
+
+export type CloudFindingPublic = {
+    id: string;
+    scan_id: string;
+    cloud_account_id: string;
+    rule_id: string;
+    rule_slug: string;
+    resource_type: string;
+    resource_id: string;
+    region?: (string | null);
+    severity: IssueSeverity;
+    category: IssueCategory;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type CloudProvider = 'aws';
+
+export type CloudScanPublic = {
+    id: string;
+    cloud_account_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    region?: (string | null);
+    resource_count?: number;
+    score?: (number | null);
+    grade?: (string | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
+};
+
 /**
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
@@ -101,6 +160,18 @@ export type ExternalRepositoryCreate = {
     full_name: string;
     installation_id?: (number | null);
 };
+
+export type FindingResolutionReason = 'no_longer_detected' | 'target_removed';
+
+/**
+ * Lifecycle of a TerraformFinding or CloudFinding.
+ *
+ * Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
+ * findings in this delivery have no fix/PR concept yet (see plan Phase 7),
+ * so the application sets this column directly alongside resolved_at/
+ * ignored_at rather than needing trigger-derived state.
+ */
+export type FindingStatus = 'open' | 'resolved' | 'ignored';
 
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
@@ -345,6 +416,16 @@ export type SamplePayload = {
 }> | null);
 };
 
+/**
+ * Lifecycle of a TerraformScan or CloudScan.
+ *
+ * Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
+ * value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
+ * files under this root" and "no resources of the scanned types in this
+ * account/region".
+ */
+export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
 export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed';
 
 /**
@@ -401,6 +482,56 @@ export type TelemetryRunPublic = {
 export type TelemetrySummaryPublic = {
     average: TelemetryAveragePublic;
     runs?: Array<TelemetryRunPublic>;
+};
+
+export type TerraformFindingPublic = {
+    id: string;
+    scan_id: string;
+    terraform_root_id: string;
+    rule_id: string;
+    rule_slug: string;
+    resource_address?: (string | null);
+    file_path: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type TerraformRootCreate = {
+    repo_id: string;
+    root_path: string;
+};
+
+export type TerraformRootPublic = {
+    id: string;
+    repo_id: string;
+    repo_full_name?: (string | null);
+    root_path: string;
+    enabled: boolean;
+    last_scanned_at?: (string | null);
+    last_scanned_head_sha?: (string | null);
+    latest_score?: (number | null);
+    latest_grade?: (string | null);
+    badge_sig?: (string | null);
+};
+
+export type TerraformScanPublic = {
+    id: string;
+    terraform_root_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    score?: (number | null);
+    grade?: (string | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
 };
 
 export type Token = {
@@ -545,6 +676,22 @@ export type BadgesGetBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 
+export type BadgesGetTerraformRootBadgeData = {
+    rootId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetTerraformRootBadgeResponse = (unknown);
+
+export type BadgesGetTerraformRootBadgeJsonData = {
+    rootId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetTerraformRootBadgeJsonResponse = ({
+    [key: string]: unknown;
+});
+
 export type BillingGetSubscriptionResponse = (BillingSubscriptionPublic);
 
 export type BillingGetTierLimitsResponse = ({
@@ -558,6 +705,54 @@ export type BillingStripeWebhookData = {
 export type BillingStripeWebhookResponse = ({
     [key: string]: (string);
 });
+
+export type CloudCreateCloudAccountData = {
+    requestBody: CloudAccountCreate;
+};
+
+export type CloudCreateCloudAccountResponse = (CloudAccountPublic);
+
+export type CloudListCloudAccountsData = {
+    orgId?: (string | null);
+};
+
+export type CloudListCloudAccountsResponse = (Array<CloudAccountPublic>);
+
+export type CloudToggleCloudAccountData = {
+    accountId: string;
+    enabled: boolean;
+};
+
+export type CloudToggleCloudAccountResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type CloudDeleteCloudAccountData = {
+    accountId: string;
+};
+
+export type CloudDeleteCloudAccountResponse = (void);
+
+export type CloudTriggerCloudScanData = {
+    accountId: string;
+};
+
+export type CloudTriggerCloudScanResponse = ({
+    [key: string]: (string);
+});
+
+export type CloudListCloudScansData = {
+    accountId: string;
+};
+
+export type CloudListCloudScansResponse = (Array<CloudScanPublic>);
+
+export type CloudListCloudFindingsData = {
+    accountId: string;
+    includeResolved?: boolean;
+};
+
+export type CloudListCloudFindingsResponse = (Array<CloudFindingPublic>);
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
@@ -874,6 +1069,55 @@ export type TelemetryAnalyzeTelemetryData = {
 export type TelemetryAnalyzeTelemetryResponse = ({
     [key: string]: (string | number);
 });
+
+export type TerraformCreateTerraformRootData = {
+    requestBody: TerraformRootCreate;
+};
+
+export type TerraformCreateTerraformRootResponse = (TerraformRootPublic);
+
+export type TerraformListTerraformRootsData = {
+    repoId?: (string | null);
+};
+
+export type TerraformListTerraformRootsResponse = (Array<TerraformRootPublic>);
+
+export type TerraformToggleTerraformRootData = {
+    enabled: boolean;
+    rootId: string;
+};
+
+export type TerraformToggleTerraformRootResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type TerraformDeleteTerraformRootData = {
+    rootId: string;
+};
+
+export type TerraformDeleteTerraformRootResponse = (void);
+
+export type TerraformTriggerTerraformScanData = {
+    branch?: (string | null);
+    rootId: string;
+};
+
+export type TerraformTriggerTerraformScanResponse = ({
+    [key: string]: (string);
+});
+
+export type TerraformListTerraformScansData = {
+    rootId: string;
+};
+
+export type TerraformListTerraformScansResponse = (Array<TerraformScanPublic>);
+
+export type TerraformListTerraformFindingsData = {
+    includeResolved?: boolean;
+    rootId: string;
+};
+
+export type TerraformListTerraformFindingsResponse = (Array<TerraformFindingPublic>);
 
 export type UsersReadUsersData = {
     limit?: number;

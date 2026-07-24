@@ -19,6 +19,8 @@ The production Compose file (`compose.yml`) is written for [Coolify](https://coo
 * `SERVICE_PASSWORD_64_SECRETKEY`: Generated 64-character secret, passed to the backend as `SECRET_KEY` (signs JWTs).
 * `SERVICE_PASSWORD_FIRSTSUPERUSER`: Generated password for the first superuser account, passed as `FIRST_SUPERUSER_PASSWORD`.
 * `SERVICE_HEX_40_GITHUBWEBHOOKSECRET`: Generated 40-character hex secret, passed to the backend as `GITHUB_WEBHOOK_SECRET`. Copy this value into your GitHub App's webhook secret field after the first deploy.
+* `SERVICE_USER_MINIO`: Generated MinIO root user, passed to the `minio` service as `MINIO_ROOT_USER` and to the backend/worker services as `S3_ACCESS_KEY`.
+* `SERVICE_PASSWORD_MINIO`: Generated MinIO root password, passed as `MINIO_ROOT_PASSWORD` / `S3_SECRET_KEY`.
 * `SERVICE_URL_FRONTEND`: Public URL (scheme included) of the frontend dashboard. Passed directly as `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and baked into the frontend build as `VITE_API_URL`'s counterpart on the landing page's `APP_URL`.
 * `SERVICE_URL_BACKEND`: Public URL of the backend API. Passed directly as `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
 * `SERVICE_URL_DOCS`: Public URL of the docs site. Passed directly as `DOCS_URL` (backend + landing) and the docs image's `DOCS_BASE_URL` build arg.
@@ -26,7 +28,7 @@ The production Compose file (`compose.yml`) is written for [Coolify](https://coo
 
 These `SERVICE_URL_*`/`FRONTEND_HOST`/`BACKEND_HOST`/`DOCS_URL`/`MARKETING_URL`/`BACKEND_CORS_ORIGINS` pairs are wired with flat `${SERVICE_URL_X}` references (no `${VAR:-default}` fallback chain) so Coolify's variable scanner reliably detects them — nested `${VAR:-${OTHER}}` defaults aren't documented as supported by Coolify's UI. This means these values are fixed to the corresponding magic variable in `compose.yml`; they're only independently overridable when running the compose file by hand without Coolify (see below), or in local dev via `compose.override.yml`.
 
-**Deploying without Coolify:** export these nine variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
+**Deploying without Coolify:** export these eleven variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
 
 ## Environment Variables
 
@@ -108,7 +110,10 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 * `POSTGRES_PORT`: The port of the PostgreSQL server. Default: `5432`.
 * `POSTGRES_DB`: The database name to use for this application. Default: `greensecops`.
-* `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL`: Hardcoded by `compose.yml` to the in-network services (`db`, `redis://redis:6379/0`, `http://opa:8181`); only relevant when running the backend outside the Compose stack, where they default to `localhost`-based values.
+* `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL`, `S3_ENDPOINT_URL`: Hardcoded by `compose.yml` to the in-network services (`db`, `redis://redis:6379/0`, `http://opa:8181`, `http://minio:9000`); only relevant when running the backend outside the Compose stack, where they default to `localhost`-based values.
+* `S3_ACCESS_KEY`, `S3_SECRET_KEY`: MinIO credentials for object storage (large IaC/cloud scan artifacts). Fixed to `${SERVICE_USER_MINIO}`/`${SERVICE_PASSWORD_MINIO}` in `compose.yml`.
+* `S3_BUCKET`: The bucket name to use for object storage. Default: `greensecops-artifacts`.
+* `S3_REGION`: Region string passed to the S3 client (MinIO ignores its value but the SDK requires one). Default: `us-east-1`.
 
 **LLM configuration**
 
@@ -116,6 +121,11 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `DEFAULT_LLM_MODEL`: The model name for the selected provider. Default: `gpt-4o-mini`.
 * `OLLAMA_BASE_URL`: Base URL of an Ollama instance, when using the `ollama` provider. Default: `http://localhost:11434`.
 * `AI_PROVIDERS_CONFIG`: Path to a JSON file defining available providers and model lists. Defaults to the file bundled in the backend image.
+
+**AWS cloud posture scanning (optional)**
+
+* `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: GreenSecOps's own AWS IAM user credentials — the identity a customer's IAM role grants `sts:AssumeRole` trust to for cloud-posture scanning. Distinct from the `S3_*` variables above, which authenticate to MinIO, not AWS. Not a Coolify magic variable: unlike `SERVICE_USER_MINIO`/`SERVICE_PASSWORD_MINIO` (an internal service Coolify also deploys), this is a real external AWS account's credentials, which Coolify has no way to generate — create an IAM user yourself and paste in its access key. Leave unset to disable cloud-posture scanning; every other feature works without it.
+* `AWS_DEFAULT_REGION`: Region for the base STS client. Default: `us-east-1`.
 
 **Billing (optional)**
 

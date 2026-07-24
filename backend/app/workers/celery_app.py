@@ -15,6 +15,7 @@ celery_app = Celery(
         "app.workers.tasks.installation_sync",
         "app.workers.tasks.maintenance",
         "app.workers.tasks.polling",
+        "app.workers.tasks.terraform_analysis",
     ],
 )
 
@@ -31,6 +32,7 @@ celery_app.conf.update(
     task_routes={
         "static_analysis.*": {"queue": "analysis"},
         "dynamic_analysis.*": {"queue": "analysis"},
+        "terraform_analysis.*": {"queue": "analysis"},
         "fix_generation.*": {"queue": "fixes"},
         "fix_delivery.*": {"queue": "fixes"},
         "maintenance.*": {"queue": "analysis"},

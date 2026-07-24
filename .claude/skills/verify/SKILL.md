@@ -17,6 +17,28 @@ su postgres -c "psql -c \"ALTER USER postgres PASSWORD '<POSTGRES_PASSWORD>';\" 
 cd backend && uv run bash scripts/prestart.sh   # migrations + superuser seed
 ```
 
+Gotcha (added once the Terraform/cloud-posture object storage landed):
+`prestart.sh` also runs `app/storage_pre_start.py`, which retries
+`ensure_bucket()` against `S3_ENDPOINT_URL` (MinIO) for up to 5 minutes
+before failing — it blocks the whole script if no S3-compatible endpoint is
+reachable. In real deployments docker-compose's `depends_on: minio:
+condition: service_healthy` means MinIO is already up by the time this
+runs; in an environment without a docker daemon, either start a MinIO
+container/binary bound to `S3_ENDPOINT_URL` first, or run
+`python app/backend_pre_start.py`, `alembic upgrade head` and
+`python app/initial_data.py` individually instead of the full
+`prestart.sh`, skipping the storage step (nothing calls
+`put_object`/`get_object` yet, so it's safe to skip for UI verification
+that doesn't touch Terraform scan artifacts).
+
+If no docker daemon and no native postgres/redis services are available
+either (this sandbox's actual state as of 2026-07-23, despite the "no
+docker daemon needed" framing above — that assumption doesn't hold in
+every environment this skill runs in), fall back to `docker run` throwaway
+containers for Postgres + Redis on their default ports instead, matching
+`.env`'s `POSTGRES_SERVER=localhost`/`POSTGRES_PORT=5432`/
+`REDIS_URL=redis://localhost:6379/0`.
+
 Gotcha: the backend test suite's conftest teardown **deletes all users** —
 re-run `uv run python app/initial_data.py` after `pytest` to restore the
 superuser before logging in.
@@ -49,6 +71,13 @@ script outside the repo must import it by absolute path:
 import { chromium } from "/home/user/greensecops/node_modules/playwright/index.mjs"
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" })
 ```
+
+If `/opt/pw-browsers/chromium` doesn't exist in this environment, find the
+Playwright-managed binary instead — it's cached per-user, not repo-local:
+`find ~/.cache/ms-playwright -maxdepth 2 -iname chrome -type f` (look under
+a `chromium-*/chrome-linux64/` directory). Also double-check the repo path
+in the import — `/home/user/greensecops` is a placeholder, not necessarily
+this checkout's actual path.
 
 Login flow: goto `/login`, fill `input[type="email"]` +
 `input[placeholder="Password"]` with FIRST_SUPERUSER creds, submit, wait for

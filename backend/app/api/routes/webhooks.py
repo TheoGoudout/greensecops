@@ -183,18 +183,29 @@ def _handle_push_event(
     # content dedup makes an unchanged tree a cheap no-op.
     forced = bool(payload.get("forced"))
     commits: list[dict[str, Any]] = payload.get("commits", [])
-    touches_workflows = any(
-        any(
-            f.startswith(".github/workflows/")
-            for f in (c.get("added", []) + c.get("modified", []) + c.get("removed", []))
-        )
+    changed_paths = {
+        f
         for c in commits
-    )
-    if not touches_workflows and not is_new_branch and not forced:
-        return
+        for f in (c.get("added", []) + c.get("modified", []) + c.get("removed", []))
+    }
+    touches_workflows = any(f.startswith(".github/workflows/") for f in changed_paths)
 
     commit_sha = payload.get("after", "")
-    eh.enqueue_workflow_analysis(repo, branch, commit_sha, AnalysisTrigger.webhook_push)
+    if touches_workflows or is_new_branch or forced:
+        eh.enqueue_workflow_analysis(
+            repo, branch, commit_sha, AnalysisTrigger.webhook_push
+        )
+    # Independent of the workflow-analysis gate above: a push that only
+    # touches Terraform files (no .github/workflows/ change) must still
+    # trigger a scan.
+    eh.enqueue_terraform_scans(
+        session,
+        repo,
+        branch,
+        commit_sha,
+        AnalysisTrigger.webhook_push,
+        changed_paths=None if (is_new_branch or forced) else changed_paths,
+    )
 
 
 def _flag_externally_modified_fix_branch(

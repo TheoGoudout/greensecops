@@ -387,6 +387,351 @@ export const CIStatusSchema = {
     description: 'Aggregate CI outcome for a PR, from ``check_suite`` webhooks.'
 } as const;
 
+export const CloudAccountCreateSchema = {
+    properties: {
+        org_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Org Id'
+        },
+        display_name: {
+            type: 'string',
+            maxLength: 255,
+            title: 'Display Name'
+        },
+        role_arn: {
+            type: 'string',
+            maxLength: 512,
+            title: 'Role Arn'
+        },
+        regions: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Regions'
+        }
+    },
+    type: 'object',
+    required: ['org_id', 'display_name', 'role_arn'],
+    title: 'CloudAccountCreate'
+} as const;
+
+export const CloudAccountPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        org_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Org Id'
+        },
+        provider: {
+            '$ref': '#/components/schemas/CloudProvider'
+        },
+        display_name: {
+            type: 'string',
+            title: 'Display Name'
+        },
+        role_arn: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Role Arn'
+        },
+        external_id: {
+            type: 'string',
+            title: 'External Id'
+        },
+        regions: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Regions',
+            default: []
+        },
+        status: {
+            '$ref': '#/components/schemas/CloudAccountStatus'
+        },
+        last_synced_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Synced At'
+        },
+        latest_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Score'
+        },
+        latest_grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Grade'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'org_id', 'provider', 'display_name', 'external_id', 'status'],
+    title: 'CloudAccountPublic'
+} as const;
+
+export const CloudAccountStatusSchema = {
+    type: 'string',
+    enum: ['pending_verification', 'connected', 'error', 'disabled'],
+    title: 'CloudAccountStatus'
+} as const;
+
+export const CloudFindingPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        scan_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Scan Id'
+        },
+        cloud_account_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Cloud Account Id'
+        },
+        rule_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Rule Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        resource_type: {
+            type: 'string',
+            title: 'Resource Type'
+        },
+        resource_id: {
+            type: 'string',
+            title: 'Resource Id'
+        },
+        region: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Region'
+        },
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        }
+    },
+    type: 'object',
+    required: ['id', 'scan_id', 'cloud_account_id', 'rule_id', 'rule_slug', 'resource_type', 'resource_id', 'severity', 'category', 'message', 'status'],
+    title: 'CloudFindingPublic'
+} as const;
+
+export const CloudProviderSchema = {
+    type: 'string',
+    enum: ['aws'],
+    title: 'CloudProvider'
+} as const;
+
+export const CloudScanPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        cloud_account_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Cloud Account Id'
+        },
+        status: {
+            '$ref': '#/components/schemas/ScanStatus'
+        },
+        triggered_by: {
+            '$ref': '#/components/schemas/AnalysisTrigger'
+        },
+        region: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Region'
+        },
+        resource_count: {
+            type: 'integer',
+            title: 'Resource Count',
+            default: 0
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        completed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Completed At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'cloud_account_id', 'status', 'triggered_by'],
+    title: 'CloudScanPublic'
+} as const;
+
 export const DynamicAnalysisStatusSchema = {
     type: 'string',
     enum: ['queued', 'running', 'enriched', 'failed'],
@@ -480,6 +825,24 @@ export const ExternalRepositoryCreateSchema = {
     type: 'object',
     required: ['full_name'],
     title: 'ExternalRepositoryCreate'
+} as const;
+
+export const FindingResolutionReasonSchema = {
+    type: 'string',
+    enum: ['no_longer_detected', 'target_removed'],
+    title: 'FindingResolutionReason'
+} as const;
+
+export const FindingStatusSchema = {
+    type: 'string',
+    enum: ['open', 'resolved', 'ignored'],
+    title: 'FindingStatus',
+    description: `Lifecycle of a TerraformFinding or CloudFinding.
+
+Unlike \`\`Issue.status\`\` (owned by a DB trigger reacting to \`\`fix_id\`\`),
+findings in this delivery have no fix/PR concept yet (see plan Phase 7),
+so the application sets this column directly alongside resolved_at/
+ignored_at rather than needing trigger-derived state.`
 } as const;
 
 export const FixDeliveryModeSchema = {
@@ -1632,6 +1995,18 @@ export const SamplePayloadSchema = {
     title: 'SamplePayload'
 } as const;
 
+export const ScanStatusSchema = {
+    type: 'string',
+    enum: ['queued', 'running', 'completed', 'failed', 'no_targets'],
+    title: 'ScanStatus',
+    description: `Lifecycle of a TerraformScan or CloudScan.
+
+Deliberately separate from \`\`AnalysisStatus\`\`: that enum's \`\`no_workflows\`\`
+value is workflow-specific vocabulary. \`\`no_targets\`\` covers both "no .tf
+files under this root" and "no resources of the scanned types in this
+account/region".`
+} as const;
+
 export const TelemetryAveragePublicSchema = {
     properties: {
         run_count: {
@@ -1867,6 +2242,325 @@ export const TelemetrySummaryPublicSchema = {
     type: 'object',
     required: ['average'],
     title: 'TelemetrySummaryPublic'
+} as const;
+
+export const TerraformFindingPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        scan_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Scan Id'
+        },
+        terraform_root_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Terraform Root Id'
+        },
+        rule_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Rule Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        resource_address: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resource Address'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        }
+    },
+    type: 'object',
+    required: ['id', 'scan_id', 'terraform_root_id', 'rule_id', 'rule_slug', 'file_path', 'severity', 'category', 'message', 'status'],
+    title: 'TerraformFindingPublic'
+} as const;
+
+export const TerraformRootCreateSchema = {
+    properties: {
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        root_path: {
+            type: 'string',
+            maxLength: 512,
+            title: 'Root Path'
+        }
+    },
+    type: 'object',
+    required: ['repo_id', 'root_path'],
+    title: 'TerraformRootCreate'
+} as const;
+
+export const TerraformRootPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        repo_full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Full Name'
+        },
+        root_path: {
+            type: 'string',
+            title: 'Root Path'
+        },
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled'
+        },
+        last_scanned_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scanned At'
+        },
+        last_scanned_head_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scanned Head Sha'
+        },
+        latest_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Score'
+        },
+        latest_grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Grade'
+        },
+        badge_sig: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Badge Sig'
+        }
+    },
+    type: 'object',
+    required: ['id', 'repo_id', 'root_path', 'enabled'],
+    title: 'TerraformRootPublic'
+} as const;
+
+export const TerraformScanPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        terraform_root_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Terraform Root Id'
+        },
+        status: {
+            '$ref': '#/components/schemas/ScanStatus'
+        },
+        triggered_by: {
+            '$ref': '#/components/schemas/AnalysisTrigger'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Commit Sha'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        completed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Completed At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'terraform_root_id', 'status', 'triggered_by'],
+    title: 'TerraformScanPublic'
 } as const;
 
 export const TokenSchema = {

@@ -6,10 +6,14 @@ import httpx
 import pytest
 
 from app.services.opa.evaluator import (
+    CI_TELEMETRY_POLICY_PACKAGES,
+    IAC_TERRAFORM_POLICY_PACKAGES,
     POLICY_PACKAGES,
     OpaUnavailableError,
     WorkflowParseError,
     _discover_policy_packages,
+    evaluate_ci_telemetry,
+    evaluate_terraform,
     evaluate_workflow,
     parse_workflow_yaml,
 )
@@ -21,7 +25,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
     Guards against seeded rules silently never firing (the pre-fix state where
     only 8 of 26 packages — and 2 of 6 security rules — were evaluated).
     """
-    packages = _discover_policy_packages()
+    packages = _discover_policy_packages("ci_workflow")
     assert len(packages) == 26
     # The security rules that were previously unwired must now be evaluated.
     for slug in (
@@ -30,7 +34,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
         "oidc_not_used",
         "public_artifact_exposure",
     ):
-        assert f"greensecops/security/{slug}" in packages
+        assert f"greensecops/ci_workflow/security/{slug}" in packages
     assert set(POLICY_PACKAGES) == set(packages)
 
 
@@ -193,5 +197,140 @@ def test_evaluate_workflow_raises_when_opa_unreachable() -> None:
 
 
 def test_discover_policy_packages_excludes_test_files() -> None:
-    packages = _discover_policy_packages()
+    packages = _discover_policy_packages("ci_workflow")
     assert not any(pkg.endswith("_test") for pkg in packages)
+
+
+# ─── Terraform ────────────────────────────────────────────────────────────────
+
+
+def test_all_seeded_terraform_rules_are_evaluated() -> None:
+    packages = _discover_policy_packages("iac_terraform")
+    assert len(packages) == 8
+    for slug in (
+        "s3_bucket_public_acl",
+        "open_ingress_security_group",
+        "unencrypted_ebs_volume",
+        "rds_not_encrypted",
+        "hardcoded_credentials_in_tf",
+    ):
+        assert f"greensecops/iac_terraform/security/{slug}" in packages
+    assert "greensecops/iac_terraform/reliability/s3_bucket_missing_versioning" in (
+        packages
+    )
+    for slug in ("resource_missing_tags", "variable_missing_description"):
+        assert f"greensecops/iac_terraform/maintainability/{slug}" in packages
+    assert set(IAC_TERRAFORM_POLICY_PACKAGES) == set(packages)
+
+
+def test_discover_policy_packages_scopes_domains_independently() -> None:
+    # Workflow discovery must not pick up the iac_terraform tree, and vice
+    # versa — they're different domains evaluated by different engines.
+    workflow_packages = _discover_policy_packages("ci_workflow")
+    terraform_packages = _discover_policy_packages("iac_terraform")
+    assert not any(
+        p.startswith("greensecops/iac_terraform/") for p in workflow_packages
+    )
+    assert all(p.startswith("greensecops/iac_terraform/") for p in terraform_packages)
+
+
+def test_evaluate_terraform_returns_violations_when_policy_matches() -> None:
+    violation = {
+        "rule": "s3_bucket_public_acl",
+        "severity": "high",
+        "category": "security",
+        "resource_address": "aws_s3_bucket.data",
+        "file_path": "main.tf",
+        "message": "Bucket is public",
+    }
+    mock_cm = _mock_client(
+        {
+            "iac_terraform/security/s3_bucket_public_acl": {
+                "result": {"violations": [violation]}
+            }
+        }
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(evaluate_terraform({"resource": []}))
+
+    assert len(violations) == 1
+    assert violations[0].rule_slug == "s3_bucket_public_acl"
+    assert violations[0].resource_address == "aws_s3_bucket.data"
+    assert violations[0].file_path == "main.tf"
+
+
+def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
+    mock_cm = _mock_client(
+        {pkg: {"result": {}} for pkg in IAC_TERRAFORM_POLICY_PACKAGES}
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(evaluate_terraform({"resource": []}))
+
+    assert violations == []
+
+
+# ─── CI telemetry ───────────────────────────────────────────────────────────
+
+
+def test_all_seeded_ci_telemetry_rules_are_evaluated() -> None:
+    packages = _discover_policy_packages("ci_telemetry")
+    assert len(packages) == 3
+    assert "greensecops/ci_telemetry/energy/runner_underutilized" in packages
+    for slug in ("high_memory_pressure", "runner_disk_pressure"):
+        assert f"greensecops/ci_telemetry/reliability/{slug}" in packages
+    assert set(CI_TELEMETRY_POLICY_PACKAGES) == set(packages)
+
+
+def test_evaluate_ci_telemetry_returns_violations_when_policy_matches() -> None:
+    violation = {
+        "rule": "runner_underutilized",
+        "severity": "medium",
+        "category": "energy",
+        "evidence": "vCPUs=8, CPU=10.0%, RAM=15.0%",
+        "recommendation": "Consider downsizing",
+    }
+    mock_cm = _mock_client(
+        {
+            "ci_telemetry/energy/runner_underutilized": {
+                "result": {"violations": [violation]}
+            }
+        }
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_ci_telemetry({"runner_specs": {}, "metrics": {}})
+        )
+
+    assert len(violations) == 1
+    assert violations[0].rule_slug == "runner_underutilized"
+    assert violations[0].evidence == "vCPUs=8, CPU=10.0%, RAM=15.0%"
+    assert violations[0].recommendation == "Consider downsizing"
+
+
+def test_evaluate_ci_telemetry_returns_empty_when_no_violations() -> None:
+    mock_cm = _mock_client(
+        {pkg: {"result": {}} for pkg in CI_TELEMETRY_POLICY_PACKAGES}
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_ci_telemetry({"runner_specs": {}, "metrics": {}})
+        )
+
+    assert violations == []
+
+
+def test_evaluate_terraform_raises_when_opa_unreachable() -> None:
+    async def _post(url: str, **_kwargs: Any) -> MagicMock:
+        raise httpx.ConnectError("connection refused")
+
+    client = AsyncMock()
+    client.post = _post
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=cm),
+        pytest.raises(OpaUnavailableError),
+    ):
+        asyncio.run(evaluate_terraform({"resource": []}))

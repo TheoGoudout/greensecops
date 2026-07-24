@@ -121,7 +121,7 @@ we are using a tool called [prek](https://prek.j178.dev/) (modern alternative to
 
 When you install it, it runs right before making a commit in git. This way it ensures that the code is consistent and formatted even before it is committed.
 
-You can find a file `.pre-commit-config.yaml` with configurations at the root of the project.
+You can find a file `.pre-commit-config.yaml` with configurations at the root of the project, holding workspace-wide hooks (file hygiene, OpenAPI client generation, commit message linting). `prek` also auto-discovers a `.pre-commit-config.yaml` in each of `backend/`, `docs/`, `frontend/`, `action/`, and `landing/` and runs their project-specific lint/format/typecheck hooks alongside it — no extra wiring needed, and each of those can also be run standalone from inside its own directory.
 
 #### Install prek to run automatically
 

@@ -50,3 +50,42 @@ def build_badge_svg_url(owner: str, repo: str, branch: str, *, private: bool) ->
     if not private:
         return base
     return f"{base}?sig={sign_badge(owner, repo, branch)}"
+
+
+def sign_terraform_root_badge(root_id: str) -> str:
+    """Return the badge signature for a Terraform root, keyed by ``root_id``.
+
+    Keyed on id rather than an ``owner/repo/root_path`` composite — root paths
+    contain ``/`` themselves, so an id-keyed scheme sidesteps URL-escaping
+    entirely instead of needing a path converter.
+    """
+    from app.core.config import settings
+
+    digest = hmac.new(
+        settings.SECRET_KEY.encode(), root_id.encode(), hashlib.sha256
+    ).hexdigest()
+    return digest[:_SIG_LEN]
+
+
+def verify_terraform_root_badge(root_id: str, sig: str | None) -> bool:
+    """Constant-time check that ``sig`` matches ``root_id``."""
+    if not sig:
+        return False
+    return hmac.compare_digest(sign_terraform_root_badge(root_id), sig)
+
+
+def build_terraform_root_badge_svg_url(root_id: str, *, private: bool) -> str:
+    """Absolute SVG badge URL for a Terraform root.
+
+    Private-repo roots get a signed URL (``?sig=``); public-repo roots get a
+    plain URL.
+    """
+    from app.core.config import settings
+
+    badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
+    base = (
+        f"{badge_host.rstrip('/')}{settings.API_V1_STR}/badges/terraform/{root_id}.svg"
+    )
+    if not private:
+        return base
+    return f"{base}?sig={sign_terraform_root_badge(root_id)}"

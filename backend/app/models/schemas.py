@@ -9,7 +9,11 @@ from .enums import (
     AnalysisStatus,
     AnalysisTrigger,
     CIStatus,
+    CloudAccountStatus,
+    CloudProvider,
     DynamicAnalysisStatus,
+    FindingResolutionReason,
+    FindingStatus,
     FixDeliveryMode,
     FixStatus,
     IssueCategory,
@@ -19,6 +23,7 @@ from .enums import (
     LLMProvider,
     PullRequestState,
     ReviewDecision,
+    ScanStatus,
     TelemetryPhase,
     UserTier,
 )
@@ -214,6 +219,118 @@ class WorkflowFilePublic(SQLModel):
     path: str
     branch: str | None = None
     raw_content: str | None = None
+
+
+class TerraformRootCreate(SQLModel):
+    repo_id: uuid.UUID
+    root_path: str = Field(max_length=512)
+
+
+class TerraformRootPublic(SQLModel):
+    id: uuid.UUID
+    repo_id: uuid.UUID
+    repo_full_name: str | None = None
+    root_path: str
+    enabled: bool
+    last_scanned_at: datetime | None = None
+    last_scanned_head_sha: str | None = None
+    # Populated from the root's latest scan, mirroring how RepositoryPublic
+    # surfaces the workflow-engine's grade — a root's grade IS its latest
+    # scan's grade, there's no separate aggregation.
+    latest_score: float | None = None
+    latest_grade: str | None = None
+    # HMAC signature for this root's badge, mirroring RepositoryPublic.badge_sig
+    # — only set when the owning repo is private (public repos get plain,
+    # unsigned badge URLs). The frontend appends it as ``?sig=``.
+    badge_sig: str | None = None
+
+
+class TerraformScanPublic(SQLModel):
+    id: uuid.UUID
+    terraform_root_id: uuid.UUID
+    status: ScanStatus
+    triggered_by: AnalysisTrigger
+    branch: str | None = None
+    commit_sha: str | None = None
+    score: float | None = None
+    grade: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class TerraformFindingPublic(SQLModel):
+    id: uuid.UUID
+    scan_id: uuid.UUID
+    terraform_root_id: uuid.UUID
+    rule_id: uuid.UUID
+    rule_slug: str
+    resource_address: str | None = None
+    file_path: str
+    severity: IssueSeverity
+    category: IssueCategory
+    message: str
+    context: str | None = None
+    status: FindingStatus
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution_reason: FindingResolutionReason | None = None
+
+
+class CloudAccountCreate(SQLModel):
+    org_id: uuid.UUID
+    display_name: str = Field(max_length=255)
+    role_arn: str = Field(max_length=512)
+    regions: list[str] = Field(default_factory=list)
+
+
+class CloudAccountPublic(SQLModel):
+    id: uuid.UUID
+    org_id: uuid.UUID
+    provider: CloudProvider
+    display_name: str
+    role_arn: str | None = None
+    external_id: str
+    regions: list[str] = []
+    status: CloudAccountStatus
+    last_synced_at: datetime | None = None
+    # Populated from the account's latest scan, mirroring TerraformRootPublic.
+    latest_score: float | None = None
+    latest_grade: str | None = None
+    created_at: datetime | None = None
+
+
+class CloudScanPublic(SQLModel):
+    id: uuid.UUID
+    cloud_account_id: uuid.UUID
+    status: ScanStatus
+    triggered_by: AnalysisTrigger
+    region: str | None = None
+    resource_count: int = 0
+    score: float | None = None
+    grade: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class CloudFindingPublic(SQLModel):
+    id: uuid.UUID
+    scan_id: uuid.UUID
+    cloud_account_id: uuid.UUID
+    rule_id: uuid.UUID
+    rule_slug: str
+    resource_type: str
+    resource_id: str
+    region: str | None = None
+    severity: IssueSeverity
+    category: IssueCategory
+    message: str
+    context: str | None = None
+    status: FindingStatus
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution_reason: FindingResolutionReason | None = None
 
 
 class PullRequestPublic(SQLModel):

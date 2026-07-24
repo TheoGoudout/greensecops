@@ -264,6 +264,44 @@
   </div>
 </section>
 
+<!-- ═══════════════════════════════ INFRASTRUCTURE ═══════════════════════════════ -->
+<section class="section" aria-labelledby="infra-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">Beyond CI/CD</div>
+      <h2 class="section__heading" id="infra-heading">Your infrastructure is a blind spot too</h2>
+      <p class="section__sub">The same rules engine that scores your workflows now scores your Terraform and your live AWS account — one grading system, three surfaces.</p>
+    </div>
+
+    <div class="surfaces-grid">
+      <div class="surface-card surface-card--terraform">
+        <div class="surface-card__icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="7" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M9 6h2M10 9v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="surface-card__title">Terraform</div>
+        <p class="surface-card__desc">Point GreenSecOps at any folder in your repo — root modules, per-environment directories, whatever your layout — and every resource block is checked for public buckets, open security groups, unencrypted storage, and more before it's ever applied.</p>
+        <div class="surface-card__tag">Static analysis</div>
+      </div>
+
+      <div class="surface-card surface-card--cloud">
+        <div class="surface-card__icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M6 14.5a3.5 3.5 0 0 1-.5-6.965 4.5 4.5 0 0 1 8.79-1.28A3.75 3.75 0 0 1 14.5 14.5H6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="surface-card__title">AWS Cloud Posture</div>
+        <p class="surface-card__desc">Connect an AWS account read-only via sts:AssumeRole — no access keys, ever — and GreenSecOps checks what's actually running: IAM policies, security groups, S3 buckets, RDS, Lambda, and more, drift and all.</p>
+        <div class="surface-card__tag">Live scanning</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ═══════════════════════════════ BEFORE / AFTER ═══════════════════════════════ -->
 <section class="section" aria-labelledby="compare-heading">
   <div class="container">

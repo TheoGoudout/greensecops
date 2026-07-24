@@ -1,9 +1,11 @@
 import type {
   CIStatus,
+  CloudAccountStatus,
   DynamicAnalysisStatus,
   FixStatus,
   IssueStatus,
   ReviewDecision,
+  ScanStatus,
 } from "@/client"
 
 // One palette of semantic status classes, mapped per domain below so the
@@ -131,6 +133,30 @@ export function reviewDecisionLabel(decision: ReviewDecision): string {
   }
 }
 
+export function scanStatusColor(status: ScanStatus): string {
+  switch (status) {
+    case "completed":
+      return STATUS_CLASSES.success
+    case "running":
+      return STATUS_CLASSES.running
+    case "failed":
+      return STATUS_CLASSES.failed
+    case "queued":
+      return STATUS_CLASSES.pending
+    default:
+      return STATUS_CLASSES.muted
+  }
+}
+
+export function scanStatusLabel(status: ScanStatus): string {
+  switch (status) {
+    case "no_targets":
+      return "No targets"
+    default:
+      return status.replace(/_/g, " ")
+  }
+}
+
 export function dynamicStatusColor(status: DynamicAnalysisStatus): string {
   switch (status) {
     case "enriched":
@@ -142,4 +168,21 @@ export function dynamicStatusColor(status: DynamicAnalysisStatus): string {
     default:
       return STATUS_CLASSES.pending
   }
+}
+
+export function cloudAccountStatusColor(status: CloudAccountStatus): string {
+  switch (status) {
+    case "connected":
+      return STATUS_CLASSES.success
+    case "error":
+      return STATUS_CLASSES.failed
+    case "disabled":
+      return STATUS_CLASSES.mutedStruck
+    default:
+      return STATUS_CLASSES.pending
+  }
+}
+
+export function cloudAccountStatusLabel(status: CloudAccountStatus): string {
+  return status.replace(/_/g, " ")
 }

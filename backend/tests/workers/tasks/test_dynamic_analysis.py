@@ -2,7 +2,8 @@
 
 import json
 import uuid
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlmodel import Session, select
@@ -19,6 +20,7 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
+from app.services.opa.evaluator import CiTelemetryOpaViolation
 from app.workers.tasks.dynamic_analysis import _run_dynamic_analysis_impl
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -59,7 +61,9 @@ def _make_telemetry_run(
         repo_id=repo.id,
         workflow_run_id=int(uuid.uuid4().int % 10**6),
         runner_specs=json.dumps({"vcpus": vcpus, "os": "Linux"}),
-        metrics=json.dumps({"cpu_percent": cpu_percent, "ram_percent": ram_percent}),
+        metrics=json.dumps(
+            {"cpu_load_percent": cpu_percent, "ram_percent": ram_percent}
+        ),
         # Ingest marks completed-phase rows queued before enqueuing the worker.
         dynamic_status=DynamicAnalysisStatus.queued,
     )
@@ -67,6 +71,23 @@ def _make_telemetry_run(
     db.commit()
     db.refresh(run)
     return run
+
+
+def _patch_evaluate(violations: list[CiTelemetryOpaViolation]) -> Any:
+    return patch(
+        "app.workers.tasks.dynamic_analysis._evaluate",
+        new=AsyncMock(return_value=violations),
+    )
+
+
+def _underutilized_violation(vcpus: int, cpu_percent: float, ram_percent: float) -> Any:
+    return CiTelemetryOpaViolation(
+        rule_slug="runner_underutilized",
+        severity="medium",
+        category="energy",
+        evidence=f"vCPUs={vcpus}, CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%",
+        recommendation=f"Consider downsizing from {vcpus} vCPUs — measured usage during the run was low.",
+    )
 
 
 def _make_completed_analysis(db: Session, repo: Repository) -> Analysis:
@@ -103,7 +124,8 @@ def test_run_dynamic_analysis_returns_completed(db: Session, repo: Repository) -
     run = _make_telemetry_run(db, repo)
 
     # Act — call the underlying function directly, bypassing Celery
-    result = _run_dynamic_analysis_impl(str(run.id))
+    with _patch_evaluate([]):
+        result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert result["status"] == "completed"
@@ -139,69 +161,37 @@ def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:  # n
     assert result["detail"] == "telemetry_run_not_found"
 
 
-def test_run_dynamic_analysis_no_enrichment_for_small_runner(
+def test_run_dynamic_analysis_persists_enrichment_for_violation(
     db: Session, repo: Repository
 ) -> None:
-    # Arrange — 2 vCPUs at 50% CPU: below the 8-vCPU threshold, no enrichment
-    run = _make_telemetry_run(db, repo, vcpus=2, cpu_percent=50.0, ram_percent=50.0)
-
-    # Act
-    result = _run_dynamic_analysis_impl(str(run.id))
-
-    # Assert
-    assert result["status"] == "completed"
-    assert int(result["enrichments"]) == 0
-
-
-def test_run_dynamic_analysis_enrichment_for_oversized_runner(
-    db: Session, repo: Repository
-) -> None:
-    # Arrange — 16 vCPUs but CPU=10% and RAM=20%: clearly oversized
+    # Arrange — the OPA evaluator flags an oversized/idle runner. Whether a
+    # given vcpus/cpu/ram combination actually crosses the Rego rule's
+    # thresholds is verified separately against a real OPA container (see the
+    # cloud/terraform rule verification convention); this test covers what
+    # this task does with whatever the evaluator returns.
     run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=10.0, ram_percent=20.0)
 
     # Act
-    result = _run_dynamic_analysis_impl(str(run.id))
+    with _patch_evaluate([_underutilized_violation(16, 10.0, 20.0)]):
+        result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
     assert result["status"] == "completed"
     assert int(result["enrichments"]) == 1
 
 
-def test_run_dynamic_analysis_no_enrichment_when_cpu_high(
-    db: Session, repo: Repository
-) -> None:
-    # Arrange — 8 vCPUs but CPU=80%: runner is being used
-    run = _make_telemetry_run(db, repo, vcpus=8, cpu_percent=80.0, ram_percent=20.0)
-
-    # Act
-    result = _run_dynamic_analysis_impl(str(run.id))
-
-    # Assert
-    assert int(result["enrichments"]) == 0
-
-
-def test_run_dynamic_analysis_no_enrichment_when_ram_high(
-    db: Session, repo: Repository
-) -> None:
-    # Arrange — 8 vCPUs, CPU low but RAM=50%: above 30% threshold
-    run = _make_telemetry_run(db, repo, vcpus=8, cpu_percent=10.0, ram_percent=50.0)
-
-    # Act
-    result = _run_dynamic_analysis_impl(str(run.id))
-
-    # Assert
-    assert int(result["enrichments"]) == 0
-
-
 def test_run_dynamic_analysis_logs_enrichment_when_analysis_exists(
     db: Session, repo: Repository
 ) -> None:
-    # Arrange — oversized runner + a completed analysis to attach to
+    # Arrange — a violation + a completed analysis to attach the enrichment to
     _make_completed_analysis(db, repo)
     run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=5.0, ram_percent=10.0)
 
     # Act — verify logger.info is called with enrichment info
-    with patch("app.workers.tasks.dynamic_analysis.logger") as mock_logger:
+    with (
+        _patch_evaluate([_underutilized_violation(16, 5.0, 10.0)]),
+        patch("app.workers.tasks.dynamic_analysis.logger") as mock_logger,
+    ):
         result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert
@@ -215,12 +205,13 @@ def test_run_dynamic_analysis_logs_enrichment_when_analysis_exists(
 def test_run_dynamic_analysis_persists_enrichment_linked_to_analysis(
     db: Session, repo: Repository
 ) -> None:
-    # Arrange — oversized runner + a completed analysis to attach to.
+    # Arrange — a violation + a completed analysis to attach the enrichment to.
     analysis = _make_completed_analysis(db, repo)
     run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=5.0, ram_percent=10.0)
 
     # Act
-    result = _run_dynamic_analysis_impl(str(run.id))
+    with _patch_evaluate([_underutilized_violation(16, 5.0, 10.0)]):
+        result = _run_dynamic_analysis_impl(str(run.id))
 
     # Assert — a DynamicEnrichment row is persisted, linked to run + analysis.
     assert int(result["enrichments"]) == 1
@@ -228,7 +219,7 @@ def test_run_dynamic_analysis_persists_enrichment_linked_to_analysis(
         select(DynamicEnrichment).where(DynamicEnrichment.telemetry_run_id == run.id)
     ).all()
     assert len(rows) == 1
-    assert rows[0].rule_slug == "runner_sizing"
+    assert rows[0].rule_slug == "runner_underutilized"
     assert rows[0].analysis_id == analysis.id
     assert rows[0].repo_id == repo.id
 
@@ -237,8 +228,9 @@ def test_run_dynamic_analysis_is_idempotent_on_rerun(
     db: Session, repo: Repository
 ) -> None:
     run = _make_telemetry_run(db, repo, vcpus=16, cpu_percent=5.0, ram_percent=10.0)
-    _run_dynamic_analysis_impl(str(run.id))
-    _run_dynamic_analysis_impl(str(run.id))
+    with _patch_evaluate([_underutilized_violation(16, 5.0, 10.0)]):
+        _run_dynamic_analysis_impl(str(run.id))
+        _run_dynamic_analysis_impl(str(run.id))
     rows = db.exec(
         select(DynamicEnrichment).where(DynamicEnrichment.telemetry_run_id == run.id)
     ).all()
@@ -250,7 +242,8 @@ def test_run_dynamic_analysis_persists_nothing_when_no_signal(
     db: Session, repo: Repository
 ) -> None:
     run = _make_telemetry_run(db, repo, vcpus=2, cpu_percent=50.0, ram_percent=50.0)
-    _run_dynamic_analysis_impl(str(run.id))
+    with _patch_evaluate([]):
+        _run_dynamic_analysis_impl(str(run.id))
     rows = db.exec(
         select(DynamicEnrichment).where(DynamicEnrichment.telemetry_run_id == run.id)
     ).all()
@@ -272,8 +265,9 @@ def test_run_dynamic_analysis_empty_specs_and_metrics(
     db.refresh(run)
 
     # Act — should not raise
-    result = _run_dynamic_analysis_impl(str(run.id))
+    with _patch_evaluate([]):
+        result = _run_dynamic_analysis_impl(str(run.id))
 
-    # Assert — defaults kick in: vcpus=0, so no oversizing signal
+    # Assert
     assert result["status"] == "completed"
     assert int(result["enrichments"]) == 0

@@ -6,6 +6,7 @@ from app.models import (
     IssueCategory,
     IssueSeverity,
     Rule,
+    RuleDomain,
     User,
     UserCreate,
 )
@@ -220,6 +221,246 @@ INITIAL_RULES: list[dict[str, object]] = [
     },
 ]
 
+# Mirrors INITIAL_RULES for the Terraform static-analysis engine — the two
+# stay separate lists (rather than one combined list with mixed domains)
+# so each is easy to scan/diff on its own, and are merged for seeding in
+# _seed_rules.
+TERRAFORM_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "s3_bucket_public_acl",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "S3 bucket with a public ACL",
+        "description": 'An aws_s3_bucket resource sets acl to "public-read" or "public-read-write", making every object in the bucket readable (or writable) by anyone on the internet by default.',
+    },
+    {
+        "slug": "open_ingress_security_group",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Security group open to the world",
+        "description": "An aws_security_group ingress rule allows traffic from 0.0.0.0/0, exposing the port to the entire internet rather than a scoped CIDR range.",
+    },
+    {
+        "slug": "unencrypted_ebs_volume",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Unencrypted EBS volume",
+        "description": "An aws_ebs_volume resource has no encrypted = true, leaving data at rest unencrypted.",
+    },
+    {
+        "slug": "rds_not_encrypted",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "RDS instance not encrypted at rest",
+        "description": "An aws_db_instance resource has no storage_encrypted = true, leaving the database's data at rest unencrypted.",
+    },
+    {
+        "slug": "hardcoded_credentials_in_tf",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 4.0,
+        "title": "Hardcoded AWS access key",
+        "description": "A resource attribute contains a literal string matching the AWS access key ID format (AKIA...), rather than a variable or a secrets-manager reference.",
+    },
+    {
+        "slug": "s3_bucket_missing_versioning",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "S3 bucket without versioning",
+        "description": "An aws_s3_bucket resource has no versioning block, so an accidental overwrite or delete of an object can't be recovered.",
+    },
+    {
+        "slug": "resource_missing_tags",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Resource missing tags",
+        "description": "A resource of a type that supports the tags argument has none set, making cost attribution and ownership harder to track.",
+    },
+    {
+        "slug": "variable_missing_description",
+        "domain": RuleDomain.iac_terraform,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.4,
+        "title": "Variable without a description",
+        "description": "A variable block has no description, making it harder for other authors (and module consumers) to understand its purpose without reading the whole config.",
+    },
+]
+
+# Mirrors TERRAFORM_INITIAL_RULES for the AWS cloud-posture engine — checks
+# the same curated resource set the collector describes (see
+# services/cloud/aws_collector.py), evaluated against live account state
+# rather than static HCL.
+CLOUD_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "s3_public_access_block_disabled",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "S3 bucket without a full public access block",
+        "description": "A live S3 bucket does not have all four Block Public Access settings enabled, leaving a path for the bucket or its objects to become publicly accessible.",
+    },
+    {
+        "slug": "s3_bucket_unencrypted",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "S3 bucket without default encryption",
+        "description": "A live S3 bucket has no server-side encryption configuration, leaving objects stored unencrypted at rest unless a caller opts in per-object.",
+    },
+    {
+        "slug": "open_ingress_security_group",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Live security group open to the world",
+        "description": "A live EC2 security group has an ingress rule allowing traffic from 0.0.0.0/0 or ::/0, exposing the port to the entire internet rather than a scoped CIDR range.",
+    },
+    {
+        "slug": "iam_policy_wildcard_action",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 4.0,
+        "title": "IAM policy grants a wildcard action",
+        "description": 'A customer-managed IAM policy has an Allow statement with Action set to "*" (or a service-wide "service:*"), granting far more permission than almost any real workload needs.',
+    },
+    {
+        "slug": "iam_user_no_mfa",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "IAM user without MFA",
+        "description": "A live IAM user has no MFA device registered, so a leaked password alone is sufficient to authenticate as them.",
+    },
+    {
+        "slug": "rds_publicly_accessible",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "RDS instance is publicly accessible",
+        "description": "A live RDS instance has PubliclyAccessible set to true, giving it a public endpoint reachable from the internet rather than only from within its VPC.",
+    },
+    {
+        "slug": "rds_not_encrypted",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "RDS instance not encrypted at rest",
+        "description": "A live RDS instance has StorageEncrypted set to false, leaving its data at rest unencrypted.",
+    },
+    {
+        "slug": "ebs_volume_unencrypted",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "EBS volume not encrypted",
+        "description": "A live EBS volume has Encrypted set to false, leaving its data at rest unencrypted.",
+    },
+    {
+        "slug": "lambda_public_function_url",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Lambda function URL with no auth",
+        "description": "A live Lambda function has a Function URL configured with AuthType NONE, making it callable by anyone on the internet without any IAM authentication.",
+    },
+    {
+        "slug": "s3_bucket_missing_versioning",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "S3 bucket without versioning",
+        "description": "A live S3 bucket has no versioning enabled, so an accidental overwrite or delete of an object can't be recovered.",
+    },
+    {
+        "slug": "cloudtrail_logging_disabled",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "CloudTrail trail not logging",
+        "description": "A live CloudTrail trail exists but is not actively logging, leaving API activity in the account unrecorded and unavailable for incident investigation.",
+    },
+    {
+        "slug": "ebs_volume_unattached",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Unattached EBS volume",
+        "description": "A live EBS volume is not attached to any instance, and is very likely a forgotten leftover still incurring storage cost with no owner tracking whether it's safe to delete.",
+    },
+    {
+        "slug": "lambda_deprecated_runtime",
+        "domain": RuleDomain.cloud_aws,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Lambda function on a deprecated runtime",
+        "description": "A live Lambda function runs on a runtime AWS has deprecated (past its official end-of-support date), so it no longer receives security patches and is blocked from configuration updates until migrated.",
+    },
+]
+
+# Mirrors TERRAFORM_INITIAL_RULES/CLOUD_INITIAL_RULES for the CI-workflow
+# dynamic-telemetry engine — evaluated against a completed TelemetryRun's
+# measured runner_specs/metrics (see workers/tasks/dynamic_analysis.py),
+# not static YAML. Seeded for admin visibility/toggling like every other
+# domain, even though DynamicEnrichment itself stays deliberately thinner
+# than Issue/TerraformFinding/CloudFinding (no severity/category/rule_id
+# columns — see its docstring) and isn't scored into a grade.
+CI_TELEMETRY_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "runner_underutilized",
+        "domain": RuleDomain.ci_telemetry,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Runner underutilized during the run",
+        "description": "Actual telemetry from a completed workflow run shows a large runner (8+ vCPUs) with low measured CPU and RAM usage throughout the job, indicating the runner size is not justified by the real workload.",
+    },
+    {
+        "slug": "high_memory_pressure",
+        "domain": RuleDomain.ci_telemetry,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Runner ran under high memory pressure",
+        "description": "Telemetry from a completed workflow run shows RAM usage above 90% at collection time, which risks the OS OOM-killer terminating a build step or test process non-deterministically.",
+    },
+    {
+        "slug": "runner_disk_pressure",
+        "domain": RuleDomain.ci_telemetry,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Runner ran low on free disk space",
+        "description": 'The runner\'s declared free disk space at job start was below 2 GB, a common cause of intermittent "no space left on device" failures.',
+    },
+]
+
 
 def _seed_rules(session: Session) -> list[str]:
     """Insert any rules from INITIAL_RULES not already present.
@@ -228,7 +469,12 @@ def _seed_rules(session: Session) -> list[str]:
     detect when a release has shipped new rules.
     """
     new_slugs: list[str] = []
-    for rule_data in INITIAL_RULES:
+    for rule_data in (
+        INITIAL_RULES
+        + TERRAFORM_INITIAL_RULES
+        + CLOUD_INITIAL_RULES
+        + CI_TELEMETRY_INITIAL_RULES
+    ):
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])
         ).first()
