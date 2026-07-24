@@ -2,7 +2,9 @@ version: 2
 updates:
   # GitHub Actions
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /action
     schedule:
       interval: weekly
     cooldown:
@@ -53,6 +55,8 @@ updates:
       - /backend
       - /frontend
       - /landing
+      - /opa
+      - /docs
     schedule:
       interval: weekly
     cooldown:
@@ -80,11 +84,29 @@ updates:
       docker-compose:
         patterns:
           - "*"
+  # Go modules
+  - package-ecosystem: gomod
+    directory: /action/native/proc-sampler
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ⬆
+    labels: [dependencies, internal]
+    groups:
+      go-packages:
+        patterns:
+          - "*"
   # pre-commit
   - package-ecosystem: "pre-commit"
     directories:
       - "/"
+      - "/backend"
+      - "/docs"
+      - "/frontend"
       - "/action"
+      - "/landing"
     schedule:
       interval: "weekly"
     cooldown:
