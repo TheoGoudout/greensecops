@@ -1,0 +1,13 @@
+default_stages: [pre-commit]
+
+repos:
+  # Frontend: biome lint + format
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: Biome lint & format (frontend)
+        entry: bunx biome check --config-path=. --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./
+        language: system
+        files: \.(ts|tsx|js|jsx|json)$
+        exclude: ^src/client/
+        pass_filenames: false

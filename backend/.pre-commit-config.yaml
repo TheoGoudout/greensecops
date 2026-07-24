@@ -1,0 +1,40 @@
+default_stages: [pre-commit]
+
+repos:
+  # Python: ruff lint + format (replaces flake8, isort, black)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^app/
+      - id: ruff-format
+        files: ^app/
+
+  # Python: mypy type checking
+  - repo: local
+    hooks:
+      - id: mypy-backend
+        name: mypy (backend)
+        entry: uv run mypy app/ --ignore-missing-imports
+        language: system
+        files: ^app/.*\.py$
+        pass_filenames: false
+        stages: [pre-push]
+
+  # OPA: format and validate rego policies (via Docker)
+  - repo: local
+    hooks:
+      - id: opa-fmt
+        name: OPA policy format
+        entry: bash -c 'docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)/app/rules:/policies" openpolicyagent/opa:latest-static fmt --write /policies'
+        language: system
+        files: ^app/rules/.*\.rego$
+        pass_filenames: false
+
+      - id: opa-check
+        name: OPA policy check
+        entry: bash -c 'docker run --rm -v "$(pwd)/app/rules:/policies:ro" openpolicyagent/opa:latest-static check /policies'
+        language: system
+        files: ^app/rules/.*\.rego$
+        pass_filenames: false

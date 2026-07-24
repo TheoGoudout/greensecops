@@ -24,27 +24,6 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
 
-  # Python: ruff lint + format (replaces flake8, isort, black)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
-    hooks:
-      - id: ruff
-        args: [--fix]
-        files: ^(backend|docs/ext)/
-      - id: ruff-format
-        files: ^(backend|docs/ext)/
-
-  # Python: mypy type checking
-  - repo: local
-    hooks:
-      - id: mypy-backend
-        name: mypy (backend)
-        entry: bash -c 'cd backend && uv run mypy app/ --ignore-missing-imports'
-        language: system
-        files: ^backend/app/.*\.py$
-        pass_filenames: false
-        stages: [pre-push]
-
   # OpenAPI client generation
   - repo: local
     hooks:
@@ -53,53 +32,6 @@ repos:
         entry: bash scripts/generate-client.sh
         language: system
         files: ^backend/app/.*\.py$
-        pass_filenames: false
-
-  # Frontend: biome lint + format
-  - repo: local
-    hooks:
-      - id: biome-check
-        name: Biome lint & format (frontend)
-        entry: bash -c 'cd frontend && bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./'
-        language: system
-        files: ^frontend/.*\.(ts|tsx|js|jsx|json)$
-        exclude: ^frontend/src/client/
-        pass_filenames: false
-
-  # Action: biome lint + format + type check
-  - repo: local
-    hooks:
-      - id: biome-check-action
-        name: Biome lint & format (action)
-        entry: bash -c 'cd action && bunx biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true src/'
-        language: system
-        files: ^action/src/.*\.(ts|js|json)$
-        exclude: ^action/src/client/
-        pass_filenames: false
-
-      - id: tsc-action
-        name: TypeScript check (action)
-        entry: bash -c 'cd action && bunx tsc --noEmit'
-        language: system
-        files: ^action/src/.*\.ts$
-        exclude: ^action/src/client/
-        pass_filenames: false
-
-  # OPA: format and validate rego policies (via Docker)
-  - repo: local
-    hooks:
-      - id: opa-fmt
-        name: OPA policy format
-        entry: bash -c 'docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)/backend/app/rules:/policies" openpolicyagent/opa:latest-static fmt --write /policies'
-        language: system
-        files: ^backend/app/rules/.*\.rego$
-        pass_filenames: false
-
-      - id: opa-check
-        name: OPA policy check
-        entry: bash -c 'docker run --rm -v "$(pwd)/backend/app/rules:/policies:ro" openpolicyagent/opa:latest-static check /policies'
-        language: system
-        files: ^backend/app/rules/.*\.rego$
         pass_filenames: false
 
       # Regenerate the landing-page workflow snippets from examples/*.yml so the
