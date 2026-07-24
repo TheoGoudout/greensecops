@@ -35,6 +35,12 @@ from ruamel.yaml import YAML
 
 ROOT = Path(__file__).resolve().parents[1]
 RULES_DIR = ROOT / "backend" / "app" / "rules"
+# Per-rule METADATA `good`/`bad` examples are only self-testable for the
+# ci_workflow domain, whose examples are literal GitHub Actions workflow YAML
+# that maps directly onto the OPA input schema. iac_terraform examples are
+# illustrative Terraform HCL and cloud_aws examples are illustrative CLI
+# output — neither parses as executable OPA input, so they are excluded here.
+CI_WORKFLOW_RULES_DIR = RULES_DIR / "ci_workflow"
 AGGREGATE_REGO = ROOT / "scripts" / "opa" / "aggregate.rego"
 EXAMPLES_DIR = ROOT / "examples"
 OPA_BIN = os.environ.get("OPA_BIN", "opa")
@@ -128,12 +134,12 @@ def check_canonical_examples() -> list[str]:
 
 def check_rule_metadata_examples() -> list[str]:
     errors: list[str] = []
-    for rego in sorted(RULES_DIR.glob("*/*.rego")):
+    for rego in sorted(CI_WORKFLOW_RULES_DIR.glob("*/*.rego")):
         if rego.name.endswith("_test.rego"):
             continue
         category, name = rego.parent.name, rego.stem
         examples = (_parse_metadata(rego).get("custom") or {}).get("examples") or {}
-        query = f"data.greensecops.{category}.{name}.violations"
+        query = f"data.greensecops.ci_workflow.{category}.{name}.violations"
 
         good = examples.get("good")
         if good:
