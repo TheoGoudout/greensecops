@@ -1151,6 +1151,10 @@ export type TerraformRootPublic = {
      * Latest Grade
      */
     latest_grade?: string | null;
+    /**
+     * Badge Sig
+     */
+    badge_sig?: string | null;
 };
 
 /**
@@ -3320,6 +3324,77 @@ export type BadgesGetBadgeJsonResponses = {
 };
 
 export type BadgesGetBadgeJsonResponse = BadgesGetBadgeJsonResponses[keyof BadgesGetBadgeJsonResponses];
+
+export type BadgesGetTerraformRootBadgeData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/terraform/{root_id}.svg';
+};
+
+export type BadgesGetTerraformRootBadgeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetTerraformRootBadgeError = BadgesGetTerraformRootBadgeErrors[keyof BadgesGetTerraformRootBadgeErrors];
+
+export type BadgesGetTerraformRootBadgeResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type BadgesGetTerraformRootBadgeJsonData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/terraform/{root_id}.json';
+};
+
+export type BadgesGetTerraformRootBadgeJsonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetTerraformRootBadgeJsonError = BadgesGetTerraformRootBadgeJsonErrors[keyof BadgesGetTerraformRootBadgeJsonErrors];
+
+export type BadgesGetTerraformRootBadgeJsonResponses = {
+    /**
+     * Response Badges-Get Terraform Root Badge Json
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type BadgesGetTerraformRootBadgeJsonResponse = BadgesGetTerraformRootBadgeJsonResponses[keyof BadgesGetTerraformRootBadgeJsonResponses];
 
 export type TelemetryIngestTelemetryData = {
     body: TelemetryPayload;

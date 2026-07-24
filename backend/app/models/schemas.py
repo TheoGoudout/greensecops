@@ -237,6 +237,10 @@ class TerraformRootPublic(SQLModel):
     # scan's grade, there's no separate aggregation.
     latest_score: float | None = None
     latest_grade: str | None = None
+    # HMAC signature for this root's badge, mirroring RepositoryPublic.badge_sig
+    # — only set when the owning repo is private (public repos get plain,
+    # unsigned badge URLs). The frontend appends it as ``?sig=``.
+    badge_sig: str | None = None
 
 
 class TerraformScanPublic(SQLModel):

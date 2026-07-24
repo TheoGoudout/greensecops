@@ -2097,6 +2097,17 @@ export const TerraformRootPublicSchema = {
                 }
             ],
             title: 'Latest Grade'
+        },
+        badge_sig: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Badge Sig'
         }
     },
     type: 'object',

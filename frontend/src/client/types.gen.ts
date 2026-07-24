@@ -458,6 +458,7 @@ export type TerraformRootPublic = {
     last_scanned_head_sha?: (string | null);
     latest_score?: (number | null);
     latest_grade?: (string | null);
+    badge_sig?: (string | null);
 };
 
 export type TerraformScanPublic = {
@@ -613,6 +614,22 @@ export type BadgesGetBadgeJsonData = {
 };
 
 export type BadgesGetBadgeJsonResponse = ({
+    [key: string]: unknown;
+});
+
+export type BadgesGetTerraformRootBadgeData = {
+    rootId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetTerraformRootBadgeResponse = (unknown);
+
+export type BadgesGetTerraformRootBadgeJsonData = {
+    rootId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetTerraformRootBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 

@@ -5,10 +5,11 @@ from fastapi.responses import Response
 from sqlmodel import Session, col, select
 
 from app.api.deps import SessionDep
+from app.api.mappers.terraform import latest_completed_terraform_scan
 from app.core.config import settings
-from app.models import Analysis, AnalysisStatus, Repository
+from app.models import Analysis, AnalysisStatus, Repository, TerraformRoot
 from app.services.badge_renderer import render_badge, render_unknown_badge
-from app.services.badge_signing import verify_badge
+from app.services.badge_signing import verify_badge, verify_terraform_root_badge
 from app.services.scoring import average_latest_scores, score_to_grade
 
 router = APIRouter(prefix="/badges", tags=["badges"])
@@ -123,6 +124,81 @@ def get_badge_json(
     return {
         "schemaVersion": 1,
         "label": "GreenSecOps",
+        "message": grade,
+        "color": color,
+        "cacheSeconds": 300,
+    }
+
+
+def _terraform_root_badge_grade(
+    session: Session, root_id: uuid.UUID
+) -> tuple[TerraformRoot | None, str | None]:
+    root = session.get(TerraformRoot, root_id)
+    if root is None:
+        return None, None
+    latest = latest_completed_terraform_scan(root)
+    return root, (latest.grade if latest else None)
+
+
+@router.get("/terraform/{root_id}.svg", response_class=Response)
+def get_terraform_root_badge(
+    root_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> Response:
+    root, grade = _terraform_root_badge_grade(session, root_id)
+
+    if root is None or (
+        root.repository
+        and root.repository.is_private
+        and not verify_terraform_root_badge(str(root_id), sig)
+    ):
+        return Response(content=render_unknown_badge(), headers=_CACHE_HEADERS)
+
+    svg = (
+        render_unknown_badge()
+        if grade is None
+        else render_badge(grade, label="Terraform")
+    )
+
+    return Response(content=svg, headers=_CACHE_HEADERS)
+
+
+@router.get("/terraform/{root_id}.json")
+def get_terraform_root_badge_json(
+    root_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> dict[str, object]:
+    """Shields.io-compatible JSON endpoint for a Terraform root's badge."""
+    root, grade = _terraform_root_badge_grade(session, root_id)
+
+    if root is None or (
+        root.repository
+        and root.repository.is_private
+        and not verify_terraform_root_badge(str(root_id), sig)
+    ):
+        return {
+            "schemaVersion": 1,
+            "label": "Terraform",
+            "message": "not configured",
+            "color": "lightgrey",
+        }
+
+    if grade is None:
+        return {
+            "schemaVersion": 1,
+            "label": "Terraform",
+            "message": "pending",
+            "color": "lightgrey",
+        }
+
+    from app.services.badge_renderer import _GRADE_COLORS
+
+    color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
+    return {
+        "schemaVersion": 1,
+        "label": "Terraform",
         "message": grade,
         "color": color,
         "cacheSeconds": 300,
