@@ -101,7 +101,7 @@ export function AppSidebar() {
   const infrastructureItems: NavItem[] = [
     { icon: Boxes, title: "Terraform", path: "/infrastructure" },
     { icon: Cloud, title: "Cloud", path: "/infrastructure/cloud" },
-    { icon: Award, title: "Badges", path: "/infrastructure/badges" },
+    { icon: Award, title: "Terraform Badges", path: "/infrastructure/badges" },
   ]
 
   const configItems: NavItem[] = [

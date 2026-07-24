@@ -87,7 +87,7 @@ function TerraformBadges() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Badges</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Terraform Badges</h1>
         <p className="text-muted-foreground">
           Embed Terraform grade badges in your repository READMEs
         </p>
