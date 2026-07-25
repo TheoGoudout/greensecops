@@ -2,6 +2,8 @@ from app.models import (
     ScanStatus,
     TerraformFinding,
     TerraformFindingPublic,
+    TerraformFix,
+    TerraformFixPublic,
     TerraformRoot,
     TerraformRootPublic,
     TerraformScan,
@@ -61,6 +63,7 @@ def to_terraform_scan_public(scan: TerraformScan) -> TerraformScanPublic:
 
 
 def to_terraform_finding_public(finding: TerraformFinding) -> TerraformFindingPublic:
+    fix = finding.fix
     return TerraformFindingPublic(
         id=finding.id,
         scan_id=finding.scan_id,
@@ -69,12 +72,36 @@ def to_terraform_finding_public(finding: TerraformFinding) -> TerraformFindingPu
         rule_slug=finding.rule.slug if finding.rule else "",
         resource_address=finding.resource_address,
         file_path=finding.file_path,
+        line_start=finding.line_start,
+        line_end=finding.line_end,
         severity=finding.severity,
         category=finding.category,
         message=finding.message,
         context=finding.context,
         status=finding.status,
+        fix_id=fix.id if fix else None,
+        fix_status=fix.status if fix else None,
         created_at=finding.created_at,
         resolved_at=finding.resolved_at,
         resolution_reason=finding.resolution_reason,
+    )
+
+
+def to_terraform_fix_public(fix: TerraformFix) -> TerraformFixPublic:
+    pr = fix.pull_request
+    return TerraformFixPublic(
+        id=fix.id,
+        terraform_root_id=fix.terraform_root_id,
+        file_path=fix.file_path,
+        pr_id=fix.pr_id,
+        llm_provider=fix.llm_provider,
+        llm_model=fix.llm_model,
+        status=fix.status,
+        full_content=fix.full_content,
+        error_message=fix.error_message,
+        pr_url=pr.pr_url if pr else None,
+        pr_branch=pr.pr_branch if pr else None,
+        pr_state=pr.pr_state if pr else None,
+        created_at=fix.created_at,
+        delivered_at=fix.delivered_at,
     )

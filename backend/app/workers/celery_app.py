@@ -16,6 +16,8 @@ celery_app = Celery(
         "app.workers.tasks.maintenance",
         "app.workers.tasks.polling",
         "app.workers.tasks.terraform_analysis",
+        "app.workers.tasks.terraform_fix_generation",
+        "app.workers.tasks.terraform_fix_delivery",
     ],
 )
 
@@ -33,6 +35,8 @@ celery_app.conf.update(
         "static_analysis.*": {"queue": "analysis"},
         "dynamic_analysis.*": {"queue": "analysis"},
         "terraform_analysis.*": {"queue": "analysis"},
+        "terraform_fix_generation.*": {"queue": "fixes"},
+        "terraform_fix_delivery.*": {"queue": "fixes"},
         "fix_generation.*": {"queue": "fixes"},
         "fix_delivery.*": {"queue": "fixes"},
         "maintenance.*": {"queue": "analysis"},

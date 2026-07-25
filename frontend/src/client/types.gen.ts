@@ -375,6 +375,7 @@ export type RepoIssueStats = {
 
 export type RepositoryPublic = {
     id: string;
+    org_id: string;
     full_name: string;
     enabled: boolean;
     is_accessible?: boolean;
@@ -484,6 +485,18 @@ export type TelemetrySummaryPublic = {
     runs?: Array<TelemetryRunPublic>;
 };
 
+/**
+ * A ``.tf`` file's live source for a Terraform root.
+ *
+ * Terraform files aren't persisted (unlike ``WorkflowFile``); they're fetched
+ * from GitHub on demand, so this carries no id/branch — just the path and
+ * content, mirroring the shape of ``WorkflowFilePublic``.
+ */
+export type TerraformFilePublic = {
+    path: string;
+    raw_content: string;
+};
+
 export type TerraformFindingPublic = {
     id: string;
     scan_id: string;
@@ -492,14 +505,39 @@ export type TerraformFindingPublic = {
     rule_slug: string;
     resource_address?: (string | null);
     file_path: string;
+    line_start?: (number | null);
+    line_end?: (number | null);
     severity: IssueSeverity;
     category: IssueCategory;
     message: string;
     context?: (string | null);
     status: FindingStatus;
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
     created_at?: (string | null);
     resolved_at?: (string | null);
     resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type TerraformFixGenerateRequest = {
+    finding_ids?: (Array<(string)> | null);
+};
+
+export type TerraformFixPublic = {
+    id: string;
+    terraform_root_id: string;
+    file_path: string;
+    pr_id?: (string | null);
+    llm_provider: LLMProvider;
+    llm_model: string;
+    status: FixStatus;
+    full_content?: (string | null);
+    error_message?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    pr_state?: (PullRequestState | null);
+    created_at?: (string | null);
+    delivered_at?: (string | null);
 };
 
 export type TerraformRootCreate = {
@@ -1118,6 +1156,38 @@ export type TerraformListTerraformFindingsData = {
 };
 
 export type TerraformListTerraformFindingsResponse = (Array<TerraformFindingPublic>);
+
+export type TerraformListTerraformFilesData = {
+    ref?: (string | null);
+    rootId: string;
+};
+
+export type TerraformListTerraformFilesResponse = (Array<TerraformFilePublic>);
+
+export type TerraformListTerraformFixesData = {
+    rootId: string;
+};
+
+export type TerraformListTerraformFixesResponse = (Array<TerraformFixPublic>);
+
+export type TerraformTriggerTerraformFixGenerationData = {
+    force?: boolean;
+    requestBody?: (TerraformFixGenerateRequest | null);
+    rootId: string;
+};
+
+export type TerraformTriggerTerraformFixGenerationResponse = ({
+    [key: string]: (string | number);
+});
+
+export type TerraformTriggerTerraformDeliveryData = {
+    force?: boolean;
+    rootId: string;
+};
+
+export type TerraformTriggerTerraformDeliveryResponse = ({
+    [key: string]: (string);
+});
 
 export type UsersReadUsersData = {
     limit?: number;

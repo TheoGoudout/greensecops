@@ -70,6 +70,9 @@ class AIProvidersPublic(SQLModel):
 
 class RepositoryPublic(SQLModel):
     id: uuid.UUID
+    # The owning organization — lets the frontend scope org-level resources
+    # (e.g. the repo's connected AWS cloud accounts) to this repo's org.
+    org_id: uuid.UUID
     full_name: str
     enabled: bool
     is_accessible: bool = True
@@ -267,14 +270,51 @@ class TerraformFindingPublic(SQLModel):
     rule_slug: str
     resource_address: str | None = None
     file_path: str
+    # 1-based line span of the offending block, when the scanner could locate
+    # it — lets the frontend annotate the finding inline on the ``.tf`` source.
+    line_start: int | None = None
+    line_end: int | None = None
     severity: IssueSeverity
     category: IssueCategory
     message: str
     context: str | None = None
     status: FindingStatus
+    # The generated fix addressing this finding, if any — mirrors
+    # ``IssuePublic.fix_id`` / ``fix_status``.
+    fix_id: uuid.UUID | None = None
+    fix_status: FixStatus | None = None
     created_at: datetime | None = None
     resolved_at: datetime | None = None
     resolution_reason: FindingResolutionReason | None = None
+
+
+class TerraformFilePublic(SQLModel):
+    """A ``.tf`` file's live source for a Terraform root.
+
+    Terraform files aren't persisted (unlike ``WorkflowFile``); they're fetched
+    from GitHub on demand, so this carries no id/branch — just the path and
+    content, mirroring the shape of ``WorkflowFilePublic``.
+    """
+
+    path: str
+    raw_content: str
+
+
+class TerraformFixPublic(SQLModel):
+    id: uuid.UUID
+    terraform_root_id: uuid.UUID
+    file_path: str
+    pr_id: uuid.UUID | None = None
+    llm_provider: LLMProvider
+    llm_model: str
+    status: FixStatus
+    full_content: str | None = None
+    error_message: str | None = None
+    pr_url: str | None = None
+    pr_branch: str | None = None
+    pr_state: PullRequestState | None = None
+    created_at: datetime | None = None
+    delivered_at: datetime | None = None
 
 
 class CloudAccountCreate(SQLModel):

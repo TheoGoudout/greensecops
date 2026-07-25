@@ -10,8 +10,10 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import (
     AnalysisTrigger,
+    FixStatus,
     IssueCategory,
     IssueSeverity,
+    LLMProvider,
     Organization,
     OrgMember,
     OrgRole,
@@ -20,6 +22,7 @@ from app.models import (
     RuleDomain,
     ScanStatus,
     TerraformFinding,
+    TerraformFix,
     TerraformRoot,
     TerraformScan,
     User,
@@ -451,3 +454,160 @@ def test_list_terraform_findings_include_resolved(
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+# ─── GET /terraform-roots/{id}/files ────────────────────────────────────────────
+
+
+def test_list_terraform_files(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    terraform_root: TerraformRoot,
+) -> None:
+    from types import SimpleNamespace
+
+    fetched = [
+        SimpleNamespace(path="main.tf", content='resource "aws_s3_bucket" "b" {}\n'),
+        SimpleNamespace(path="variables.tf", content='variable "x" {}\n'),
+    ]
+    with patch("app.api.routes.terraform._fetch_terraform_files", return_value=fetched):
+        response = client.get(
+            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/files",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert [f["path"] for f in body] == ["main.tf", "variables.tf"]
+    assert body[0]["raw_content"].startswith('resource "aws_s3_bucket"')
+
+
+def test_list_terraform_files_github_failure_is_502(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    terraform_root: TerraformRoot,
+) -> None:
+    with patch(
+        "app.api.routes.terraform._fetch_terraform_files",
+        side_effect=RuntimeError("boom"),
+    ):
+        response = client.get(
+            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/files",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 502
+
+
+# ─── POST/GET /terraform-roots/{id}/fixes ───────────────────────────────────────
+
+
+def _make_open_finding(
+    db: Session,
+    root: TerraformRoot,
+    scan: TerraformScan,
+    rule: Rule,
+    file_path: str = "main.tf",
+) -> TerraformFinding:
+    finding = TerraformFinding(
+        scan_id=scan.id,
+        terraform_root_id=root.id,
+        rule_id=rule.id,
+        resource_address="aws_s3_bucket.data",
+        file_path=file_path,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="unencrypted bucket",
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+def test_trigger_terraform_fix_generation_creates_pending_fix(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    terraform_root: TerraformRoot,
+    completed_scan: TerraformScan,
+    seeded_terraform_rule: Rule,
+) -> None:
+    # Give the repo an explicit provider so resolve_llm_provider doesn't need a
+    # configured API key in the test environment.
+    repo.llm_provider = LLMProvider.openai
+    repo.llm_model = "gpt-4o-mini"
+    db.add(repo)
+    db.commit()
+
+    finding = _make_open_finding(
+        db, terraform_root, completed_scan, seeded_terraform_rule
+    )
+
+    with patch(
+        "app.api.routes.terraform.run_terraform_fix_generation.delay"
+    ) as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/fixes",
+            headers=superuser_token_headers,
+            json={},
+        )
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs["finding_ids"] == [str(finding.id)]
+
+    fix = db.exec(
+        select(TerraformFix).where(TerraformFix.terraform_root_id == terraform_root.id)
+    ).first()
+    assert fix is not None
+    assert fix.status == FixStatus.pending
+    assert fix.file_path == "main.tf"
+    db.refresh(finding)
+    assert finding.fix_id == fix.id
+
+
+def test_list_terraform_fixes(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    terraform_root: TerraformRoot,
+) -> None:
+    fix = TerraformFix(
+        terraform_root_id=terraform_root.id,
+        file_path="main.tf",
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.ready,
+        full_content='resource "aws_s3_bucket" "b" {}\n',
+    )
+    db.add(fix)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/fixes",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["file_path"] == "main.tf"
+    assert body[0]["status"] == "ready"
+
+
+def test_trigger_terraform_delivery_queues_task(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    terraform_root: TerraformRoot,
+) -> None:
+    with patch("app.api.routes.terraform.deliver_terraform_fixes.delay") as mock_delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/deliver",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["pr_branch"].startswith("greensecops/terraform-")
+    mock_delay.assert_called_once()
+    assert mock_delay.call_args.kwargs["terraform_root_id"] == str(terraform_root.id)

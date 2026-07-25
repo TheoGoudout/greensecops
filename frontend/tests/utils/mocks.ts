@@ -90,6 +90,7 @@ export const MOCK_ORG = {
 // ── Repositories ──────────────────────────────────────────────────────
 export const MOCK_REPO = {
   id: ID.repo,
+  org_id: ID.org,
   full_name: "acme/web-app",
   enabled: true,
   is_external: false,
@@ -102,6 +103,7 @@ export const MOCK_REPO = {
 
 export const MOCK_REPO_DISABLED = {
   id: ID.repoDisabled,
+  org_id: ID.org,
   full_name: "acme/old-service",
   enabled: false,
   is_external: false,
@@ -114,6 +116,7 @@ export const MOCK_REPO_DISABLED = {
 
 export const MOCK_REPO_EXTERNAL = {
   id: ID.repoExternal,
+  org_id: ID.org,
   full_name: "external/third-party-repo",
   enabled: true,
   is_external: true,
@@ -126,6 +129,7 @@ export const MOCK_REPO_EXTERNAL = {
 
 export const MOCK_REPO_NO_ANALYSES = {
   id: ID.repoNoAnalyses,
+  org_id: ID.org,
   full_name: "acme/new-repo",
   enabled: true,
   is_external: false,
@@ -138,6 +142,7 @@ export const MOCK_REPO_NO_ANALYSES = {
 
 export const MOCK_REPO_PRIVATE = {
   id: ID.repoPrivate,
+  org_id: ID.org,
   full_name: "acme/secret-service",
   enabled: true,
   is_external: false,

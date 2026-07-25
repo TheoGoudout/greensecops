@@ -12,6 +12,7 @@ def to_repo_public(
         badge_sig = sign_badge(owner, name, repo.default_branch)
     return RepositoryPublic(
         id=repo.id,
+        org_id=repo.org_id,
         full_name=repo.full_name,
         enabled=repo.enabled,
         is_accessible=repo.is_accessible,

@@ -32,6 +32,17 @@ def repo_fix_branch(repo_id: uuid.UUID) -> str:
     return f"greensecops/fixes-{str(repo_id)[:8]}"
 
 
+# Matches the Terraform-root fix branch ``greensecops/terraform-<root_id[:8]>``
+# minted by tf_fix_branch(). Distinct prefix from the workflow branches so the
+# frontend can tell a Terraform PR apart from a CI-workflow PR on the same repo.
+TF_FIX_BRANCH_RE = re.compile(r"greensecops/terraform-([0-9a-f]{8})$")
+
+
+def tf_fix_branch(terraform_root_id: uuid.UUID) -> str:
+    """Deterministic branch for a Terraform root's fix PR (all its .tf files)."""
+    return f"greensecops/terraform-{str(terraform_root_id)[:8]}"
+
+
 def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
     """Build PR-body issue summaries from the issues each fix actually resolved.
 
