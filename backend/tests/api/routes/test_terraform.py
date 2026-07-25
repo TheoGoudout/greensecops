@@ -470,9 +470,7 @@ def test_list_terraform_files(
         SimpleNamespace(path="main.tf", content='resource "aws_s3_bucket" "b" {}\n'),
         SimpleNamespace(path="variables.tf", content='variable "x" {}\n'),
     ]
-    with patch(
-        "app.api.routes.terraform._fetch_terraform_files", return_value=fetched
-    ):
+    with patch("app.api.routes.terraform._fetch_terraform_files", return_value=fetched):
         response = client.get(
             f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/files",
             headers=superuser_token_headers,
@@ -542,7 +540,9 @@ def test_trigger_terraform_fix_generation_creates_pending_fix(
     db.add(repo)
     db.commit()
 
-    finding = _make_open_finding(db, terraform_root, completed_scan, seeded_terraform_rule)
+    finding = _make_open_finding(
+        db, terraform_root, completed_scan, seeded_terraform_rule
+    )
 
     with patch(
         "app.api.routes.terraform.run_terraform_fix_generation.delay"
@@ -558,9 +558,7 @@ def test_trigger_terraform_fix_generation_creates_pending_fix(
     assert mock_delay.call_args.kwargs["finding_ids"] == [str(finding.id)]
 
     fix = db.exec(
-        select(TerraformFix).where(
-            TerraformFix.terraform_root_id == terraform_root.id
-        )
+        select(TerraformFix).where(TerraformFix.terraform_root_id == terraform_root.id)
     ).first()
     assert fix is not None
     assert fix.status == FixStatus.pending
@@ -602,9 +600,7 @@ def test_trigger_terraform_delivery_queues_task(
     superuser_token_headers: dict[str, str],
     terraform_root: TerraformRoot,
 ) -> None:
-    with patch(
-        "app.api.routes.terraform.deliver_terraform_fixes.delay"
-    ) as mock_delay:
+    with patch("app.api.routes.terraform.deliver_terraform_fixes.delay") as mock_delay:
         response = client.post(
             f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/deliver",
             headers=superuser_token_headers,

@@ -40,9 +40,7 @@ def run_terraform_fix_generation(
     one root (the route groups by file path).
     """
     with Session(engine) as session:
-        loaded = [
-            session.get(TerraformFinding, uuid.UUID(fid)) for fid in finding_ids
-        ]
+        loaded = [session.get(TerraformFinding, uuid.UUID(fid)) for fid in finding_ids]
         findings = [f for f in loaded if f is not None]
         if not findings:
             return {"status": "error", "detail": "no_findings_found"}

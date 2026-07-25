@@ -134,7 +134,9 @@ def deliver_terraform_fixes(
             )
         session.commit()
 
-        pr_title = f"fix(terraform): apply {settings.PROJECT_NAME} fixes to {root.root_path}"
+        pr_title = (
+            f"fix(terraform): apply {settings.PROJECT_NAME} fixes to {root.root_path}"
+        )
         pr_body = _build_terraform_pr_body(fixes)
 
         result = asyncio.run(

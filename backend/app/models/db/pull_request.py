@@ -60,6 +60,4 @@ class PullRequest(SQLModel, table=True):
     updated_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     repository: Optional["Repository"] = Relationship(back_populates="pull_requests")
     fixes: list["Fix"] = Relationship(back_populates="pull_request")
-    terraform_fixes: list["TerraformFix"] = Relationship(
-        back_populates="pull_request"
-    )
+    terraform_fixes: list["TerraformFix"] = Relationship(back_populates="pull_request")
