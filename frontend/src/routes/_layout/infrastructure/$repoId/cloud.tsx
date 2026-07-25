@@ -13,23 +13,17 @@ import {
 import { useState } from "react"
 import { toast } from "sonner"
 import type { CloudAccountPublic } from "@/client"
-import { CloudService, OrganizationsService } from "@/client"
+import { CloudService } from "@/client"
 import { CloudFindingRow } from "@/components/CloudFindingRow"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
+import { useRepository } from "@/hooks/useRepository"
 import {
   cloudAccountStatusColor,
   cloudAccountStatusLabel,
@@ -38,17 +32,19 @@ import {
 } from "@/lib/status-colors"
 import { apiErrorDetail } from "@/utils"
 
-export const Route = createFileRoute("/_layout/infrastructure/cloud")({
-  component: CloudPage,
+export const Route = createFileRoute("/_layout/infrastructure/$repoId/cloud")({
+  component: CloudTab,
   head: () => ({
     meta: [{ title: "Cloud - GreenSecOps" }],
   }),
 })
 
-function CloudPage() {
+function CloudTab() {
+  const { repoId } = Route.useParams()
   const queryClient = useQueryClient()
+  const { repo, isLoading: repoLoading } = useRepository(repoId)
+  const orgId = repo?.org_id
 
-  const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [displayName, setDisplayName] = useState("")
   const [roleArn, setRoleArn] = useState("")
   const [regions, setRegions] = useState("us-east-1")
@@ -58,28 +54,23 @@ function CloudPage() {
   )
 
   const invalidateAccounts = () =>
-    queryClient.invalidateQueries({ queryKey: ["cloud-accounts"] })
-
-  const { data: orgs } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: OrganizationsService.listMyOrganizations,
-  })
+    queryClient.invalidateQueries({ queryKey: ["cloud-accounts", orgId] })
 
   const { data: accounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ["cloud-accounts"],
-    queryFn: () => CloudService.listCloudAccounts({}),
+    queryKey: ["cloud-accounts", orgId],
+    queryFn: () => CloudService.listCloudAccounts({ orgId }),
+    enabled: !!orgId,
   })
 
   const createMutation = useMutation({
     mutationFn: (vars: {
-      orgId: string
       displayName: string
       roleArn: string
       regions: string[]
     }) =>
       CloudService.createCloudAccount({
         requestBody: {
-          org_id: vars.orgId,
+          org_id: orgId!,
           display_name: vars.displayName,
           role_arn: vars.roleArn,
           regions: vars.regions,
@@ -139,8 +130,7 @@ function CloudPage() {
   function toggleAccountOpen(accountId: string) {
     setOpenAccounts((prev) => {
       const next = new Set(prev)
-      if (next.has(accountId)) next.delete(accountId)
-      else next.add(accountId)
+      next.has(accountId) ? next.delete(accountId) : next.add(accountId)
       return next
     })
   }
@@ -148,8 +138,7 @@ function CloudPage() {
   function toggleHistoryOpen(accountId: string) {
     setHistoryOpenAccounts((prev) => {
       const next = new Set(prev)
-      if (next.has(accountId)) next.delete(accountId)
-      else next.add(accountId)
+      next.has(accountId) ? next.delete(accountId) : next.add(accountId)
       return next
     })
   }
@@ -161,9 +150,8 @@ function CloudPage() {
       .split(",")
       .map((r) => r.trim())
       .filter(Boolean)
-    if (!name || !arn || !selectedOrgId) return
+    if (!name || !arn || !orgId) return
     createMutation.mutate({
-      orgId: selectedOrgId,
       displayName: name,
       roleArn: arn,
       regions: regionList,
@@ -173,28 +161,16 @@ function CloudPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Cloud</h1>
-        <p className="text-muted-foreground">
-          AWS cloud posture scanning across every account you connect —
-          read-only, via sts:AssumeRole.
+        <p className="text-muted-foreground text-sm">
+          AWS cloud posture scanning for this repository's organization —
+          read-only, via <code className="font-mono">sts:AssumeRole</code>.
+          Accounts are shared across every repo in the organization.
         </p>
       </div>
 
       <Card>
         <CardContent className="flex flex-col gap-3 py-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Select an organization" />
-              </SelectTrigger>
-              <SelectContent>
-                {(orgs ?? []).map((org) => (
-                  <SelectItem key={org.id} value={org.id}>
-                    {org.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Input
               placeholder="Display name (e.g. prod)"
               value={displayName}
@@ -219,7 +195,7 @@ function CloudPage() {
               className="gap-2"
               onClick={handleConnect}
               disabled={
-                !selectedOrgId ||
+                !orgId ||
                 !displayName.trim() ||
                 !roleArn.trim() ||
                 createMutation.isPending
@@ -240,7 +216,7 @@ function CloudPage() {
         </CardContent>
       </Card>
 
-      {accountsLoading ? (
+      {repoLoading || accountsLoading ? (
         <div className="flex flex-col gap-4">
           {[...Array(2)].map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
@@ -249,8 +225,8 @@ function CloudPage() {
       ) : !accounts?.length ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            No cloud accounts connected. Add an AWS account above to start
-            scanning its posture.
+            No cloud accounts connected for this organization. Add an AWS
+            account above to start scanning its posture.
           </CardContent>
         </Card>
       ) : (

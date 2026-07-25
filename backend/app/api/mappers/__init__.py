@@ -16,6 +16,7 @@ from .telemetry import (
 )
 from .terraform import (
     to_terraform_finding_public,
+    to_terraform_fix_public,
     to_terraform_root_public,
     to_terraform_scan_public,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "to_terraform_root_public",
     "to_terraform_scan_public",
     "to_terraform_finding_public",
+    "to_terraform_fix_public",
     "to_cloud_account_public",
     "to_cloud_scan_public",
     "to_cloud_finding_public",

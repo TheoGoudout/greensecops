@@ -16,7 +16,12 @@ from .pull_request import PullRequest
 from .repository import Repository
 from .rule import Rule
 from .telemetry import DynamicEnrichment, TelemetryMetricSample, TelemetryRun
-from .terraform import TerraformFinding, TerraformRoot, TerraformScan
+from .terraform import (
+    TerraformFinding,
+    TerraformFix,
+    TerraformRoot,
+    TerraformScan,
+)
 from .user import (
     UpdatePassword,
     User,
@@ -53,6 +58,7 @@ __all__ = [
     "TerraformRoot",
     "TerraformScan",
     "TerraformFinding",
+    "TerraformFix",
     "CloudAccount",
     "CloudScan",
     "CloudFinding",

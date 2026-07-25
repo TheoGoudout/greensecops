@@ -28,14 +28,18 @@ import { Route as LayoutInfrastructureIndexRouteImport } from './routes/_layout/
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as AuthGithubAppCallbackRouteImport } from './routes/auth/github/app-callback'
 import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
-import { Route as LayoutInfrastructureCloudRouteImport } from './routes/_layout/infrastructure/cloud'
 import { Route as LayoutInfrastructureBadgesRouteImport } from './routes/_layout/infrastructure/badges'
+import { Route as LayoutInfrastructureRepoIdRouteImport } from './routes/_layout/infrastructure/$repoId'
 import { Route as LayoutFixesFixIdRouteImport } from './routes/_layout/fixes/$fixId'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 import { Route as LayoutRepositoriesRepoIdIndexRouteImport } from './routes/_layout/repositories/$repoId/index'
+import { Route as LayoutInfrastructureRepoIdIndexRouteImport } from './routes/_layout/infrastructure/$repoId/index'
 import { Route as LayoutRepositoriesRepoIdTelemetryRouteImport } from './routes/_layout/repositories/$repoId/telemetry'
 import { Route as LayoutRepositoriesRepoIdStaticAnalysisRouteImport } from './routes/_layout/repositories/$repoId/static-analysis'
 import { Route as LayoutRepositoriesRepoIdPullRequestsRouteImport } from './routes/_layout/repositories/$repoId/pull-requests'
+import { Route as LayoutInfrastructureRepoIdTerraformRouteImport } from './routes/_layout/infrastructure/$repoId/terraform'
+import { Route as LayoutInfrastructureRepoIdPullRequestsRouteImport } from './routes/_layout/infrastructure/$repoId/pull-requests'
+import { Route as LayoutInfrastructureRepoIdCloudRouteImport } from './routes/_layout/infrastructure/$repoId/cloud'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -133,16 +137,16 @@ const LayoutRepositoriesRepoIdRoute =
     path: '/$repoId',
     getParentRoute: () => LayoutRepositoriesRoute,
   } as any)
-const LayoutInfrastructureCloudRoute =
-  LayoutInfrastructureCloudRouteImport.update({
-    id: '/cloud',
-    path: '/cloud',
-    getParentRoute: () => LayoutInfrastructureRoute,
-  } as any)
 const LayoutInfrastructureBadgesRoute =
   LayoutInfrastructureBadgesRouteImport.update({
     id: '/badges',
     path: '/badges',
+    getParentRoute: () => LayoutInfrastructureRoute,
+  } as any)
+const LayoutInfrastructureRepoIdRoute =
+  LayoutInfrastructureRepoIdRouteImport.update({
+    id: '/$repoId',
+    path: '/$repoId',
     getParentRoute: () => LayoutInfrastructureRoute,
   } as any)
 const LayoutFixesFixIdRoute = LayoutFixesFixIdRouteImport.update({
@@ -162,6 +166,12 @@ const LayoutRepositoriesRepoIdIndexRoute =
     path: '/',
     getParentRoute: () => LayoutRepositoriesRepoIdRoute,
   } as any)
+const LayoutInfrastructureRepoIdIndexRoute =
+  LayoutInfrastructureRepoIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => LayoutInfrastructureRepoIdRoute,
+  } as any)
 const LayoutRepositoriesRepoIdTelemetryRoute =
   LayoutRepositoriesRepoIdTelemetryRouteImport.update({
     id: '/telemetry',
@@ -180,6 +190,24 @@ const LayoutRepositoriesRepoIdPullRequestsRoute =
     path: '/pull-requests',
     getParentRoute: () => LayoutRepositoriesRepoIdRoute,
   } as any)
+const LayoutInfrastructureRepoIdTerraformRoute =
+  LayoutInfrastructureRepoIdTerraformRouteImport.update({
+    id: '/terraform',
+    path: '/terraform',
+    getParentRoute: () => LayoutInfrastructureRepoIdRoute,
+  } as any)
+const LayoutInfrastructureRepoIdPullRequestsRoute =
+  LayoutInfrastructureRepoIdPullRequestsRouteImport.update({
+    id: '/pull-requests',
+    path: '/pull-requests',
+    getParentRoute: () => LayoutInfrastructureRepoIdRoute,
+  } as any)
+const LayoutInfrastructureRepoIdCloudRoute =
+  LayoutInfrastructureRepoIdCloudRouteImport.update({
+    id: '/cloud',
+    path: '/cloud',
+    getParentRoute: () => LayoutInfrastructureRepoIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -197,16 +225,20 @@ export interface FileRoutesByFullPath {
   '/settings': typeof LayoutSettingsRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
+  '/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdRouteWithChildren
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
-  '/infrastructure/cloud': typeof LayoutInfrastructureCloudRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/infrastructure/': typeof LayoutInfrastructureIndexRoute
   '/repositories/': typeof LayoutRepositoriesIndexRoute
+  '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
+  '/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
+  '/infrastructure/$repoId/terraform': typeof LayoutInfrastructureRepoIdTerraformRoute
   '/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
   '/repositories/$repoId/static-analysis': typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
   '/repositories/$repoId/telemetry': typeof LayoutRepositoriesRepoIdTelemetryRoute
+  '/infrastructure/$repoId/': typeof LayoutInfrastructureRepoIdIndexRoute
   '/repositories/$repoId/': typeof LayoutRepositoriesRepoIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -224,14 +256,17 @@ export interface FileRoutesByTo {
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
-  '/infrastructure/cloud': typeof LayoutInfrastructureCloudRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/infrastructure': typeof LayoutInfrastructureIndexRoute
   '/repositories': typeof LayoutRepositoriesIndexRoute
+  '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
+  '/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
+  '/infrastructure/$repoId/terraform': typeof LayoutInfrastructureRepoIdTerraformRoute
   '/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
   '/repositories/$repoId/static-analysis': typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
   '/repositories/$repoId/telemetry': typeof LayoutRepositoriesRepoIdTelemetryRoute
+  '/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdIndexRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdIndexRoute
 }
 export interface FileRoutesById {
@@ -252,16 +287,20 @@ export interface FileRoutesById {
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/_layout/fixes/$fixId': typeof LayoutFixesFixIdRoute
+  '/_layout/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdRouteWithChildren
   '/_layout/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
-  '/_layout/infrastructure/cloud': typeof LayoutInfrastructureCloudRoute
   '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/_layout/infrastructure/': typeof LayoutInfrastructureIndexRoute
   '/_layout/repositories/': typeof LayoutRepositoriesIndexRoute
+  '/_layout/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
+  '/_layout/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
+  '/_layout/infrastructure/$repoId/terraform': typeof LayoutInfrastructureRepoIdTerraformRoute
   '/_layout/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
   '/_layout/repositories/$repoId/static-analysis': typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
   '/_layout/repositories/$repoId/telemetry': typeof LayoutRepositoriesRepoIdTelemetryRoute
+  '/_layout/infrastructure/$repoId/': typeof LayoutInfrastructureRepoIdIndexRoute
   '/_layout/repositories/$repoId/': typeof LayoutRepositoriesRepoIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -282,16 +321,20 @@ export interface FileRouteTypes {
     | '/settings'
     | '/analyses/$analysisId'
     | '/fixes/$fixId'
+    | '/infrastructure/$repoId'
     | '/infrastructure/badges'
-    | '/infrastructure/cloud'
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/infrastructure/'
     | '/repositories/'
+    | '/infrastructure/$repoId/cloud'
+    | '/infrastructure/$repoId/pull-requests'
+    | '/infrastructure/$repoId/terraform'
     | '/repositories/$repoId/pull-requests'
     | '/repositories/$repoId/static-analysis'
     | '/repositories/$repoId/telemetry'
+    | '/infrastructure/$repoId/'
     | '/repositories/$repoId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -309,14 +352,17 @@ export interface FileRouteTypes {
     | '/analyses/$analysisId'
     | '/fixes/$fixId'
     | '/infrastructure/badges'
-    | '/infrastructure/cloud'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/infrastructure'
     | '/repositories'
+    | '/infrastructure/$repoId/cloud'
+    | '/infrastructure/$repoId/pull-requests'
+    | '/infrastructure/$repoId/terraform'
     | '/repositories/$repoId/pull-requests'
     | '/repositories/$repoId/static-analysis'
     | '/repositories/$repoId/telemetry'
+    | '/infrastructure/$repoId'
     | '/repositories/$repoId'
   id:
     | '__root__'
@@ -336,16 +382,20 @@ export interface FileRouteTypes {
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
     | '/_layout/fixes/$fixId'
+    | '/_layout/infrastructure/$repoId'
     | '/_layout/infrastructure/badges'
-    | '/_layout/infrastructure/cloud'
     | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/_layout/infrastructure/'
     | '/_layout/repositories/'
+    | '/_layout/infrastructure/$repoId/cloud'
+    | '/_layout/infrastructure/$repoId/pull-requests'
+    | '/_layout/infrastructure/$repoId/terraform'
     | '/_layout/repositories/$repoId/pull-requests'
     | '/_layout/repositories/$repoId/static-analysis'
     | '/_layout/repositories/$repoId/telemetry'
+    | '/_layout/infrastructure/$repoId/'
     | '/_layout/repositories/$repoId/'
   fileRoutesById: FileRoutesById
 }
@@ -494,18 +544,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdRouteImport
       parentRoute: typeof LayoutRepositoriesRoute
     }
-    '/_layout/infrastructure/cloud': {
-      id: '/_layout/infrastructure/cloud'
-      path: '/cloud'
-      fullPath: '/infrastructure/cloud'
-      preLoaderRoute: typeof LayoutInfrastructureCloudRouteImport
-      parentRoute: typeof LayoutInfrastructureRoute
-    }
     '/_layout/infrastructure/badges': {
       id: '/_layout/infrastructure/badges'
       path: '/badges'
       fullPath: '/infrastructure/badges'
       preLoaderRoute: typeof LayoutInfrastructureBadgesRouteImport
+      parentRoute: typeof LayoutInfrastructureRoute
+    }
+    '/_layout/infrastructure/$repoId': {
+      id: '/_layout/infrastructure/$repoId'
+      path: '/$repoId'
+      fullPath: '/infrastructure/$repoId'
+      preLoaderRoute: typeof LayoutInfrastructureRepoIdRouteImport
       parentRoute: typeof LayoutInfrastructureRoute
     }
     '/_layout/fixes/$fixId': {
@@ -529,6 +579,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdIndexRouteImport
       parentRoute: typeof LayoutRepositoriesRepoIdRoute
     }
+    '/_layout/infrastructure/$repoId/': {
+      id: '/_layout/infrastructure/$repoId/'
+      path: '/'
+      fullPath: '/infrastructure/$repoId/'
+      preLoaderRoute: typeof LayoutInfrastructureRepoIdIndexRouteImport
+      parentRoute: typeof LayoutInfrastructureRepoIdRoute
+    }
     '/_layout/repositories/$repoId/telemetry': {
       id: '/_layout/repositories/$repoId/telemetry'
       path: '/telemetry'
@@ -550,18 +607,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesRepoIdPullRequestsRouteImport
       parentRoute: typeof LayoutRepositoriesRepoIdRoute
     }
+    '/_layout/infrastructure/$repoId/terraform': {
+      id: '/_layout/infrastructure/$repoId/terraform'
+      path: '/terraform'
+      fullPath: '/infrastructure/$repoId/terraform'
+      preLoaderRoute: typeof LayoutInfrastructureRepoIdTerraformRouteImport
+      parentRoute: typeof LayoutInfrastructureRepoIdRoute
+    }
+    '/_layout/infrastructure/$repoId/pull-requests': {
+      id: '/_layout/infrastructure/$repoId/pull-requests'
+      path: '/pull-requests'
+      fullPath: '/infrastructure/$repoId/pull-requests'
+      preLoaderRoute: typeof LayoutInfrastructureRepoIdPullRequestsRouteImport
+      parentRoute: typeof LayoutInfrastructureRepoIdRoute
+    }
+    '/_layout/infrastructure/$repoId/cloud': {
+      id: '/_layout/infrastructure/$repoId/cloud'
+      path: '/cloud'
+      fullPath: '/infrastructure/$repoId/cloud'
+      preLoaderRoute: typeof LayoutInfrastructureRepoIdCloudRouteImport
+      parentRoute: typeof LayoutInfrastructureRepoIdRoute
+    }
   }
 }
 
+interface LayoutInfrastructureRepoIdRouteChildren {
+  LayoutInfrastructureRepoIdCloudRoute: typeof LayoutInfrastructureRepoIdCloudRoute
+  LayoutInfrastructureRepoIdPullRequestsRoute: typeof LayoutInfrastructureRepoIdPullRequestsRoute
+  LayoutInfrastructureRepoIdTerraformRoute: typeof LayoutInfrastructureRepoIdTerraformRoute
+  LayoutInfrastructureRepoIdIndexRoute: typeof LayoutInfrastructureRepoIdIndexRoute
+}
+
+const LayoutInfrastructureRepoIdRouteChildren: LayoutInfrastructureRepoIdRouteChildren =
+  {
+    LayoutInfrastructureRepoIdCloudRoute: LayoutInfrastructureRepoIdCloudRoute,
+    LayoutInfrastructureRepoIdPullRequestsRoute:
+      LayoutInfrastructureRepoIdPullRequestsRoute,
+    LayoutInfrastructureRepoIdTerraformRoute:
+      LayoutInfrastructureRepoIdTerraformRoute,
+    LayoutInfrastructureRepoIdIndexRoute: LayoutInfrastructureRepoIdIndexRoute,
+  }
+
+const LayoutInfrastructureRepoIdRouteWithChildren =
+  LayoutInfrastructureRepoIdRoute._addFileChildren(
+    LayoutInfrastructureRepoIdRouteChildren,
+  )
+
 interface LayoutInfrastructureRouteChildren {
+  LayoutInfrastructureRepoIdRoute: typeof LayoutInfrastructureRepoIdRouteWithChildren
   LayoutInfrastructureBadgesRoute: typeof LayoutInfrastructureBadgesRoute
-  LayoutInfrastructureCloudRoute: typeof LayoutInfrastructureCloudRoute
   LayoutInfrastructureIndexRoute: typeof LayoutInfrastructureIndexRoute
 }
 
 const LayoutInfrastructureRouteChildren: LayoutInfrastructureRouteChildren = {
+  LayoutInfrastructureRepoIdRoute: LayoutInfrastructureRepoIdRouteWithChildren,
   LayoutInfrastructureBadgesRoute: LayoutInfrastructureBadgesRoute,
-  LayoutInfrastructureCloudRoute: LayoutInfrastructureCloudRoute,
   LayoutInfrastructureIndexRoute: LayoutInfrastructureIndexRoute,
 }
 

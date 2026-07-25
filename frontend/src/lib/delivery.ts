@@ -10,6 +10,13 @@ export function repoFixBranch(repoId: string): string {
   return `greensecops/fixes-${repoId.slice(0, 8)}`
 }
 
+// Mirrors tf_fix_branch server-side (backend/app/services/delivery_pr.py): one
+// PR branch per Terraform root, distinct prefix from the workflow branches so
+// the Infrastructure PRs tab can tell a Terraform PR from a CI-workflow PR.
+export function tfFixBranch(terraformRootId: string): string {
+  return `greensecops/terraform-${terraformRootId.slice(0, 8)}`
+}
+
 // Mirrors the fixed branch name delivery mints server-side for the
 // "Integrate action" PR (see backend/app/api/routes/repositories.py
 // integrate_action).

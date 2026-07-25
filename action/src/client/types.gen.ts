@@ -958,6 +958,10 @@ export type RepositoryPublic = {
      */
     id: string;
     /**
+     * Org Id
+     */
+    org_id: string;
+    /**
      * Full Name
      */
     full_name: string;
@@ -1226,6 +1230,25 @@ export type TelemetrySummaryPublic = {
 };
 
 /**
+ * TerraformFilePublic
+ * A ``.tf`` file's live source for a Terraform root.
+ *
+ * Terraform files aren't persisted (unlike ``WorkflowFile``); they're fetched
+ * from GitHub on demand, so this carries no id/branch — just the path and
+ * content, mirroring the shape of ``WorkflowFilePublic``.
+ */
+export type TerraformFilePublic = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Raw Content
+     */
+    raw_content: string;
+};
+
+/**
  * TerraformFindingPublic
  */
 export type TerraformFindingPublic = {
@@ -1257,6 +1280,14 @@ export type TerraformFindingPublic = {
      * File Path
      */
     file_path: string;
+    /**
+     * Line Start
+     */
+    line_start?: number | null;
+    /**
+     * Line End
+     */
+    line_end?: number | null;
     severity: IssueSeverity;
     category: IssueCategory;
     /**
@@ -1269,6 +1300,11 @@ export type TerraformFindingPublic = {
     context?: string | null;
     status: FindingStatus;
     /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
      * Created At
      */
     created_at?: string | null;
@@ -1277,6 +1313,69 @@ export type TerraformFindingPublic = {
      */
     resolved_at?: string | null;
     resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * TerraformFixGenerateRequest
+ */
+export type TerraformFixGenerateRequest = {
+    /**
+     * Finding Ids
+     */
+    finding_ids?: Array<string> | null;
+};
+
+/**
+ * TerraformFixPublic
+ */
+export type TerraformFixPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Pr Id
+     */
+    pr_id?: string | null;
+    llm_provider: LlmProvider;
+    /**
+     * Llm Model
+     */
+    llm_model: string;
+    status: FixStatus;
+    /**
+     * Full Content
+     */
+    full_content?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    pr_state?: PullRequestState | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Delivered At
+     */
+    delivered_at?: string | null;
 };
 
 /**
@@ -4046,6 +4145,152 @@ export type TerraformListTerraformFindingsResponses = {
 };
 
 export type TerraformListTerraformFindingsResponse = TerraformListTerraformFindingsResponses[keyof TerraformListTerraformFindingsResponses];
+
+export type TerraformListTerraformFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Ref
+         */
+        ref?: string | null;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/files';
+};
+
+export type TerraformListTerraformFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformFilesError = TerraformListTerraformFilesErrors[keyof TerraformListTerraformFilesErrors];
+
+export type TerraformListTerraformFilesResponses = {
+    /**
+     * Response Terraform-List Terraform Files
+     * Successful Response
+     */
+    200: Array<TerraformFilePublic>;
+};
+
+export type TerraformListTerraformFilesResponse = TerraformListTerraformFilesResponses[keyof TerraformListTerraformFilesResponses];
+
+export type TerraformListTerraformFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform-roots/{root_id}/fixes';
+};
+
+export type TerraformListTerraformFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListTerraformFixesError = TerraformListTerraformFixesErrors[keyof TerraformListTerraformFixesErrors];
+
+export type TerraformListTerraformFixesResponses = {
+    /**
+     * Response Terraform-List Terraform Fixes
+     * Successful Response
+     */
+    200: Array<TerraformFixPublic>;
+};
+
+export type TerraformListTerraformFixesResponse = TerraformListTerraformFixesResponses[keyof TerraformListTerraformFixesResponses];
+
+export type TerraformTriggerTerraformFixGenerationData = {
+    /**
+     * Body
+     */
+    body?: TerraformFixGenerateRequest | null;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/fixes';
+};
+
+export type TerraformTriggerTerraformFixGenerationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformTriggerTerraformFixGenerationError = TerraformTriggerTerraformFixGenerationErrors[keyof TerraformTriggerTerraformFixGenerationErrors];
+
+export type TerraformTriggerTerraformFixGenerationResponses = {
+    /**
+     * Response Terraform-Trigger Terraform Fix Generation
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type TerraformTriggerTerraformFixGenerationResponse = TerraformTriggerTerraformFixGenerationResponses[keyof TerraformTriggerTerraformFixGenerationResponses];
+
+export type TerraformTriggerTerraformDeliveryData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/terraform-roots/{root_id}/deliver';
+};
+
+export type TerraformTriggerTerraformDeliveryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformTriggerTerraformDeliveryError = TerraformTriggerTerraformDeliveryErrors[keyof TerraformTriggerTerraformDeliveryErrors];
+
+export type TerraformTriggerTerraformDeliveryResponses = {
+    /**
+     * Response Terraform-Trigger Terraform Delivery
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type TerraformTriggerTerraformDeliveryResponse = TerraformTriggerTerraformDeliveryResponses[keyof TerraformTriggerTerraformDeliveryResponses];
 
 export type CloudListCloudAccountsData = {
     body?: never;

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
+import sqlalchemy as sa
 from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -10,13 +11,16 @@ from ..enums import (
     AnalysisTrigger,
     FindingResolutionReason,
     FindingStatus,
+    FixStatus,
     IssueCategory,
     IssueSeverity,
+    LLMProvider,
     ScanStatus,
 )
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
+    from .pull_request import PullRequest
     from .repository import Repository
     from .rule import Rule
 
@@ -107,6 +111,12 @@ class TerraformFinding(SQLModel, table=True):
     rule_id: uuid.UUID = Field(
         foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
     )
+    # The Terraform fix that addresses this finding, if one has been generated.
+    # SET NULL (not CASCADE): dropping a fix must not delete the finding history
+    # — mirrors ``Issue.fix_id``.
+    fix_id: uuid.UUID | None = Field(
+        default=None, foreign_key="terraform_fix.id", ondelete="SET NULL"
+    )
     resource_address: str | None = Field(default=None, max_length=512)
     file_path: str = Field(max_length=512)
     line_start: int | None = Field(default=None)
@@ -131,3 +141,52 @@ class TerraformFinding(SQLModel, table=True):
     # One-directional (no back_populates on Rule): findings look up their rule,
     # Rule doesn't need to know about the finding tables that reference it.
     rule: Optional["Rule"] = Relationship()
+    fix: Optional["TerraformFix"] = Relationship(back_populates="findings")
+
+
+class TerraformFix(SQLModel, table=True):
+    """An LLM-generated fix for a single ``.tf`` file in a Terraform root.
+
+    Mirrors ``Fix`` (the CI-workflow fix), but keyed to a Terraform root +
+    file path rather than a ``workflow_file_id`` — Terraform files aren't
+    persisted as their own rows, so the unit a fix targets is the
+    ``(terraform_root_id, file_path)`` pair. One fix per file per root; a
+    repo's Terraform PR carries all its root's patched files.
+    """
+
+    __tablename__ = "terraform_fix"
+    __table_args__ = (
+        UniqueConstraint(
+            "terraform_root_id", "file_path", name="uq_terraform_fix_root_file"
+        ),
+    )
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    terraform_root_id: uuid.UUID = Field(
+        foreign_key="terraform_root.id", nullable=False, ondelete="CASCADE"
+    )
+    file_path: str = Field(max_length=512)
+    pr_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("pull_request.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    llm_provider: LLMProvider
+    llm_model: str = Field(max_length=255)
+    prompt_tokens: int | None = Field(default=None)
+    completion_tokens: int | None = Field(default=None)
+    langsmith_run_id: str | None = Field(default=None, max_length=255)
+    status: FixStatus = Field(default=FixStatus.pending)
+    full_content: str | None = Field(default=None)
+    error_message: str | None = Field(default=None, max_length=2048)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    terraform_root: TerraformRoot | None = Relationship()
+    findings: list["TerraformFinding"] = Relationship(back_populates="fix")
+    pull_request: Optional["PullRequest"] = Relationship(
+        back_populates="terraform_fixes"
+    )

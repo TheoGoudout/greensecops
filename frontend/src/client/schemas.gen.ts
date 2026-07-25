@@ -1772,6 +1772,11 @@ export const RepositoryPublicSchema = {
             format: 'uuid',
             title: 'Id'
         },
+        org_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Org Id'
+        },
         full_name: {
             type: 'string',
             title: 'Full Name'
@@ -1861,7 +1866,7 @@ export const RepositoryPublicSchema = {
         }
     },
     type: 'object',
-    required: ['id', 'full_name', 'enabled', 'default_branch'],
+    required: ['id', 'org_id', 'full_name', 'enabled', 'default_branch'],
     title: 'RepositoryPublic'
 } as const;
 
@@ -2244,6 +2249,27 @@ export const TelemetrySummaryPublicSchema = {
     title: 'TelemetrySummaryPublic'
 } as const;
 
+export const TerraformFilePublicSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        raw_content: {
+            type: 'string',
+            title: 'Raw Content'
+        }
+    },
+    type: 'object',
+    required: ['path', 'raw_content'],
+    title: 'TerraformFilePublic',
+    description: `A \`\`.tf\`\` file's live source for a Terraform root.
+
+Terraform files aren't persisted (unlike \`\`WorkflowFile\`\`); they're fetched
+from GitHub on demand, so this carries no id/branch — just the path and
+content, mirroring the shape of \`\`WorkflowFilePublic\`\`.`
+} as const;
+
 export const TerraformFindingPublicSchema = {
     properties: {
         id: {
@@ -2285,6 +2311,28 @@ export const TerraformFindingPublicSchema = {
             type: 'string',
             title: 'File Path'
         },
+        line_start: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line Start'
+        },
+        line_end: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line End'
+        },
         severity: {
             '$ref': '#/components/schemas/IssueSeverity'
         },
@@ -2308,6 +2356,28 @@ export const TerraformFindingPublicSchema = {
         },
         status: {
             '$ref': '#/components/schemas/FindingStatus'
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         created_at: {
             anyOf: [
@@ -2347,6 +2417,150 @@ export const TerraformFindingPublicSchema = {
     type: 'object',
     required: ['id', 'scan_id', 'terraform_root_id', 'rule_id', 'rule_slug', 'file_path', 'severity', 'category', 'message', 'status'],
     title: 'TerraformFindingPublic'
+} as const;
+
+export const TerraformFixGenerateRequestSchema = {
+    properties: {
+        finding_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string',
+                        format: 'uuid'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finding Ids'
+        }
+    },
+    type: 'object',
+    title: 'TerraformFixGenerateRequest'
+} as const;
+
+export const TerraformFixPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        terraform_root_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Terraform Root Id'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
+        llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        llm_model: {
+            type: 'string',
+            title: 'Llm Model'
+        },
+        status: {
+            '$ref': '#/components/schemas/FixStatus'
+        },
+        full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Content'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        delivered_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Delivered At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'terraform_root_id', 'file_path', 'llm_provider', 'llm_model', 'status'],
+    title: 'TerraformFixPublic'
 } as const;
 
 export const TerraformRootCreateSchema = {
