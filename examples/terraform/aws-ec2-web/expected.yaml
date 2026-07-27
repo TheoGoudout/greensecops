@@ -1,0 +1,7 @@
+# Rules this module is expected to trip, checked exactly by
+# scripts/validate_terraform_examples.py. Every resource here is tagged, so
+# resource_missing_tags deliberately does NOT appear.
+violations:
+  - open_ingress_security_group
+  - unencrypted_ebs_volume
+  - hardcoded_credentials_in_tf

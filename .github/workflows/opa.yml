@@ -5,20 +5,24 @@ on:
     branches: [main]
     paths:
       - "backend/app/rules/**"
+      - "backend/app/services/terraform/**"
       - "examples/**"
       - "landing/index.html"
       - "docs/**"
       - "scripts/validate_examples.py"
+      - "scripts/validate_terraform_examples.py"
       - "scripts/render_landing_examples.py"
       - "scripts/opa/**"
       - ".github/workflows/opa.yml"
   pull_request:
     paths:
       - "backend/app/rules/**"
+      - "backend/app/services/terraform/**"
       - "examples/**"
       - "landing/index.html"
       - "docs/**"
       - "scripts/validate_examples.py"
+      - "scripts/validate_terraform_examples.py"
       - "scripts/render_landing_examples.py"
       - "scripts/opa/**"
       - ".github/workflows/opa.yml"
@@ -51,7 +55,9 @@ jobs:
           python-version: "3.11"
 
       - name: Install script dependencies
-        run: pip install "ruamel.yaml>=0.18,<0.19"
+        # python-hcl2 lets validate_terraform_examples.py reuse the production
+        # HCL parse+merge path (backend/app/services/terraform/hcl_parser.py).
+        run: pip install "ruamel.yaml>=0.18,<0.19" "python-hcl2>=6.1,<7.0"
 
       - name: Check Rego policies compile
         run: opa check backend/app/rules
@@ -61,6 +67,9 @@ jobs:
 
       - name: Validate workflow examples against the rule suite
         run: python scripts/validate_examples.py
+
+      - name: Validate Terraform examples against the rule suite
+        run: python scripts/validate_terraform_examples.py
 
       - name: Check landing page is in sync with example files
         run: python scripts/render_landing_examples.py --check
