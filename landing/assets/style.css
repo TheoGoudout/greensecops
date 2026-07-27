@@ -1728,8 +1728,117 @@ a { color: inherit; }
 }
 
 /* ============================================================
+   FEATURE PAGES
+   ============================================================ */
+/* Three-surface grid for the Features hub (Workflows / Terraform / Cloud). */
+.surfaces-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 64rem;
+}
+
+/* A whole surface card can be a link on the Features hub. */
+a.surface-card {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* The workflow surface reuses the primary brand green. */
+.surface-card--workflow { border-top-color: var(--primary); }
+.surface-card--workflow::before { background: var(--primary); }
+.surface-card--workflow .surface-card__icon { color: var(--primary); background: var(--green-50); }
+.surface-card--workflow .surface-card__tag { color: var(--primary); background: var(--green-50); }
+
+/* "Learn more →" affordance pinned to the bottom of a linkable card. */
+.surface-card__link {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.surface-card__link svg {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+a.surface-card:hover .surface-card__link svg {
+  transform: translateX(3px);
+}
+
+/* Feature detail pages: what-it-checks card grid. */
+.checks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.check-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.check-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin-bottom: 0.875rem;
+}
+
+.check-card__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.check-card__dot--security { background: var(--cat-security); }
+.check-card__dot--reliability { background: var(--cat-reliability); }
+.check-card__dot--maintainability { background: var(--cat-maintainability); }
+
+.check-card__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.check-card__item {
+  position: relative;
+  padding-left: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+.check-card__item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M10 18.3a8.3 8.3 0 100-16.6 8.3 8.3 0 000 16.6z' stroke='%231a7a4a' stroke-width='1.5'/%3E%3Cpath d='M6.7 10l2.2 2.2 4.4-4.4' stroke='%231a7a4a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
+@media (max-width: 900px) {
+  .surfaces-grid--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .pillars-grid {
     grid-template-columns: repeat(3, 1fr);

@@ -31,13 +31,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX_HTML = ROOT / "landing" / "index.html"
+WORKFLOWS_HTML = ROOT / "landing" / "workflows.html"
 EXAMPLES = ROOT / "examples"
 
-# marker name in index.html -> source example file
+# marker name -> (landing file that hosts the region, source example file). The
+# animated hero lives on the homepage; the static before/after comparison lives
+# on the dedicated CI/CD Workflows feature page.
 REGIONS = {
-    "hero": EXAMPLES / "deploy.yml",
-    "before": EXAMPLES / "deploy-insecure.yml",
-    "after": EXAMPLES / "deploy.yml",
+    "hero": (INDEX_HTML, EXAMPLES / "deploy.yml"),
+    "before": (WORKFLOWS_HTML, EXAMPLES / "deploy-insecure.yml"),
+    "after": (WORKFLOWS_HTML, EXAMPLES / "deploy.yml"),
 }
 
 _NUM_RE = re.compile(r"^-?\d+(\.\d+)?$")
@@ -190,8 +193,8 @@ def _render_hero_anim() -> str:
     in place: unchanged (``equal``) lines stay put, flagged (``del``) lines
     collapse away and the fix's new (``ins``) lines are typed in — so the file
     is edited, never blanked and retyped."""
-    before_lines = _example_lines(REGIONS["before"])
-    after_lines = _example_lines(REGIONS["after"])
+    before_lines = _example_lines(REGIONS["before"][1])
+    after_lines = _example_lines(REGIONS["after"][1])
     matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
 
     out: list[str] = []
@@ -210,16 +213,19 @@ def _render_hero_anim() -> str:
     return '<div class="wf-anim"><div class="wf-anim__code">' + "".join(out) + "</div></div>"
 
 
-def render(html: str) -> str:
-    for name in REGIONS:
+def render(html: str, path: Path) -> str:
+    """Rewrite every codegen region hosted by ``path`` within ``html``."""
+    for name, (target, source) in REGIONS.items():
+        if target != path:
+            continue
         start = f"<!-- codegen:{name}:start -->"
         end = f"<!-- codegen:{name}:end -->"
         pattern = re.compile(re.escape(start) + r".*?" + re.escape(end), re.DOTALL)
         if not pattern.search(html):
             raise SystemExit(
-                f"markers for region '{name}' not found in {INDEX_HTML.name}"
+                f"markers for region '{name}' not found in {path.name}"
             )
-        content = _render_hero_anim() if name == "hero" else _render_example(REGIONS[name])
+        content = _render_hero_anim() if name == "hero" else _render_example(source)
         replacement = start + content + end
         html = pattern.sub(lambda _m, r=replacement: r, html, count=1)
     return html
@@ -227,20 +233,29 @@ def render(html: str) -> str:
 
 def main(argv: list[str]) -> int:
     check_only = "--check" in argv
-    original = INDEX_HTML.read_text(encoding="utf-8")
-    rendered = render(original)
-    if rendered == original:
-        print("landing examples are in sync ✅")
-        return 0
-    if check_only:
-        print(
-            "landing/index.html is out of sync with examples/. "
-            "Run: python scripts/render_landing_examples.py",
-            file=sys.stderr,
-        )
+    # Preserve declaration order while de-duplicating the host files.
+    targets = list(dict.fromkeys(target for target, _ in REGIONS.values()))
+    rel = {f: f.relative_to(ROOT).as_posix() for f in targets}
+    out_of_sync = False
+    for path in targets:
+        original = path.read_text(encoding="utf-8")
+        rendered = render(original, path)
+        if rendered == original:
+            continue
+        out_of_sync = True
+        if check_only:
+            print(
+                f"{rel[path]} is out of sync with examples/. "
+                "Run: python scripts/render_landing_examples.py",
+                file=sys.stderr,
+            )
+        else:
+            path.write_text(rendered, encoding="utf-8")
+            print(f"{rel[path]} updated from examples/ ✅")
+    if check_only and out_of_sync:
         return 1
-    INDEX_HTML.write_text(rendered, encoding="utf-8")
-    print("landing/index.html updated from examples/ ✅")
+    if not out_of_sync:
+        print("landing examples are in sync ✅")
     return 0
 
 

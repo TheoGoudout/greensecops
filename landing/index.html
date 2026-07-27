@@ -35,6 +35,7 @@
           GreenSecOps
         </a>
         <div class="nav__links">
+          <a href="./features.html" class="nav__link">Features</a>
           <a href="./pricing.html" class="nav__link">Pricing</a>
           <a href="${DOCS_URL}" class="nav__link">Docs</a>
           <div class="theme-menu">
@@ -74,14 +75,14 @@
       <div class="hero__copy">
         <div class="hero__eyebrow">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="6"/></svg>
-          GitHub Actions Security
+          CI/CD · Terraform · Cloud
         </div>
         <h1 class="hero__headline" id="hero-heading">
-          Grade Your CI/CD&nbsp;Workflows.<br>
+          Grade Your Whole&nbsp;Pipeline.<br>
           <span>Ship With Confidence.</span>
         </h1>
         <p class="hero__sub">
-          GreenSecOps connects to your repositories via GitHub App, analyses every workflow file on every push, and delivers grades from A+++ to F across security, reliability, performance, energy efficiency, and maintainability — with AI-generated fixes ready to merge.
+          GreenSecOps grades every layer of your delivery pipeline — GitHub Actions workflows, Terraform, and your live AWS account — from A+++ to F across security, reliability, performance, energy efficiency, and maintainability, with AI-generated fixes ready to merge.
         </p>
         <div class="hero__actions">
           <a href="${APP_URL}/signup" class="btn btn--primary btn--lg">
@@ -90,7 +91,7 @@
             </svg>
             Start for Free
           </a>
-          <a href="./pricing.html" class="btn btn--outline btn--lg">View Pricing</a>
+          <a href="./features.html" class="btn btn--outline btn--lg">Explore Features</a>
         </div>
       </div>
 
@@ -124,14 +125,76 @@
   </div>
 </section>
 
+<!-- ═══════════════════════════════ SURFACES ═══════════════════════════════ -->
+<section class="section" aria-labelledby="surfaces-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">What We Analyze</div>
+      <h2 class="section__heading" id="surfaces-heading">Three surfaces, one grading engine</h2>
+      <p class="section__sub">GreenSecOps runs the same rule catalog and A+++ to F grade model across your CI/CD workflows, your Terraform, and your live AWS account. Pick a surface to see exactly what we check.</p>
+    </div>
+
+    <div class="surfaces-grid surfaces-grid--3">
+      <a href="./workflows.html" class="surface-card surface-card--workflow">
+        <div class="surface-card__icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 4h12M4 10h12M4 16h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="16.5" cy="16" r="1.5" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="surface-card__title">CI/CD Workflows</div>
+        <p class="surface-card__desc">Static analysis of every GitHub Actions workflow file on each push — action pinning, secret exposure, caching, timeouts, and more across five categories.</p>
+        <span class="surface-card__tag">Static analysis</span>
+        <span class="surface-card__link">
+          Explore workflows
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <a href="./terraform.html" class="surface-card surface-card--terraform">
+        <div class="surface-card__icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="7" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M9 6h2M10 9v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="surface-card__title">Terraform</div>
+        <p class="surface-card__desc">Grade your <code>.tf</code> files before you ever run <code>apply</code> — public buckets, open security groups, unencrypted storage, missing tags, and more.</p>
+        <span class="surface-card__tag">Static analysis</span>
+        <span class="surface-card__link">
+          Explore Terraform
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <a href="./terraform.html#cloud" class="surface-card surface-card--cloud">
+        <div class="surface-card__icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M6 14.5a3.5 3.5 0 0 1-.5-6.965 4.5 4.5 0 0 1 8.79-1.28A3.75 3.75 0 0 1 14.5 14.5H6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="surface-card__title">AWS Cloud Posture</div>
+        <p class="surface-card__desc">Connect an AWS account read-only via <code>sts:AssumeRole</code> and grade what's actually running — IAM, security groups, S3, RDS, EBS, Lambda, and CloudTrail.</p>
+        <span class="surface-card__tag">Live scanning</span>
+        <span class="surface-card__link">
+          Explore cloud posture
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+    </div>
+  </div>
+</section>
+
 <!-- ═══════════════════════════════ PROBLEM ═══════════════════════════════ -->
 <section class="section section--alt" aria-labelledby="problem-heading">
   <div class="container">
     <div class="section__header">
       <div class="section__label">The Problem</div>
-      <h2 class="section__heading" id="problem-heading">Your CI/CD pipelines are a security blind spot</h2>
+      <h2 class="section__heading" id="problem-heading">Your pipeline has blind spots at every layer</h2>
       <p class="section__sub">
-        Teams spend weeks hardening application code while leaving workflow files — which run with broad repository permissions on every push — essentially unreviewed.
+        Teams harden application code for weeks while the workflows that deploy it, the Terraform that provisions it, and the cloud account that runs it go essentially unreviewed.
       </p>
     </div>
 
@@ -142,19 +205,19 @@
         <div class="stat-card__desc">Supply-chain attacks via transitive action dependencies are trivially easy when SHA pinning is absent.</div>
       </div>
       <div class="stat-card">
+        <div class="stat-card__num">36%</div>
+        <div class="stat-card__label">of cloud breaches trace back to a misconfiguration</div>
+        <div class="stat-card__desc">A single public S3 bucket or an open security group in your Terraform is all it takes to expose production.</div>
+      </div>
+      <div class="stat-card">
         <div class="stat-card__num">3×</div>
         <div class="stat-card__label">longer median build times from uncached steps</div>
         <div class="stat-card__desc">Redundant dependency installs and missing caching layers silently compound your cloud bill every day.</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card__num">60%</div>
-        <div class="stat-card__label">of CI failures are preventable reliability issues</div>
-        <div class="stat-card__desc">Missing health-check timeouts, absent retry logic, and fragile shell scripts cause cascading outages.</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card__num">0</div>
-        <div class="stat-card__label">automated tools reviewing your workflow energy use</div>
-        <div class="stat-card__desc">No existing tool flags inefficient runner selection, unnecessary matrix entries, or avoidable re-runs — until now.</div>
+        <div class="stat-card__num">1</div>
+        <div class="stat-card__label">tool that grades workflows, Terraform, and live cloud</div>
+        <div class="stat-card__desc">One engine, one grade model — so a failing dimension can't hide in any layer of your delivery pipeline.</div>
       </div>
     </div>
   </div>
@@ -259,139 +322,6 @@
         </div>
         <div class="pillar-card__title">Maintainability</div>
         <p class="pillar-card__desc">Reusable workflow extraction, version pinning discipline, documentation, naming conventions, and duplication detection.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════ INFRASTRUCTURE ═══════════════════════════════ -->
-<section class="section" aria-labelledby="infra-heading">
-  <div class="container">
-    <div class="section__header section__header--center">
-      <div class="section__label">Beyond CI/CD</div>
-      <h2 class="section__heading" id="infra-heading">Your infrastructure is a blind spot too</h2>
-      <p class="section__sub">The same rules engine that scores your workflows now scores your Terraform and your live AWS account — one grading system, three surfaces.</p>
-    </div>
-
-    <div class="surfaces-grid">
-      <div class="surface-card surface-card--terraform">
-        <div class="surface-card__icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="7" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M9 6h2M10 9v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="surface-card__title">Terraform</div>
-        <p class="surface-card__desc">Point GreenSecOps at any folder in your repo — root modules, per-environment directories, whatever your layout — and every resource block is checked for public buckets, open security groups, unencrypted storage, and more before it's ever applied.</p>
-        <div class="surface-card__tag">Static analysis</div>
-      </div>
-
-      <div class="surface-card surface-card--cloud">
-        <div class="surface-card__icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M6 14.5a3.5 3.5 0 0 1-.5-6.965 4.5 4.5 0 0 1 8.79-1.28A3.75 3.75 0 0 1 14.5 14.5H6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="surface-card__title">AWS Cloud Posture</div>
-        <p class="surface-card__desc">Connect an AWS account read-only via sts:AssumeRole — no access keys, ever — and GreenSecOps checks what's actually running: IAM policies, security groups, S3 buckets, RDS, Lambda, and more, drift and all.</p>
-        <div class="surface-card__tag">Live scanning</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════ BEFORE / AFTER ═══════════════════════════════ -->
-<section class="section" aria-labelledby="compare-heading">
-  <div class="container">
-    <div class="section__header section__header--center">
-      <div class="section__label">See It In Action</div>
-      <h2 class="section__heading" id="compare-heading">From flagged to fixed, automatically</h2>
-      <p class="section__sub">A real workflow file before GreenSecOps finds anything, and after its AI-generated fix is applied — same file, dramatically different grade.</p>
-    </div>
-
-    <div class="compare-grid">
-      <div class="compare-panel">
-        <span class="compare-panel__label compare-panel__label--before">Before</span>
-        <div class="hero__code-card">
-          <div class="hero__code-header">
-            <span class="hero__dot hero__dot--red"></span>
-            <span class="hero__dot hero__dot--yellow"></span>
-            <span class="hero__dot hero__dot--green"></span>
-            <span class="hero__code-filename">.github/workflows/deploy.yml</span>
-          </div>
-          <div class="hero__code-body"><!-- codegen:before:start --><span class="token-key">name</span>: <span class="token-str">Deploy to Production</span>
-
-<span class="token-key">on</span>:
-  <span class="token-key">push</span>:
-    <span class="token-key">branches</span>: [<span class="token-str">main</span>]
-
-<span class="token-key">jobs</span>:
-  <span class="token-key">deploy</span>:
-    <span class="token-key">runs-on</span>: <span class="token-str">ubuntu-latest</span>
-    <span class="token-key">steps</span>:
-      - <span class="token-key">uses</span>: <span class="token-str">actions/checkout@v4</span>
-      - <span class="token-key">uses</span>: <span class="token-str">actions/setup-node@v4</span>
-      - <span class="token-key">run</span>: <span class="token-val">npm install &amp;&amp; npm run build</span>
-      - <span class="token-key">run</span>: <span class="token-val">./deploy.sh</span>
-        <span class="token-key">env</span>:
-          <span class="token-key">API_KEY</span>: <span class="token-str">"sk-prod-abc123def456"</span><!-- codegen:before:end --></div>
-        </div>
-        <div class="compare-panel__grade">
-          <span class="grade-badge grade-badge--lg grade-badge--d" aria-label="Grade D">D</span>
-          <span class="compare-panel__grade-text">1 critical, 2 high-severity issues:<br>hardcoded secret, unpinned actions,<br>no dependency cache</span>
-        </div>
-      </div>
-
-      <div class="compare-arrow" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        <span>AI-generated fix</span>
-      </div>
-
-      <div class="compare-panel">
-        <span class="compare-panel__label compare-panel__label--after">After</span>
-        <div class="hero__code-card">
-          <div class="hero__code-header">
-            <span class="hero__dot hero__dot--red"></span>
-            <span class="hero__dot hero__dot--yellow"></span>
-            <span class="hero__dot hero__dot--green"></span>
-            <span class="hero__code-filename">.github/workflows/deploy.yml</span>
-          </div>
-          <div class="hero__code-body"><!-- codegen:after:start --><span class="token-key">name</span>: <span class="token-str">Deploy to Production</span>
-
-<span class="token-key">on</span>:
-  <span class="token-key">push</span>:
-    <span class="token-key">branches</span>: [<span class="token-str">main</span>]
-
-<span class="token-key">permissions</span>: {}
-
-<span class="token-key">jobs</span>:
-  <span class="token-key">deploy</span>:
-    <span class="token-key">name</span>: <span class="token-str">Deploy</span>
-    <span class="token-key">runs-on</span>: <span class="token-str">ubuntu-latest</span>
-    <span class="token-key">timeout-minutes</span>: <span class="token-num">15</span>
-    <span class="token-key">permissions</span>:
-      <span class="token-key">contents</span>: <span class="token-str">read</span>
-    <span class="token-key">steps</span>:
-      - <span class="token-key">name</span>: <span class="token-str">Checkout</span>
-        <span class="token-key">uses</span>: <span class="token-str">actions/checkout@11bd719…</span> <span class="token-comment"># v4.2.2</span>
-      - <span class="token-key">name</span>: <span class="token-str">Set up Node.js</span>
-        <span class="token-key">uses</span>: <span class="token-str">actions/setup-node@39370e3…</span> <span class="token-comment"># v4.1.0</span>
-        <span class="token-key">with</span>:
-          <span class="token-key">node-version</span>: <span class="token-num">20</span>
-          <span class="token-key">cache</span>: <span class="token-str">npm</span>
-      - <span class="token-key">name</span>: <span class="token-str">Install &amp; build</span>
-        <span class="token-key">run</span>: <span class="token-val">npm ci &amp;&amp; npm run build</span>
-      - <span class="token-key">name</span>: <span class="token-str">Deploy</span>
-        <span class="token-key">run</span>: <span class="token-val">./deploy.sh</span>
-        <span class="token-key">env</span>:
-          <span class="token-key">API_KEY</span>: <span class="token-str">${{ secrets.API_KEY }}</span><!-- codegen:after:end --></div>
-        </div>
-        <div class="compare-panel__grade">
-          <span class="grade-badge grade-badge--lg grade-badge--aaa" aria-label="Grade A plus plus plus">A+++</span>
-          <span class="compare-panel__grade-text">0 issues across all five<br>dimensions. Reference-quality<br>workflow.</span>
-        </div>
       </div>
     </div>
   </div>
@@ -591,6 +521,7 @@
       </a>
       <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
       <nav class="footer__links" aria-label="Footer navigation">
+        <a href="./features.html" class="footer__link">Features</a>
         <a href="./pricing.html" class="footer__link">Pricing</a>
         <a href="./privacy.html" class="footer__link">Privacy</a>
         <a href="./terms.html" class="footer__link">Terms</a>
