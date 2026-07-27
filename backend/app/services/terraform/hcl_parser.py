@@ -1,5 +1,6 @@
 import json
 import logging
+from pathlib import PurePosixPath
 from typing import Any
 
 import hcl2
@@ -30,9 +31,16 @@ def parse_terraform_content(path: str, raw_content: str) -> dict[str, Any] | Non
     """
     try:
         if path.endswith(".json"):
+            # JSON Terraform configuration carries no source-line metadata, so
+            # ``__start_line__``/``__end_line__`` stay absent and findings from
+            # these files keep ``line_start``/``line_end`` null (allowed).
             parsed = json.loads(raw_content)
         else:
-            parsed = hcl2.loads(raw_content)
+            # ``with_meta=True`` stamps ``__start_line__``/``__end_line__`` onto
+            # every block's innermost attrs dict (and nested blocks), riding
+            # alongside the ``__tf_file`` tag ``merge_terraform_configs`` injects
+            # so a Rego rule can report the exact source span of a violation.
+            parsed = hcl2.loads(raw_content, with_meta=True)
     except (LarkError, json.JSONDecodeError) as exc:
         logger.warning("Failed to parse Terraform file %s: %s", path, exc)
         return None
@@ -98,3 +106,35 @@ def merge_terraform_configs(files: list[tuple[str, str]]) -> dict[str, list[Any]
                 _tag_source_file(key, block, path)
             merged.setdefault(key, []).extend(block_list)
     return merged
+
+
+def derive_module_path(file_path: str, root_path: str) -> str | None:
+    """Best-effort module path for a finding, from its file's directory.
+
+    The recursive fetcher merges every ``.tf`` file under a root — including
+    files in submodule subdirectories — into one logical config, so a finding's
+    ``file_path`` is the only signal of which sub-tree it lives in. This returns
+    that file's directory *relative to the root* (posix), or ``None`` when the
+    file sits directly in the root (a root-module resource, no module prefix).
+
+    This is a directory-derived heuristic, **not** ``module { source = ... }``
+    invocation-name resolution: a module block declared ``module "vpc"`` whose
+    source is ``./modules/network`` yields ``modules/network`` here, not
+    ``vpc``. Resolving the invocation graph is deliberately out of scope; the
+    directory path is a stable, honest locator that always matches the file the
+    finding points at.
+    """
+    file = PurePosixPath(file_path)
+    root = PurePosixPath(root_path) if root_path not in ("", ".") else None
+    parent = file.parent
+    if root is not None:
+        try:
+            parent = parent.relative_to(root)
+        except ValueError:
+            # file_path isn't under root_path (shouldn't happen); fall back to
+            # the file's own parent directory unchanged.
+            pass
+    rel = parent.as_posix()
+    if rel in ("", "."):
+        return None
+    return rel

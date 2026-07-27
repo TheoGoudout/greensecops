@@ -30,6 +30,8 @@ violations contains violation if {
 		"category": "security",
 		"resource_address": sprintf("aws_db_instance.%v", [name]),
 		"file_path": object.get(db, "__tf_file", ""),
+		"line_start": object.get(db, "__start_line__", null),
+		"line_end": object.get(db, "__end_line__", null),
 		"message": sprintf("RDS instance '%v' has no storage_encrypted = true — data at rest is unencrypted.", [name]),
 	}
 }

@@ -74,6 +74,8 @@ def to_terraform_finding_public(finding: TerraformFinding) -> TerraformFindingPu
         file_path=finding.file_path,
         line_start=finding.line_start,
         line_end=finding.line_end,
+        module_path=finding.module_path,
+        terraform_address=finding.terraform_address,
         severity=finding.severity,
         category=finding.category,
         message=finding.message,

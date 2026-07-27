@@ -30,7 +30,10 @@ from app.services import state_machines as sm
 from app.services.deduplication import compute_terraform_finding_fingerprint
 from app.services.opa.evaluator import OpaUnavailableError
 from app.services.scoring import compute_score, score_to_grade
-from app.services.terraform.hcl_parser import merge_terraform_configs
+from app.services.terraform.hcl_parser import (
+    derive_module_path,
+    merge_terraform_configs,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,27 @@ logger = logging.getLogger(__name__)
 
 class TerraformFetchError(Exception):
     """Raised when Terraform files cannot be fetched from GitHub (transient)."""
+
+
+def _terraform_address(
+    module_path: str | None, resource_address: str | None
+) -> str | None:
+    """Full Terraform address for a finding, module prefix included.
+
+    Prefixes the resource address (``aws_s3_bucket.logs``) with a single
+    ``module.`` segment carrying the directory-derived module path
+    (``module.modules.storage.aws_s3_bucket.logs`` for path ``modules/storage``,
+    matching the spec's ``module.storage.aws_s3_bucket.logs`` shape). A single
+    prefix — not one per path segment — because the path is a directory locator,
+    not a resolved ``module {}`` invocation chain (see ``derive_module_path``).
+    Root-module resources (no ``module_path``) get the bare resource address;
+    returns ``None`` only when the rule emitted no resource address at all.
+    """
+    if resource_address is None:
+        return None
+    if not module_path:
+        return resource_address
+    return f"module.{module_path.replace('/', '.')}.{resource_address}"
 
 
 def _resolve_stale_findings(
@@ -175,6 +199,8 @@ def _run_terraform_scan_impl(
             )
             seen_fingerprints.add(fingerprint)
             finding_count += 1
+            module_path = derive_module_path(v.file_path, root.root_path)
+            terraform_address = _terraform_address(module_path, v.resource_address)
             stmt = (
                 pg_insert(TerraformFinding)
                 .values(
@@ -184,6 +210,10 @@ def _run_terraform_scan_impl(
                     rule_id=rule.id,
                     resource_address=v.resource_address,
                     file_path=v.file_path,
+                    line_start=v.line_start,
+                    line_end=v.line_end,
+                    module_path=module_path,
+                    terraform_address=terraform_address,
                     fingerprint=fingerprint,
                     severity=IssueSeverity(v.severity),
                     category=IssueCategory(v.category),
@@ -197,6 +227,10 @@ def _run_terraform_scan_impl(
                         "scan_id": scan.id,
                         "severity": IssueSeverity(v.severity),
                         "file_path": v.file_path,
+                        "line_start": v.line_start,
+                        "line_end": v.line_end,
+                        "module_path": module_path,
+                        "terraform_address": terraform_address,
                         "message": v.message,
                         "context": v.context,
                         # A recurring violation reopens a resolved finding.

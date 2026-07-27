@@ -160,6 +160,8 @@ def test_creates_finding_and_computes_score(
         message="something is wrong",
         resource_address="aws_s3_bucket.data",
         file_path="main.tf",
+        line_start=12,
+        line_end=30,
     )
     with _patch_fetch(files), _patch_evaluate([violation]):
         result = _run_terraform_scan_impl(str(terraform_root.id))
@@ -177,10 +179,50 @@ def test_creates_finding_and_computes_score(
     assert len(findings) == 1
     assert findings[0].resource_address == "aws_s3_bucket.data"
     assert findings[0].file_path == "main.tf"
+    # Source line span from the violation is persisted (spec #3).
+    assert findings[0].line_start == 12
+    assert findings[0].line_end == 30
+    # A file directly in the root has no module prefix.
+    assert findings[0].module_path is None
+    assert findings[0].terraform_address == "aws_s3_bucket.data"
     assert findings[0].status == FindingStatus.open
 
     db.refresh(terraform_root)
     assert terraform_root.last_scanned_at is not None
+
+
+def test_finding_in_submodule_dir_gets_module_path_and_address(
+    db: Session, terraform_root: TerraformRoot, seeded_terraform_rule: Rule
+) -> None:
+    # A resource whose file lives in a subdirectory of the root is attributed
+    # to that directory as its module path, and its terraform_address carries
+    # the module prefix (spec #9).
+    sub_file = f"{terraform_root.root_path}/modules/storage/main.tf"
+    files = [FakeTerraformFile(path=sub_file, content='resource "x" "y" {}')]
+    violation = TerraformOpaViolation(
+        rule_slug=seeded_terraform_rule.slug,
+        severity=seeded_terraform_rule.severity.value,
+        category=seeded_terraform_rule.category.value,
+        message="something is wrong",
+        resource_address="aws_s3_bucket.logs",
+        file_path=sub_file,
+        line_start=42,
+        line_end=55,
+    )
+    with _patch_fetch(files), _patch_evaluate([violation]):
+        result = _run_terraform_scan_impl(str(terraform_root.id))
+
+    assert result["status"] == "done"
+    findings = db.exec(
+        select(TerraformFinding).where(
+            TerraformFinding.terraform_root_id == terraform_root.id
+        )
+    ).all()
+    assert len(findings) == 1
+    assert findings[0].module_path == "modules/storage"
+    assert findings[0].terraform_address == "module.modules.storage.aws_s3_bucket.logs"
+    assert findings[0].line_start == 42
+    assert findings[0].line_end == 55
 
 
 def test_clean_root_scores_100_and_grade_a_plus_plus_plus(

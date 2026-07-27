@@ -241,6 +241,8 @@ def test_evaluate_terraform_returns_violations_when_policy_matches() -> None:
         "category": "security",
         "resource_address": "aws_s3_bucket.data",
         "file_path": "main.tf",
+        "line_start": 10,
+        "line_end": 20,
         "message": "Bucket is public",
     }
     mock_cm = _mock_client(
@@ -257,6 +259,9 @@ def test_evaluate_terraform_returns_violations_when_policy_matches() -> None:
     assert violations[0].rule_slug == "s3_bucket_public_acl"
     assert violations[0].resource_address == "aws_s3_bucket.data"
     assert violations[0].file_path == "main.tf"
+    # Source line span flows from the raw OPA violation into the dataclass.
+    assert violations[0].line_start == 10
+    assert violations[0].line_end == 20
 
 
 def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
