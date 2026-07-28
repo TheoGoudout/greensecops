@@ -1,0 +1,7 @@
+# Rules this module is expected to trip, checked exactly by
+# scripts/validate_terraform_examples.py. An empty list means the module must
+# be violation-free across the whole rule suite.
+violations:
+  - s3_bucket_public_acl
+  - s3_bucket_missing_versioning
+  - resource_missing_tags

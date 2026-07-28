@@ -1,0 +1,3 @@
+# A clean reference module: it must be violation-free across the entire rule
+# suite, so an empty list is the assertion.
+violations: []

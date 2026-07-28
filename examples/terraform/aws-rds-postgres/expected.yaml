@@ -1,0 +1,6 @@
+# Rules this module is expected to trip, checked exactly by
+# scripts/validate_terraform_examples.py.
+violations:
+  - rds_not_encrypted
+  - resource_missing_tags
+  - variable_missing_description
