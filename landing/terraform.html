@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terraform &amp; Cloud — GreenSecOps</title>
+  <meta name="description" content="GreenSecOps grades your Terraform before you apply and scans your live AWS account read-only — public buckets, open security groups, unencrypted storage, risky IAM, and more, graded A+++ to F." />
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("theme");
+        var theme = ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system";
+        var resolved = theme === "system"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : theme;
+        document.documentElement.classList.add(resolved);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="./assets/style.css" />
+  <link rel="icon" type="image/png" href="./assets/images/favicon.png" />
+</head>
+<body>
+
+<header>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="container">
+      <div class="nav__inner">
+        <a href="./index.html" class="nav__logo" aria-label="GreenSecOps home">
+          <img src="./assets/images/logo-mark.png" data-logo="light" width="24" height="24" alt="" aria-hidden="true">
+          <img src="./assets/images/logo-mark-dark.png" data-logo="dark" width="24" height="24" alt="" aria-hidden="true">
+          GreenSecOps
+        </a>
+        <div class="nav__links">
+          <a href="./features.html" class="nav__link" aria-current="page">Features</a>
+          <a href="./pricing.html" class="nav__link">Pricing</a>
+          <a href="${DOCS_URL}" class="nav__link">Docs</a>
+          <div class="theme-menu">
+            <button type="button" class="theme-toggle" aria-label="Toggle theme" aria-haspopup="true">
+              <svg class="icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
+              <svg class="icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
+            </button>
+            <div class="theme-menu__dropdown" data-open="false" role="menu">
+              <button type="button" class="theme-menu__item" data-theme="light" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
+                Light
+              </button>
+              <button type="button" class="theme-menu__item" data-theme="dark" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
+                Dark
+              </button>
+              <button type="button" class="theme-menu__item" data-theme="system" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M5.5 14h5M8 11v3"/></svg>
+                System
+              </button>
+            </div>
+          </div>
+          <a href="${APP_URL}/login" class="btn btn--ghost btn--sm">Sign In</a>
+          <a href="${APP_URL}/signup" class="btn btn--primary btn--sm">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main>
+
+<!-- HERO -->
+<section class="pricing-hero" aria-labelledby="terraform-page-heading">
+  <div class="container container--narrow">
+    <div class="section__label" style="display:inline-block; margin-bottom:1rem;">Infrastructure as Code</div>
+    <h1 class="section__heading" id="terraform-page-heading" style="font-size: clamp(2rem, 4vw, 3rem);">Catch infrastructure risk before it ships</h1>
+    <p class="section__sub" style="margin: 0.875rem auto 0;">The same grading engine that scores your workflows checks your Terraform statically — before <code>apply</code> — and scans your live AWS account read-only. One grade model, from source to running cloud.</p>
+    <div class="hero__actions" style="justify-content:center; margin-top:1.5rem;">
+      <a href="${APP_URL}/signup" class="btn btn--primary btn--lg">Start for Free</a>
+      <a href="#cloud" class="btn btn--outline btn--lg">See cloud scanning</a>
+    </div>
+  </div>
+</section>
+
+<!-- TERRAFORM: WHAT WE CHECK -->
+<section class="section" aria-labelledby="tf-checks-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">Terraform</div>
+      <h2 class="section__heading" id="tf-checks-heading">Every resource block, reviewed before apply</h2>
+      <p class="section__sub">Point GreenSecOps at any folder in your repo — root modules, per-environment directories, whatever your layout — and every <code>.tf</code> / <code>.tf.json</code> file is graded across three categories.</p>
+    </div>
+
+    <div class="checks-grid">
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--security"></span>Security</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Public S3 bucket ACLs exposing data to the internet</li>
+          <li class="check-card__item">Security groups with unrestricted <code>0.0.0.0/0</code> ingress</li>
+          <li class="check-card__item">Unencrypted RDS instances</li>
+          <li class="check-card__item">Unencrypted EBS volumes</li>
+          <li class="check-card__item">Hardcoded credentials in Terraform source</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--reliability"></span>Reliability</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">S3 buckets missing versioning, risking irrecoverable data loss</li>
+          <li class="check-card__item">Configuration that undermines durability and recovery</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--maintainability"></span>Maintainability</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Resources missing tags for ownership and cost tracking</li>
+          <li class="check-card__item">Variables missing descriptions</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TERRAFORM: HOW IT WORKS -->
+<section class="section section--alt" aria-labelledby="tf-how-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">How It Works</div>
+      <h2 class="section__heading" id="tf-how-heading">No plan files, no apply required</h2>
+      <p class="section__sub">GreenSecOps analyses your Terraform source directly — it never needs cloud credentials or a <code>terraform plan</code> to grade your configuration.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step__num">1</div>
+        <div>
+          <div class="step__title">Choose your Terraform folders</div>
+          <p class="step__desc">Tell GreenSecOps which directories hold your Terraform. Any layout works — a single root module or dozens of per-environment folders.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">2</div>
+        <div>
+          <div class="step__title">Graded on every push</div>
+          <p class="step__desc">Each push parses your <code>.tf</code> files and runs the shared Rego rule catalog, returning per-category grades in seconds — long before anything reaches your cloud.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">3</div>
+        <div>
+          <div class="step__title">Fix it in a pull request</div>
+          <p class="step__desc">Review each finding with remediation guidance, generate an AI fix, and open a pull request — so misconfigurations never make it to <code>apply</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TERRAFORM: BEFORE / AFTER -->
+<section class="section" aria-labelledby="tf-compare-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">See It In Action</div>
+      <h2 class="section__heading" id="tf-compare-heading">From exposed bucket to airtight</h2>
+      <p class="section__sub">A public, unencrypted S3 bucket before GreenSecOps — and after its AI-generated fix locks it down, encrypts it, versions it, and tags it.</p>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-panel">
+        <span class="compare-panel__label compare-panel__label--before">Before</span>
+        <div class="hero__code-card">
+          <div class="hero__code-header">
+            <span class="hero__dot hero__dot--red"></span>
+            <span class="hero__dot hero__dot--yellow"></span>
+            <span class="hero__dot hero__dot--green"></span>
+            <span class="hero__code-filename">s3.tf</span>
+          </div>
+          <div class="hero__code-body"><span class="token-key">resource</span> <span class="token-str">"aws_s3_bucket"</span> <span class="token-str">"assets"</span> {
+  <span class="token-key">bucket</span> = <span class="token-str">"acme-prod-assets"</span>
+  <span class="token-key">acl</span>    = <span class="token-str">"public-read"</span>
+}
+
+<span class="token-key">resource</span> <span class="token-str">"aws_db_instance"</span> <span class="token-str">"main"</span> {
+  <span class="token-key">engine</span>         = <span class="token-str">"postgres"</span>
+  <span class="token-key">instance_class</span> = <span class="token-str">"db.t3.medium"</span>
+  <span class="token-key">password</span>       = <span class="token-str">"hunter2-prod-pw"</span>
+}</div>
+        </div>
+        <div class="compare-panel__grade">
+          <span class="grade-badge grade-badge--lg grade-badge--f" aria-label="Grade F">F</span>
+          <span class="compare-panel__grade-text">Public bucket, hardcoded DB<br>password, unencrypted RDS,<br>no versioning, no tags</span>
+        </div>
+      </div>
+
+      <div class="compare-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        <span>AI-generated fix</span>
+      </div>
+
+      <div class="compare-panel">
+        <span class="compare-panel__label compare-panel__label--after">After</span>
+        <div class="hero__code-card">
+          <div class="hero__code-header">
+            <span class="hero__dot hero__dot--red"></span>
+            <span class="hero__dot hero__dot--yellow"></span>
+            <span class="hero__dot hero__dot--green"></span>
+            <span class="hero__code-filename">s3.tf</span>
+          </div>
+          <div class="hero__code-body"><span class="token-key">resource</span> <span class="token-str">"aws_s3_bucket"</span> <span class="token-str">"assets"</span> {
+  <span class="token-key">bucket</span> = <span class="token-str">"acme-prod-assets"</span>
+  <span class="token-key">tags</span>   = { <span class="token-key">Owner</span> = <span class="token-str">"platform"</span>, <span class="token-key">Env</span> = <span class="token-str">"prod"</span> }
+}
+
+<span class="token-key">resource</span> <span class="token-str">"aws_s3_bucket_versioning"</span> <span class="token-str">"assets"</span> {
+  <span class="token-key">bucket</span> = <span class="token-val">aws_s3_bucket.assets.id</span>
+  <span class="token-key">versioning_configuration</span> { <span class="token-key">status</span> = <span class="token-str">"Enabled"</span> }
+}
+
+<span class="token-key">resource</span> <span class="token-str">"aws_db_instance"</span> <span class="token-str">"main"</span> {
+  <span class="token-key">engine</span>              = <span class="token-str">"postgres"</span>
+  <span class="token-key">instance_class</span>      = <span class="token-str">"db.t3.medium"</span>
+  <span class="token-key">storage_encrypted</span>   = <span class="token-num">true</span>
+  <span class="token-key">password</span>            = <span class="token-str">var.db_password</span>
+}</div>
+        </div>
+        <div class="compare-panel__grade">
+          <span class="grade-badge grade-badge--lg grade-badge--aaa" aria-label="Grade A plus plus plus">A+++</span>
+          <span class="compare-panel__grade-text">Private &amp; encrypted, secret in a<br>variable, versioning on, fully<br>tagged. Reference-quality.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AWS CLOUD POSTURE -->
+<section class="section section--alt" id="cloud" aria-labelledby="cloud-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">AWS Cloud Posture</div>
+      <h2 class="section__heading" id="cloud-heading">Grade what's actually running</h2>
+      <p class="section__sub">Terraform tells you what you intend to deploy. Cloud posture tells you what's live — drift, manual changes, and all. Connect an AWS account read-only via <code>sts:AssumeRole</code> — no access keys, ever.</p>
+    </div>
+
+    <div class="checks-grid">
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--security"></span>Identity &amp; access</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Over-permissive IAM policies and wildcard grants</li>
+          <li class="check-card__item">Security groups exposing ports to the public internet</li>
+          <li class="check-card__item">CloudTrail coverage gaps that blind your audit log</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--reliability"></span>Data &amp; storage</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Public or unencrypted S3 buckets</li>
+          <li class="check-card__item">Unencrypted RDS instances and EBS volumes</li>
+          <li class="check-card__item">Missing durability and backup safeguards</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--maintainability"></span>Compute &amp; hygiene</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Lambda functions with risky configuration</li>
+          <li class="check-card__item">Untagged, unowned resources across the account</li>
+          <li class="check-card__item">Drift between your Terraform and live state</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="steps" style="margin-top: clamp(2rem, 4vw, 3rem);">
+      <div class="step">
+        <div class="step__num">1</div>
+        <div>
+          <div class="step__title">Create a read-only role</div>
+          <p class="step__desc">Add an IAM role that GreenSecOps assumes via <code>sts:AssumeRole</code>. Read-only, scoped, and revocable at any time — no long-lived access keys change hands.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">2</div>
+        <div>
+          <div class="step__title">Scan on demand or on schedule</div>
+          <p class="step__desc">GreenSecOps inspects S3, IAM, security groups, RDS, EBS, Lambda, and CloudTrail across your account and grades each finding.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">3</div>
+        <div>
+          <div class="step__title">Close the loop with Terraform</div>
+          <p class="step__desc">Trace live findings back to the Terraform that should own them, and fix the source instead of patching the console.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" aria-labelledby="terraform-cta-heading">
+  <div class="container">
+    <h2 class="cta__headline" id="terraform-cta-heading">Grade your infrastructure,<br>source to cloud</h2>
+    <p class="cta__sub">Point GreenSecOps at your Terraform, connect an AWS account read-only, and see where you stand — free to start.</p>
+    <div class="cta__actions">
+      <a href="${APP_URL}/signup" class="btn btn--white btn--lg">Get Started for Free</a>
+      <a href="./workflows.html" class="btn btn--outline-white btn--lg">Explore CI/CD Workflows</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <a href="./index.html" class="footer__logo" aria-label="GreenSecOps home">
+        <img src="./assets/images/logo-mark.png" width="18" height="18" alt="" aria-hidden="true">
+        GreenSecOps
+      </a>
+      <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
+      <nav class="footer__links" aria-label="Footer navigation">
+        <a href="./features.html" class="footer__link">Features</a>
+        <a href="./pricing.html" class="footer__link">Pricing</a>
+        <a href="./privacy.html" class="footer__link">Privacy</a>
+        <a href="./terms.html" class="footer__link">Terms</a>
+        <a href="${APP_URL}" class="footer__link">App</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+<script src="./assets/theme.js" defer></script>
+</body>
+</html>

@@ -40,7 +40,7 @@ repos:
         name: Render landing examples from examples/
         entry: python3 scripts/render_landing_examples.py
         language: system
-        files: ^(examples/.*\.ya?ml|landing/index\.html|scripts/render_landing_examples\.py)$
+        files: ^(examples/.*\.ya?ml|landing/(index|workflows)\.html|scripts/render_landing_examples\.py)$
         pass_filenames: false
 
   # Conventional commits enforcement

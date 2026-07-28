@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test"
 
-const PAGES = ["/index.html", "/pricing.html", "/privacy.html", "/terms.html"]
+const PAGES = [
+  "/index.html",
+  "/features.html",
+  "/workflows.html",
+  "/terraform.html",
+  "/pricing.html",
+  "/privacy.html",
+  "/terms.html",
+]
 
 test.describe("theme toggle", () => {
   test("defaults to system preference with no stored choice", async ({
