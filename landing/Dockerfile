@@ -1,4 +1,4 @@
-FROM nginx:1.31.2-alpine
+FROM nginx:1.31.3-alpine
 
 COPY landing/nginx.conf /etc/nginx/conf.d/default.conf
 COPY landing/entrypoint.sh /docker-entrypoint-landing.sh
