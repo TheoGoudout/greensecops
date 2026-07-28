@@ -1,30 +1,76 @@
-upgrade:
-  - changed-files:
-    - any-glob-to-any-file:
-      - '**/Dockerfile*'
+# Auto-labels for the check-labels gate (see workflows/labeler.yml). That gate
+# requires *exactly one* of: breaking, security, feature, bug, refactor,
+# upgrade, docs, lang-all, internal. The intent labels (breaking, security,
+# feature, bug, refactor) can't be derived from file paths and stay manual;
+# these rules cover the three path-derivable categories.
+#
+# Each rule uses `any-glob-to-all-files` ("every changed file is in this
+# category") plus cross-exclusions, so the three categories are disjoint and a
+# PR can never receive two auto-labels. A PR that mixes categories, or touches
+# product source (backend/app, frontend/src, action/src), matches nothing and
+# gets its label applied manually.
 
-docs:
+# Dependency and container-image version bumps: manifests, lockfiles, Dockerfiles.
+upgrade:
   - all:
     - changed-files:
-      - any-glob-to-any-file:
-        - '**/*.md'
+      - any-glob-to-all-files:
+        - '**/Dockerfile*'
+        - '**/package.json'
+        - '**/pyproject.toml'
+        - bun.lock
+        - package-lock.json
+        - uv.lock
+    - changed-files:
       - all-globs-to-all-files:
-        - '!frontend/**'
-        - '!backend/**'
-        - '!.github/**'
-        - '!scripts/**'
-        - '!.gitignore'
-        - '!.pre-commit-config.yaml'
+        - '!**/*.md'
+        - '!**/*.rst'
 
+# Documentation only: Markdown / reStructuredText anywhere in the tree.
+docs:
+  - changed-files:
+    - any-glob-to-all-files:
+      - '**/*.md'
+      - '**/*.rst'
+
+# Repo internals: CI, tooling, scripts, project configs, the docs site build,
+# examples, OPA image, and the static landing/marketing site. Excludes
+# dependency manifests (-> upgrade) and docs (-> docs) so the categories stay
+# disjoint; product source is intentionally absent so it falls through to a
+# manual intent label.
 internal:
   - all:
     - changed-files:
-      - any-glob-to-any-file:
+      - any-glob-to-all-files:
         - .github/**
         - scripts/**
+        - hooks/**
+        - examples/**
+        - landing/**
+        - opa/**
+        - docs/**
+        - .vscode/**
+        - '**/.pre-commit-config.yaml'
+        - '**/biome.json'
+        - '**/bunfig.toml'
+        - '**/tsconfig*.json'
+        - '**/components.json'
+        - '**/action.yml'
+        - '**/alembic.ini'
+        - '**/*.config.ts'
+        - '**/*.conf'
+        - compose*.yml
         - .gitignore
-        - .pre-commit-config.yaml
+        - .gitattributes
+        - .env.example
+        - LICENSE
+    - changed-files:
       - all-globs-to-all-files:
-        - '!./**/*.md'
-        - '!frontend/**'
-        - '!backend/**'
+        - '!**/Dockerfile*'
+        - '!**/package.json'
+        - '!**/pyproject.toml'
+        - '!bun.lock'
+        - '!package-lock.json'
+        - '!uv.lock'
+        - '!**/*.md'
+        - '!**/*.rst'
