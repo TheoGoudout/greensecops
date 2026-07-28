@@ -8,5 +8,5 @@ repos:
         name: Biome lint & format (landing)
         entry: bunx biome check --config-path=. --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./
         language: system
-        files: \.(ts|tsx|js|jsx|json)$
+        files: \.(ts|tsx|js|jsx|json|html)$
         pass_filenames: false

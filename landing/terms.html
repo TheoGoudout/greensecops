@@ -1,223 +1,625 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Terms of Service — GreenSecOps</title>
-  <meta name="description" content="GreenSecOps Terms of Service — the legal agreement governing your use of the GreenSecOps service." />
-  <script>
-    (function () {
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service — GreenSecOps</title>
+    <meta
+      name="description"
+      content="GreenSecOps Terms of Service — the legal agreement governing your use of the GreenSecOps service."
+    >
+    <script>
+    ;(() => {
       try {
-        var stored = localStorage.getItem("theme");
-        var theme = ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system";
-        var resolved = theme === "system"
-          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-          : theme;
-        document.documentElement.classList.add(resolved);
-      } catch (e) {}
-    })();
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="./assets/style.css" />
-  <link rel="icon" type="image/png" href="./assets/images/favicon.png" />
-</head>
-<body>
-
-<header>
-  <nav class="nav" aria-label="Main navigation">
-    <div class="container">
-      <div class="nav__inner">
-        <a href="./index.html" class="nav__logo" aria-label="GreenSecOps home">
-          <img src="./assets/images/logo-mark.png" data-logo="light" width="24" height="24" alt="" aria-hidden="true">
-          <img src="./assets/images/logo-mark-dark.png" data-logo="dark" width="24" height="24" alt="" aria-hidden="true">
-          GreenSecOps
-        </a>
-        <div class="nav__links">
-          <a href="./features.html" class="nav__link">Features</a>
-          <a href="./pricing.html" class="nav__link">Pricing</a>
-          <a href="${DOCS_URL}" class="nav__link">Docs</a>
-          <div class="theme-menu">
-            <button type="button" class="theme-toggle" aria-label="Toggle theme" aria-haspopup="true">
-              <svg class="icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
-              <svg class="icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
-            </button>
-            <div class="theme-menu__dropdown" data-open="false" role="menu">
-              <button type="button" class="theme-menu__item" data-theme="light" role="menuitem">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
-                Light
-              </button>
-              <button type="button" class="theme-menu__item" data-theme="dark" role="menuitem">
-                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
-                Dark
-              </button>
-              <button type="button" class="theme-menu__item" data-theme="system" role="menuitem">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M5.5 14h5M8 11v3"/></svg>
-                System
-              </button>
+        var stored = localStorage.getItem("theme")
+        var theme =
+          ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system"
+        var resolved =
+          theme === "system"
+            ? window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : theme
+        document.documentElement.classList.add(resolved)
+      } catch (_e) {}
+    })()
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="./assets/style.css">
+    <link rel="icon" type="image/png" href="./assets/images/favicon.png">
+  </head>
+  <body>
+    <header>
+      <nav class="nav" aria-label="Main navigation">
+        <div class="container">
+          <div class="nav__inner">
+            <a
+              href="./index.html"
+              class="nav__logo"
+              aria-label="GreenSecOps home"
+            >
+              <img
+                src="./assets/images/logo-mark.png"
+                data-logo="light"
+                width="24"
+                height="24"
+                alt=""
+                aria-hidden="true"
+              >
+              <img
+                src="./assets/images/logo-mark-dark.png"
+                data-logo="dark"
+                width="24"
+                height="24"
+                alt=""
+                aria-hidden="true"
+              >
+              GreenSecOps
+            </a>
+            <div class="nav__links">
+              <a href="./features.html" class="nav__link">Features</a>
+              <a href="./pricing.html" class="nav__link">Pricing</a>
+              <a href="${DOCS_URL}" class="nav__link">Docs</a>
+              <div class="theme-menu">
+                <button
+                  type="button"
+                  class="theme-toggle"
+                  aria-label="Toggle theme"
+                  aria-haspopup="true"
+                >
+                  <svg
+                    class="icon-sun"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  >
+                    <circle cx="8" cy="8" r="3.2" />
+                    <path
+                      d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"
+                    />
+                  </svg>
+                  <svg
+                    class="icon-moon"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z" />
+                  </svg>
+                </button>
+                <div class="theme-menu__dropdown" data-open="false" role="menu">
+                  <button
+                    type="button"
+                    class="theme-menu__item"
+                    data-theme="light"
+                    role="menuitem"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="8" cy="8" r="3.2" />
+                      <path
+                        d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"
+                      />
+                    </svg>
+                    Light
+                  </button>
+                  <button
+                    type="button"
+                    class="theme-menu__item"
+                    data-theme="dark"
+                    role="menuitem"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"
+                      />
+                    </svg>
+                    Dark
+                  </button>
+                  <button
+                    type="button"
+                    class="theme-menu__item"
+                    data-theme="system"
+                    role="menuitem"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      aria-hidden="true"
+                    >
+                      <rect x="1.5" y="2.5" width="13" height="8.5" rx="1" />
+                      <path d="M5.5 14h5M8 11v3" />
+                    </svg>
+                    System
+                  </button>
+                </div>
+              </div>
+              <a href="${APP_URL}/login" class="btn btn--ghost btn--sm"
+                >Sign In</a
+              >
+              <a href="${APP_URL}/signup" class="btn btn--primary btn--sm"
+                >Get Started</a
+              >
             </div>
           </div>
-          <a href="${APP_URL}/login" class="btn btn--ghost btn--sm">Sign In</a>
-          <a href="${APP_URL}/signup" class="btn btn--primary btn--sm">Get Started</a>
         </div>
-      </div>
-    </div>
-  </nav>
-</header>
-
-<main>
-  <div class="prose-page">
-    <div class="container container--narrow">
-
-      <div class="prose-page__header">
-        <h1 class="prose-page__title">Terms of Service</h1>
-        <p class="prose-page__meta">Last updated: 16 June 2026</p>
-      </div>
-
-      <div class="prose">
-
-        <div class="prose__section">
-          <h2>1. Acceptance of Terms</h2>
-          <p>These Terms of Service ("Terms") constitute a legally binding agreement between you ("User", "you") and GreenSecOps ("GreenSecOps", "we", "us", "our"), governing your access to and use of the GreenSecOps service, including the web application at <strong>${APP_URL}</strong>, the marketing website at <strong>${MARKETING_URL}</strong>, the GitHub App, any APIs, and related tools (collectively, the "Service").</p>
-          <p>By creating an account, installing the GitHub App, or otherwise using the Service, you confirm that you have read, understood, and agree to be bound by these Terms and our <a href="./privacy.html">Privacy Policy</a>, which is incorporated herein by reference. If you do not agree, you must not use the Service.</p>
-          <p>If you are accepting these Terms on behalf of an organisation, you represent and warrant that you have the authority to bind that organisation. In that case, "you" refers to the organisation.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>2. Service Description</h2>
-          <p>GreenSecOps is a software-as-a-service (SaaS) platform that analyses GitHub Actions workflow files for security vulnerabilities, reliability issues, performance inefficiencies, energy consumption patterns, and maintainability concerns. The Service produces quality grades (from A+++ to F) per category and per workflow file, and optionally generates AI-assisted remediation patches ("AI Fixes") that may be proposed as GitHub pull requests.</p>
-          <p>The Service is provided "as-is" and is subject to change. We reserve the right to modify, suspend, or discontinue any aspect of the Service with reasonable advance notice where practicable.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>3. Account Registration and GitHub Integration</h2>
-          <p><strong>Account creation.</strong> To use the Service, you must authenticate via GitHub OAuth. By doing so, you grant GreenSecOps permission to read your GitHub profile information (username, display name, primary email) in accordance with the scopes requested during OAuth authorisation.</p>
-          <p><strong>GitHub App installation.</strong> Activating analysis for a repository requires installing the GreenSecOps GitHub App and granting the permissions listed on the installation page. You represent that you have the right to install the App on any repository you connect — either as the repository owner or with explicit permission from the owner.</p>
-          <p><strong>Account security.</strong> You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. You must notify us immediately at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a> if you suspect unauthorised access.</p>
-          <p><strong>Eligibility.</strong> You must be at least 18 years old to use the Service. By using the Service, you represent that you meet this requirement.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>4. Subscription and Billing</h2>
-          <p><strong>Plans.</strong> The Service is offered under the following plans: Free, Starter ($19/month), Pro ($79/month), Ultimate ($299/month), and Open Source (free for qualifying projects). Plan details, limits, and current pricing are described on the <a href="./pricing.html">pricing page</a> and may be updated from time to time.</p>
-          <p><strong>Billing cycle and auto-renewal.</strong> Paid subscriptions are billed monthly in advance, beginning on the date you upgrade to a paid plan. Subscriptions renew automatically at the end of each billing period unless you cancel before the renewal date. Renewal charges use the payment method on file.</p>
-          <p><strong>Payment.</strong> All payments are processed by Stripe, Inc. By providing payment information, you authorise us to charge your payment method for the applicable subscription fees. All amounts are stated in US dollars (USD) unless otherwise indicated. You are responsible for any applicable taxes.</p>
-          <p><strong>Cancellation.</strong> You may cancel your subscription at any time via the billing page in your account settings. Cancellation takes effect at the end of the current billing period, after which your account will downgrade to the Free plan. You will not be charged for subsequent periods.</p>
-          <p><strong>Refunds.</strong> Subscription fees are non-refundable except where required by applicable law. We will, at our sole discretion, consider refund requests for exceptional circumstances (such as extended service outage caused by us) on a case-by-case basis. Submit refund requests to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
-          <p><strong>Price changes.</strong> We may change subscription prices on 30 days' written notice (by email to your registered address). Continued use after the effective date constitutes acceptance of the new price.</p>
-          <p><strong>Free plan.</strong> The Free plan is provided at no cost and carries no service-level commitments. We may modify or discontinue it at any time with 30 days' notice.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>5. Acceptable Use</h2>
-          <p>You agree not to use the Service in any way that:</p>
-          <ul>
-            <li>Violates any applicable law or regulation, including the GDPR, French law, and any export controls.</li>
-            <li>Infringes the intellectual property rights, privacy rights, or other rights of any third party.</li>
-            <li>Introduces malware, viruses, or malicious code into the Service or its infrastructure.</li>
-            <li>Attempts to probe, scan, or test the vulnerability of the Service or any connected system without prior written authorisation from us.</li>
-            <li>Circumvents, disables, or interferes with security features or usage limits of the Service, including rate limits, quota systems, or tier restrictions.</li>
-            <li>Reverse-engineers, decompiles, or disassembles the Service software, except as permitted by applicable law.</li>
-            <li>Resells or sublicenses access to the Service without our prior written consent.</li>
-            <li>Scrapes or harvests data from the Service beyond what is provided by official API endpoints.</li>
-            <li>Uses the Service to generate output for the purpose of building a competing product or benchmarking the Service without our written consent.</li>
-          </ul>
-          <p>We reserve the right to suspend or terminate accounts that violate these provisions, without liability and without prejudice to any other remedies available to us.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>6. Intellectual Property</h2>
-          <p><strong>Our intellectual property.</strong> The Service, including its software, algorithms, grade-computation logic, user interface, design, documentation, and all related materials, is owned by GreenSecOps or its licensors and is protected by intellectual property laws. These Terms do not transfer any ownership of our intellectual property to you. You are granted a limited, non-exclusive, non-transferable, revocable licence to use the Service solely as permitted by these Terms.</p>
-          <p><strong>Your data.</strong> You retain all ownership rights to your workflow files, repository data, and any other content you make accessible to the Service ("Your Data"). By using the Service, you grant GreenSecOps a limited, non-exclusive, worldwide, royalty-free licence to access, read, and process Your Data solely to the extent necessary to provide the Service to you. This licence terminates when you revoke the GitHub App installation or delete your account.</p>
-          <p><strong>Feedback.</strong> If you provide suggestions, bug reports, or other feedback about the Service, you grant us an irrevocable, perpetual, royalty-free right to use such feedback for any purpose, without any obligation to you.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>7. Privacy</h2>
-          <p>Our collection, use, and protection of personal data is described in our <a href="./privacy.html">Privacy Policy</a>. By using the Service, you consent to data processing as described therein.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>8. Warranties and Disclaimers</h2>
-          <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, OR UNINTERRUPTED AVAILABILITY.</p>
-          <p>We do not warrant that: (a) the Service will be free of errors or defects; (b) grades and AI Fixes will be accurate, complete, or suitable for your specific workflow or environment; (c) issues identified by the Service represent an exhaustive list of problems; or (d) AI-generated fix suggestions will not introduce new issues.</p>
-          <p>You are solely responsible for reviewing AI Fix suggestions before applying them to your repositories. Grades and recommendations are informational and do not constitute professional security, legal, or engineering advice.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>9. Limitation of Liability</h2>
-          <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL GREENSECOPS OR ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF PROFITS, LOSS OF DATA, BUSINESS INTERRUPTION, OR LOSS OF GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO USE THE SERVICE, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
-          <p>TO THE EXTENT NOT PROHIBITED BY LAW, OUR TOTAL CUMULATIVE LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THESE TERMS OR THE SERVICE SHALL NOT EXCEED THE GREATER OF: (A) THE TOTAL FEES PAID BY YOU TO GREENSECOPS IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM; OR (B) ONE HUNDRED EUROS (€100).</p>
-          <p>Some jurisdictions do not allow limitation or exclusion of certain damages. In such jurisdictions, our liability is limited to the greatest extent permitted by law.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>10. Indemnification</h2>
-          <p>You agree to indemnify, defend, and hold harmless GreenSecOps and its officers, directors, employees, and agents from and against any third-party claims, liabilities, damages, losses, and expenses (including reasonable legal fees) arising out of or related to: (a) your use of the Service in breach of these Terms; (b) Your Data and the content of your workflow files; (c) your infringement of any third-party rights; or (d) your violation of any applicable law or regulation.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>11. Termination</h2>
-          <p><strong>Termination by you.</strong> You may terminate your account at any time by uninstalling the GitHub App and deleting your account from the account settings page. Termination does not entitle you to a refund of pre-paid fees.</p>
-          <p><strong>Termination by us.</strong> We may suspend or terminate your access to the Service immediately and without prior notice if: (a) you materially breach these Terms; (b) we are required to do so by law; (c) continued provision would expose us to legal liability; or (d) you are abusing the Service in a way that impairs the experience of other users.</p>
-          <p><strong>Effect of termination.</strong> Upon termination, your licence to use the Service immediately ceases. Sections 6 (Intellectual Property), 8 (Warranties), 9 (Limitation of Liability), 10 (Indemnification), 12 (Governing Law), and any payment obligations accrued prior to termination shall survive.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>12. Governing Law and Dispute Resolution</h2>
-          <p>These Terms are governed by and construed in accordance with the laws of France, without regard to its conflict-of-law provisions. Any dispute arising from or relating to these Terms or the Service shall be subject to the exclusive jurisdiction of the competent courts of Paris, France, unless mandatory consumer protection law in your country of residence requires otherwise.</p>
-          <p>Before initiating any formal proceedings, we encourage you to contact us at <a href="mailto:${LEGAL_EMAIL}">${LEGAL_EMAIL}</a> to seek an amicable resolution. We will make good-faith efforts to resolve disputes informally within 30 days of notice.</p>
-          <p>If you are a consumer based in the European Union, you may also submit a complaint to the European Online Dispute Resolution platform at <a href="https://ec.europa.eu/consumers/odr" rel="noopener noreferrer">ec.europa.eu/consumers/odr</a>.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>13. Changes to Terms</h2>
-          <p>We may update these Terms from time to time. We will provide at least 30 days' notice of material changes by sending an email to your registered address and posting a notice on the Service. Minor changes (such as clarifications that do not reduce your rights) may be made without notice and will be indicated by the updated "Last updated" date.</p>
-          <p>Your continued use of the Service after the effective date of any changes constitutes acceptance of the updated Terms. If you do not agree to the updated Terms, you must stop using the Service and may terminate your account.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>14. Miscellaneous</h2>
-          <p><strong>Entire agreement.</strong> These Terms and the Privacy Policy constitute the entire agreement between you and GreenSecOps concerning the Service and supersede all prior agreements, representations, and understandings.</p>
-          <p><strong>Severability.</strong> If any provision of these Terms is found to be unenforceable, it will be modified to the minimum extent necessary to make it enforceable, and the remaining provisions will continue in full force and effect.</p>
-          <p><strong>Waiver.</strong> Failure to enforce any provision of these Terms shall not constitute a waiver of the right to enforce it in the future.</p>
-          <p><strong>Assignment.</strong> You may not assign your rights or obligations under these Terms without our prior written consent. We may assign these Terms in connection with a merger, acquisition, or sale of assets, with notice to you.</p>
-          <p><strong>Force majeure.</strong> We are not liable for any failure to perform caused by circumstances beyond our reasonable control, including natural disasters, acts of government, pandemics, or third-party infrastructure failures.</p>
-        </div>
-
-        <div class="prose__section">
-          <h2>15. Contact</h2>
-          <p>For legal enquiries regarding these Terms, please contact:</p>
-          <p>
-            <strong>GreenSecOps — Legal</strong><br>
-            Email: <a href="mailto:${LEGAL_EMAIL}">${LEGAL_EMAIL}</a>
-          </p>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</main>
-
-<footer class="footer">
-  <div class="container">
-    <div class="footer__inner">
-      <a href="./index.html" class="footer__logo" aria-label="GreenSecOps home">
-        <img src="./assets/images/logo-mark.png" width="18" height="18" alt="" aria-hidden="true">
-        GreenSecOps
-      </a>
-      <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
-      <nav class="footer__links" aria-label="Footer navigation">
-        <a href="./features.html" class="footer__link">Features</a>
-        <a href="./pricing.html" class="footer__link">Pricing</a>
-        <a href="./privacy.html" class="footer__link">Privacy</a>
-        <a href="./terms.html" class="footer__link">Terms</a>
-        <a href="${APP_URL}" class="footer__link">App</a>
       </nav>
-    </div>
-  </div>
-</footer>
+    </header>
 
-<script src="./assets/theme.js" defer></script>
-</body>
+    <main>
+      <div class="prose-page">
+        <div class="container container--narrow">
+          <div class="prose-page__header">
+            <h1 class="prose-page__title">Terms of Service</h1>
+            <p class="prose-page__meta">Last updated: 16 June 2026</p>
+          </div>
+
+          <div class="prose">
+            <div class="prose__section">
+              <h2>1. Acceptance of Terms</h2>
+              <p>
+                These Terms of Service ("Terms") constitute a legally binding
+                agreement between you ("User", "you") and GreenSecOps
+                ("GreenSecOps", "we", "us", "our"), governing your access to and
+                use of the GreenSecOps service, including the web application at
+                <strong>$ { APP_URL}</strong>, the marketing website at
+                <strong>$ { MARKETING_URL}</strong>, the GitHub App, any APIs,
+                and related tools (collectively, the "Service").
+              </p>
+              <p>
+                By creating an account, installing the GitHub App, or otherwise
+                using the Service, you confirm that you have read, understood,
+                and agree to be bound by these Terms and our
+                <a href="./privacy.html">Privacy Policy</a>, which is
+                incorporated herein by reference. If you do not agree, you must
+                not use the Service.
+              </p>
+              <p>
+                If you are accepting these Terms on behalf of an organisation,
+                you represent and warrant that you have the authority to bind
+                that organisation. In that case, "you" refers to the
+                organisation.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>2. Service Description</h2>
+              <p>
+                GreenSecOps is a software-as-a-service (SaaS) platform that
+                analyses GitHub Actions workflow files for security
+                vulnerabilities, reliability issues, performance inefficiencies,
+                energy consumption patterns, and maintainability concerns. The
+                Service produces quality grades (from A+++ to F) per category
+                and per workflow file, and optionally generates AI-assisted
+                remediation patches ("AI Fixes") that may be proposed as GitHub
+                pull requests.
+              </p>
+              <p>
+                The Service is provided "as-is" and is subject to change. We
+                reserve the right to modify, suspend, or discontinue any aspect
+                of the Service with reasonable advance notice where practicable.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>3. Account Registration and GitHub Integration</h2>
+              <p>
+                <strong>Account creation.</strong>
+                To use the Service, you must authenticate via GitHub OAuth. By
+                doing so, you grant GreenSecOps permission to read your GitHub
+                profile information (username, display name, primary email) in
+                accordance with the scopes requested during OAuth authorisation.
+              </p>
+              <p>
+                <strong>GitHub App installation.</strong>
+                Activating analysis for a repository requires installing the
+                GreenSecOps GitHub App and granting the permissions listed on
+                the installation page. You represent that you have the right to
+                install the App on any repository you connect — either as the
+                repository owner or with explicit permission from the owner.
+              </p>
+              <p>
+                <strong>Account security.</strong>
+                You are responsible for maintaining the confidentiality of your
+                account credentials and for all activity that occurs under your
+                account. You must notify us immediately at
+                <a href="mailto:${SUPPORT_EMAIL}">$ { SUPPORT_EMAIL}</a>
+                if you suspect unauthorised access.
+              </p>
+              <p>
+                <strong>Eligibility.</strong>
+                You must be at least 18 years old to use the Service. By using
+                the Service, you represent that you meet this requirement.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>4. Subscription and Billing</h2>
+              <p>
+                <strong>Plans.</strong>
+                The Service is offered under the following plans: Free, Starter
+                ($19/month), Pro ($79/month), Ultimate ($299/month), and Open
+                Source (free for qualifying projects). Plan details, limits, and
+                current pricing are described on the
+                <a href="./pricing.html">pricing page</a>
+                and may be updated from time to time.
+              </p>
+              <p>
+                <strong>Billing cycle and auto-renewal.</strong>
+                Paid subscriptions are billed monthly in advance, beginning on
+                the date you upgrade to a paid plan. Subscriptions renew
+                automatically at the end of each billing period unless you
+                cancel before the renewal date. Renewal charges use the payment
+                method on file.
+              </p>
+              <p>
+                <strong>Payment.</strong>
+                All payments are processed by Stripe, Inc. By providing payment
+                information, you authorise us to charge your payment method for
+                the applicable subscription fees. All amounts are stated in US
+                dollars (USD) unless otherwise indicated. You are responsible
+                for any applicable taxes.
+              </p>
+              <p>
+                <strong>Cancellation.</strong>
+                You may cancel your subscription at any time via the billing
+                page in your account settings. Cancellation takes effect at the
+                end of the current billing period, after which your account will
+                downgrade to the Free plan. You will not be charged for
+                subsequent periods.
+              </p>
+              <p>
+                <strong>Refunds.</strong>
+                Subscription fees are non-refundable except where required by
+                applicable law. We will, at our sole discretion, consider refund
+                requests for exceptional circumstances (such as extended service
+                outage caused by us) on a case-by-case basis. Submit refund
+                requests to
+                <a href="mailto:${SUPPORT_EMAIL}">$ { SUPPORT_EMAIL}</a>.
+              </p>
+              <p>
+                <strong>Price changes.</strong>
+                We may change subscription prices on 30 days' written notice (by
+                email to your registered address). Continued use after the
+                effective date constitutes acceptance of the new price.
+              </p>
+              <p>
+                <strong>Free plan.</strong>
+                The Free plan is provided at no cost and carries no
+                service-level commitments. We may modify or discontinue it at
+                any time with 30 days' notice.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>5. Acceptable Use</h2>
+              <p>You agree not to use the Service in any way that:</p>
+              <ul>
+                <li>
+                  Violates any applicable law or regulation, including the GDPR,
+                  French law, and any export controls.
+                </li>
+                <li>
+                  Infringes the intellectual property rights, privacy rights, or
+                  other rights of any third party.
+                </li>
+                <li>
+                  Introduces malware, viruses, or malicious code into the
+                  Service or its infrastructure.
+                </li>
+                <li>
+                  Attempts to probe, scan, or test the vulnerability of the
+                  Service or any connected system without prior written
+                  authorisation from us.
+                </li>
+                <li>
+                  Circumvents, disables, or interferes with security features or
+                  usage limits of the Service, including rate limits, quota
+                  systems, or tier restrictions.
+                </li>
+                <li>
+                  Reverse-engineers, decompiles, or disassembles the Service
+                  software, except as permitted by applicable law.
+                </li>
+                <li>
+                  Resells or sublicenses access to the Service without our prior
+                  written consent.
+                </li>
+                <li>
+                  Scrapes or harvests data from the Service beyond what is
+                  provided by official API endpoints.
+                </li>
+                <li>
+                  Uses the Service to generate output for the purpose of
+                  building a competing product or benchmarking the Service
+                  without our written consent.
+                </li>
+              </ul>
+              <p>
+                We reserve the right to suspend or terminate accounts that
+                violate these provisions, without liability and without
+                prejudice to any other remedies available to us.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>6. Intellectual Property</h2>
+              <p>
+                <strong>Our intellectual property.</strong>
+                The Service, including its software, algorithms,
+                grade-computation logic, user interface, design, documentation,
+                and all related materials, is owned by GreenSecOps or its
+                licensors and is protected by intellectual property laws. These
+                Terms do not transfer any ownership of our intellectual property
+                to you. You are granted a limited, non-exclusive,
+                non-transferable, revocable licence to use the Service solely as
+                permitted by these Terms.
+              </p>
+              <p>
+                <strong>Your data.</strong>
+                You retain all ownership rights to your workflow files,
+                repository data, and any other content you make accessible to
+                the Service ("Your Data"). By using the Service, you grant
+                GreenSecOps a limited, non-exclusive, worldwide, royalty-free
+                licence to access, read, and process Your Data solely to the
+                extent necessary to provide the Service to you. This licence
+                terminates when you revoke the GitHub App installation or delete
+                your account.
+              </p>
+              <p>
+                <strong>Feedback.</strong>
+                If you provide suggestions, bug reports, or other feedback about
+                the Service, you grant us an irrevocable, perpetual,
+                royalty-free right to use such feedback for any purpose, without
+                any obligation to you.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>7. Privacy</h2>
+              <p>
+                Our collection, use, and protection of personal data is
+                described in our <a href="./privacy.html">Privacy Policy</a>. By
+                using the Service, you consent to data processing as described
+                therein.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>8. Warranties and Disclaimers</h2>
+              <p>
+                THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT
+                WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+                LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+                PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, OR UNINTERRUPTED
+                AVAILABILITY.
+              </p>
+              <p>
+                We do not warrant that: (a) the Service will be free of errors
+                or defects; (b) grades and AI Fixes will be accurate, complete,
+                or suitable for your specific workflow or environment; (c)
+                issues identified by the Service represent an exhaustive list of
+                problems; or (d) AI-generated fix suggestions will not introduce
+                new issues.
+              </p>
+              <p>
+                You are solely responsible for reviewing AI Fix suggestions
+                before applying them to your repositories. Grades and
+                recommendations are informational and do not constitute
+                professional security, legal, or engineering advice.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>9. Limitation of Liability</h2>
+              <p>
+                TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT
+                SHALL GREENSECOPS OR ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS,
+                OR LICENSORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+                CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF PROFITS,
+                LOSS OF DATA, BUSINESS INTERRUPTION, OR LOSS OF GOODWILL,
+                ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO
+                USE THE SERVICE, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY
+                OF SUCH DAMAGES.
+              </p>
+              <p>
+                TO THE EXTENT NOT PROHIBITED BY LAW, OUR TOTAL CUMULATIVE
+                LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO
+                THESE TERMS OR THE SERVICE SHALL NOT EXCEED THE GREATER OF: (A)
+                THE TOTAL FEES PAID BY YOU TO GREENSECOPS IN THE TWELVE (12)
+                MONTHS PRECEDING THE CLAIM; OR (B) ONE HUNDRED EUROS (€100).
+              </p>
+              <p>
+                Some jurisdictions do not allow limitation or exclusion of
+                certain damages. In such jurisdictions, our liability is limited
+                to the greatest extent permitted by law.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>10. Indemnification</h2>
+              <p>
+                You agree to indemnify, defend, and hold harmless GreenSecOps
+                and its officers, directors, employees, and agents from and
+                against any third-party claims, liabilities, damages, losses,
+                and expenses (including reasonable legal fees) arising out of or
+                related to: (a) your use of the Service in breach of these
+                Terms; (b) Your Data and the content of your workflow files; (c)
+                your infringement of any third-party rights; or (d) your
+                violation of any applicable law or regulation.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>11. Termination</h2>
+              <p>
+                <strong>Termination by you.</strong>
+                You may terminate your account at any time by uninstalling the
+                GitHub App and deleting your account from the account settings
+                page. Termination does not entitle you to a refund of pre-paid
+                fees.
+              </p>
+              <p>
+                <strong>Termination by us.</strong>
+                We may suspend or terminate your access to the Service
+                immediately and without prior notice if: (a) you materially
+                breach these Terms; (b) we are required to do so by law; (c)
+                continued provision would expose us to legal liability; or (d)
+                you are abusing the Service in a way that impairs the experience
+                of other users.
+              </p>
+              <p>
+                <strong>Effect of termination.</strong>
+                Upon termination, your licence to use the Service immediately
+                ceases. Sections 6 (Intellectual Property), 8 (Warranties), 9
+                (Limitation of Liability), 10 (Indemnification), 12 (Governing
+                Law), and any payment obligations accrued prior to termination
+                shall survive.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>12. Governing Law and Dispute Resolution</h2>
+              <p>
+                These Terms are governed by and construed in accordance with the
+                laws of France, without regard to its conflict-of-law
+                provisions. Any dispute arising from or relating to these Terms
+                or the Service shall be subject to the exclusive jurisdiction of
+                the competent courts of Paris, France, unless mandatory consumer
+                protection law in your country of residence requires otherwise.
+              </p>
+              <p>
+                Before initiating any formal proceedings, we encourage you to
+                contact us at
+                <a href="mailto:${LEGAL_EMAIL}">$ { LEGAL_EMAIL}</a>
+                to seek an amicable resolution. We will make good-faith efforts
+                to resolve disputes informally within 30 days of notice.
+              </p>
+              <p>
+                If you are a consumer based in the European Union, you may also
+                submit a complaint to the European Online Dispute Resolution
+                platform at
+                <a
+                  href="https://ec.europa.eu/consumers/odr"
+                  rel="noopener noreferrer"
+                  >ec.europa.eu/consumers/odr</a
+                >.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>13. Changes to Terms</h2>
+              <p>
+                We may update these Terms from time to time. We will provide at
+                least 30 days' notice of material changes by sending an email to
+                your registered address and posting a notice on the Service.
+                Minor changes (such as clarifications that do not reduce your
+                rights) may be made without notice and will be indicated by the
+                updated "Last updated" date.
+              </p>
+              <p>
+                Your continued use of the Service after the effective date of
+                any changes constitutes acceptance of the updated Terms. If you
+                do not agree to the updated Terms, you must stop using the
+                Service and may terminate your account.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>14. Miscellaneous</h2>
+              <p>
+                <strong>Entire agreement.</strong>
+                These Terms and the Privacy Policy constitute the entire
+                agreement between you and GreenSecOps concerning the Service and
+                supersede all prior agreements, representations, and
+                understandings.
+              </p>
+              <p>
+                <strong>Severability.</strong>
+                If any provision of these Terms is found to be unenforceable, it
+                will be modified to the minimum extent necessary to make it
+                enforceable, and the remaining provisions will continue in full
+                force and effect.
+              </p>
+              <p>
+                <strong>Waiver.</strong>
+                Failure to enforce any provision of these Terms shall not
+                constitute a waiver of the right to enforce it in the future.
+              </p>
+              <p>
+                <strong>Assignment.</strong>
+                You may not assign your rights or obligations under these Terms
+                without our prior written consent. We may assign these Terms in
+                connection with a merger, acquisition, or sale of assets, with
+                notice to you.
+              </p>
+              <p>
+                <strong>Force majeure.</strong>
+                We are not liable for any failure to perform caused by
+                circumstances beyond our reasonable control, including natural
+                disasters, acts of government, pandemics, or third-party
+                infrastructure failures.
+              </p>
+            </div>
+
+            <div class="prose__section">
+              <h2>15. Contact</h2>
+              <p>For legal enquiries regarding these Terms, please contact:</p>
+              <p>
+                <strong>GreenSecOps — Legal</strong><br>
+                Email: <a href="mailto:${LEGAL_EMAIL}">$ { LEGAL_EMAIL}</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <div class="footer__inner">
+          <a
+            href="./index.html"
+            class="footer__logo"
+            aria-label="GreenSecOps home"
+          >
+            <img
+              src="./assets/images/logo-mark.png"
+              width="18"
+              height="18"
+              alt=""
+              aria-hidden="true"
+            >
+            GreenSecOps
+          </a>
+          <p class="footer__copy">
+            &copy; 2026 GreenSecOps. All rights reserved.
+          </p>
+          <nav class="footer__links" aria-label="Footer navigation">
+            <a href="./features.html" class="footer__link">Features</a>
+            <a href="./pricing.html" class="footer__link">Pricing</a>
+            <a href="./privacy.html" class="footer__link">Privacy</a>
+            <a href="./terms.html" class="footer__link">Terms</a>
+            <a href="${APP_URL}" class="footer__link">App</a>
+          </nav>
+        </div>
+      </div>
+    </footer>
+
+    <script src="./assets/theme.js" defer></script>
+  </body>
 </html>
