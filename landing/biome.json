@@ -10,6 +10,10 @@
   "files": {
     "includes": [
       "**/*.{ts,tsx,js,jsx,json}",
+      "features.html",
+      "pricing.html",
+      "privacy.html",
+      "terms.html",
       "!**/node_modules/**/*",
       "!**/playwright-report/**/*",
       "!**/test-results/**/*",
@@ -30,5 +34,17 @@
       "quoteStyle": "double",
       "semicolons": "asNeeded"
     }
-  }
+  },
+  "html": {
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.html"],
+      "linter": { "enabled": false },
+      "assist": { "enabled": false }
+    }
+  ]
 }

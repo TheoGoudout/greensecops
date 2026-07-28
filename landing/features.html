@@ -1,193 +1,457 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Features — GreenSecOps</title>
-  <meta name="description" content="One grading engine across your whole delivery pipeline — GitHub Actions workflows, Terraform, and live AWS cloud posture. Graded A+++ to F with AI-powered fixes." />
-  <script>
-    (function () {
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features — GreenSecOps</title>
+    <meta
+      name="description"
+      content="One grading engine across your whole delivery pipeline — GitHub Actions workflows, Terraform, and live AWS cloud posture. Graded A+++ to F with AI-powered fixes."
+    >
+    <script>
+    ;(() => {
       try {
-        var stored = localStorage.getItem("theme");
-        var theme = ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system";
-        var resolved = theme === "system"
-          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-          : theme;
-        document.documentElement.classList.add(resolved);
-      } catch (e) {}
-    })();
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="./assets/style.css" />
-  <link rel="icon" type="image/png" href="./assets/images/favicon.png" />
-</head>
-<body>
-
-<header>
-  <nav class="nav" aria-label="Main navigation">
-    <div class="container">
-      <div class="nav__inner">
-        <a href="./index.html" class="nav__logo" aria-label="GreenSecOps home">
-          <img src="./assets/images/logo-mark.png" data-logo="light" width="24" height="24" alt="" aria-hidden="true">
-          <img src="./assets/images/logo-mark-dark.png" data-logo="dark" width="24" height="24" alt="" aria-hidden="true">
-          GreenSecOps
-        </a>
-        <div class="nav__links">
-          <a href="./features.html" class="nav__link" aria-current="page">Features</a>
-          <a href="./pricing.html" class="nav__link">Pricing</a>
-          <a href="${DOCS_URL}" class="nav__link">Docs</a>
-          <div class="theme-menu">
-            <button type="button" class="theme-toggle" aria-label="Toggle theme" aria-haspopup="true">
-              <svg class="icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
-              <svg class="icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
-            </button>
-            <div class="theme-menu__dropdown" data-open="false" role="menu">
-              <button type="button" class="theme-menu__item" data-theme="light" role="menuitem">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
-                Light
-              </button>
-              <button type="button" class="theme-menu__item" data-theme="dark" role="menuitem">
-                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
-                Dark
-              </button>
-              <button type="button" class="theme-menu__item" data-theme="system" role="menuitem">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M5.5 14h5M8 11v3"/></svg>
-                System
-              </button>
+        var stored = localStorage.getItem("theme")
+        var theme =
+          ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system"
+        var resolved =
+          theme === "system"
+            ? window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : theme
+        document.documentElement.classList.add(resolved)
+      } catch (_e) {}
+    })()
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="./assets/style.css">
+    <link rel="icon" type="image/png" href="./assets/images/favicon.png">
+  </head>
+  <body>
+    <header>
+      <nav class="nav" aria-label="Main navigation">
+        <div class="container">
+          <div class="nav__inner">
+            <a
+              href="./index.html"
+              class="nav__logo"
+              aria-label="GreenSecOps home"
+            >
+              <img
+                src="./assets/images/logo-mark.png"
+                data-logo="light"
+                width="24"
+                height="24"
+                alt=""
+                aria-hidden="true"
+              >
+              <img
+                src="./assets/images/logo-mark-dark.png"
+                data-logo="dark"
+                width="24"
+                height="24"
+                alt=""
+                aria-hidden="true"
+              >
+              GreenSecOps
+            </a>
+            <div class="nav__links">
+              <a href="./features.html" class="nav__link" aria-current="page"
+                >Features</a
+              >
+              <a href="./pricing.html" class="nav__link">Pricing</a>
+              <a href="${DOCS_URL}" class="nav__link">Docs</a>
+              <div class="theme-menu">
+                <button
+                  type="button"
+                  class="theme-toggle"
+                  aria-label="Toggle theme"
+                  aria-haspopup="true"
+                >
+                  <svg
+                    class="icon-sun"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  >
+                    <circle cx="8" cy="8" r="3.2" />
+                    <path
+                      d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"
+                    />
+                  </svg>
+                  <svg
+                    class="icon-moon"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z" />
+                  </svg>
+                </button>
+                <div class="theme-menu__dropdown" data-open="false" role="menu">
+                  <button
+                    type="button"
+                    class="theme-menu__item"
+                    data-theme="light"
+                    role="menuitem"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="8" cy="8" r="3.2" />
+                      <path
+                        d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"
+                      />
+                    </svg>
+                    Light
+                  </button>
+                  <button
+                    type="button"
+                    class="theme-menu__item"
+                    data-theme="dark"
+                    role="menuitem"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"
+                      />
+                    </svg>
+                    Dark
+                  </button>
+                  <button
+                    type="button"
+                    class="theme-menu__item"
+                    data-theme="system"
+                    role="menuitem"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      aria-hidden="true"
+                    >
+                      <rect x="1.5" y="2.5" width="13" height="8.5" rx="1" />
+                      <path d="M5.5 14h5M8 11v3" />
+                    </svg>
+                    System
+                  </button>
+                </div>
+              </div>
+              <a href="${APP_URL}/login" class="btn btn--ghost btn--sm"
+                >Sign In</a
+              >
+              <a href="${APP_URL}/signup" class="btn btn--primary btn--sm"
+                >Get Started</a
+              >
             </div>
           </div>
-          <a href="${APP_URL}/login" class="btn btn--ghost btn--sm">Sign In</a>
-          <a href="${APP_URL}/signup" class="btn btn--primary btn--sm">Get Started</a>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section class="pricing-hero" aria-labelledby="features-page-heading">
+        <div class="container container--narrow">
+          <div
+            class="section__label"
+            style="display:inline-block; margin-bottom:1rem;"
+          >
+            Features
+          </div>
+          <h1
+            class="section__heading"
+            id="features-page-heading"
+            style="font-size: clamp(2rem, 4vw, 3rem);"
+          >
+            One grading engine. Every layer of your pipeline.
+          </h1>
+          <p class="section__sub" style="margin: 0.875rem auto 0;">
+            GreenSecOps runs the same Rego rule catalog and A+++ to F grade
+            model across three surfaces — your CI/CD workflows, your Terraform,
+            and your live AWS account. Pick a surface to see exactly what we
+            check.
+          </p>
+        </div>
+      </section>
+
+      <!-- SURFACES -->
+      <section class="section" aria-labelledby="surfaces-heading">
+        <div class="container">
+          <h2 class="sr-only" id="surfaces-heading">Analysis surfaces</h2>
+          <div class="surfaces-grid surfaces-grid--3">
+            <a
+              href="./workflows.html"
+              class="surface-card surface-card--workflow"
+            >
+              <div class="surface-card__icon">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 4h12M4 10h12M4 16h7"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                  <circle
+                    cx="16.5"
+                    cy="16"
+                    r="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                </svg>
+              </div>
+              <div class="surface-card__title">CI/CD Workflows</div>
+              <p class="surface-card__desc">
+                Static analysis of every GitHub Actions workflow file on each
+                push — action pinning, secret exposure, caching, timeouts, and
+                more across five categories.
+              </p>
+              <span class="surface-card__tag">Static analysis</span>
+              <span class="surface-card__link">
+                Explore workflows
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+
+            <a
+              href="./terraform.html"
+              class="surface-card surface-card--terraform"
+            >
+              <div class="surface-card__icon">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="3"
+                    y="3"
+                    width="6"
+                    height="6"
+                    rx="1"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="11"
+                    y="3"
+                    width="6"
+                    height="6"
+                    rx="1"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="7"
+                    y="11"
+                    width="6"
+                    height="6"
+                    rx="1"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M9 6h2M10 9v2"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </div>
+              <div class="surface-card__title">Terraform</div>
+              <p class="surface-card__desc">
+                Grade your <code>.tf</code> files before you ever run
+                <code>apply</code>
+                — public buckets, open security groups, unencrypted storage,
+                missing tags, and more.
+              </p>
+              <span class="surface-card__tag">Static analysis</span>
+              <span class="surface-card__link">
+                Explore Terraform
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+
+            <a
+              href="./terraform.html#cloud"
+              class="surface-card surface-card--cloud"
+            >
+              <div class="surface-card__icon">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 14.5a3.5 3.5 0 0 1-.5-6.965 4.5 4.5 0 0 1 8.79-1.28A3.75 3.75 0 0 1 14.5 14.5H6z"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </div>
+              <div class="surface-card__title">AWS Cloud Posture</div>
+              <p class="surface-card__desc">
+                Connect an AWS account read-only via
+                <code>sts:AssumeRole</code>
+                and grade what's actually running — IAM, security groups, S3,
+                RDS, EBS, Lambda, and CloudTrail.
+              </p>
+              <span class="surface-card__tag">Live scanning</span>
+              <span class="surface-card__link">
+                Explore cloud posture
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- SHARED ENGINE -->
+      <section class="section section--alt" aria-labelledby="engine-heading">
+        <div class="container">
+          <div class="section__header section__header--center">
+            <div class="section__label">One System</div>
+            <h2 class="section__heading" id="engine-heading">
+              Different surfaces, the same grade you trust
+            </h2>
+            <p class="section__sub">
+              Whatever GreenSecOps scans, it speaks the same language — a single
+              letter grade from A+++ to F, per-category breakdowns, and
+              AI-generated fixes ready to review.
+            </p>
+          </div>
+
+          <div class="grades-showcase" aria-hidden="true">
+            <span class="grade-badge grade-badge--xl grade-badge--aaa"
+              >A+++</span
+            >
+            <span class="grade-badge grade-badge--xl grade-badge--app"
+              >A++</span
+            >
+            <span class="grade-badge grade-badge--xl grade-badge--apl">A+</span>
+            <span class="grade-badge grade-badge--xl grade-badge--a">A</span>
+            <span class="grade-badge grade-badge--xl grade-badge--b">B</span>
+            <span class="grade-badge grade-badge--xl grade-badge--c">C</span>
+            <span class="grade-badge grade-badge--xl grade-badge--d">D</span>
+            <span class="grade-badge grade-badge--xl grade-badge--f">F</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="cta-section" aria-labelledby="features-cta-heading">
+        <div class="container">
+          <h2 class="cta__headline" id="features-cta-heading">
+            Grade every layer in one place
+          </h2>
+          <p class="cta__sub">
+            Install the GitHub App, connect your infrastructure, and see your
+            first grades in minutes — free to start.
+          </p>
+          <div class="cta__actions">
+            <a href="${APP_URL}/signup" class="btn btn--white btn--lg"
+              >Get Started for Free</a
+            >
+            <a href="./pricing.html" class="btn btn--outline-white btn--lg"
+              >See Pricing</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <div class="footer__inner">
+          <a
+            href="./index.html"
+            class="footer__logo"
+            aria-label="GreenSecOps home"
+          >
+            <img
+              src="./assets/images/logo-mark.png"
+              width="18"
+              height="18"
+              alt=""
+              aria-hidden="true"
+            >
+            GreenSecOps
+          </a>
+          <p class="footer__copy">
+            &copy; 2026 GreenSecOps. All rights reserved.
+          </p>
+          <nav class="footer__links" aria-label="Footer navigation">
+            <a href="./features.html" class="footer__link">Features</a>
+            <a href="./pricing.html" class="footer__link">Pricing</a>
+            <a href="./privacy.html" class="footer__link">Privacy</a>
+            <a href="./terms.html" class="footer__link">Terms</a>
+            <a href="${APP_URL}" class="footer__link">App</a>
+          </nav>
         </div>
       </div>
-    </div>
-  </nav>
-</header>
+    </footer>
 
-<main>
-
-<!-- HERO -->
-<section class="pricing-hero" aria-labelledby="features-page-heading">
-  <div class="container container--narrow">
-    <div class="section__label" style="display:inline-block; margin-bottom:1rem;">Features</div>
-    <h1 class="section__heading" id="features-page-heading" style="font-size: clamp(2rem, 4vw, 3rem);">One grading engine. Every layer of your pipeline.</h1>
-    <p class="section__sub" style="margin: 0.875rem auto 0;">GreenSecOps runs the same Rego rule catalog and A+++ to F grade model across three surfaces — your CI/CD workflows, your Terraform, and your live AWS account. Pick a surface to see exactly what we check.</p>
-  </div>
-</section>
-
-<!-- SURFACES -->
-<section class="section" aria-labelledby="surfaces-heading">
-  <div class="container">
-    <h2 class="sr-only" id="surfaces-heading">Analysis surfaces</h2>
-    <div class="surfaces-grid surfaces-grid--3">
-      <a href="./workflows.html" class="surface-card surface-card--workflow">
-        <div class="surface-card__icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M4 4h12M4 10h12M4 16h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="16.5" cy="16" r="1.5" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </div>
-        <div class="surface-card__title">CI/CD Workflows</div>
-        <p class="surface-card__desc">Static analysis of every GitHub Actions workflow file on each push — action pinning, secret exposure, caching, timeouts, and more across five categories.</p>
-        <span class="surface-card__tag">Static analysis</span>
-        <span class="surface-card__link">
-          Explore workflows
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </span>
-      </a>
-
-      <a href="./terraform.html" class="surface-card surface-card--terraform">
-        <div class="surface-card__icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="7" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M9 6h2M10 9v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="surface-card__title">Terraform</div>
-        <p class="surface-card__desc">Grade your <code>.tf</code> files before you ever run <code>apply</code> — public buckets, open security groups, unencrypted storage, missing tags, and more.</p>
-        <span class="surface-card__tag">Static analysis</span>
-        <span class="surface-card__link">
-          Explore Terraform
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </span>
-      </a>
-
-      <a href="./terraform.html#cloud" class="surface-card surface-card--cloud">
-        <div class="surface-card__icon">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M6 14.5a3.5 3.5 0 0 1-.5-6.965 4.5 4.5 0 0 1 8.79-1.28A3.75 3.75 0 0 1 14.5 14.5H6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="surface-card__title">AWS Cloud Posture</div>
-        <p class="surface-card__desc">Connect an AWS account read-only via <code>sts:AssumeRole</code> and grade what's actually running — IAM, security groups, S3, RDS, EBS, Lambda, and CloudTrail.</p>
-        <span class="surface-card__tag">Live scanning</span>
-        <span class="surface-card__link">
-          Explore cloud posture
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </span>
-      </a>
-    </div>
-  </div>
-</section>
-
-<!-- SHARED ENGINE -->
-<section class="section section--alt" aria-labelledby="engine-heading">
-  <div class="container">
-    <div class="section__header section__header--center">
-      <div class="section__label">One System</div>
-      <h2 class="section__heading" id="engine-heading">Different surfaces, the same grade you trust</h2>
-      <p class="section__sub">Whatever GreenSecOps scans, it speaks the same language — a single letter grade from A+++ to F, per-category breakdowns, and AI-generated fixes ready to review.</p>
-    </div>
-
-    <div class="grades-showcase" aria-hidden="true">
-      <span class="grade-badge grade-badge--xl grade-badge--aaa">A+++</span>
-      <span class="grade-badge grade-badge--xl grade-badge--app">A++</span>
-      <span class="grade-badge grade-badge--xl grade-badge--apl">A+</span>
-      <span class="grade-badge grade-badge--xl grade-badge--a">A</span>
-      <span class="grade-badge grade-badge--xl grade-badge--b">B</span>
-      <span class="grade-badge grade-badge--xl grade-badge--c">C</span>
-      <span class="grade-badge grade-badge--xl grade-badge--d">D</span>
-      <span class="grade-badge grade-badge--xl grade-badge--f">F</span>
-    </div>
-  </div>
-</section>
-
-<!-- CTA -->
-<section class="cta-section" aria-labelledby="features-cta-heading">
-  <div class="container">
-    <h2 class="cta__headline" id="features-cta-heading">Grade every layer in one place</h2>
-    <p class="cta__sub">Install the GitHub App, connect your infrastructure, and see your first grades in minutes — free to start.</p>
-    <div class="cta__actions">
-      <a href="${APP_URL}/signup" class="btn btn--white btn--lg">Get Started for Free</a>
-      <a href="./pricing.html" class="btn btn--outline-white btn--lg">See Pricing</a>
-    </div>
-  </div>
-</section>
-
-</main>
-
-<footer class="footer">
-  <div class="container">
-    <div class="footer__inner">
-      <a href="./index.html" class="footer__logo" aria-label="GreenSecOps home">
-        <img src="./assets/images/logo-mark.png" width="18" height="18" alt="" aria-hidden="true">
-        GreenSecOps
-      </a>
-      <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
-      <nav class="footer__links" aria-label="Footer navigation">
-        <a href="./features.html" class="footer__link">Features</a>
-        <a href="./pricing.html" class="footer__link">Pricing</a>
-        <a href="./privacy.html" class="footer__link">Privacy</a>
-        <a href="./terms.html" class="footer__link">Terms</a>
-        <a href="${APP_URL}" class="footer__link">App</a>
-      </nav>
-    </div>
-  </div>
-</footer>
-
-<script src="./assets/theme.js" defer></script>
-</body>
+    <script src="./assets/theme.js" defer></script>
+  </body>
 </html>
