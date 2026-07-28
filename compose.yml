@@ -161,7 +161,7 @@ services:
         restart: true
       prestart:
         condition: service_completed_successfully
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q default,analysis,fixes
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default,analysis,fixes
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
       interval: 30s

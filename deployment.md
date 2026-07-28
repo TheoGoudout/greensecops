@@ -114,6 +114,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `S3_ACCESS_KEY`, `S3_SECRET_KEY`: MinIO credentials for object storage (large IaC/cloud scan artifacts). Fixed to `${SERVICE_USER_MINIO}`/`${SERVICE_PASSWORD_MINIO}` in `compose.yml`.
 * `S3_BUCKET`: The bucket name to use for object storage. Default: `greensecops-artifacts`.
 * `S3_REGION`: Region string passed to the S3 client (MinIO ignores its value but the SDK requires one). Default: `us-east-1`.
+* `CELERY_CONCURRENCY`: Number of concurrent Celery worker processes/threads in the `celery-worker` service. Lower it to reduce CPU/memory strain on a smaller (e.g. staging) host; raise it to process more tasks in parallel. Default: `4` (`2` under `compose.override.yml` for local development).
 
 **LLM configuration**
 

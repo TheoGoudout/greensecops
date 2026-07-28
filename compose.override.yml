@@ -95,7 +95,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=2 -Q default,analysis,fixes
+    command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=${CELERY_CONCURRENCY:-2} -Q default,analysis,fixes
     develop:
       watch:
         - path: ./backend
