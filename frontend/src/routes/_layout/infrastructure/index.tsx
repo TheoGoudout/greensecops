@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Boxes, Loader2, Plus } from "lucide-react"
+import { Boxes, GitBranch, Loader2, Plus } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { TerraformRootPublic } from "@/client"
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
 import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/infrastructure/")({
@@ -45,6 +46,7 @@ function worstGrade(roots: TerraformRootPublic[]): string | null {
 
 function InfrastructurePage() {
   const queryClient = useQueryClient()
+  const { openInstallPopup } = useGitHubAppInstall()
   const [selectedRepoId, setSelectedRepoId] = useState<string>("")
   const [newRootPath, setNewRootPath] = useState("")
 
@@ -105,11 +107,17 @@ function InfrastructurePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Infrastructure</h1>
-        <p className="text-muted-foreground">
-          Terraform static analysis, cloud posture and fixes, per repository.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Infrastructure</h1>
+          <p className="text-muted-foreground">
+            Terraform static analysis, cloud posture and fixes, per repository.
+          </p>
+        </div>
+        <Button variant="outline" className="gap-2" onClick={openInstallPopup}>
+          <GitBranch className="h-4 w-4" />
+          Install GitHub App
+        </Button>
       </div>
 
       <Card>
