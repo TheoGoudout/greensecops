@@ -507,6 +507,8 @@ export type TerraformFindingPublic = {
     file_path: string;
     line_start?: (number | null);
     line_end?: (number | null);
+    module_path?: (string | null);
+    terraform_address?: (string | null);
     severity: IssueSeverity;
     category: IssueCategory;
     message: string;

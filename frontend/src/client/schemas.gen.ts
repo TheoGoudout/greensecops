@@ -2333,6 +2333,28 @@ export const TerraformFindingPublicSchema = {
             ],
             title: 'Line End'
         },
+        module_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Module Path'
+        },
+        terraform_address: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Terraform Address'
+        },
         severity: {
             '$ref': '#/components/schemas/IssueSeverity'
         },

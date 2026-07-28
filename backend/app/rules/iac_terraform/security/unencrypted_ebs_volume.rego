@@ -30,6 +30,8 @@ violations contains violation if {
 		"category": "security",
 		"resource_address": sprintf("aws_ebs_volume.%v", [name]),
 		"file_path": object.get(vol, "__tf_file", ""),
+		"line_start": object.get(vol, "__start_line__", null),
+		"line_end": object.get(vol, "__end_line__", null),
 		"message": sprintf("EBS volume '%v' has no encrypted = true — data at rest is unencrypted.", [name]),
 	}
 }

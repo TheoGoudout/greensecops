@@ -1288,6 +1288,14 @@ export type TerraformFindingPublic = {
      * Line End
      */
     line_end?: number | null;
+    /**
+     * Module Path
+     */
+    module_path?: string | null;
+    /**
+     * Terraform Address
+     */
+    terraform_address?: string | null;
     severity: IssueSeverity;
     category: IssueCategory;
     /**

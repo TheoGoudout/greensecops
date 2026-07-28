@@ -274,6 +274,10 @@ class TerraformFindingPublic(SQLModel):
     # it — lets the frontend annotate the finding inline on the ``.tf`` source.
     line_start: int | None = None
     line_end: int | None = None
+    # Directory-derived module locator + full Terraform address; null for
+    # root-module resources. See ``hcl_parser.derive_module_path``.
+    module_path: str | None = None
+    terraform_address: str | None = None
     severity: IssueSeverity
     category: IssueCategory
     message: str

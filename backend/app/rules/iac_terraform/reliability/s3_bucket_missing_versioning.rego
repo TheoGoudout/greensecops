@@ -32,6 +32,8 @@ violations contains violation if {
 		"category": "reliability",
 		"resource_address": sprintf("aws_s3_bucket.%v", [name]),
 		"file_path": object.get(bucket, "__tf_file", ""),
+		"line_start": object.get(bucket, "__start_line__", null),
+		"line_end": object.get(bucket, "__end_line__", null),
 		"message": sprintf(
 			"S3 bucket '%v' has no versioning configured — accidental overwrites/deletes can't be recovered.",
 			[name],

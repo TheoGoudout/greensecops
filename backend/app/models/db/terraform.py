@@ -121,6 +121,13 @@ class TerraformFinding(SQLModel, table=True):
     file_path: str = Field(max_length=512)
     line_start: int | None = Field(default=None)
     line_end: int | None = Field(default=None)
+    # Directory-derived module locator (e.g. ``modules/storage``) and the full
+    # Terraform address (``module.modules.storage.aws_s3_bucket.logs``). Both
+    # nullable: root-module resources and JSON-config files carry no module
+    # prefix. See ``hcl_parser.derive_module_path`` — a path heuristic, not a
+    # resolved ``module {}`` invocation chain.
+    module_path: str | None = Field(default=None, max_length=512)
+    terraform_address: str | None = Field(default=None, max_length=1024)
     fingerprint: str = Field(max_length=16, index=True)
     severity: IssueSeverity
     category: IssueCategory

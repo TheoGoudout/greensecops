@@ -39,6 +39,8 @@ violations contains violation if {
 		"category": "security",
 		"resource_address": sprintf("aws_security_group.%v", [name]),
 		"file_path": object.get(sg, "__tf_file", ""),
+		"line_start": object.get(sg, "__start_line__", null),
+		"line_end": object.get(sg, "__end_line__", null),
 		"message": sprintf(
 			"Security group '%v' allows ingress from 0.0.0.0/0 on port %v.",
 			[name, object.get(ingress, "from_port", "?")],

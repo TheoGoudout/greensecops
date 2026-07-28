@@ -32,6 +32,8 @@ violations contains violation if {
 		"category": "security",
 		"resource_address": sprintf("aws_s3_bucket.%v", [name]),
 		"file_path": object.get(bucket, "__tf_file", ""),
+		"line_start": object.get(bucket, "__start_line__", null),
+		"line_end": object.get(bucket, "__end_line__", null),
 		"message": sprintf("S3 bucket '%v' has a public ACL (%v). Every object is readable by anyone on the internet.", [name, acl]),
 	}
 }

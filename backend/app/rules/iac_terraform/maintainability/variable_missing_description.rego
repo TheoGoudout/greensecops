@@ -30,6 +30,8 @@ violations contains violation if {
 		"category": "maintainability",
 		"resource_address": sprintf("var.%v", [name]),
 		"file_path": object.get(attrs, "__tf_file", ""),
+		"line_start": object.get(attrs, "__start_line__", null),
+		"line_end": object.get(attrs, "__end_line__", null),
 		"message": sprintf(
 			"Variable '%v' has no description — harder for other authors to understand its purpose.",
 			[name],

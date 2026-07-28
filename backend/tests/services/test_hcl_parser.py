@@ -1,4 +1,5 @@
 from app.services.terraform.hcl_parser import (
+    derive_module_path,
     merge_terraform_configs,
     parse_terraform_content,
 )
@@ -13,6 +14,17 @@ def test_parse_terraform_content_parses_hcl() -> None:
     result = parse_terraform_content("main.tf", raw)
     assert result is not None
     assert result["resource"][0]["aws_s3_bucket"]["data"]["bucket"] == "my-bucket"
+
+
+def test_parse_terraform_content_preserves_source_line_span() -> None:
+    # with_meta=True stamps 1-based start/end lines on every block's attrs dict
+    # so a rule can report the exact source span of a violation (spec #3).
+    raw = 'resource "aws_s3_bucket" "data" {\n  acl = "public-read"\n}\n'
+    result = parse_terraform_content("main.tf", raw)
+    assert result is not None
+    attrs = result["resource"][0]["aws_s3_bucket"]["data"]
+    assert attrs["__start_line__"] == 1
+    assert attrs["__end_line__"] == 3
 
 
 def test_parse_terraform_content_parses_tf_json() -> None:
@@ -83,3 +95,24 @@ def test_merge_terraform_configs_skips_unparseable_files() -> None:
 
 def test_merge_terraform_configs_empty_input() -> None:
     assert merge_terraform_configs([]) == {}
+
+
+def test_derive_module_path_root_level_file_is_none() -> None:
+    # A file directly in the root (or its root_path prefix) has no module.
+    assert derive_module_path("main.tf", "") is None
+    assert derive_module_path("main.tf", ".") is None
+    assert derive_module_path("infra/prod/main.tf", "infra/prod") is None
+
+
+def test_derive_module_path_subdirectory_is_relative_dir() -> None:
+    assert (
+        derive_module_path("infra/prod/modules/storage/main.tf", "infra/prod")
+        == "modules/storage"
+    )
+    # No root_path prefix: the whole directory is the module locator.
+    assert derive_module_path("modules/vpc/main.tf", "") == "modules/vpc"
+
+
+def test_derive_module_path_file_outside_root_falls_back_to_its_dir() -> None:
+    # Defensive: file not actually under root_path — use its own parent dir.
+    assert derive_module_path("other/main.tf", "infra/prod") == "other"

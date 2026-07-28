@@ -72,6 +72,8 @@ class TerraformOpaViolation:
     message: str
     resource_address: str | None = None
     file_path: str = ""
+    line_start: int | None = None
+    line_end: int | None = None
     context: str | None = None
     discriminator: str | None = None
 
@@ -221,6 +223,8 @@ async def evaluate_terraform(
             message=v.get("message", ""),
             resource_address=v.get("resource_address"),
             file_path=v.get("file_path", ""),
+            line_start=v.get("line_start"),
+            line_end=v.get("line_end"),
             context=v.get("context"),
             discriminator=v.get("discriminator"),
         )
