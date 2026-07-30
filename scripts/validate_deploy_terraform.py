@@ -28,6 +28,7 @@ from opa_terraform_eval import (
     collect_tf_files,
     evaluate_violations,
     merge_terraform_configs,
+    unparseable_files,
 )
 
 DEPLOY_TF_DIR = ROOT / "deploy" / "terraform"
@@ -65,6 +66,19 @@ def main() -> int:
     tf_files = collect_tf_files(DEPLOY_TF_DIR, recursive=True)
     if not tf_files:
         print(f"No .tf/.tf.json files found under {DEPLOY_TF_DIR}", file=sys.stderr)
+        return 1
+
+    # A file the parser cannot read is a file that is not scanned. Without this
+    # the check would report "violation-free" while silently skipping it.
+    unparseable = unparseable_files(tf_files)
+    if unparseable:
+        print(
+            "Deployment Terraform could not be fully parsed, so the scan would "
+            "have skipped these file(s) rather than checking them:\n",
+            file=sys.stderr,
+        )
+        for path in unparseable:
+            print(f"  ✗ {path}", file=sys.stderr)
         return 1
 
     violations = evaluate_violations(merge_terraform_configs(tf_files))

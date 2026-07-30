@@ -43,6 +43,7 @@ TERRAFORM_VIOLATIONS_QUERY = (
 sys.path.insert(0, str(ROOT / "backend"))
 from app.services.terraform.hcl_parser import (  # noqa: E402
     merge_terraform_configs,
+    parse_terraform_content,
 )
 
 __all__ = [
@@ -52,7 +53,25 @@ __all__ = [
     "collect_tf_files",
     "evaluate_violations",
     "merge_terraform_configs",
+    "unparseable_files",
 ]
+
+
+def unparseable_files(files: list[tuple[str, str]]) -> list[str]:
+    """Return the paths in ``files`` that the HCL parser cannot read.
+
+    ``merge_terraform_configs`` skips a file it cannot parse rather than
+    aborting the whole scan — the right behaviour in production, where one bad
+    file in a customer repository should not lose the findings from every other
+    one. In a check whose whole job is to prove a directory is clean it is the
+    wrong behaviour: an unparseable file is silently *not scanned*, and the
+    check passes for the wrong reason. Callers use this to fail loudly instead.
+    """
+    return [
+        path
+        for path, content in files
+        if parse_terraform_content(path, content) is None
+    ]
 
 
 def evaluate_violations(merged_config: dict[str, Any]) -> list[dict[str, Any]]:
