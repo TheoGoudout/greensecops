@@ -60,6 +60,11 @@ repos:
 
       - id: terraform-validate
         name: Validate Terraform
+        # Two commands per root, so the image's `terraform` entrypoint has to be
+        # replaced with a shell — otherwise `sh -c ...` is passed to Terraform
+        # as arguments. HOME is set because the container runs as the calling
+        # uid, which has no writable home inside the image.
+        #
         # -backend=false so validation needs no S3 bucket and no credentials.
         # Both roots are checked: bootstrap is a separate root with its own
         # provider requirements.
@@ -67,8 +72,9 @@ repos:
           bash -c 'for root in . bootstrap; do
           docker run --rm -u "$(id -u):$(id -g)"
           -v "$(pwd)/deploy/terraform:/work" -w "/work/$root"
-          -e TF_IN_AUTOMATION=1 hashicorp/terraform:1.14
-          sh -c "terraform init -backend=false -input=false >/dev/null && terraform validate"
+          -e TF_IN_AUTOMATION=1 -e HOME=/tmp
+          --entrypoint sh hashicorp/terraform:1.14
+          -c "terraform init -backend=false -input=false >/dev/null && terraform validate"
           || exit 1; done'
         language: system
         files: ^deploy/terraform/.*\.tf$
