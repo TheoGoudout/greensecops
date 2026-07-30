@@ -78,6 +78,8 @@ Frontend docs: [frontend/README.md](./frontend/README.md).
 
 Deployment docs: [deployment.md](./deployment.md).
 
+To deploy on AWS with Terraform and Ansible instead of a single Docker host, see [deploy/README.md](./deploy/README.md).
+
 ## Development
 
 General development docs: [development.md](./development.md).

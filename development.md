@@ -121,7 +121,17 @@ we are using a tool called [prek](https://prek.j178.dev/) (modern alternative to
 
 When you install it, it runs right before making a commit in git. This way it ensures that the code is consistent and formatted even before it is committed.
 
-You can find a file `.pre-commit-config.yaml` with configurations at the root of the project, holding workspace-wide hooks (file hygiene, OpenAPI client generation, commit message linting). `prek` also auto-discovers a `.pre-commit-config.yaml` in each of `backend/`, `docs/`, `frontend/`, `action/`, and `landing/` and runs their project-specific lint/format/typecheck hooks alongside it — no extra wiring needed, and each of those can also be run standalone from inside its own directory.
+You can find a file `.pre-commit-config.yaml` with configurations at the root of the project, holding workspace-wide hooks (file hygiene, OpenAPI client generation, deployment-config checks, commit message linting). `prek` also auto-discovers a `.pre-commit-config.yaml` in each of `backend/`, `docs/`, `frontend/`, `action/`, and `landing/` and runs their project-specific lint/format/typecheck hooks alongside it — no extra wiring needed, and each of those can also be run standalone from inside its own directory.
+
+#### Hooks for the AWS deployment config
+
+Four hooks cover `deploy/`, and only run when you touch it:
+
+* `terraform-fmt` and `terraform-validate` run `terraform fmt -recursive` and `terraform validate` over `deploy/terraform/`. Both run in a `hashicorp/terraform` container — the same approach `backend/.pre-commit-config.yaml` takes for `opa fmt` and `opa check` — so you need Docker but not a local Terraform install.
+* `deploy-terraform-opa` runs `scripts/validate_deploy_terraform.py`, which scans the deployment Terraform with GreenSecOps's own `iac_terraform` rules and **fails on any violation**. It needs the `opa` binary on your `PATH` (the same one `backend/`'s Rego hooks use) and Python with `python-hcl2`.
+* `ansible-lint` lints `deploy/ansible/` at its `production` profile.
+
+See [deploy/README.md](./deploy/README.md) for what these are guarding.
 
 #### Install prek to run automatically
 
