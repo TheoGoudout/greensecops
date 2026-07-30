@@ -1,0 +1,7 @@
+---
+# Resolved from vars/services.yml once the role fact is known, so every task and
+# template refers to one variable instead of indexing the map repeatedly.
+greensecops_service_spec: "{{ greensecops_services[greensecops_role] }}"
+
+greensecops_service_image: >-
+  {{ greensecops_config.ECR_REGISTRY }}/greensecops/{{ greensecops_service_spec.image }}:{{ greensecops_config.IMAGE_TAG }}

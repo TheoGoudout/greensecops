@@ -1,0 +1,6 @@
+---
+docker_compose_version: "2.40.4"
+
+# Graviton instances by default, matching the arm64 images. Falls back to the
+# host's own architecture so an x86_64 environment works unchanged.
+docker_compose_arch: "{{ 'aarch64' if ansible_facts['architecture'] == 'aarch64' else 'x86_64' }}"

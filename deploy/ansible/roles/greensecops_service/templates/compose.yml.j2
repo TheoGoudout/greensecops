@@ -1,0 +1,54 @@
+{{ ansible_managed | comment }}
+# One service per host. This is the split-host counterpart to the repository's
+# compose.yml: same images and same commands, but PostgreSQL, Redis and OPA are
+# reached over the network instead of over a compose bridge, so no db, redis,
+# minio or opa service is defined alongside.
+#
+# Generated from deploy/ansible/vars/services.yml — edit that, not this.
+---
+services:
+  {{ greensecops_role }}:
+    image: {{ greensecops_service_image }}
+    restart: always
+    env_file:
+      - {{ greensecops_env_file }}
+{% if greensecops_service_spec.command %}
+    command: {{ greensecops_service_spec.command | trim }}
+{% endif %}
+{% if greensecops_service_spec.port %}
+    ports:
+      # Bound to every interface because the load balancer reaches the instance
+      # from another subnet; the security group is what limits who may connect.
+      - "{{ greensecops_service_spec.port }}:{{ greensecops_service_spec.port }}"
+{% endif %}
+{% if greensecops_service_spec.volumes is defined %}
+    volumes:
+{% for volume in greensecops_service_spec.volumes %}
+      - {{ volume }}
+{% endfor %}
+{% endif %}
+    healthcheck:
+      test: {{ greensecops_service_spec.health_check | to_json }}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: {{ greensecops_region }}
+        awslogs-group: /greensecops/greensecops-{{ greensecops_environment }}/{{ greensecops_role }}
+        awslogs-stream: "{{ greensecops_role }}-{{ inventory_hostname }}"
+{% if greensecops_role == 'backend' %}
+
+  # Migrations, the object-store bucket check and the first-superuser seed.
+  # Never started by `up` — the deploy runs it once with `compose run --rm`.
+  prestart:
+    image: {{ greensecops_service_image }}
+    command: bash scripts/prestart.sh
+    env_file:
+      - {{ greensecops_env_file }}
+    profiles:
+      - migration
+    restart: "no"
+{% endif %}

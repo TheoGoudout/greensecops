@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and adjust. The bucket name must be globally unique
+# across all of S3 — including a short account-specific suffix is the usual way.
+aws_region        = "eu-west-1"
+state_bucket_name = "greensecops-tfstate-CHANGEME"
+
+tags = {
+  Owner = "platform"
+}

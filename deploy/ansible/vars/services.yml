@@ -1,0 +1,93 @@
+---
+# The single source of truth for what each role runs.
+#
+# This intentionally duplicates part of compose.yml. A split-host deployment
+# cannot reuse a single-host compose file — every service here runs alone on
+# its own instance group, reaching PostgreSQL, Redis and OPA over the network
+# instead of over a compose bridge. Keeping the duplication in one small file
+# makes the drift reviewable: if a command or a health check changes in
+# compose.yml, it changes here too, and deploy/README.md says so.
+#
+# `image` names the ECR repository; the registry and tag come from Parameter
+# Store, so a rollback is a tag change rather than a rebuild.
+
+greensecops_services:
+  backend:
+    image: backend
+    command: fastapi run --workers 4 app/main.py
+    port: 8000
+    health_check: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+    needs_app_env: true
+
+  celery-worker:
+    image: backend
+    command: >-
+      celery -A app.workers.celery_app worker --loglevel=info
+      --concurrency=${CELERY_CONCURRENCY:-4} -Q default,analysis,fixes
+    port: null
+    health_check: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
+    needs_app_env: true
+
+  celery-beat:
+    image: backend
+    command: >-
+      celery -A app.workers.celery_app beat --loglevel=info
+      --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celery/celerybeat-schedule
+    port: null
+    health_check: ["CMD-SHELL", "test -f /var/lib/celery/celerybeat-schedule"]
+    needs_app_env: true
+    # PersistentScheduler keeps its cursor on disk; losing it re-fires every
+    # periodic task at once, so it survives container replacement.
+    volumes:
+      - /var/lib/greensecops/celery:/var/lib/celery
+
+  opa:
+    image: opa
+    command: >-
+      run --server --addr=0.0.0.0:8181 --log-level=info /policies
+    port: 8181
+    health_check: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
+    needs_app_env: false
+
+  frontend:
+    image: frontend
+    command: null
+    port: 80
+    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    needs_app_env: false
+
+  landing:
+    image: landing
+    command: null
+    port: 80
+    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    needs_app_env: false
+    # The landing page reads these at container start to render its links and
+    # legal copy; they are plain configuration, not secrets.
+    environment_keys:
+      - APP_URL
+      - MARKETING_URL
+      - DOCS_URL
+      - SUPPORT_EMAIL
+      - SALES_EMAIL
+      - LEGAL_EMAIL
+      - PRIVACY_EMAIL
+
+  docs:
+    image: docs
+    command: null
+    port: 80
+    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    needs_app_env: false
+
+# Build-time arguments, as the KEY=VALUE strings buildx takes directly. The
+# frontend and docs images bake their configuration in at build time, which is
+# why they are built per environment rather than promoted between them.
+greensecops_build_args:
+  frontend:
+    - "VITE_API_URL={{ greensecops_config.BACKEND_HOST }}"
+    - "VITE_GREENSECOPS_PUBLIC_URL={{ greensecops_config.BACKEND_HOST }}"
+    - "VITE_GITHUB_APP_NAME={{ greensecops_secrets.GITHUB_APP_NAME }}"
+    - "VITE_GITHUB_OAUTH_CLIENT_ID={{ greensecops_secrets.GITHUB_CLIENT_ID }}"
+  docs:
+    - "DOCS_BASE_URL={{ greensecops_config.DOCS_URL }}"

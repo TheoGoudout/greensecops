@@ -1,0 +1,17 @@
+---
+- name: Render the CloudWatch agent configuration
+  ansible.builtin.template:
+    src: amazon-cloudwatch-agent.json.j2
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Restart the CloudWatch agent
+
+- name: Enable the CloudWatch agent
+  ansible.builtin.systemd_service:
+    name: amazon-cloudwatch-agent
+    state: started
+    enabled: true
+  become: true

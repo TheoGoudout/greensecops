@@ -1,0 +1,131 @@
+# The configuration contract between Terraform and Ansible.
+#
+# Two halves, because they have different owners and different blast radii:
+#
+#   /config/*  Written by Terraform. Everything derivable from the
+#              infrastructure itself — endpoints, hostnames, bucket names.
+#              Readable by every instance role. Changing one is a terraform
+#              apply followed by a deploy.
+#
+#   /secret/*  Declared here with a placeholder and seeded out of band with
+#              `aws ssm put-parameter --overwrite`. `ignore_changes` on the
+#              value means Terraform never reads back, overwrites, or stores
+#              the real secret — nothing sensitive reaches the state file.
+#              Readable only by the roles that run application code.
+#
+# Ansible fetches the whole tree on each host with the instance's own role and
+# renders it into /opt/greensecops/.env. Names map one-to-one onto the settings
+# in backend/app/core/config.py, so the list below and .env.example describe the
+# same variables.
+
+locals {
+  # Values Terraform knows because it built the thing they point at.
+  config_parameters = {
+    ENVIRONMENT  = var.environment
+    PROJECT_NAME = "GreenSecOps"
+    IMAGE_TAG    = var.image_tag
+    ECR_REGISTRY = var.ecr_registry
+    AWS_REGION   = var.aws_region
+
+    # Hosts and URLs. The backend derives the GitHub OAuth callback from
+    # FRONTEND_HOST, so this is also what the OAuth app must be configured with.
+    FRONTEND_HOST        = local.urls.frontend
+    BACKEND_HOST         = local.urls.backend
+    DOCS_URL             = local.urls.docs
+    MARKETING_URL        = local.urls.landing
+    BACKEND_CORS_ORIGINS = local.urls.frontend
+
+    # Data tier. POSTGRES_PASSWORD is absent on purpose: it lives in the
+    # RDS-managed Secrets Manager secret, which Ansible reads separately.
+    POSTGRES_SERVER     = module.data.postgres_address
+    POSTGRES_PORT       = tostring(module.data.postgres_port)
+    POSTGRES_DB         = module.data.postgres_database_name
+    POSTGRES_USER       = module.data.postgres_username
+    POSTGRES_SECRET_ARN = module.data.postgres_master_secret_arn
+
+    REDIS_URL = module.data.redis_url
+    OPA_URL   = "http://${module.edge.internal_alb_dns_name}:${local.service_topology["opa"].port}"
+
+    # Object storage is real S3 here rather than MinIO: no endpoint override,
+    # and no key pair, so boto3 falls back to the instance role.
+    S3_BUCKET = module.data.artifact_bucket_name
+    S3_REGION = var.aws_region
+
+    CELERY_CONCURRENCY = tostring(var.celery_concurrency)
+
+    ANSIBLE_TRANSFER_BUCKET = module.data.ansible_transfer_bucket_name
+  }
+
+  # Declared, never populated by Terraform. The description is what an operator
+  # sees in the console when working out what to put there.
+  secret_parameters = {
+    SECRET_KEY               = "Signs the API's JWTs. Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    FIRST_SUPERUSER          = "Email address of the first superuser account."
+    FIRST_SUPERUSER_PASSWORD = "Password for the first superuser account."
+
+    GITHUB_APP_ID          = "Numeric ID of the GitHub App."
+    GITHUB_APP_PRIVATE_KEY = "Full PEM content of the GitHub App's private key."
+    GITHUB_WEBHOOK_SECRET  = "Shared secret verifying incoming GitHub webhooks. Must match the App's webhook secret field."
+    GITHUB_CLIENT_ID       = "OAuth client ID for GitHub login."
+    GITHUB_CLIENT_SECRET   = "OAuth client secret for GitHub login."
+    GITHUB_APP_NAME        = "GitHub App slug, used to build the installation URL."
+
+    DEFAULT_LLM_PROVIDER = "Which LLM provider generates fixes: openai, anthropic, gemini or ollama."
+    DEFAULT_LLM_MODEL    = "Model name for the selected provider."
+    OPENAI_API_KEY       = "OpenAI API key. Set at least one LLM provider key."
+    ANTHROPIC_API_KEY    = "Anthropic API key. Set at least one LLM provider key."
+    GOOGLE_API_KEY       = "Google Gemini API key. Set at least one LLM provider key."
+
+    SMTP_HOST         = "SMTP server host. Email is disabled while this is unset."
+    SMTP_USER         = "SMTP username."
+    SMTP_PASSWORD     = "SMTP password."
+    EMAILS_FROM_EMAIL = "Address outbound email is sent from."
+
+    STRIPE_SECRET_KEY     = "Stripe API secret key. Billing is disabled while unset."
+    STRIPE_WEBHOOK_SECRET = "Signing secret for Stripe webhooks."
+
+    SENTRY_DSN = "Sentry DSN. Error reporting is disabled while unset."
+  }
+
+  # A value no running deployment would accept, so a parameter that was never
+  # seeded fails loudly at deploy time instead of starting with a usable-looking
+  # placeholder. The backend already refuses to boot on the literal
+  # "changethis" in staging/production (app/core/config.py).
+  unseeded_placeholder = "changethis"
+}
+
+resource "aws_ssm_parameter" "config" {
+  for_each = local.config_parameters
+
+  name        = "${local.ssm_prefix}/config/${each.key}"
+  description = "Terraform-managed configuration value for ${local.name_prefix}."
+  type        = "String"
+  value       = each.value
+  tier        = "Standard"
+  overwrite   = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.ssm_prefix}/config/${each.key}"
+  })
+}
+
+resource "aws_ssm_parameter" "secret" {
+  for_each = local.secret_parameters
+
+  name        = "${local.ssm_prefix}/secret/${each.key}"
+  description = each.value
+  type        = "SecureString"
+  key_id      = aws_kms_key.environment.arn
+  value       = local.unseeded_placeholder
+  tier        = "Standard"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.ssm_prefix}/secret/${each.key}"
+  })
+
+  lifecycle {
+    # The whole point: after creation the real value is written out of band and
+    # Terraform must neither overwrite it nor pull it into state.
+    ignore_changes = [value]
+  }
+}

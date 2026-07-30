@@ -1,0 +1,25 @@
+#!/bin/bash
+# Minimal first-boot bootstrap. Everything else — Docker, the CloudWatch agent,
+# the rendered .env and the containers themselves — is Ansible's job, reached
+# over SSM Session Manager once this has run. Keeping user_data this small means
+# a configuration change does not require replacing instances.
+set -euo pipefail
+
+# SSM is the only way in: without the agent running, the instance is
+# unreachable and Ansible's dynamic inventory will skip it.
+systemctl enable --now amazon-ssm-agent
+
+# The role tag is already readable from instance metadata (instance_metadata_tags
+# is enabled on the launch template); writing it to disk as well gives the
+# Ansible roles a dependency-free way to identify the host.
+install -d -m 0755 /etc/greensecops
+cat >/etc/greensecops/role <<'ROLE'
+${role}
+ROLE
+
+cat >/etc/greensecops/environment <<'ENVIRONMENT'
+${environment}
+ENVIRONMENT
+
+# Marker the deploy playbook waits on, so it never configures a half-booted host.
+touch /etc/greensecops/bootstrap-complete

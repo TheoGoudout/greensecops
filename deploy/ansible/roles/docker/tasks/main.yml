@@ -1,0 +1,57 @@
+---
+- name: Install Docker
+  ansible.builtin.dnf:
+    name: docker
+    state: present
+  become: true
+
+- name: Install the Docker Compose plugin
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-{{ docker_compose_arch }}
+    dest: /usr/libexec/docker/cli-plugins/docker-compose
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+  # Amazon Linux 2023 ships the Docker engine but not the compose plugin.
+
+- name: Configure the Docker daemon
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      {
+        "log-driver": "awslogs",
+        "log-opts": {
+          "awslogs-region": "{{ greensecops_region }}",
+          "awslogs-group": "/greensecops/greensecops-{{ greensecops_environment }}/{{ greensecops_role }}",
+          "awslogs-create-group": "false"
+        },
+        "live-restore": true
+      }
+  become: true
+  notify: Restart Docker
+  # Shipping straight to the log group Terraform created means container logs
+  # survive the instance, which matters when an Auto Scaling group replaces it.
+
+- name: Start Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+
+- name: Log in to ECR
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      aws ecr get-login-password --region {{ greensecops_region }} |
+      docker login --username AWS --password-stdin {{ greensecops_config.ECR_REGISTRY }}
+    executable: /bin/bash
+  become: true
+  changed_when: false
+  # Uses the instance role, so no registry credentials are stored anywhere. The
+  # token lasts 12 hours, which is why this runs on every deploy.
