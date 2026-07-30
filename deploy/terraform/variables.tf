@@ -109,9 +109,21 @@ variable "ecr_repository_arns" {
 }
 
 variable "image_tag" {
-  description = "Container image tag every service runs. Ansible reads this from Parameter Store, so a rollback is a tfvars change plus a deploy, not a rebuild."
+  description = "Initial container image tag. Seeds the IMAGE_TAG parameter on first apply only — after that the deploy pipeline owns the value and Terraform ignores changes to it, so this is not the way to roll back."
   type        = string
   default     = "latest"
+}
+
+variable "github_repository" {
+  description = "Repository whose Actions workflows may deploy this environment, as owner/name."
+  type        = string
+  default     = "TheoGoudout/greensecops"
+}
+
+variable "github_oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider, as output by the bootstrap root. Leave empty to skip creating the deploy role entirely — useful for an environment that is only ever deployed by hand."
+  type        = string
+  default     = ""
 }
 
 variable "instance_architecture" {

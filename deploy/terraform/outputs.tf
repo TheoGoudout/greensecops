@@ -62,3 +62,8 @@ output "ansible_transfer_bucket" {
   description = "Bucket Ansible's aws_ssm connection plugin stages files through. Set it as ansible_aws_ssm_bucket_name, or let group_vars/all.yml read it from Parameter Store."
   value       = module.data.ansible_transfer_bucket_name
 }
+
+output "github_deploy_role_arn" {
+  description = "Role GitHub Actions assumes to deploy this environment. Set it as the AWS_DEPLOY_ROLE_ARN variable on the GitHub environment of the same name; empty when github_oidc_provider_arn was not supplied."
+  value       = try(module.cicd[0].deploy_role_arn, "")
+}

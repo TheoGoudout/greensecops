@@ -22,3 +22,8 @@ output "ecr_repository_arns" {
   description = "ARNs of the image repositories. Pass them to the main root as `ecr_repository_arns` so instance roles can be scoped to exactly these."
   value       = [for repo in aws_ecr_repository.images : repo.arn]
 }
+
+output "github_oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider. Pass it to the environment root as `github_oidc_provider_arn`."
+  value       = aws_iam_openid_connect_provider.github.arn
+}

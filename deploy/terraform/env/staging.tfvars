@@ -27,6 +27,11 @@ ecr_repository_arns = [
 ]
 image_tag = "latest"
 
+# GitHub Actions deploy identity, from the bootstrap root's
+# github_oidc_provider_arn output. Leave empty to skip creating the role.
+github_repository        = "TheoGoudout/greensecops"
+github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+
 # One of everything; the groups still exist, so scaling behaviour can be
 # tested by raising max.
 services = {

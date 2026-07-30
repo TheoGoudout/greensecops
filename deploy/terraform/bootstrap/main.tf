@@ -190,3 +190,27 @@ resource "aws_ecr_lifecycle_policy" "images" {
     }]
   })
 }
+
+# --------------------------------------------------------------------------
+# GitHub Actions OIDC
+# --------------------------------------------------------------------------
+# Account-global, so it lives here rather than in the environment root — one
+# provider serves staging and production alike. The per-environment roles that
+# trust it are created by the cicd module, each scoped to a single GitHub
+# environment so a staging deploy cannot obtain production credentials.
+#
+# This is what keeps long-lived AWS keys out of GitHub secrets entirely: the
+# workflow exchanges a short-lived OIDC token for a session at run time.
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+
+  # No thumbprint_list: since 2023 IAM validates GitHub's OIDC endpoint against
+  # its own trusted root CAs, and a pinned thumbprint only creates a rotation
+  # hazard.
+
+  tags = merge(local.tags, {
+    Name = "github-actions"
+  })
+}

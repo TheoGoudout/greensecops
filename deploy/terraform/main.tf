@@ -279,3 +279,31 @@ module "observability" {
   kms_key_arn = aws_kms_key.environment.arn
   tags        = local.common_tags
 }
+
+# --------------------------------------------------------------------------
+# Deploy identity
+# --------------------------------------------------------------------------
+
+module "cicd" {
+  source = "./modules/cicd"
+  count  = var.github_oidc_provider_arn == "" ? 0 : 1
+
+  name_prefix = local.name_prefix
+  project     = var.project
+  environment = var.environment
+
+  github_repository        = var.github_repository
+  github_oidc_provider_arn = var.github_oidc_provider_arn
+
+  ssm_parameter_prefix = local.ssm_prefix
+
+  # The only two parameters the pipeline may write, and the only two secrets it
+  # may read — both public identifiers the frontend bundle embeds anyway.
+  deployable_tag_parameters   = ["IMAGE_TAG", "PREVIOUS_IMAGE_TAG"]
+  build_identifier_parameters = ["GITHUB_APP_NAME", "GITHUB_CLIENT_ID"]
+
+  ecr_repository_arns         = var.ecr_repository_arns
+  ansible_transfer_bucket_arn = module.data.ansible_transfer_bucket_arn
+  kms_key_arn                 = aws_kms_key.environment.arn
+  tags                        = local.common_tags
+}

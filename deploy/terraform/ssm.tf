@@ -7,6 +7,10 @@
 #              Readable by every instance role. Changing one is a terraform
 #              apply followed by a deploy.
 #
+#   /config/{IMAGE_TAG,PREVIOUS_IMAGE_TAG}
+#              Declared here, then owned by the deploy pipeline. See the
+#              dedicated resources at the bottom of this file.
+#
 #   /secret/*  Declared here with a placeholder and seeded out of band with
 #              `aws ssm put-parameter --overwrite`. `ignore_changes` on the
 #              value means Terraform never reads back, overwrites, or stores
@@ -23,7 +27,6 @@ locals {
   config_parameters = {
     ENVIRONMENT  = var.environment
     PROJECT_NAME = "GreenSecOps"
-    IMAGE_TAG    = var.image_tag
     ECR_REGISTRY = var.ecr_registry
     AWS_REGION   = var.aws_region
 
@@ -126,6 +129,51 @@ resource "aws_ssm_parameter" "secret" {
   lifecycle {
     # The whole point: after creation the real value is written out of band and
     # Terraform must neither overwrite it nor pull it into state.
+    ignore_changes = [value]
+  }
+}
+
+# --------------------------------------------------------------------------
+# Which image is deployed
+# --------------------------------------------------------------------------
+# Deliberately not part of config_parameters above. Those are written on every
+# apply; these two are written by .github/workflows/deploy-reusable.yml, so
+# `overwrite = true` would mean the next `terraform apply` silently reverted a
+# deployment to whatever var.image_tag happened to say — and the change would
+# only surface the next time an Auto Scaling group replaced an instance.
+#
+# var.image_tag therefore seeds the initial value and nothing more. To pin a
+# tag from Terraform, remove the parameter from state and re-apply, or just
+# deploy the tag you want.
+
+resource "aws_ssm_parameter" "image_tag" {
+  name        = "${local.ssm_prefix}/config/IMAGE_TAG"
+  description = "Container image tag currently deployed. Written by the deploy pipeline."
+  type        = "String"
+  value       = var.image_tag
+  tier        = "Standard"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.ssm_prefix}/config/IMAGE_TAG"
+  })
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "previous_image_tag" {
+  name        = "${local.ssm_prefix}/config/PREVIOUS_IMAGE_TAG"
+  description = "Tag that was deployed before the current one. What the rollback workflow deploys when given no explicit tag."
+  type        = "String"
+  value       = var.image_tag
+  tier        = "Standard"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.ssm_prefix}/config/PREVIOUS_IMAGE_TAG"
+  })
+
+  lifecycle {
     ignore_changes = [value]
   }
 }

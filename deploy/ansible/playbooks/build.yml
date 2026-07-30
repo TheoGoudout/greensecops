@@ -22,6 +22,12 @@
     image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
     target_platform: linux/arm64
 
+    # Kept in step with build_identifier_parameters in the cicd Terraform
+    # module, which scopes the CI role to exactly these parameters.
+    greensecops_build_identifiers:
+      - GITHUB_APP_NAME
+      - GITHUB_CLIENT_ID
+
   tasks:
     - name: Read the environment's configuration from Parameter Store
       ansible.builtin.command:
@@ -47,24 +53,19 @@
         _names: "{{ _parameters | map(attribute='Name') | map('basename') | list }}"
         _values: "{{ _parameters | map(attribute='Value') | list }}"
 
-    # The frontend needs the GitHub App slug and OAuth client ID baked in, and
-    # both live on the secret side of the tree. They are public identifiers
+    # The frontend bakes in the GitHub App slug and OAuth client ID, both of
+    # which live on the secret side of the tree. They are public identifiers
     # rather than credentials — they end up in the shipped JavaScript either
-    # way — but they are read here rather than assumed.
+    # way — so they are fetched by name. Fetching the whole path instead would
+    # pull every real secret onto the build host to read two public strings,
+    # and would force the CI deploy role to hold read access to all of them.
     - name: Read the build-time identifiers
       ansible.builtin.command:
-        argv:
-          - aws
-          - ssm
-          - get-parameters-by-path
-          - --path
-          - "{{ greensecops_ssm_prefix }}/secret"
-          - --recursive
-          - --with-decryption
-          - --region
-          - "{{ greensecops_region }}"
-          - --output
-          - json
+        argv: "{{ ['aws', 'ssm', 'get-parameters', '--names']
+                  + (greensecops_build_identifiers
+                     | map('regex_replace', '^', greensecops_ssm_prefix ~ '/secret/') | list)
+                  + ['--with-decryption', '--region', greensecops_region,
+                     '--output', 'json'] }}"
       register: secrets_raw
       changed_when: false
       no_log: true
@@ -143,7 +144,6 @@
           - --region
           - "{{ greensecops_region }}"
       changed_when: true
-      when: image_tag != 'latest'
-      # So deploy.yml rolls out what was just built. Terraform owns this
-      # parameter's declaration but not its value between applies — keep
-      # image_tag in the tfvars in step with what is actually deployed.
+      # So a subsequent deploy.yml rolls out what was just built. Terraform
+      # declares this parameter but ignores its value after creation, so this
+      # write is not undone by the next apply.

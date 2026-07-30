@@ -31,3 +31,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "github_repository" {
+  description = "GitHub repository allowed to assume the deploy roles, as owner/name. Only workflows in this repository can obtain AWS credentials."
+  type        = string
+  default     = "TheoGoudout/greensecops"
+}

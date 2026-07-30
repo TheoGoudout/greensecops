@@ -28,6 +28,11 @@ ecr_repository_arns = [
 ]
 image_tag = "latest"
 
+# GitHub Actions deploy identity, from the bootstrap root's
+# github_oidc_provider_arn output. Leave empty to skip creating the role.
+github_repository        = "TheoGoudout/greensecops"
+github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+
 # Two instances for anything on the request path, so a rolling instance
 # refresh never drops to zero capacity.
 services = {

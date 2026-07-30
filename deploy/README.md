@@ -113,7 +113,26 @@ The `/config/*` half of the tree is written by Terraform and needs no attention 
 
 Every variable maps one-to-one onto a setting in `backend/app/core/config.py`; [`.env.example`](../.env.example) documents the same list with development defaults.
 
-### 5. Build and deploy
+### 5. Set up the GitHub environments
+
+This is what makes deploying a single click, and what puts production behind an approval.
+
+In **Settings → Environments**, create `staging` and `production`. On each, set two **variables**:
+
+| Variable | Value |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | `terraform output github_deploy_role_arn` |
+| `AWS_REGION` | the environment's region |
+
+On `production`, add **required reviewers**. That is the click: a run pauses until a reviewer approves, and only then can it obtain AWS credentials — the role's trust policy pins the OIDC subject to `repo:<owner>/<repo>:environment:production`, so an unapproved job is refused by AWS, not merely by GitHub.
+
+No AWS keys are stored in GitHub. The workflow exchanges a short-lived OIDC token for a session at run time.
+
+### 6. Build and deploy
+
+From the Actions tab — **deploy** → *Run workflow* → pick an environment. Leave the tag empty to build the checked-out ref; give an existing tag to deploy that without rebuilding. See [Deploying and rolling back](#deploying-and-rolling-back) below.
+
+By hand, if you prefer:
 
 ```bash
 cd deploy/ansible
@@ -126,11 +145,11 @@ ansible-playbook -i localhost, playbooks/build.yml -e image_tag=$(git rev-parse 
 ansible-playbook -i inventory/aws_ec2.yml playbooks/deploy.yml
 ```
 
-`playbooks/site.yml` runs both. Use `deploy.yml` alone to roll out an image already in ECR — a rollback is a tag change, not a rebuild.
+`playbooks/site.yml` runs both.
 
 The deploy is ordered: OPA first, then the backend (one instance at a time, running migrations once), then the workers, then the static sites. `docker compose up --wait` blocks on each container's own health check, so a broken image fails the playbook rather than the load balancer.
 
-### 6. Point GitHub at the deployment
+### 7. Point GitHub at the deployment
 
 ```bash
 terraform output github_webhook_url         # → the App's webhook URL
@@ -138,6 +157,27 @@ terraform output github_oauth_callback_url  # → the OAuth App's callback URL
 ```
 
 The callback URL is not separately configurable: the backend derives it from `FRONTEND_HOST`.
+
+## Deploying and rolling back
+
+Two workflows, both `workflow_dispatch`, both serialised on the same concurrency group so a deploy and a rollback can never race to set the tag.
+
+**deploy** — pick an environment; leave the tag empty to build the checked-out ref and deploy it, or name a tag already in ECR to deploy that without rebuilding. Built images are tagged with the short commit SHA, so what is running traces back to a commit.
+
+**rollback** — pick an environment; leave the tag empty to return to the previous release, or name any earlier tag to go further back. Nothing is rebuilt: the images are already in ECR, so a rollback is a pointer change plus a rolling restart, and takes about as long as the health checks.
+
+The pointers live in Parameter Store:
+
+| Parameter | Meaning |
+|---|---|
+| `/config/IMAGE_TAG` | what is deployed now |
+| `/config/PREVIOUS_IMAGE_TAG` | what the rollback workflow returns to by default |
+
+`PREVIOUS_IMAGE_TAG` is written *before* the rollout begins, so a deploy that fails half-way still leaves a correct rollback target. Both are declared by Terraform but carry `ignore_changes` on their value — the pipeline owns them, and `terraform apply` will not drag a deployment back to whatever `var.image_tag` says.
+
+Each run ends with a summary naming the deployed tag, the previous tag, and how to undo it. A deploy that fails its post-rollout health check leaves the same instructions.
+
+**Rolling back an infrastructure change is a separate job.** These workflows move application images only; `terraform apply` stays a deliberate local action. If a release changed both, revert the Terraform yourself.
 
 ## Operating
 
@@ -169,6 +209,7 @@ deploy/
       edge/             ALBs, ACM certificate, listeners, Route53 records
       service/          reusable launch template + ASG, instantiated seven times
       observability/    SNS topic and CloudWatch alarms
+      cicd/             OIDC-trusted role GitHub Actions deploys with
   ansible/
     inventory/          aws_ec2 dynamic inventory over SSM
     tasks/              config resolution, imported as pre_tasks by every play
@@ -176,6 +217,10 @@ deploy/
     playbooks/          build.yml, deploy.yml, site.yml
     roles/              common, docker, cloudwatch_agent, greensecops_service
 ```
+
+The workflows that drive all of this live in `.github/workflows/`: `deploy.yml`
+and `rollback.yml` are the two dispatch entries, and `deploy-reusable.yml` holds
+the mechanics they share.
 
 ## Checks
 

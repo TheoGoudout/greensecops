@@ -1,0 +1,46 @@
+name: deploy
+
+# Click-to-deploy: Actions → deploy → Run workflow, pick an environment.
+#
+# Leave the tag empty to build the checked-out ref and deploy it. Give a tag
+# that is already in ECR to deploy that instead, without rebuilding.
+#
+# Production is gated by whatever reviewers its GitHub environment requires;
+# the run waits on that approval before it can obtain AWS credentials. Setup
+# for those environments is in deploy/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy to
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: "Existing tag to deploy (leave empty to build this ref)"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+# Serialised per environment, and never cancelled: interrupting a run half-way
+# through rolling the instance groups would leave the fleet on two versions.
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    uses: ./.github/workflows/deploy-reusable.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: ${{ inputs.environment }}
+      image_tag: ${{ inputs.image_tag }}
+      rollback_to_previous: false
