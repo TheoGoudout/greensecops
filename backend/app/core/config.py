@@ -137,9 +137,16 @@ class Settings(BaseSettings):
     # Object storage (MinIO / S3-compatible) — large IaC/cloud scan artifacts
     # (Terraform file bundles, cloud resource snapshots) that don't belong in
     # a Postgres column the way WorkflowFile.raw_content does for small YAML.
-    S3_ENDPOINT_URL: str = "http://localhost:9000"
-    S3_ACCESS_KEY: str = ""
-    S3_SECRET_KEY: str = ""
+    #
+    # All three are optional so a deployment can point at real AWS S3 instead
+    # of MinIO: leaving S3_ENDPOINT_URL unset selects the AWS endpoint, and
+    # leaving the key pair unset falls back to boto3's default credential chain
+    # (an EC2 instance profile / task role), the same way the cloud collector
+    # already does. The defaults below keep local development and compose.yml
+    # pointed at MinIO with no configuration change.
+    S3_ENDPOINT_URL: str | None = "http://localhost:9000"
+    S3_ACCESS_KEY: str | None = ""
+    S3_SECRET_KEY: str | None = ""
     S3_BUCKET: str = "greensecops-artifacts"
     S3_REGION: str = "us-east-1"
 

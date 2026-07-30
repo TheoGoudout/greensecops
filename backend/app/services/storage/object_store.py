@@ -17,17 +17,25 @@ class ObjectStorageError(Exception):
 
 @lru_cache(maxsize=1)
 def _get_client() -> Any:  # noqa: ANN401 — boto3 client has no public stub type
-    # path-style addressing is required for MinIO (and most self-hosted
-    # S3-compatible stores); virtual-hosted-style, boto3's default, only
-    # resolves against real S3 DNS.
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.S3_ENDPOINT_URL,
-        aws_access_key_id=settings.S3_ACCESS_KEY,
-        aws_secret_access_key=settings.S3_SECRET_KEY,
-        region_name=settings.S3_REGION,
-        config=BotoConfig(s3={"addressing_style": "path"}),
-    )
+    kwargs: dict[str, Any] = {"region_name": settings.S3_REGION}
+
+    if settings.S3_ENDPOINT_URL:
+        # path-style addressing is required for MinIO (and most self-hosted
+        # S3-compatible stores); virtual-hosted-style, boto3's default, only
+        # resolves against real S3 DNS. Applied only alongside a custom
+        # endpoint, since AWS is deprecating path-style for new buckets.
+        kwargs["endpoint_url"] = settings.S3_ENDPOINT_URL
+        kwargs["config"] = BotoConfig(s3={"addressing_style": "path"})
+
+    # Passing an empty string would register *explicit* (and unusable)
+    # credentials, shadowing the default chain; omitting the arguments
+    # entirely is what lets an instance profile / task role authenticate.
+    # Mirrors services/cloud/aws_collector.py's fallback.
+    if settings.S3_ACCESS_KEY and settings.S3_SECRET_KEY:
+        kwargs["aws_access_key_id"] = settings.S3_ACCESS_KEY
+        kwargs["aws_secret_access_key"] = settings.S3_SECRET_KEY
+
+    return boto3.client("s3", **kwargs)
 
 
 def build_object_key(*parts: str) -> str:
