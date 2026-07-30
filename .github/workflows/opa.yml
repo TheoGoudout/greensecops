@@ -11,8 +11,11 @@ on:
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
+      - "scripts/validate_deploy_terraform.py"
+      - "scripts/opa_terraform_eval.py"
       - "scripts/render_landing_examples.py"
       - "scripts/opa/**"
+      - "deploy/terraform/**"
       - ".github/workflows/opa.yml"
   pull_request:
     paths:
@@ -23,8 +26,11 @@ on:
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
+      - "scripts/validate_deploy_terraform.py"
+      - "scripts/opa_terraform_eval.py"
       - "scripts/render_landing_examples.py"
       - "scripts/opa/**"
+      - "deploy/terraform/**"
       - ".github/workflows/opa.yml"
 
 permissions: {}
@@ -70,6 +76,11 @@ jobs:
 
       - name: Validate Terraform examples against the rule suite
         run: python scripts/validate_terraform_examples.py
+
+      # The reference deployment of a product that scans Terraform has to be
+      # one its own rules pass. Any violation fails the build.
+      - name: Scan the AWS deployment Terraform with the rule suite
+        run: python scripts/validate_deploy_terraform.py
 
       - name: Check landing page is in sync with example files
         run: python scripts/render_landing_examples.py --check

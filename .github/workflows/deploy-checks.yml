@@ -1,0 +1,89 @@
+name: deploy-checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/**"
+      - ".github/workflows/deploy-checks.yml"
+  pull_request:
+    paths:
+      - "deploy/**"
+      - ".github/workflows/deploy-checks.yml"
+
+permissions: {}
+
+env:
+  # Pinned so local hooks, CI and the documented runbook agree. 1.10 is the
+  # floor for S3 native state locking, which deploy/terraform/backend.tf uses.
+  TERRAFORM_VERSION: "1.14.4"
+
+jobs:
+  terraform:
+    name: Terraform format & validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Terraform
+        # Installed directly rather than via an action: one fewer third-party
+        # dependency to pin, matching how opa.yml installs the OPA binary.
+        run: |
+          curl -fsSL -o /tmp/terraform.zip \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          sudo unzip -o -q /tmp/terraform.zip -d /usr/local/bin
+          terraform version
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff deploy/terraform
+
+      - name: Validate the main root
+        # -backend=false so no state bucket and no AWS credentials are needed;
+        # this checks the configuration, it does not touch an account.
+        env:
+          TF_IN_AUTOMATION: "1"
+        run: |
+          terraform -chdir=deploy/terraform init -backend=false -input=false
+          terraform -chdir=deploy/terraform validate
+
+      - name: Validate the bootstrap root
+        env:
+          TF_IN_AUTOMATION: "1"
+        run: |
+          terraform -chdir=deploy/terraform/bootstrap init -backend=false -input=false
+          terraform -chdir=deploy/terraform/bootstrap validate
+
+  ansible:
+    name: Ansible lint & syntax check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install "ansible-core>=2.19,<2.21" "ansible-lint>=25.9,<26.0"
+
+      - name: Install collections
+        # amazon.aws supplies both the aws_ec2 inventory plugin and the aws_ssm
+        # connection plugin; without it the playbooks cannot even be parsed.
+        working-directory: deploy/ansible
+        run: ansible-galaxy collection install -r requirements.yml -p collections
+
+      - name: Lint
+        working-directory: deploy/ansible
+        run: ansible-lint .
+
+      - name: Syntax check
+        working-directory: deploy/ansible
+        # `-i localhost,` rather than the real inventory: parsing the playbooks
+        # does not need hosts, and the dynamic inventory would call AWS.
+        run: ansible-playbook -i localhost, --syntax-check playbooks/site.yml

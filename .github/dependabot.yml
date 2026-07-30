@@ -127,3 +127,22 @@ updates:
       pre-commit:
         patterns:
           - "*"
+  # Terraform providers and modules for the AWS deployment
+  - package-ecosystem: "terraform"
+    directories:
+      - "/deploy/terraform"
+      - "/deploy/terraform/bootstrap"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ⬆
+    labels:
+      - "internal"
+      - "dependencies"
+      - "terraform"
+    groups:
+      terraform:
+        patterns:
+          - "*"

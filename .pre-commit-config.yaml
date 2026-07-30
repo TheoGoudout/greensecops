@@ -43,6 +43,60 @@ repos:
         files: ^(examples/.*\.ya?ml|landing/(index|workflows)\.html|scripts/render_landing_examples\.py)$
         pass_filenames: false
 
+  # AWS deployment configuration (deploy/). The Terraform hooks run in a
+  # container for the same reason backend/'s opa-fmt and opa-check do: a
+  # contributor who only touches Python should not have to install Terraform.
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: Format Terraform
+        entry: >-
+          bash -c 'docker run --rm -u "$(id -u):$(id -g)"
+          -v "$(pwd)/deploy/terraform:/work" -w /work
+          hashicorp/terraform:1.14 fmt -recursive .'
+        language: system
+        files: ^deploy/terraform/.*\.tf$
+        pass_filenames: false
+
+      - id: terraform-validate
+        name: Validate Terraform
+        # -backend=false so validation needs no S3 bucket and no credentials.
+        # Both roots are checked: bootstrap is a separate root with its own
+        # provider requirements.
+        entry: >-
+          bash -c 'for root in . bootstrap; do
+          docker run --rm -u "$(id -u):$(id -g)"
+          -v "$(pwd)/deploy/terraform:/work" -w "/work/$root"
+          -e TF_IN_AUTOMATION=1 hashicorp/terraform:1.14
+          sh -c "terraform init -backend=false -input=false >/dev/null && terraform validate"
+          || exit 1; done'
+        language: system
+        files: ^deploy/terraform/.*\.tf$
+        pass_filenames: false
+
+      # The project's own rule suite, run against the project's own
+      # infrastructure. Any violation fails the commit — see deploy/README.md.
+      - id: deploy-terraform-opa
+        name: Scan deployment Terraform with the GreenSecOps rules
+        entry: python3 scripts/validate_deploy_terraform.py
+        language: system
+        files: ^(deploy/terraform/.*\.tf(\.json)?|backend/app/rules/iac_terraform/.*\.rego|scripts/(validate_deploy_terraform|opa_terraform_eval)\.py)$
+        pass_filenames: false
+
+      # Runs from inside deploy/ansible, which is what makes ansible-lint pick
+      # up its ansible.cfg — without that, roles_path never applies and every
+      # role in the playbooks fails to resolve. Same working directory as the
+      # ansible job in .github/workflows/deploy-checks.yml.
+      - id: ansible-lint
+        name: Lint Ansible
+        entry: bash -c 'cd deploy/ansible && ansible-lint .'
+        language: python
+        additional_dependencies:
+          - "ansible-core>=2.19,<2.21"
+          - "ansible-lint>=25.9,<27.0"
+        files: ^deploy/ansible/
+        pass_filenames: false
+
   # Conventional commits enforcement
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
