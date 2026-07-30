@@ -1,0 +1,46 @@
+---
+# Dynamic inventory built from the instance tags Terraform sets on every launch
+# template. Nothing is written down: scale the Celery group from 2 to 8 and the
+# next playbook run addresses eight hosts.
+#
+# Requires GREENSECOPS_ENV and AWS_REGION in the environment, so one inventory
+# file serves every environment:
+#
+#   export GREENSECOPS_ENV=production AWS_REGION=eu-west-1
+#   ansible-inventory -i inventory/aws_ec2.yml --graph
+plugin: amazon.aws.aws_ec2
+
+regions:
+  - "{{ lookup('env', 'AWS_REGION') | default('eu-west-1', true) }}"
+
+filters:
+  instance-state-name: running
+  "tag:Project": greensecops
+  "tag:Environment": "{{ lookup('env', 'GREENSECOPS_ENV') | mandatory }}"
+
+# Instances live in private subnets, so the private address is the only one
+# there is — and the SSM connection plugin addresses hosts by instance ID
+# regardless.
+hostnames:
+  - instance-id
+
+keyed_groups:
+  # tag greensecops:role=celery-worker becomes group `role_celery_worker`,
+  # which is what the playbooks target.
+  - key: tags['greensecops:role']
+    prefix: role
+    separator: "_"
+  - key: placement.availability_zone
+    prefix: az
+    separator: "_"
+
+compose:
+  # Every host is reached over SSM Session Manager: no bastion, no SSH key, no
+  # inbound rule. The transfer bucket is how the plugin copies files; its name
+  # comes from Parameter Store in group_vars/all.yml.
+  ansible_connection: "'amazon.aws.aws_ssm'"
+  ansible_aws_ssm_region: placement.region
+  ansible_host: instance_id
+  greensecops_role: tags['greensecops:role']
+
+strict: false

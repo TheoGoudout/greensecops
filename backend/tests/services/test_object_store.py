@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -123,3 +124,71 @@ def test_delete_object_wraps_client_errors() -> None:
         pytest.raises(object_store.ObjectStorageError),
     ):
         object_store.delete_object("some/key")
+
+
+@pytest.fixture
+def _uncached_client() -> Iterator[MagicMock]:
+    """Yield a patched boto3.client with _get_client's lru_cache cleared.
+
+    _get_client memoises the client for the process, so a test that changes
+    the S3_* settings has to drop the cached instance on both sides of the
+    call or it leaks into (and inherits from) its neighbours.
+    """
+    object_store._get_client.cache_clear()
+    with patch.object(object_store.boto3, "client") as boto_client:
+        yield boto_client
+    object_store._get_client.cache_clear()
+
+
+def test_get_client_uses_path_style_and_explicit_keys_for_minio(
+    _uncached_client: MagicMock,
+) -> None:
+    with patch.multiple(
+        object_store.settings,
+        S3_ENDPOINT_URL="http://minio:9000",
+        S3_ACCESS_KEY="minio-user",
+        S3_SECRET_KEY="minio-password",
+        S3_REGION="us-east-1",
+    ):
+        object_store._get_client()
+
+    _, kwargs = _uncached_client.call_args
+    assert kwargs["endpoint_url"] == "http://minio:9000"
+    assert kwargs["aws_access_key_id"] == "minio-user"
+    assert kwargs["aws_secret_access_key"] == "minio-password"
+    assert kwargs["config"].s3 == {"addressing_style": "path"}
+
+
+def test_get_client_falls_back_to_default_credential_chain_for_real_s3(
+    _uncached_client: MagicMock,
+) -> None:
+    """No endpoint and no keys: boto3 must resolve AWS S3 and the instance role."""
+    with patch.multiple(
+        object_store.settings,
+        S3_ENDPOINT_URL=None,
+        S3_ACCESS_KEY=None,
+        S3_SECRET_KEY=None,
+        S3_REGION="eu-west-1",
+    ):
+        object_store._get_client()
+
+    _, kwargs = _uncached_client.call_args
+    assert kwargs == {"region_name": "eu-west-1"}
+
+
+def test_get_client_ignores_a_half_configured_key_pair(
+    _uncached_client: MagicMock,
+) -> None:
+    """An access key without its secret is unusable; don't shadow the chain."""
+    with patch.multiple(
+        object_store.settings,
+        S3_ENDPOINT_URL="",
+        S3_ACCESS_KEY="orphaned-key",
+        S3_SECRET_KEY="",
+        S3_REGION="us-east-1",
+    ):
+        object_store._get_client()
+
+    _, kwargs = _uncached_client.call_args
+    assert "aws_access_key_id" not in kwargs
+    assert "endpoint_url" not in kwargs

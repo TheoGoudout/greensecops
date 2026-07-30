@@ -18,79 +18,32 @@ an ``expected.yaml``, and it is picked up automatically. See
 
 Merging reuses the production code path, so an example that passes here is
 faithful to what a real scan of the same files would see — the same
-``__tf_file`` tagging and per-block-type list-concatenation feed OPA.
+``__tf_file`` tagging and per-block-type list-concatenation feed OPA. The
+parse/merge/eval pipeline itself lives in ``scripts/opa_terraform_eval.py``,
+shared with ``scripts/validate_deploy_terraform.py`` so the two checks can't
+drift apart.
 """
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
+from typing import Any
 
-from ruamel.yaml import YAML
-
-ROOT = Path(__file__).resolve().parents[1]
-RULES_DIR = ROOT / "backend" / "app" / "rules"
-EXAMPLES_DIR = ROOT / "examples" / "terraform"
-OPA_BIN = os.environ.get("OPA_BIN", "opa")
-
-# Evaluate ONLY the iac_terraform packages, exactly like production's
-# app.services.opa.evaluator.evaluate_terraform. The cross-domain aggregate is
-# deliberately not used here: some ci_workflow rules fire on a negation (e.g.
-# `not input.name`), which is vacuously true for a Terraform document and would
-# be a cross-domain false positive. This comprehension collects every violation
-# under greensecops.iac_terraform.<category>.<rule> and nothing else.
-_TERRAFORM_VIOLATIONS_QUERY = (
-    "[v | v := data.greensecops.iac_terraform[_][_].violations[_]]"
-)
-
-# Reuse the exact parse+merge production feeds to OPA rather than re-implementing
-# HCL handling here.
-sys.path.insert(0, str(ROOT / "backend"))
-from app.services.terraform.hcl_parser import (  # noqa: E402
+from opa_terraform_eval import (
+    ROOT,
+    collect_tf_files,
+    evaluate_violations,
     merge_terraform_configs,
 )
+from ruamel.yaml import YAML
+
+EXAMPLES_DIR = ROOT / "examples" / "terraform"
 
 
-def _opa_eval_slugs(merged_config: dict) -> list[str]:
+def _opa_eval_slugs(merged_config: dict[str, Any]) -> list[str]:
     """Return the sorted rule slugs ``merged_config`` trips across the suite."""
-    with tempfile.NamedTemporaryFile(
-        "w", suffix=".json", delete=False, encoding="utf-8"
-    ) as handle:
-        json.dump(merged_config, handle)
-        input_path = handle.name
-    cmd = [
-        OPA_BIN,
-        "eval",
-        "-d",
-        str(RULES_DIR),
-        "-f",
-        "raw",
-        "-i",
-        input_path,
-        _TERRAFORM_VIOLATIONS_QUERY,
-    ]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    finally:
-        os.unlink(input_path)
-    if proc.returncode != 0:
-        raise RuntimeError(f"opa eval failed:\n{proc.stderr.strip()}")
-    violations = json.loads(proc.stdout or "[]")
-    return sorted({v["rule"] for v in violations})
-
-
-def _read_tf_files(case_dir: Path) -> list[tuple[str, str]]:
-    """Collect every ``.tf`` / ``.tf.json`` file in a case as (name, content)."""
-    files = sorted(
-        p
-        for p in case_dir.iterdir()
-        if p.suffix == ".tf" or p.name.endswith(".tf.json")
-    )
-    return [(p.name, p.read_text(encoding="utf-8")) for p in files]
+    return sorted({v["rule"] for v in evaluate_violations(merged_config)})
 
 
 def _load_expected(case_dir: Path) -> list[str]:
@@ -123,7 +76,7 @@ def main() -> int:
     errors: list[str] = []
     checked = 0
     for case_dir in sorted(p for p in EXAMPLES_DIR.iterdir() if p.is_dir()):
-        tf_files = _read_tf_files(case_dir)
+        tf_files = collect_tf_files(case_dir)
         if not tf_files:
             errors.append(f"{case_dir.name}: no .tf/.tf.json files found")
             continue

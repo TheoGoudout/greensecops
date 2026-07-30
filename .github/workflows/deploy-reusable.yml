@@ -1,0 +1,226 @@
+name: deploy-reusable
+
+# The mechanics behind deploy.yml and rollback.yml. Both do the same thing —
+# point an environment at an image tag and roll the instances — so the
+# difference between a deploy and a rollback is only which tag, and whether it
+# has to be built first.
+#
+# The approval gate is the `environment:` declaration below. Its protection
+# rules decide who may approve, and the AWS trust policy pins the OIDC subject
+# to `repo:<owner>/<repo>:environment:<name>` — so a job that has not been
+# approved for this environment cannot obtain credentials for it at all.
+#
+# Infrastructure is deliberately out of scope: this rolls out application
+# images. `terraform apply` stays a considered, local action (deploy/README.md).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Environment to deploy.
+        required: true
+        type: string
+      image_tag:
+        description: Tag to deploy. Empty means build from the checked-out ref.
+        required: false
+        type: string
+        default: ""
+      rollback_to_previous:
+        description: Deploy whatever PREVIOUS_IMAGE_TAG points at, ignoring image_tag.
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+env:
+  ANSIBLE_CORE_VERSION: ">=2.19,<2.21"
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.environment }}
+
+    permissions:
+      # Mint the OIDC token exchanged for the AWS deploy role. No long-lived
+      # AWS keys exist in this repository's secrets.
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@f813ab9668f2a0913ee3d055b39ed0ac5f7b1ffa # v5.1.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-deploy-${{ inputs.environment }}-${{ github.run_id }}
+
+      - name: Install the Session Manager plugin
+        # Ansible reaches the instances over Session Manager; the plugin is the
+        # local half of that transport and is not preinstalled on the runner.
+        run: |
+          curl -fsSL -o /tmp/session-manager-plugin.deb \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+          session-manager-plugin --version
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Ansible
+        run: pip install "ansible-core${ANSIBLE_CORE_VERSION}"
+
+      - name: Install collections
+        working-directory: deploy/ansible
+        run: ansible-galaxy collection install -r requirements.yml -p collections
+
+      - name: Resolve the tag to deploy
+        id: target
+        env:
+          SSM_PREFIX: /greensecops/${{ inputs.environment }}
+          REQUESTED_TAG: ${{ inputs.image_tag }}
+          ROLLBACK: ${{ inputs.rollback_to_previous }}
+        run: |
+          set -euo pipefail
+          current=$(aws ssm get-parameter --name "${SSM_PREFIX}/config/IMAGE_TAG" \
+            --query Parameter.Value --output text)
+
+          if [ "${ROLLBACK}" = "true" ]; then
+            tag=$(aws ssm get-parameter --name "${SSM_PREFIX}/config/PREVIOUS_IMAGE_TAG" \
+              --query Parameter.Value --output text)
+            build=false
+            if [ "${tag}" = "${current}" ]; then
+              echo "::error::PREVIOUS_IMAGE_TAG and IMAGE_TAG are both '${tag}' — there is no earlier deployment on record to roll back to. Pass an explicit tag instead."
+              exit 1
+            fi
+          elif [ -n "${REQUESTED_TAG}" ]; then
+            tag="${REQUESTED_TAG}"
+            build=false
+          else
+            # Nothing requested: build what is checked out. The short SHA makes
+            # the deployed tag traceable back to a commit.
+            tag=$(git rev-parse --short HEAD)
+            build=true
+          fi
+
+          {
+            echo "tag=${tag}"
+            echo "current=${current}"
+            echo "build=${build}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Deploying '${tag}' to ${{ inputs.environment }} (currently '${current}', build=${build})."
+
+      - name: Verify the tag exists in ECR
+        # Cheap guard that turns a typo in a rollback tag into an error here
+        # rather than a pull failure part-way through rolling the instances.
+        if: steps.target.outputs.build == 'false'
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for image in backend frontend landing docs opa; do
+            if ! aws ecr describe-images --repository-name "greensecops/${image}" \
+                 --image-ids "imageTag=${TAG}" >/dev/null 2>&1; then
+              echo "::error::greensecops/${image}:${TAG} is not in ECR."
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Record the outgoing tag
+        # Before the build, not after: playbooks/build.yml promotes what it
+        # builds, so recording later would capture the new tag as the previous
+        # one. Before the rollout too, so a deploy that fails half-way still
+        # leaves a correct pointer for the rollback workflow to use.
+        if: steps.target.outputs.tag != steps.target.outputs.current
+        env:
+          SSM_PREFIX: /greensecops/${{ inputs.environment }}
+          PREVIOUS: ${{ steps.target.outputs.current }}
+        run: |
+          aws ssm put-parameter --name "${SSM_PREFIX}/config/PREVIOUS_IMAGE_TAG" \
+            --value "${PREVIOUS}" --type String --overwrite
+
+      - name: Build and publish the images
+        if: steps.target.outputs.build == 'true'
+        working-directory: deploy/ansible
+        env:
+          GREENSECOPS_ENV: ${{ inputs.environment }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          ansible-playbook -i localhost, playbooks/build.yml \
+            -e image_tag=${{ steps.target.outputs.tag }}
+
+      - name: Point the environment at the new tag
+        # Idempotent: the build step already set this when it ran. Required
+        # when deploying an existing tag, where nothing was built.
+        env:
+          SSM_PREFIX: /greensecops/${{ inputs.environment }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          aws ssm put-parameter --name "${SSM_PREFIX}/config/IMAGE_TAG" \
+            --value "${TAG}" --type String --overwrite
+
+      - name: Roll out
+        working-directory: deploy/ansible
+        env:
+          GREENSECOPS_ENV: ${{ inputs.environment }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: ansible-playbook -i inventory/aws_ec2.yml playbooks/deploy.yml
+
+      - name: Check the API answers
+        id: smoke
+        env:
+          SSM_PREFIX: /greensecops/${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          backend=$(aws ssm get-parameter --name "${SSM_PREFIX}/config/BACKEND_HOST" \
+            --query Parameter.Value --output text)
+          url="${backend}/api/v1/utils/health-check/"
+
+          # The load balancer needs a moment to see the replaced targets as
+          # healthy even after the containers report ready.
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 10 "${url}" >/dev/null; then
+              echo "${url} responded on attempt ${attempt}."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::${url} did not respond within 5 minutes of the rollout finishing."
+          exit 1
+
+      - name: Summarise
+        if: always()
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+          PREVIOUS: ${{ steps.target.outputs.current }}
+          BUILT: ${{ steps.target.outputs.build }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          {
+            echo "## ${OUTCOME}: ${{ inputs.environment }}"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Deployed tag | \`${TAG}\` |"
+            echo "| Previous tag | \`${PREVIOUS}\` |"
+            echo "| Images built | ${BUILT} |"
+            echo
+            if [ "${OUTCOME}" != "success" ]; then
+              echo "The rollout did not complete. Run the **rollback** workflow"
+              echo "against \`${{ inputs.environment }}\` to return to \`${PREVIOUS}\`."
+            else
+              echo "To undo this, run the **rollback** workflow against"
+              echo "\`${{ inputs.environment }}\` — it will deploy \`${PREVIOUS}\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

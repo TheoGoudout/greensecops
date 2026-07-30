@@ -1,0 +1,41 @@
+---
+greensecops_environment: "{{ lookup('env', 'GREENSECOPS_ENV') | mandatory }}"
+greensecops_region: "{{ lookup('env', 'AWS_REGION') | default('eu-west-1', true) }}"
+greensecops_ssm_prefix: "/greensecops/{{ greensecops_environment }}"
+
+# Where the rendered configuration and compose file live on each host.
+greensecops_root: /opt/greensecops
+greensecops_env_file: "{{ greensecops_root }}/.env"
+greensecops_compose_file: "{{ greensecops_root }}/compose.yml"
+
+# The aws_ssm connection plugin stages files through S3. The bucket is created
+# by Terraform and published to Parameter Store, so this file needs no manual
+# editing per environment. The lookup runs on the control node, which is why
+# it uses the operator's credentials rather than an instance role.
+ansible_aws_ssm_bucket_name: >-
+  {{ lookup('amazon.aws.aws_ssm',
+            greensecops_ssm_prefix ~ '/config/ANSIBLE_TRANSFER_BUCKET',
+            region=greensecops_region) }}
+ansible_aws_ssm_region: "{{ greensecops_region }}"
+
+# Seconds to wait for a container to report healthy before failing the deploy.
+greensecops_health_timeout: 180
+
+# The value Terraform seeds every SecureString with, and the value
+# backend/app/core/config.py refuses to start on outside local development.
+greensecops_unseeded_placeholder: changethis
+
+# The subset of /secret/* without which the application cannot function. The
+# rest — Stripe, Sentry, SMTP, the LLM providers not selected — are genuinely
+# optional and may stay at their placeholder, in which case the .env template
+# omits them entirely rather than writing a value the backend would reject.
+greensecops_required_secrets:
+  - SECRET_KEY
+  - FIRST_SUPERUSER
+  - FIRST_SUPERUSER_PASSWORD
+  - GITHUB_APP_ID
+  - GITHUB_APP_PRIVATE_KEY
+  - GITHUB_WEBHOOK_SECRET
+  - GITHUB_CLIENT_ID
+  - GITHUB_CLIENT_SECRET
+  - GITHUB_APP_NAME

@@ -61,6 +61,17 @@ jobs:
             requirements**.txt
             pyproject.toml
             uv.lock
+      - name: Install OPA
+        # The deploy-terraform-opa hook shells out to the opa binary. Version
+        # pinned to match opa/Dockerfile and .github/workflows/opa.yml so local,
+        # server and CI evaluation all agree.
+        run: |
+          curl -fsSL -o /usr/local/bin/opa \
+            "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static"
+          chmod +x /usr/local/bin/opa
+          opa version
+        env:
+          OPA_VERSION: "1.18.2"
       - name: Install backend dependencies
         run: uv sync --all-packages
       - name: Install frontend dependencies

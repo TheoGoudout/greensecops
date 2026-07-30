@@ -1,0 +1,21 @@
+---
+# Host preparation only. Anything that resolves configuration lives in
+# tasks/fetch_config.yml, which the plays import before these roles run.
+
+- name: Install base packages
+  ansible.builtin.dnf:
+    name:
+      - awscli-2
+      - jq
+      - amazon-cloudwatch-agent
+    state: present
+  become: true
+
+- name: Create the application directory
+  ansible.builtin.file:
+    path: "{{ greensecops_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  become: true

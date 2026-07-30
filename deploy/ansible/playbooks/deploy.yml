@@ -1,0 +1,72 @@
+---
+# Configure every instance and bring its container up.
+#
+#   export GREENSECOPS_ENV=production AWS_REGION=eu-west-1
+#   ansible-playbook -i inventory/aws_ec2.yml playbooks/deploy.yml
+#
+# Ordering matters: OPA and the data tier must answer before the backend runs
+# migrations, and the backend must be migrated before the workers pick up a
+# task against a schema that has moved. Static content has no such dependency
+# and goes last, where a failure cannot block anything.
+
+- name: Deploy the policy servers
+  hosts: role_opa
+  serial: "50%"
+  gather_facts: true
+  vars_files:
+    - ../vars/services.yml
+  pre_tasks:
+    - name: Resolve this host's role and configuration
+      ansible.builtin.import_tasks: ../tasks/fetch_config.yml
+  roles:
+    - common
+    - docker
+    - cloudwatch_agent
+    - greensecops_service
+
+- name: Deploy the API
+  hosts: role_backend
+  # One instance at a time: the group is behind a load balancer, and taking
+  # every backend down at once is a visible outage.
+  serial: 1
+  gather_facts: true
+  vars_files:
+    - ../vars/services.yml
+  pre_tasks:
+    - name: Resolve this host's role and configuration
+      ansible.builtin.import_tasks: ../tasks/fetch_config.yml
+  roles:
+    - common
+    - docker
+    - cloudwatch_agent
+    - greensecops_service
+
+- name: Deploy the workers
+  hosts: role_celery-worker:role_celery-beat
+  serial: "50%"
+  gather_facts: true
+  vars_files:
+    - ../vars/services.yml
+  pre_tasks:
+    - name: Resolve this host's role and configuration
+      ansible.builtin.import_tasks: ../tasks/fetch_config.yml
+  roles:
+    - common
+    - docker
+    - cloudwatch_agent
+    - greensecops_service
+
+- name: Deploy the static sites
+  hosts: role_frontend:role_landing:role_docs
+  serial: 1
+  gather_facts: true
+  vars_files:
+    - ../vars/services.yml
+  pre_tasks:
+    - name: Resolve this host's role and configuration
+      ansible.builtin.import_tasks: ../tasks/fetch_config.yml
+  roles:
+    - common
+    - docker
+    - cloudwatch_agent
+    - greensecops_service

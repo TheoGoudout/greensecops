@@ -1,0 +1,149 @@
+---
+# Build the five images and push them to ECR. Runs entirely on the control
+# node, against the repository checkout this playbook lives in — the instances
+# never build anything, they only pull.
+#
+#   export GREENSECOPS_ENV=production AWS_REGION=eu-west-1
+#   ansible-playbook -i localhost, playbooks/build.yml -e image_tag=$(git rev-parse --short HEAD)
+#
+# The frontend and docs images bake their configuration in at build time
+# (VITE_* and DOCS_BASE_URL), which is why they are built per environment
+# rather than promoted between them.
+
+- name: Build and publish the GreenSecOps images
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - ../vars/services.yml
+
+  vars:
+    repository_root: "{{ playbook_dir }}/../../.."
+    image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
+    target_platform: linux/arm64
+
+    # Kept in step with build_identifier_parameters in the cicd Terraform
+    # module, which scopes the CI role to exactly these parameters.
+    greensecops_build_identifiers:
+      - GITHUB_APP_NAME
+      - GITHUB_CLIENT_ID
+
+  tasks:
+    - name: Read the environment's configuration from Parameter Store
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ssm
+          - get-parameters-by-path
+          - --path
+          - "{{ greensecops_ssm_prefix }}/config"
+          - --recursive
+          - --region
+          - "{{ greensecops_region }}"
+          - --output
+          - json
+      register: config_raw
+      changed_when: false
+
+    - name: Parse the configuration
+      ansible.builtin.set_fact:
+        greensecops_config: "{{ dict(_names | zip(_values)) }}"
+      vars:
+        _parameters: "{{ (config_raw.stdout | from_json).Parameters }}"
+        _names: "{{ _parameters | map(attribute='Name') | map('basename') | list }}"
+        _values: "{{ _parameters | map(attribute='Value') | list }}"
+
+    # The frontend bakes in the GitHub App slug and OAuth client ID, both of
+    # which live on the secret side of the tree. They are public identifiers
+    # rather than credentials — they end up in the shipped JavaScript either
+    # way — so they are fetched by name. Fetching the whole path instead would
+    # pull every real secret onto the build host to read two public strings,
+    # and would force the CI deploy role to hold read access to all of them.
+    - name: Read the build-time identifiers
+      ansible.builtin.command:
+        argv: "{{ ['aws', 'ssm', 'get-parameters', '--names']
+                  + (greensecops_build_identifiers
+                     | map('regex_replace', '^', greensecops_ssm_prefix ~ '/secret/') | list)
+                  + ['--with-decryption', '--region', greensecops_region,
+                     '--output', 'json'] }}"
+      register: secrets_raw
+      changed_when: false
+      no_log: true
+
+    - name: Parse the build-time identifiers
+      ansible.builtin.set_fact:
+        greensecops_secrets: "{{ dict(_names | zip(_values)) }}"
+      vars:
+        _parameters: "{{ (secrets_raw.stdout | from_json).Parameters }}"
+        _names: "{{ _parameters | map(attribute='Name') | map('basename') | list }}"
+        _values: "{{ _parameters | map(attribute='Value') | list }}"
+      no_log: true
+
+    - name: Log in to ECR
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          aws ecr get-login-password --region {{ greensecops_region }} |
+          docker login --username AWS --password-stdin {{ greensecops_config.ECR_REGISTRY }}
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Ensure a buildx builder exists
+      ansible.builtin.command:
+        argv: [docker, buildx, create, --name, greensecops, --use, --bootstrap]
+      register: builder
+      changed_when: builder.rc == 0
+      failed_when: builder.rc != 0 and 'existing instance' not in builder.stderr
+
+    - name: Build and push each image
+      ansible.builtin.command:
+        argv: "{{ _buildx_args + _build_arg_flags + ['.'] }}"
+        chdir: "{{ repository_root }}"
+      vars:
+        _image: "{{ greensecops_config.ECR_REGISTRY }}/greensecops/{{ item.name }}:{{ image_tag }}"
+        _buildx_args:
+          - docker
+          - buildx
+          - build
+          - --platform
+          - "{{ target_platform }}"
+          - --file
+          - "{{ item.dockerfile }}"
+          - --tag
+          - "{{ _image }}"
+          - --provenance=false
+          - --push
+        _build_arg_flags: >-
+          {{ greensecops_build_args[item.name] | default([])
+             | map('regex_replace', '^', '--build-arg=') | list }}
+      loop:
+        # Build context is the repository root for every image — the backend
+        # image resolves the uv workspace from the root pyproject.toml/uv.lock.
+        - { name: backend, dockerfile: backend/Dockerfile }
+        - { name: frontend, dockerfile: frontend/Dockerfile }
+        - { name: landing, dockerfile: landing/Dockerfile }
+        - { name: docs, dockerfile: docs/Dockerfile }
+        - { name: opa, dockerfile: opa/Dockerfile }
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+
+    - name: Record the deployed tag in Parameter Store
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ssm
+          - put-parameter
+          - --name
+          - "{{ greensecops_ssm_prefix }}/config/IMAGE_TAG"
+          - --value
+          - "{{ image_tag }}"
+          - --type
+          - String
+          - --overwrite
+          - --region
+          - "{{ greensecops_region }}"
+      changed_when: true
+      # So a subsequent deploy.yml rolls out what was just built. Terraform
+      # declares this parameter but ignores its value after creation, so this
+      # write is not undone by the next apply.

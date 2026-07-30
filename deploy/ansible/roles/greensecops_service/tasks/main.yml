@@ -1,0 +1,90 @@
+---
+- name: Create the state directory for this role
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+  loop: "{{ greensecops_service_spec.volumes | default([]) | map('regex_replace', ':.*$', '') | list }}"
+  # celery-beat is the only role with a volume today: PersistentScheduler keeps
+  # its cursor on disk, and losing it re-fires every periodic task at once.
+
+- name: Render the environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ greensecops_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Render the compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ greensecops_compose_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  become: true
+
+- name: Pull the service image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greensecops_compose_file }}"
+      - pull
+      - --quiet
+    chdir: "{{ greensecops_root }}"
+  become: true
+  changed_when: true
+
+- name: Run database migrations
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greensecops_compose_file }}"
+      - run
+      - --rm
+      - prestart
+    chdir: "{{ greensecops_root }}"
+  become: true
+  changed_when: true
+  run_once: true
+  when: greensecops_role == 'backend'
+  # Alembic migrations, the object-store bucket check and the first-superuser
+  # seed, from backend/scripts/prestart.sh. Once per deploy rather than once
+  # per instance: concurrent `alembic upgrade head` runs on one database race.
+
+- name: Start the service
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greensecops_compose_file }}"
+      - up
+      - -d
+      - --remove-orphans
+      - --wait
+      - --wait-timeout
+      - "{{ greensecops_health_timeout }}"
+    chdir: "{{ greensecops_root }}"
+  become: true
+  changed_when: true
+  # --wait blocks on the container's own health check, so a deploy that brings
+  # up a broken image fails here rather than when the load balancer notices.
+
+- name: Remove images no longer referenced
+  ansible.builtin.command:
+    argv: [docker, image, prune, --force, --filter, until=168h]
+  become: true
+  changed_when: false
+  # The root volume is 30 GiB and every deploy adds a tag; without this an
+  # instance that survives long enough eventually fills up.

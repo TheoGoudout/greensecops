@@ -1,0 +1,15 @@
+---
+# The whole deployment, end to end: build and publish the images, then
+# configure every host and start its container.
+#
+#   export GREENSECOPS_ENV=production AWS_REGION=eu-west-1
+#   ansible-playbook -i inventory/aws_ec2.yml playbooks/site.yml
+#
+# Use playbooks/deploy.yml on its own to roll out an image already in
+# ECR — a rollback, for instance, which is a tag change rather than a rebuild.
+
+- name: Build and publish the images
+  ansible.builtin.import_playbook: build.yml
+
+- name: Configure the instances and start the services
+  ansible.builtin.import_playbook: deploy.yml

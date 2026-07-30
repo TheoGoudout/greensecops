@@ -45,6 +45,7 @@ internal:
         - .github/**
         - scripts/**
         - hooks/**
+        - deploy/**
         - examples/**
         - landing/**
         - opa/**

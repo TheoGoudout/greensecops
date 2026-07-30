@@ -33,6 +33,12 @@ firing) or starts producing a false positive fails the build.
 That's it — the validator auto-discovers every folder. No Python, workflow, or
 manifest changes needed.
 
+Note that these fixtures assert an *exact* expected set, because several exist
+precisely to demonstrate a finding. The project's own AWS deployment config is
+held to a stricter bar by a separate check — `scripts/validate_deploy_terraform.py`
+fails on **any** violation under `deploy/terraform/`. See
+[`deploy/README.md`](../../deploy/README.md).
+
 Run it locally with:
 
 ```bash
@@ -50,7 +56,7 @@ The slug is the `.rego` file name (without extension) under
 | Slug | Catches |
 | --- | --- |
 | `s3_bucket_public_acl` | S3 bucket with a `public-read` / `public-read-write` ACL |
-| `s3_bucket_missing_versioning` | S3 bucket with no `versioning` block |
+| `s3_bucket_missing_versioning` | S3 bucket with neither an inline `versioning` block nor a companion `aws_s3_bucket_versioning` resource |
 | `resource_missing_tags` | A taggable resource (s3, instance, sg, vpc, subnet, db, lambda, ebs) with no `tags` |
 | `variable_missing_description` | A `variable` block with no `description` |
 | `open_ingress_security_group` | Security-group ingress from `0.0.0.0/0` |
@@ -66,3 +72,4 @@ The slug is the `.rego` file name (without extension) under
 | `aws-rds-postgres/` | "Before": a quickly-wired Postgres instance | unencrypted at rest, no tags, an undescribed variable |
 | `aws-ec2-web/` | "Before": a tagged but insecure web tier | world-open ingress, unencrypted EBS, hardcoded key |
 | `aws-s3-hardened/` | "After": the hardened bucket | *(nothing — clean)* |
+| `aws-s3-split-config/` | "After", written for a modern provider: bucket config split into `aws_s3_bucket_versioning` and friends | *(nothing — clean)* |

@@ -1,0 +1,12 @@
+---
+# Install with:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# amazon.aws supplies both the aws_ec2 dynamic inventory plugin and the aws_ssm
+# connection plugin, which together are how this playbook reaches instances that
+# have no public address and no SSH key.
+collections:
+  - name: amazon.aws
+    version: ">=9.0.0,<12.0.0"
+  - name: community.docker
+    version: ">=4.0.0,<5.0.0"

@@ -16,3 +16,18 @@ frontend/.env
 docs/_build/
 docs/rules/
 docs/reference.rst
+
+# Terraform working directories, plans and state. The lock file IS committed —
+# it pins provider checksums, which is the point.
+deploy/terraform/**/.terraform/
+deploy/terraform/**/*.tfstate
+deploy/terraform/**/*.tfstate.*
+deploy/terraform/**/*.tfplan
+deploy/terraform/**/crash.log
+# Real values for the bootstrap root, which has no remote state to hold them.
+deploy/terraform/bootstrap/terraform.tfvars
+
+# Ansible collections installed from requirements.yml, and the cache
+# ansible-lint drops at the repository root when it runs.
+deploy/ansible/collections/
+.ansible/

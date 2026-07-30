@@ -1,0 +1,52 @@
+name: rollback
+
+# Click-to-rollback: Actions → rollback → Run workflow, pick an environment.
+#
+# Leave the tag empty to return to whatever was deployed before the current
+# release — the deploy workflow records that pointer before every rollout, so
+# it is correct even when the deploy it recorded went on to fail.
+#
+# Nothing is rebuilt: the images are already in ECR, so a rollback is a tag
+# change plus a rolling restart. Give an explicit tag to go further back than
+# one release.
+#
+# A rollback only reverts application images. If the release it is undoing also
+# changed infrastructure, revert that with Terraform separately — the two are
+# deliberately not coupled (deploy/README.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to roll back
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: "Tag to roll back to (leave empty for the previous release)"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+# Shares the deploy group: a rollback must never overlap a deploy to the same
+# environment, or the two would race to set IMAGE_TAG.
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Roll back
+    uses: ./.github/workflows/deploy-reusable.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: ${{ inputs.environment }}
+      image_tag: ${{ inputs.image_tag }}
+      # Only consult PREVIOUS_IMAGE_TAG when no explicit tag was given.
+      rollback_to_previous: ${{ inputs.image_tag == '' }}

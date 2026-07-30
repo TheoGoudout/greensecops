@@ -1,0 +1,138 @@
+---
+# Resolve this host's role and pull its configuration out of Parameter Store.
+#
+# Imported as pre_tasks by every play rather than living in a role: the facts
+# it sets are consumed by three different roles, so they belong to the play,
+# not to any one of them.
+#
+# The fetch runs on the instance, using the instance's own role. Nothing
+# sensitive passes through the control node, and an operator who can run this
+# playbook still cannot read a secret their own IAM identity has no grant for.
+
+- name: Wait for cloud-init to finish
+  ansible.builtin.wait_for:
+    path: /etc/greensecops/bootstrap-complete
+    timeout: 300
+  # A freshly scaled-out instance may still be running user_data when the
+  # playbook reaches it; configuring a half-booted host fails in confusing ways.
+
+- name: Read this instance's role from disk
+  ansible.builtin.slurp:
+    src: /etc/greensecops/role
+  register: greensecops_role_file
+  become: true
+
+- name: Record the role and what it needs
+  ansible.builtin.set_fact:
+    greensecops_role: "{{ _role }}"
+    greensecops_needs_app_env: "{{ greensecops_services[_role].needs_app_env | bool }}"
+  vars:
+    _role: "{{ (greensecops_role_file.content | b64decode) | trim }}"
+  # Prefer the on-disk value over the inventory tag: they agree, but the file is
+  # what the instance itself believes, and a mismatch is worth surfacing as a
+  # failed deploy rather than a silently wrong container.
+
+- name: Fetch the plain configuration parameters
+  ansible.builtin.command:
+    argv:
+      - aws
+      - ssm
+      - get-parameters-by-path
+      - --path
+      - "{{ greensecops_ssm_prefix }}/config"
+      - --recursive
+      - --region
+      - "{{ greensecops_region }}"
+      - --output
+      - json
+  register: greensecops_config_raw
+  changed_when: false
+  become: true
+
+- name: Parse the plain configuration
+  ansible.builtin.set_fact:
+    greensecops_config: "{{ dict(_names | zip(_values)) }}"
+  vars:
+    # Parameters come back fully qualified; the .env key is the leaf name.
+    _parameters: "{{ (greensecops_config_raw.stdout | from_json).Parameters }}"
+    _names: "{{ _parameters | map(attribute='Name') | map('basename') | list }}"
+    _values: "{{ _parameters | map(attribute='Value') | list }}"
+
+- name: Fetch the secret parameters
+  ansible.builtin.command:
+    argv:
+      - aws
+      - ssm
+      - get-parameters-by-path
+      - --path
+      - "{{ greensecops_ssm_prefix }}/secret"
+      - --recursive
+      - --with-decryption
+      - --region
+      - "{{ greensecops_region }}"
+      - --output
+      - json
+  register: greensecops_secrets_raw
+  changed_when: false
+  no_log: true
+  become: true
+  when: greensecops_needs_app_env
+
+- name: Parse the secrets
+  ansible.builtin.set_fact:
+    greensecops_secrets: "{{ dict(_names | zip(_values)) }}"
+  vars:
+    _parameters: "{{ (greensecops_secrets_raw.stdout | from_json).Parameters }}"
+    _names: "{{ _parameters | map(attribute='Name') | map('basename') | list }}"
+    _values: "{{ _parameters | map(attribute='Value') | list }}"
+  no_log: true
+  when: greensecops_needs_app_env
+
+- name: Default the secrets to empty for roles serving static content
+  ansible.builtin.set_fact:
+    greensecops_secrets: {}
+  when: not greensecops_needs_app_env
+
+- name: Refuse to deploy with unseeded secrets
+  ansible.builtin.assert:
+    that:
+      - greensecops_secrets[item] is defined
+      - greensecops_secrets[item] != greensecops_unseeded_placeholder
+    fail_msg: >-
+      {{ greensecops_ssm_prefix }}/secret/{{ item }} still holds its placeholder
+      value. Seed it with `aws ssm put-parameter --overwrite` before deploying —
+      see deploy/README.md. The backend refuses to start on "changethis" in
+      staging and production anyway, so failing here fails the deploy rather
+      than the container.
+    quiet: true
+  loop: "{{ greensecops_required_secrets }}"
+  when: greensecops_needs_app_env
+
+- name: Fetch the database password
+  ansible.builtin.command:
+    argv:
+      - aws
+      - secretsmanager
+      - get-secret-value
+      - --secret-id
+      - "{{ greensecops_config.POSTGRES_SECRET_ARN }}"
+      - --region
+      - "{{ greensecops_region }}"
+      - --query
+      - SecretString
+      - --output
+      - text
+  register: greensecops_db_secret_raw
+  changed_when: false
+  no_log: true
+  become: true
+  when: greensecops_needs_app_env
+  # RDS owns and rotates this credential. Reading it at deploy time rather than
+  # copying it into Parameter Store is what makes a rotation transparent: the
+  # next deploy simply picks up the new value.
+
+- name: Extract the database password
+  ansible.builtin.set_fact:
+    greensecops_db_password: "{{ (greensecops_db_secret_raw.stdout | from_json).password }}"
+  no_log: true
+  when: greensecops_needs_app_env

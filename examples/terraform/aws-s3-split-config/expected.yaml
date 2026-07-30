@@ -1,0 +1,4 @@
+# A clean reference module written against a provider v4+ split-resource
+# configuration: it must be violation-free across the entire rule suite, so an
+# empty list is the assertion.
+violations: []
