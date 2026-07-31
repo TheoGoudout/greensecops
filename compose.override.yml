@@ -161,6 +161,12 @@ services:
 
   frontend:
     restart: "no"
+    # compose.yml caps this at 128m, which is right for nginx serving a built
+    # bundle and nowhere near enough for the Vite dev server this becomes in
+    # `dev-stage`. Every other service runs the same image here as in
+    # production, so this is the only limit local development has to move.
+    mem_limit: 2g
+    mem_reservation: 256m
     ports:
       - "5173:5173"
     healthcheck:

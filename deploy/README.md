@@ -395,6 +395,8 @@ the target topology before moving production.
 
 **Rolling out.** Every group has a rolling instance refresh at `min_healthy_percentage = 100`, so capacity never dips during a replacement — except on `single_host`, where one instance means a rollout is a restart and a brief outage.
 
+**Container limits.** `vars/services.yml` gives every container a `mem_limit`, a `mem_reservation` and a `cpu_shares` weight, rendered into the compose file on each host. The memory cap means a container that misbehaves dies alone rather than leaving the kernel's OOM killer to choose a victim by score — which on `single_host`, where PostgreSQL shares the box, is the difference between a restarted worker and a corrupted write. `cpu_shares` rather than a `cpus` ceiling, so a scan can use an otherwise idle instance and yields when it is not: data tier 2048, request path 1024, background work 512, static files 256. On `single_host` the caps total ~8.4 GB and the reservations ~2.2 GB, which fits `t4g.large` comfortably and `t4g.medium` (staging) with less room to spare. Raise `celery-worker` in step with `CELERY_CONCURRENCY` — budget roughly 500m per worker plus 500m of parent.
+
 **Logs.** Container output goes straight to CloudWatch via the `awslogs` driver, under `/greensecops/greensecops-<env>/<role>` — so logs survive the instance, which matters when a group replaces one.
 
 **Alarms.** Load-balancer 5xx, unhealthy hosts per target group, sustained CPU per group, and — where a managed data tier exists — database CPU and free storage plus Redis memory. On `single_host` the containers are covered by the group's CPU and disk alarms instead. All publish to the `alarm_topic_arn` SNS topic; `alarm_email` subscribes an address.

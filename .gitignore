@@ -31,3 +31,8 @@ deploy/terraform/bootstrap/terraform.tfvars
 # ansible-lint drops at the repository root when it runs.
 deploy/ansible/collections/
 .ansible/
+
+# Intermediate artifact of the generate-openapi-client hook: dumped at the
+# repository root, copied to frontend/ (where it is already ignored), then fed
+# to openapi-ts. The committed output is the generated client, not this.
+/openapi.json

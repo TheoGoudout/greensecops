@@ -16,6 +16,14 @@ services:
     restart: always
     env_file:
       - {{ greensecops_env_file }}
+{% if svc.mem_limit is defined %}
+    # Hard cap, soft floor and relative CPU weight, from services.yml. Bounded
+    # so that a container which misbehaves dies alone rather than leaving the
+    # kernel's OOM killer to choose a victim by score.
+    mem_limit: {{ svc.mem_limit }}
+    mem_reservation: {{ svc.mem_reservation }}
+    cpu_shares: {{ svc.cpu_shares }}
+{% endif %}
 {% if svc.command %}
     command: {{ svc.command | trim }}
 {% endif %}
@@ -67,6 +75,13 @@ services:
     restart: always
     env_file:
       - {{ greensecops_env_file }}
+{% if svc.mem_limit is defined %}
+    # The data tier carries the highest CPU weight on the box: under
+    # contention, a starved PostgreSQL is the worst outcome available.
+    mem_limit: {{ svc.mem_limit }}
+    mem_reservation: {{ svc.mem_reservation }}
+    cpu_shares: {{ svc.cpu_shares }}
+{% endif %}
 {% if svc.command is defined %}
     command: {{ svc.command }}
 {% endif %}
@@ -106,4 +121,8 @@ services:
     profiles:
       - migration
     restart: "no"
+    # Migrates and exits, so it never overlaps steady state.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
 {% endif %}

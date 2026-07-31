@@ -13,6 +13,18 @@
 # nginx containers cannot all take :80. It must stay in step with
 # service_topology in deploy/terraform/locals.tf, which points the load
 # balancer's target groups at the same numbers.
+#
+# `mem_limit`, `mem_reservation` and `cpu_shares` mirror compose.yml — see the
+# comment at the top of that file for why each is what it is. They matter most
+# in the single_host topology, where every container shares one instance and an
+# unbounded Celery worker would have the kernel's OOM killer pick a victim by
+# score rather than by importance. On the larger topologies a service usually
+# has its box to itself and the cap is simply never reached, which is the point:
+# the same numbers are correct everywhere, so migrating between topologies does
+# not mean re-tuning them.
+#
+# The caps sum to more than any instance type here has. They are ceilings, not
+# allocations; the reservations, about 2.2 GB in single_host, are what must fit.
 
 greensecops_services:
   backend:
@@ -22,6 +34,10 @@ greensecops_services:
     host_port: 8000
     health_check: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
     needs_app_env: true
+    # Four uvicorn workers, each holding its own copy of the application.
+    mem_limit: 1536m
+    mem_reservation: 512m
+    cpu_shares: 1024
 
   celery-worker:
     image: backend
@@ -32,6 +48,13 @@ greensecops_services:
     host_port: null
     health_check: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
     needs_app_env: true
+    # Prefork: CELERY_CONCURRENCY children plus a parent, each with the whole
+    # application, plus a scan's working set. Roughly 500m per worker plus 500m
+    # of parent — raise this in step with the concurrency. Lowest CPU weight of
+    # the application services, since scans should yield to the request path.
+    mem_limit: 3g
+    mem_reservation: 768m
+    cpu_shares: 512
 
   celery-beat:
     image: backend
@@ -42,6 +65,10 @@ greensecops_services:
     host_port: null
     health_check: ["CMD-SHELL", "test -f /var/lib/celery/celerybeat-schedule"]
     needs_app_env: true
+    # Only ever enqueues; it does no work itself.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 256
     # PersistentScheduler keeps its cursor on disk; losing it re-fires every
     # periodic task at once, so it survives container replacement.
     volumes:
@@ -55,6 +82,10 @@ greensecops_services:
     host_port: 8181
     health_check: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
     needs_app_env: false
+    # The compiled rule bundle dominates, and it does not grow with load.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
 
   frontend:
     image: frontend
@@ -63,6 +94,10 @@ greensecops_services:
     host_port: 8081
     health_check: ["CMD", "curl", "-f", "http://localhost/"]
     needs_app_env: false
+    # nginx serving a built bundle.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
 
   landing:
     image: landing
@@ -71,6 +106,9 @@ greensecops_services:
     host_port: 8082
     health_check: ["CMD", "curl", "-f", "http://localhost/"]
     needs_app_env: false
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
     # The landing container substitutes these into its HTML at start-up.
     environment_keys:
       - APP_URL
@@ -88,6 +126,10 @@ greensecops_services:
     host_port: 8083
     health_check: ["CMD", "curl", "-f", "http://localhost/"]
     needs_app_env: false
+    # Sphinx runs at build time; this is nginx serving the result.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
 
 # Containers the deployment runs only when Terraform did not provision a
 # managed equivalent — that is, in the single_host topology. Pinned to the same
@@ -96,6 +138,12 @@ greensecops_services:
 greensecops_data_tier_services:
   db:
     image_ref: postgres:18
+    # Highest CPU weight on the box: a starved database is the worst outcome
+    # under contention, and PostgreSQL sizes shared_buffers from its own
+    # defaults rather than from the cgroup, so the cap is what bounds it.
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 2048
     volumes:
       - /var/lib/greensecops/postgres:/var/lib/postgresql/data/pgdata
     health_check: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -107,6 +155,11 @@ greensecops_data_tier_services:
 
   redis:
     image_ref: redis:8-alpine
+    # Broker as well as cache, so the working set grows with queue depth. If a
+    # backlog approaches this, set `maxmemory` rather than raising it.
+    mem_limit: 512m
+    mem_reservation: 64m
+    cpu_shares: 2048
     volumes:
       - /var/lib/greensecops/redis:/data
     health_check: ["CMD", "redis-cli", "ping"]
@@ -114,6 +167,9 @@ greensecops_data_tier_services:
 
   minio:
     image_ref: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 512
     command: server /data --console-address ":9001"
     volumes:
       - /var/lib/greensecops/minio:/data

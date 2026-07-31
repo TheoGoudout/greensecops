@@ -21,11 +21,33 @@
 # Coolify substitutes only the variables a compose file names, so an omitted
 # one silently never reaches the container — and it is the reason to change
 # both files together when a setting is added.
+#
+# Resource limits
+#
+# Every service is bounded, for the reasons compose.yml explains at length:
+# nothing here bounds itself, and an unbounded Celery worker means the kernel's
+# OOM killer choosing a victim by score rather than by importance. The values
+# are the same, except for celery-worker, which is smaller here because this
+# deployment defaults to CELERY_CONCURRENCY=2 rather than 4.
+#
+# It matters more on this deployment than on any other. Coolify is a
+# multi-tenant platform and this is the topology people put other projects
+# beside — these limits are the difference between "GreenSecOps had a busy
+# scan" and "the box went down". The caps sum to about 5.5 GB and the
+# reservations to about 1.5 GB, so on a CPX31's 8 GB the steady-state footprint
+# leaves real room for a neighbour, and the caps stop a burst from claiming it.
+#
+# Anything sharing this host should be bounded the same way, and nothing
+# sharing it should mount /var/run/docker.sock — that is root on the host, and
+# therefore root over this stack's GitHub App key and customer credentials.
 
 services:
   db:
     image: postgres:18
     restart: always
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 2048
     volumes:
       - app-db-data:/var/lib/postgresql/data/pgdata
     environment:
@@ -43,6 +65,11 @@ services:
   redis:
     image: redis:8-alpine
     restart: always
+    # If a backlog ever approaches this, set `maxmemory` rather than raising
+    # it: a broker that evicts beats a broker the kernel kills.
+    mem_limit: 512m
+    mem_reservation: 64m
+    cpu_shares: 2048
     volumes:
       - app-redis-data:/data
     healthcheck:
@@ -54,6 +81,11 @@ services:
   opa:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-opa:${TAG:-latest}
     restart: always
+    # The compiled rule bundle dominates the footprint and does not grow with
+    # load, which is why this is the smallest steady-state service here.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
     command:
       - run
       - --server
@@ -71,6 +103,10 @@ services:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     command: bash scripts/prestart.sh
     restart: "no"
+    # Migrates and exits, so it never overlaps steady state.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
     depends_on:
       db:
         condition: service_healthy
@@ -160,6 +196,11 @@ services:
   backend:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     restart: always
+    # The image runs `fastapi run --workers 4`; each uvicorn worker holds its
+    # own copy of the application, so the floor is four of them.
+    mem_limit: 1536m
+    mem_reservation: 512m
+    cpu_shares: 1024
     depends_on:
       db:
         condition: service_healthy
@@ -183,6 +224,16 @@ services:
   celery-worker:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     restart: always
+    # The service most likely to hit its cap, and the reason the caps exist.
+    # Prefork holds CELERY_CONCURRENCY children plus a parent, each with the
+    # whole application, and a scan's working set on top — budget roughly 500m
+    # per worker plus 500m of parent, and raise this if you raise concurrency.
+    #
+    # Lowest CPU weight here: a scan is background work and should yield to
+    # anything a user is waiting on.
+    mem_limit: 2g
+    mem_reservation: 512m
+    cpu_shares: 512
     depends_on:
       db:
         condition: service_healthy

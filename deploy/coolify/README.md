@@ -232,6 +232,51 @@ set `--concurrency` higher in the meantime.
 the frontend and a backend contract lands in two places at slightly different
 times. For a change that breaks compatibility, deploy the backend first.
 
+## Running other projects on the same server
+
+Coolify is a multi-tenant platform and this stack does not fill a CPX31, so
+putting other projects beside it is the obvious move. It is also where the
+€13/month saving per project comes from, which is worth being honest about:
+that is roughly what a second server costs, so isolation is cheap enough that
+"we saved money" is rarely the argument that should decide it.
+
+**What makes it safe is bounding things.** Every service here declares
+`mem_limit`, `mem_reservation` and `cpu_shares` — see the comment at the top of
+`compose.yml` for the reasoning. Without them the Celery worker is unbounded,
+and when a scan fans out further than expected the kernel's OOM killer picks a
+victim by score rather than by importance. That victim is usually a database,
+and on a shared box it is as likely to be your neighbour's as this one's.
+
+Steady state is about **1.5 GB reserved** against caps totalling ~5.5 GB, so on
+8 GB there is real room for something else and a burst cannot claim all of it.
+
+Four rules for anything you co-locate:
+
+1. **Bound it the same way.** Limits on this stack only protect the host from
+   *this* stack. An unbounded neighbour is the same problem pointed the other
+   way.
+2. **Never mount `/var/run/docker.sock`.** Plenty of self-hosted tooling asks
+   for it — Portainer, Watchtower, Dozzle, CI runners. That mount is root on
+   the host, and therefore root over this stack's GitHub App private key and
+   its customers' AWS credentials. Use Coolify's own UI, which already has that
+   access legitimately.
+3. **One database per project.** Do not consolidate PostgreSQL to save RAM.
+   Coolify defaults to a database per resource; keep it that way.
+4. **Back up per project.** Hetzner's automated backups snapshot the whole
+   volume, so restoring one project to last Tuesday restores all of them. The
+   `pg_dump` to R2 above is what makes a single-project restore possible.
+
+**The point at which to stop sharing** is not a resource threshold — it is the
+first external user. This backend holds a GitHub App private key with write
+access to customers' repositories and `AssumeRole` credentials into their AWS
+accounts. Co-locating your own side projects risks your own things; co-locating
+this one risks your customers'. That is also the first question on any security
+questionnaire you will be sent, and "it shares a box with my other projects" is
+not an answer you want to give.
+
+Until then — pre-revenue, with only your own repositories connected — sharing
+is a perfectly reasonable call.
+
 ## Why OPA still runs as a server
 
 The cost analysis suggested replacing the OPA container with `opa eval`
