@@ -1,0 +1,91 @@
+name: images
+
+# Builds the two images the Coolify deployment still needs — the backend and
+# the policy server — for arm64, and publishes them to GHCR.
+#
+# The other three images are gone from that deployment: landing, dashboard and
+# docs are static and go to Cloudflare Pages instead (.github/workflows/pages.yml).
+#
+# Built here rather than on the target host for two reasons. A €12/month ARM
+# box takes a long time over `uv sync`, and a Raspberry Pi acting as Coolify's
+# control plane should not be building anything at all. Coolify then only has
+# to pull.
+#
+# Runs on GitHub's native arm64 runners, so there is no QEMU emulation in the
+# path — a cross-built backend image would take roughly ten times as long.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "backend/**"
+      - "opa/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/images.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      # Push to GHCR with the workflow's own token — no registry credentials
+      # stored in the repository.
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            dockerfile: backend/Dockerfile
+          - image: opa
+            dockerfile: opa/Dockerfile
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.8.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=tag
+
+      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          # The build context is the repository root for both images: the
+          # backend resolves the uv workspace from the root pyproject.toml and
+          # uv.lock, and opa/Dockerfile copies backend/app/rules.
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

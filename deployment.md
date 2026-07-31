@@ -4,7 +4,12 @@ You can deploy the project using Docker Compose to a remote server.
 
 The production Compose file (`compose.yml`) is written for [Coolify](https://coolify.io/), a self-hostable deployment platform that builds the stack, injects secrets, and handles HTTPS and routing for the public-facing services. You can also run `compose.yml` by hand on any Docker host, as long as you provide the same variables yourself (see below).
 
-There is a second, larger path: **[deploy/README.md](deploy/README.md) provisions the stack on AWS with Terraform and configures it with Ansible.** The rest of this document describes the single-host Compose deployment, which remains the simplest way to run GreenSecOps.
+Two other paths exist, at opposite ends of the cost and complexity range:
+
+* **[deploy/coolify/README.md](deploy/coolify/README.md) — the cheapest, ~€20/month.** Coolify driving one small ARM server at Hetzner, with the three static surfaces on Cloudflare Pages and object storage on R2. Five containers instead of ten.
+* **[deploy/README.md](deploy/README.md) — AWS with Terraform and Ansible**, from ~$120/month on one instance up to ~$970 fully distributed, with a documented migration path between the two.
+
+The rest of this document describes the generic single-host Compose deployment, which both of those build on.
 
 ## Preparation
 
@@ -160,6 +165,12 @@ docker compose -f compose.yml up -d
 For production you wouldn't want to have the overrides in `compose.override.yml`, that's why we explicitly specify `compose.yml` as the file to use.
 
 Note that `compose.yml` does not publish any ports — in a Coolify deployment the platform's proxy routes the `SERVICE_URL_*` hostnames to the right containers and terminates HTTPS. On a plain Docker host you need to put your own reverse proxy in front of the `frontend`, `backend`, `landing`, and `docs` services.
+
+## Deploy with Coolify to Hetzner
+
+`deploy/coolify/` holds a Compose file and runbook for the cheapest supported deployment: one ARM server at Hetzner (~€12/month), the landing page, dashboard and docs on Cloudflare Pages, and scan artifacts in Cloudflare R2.
+
+It differs from the Compose file above in what it leaves out — no `frontend`, `landing`, `docs` or `minio` containers, and the Celery scheduler runs embedded in the worker rather than as its own service. See **[deploy/coolify/README.md](deploy/coolify/README.md)**, which also covers running Coolify's control plane on a Raspberry Pi and why that does not restrict which servers you can deploy to.
 
 ## Deploy to AWS with Terraform and Ansible
 

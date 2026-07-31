@@ -80,6 +80,16 @@ repos:
         files: ^deploy/terraform/.*\.tf$
         pass_filenames: false
 
+      # Coolify substitutes only the variables a compose file names, so one
+      # forgotten in the Coolify variant silently takes its default in
+      # production rather than failing. This catches that.
+      - id: coolify-compose-drift
+        name: Check the Coolify compose against compose.yml
+        entry: python3 scripts/validate_coolify_compose.py
+        language: system
+        files: ^(compose\.yml|deploy/coolify/compose\.yml|scripts/validate_coolify_compose\.py)$
+        pass_filenames: false
+
       # The project's own rule suite, run against the project's own
       # infrastructure. Any violation fails the commit — see deploy/README.md.
       - id: deploy-terraform-opa

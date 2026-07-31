@@ -4,6 +4,8 @@ Terraform provisions the infrastructure; Ansible configures the instances and ru
 
 Applying this creates real, billed AWS resources. Nothing here runs automatically: CI only checks that the configuration is well-formed and passes the rule suite.
 
+**If cost is the deciding factor, start with [deploy/coolify/](coolify/README.md) instead** — one Hetzner ARM server with the static sites on Cloudflare Pages, about €20/month against this path's ~$120 floor. It runs the same images and the same configuration contract, so moving here later is a migration rather than a rewrite.
+
 ## Topologies
 
 The same deployment in three shapes. `topology` in the tfvars picks one; moving

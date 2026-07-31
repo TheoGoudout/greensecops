@@ -1,0 +1,216 @@
+# GreenSecOps for Coolify, on one small ARM server.
+#
+# The difference from the repository's compose.yml is what is *absent*:
+#
+#   * No frontend, landing or docs containers. Those three surfaces are static
+#     and are published to Cloudflare Pages by .github/workflows/pages.yml.
+#   * No minio container. Object storage is Cloudflare R2, which is
+#     S3-compatible and charges nothing for egress.
+#   * No separate celery-beat container. The worker runs an embedded beat,
+#     which is safe because this deployment runs exactly one worker.
+#   * No build sections. Images are built for arm64 by
+#     .github/workflows/images.yml and pulled from GHCR, so neither the target
+#     server nor the Raspberry Pi running Coolify compiles anything.
+#
+# Five containers instead of ten, on a box that costs about €12/month. See
+# deploy/coolify/README.md.
+#
+# The environment list below duplicates compose.yml's. That is unavoidable —
+# Coolify substitutes only the variables a compose file names, so an omitted
+# one silently never reaches the container — and it is the reason to change
+# both files together when a setting is added.
+
+services:
+  db:
+    image: postgres:18
+    restart: always
+    volumes:
+      - app-db-data:/var/lib/postgresql/data/pgdata
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES} -d ${POSTGRES_DB:-greensecops}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:8-alpine
+    restart: always
+    volumes:
+      - app-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  opa:
+    image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-opa:${TAG:-latest}
+    restart: always
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - --log-level=info
+      - /policies
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  prestart:
+    image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
+    command: bash scripts/prestart.sh
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &app-env
+      # General
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
+      # Hosts & URLs. Only the API is a Coolify service, so only it has a
+      # SERVICE_URL_* magic variable — the other three live on Cloudflare Pages
+      # and are set by hand to their custom domains.
+      - FRONTEND_HOST=${FRONTEND_HOST}
+      - BACKEND_HOST=${SERVICE_URL_BACKEND}
+      - GREENSECOPS_PUBLIC_URL=${GREENSECOPS_PUBLIC_URL}
+      - MARKETING_URL=${MARKETING_URL}
+      - DOCS_URL=${DOCS_URL}
+      - BACKEND_CORS_ORIGINS=${FRONTEND_HOST}
+      # Auth & Security
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-11520}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER:-admin@example.com}
+      - FIRST_SUPERUSER_PASSWORD=${SERVICE_PASSWORD_FIRSTSUPERUSER}
+      - EMAIL_RESET_TOKEN_EXPIRE_HOURS=${EMAIL_RESET_TOKEN_EXPIRE_HOURS:-48}
+      # Database & Infrastructure
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-greensecops}
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - REDIS_URL=redis://redis:6379/0
+      - OPA_URL=http://opa:8181
+      # Object storage is Cloudflare R2. object_store.py sends path-style
+      # requests and explicit credentials whenever S3_ENDPOINT_URL is set,
+      # which is what R2 expects; S3_REGION must be "auto".
+      - S3_ENDPOINT_URL=${R2_ENDPOINT_URL}
+      - S3_ACCESS_KEY=${R2_ACCESS_KEY_ID}
+      - S3_SECRET_KEY=${R2_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET:-greensecops-artifacts}
+      - S3_REGION=${S3_REGION:-auto}
+      # AWS (cloud posture scanning) — GreenSecOps's own identity, unrelated to
+      # the S3_* values above, which now authenticate to R2. A real IAM user's
+      # keys; unset disables cloud-posture scanning only.
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      # Email / SMTP
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@example.com}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME}
+      - SMTP_TLS=${SMTP_TLS:-True}
+      - SMTP_SSL=${SMTP_SSL:-False}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      # GitHub
+      - GITHUB_ACTION_REF=${GITHUB_ACTION_REF:-greensecops/telemetry@v1}
+      - GITHUB_BOT_HANDLE=${GITHUB_BOT_HANDLE:-@greensecops}
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY}
+      - GITHUB_WEBHOOK_SECRET=${SERVICE_HEX_40_GITHUBWEBHOOKSECRET}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GITHUB_BOT_TOKEN=${GITHUB_BOT_TOKEN}
+      - GITHUB_BOT_LOGIN=${GITHUB_BOT_LOGIN}
+      # AI / LLM
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - AI_PROVIDERS_CONFIG=${AI_PROVIDERS_CONFIG}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-greensecops}
+      # Billing (Stripe)
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_STARTER=${STRIPE_PRICE_STARTER}
+      - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
+      - STRIPE_PRICE_ULTIMATE=${STRIPE_PRICE_ULTIMATE}
+      # Observability
+      - SENTRY_DSN=${SENTRY_DSN}
+      # Celery
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
+
+  backend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+      opa:
+        condition: service_healthy
+        restart: true
+      prestart:
+        condition: service_completed_successfully
+    environment: *app-env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  celery-worker:
+    image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+      prestart:
+        condition: service_completed_successfully
+    environment: *app-env
+    # --beat runs the periodic scheduler inside the worker rather than as its
+    # own container. Only safe with exactly one worker: two embedded beats
+    # would each fire every scheduled task. Scaling this service means moving
+    # beat back out, as the root compose.yml has it.
+    command: >-
+      celery -A app.workers.celery_app worker --loglevel=info
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      -Q default,analysis,fixes
+      --beat --scheduler celery.beat:PersistentScheduler
+      --schedule /var/lib/celery/celerybeat-schedule
+    volumes:
+      - app-celery-data:/var/lib/celery
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  app-db-data:
+  app-redis-data:
+  app-celery-data:

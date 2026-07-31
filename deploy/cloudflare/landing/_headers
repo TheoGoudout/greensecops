@@ -1,0 +1,10 @@
+# The security headers landing/nginx.conf sets. Pages serves no headers of its
+# own beyond caching, so they have to be declared here or they are simply lost
+# when the site moves off nginx.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
