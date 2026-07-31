@@ -22,3 +22,8 @@ output "isolated_subnet_ids" {
   description = "Isolated subnet IDs, for RDS and ElastiCache."
   value       = aws_subnet.isolated[*].id
 }
+
+output "has_nat_gateway" {
+  description = "Whether any NAT gateway exists. When false the private subnets have no route out and instances belong in the public tier."
+  value       = local.has_nat
+}

@@ -8,6 +8,12 @@
 # migrations, and the backend must be migrated before the workers pick up a
 # task against a schema that has moved. Static content has no such dependency
 # and goes last, where a failure cannot block anything.
+#
+# Each play names the group it targets in every topology, because the group
+# names differ: `opa`/`backend`/`celery-worker` when each service has its own
+# hosts, `app`/`web`/`worker` when they are consolidated, and a single `app`
+# group running everything in single_host. A pattern matching no group is
+# skipped, so exactly the plays that apply run.
 
 - name: Deploy the policy servers
   hosts: role_opa
@@ -24,8 +30,8 @@
     - cloudwatch_agent
     - greensecops_service
 
-- name: Deploy the API
-  hosts: role_backend
+- name: Deploy the API (and everything else in single_host)
+  hosts: role_backend:role_app
   # One instance at a time: the group is behind a load balancer, and taking
   # every backend down at once is a visible outage.
   serial: 1
@@ -42,7 +48,7 @@
     - greensecops_service
 
 - name: Deploy the workers
-  hosts: role_celery-worker:role_celery-beat
+  hosts: role_celery_worker:role_celery_beat:role_worker
   serial: "50%"
   gather_facts: true
   vars_files:
@@ -57,7 +63,7 @@
     - greensecops_service
 
 - name: Deploy the static sites
-  hosts: role_frontend:role_landing:role_docs
+  hosts: role_frontend:role_landing:role_docs:role_web
   serial: 1
   gather_facts: true
   vars_files:

@@ -1,21 +1,25 @@
 ---
-# The single source of truth for what each role runs.
+# The single source of truth for what each container is.
 #
-# This intentionally duplicates part of compose.yml. A split-host deployment
-# cannot reuse a single-host compose file — every service here runs alone on
-# its own instance group, reaching PostgreSQL, Redis and OPA over the network
-# instead of over a compose bridge. Keeping the duplication in one small file
-# makes the drift reviewable: if a command or a health check changes in
-# compose.yml, it changes here too, and deploy/README.md says so.
+# This intentionally duplicates part of compose.yml. Above the single_host
+# topology a host runs only some of these containers and reaches the rest over
+# the network, so a single-host compose file cannot be reused as-is. Keeping
+# the duplication in one small file makes the drift reviewable: if a command or
+# a health check changes in compose.yml, it changes here too, and
+# deploy/README.md says so.
 #
-# `image` names the ECR repository; the registry and tag come from Parameter
-# Store, so a rollback is a tag change rather than a rebuild.
+# `host_port` is what the container publishes on the instance. It differs from
+# the container port for the static sites because co-locating them means three
+# nginx containers cannot all take :80. It must stay in step with
+# service_topology in deploy/terraform/locals.tf, which points the load
+# balancer's target groups at the same numbers.
 
 greensecops_services:
   backend:
     image: backend
     command: fastapi run --workers 4 app/main.py
-    port: 8000
+    container_port: 8000
+    host_port: 8000
     health_check: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
     needs_app_env: true
 
@@ -24,7 +28,8 @@ greensecops_services:
     command: >-
       celery -A app.workers.celery_app worker --loglevel=info
       --concurrency=${CELERY_CONCURRENCY:-4} -Q default,analysis,fixes
-    port: null
+    container_port: null
+    host_port: null
     health_check: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
     needs_app_env: true
 
@@ -33,7 +38,8 @@ greensecops_services:
     command: >-
       celery -A app.workers.celery_app beat --loglevel=info
       --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celery/celerybeat-schedule
-    port: null
+    container_port: null
+    host_port: null
     health_check: ["CMD-SHELL", "test -f /var/lib/celery/celerybeat-schedule"]
     needs_app_env: true
     # PersistentScheduler keeps its cursor on disk; losing it re-fires every
@@ -45,25 +51,27 @@ greensecops_services:
     image: opa
     command: >-
       run --server --addr=0.0.0.0:8181 --log-level=info /policies
-    port: 8181
+    container_port: 8181
+    host_port: 8181
     health_check: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
     needs_app_env: false
 
   frontend:
     image: frontend
     command: null
-    port: 80
+    container_port: 80
+    host_port: 8081
     health_check: ["CMD", "curl", "-f", "http://localhost/"]
     needs_app_env: false
 
   landing:
     image: landing
     command: null
-    port: 80
+    container_port: 80
+    host_port: 8082
     health_check: ["CMD", "curl", "-f", "http://localhost/"]
     needs_app_env: false
-    # The landing page reads these at container start to render its links and
-    # legal copy; they are plain configuration, not secrets.
+    # The landing container substitutes these into its HTML at start-up.
     environment_keys:
       - APP_URL
       - MARKETING_URL
@@ -76,9 +84,43 @@ greensecops_services:
   docs:
     image: docs
     command: null
-    port: 80
+    container_port: 80
+    host_port: 8083
     health_check: ["CMD", "curl", "-f", "http://localhost/"]
     needs_app_env: false
+
+# Containers the deployment runs only when Terraform did not provision a
+# managed equivalent — that is, in the single_host topology. Pinned to the same
+# versions as compose.yml so local development and a deployed single host run
+# the same software.
+greensecops_data_tier_services:
+  db:
+    image_ref: postgres:18
+    volumes:
+      - /var/lib/greensecops/postgres:/var/lib/postgresql/data/pgdata
+    health_check: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+
+  redis:
+    image_ref: redis:8-alpine
+    volumes:
+      - /var/lib/greensecops/redis:/data
+    health_check: ["CMD", "redis-cli", "ping"]
+    environment: {}
+
+  minio:
+    image_ref: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    command: server /data --console-address ":9001"
+    volumes:
+      - /var/lib/greensecops/minio:/data
+    health_check: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
 
 # Build-time arguments, as the KEY=VALUE strings buildx takes directly. The
 # frontend and docs images bake their configuration in at build time, which is

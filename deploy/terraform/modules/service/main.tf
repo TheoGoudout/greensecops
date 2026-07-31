@@ -9,6 +9,10 @@ locals {
   tags = merge(var.tags, {
     Name               = local.name
     "greensecops:role" = var.role
+
+    # Ansible's dynamic inventory groups on the role; the service list tells
+    # the deploy which containers this group is responsible for.
+    "greensecops:services" = join(",", var.services)
   })
 }
 
@@ -26,7 +30,15 @@ resource "aws_launch_template" "this" {
   instance_type = var.instance_type
   user_data     = base64encode(var.user_data)
 
-  vpc_security_group_ids = var.security_group_ids
+  # Security groups live in the interface block rather than at the top level:
+  # the two forms conflict, and assigning a public address needs this form.
+  # A public address is how a host with no NAT gateway reaches ECR, GitHub and
+  # the LLM providers — inbound is still closed by the security group.
+  network_interfaces {
+    associate_public_ip_address = var.assign_public_ip
+    security_groups             = var.security_group_ids
+    delete_on_termination       = true
+  }
 
   iam_instance_profile {
     name = var.instance_profile_name

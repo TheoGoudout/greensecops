@@ -1,22 +1,29 @@
-# Staging. Same topology as production so a deploy exercises the real shape,
-# sized down and with the durability guarantees relaxed where they only cost
-# money.
+# Staging, on the single_host topology: every container on one box, exactly
+# like compose.yml, with PostgreSQL, Redis and MinIO running alongside the
+# application on a persistent volume.
 #
 #   terraform init -backend-config=env/staging.backend.hcl
 #   terraform apply -var-file=env/staging.tfvars
+#
+# Staging stays on single_host permanently: it exists to exercise a deploy, not
+# to survive an outage. Note that it therefore does *not* exercise RDS,
+# ElastiCache or the internal load balancer — see the migration section of
+# deploy/README.md for what to verify before moving production up a tier.
 
 environment = "staging"
 aws_region  = "eu-west-1"
+topology    = "single_host"
 
-# Two AZs and one NAT gateway: staging can tolerate an AZ outage taking egress
-# with it, and the saving is roughly a NAT gateway per AZ per month.
+# Two AZs because the load balancer requires subnets in at least two, even
+# though only the first one holds an instance.
 vpc_cidr                = "10.31.0.0/16"
 availability_zone_count = 2
-single_nat_gateway      = true
 
+# DNS. The hosted zone must already exist and be delegated.
 domain_name     = "staging.greensecops.example.com"
 route53_zone_id = "Z0123456789ABCDEFGHIJ"
 
+# Images, from the bootstrap root's outputs.
 ecr_registry = "123456789012.dkr.ecr.eu-west-1.amazonaws.com"
 ecr_repository_arns = [
   "arn:aws:ecr:eu-west-1:123456789012:repository/greensecops/backend",
@@ -32,34 +39,25 @@ image_tag = "latest"
 github_repository        = "TheoGoudout/greensecops"
 github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 
-# One of everything; the groups still exist, so scaling behaviour can be
-# tested by raising max.
-services = {
-  backend       = { instance_type = "t4g.small", min = 1, max = 2, desired = 1 }
-  frontend      = { instance_type = "t4g.micro", min = 1, max = 1, desired = 1 }
-  landing       = { instance_type = "t4g.micro", min = 1, max = 1, desired = 1 }
-  docs          = { instance_type = "t4g.micro", min = 1, max = 1, desired = 1 }
-  celery-worker = { instance_type = "t4g.small", min = 1, max = 4, desired = 1 }
-  celery-beat   = { instance_type = "t4g.micro", min = 1, max = 1, desired = 1 }
-  opa           = { instance_type = "t4g.micro", min = 1, max = 2, desired = 1 }
+# One group running all seven containers plus PostgreSQL, Redis and MinIO.
+# t4g.medium (2 vCPU / 8 GiB) is the smallest size that comfortably holds the
+# lot; t4g.xlarge if the Celery workers are busy.
+groups = {
+  app = { instance_type = "t4g.medium", min = 1, max = 1, desired = 1 }
 }
 
 celery_concurrency = 2
 
-postgres_instance_class        = "db.t4g.small"
-postgres_allocated_storage     = 20
-postgres_multi_az              = false
-postgres_backup_retention_days = 7
-postgres_deletion_protection   = false
-
-redis_node_type     = "cache.t4g.micro"
-redis_replica_count = 0
+# The persistent volume is the only copy of the database in this topology.
+state_volume_size               = 30
+state_volume_snapshot_retention = 3
 
 artifact_bucket_name          = "greensecops-artifacts-staging-CHANGEME"
 artifact_bucket_force_destroy = true
 access_log_bucket_name        = "greensecops-alb-logs-staging-CHANGEME"
 ansible_transfer_bucket_name  = "greensecops-ansible-staging-CHANGEME"
 
+# Operations.
 log_retention_days  = 14
 deletion_protection = false
 alarm_email         = ""

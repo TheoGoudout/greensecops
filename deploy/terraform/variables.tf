@@ -50,12 +50,6 @@ variable "availability_zone_count" {
   }
 }
 
-variable "single_nat_gateway" {
-  description = "Route every private subnet through one NAT gateway instead of one per AZ. Saves roughly the cost of a small instance per AZ; acceptable for staging, not for production."
-  type        = bool
-  default     = false
-}
-
 variable "public_ingress_cidrs" {
   description = "CIDR blocks allowed to reach the load balancer on 80/443. The default is the whole internet because the dashboard, API, docs and landing page are public by design."
   type        = list(string)
@@ -141,8 +135,19 @@ variable "instance_architecture" {
 # Service sizing
 # --------------------------------------------------------------------------
 
-variable "services" {
-  description = "Per-role instance sizing. `min`/`max` bound the Auto Scaling group and `desired` seeds it; roles whose min equals max are pinned. Keys must match the role set in locals.tf."
+variable "topology" {
+  description = "How the services are spread across hosts, and how much of the data tier is managed. `single_host` runs every container on one box with PostgreSQL, Redis and object storage as containers — cheapest, no redundancy. `consolidated` splits into static/API/worker groups with managed PostgreSQL and Redis. `distributed` gives every service its own group, multi-AZ throughout. See the migration section of deploy/README.md."
+  type        = string
+  default     = "single_host"
+
+  validation {
+    condition     = contains(["single_host", "consolidated", "distributed"], var.topology)
+    error_message = "topology must be one of: single_host, consolidated, distributed."
+  }
+}
+
+variable "groups" {
+  description = "Per-host-group sizing, keyed by the group names the chosen topology defines: `app` for single_host; `web`/`app`/`worker` for consolidated; one per service for distributed. `min`/`max` bound the Auto Scaling group and `desired` seeds it."
   type = map(object({
     instance_type = string
     min           = number
@@ -151,14 +156,57 @@ variable "services" {
   }))
 
   default = {
-    backend       = { instance_type = "t4g.medium", min = 2, max = 2, desired = 2 }
-    frontend      = { instance_type = "t4g.small", min = 2, max = 2, desired = 2 }
-    landing       = { instance_type = "t4g.small", min = 1, max = 1, desired = 1 }
-    docs          = { instance_type = "t4g.small", min = 1, max = 1, desired = 1 }
-    celery-worker = { instance_type = "t4g.medium", min = 2, max = 10, desired = 2 }
-    celery-beat   = { instance_type = "t4g.small", min = 1, max = 1, desired = 1 }
-    opa           = { instance_type = "t4g.small", min = 2, max = 6, desired = 2 }
+    app = { instance_type = "t4g.large", min = 1, max = 1, desired = 1 }
   }
+}
+
+# --------------------------------------------------------------------------
+# Topology overrides
+# --------------------------------------------------------------------------
+# Each defaults to whatever the chosen topology implies. Set one to deviate on
+# a single axis without abandoning the preset — adding interface endpoints to a
+# consolidated deployment, for instance.
+
+variable "managed_database" {
+  description = "Use RDS instead of a PostgreSQL container. Null follows the topology: false for single_host, true otherwise."
+  type        = bool
+  default     = null
+}
+
+variable "managed_cache" {
+  description = "Use ElastiCache instead of a Redis container. Null follows the topology."
+  type        = bool
+  default     = null
+}
+
+variable "nat_gateway_count" {
+  description = "NAT gateways to create. 0 places the instances in public subnets with no NAT at all, which is what makes single_host cheap. Null follows the topology: 0 for single_host, 1 for consolidated, one per AZ for distributed."
+  type        = number
+  default     = null
+}
+
+variable "interface_endpoints" {
+  description = "AWS services to reach over PrivateLink rather than the internet. Each costs roughly $8/month per availability zone, so the list is empty below the distributed topology — they only pay for themselves at scale. Null follows the topology."
+  type        = list(string)
+  default     = null
+}
+
+variable "internal_load_balancer" {
+  description = "Front OPA with an internal load balancer. Only needed when OPA runs on its own hosts; otherwise the backend reaches it over the Docker network. Null follows the topology."
+  type        = bool
+  default     = null
+}
+
+variable "state_volume_size" {
+  description = "Size, in GiB, of the persistent volume holding PostgreSQL, Redis and object data in the single_host topology. Survives instance replacement and is snapshotted daily."
+  type        = number
+  default     = 100
+}
+
+variable "state_volume_snapshot_retention" {
+  description = "Daily snapshots of the single_host state volume to retain. This is the only backup of the database in that topology."
+  type        = number
+  default     = 14
 }
 
 variable "celery_worker_target_cpu" {

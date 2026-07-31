@@ -24,8 +24,9 @@ variable "public_alb_security_group_id" {
 }
 
 variable "internal_alb_security_group_id" {
-  description = "Security group for the internal load balancer."
+  description = "Security group for the internal load balancer. Empty when the topology has none."
   type        = string
+  default     = ""
 }
 
 variable "route53_zone_id" {
@@ -44,7 +45,7 @@ variable "hostnames" {
 }
 
 variable "public_services" {
-  description = "Services routed by the internet-facing load balancer, keyed by role. `port` is the container port; `health_check_path` is the path the target group probes; `priority` orders the host-based listener rules."
+  description = "Services routed by the internet-facing load balancer, keyed by service name. `port` is the *host* port the container publishes — which differs from the container port when several services share a box and cannot all take :80. `priority` orders the host-based listener rules."
   type = map(object({
     port              = number
     health_check_path = string
@@ -53,11 +54,12 @@ variable "public_services" {
 }
 
 variable "internal_service" {
-  description = "The single service behind the internal load balancer (OPA), with the port and health-check path to probe."
+  description = "The service behind the internal load balancer (OPA), with the port and health-check path to probe. Null when the topology has no internal load balancer because OPA shares a host with the backend."
   type = object({
     port              = number
     health_check_path = string
   })
+  default = null
 }
 
 variable "access_log_bucket_name" {
