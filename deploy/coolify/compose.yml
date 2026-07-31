@@ -1,4 +1,4 @@
-# GreenSecOps for Coolify, on one small ARM server.
+# GreenSecOps for Coolify, on one small server.
 #
 # The difference from the repository's compose.yml is what is *absent*:
 #
@@ -8,11 +8,13 @@
 #     S3-compatible and charges nothing for egress.
 #   * No separate celery-beat container. The worker runs an embedded beat,
 #     which is safe because this deployment runs exactly one worker.
-#   * No build sections. Images are built for arm64 by
-#     .github/workflows/images.yml and pulled from GHCR, so neither the target
-#     server nor the Raspberry Pi running Coolify compiles anything.
+#   * No build sections. Images are published to GHCR by
+#     .github/workflows/images.yml as multi-architecture manifests covering
+#     amd64 and arm64, so neither the target server nor the Raspberry Pi
+#     running Coolify compiles anything — and the same tag runs on whichever
+#     Hetzner line happens to be in stock.
 #
-# Five containers instead of ten, on a box that costs about €12/month. See
+# Five containers instead of ten, on a box that costs about €13/month. See
 # deploy/coolify/README.md.
 #
 # The environment list below duplicates compose.yml's. That is unavoidable —

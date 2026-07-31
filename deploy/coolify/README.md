@@ -6,26 +6,26 @@ for the AWS `single_host` topology and ~$970 for `distributed`.
 It works by removing things rather than shrinking them. Three of the four public
 surfaces are static, so they leave the server entirely; object storage moves to
 a provider that does not charge for egress; and the periodic scheduler folds
-into the worker. What is left is five containers on one small ARM box.
+into the worker. What is left is five containers on one small server.
 
 ```
 Cloudflare Pages (free)   →  landing · dashboard · docs      static, CDN, unlimited bandwidth
 Cloudflare R2 (~$1.50)    →  scan artifacts                  S3-compatible, zero egress fees
 Hetzner CAX31 (€12.49)    →  backend · celery · opa
-  + backups (€2.50)          postgres · redis
-  + volume  (€4.40)
+  or CPX31 (€13.60)          postgres · redis
+  + backups, + volume
 Raspberry Pi              →  Coolify control plane           deploys over SSH; not in the request path
 ```
 
 | | Monthly |
 |---|---|
-| Hetzner CAX31 — 8 vCPU Ampere, 16 GB, 160 GB NVMe | €12.49 |
+| Hetzner CAX31 (ARM) or CPX31 (x86) — see availability below | €12.49–13.60 |
 | Hetzner automated backups (20%) | €2.50 |
 | Hetzner volume, 100 GB | €4.40 |
 | Cloudflare R2, 100 GB stored | ~€1.40 |
 | Cloudflare Pages, 3 projects | free |
 | GHCR image hosting | free |
-| **Total** | **~€21** |
+| **Total** | **~€21–22** |
 
 Egress is included on both Hetzner (20 TB/server) and R2 (zero), so this does
 not grow with traffic the way a metered deployment does.
@@ -39,31 +39,71 @@ images. The Pi's own architecture only matters if you enable Coolify's central
 *build server* feature, or push images from the Pi to a registry.
 
 It is moot here anyway, because **this setup builds nothing locally**.
-`.github/workflows/images.yml` builds the backend and OPA images on GitHub's
-native arm64 runners and pushes them to GHCR; Coolify only pulls. The Pi never
-compiles anything, which matters — `uv sync` on a Pi is slow enough to be
-annoying and slow enough to time out a deploy.
+`.github/workflows/images.yml` builds the backend and OPA images for *both*
+architectures on GitHub's native runners and publishes them to GHCR as a
+multi-architecture manifest; Coolify only pulls. The Pi never compiles
+anything, which matters — `uv sync` on a Pi is slow enough to be annoying and
+slow enough to time out a deploy.
 
-**And Hetzner's arm64 line is their cheapest.** The CAX series is Ampere Altra:
+**Hetzner's arm64 CAX line is their cheapest — when you can buy it.**
 
-| Server | vCPU | RAM | Disk | Monthly |
-|---|---|---|---|---|
-| CAX11 | 2 | 4 GB | 40 GB | ~€3.79 |
-| CAX21 | 4 | 8 GB | 80 GB | ~€6.49 |
-| **CAX31** | **8** | **16 GB** | **160 GB** | **~€12.49** |
-| CAX41 | 16 | 32 GB | 320 GB | ~€24.49 |
+| Server | Arch | vCPU | RAM | Disk | Monthly |
+|---|---|---|---|---|---|
+| CAX21 | ARM Ampere | 4 | 8 GB | 80 GB | ~€6.49 |
+| **CAX31** | ARM Ampere | **8** | **16 GB** | 160 GB | **~€12.49** |
+| CX32 | Intel | 4 | 8 GB | 80 GB | ~€6.80 |
+| **CPX31** | **AMD EPYC** | **4** | **8 GB** | 160 GB | **~€13.60** |
+| CPX41 | AMD EPYC | 8 | 16 GB | 240 GB | ~€26.00 |
+| CCX13 | AMD, dedicated | 2 | 8 GB | 80 GB | ~€13.50 |
 
-CAX31 is the recommendation: 16 GB comfortably holds PostgreSQL, Redis and the
-Python services with room for the Celery workers to do real work. CAX21 is
-enough to start.
+### When CX and CAX are out of stock
 
-The project already targets arm64 — `opa/Dockerfile` pins the multi-arch
-`-static` OPA variant precisely because the deployment host is ARM.
+They frequently are — Hetzner's cheapest shared lines sell out for weeks at a
+time, and CAX in particular has been supply-constrained since launch. Stock is
+per-location, so the first thing to try is another one. If you have a Hetzner
+Cloud API token:
 
-**One real constraint:** CAX is available in Falkenstein, Nuremberg and
-Helsinki only. There is no US or Asia-Pacific CAX. If you need to host outside
-the EU, Hetzner's x86 CPX line is the fallback, and the images workflow needs
-`platforms: linux/amd64` (or both).
+```bash
+curl -sH "Authorization: Bearer $HCLOUD_TOKEN" \
+  'https://api.hetzner.cloud/v1/server_types?per_page=50' \
+| jq -r '.server_types[]
+         | select(.name | test("^(cax|cx|cpx)"))
+         | . as $t
+         | .prices[]
+         | select(.location | test("fsn1|nbg1|hel1"))
+         | "\($t.name)\t\(.location)\t€\(.price_monthly.gross[0:5])"' \
+| sort
+```
+
+That lists what exists and where, though not live stock. The console's create
+page is the authoritative answer, and `hcloud server create` fails fast with
+`resource_unavailable` when a type is sold out in a location — which is a
+perfectly good way to poll.
+
+In rough order of preference when neither CX nor CAX is available:
+
+1. **CPX31 (~€13.60)** — AMD EPYC, x86. The closest substitute: same provider,
+   same network, same volumes, same €. Half the vCPU of a CAX31 at the same
+   RAM, which for this workload is not the binding constraint. **This is the
+   recommendation** — the images are published for both architectures, so
+   nothing about the deployment changes.
+2. **CCX13 (~€13.50)** — dedicated vCPU rather than shared. Usually in stock
+   when the shared lines are not, and the dedicated cores make the Celery
+   workers noticeably more predictable.
+3. **A different location.** Helsinki often has stock when Falkenstein does
+   not. Latency differences are irrelevant here.
+4. **Hetzner's server auction** (Robot, not Cloud) — dedicated hardware from
+   about €35/month, absurd specs, effectively always available. Different
+   product: no cloud volumes, no snapshots, no API-managed backups, so you
+   would be arranging your own. Worth it only if you are staying a while.
+5. **Another provider.** Netcup's ARM VPS line is comparable and often
+   cheaper; OVH and Scaleway are both credible. None of this deployment is
+   Hetzner-specific — Coolify only needs a server it can reach over SSH.
+
+**This is why the images are multi-architecture.**
+`.github/workflows/images.yml` publishes both amd64 and arm64 manifests, built
+on native runners, so whichever server you manage to buy runs the same tag.
+Moving between ARM and x86 later is a server rebuild, not a pipeline change.
 
 **The Pi is not in the request path.** If it goes down you cannot deploy, but
 the application keeps serving. That is a good failure mode for a control plane;
@@ -102,6 +142,10 @@ and `api.` at the Hetzner server's address.
 Create a **CAX31** in Falkenstein with Ubuntu 24.04, plus a 100 GB volume and
 automated backups. Add your SSH key. Nothing else — Coolify installs what it
 needs.
+
+If CAX31 is out of stock, take a **CPX31** instead and change nothing else:
+the images are published for both architectures. See
+[when CX and CAX are out of stock](#when-cx-and-cax-are-out-of-stock).
 
 ### 3. Coolify — connect the server
 

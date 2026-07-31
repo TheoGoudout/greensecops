@@ -6,7 +6,7 @@ The production Compose file (`compose.yml`) is written for [Coolify](https://coo
 
 Two other paths exist, at opposite ends of the cost and complexity range:
 
-* **[deploy/coolify/README.md](deploy/coolify/README.md) — the cheapest, ~€20/month.** Coolify driving one small ARM server at Hetzner, with the three static surfaces on Cloudflare Pages and object storage on R2. Five containers instead of ten.
+* **[deploy/coolify/README.md](deploy/coolify/README.md) — the cheapest, ~€20/month.** Coolify driving one small server at Hetzner — ARM or x86, whichever line has stock — with the three static surfaces on Cloudflare Pages and object storage on R2. Five containers instead of ten.
 * **[deploy/README.md](deploy/README.md) — AWS with Terraform and Ansible**, from ~$120/month on one instance up to ~$970 fully distributed, with a documented migration path between the two.
 
 The rest of this document describes the generic single-host Compose deployment, which both of those build on.
@@ -168,7 +168,7 @@ Note that `compose.yml` does not publish any ports — in a Coolify deployment t
 
 ## Deploy with Coolify to Hetzner
 
-`deploy/coolify/` holds a Compose file and runbook for the cheapest supported deployment: one ARM server at Hetzner (~€12/month), the landing page, dashboard and docs on Cloudflare Pages, and scan artifacts in Cloudflare R2.
+`deploy/coolify/` holds a Compose file and runbook for the cheapest supported deployment: one small server at Hetzner (~€13/month), the landing page, dashboard and docs on Cloudflare Pages, and scan artifacts in Cloudflare R2. The images are published for both amd64 and arm64, so it does not matter which of Hetzner's lines has stock on the day.
 
 It differs from the Compose file above in what it leaves out — no `frontend`, `landing`, `docs` or `minio` containers, and the Celery scheduler runs embedded in the worker rather than as its own service. See **[deploy/coolify/README.md](deploy/coolify/README.md)**, which also covers running Coolify's control plane on a Raspberry Pi and why that does not restrict which servers you can deploy to.
 

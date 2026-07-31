@@ -1,18 +1,25 @@
 name: images
 
 # Builds the two images the Coolify deployment still needs — the backend and
-# the policy server — for arm64, and publishes them to GHCR.
+# the policy server — and publishes them to GHCR as multi-architecture
+# manifests covering amd64 and arm64.
 #
 # The other three images are gone from that deployment: landing, dashboard and
 # docs are static and go to Cloudflare Pages instead (.github/workflows/pages.yml).
 #
-# Built here rather than on the target host for two reasons. A €12/month ARM
-# box takes a long time over `uv sync`, and a Raspberry Pi acting as Coolify's
-# control plane should not be building anything at all. Coolify then only has
-# to pull.
+# Both architectures, deliberately. Hetzner's cheapest lines go out of stock
+# routinely — CAX (Ampere/arm64) and CX (Intel/amd64) are frequently
+# unavailable at the same time, and which one you can actually buy on the day
+# decides the architecture. Publishing a manifest that covers both means the
+# same tag runs wherever you land, and a later move between ARM and x86 is a
+# server rebuild rather than a pipeline change.
 #
-# Runs on GitHub's native arm64 runners, so there is no QEMU emulation in the
-# path — a cross-built backend image would take roughly ten times as long.
+# Each architecture builds on a native runner, so nothing goes through QEMU —
+# emulating the backend build would take roughly ten times as long.
+#
+# Built here rather than on the target host because a €13/month box is slow
+# over `uv sync`, and a Raspberry Pi acting as Coolify's control plane should
+# not be building anything at all. Coolify only pulls.
 
 on:
   push:
@@ -32,10 +39,13 @@ concurrency:
   group: images-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  REGISTRY: ghcr.io
+
 jobs:
   build:
-    name: ${{ matrix.image }}
-    runs-on: ubuntu-24.04-arm
+    name: ${{ matrix.image }} (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
 
     permissions:
@@ -47,11 +57,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Both dimensions are base keys so they form a cross-product: four
+        # jobs, one per image per architecture. The `include` entries below
+        # each share a key with a base dimension, which makes them selectors
+        # that attach the runner and Dockerfile to the matching combinations.
+        # Putting platform only in `include` would not work — entries that
+        # share no key with the base matrix are merged into *every*
+        # combination, so the second would silently overwrite the first and
+        # only one architecture would ever be built.
+        image: [backend, opa]
+        platform: [amd64, arm64]
         include:
           - image: backend
             dockerfile: backend/Dockerfile
           - image: opa
             dockerfile: opa/Dockerfile
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,30 +86,104 @@ jobs:
 
       - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.8.0
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
-            type=ref,event=tag
-
-      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           # The build context is the repository root for both images: the
           # backend resolves the uv workspace from the root pyproject.toml and
           # uv.lock, and opa/Dockerfile copies backend/app/rules.
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/${{ matrix.platform }}
           provenance: false
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # Pushed without a tag; the merge job assembles the per-architecture
+          # digests into one manifest. Tagging here would have the two
+          # architectures overwrite each other.
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform }}
+
+      - name: Export the digest
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+        shell: bash
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: ${{ matrix.image }} manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build]
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, opa]
+
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.8.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=tag
+
+      - name: Create the multi-architecture manifest
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+        run: |
+          # Every file here is named for one architecture's digest; the tags
+          # come from the metadata action as -t arguments.
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Confirm both architectures are present
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          version='${{ steps.meta.outputs.version }}'
+          platforms=$(docker buildx imagetools inspect "${IMAGE}:${version}" --raw \
+            | jq -r '.manifests[] | select(.platform.os == "linux") | .platform.architecture' \
+            | sort -u | tr '\n' ' ')
+          echo "Published ${IMAGE}:${version} for: ${platforms}"
+          for arch in amd64 arm64; do
+            case " ${platforms} " in
+              *" ${arch} "*) ;;
+              *) echo "::error::${IMAGE}:${version} has no ${arch} manifest"; exit 1 ;;
+            esac
+          done
