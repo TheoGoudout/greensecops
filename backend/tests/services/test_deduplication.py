@@ -4,6 +4,7 @@ from sqlmodel import Session
 
 from app.services.deduplication import (
     compute_content_hash,
+    compute_docker_finding_fingerprint,
     compute_issue_fingerprint,
     is_duplicate,
 )
@@ -53,3 +54,37 @@ def test_fingerprint_index_zero_differs_from_none() -> None:
     fp_first_step = compute_issue_fingerprint(wf_id, rule_id, "build", 0)
     fp_job_level = compute_issue_fingerprint(wf_id, rule_id, "build", None)
     assert fp_first_step != fp_job_level
+
+
+def test_docker_fingerprint_stable_for_same_inputs() -> None:
+    target_id, rule_id = uuid.uuid4(), uuid.uuid4()
+    fp1 = compute_docker_finding_fingerprint(target_id, rule_id, "backend/Dockerfile")
+    fp2 = compute_docker_finding_fingerprint(target_id, rule_id, "backend/Dockerfile")
+    assert fp1 == fp2
+    assert len(fp1) == 16
+    int(fp1, 16)  # hex
+
+
+def test_docker_fingerprint_distinct_per_file() -> None:
+    # The same rule firing on two Dockerfiles in one target is two findings.
+    target_id, rule_id = uuid.uuid4(), uuid.uuid4()
+    fp1 = compute_docker_finding_fingerprint(target_id, rule_id, "backend/Dockerfile")
+    fp2 = compute_docker_finding_fingerprint(target_id, rule_id, "frontend/Dockerfile")
+    assert fp1 != fp2
+
+
+def test_docker_fingerprint_distinct_per_discriminator() -> None:
+    # Two privileged services in one compose file must not collide.
+    target_id, rule_id = uuid.uuid4(), uuid.uuid4()
+    fp1 = compute_docker_finding_fingerprint(target_id, rule_id, "compose.yml", "api")
+    fp2 = compute_docker_finding_fingerprint(
+        target_id, rule_id, "compose.yml", "worker"
+    )
+    assert fp1 != fp2
+
+
+def test_docker_fingerprint_scoped_to_the_target() -> None:
+    rule_id = uuid.uuid4()
+    fp1 = compute_docker_finding_fingerprint(uuid.uuid4(), rule_id, "Dockerfile")
+    fp2 = compute_docker_finding_fingerprint(uuid.uuid4(), rule_id, "Dockerfile")
+    assert fp1 != fp2

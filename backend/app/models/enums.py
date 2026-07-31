@@ -268,6 +268,7 @@ class RuleDomain(str, enum.Enum):
     iac_terraform = "iac_terraform"
     cloud_aws = "cloud_aws"
     ci_telemetry = "ci_telemetry"
+    container_docker = "container_docker"
 
 
 class ScanStatus(str, enum.Enum):

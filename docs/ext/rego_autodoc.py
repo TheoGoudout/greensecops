@@ -35,6 +35,7 @@ _DOMAIN_LABELS = {
     "ci_telemetry": "CI Telemetry (dynamic)",
     "iac_terraform": "Terraform (IaC)",
     "cloud_aws": "AWS Cloud Posture (dynamic)",
+    "container_docker": "Docker & Compose (static)",
 }
 
 

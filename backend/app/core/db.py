@@ -462,6 +462,214 @@ CI_TELEMETRY_INITIAL_RULES: list[dict[str, object]] = [
 ]
 
 
+# Mirrors TERRAFORM_INITIAL_RULES for the Docker/Compose engine. Seeding is
+# mandatory, not cosmetic: like the Terraform and cloud engines (and unlike
+# ci_workflow, which auto-registers an unknown slug via
+# static_analysis._register_rule_from_violation), docker_analysis drops a
+# violation whose slug has no Rule row. A rego rule shipped without an entry
+# here is silently invisible.
+DOCKER_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "container_runs_as_root",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Container image runs as root",
+        "description": "The final build stage declares no USER instruction, or sets it back to root, so the shipped image runs its entrypoint as uid 0. Any container escape or code-execution bug then starts with full root in the container namespace.",
+    },
+    {
+        "slug": "unpinned_base_image",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Base image is not pinned",
+        "description": "A FROM instruction references an image by a mutable tag rather than a digest, so the same Dockerfile produces different images over time. Takes the same position on base images that unpinned_actions takes on Actions.",
+    },
+    {
+        "slug": "secret_in_build_arg",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Secret hardcoded in ARG or ENV",
+        "description": "An ARG or ENV instruction whose name looks like a credential is given a literal default value. Build arguments and environment variables are recorded in the image metadata and readable by anyone who can pull the image.",
+    },
+    {
+        "slug": "curl_pipe_shell",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Remote script piped straight into a shell",
+        "description": "A RUN instruction downloads a script with curl or wget and pipes it directly into a shell, so the build executes whatever the remote host serves at build time with no verification.",
+    },
+    {
+        "slug": "add_remote_url",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "ADD used to fetch a remote URL",
+        "description": "An ADD instruction takes a remote URL as its source. ADD fetches over the network with no checksum verification and silently auto-extracts archives.",
+    },
+    {
+        "slug": "compose_privileged_container",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Compose service runs privileged",
+        "description": "A service sets privileged true, which disables almost every container isolation boundary — all capabilities, unrestricted device access, and an unconfined seccomp/AppArmor profile.",
+    },
+    {
+        "slug": "compose_docker_socket_mount",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.critical,
+        "severity_weight": 3.5,
+        "title": "Docker socket mounted into a container",
+        "description": "A service bind-mounts /var/run/docker.sock. Anything that can talk to the Docker socket can start a container with the host filesystem mounted, so this grants root on the host.",
+    },
+    {
+        "slug": "compose_host_network_mode",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Compose service uses host networking",
+        "description": "A service sets network_mode host, so it shares the host's network namespace, binds every port it opens on the host, and can reach services on the host loopback.",
+    },
+    {
+        "slug": "compose_cap_add_sys_admin",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Service grants SYS_ADMIN or ALL capabilities",
+        "description": "A service adds CAP_SYS_ADMIN or ALL. SYS_ADMIN covers mount, pivot_root and cgroup manipulation, and is the usual route out of a container.",
+    },
+    {
+        "slug": "compose_hardcoded_secret",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.security,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Secret hardcoded in a Compose environment",
+        "description": "A service's environment block sets a credential-looking variable to a literal value. Compose files are committed, so the value lives in version-control history.",
+    },
+    {
+        "slug": "copy_before_dependency_install",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Source copied before dependencies are installed",
+        "description": "A stage copies the whole build context before running its dependency install, so a one-character source edit invalidates the cache and rebuilds the entire dependency tree on every push.",
+    },
+    {
+        "slug": "apt_cache_not_cleaned",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "apt package lists left in the image",
+        "description": "A RUN instruction installs packages with apt-get but never removes /var/lib/apt/lists, leaving tens of megabytes of stale package index in the layer forever.",
+    },
+    {
+        "slug": "no_multistage_build",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Build toolchain shipped in a single-stage image",
+        "description": "A single-stage Dockerfile installs a compiler or build toolchain, so packages needed only to produce the artifact ship in the final image and inflate every pull and push.",
+    },
+    {
+        "slug": "heavy_base_image",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Final image uses a full-fat base",
+        "description": "The final stage builds on a full distribution or language image where the publisher also ships a slim variant, typically several hundred megabytes of packages the application never calls.",
+    },
+    {
+        "slug": "compose_missing_resource_limits",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Compose service declares no resource limits",
+        "description": "A service sets neither a memory nor a CPU limit, so one runaway container can starve every other service on the host and nothing records what the workload actually needs.",
+    },
+    {
+        "slug": "missing_healthcheck",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Runnable image declares no HEALTHCHECK",
+        "description": "The final stage defines a CMD or ENTRYPOINT but no HEALTHCHECK, so the runtime cannot distinguish a deadlocked or failing container from a healthy one.",
+    },
+    {
+        "slug": "compose_missing_restart_policy",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Compose service declares no restart policy",
+        "description": "A service sets no restart policy, so Docker leaves it stopped after a crash or host reboot — the default is 'no'.",
+    },
+    {
+        "slug": "compose_depends_on_without_condition",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "depends_on used without a health condition",
+        "description": "A service declares depends_on in the short list form, which waits only for the dependency's container to be created rather than for the process inside it to be ready.",
+    },
+    {
+        "slug": "compose_unpinned_image_tag",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Compose service uses a floating image tag",
+        "description": "A service references an image with no tag or with :latest, so two runs a week apart start different code and rolling back the Compose file does not roll back the image.",
+    },
+    {
+        "slug": "maintainer_instruction_deprecated",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Deprecated MAINTAINER instruction",
+        "description": "The Dockerfile uses MAINTAINER, deprecated since Docker 1.13 in favour of LABEL, and invisible to the OCI annotation conventions registries and scanners consume.",
+    },
+    {
+        "slug": "compose_obsolete_version_key",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Obsolete top-level version key in a Compose file",
+        "description": "The file declares a top-level version key. The Compose Specification dropped it, and current versions of Docker Compose warn on every invocation while ignoring the value.",
+    },
+    {
+        "slug": "missing_oci_labels",
+        "domain": RuleDomain.container_docker,
+        "category": IssueCategory.maintainability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Image declares no OCI source label",
+        "description": "The Dockerfile sets no org.opencontainers.image.source label, so a published image cannot be traced back to the repository that produced it.",
+    },
+]
+
+
 def _seed_rules(session: Session) -> list[str]:
     """Insert any rules from INITIAL_RULES not already present.
 
@@ -474,6 +682,7 @@ def _seed_rules(session: Session) -> list[str]:
         + TERRAFORM_INITIAL_RULES
         + CLOUD_INITIAL_RULES
         + CI_TELEMETRY_INITIAL_RULES
+        + DOCKER_INITIAL_RULES
     ):
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])
