@@ -41,19 +41,19 @@ locals {
       priority          = 10
     }
     frontend = {
-      port              = 80
+      port              = 8080
       exposure          = "public"
       health_check_path = "/"
       priority          = 20
     }
     landing = {
-      port              = 80
+      port              = 8080
       exposure          = "public"
       health_check_path = "/"
       priority          = 30
     }
     docs = {
-      port              = 80
+      port              = 8080
       exposure          = "public"
       health_check_path = "/"
       priority          = 40

@@ -1,4 +1,6 @@
-FROM python:3.14-slim AS builder
+# Pinned by digest, not just by tag: `python` republishes 3.14-slim on every
+# patch release, so the tag alone does not make the build reproducible.
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
 
 WORKDIR /build
 
@@ -24,7 +26,23 @@ ENV DOCS_BASE_URL=${DOCS_BASE_URL}
 RUN uv run sphinx-build -b html -W docs docs/_build/html
 
 
-FROM nginx:1.31-alpine
+# nginx-unprivileged rather than the stock nginx image: it is the same upstream
+# build with the cache, run and log directories already owned by uid 101, so the
+# server runs unprivileged without a chown layer of our own. An unprivileged
+# process cannot bind a port below 1024, which is why docs/nginx.conf listens on
+# 8080 and the deployment's container port is 8080 rather than 80.
+FROM nginxinc/nginx-unprivileged:1.31.3-alpine@sha256:59ccf0943b0b8e8d9e6ea9039a39555730f544701a655c596f7df7d096c593f5
+
+LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
+LABEL org.opencontainers.image.licenses="MIT"
 
 COPY docs/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /build/docs/_build/html /usr/share/nginx/html
+
+# wget, not curl: the alpine image ships busybox wget and no curl at all.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
+
+# Inherited from the base image, but stated here so the shipped uid is visible
+# in this file and survives a future base-image change.
+USER 101

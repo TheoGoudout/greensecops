@@ -1,6 +1,9 @@
 # ---- builder ----
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#multi-stage-builds
-FROM python:3.14.6-slim AS builder
+# Pinned by digest, not just by tag: `python` republishes 3.14.6-slim on every
+# base-OS patch, so the tag alone does not make the build reproducible.
+# Dependabot updates the digest alongside the tag (see .github/dependabot.yml).
+FROM python:3.14.6-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
 
 # Install git
 # Used for dependencies specified by Git URLs
@@ -43,7 +46,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package app
 
 # ---- runtime ----
-FROM python:3.14.6-slim
+FROM python:3.14.6-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
+
+LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
+LABEL org.opencontainers.image.licenses="MIT"
 
 # Install curl for health checks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
@@ -64,5 +70,13 @@ RUN useradd --create-home --uid 1000 appuser
 USER appuser
 
 WORKDIR /app/backend/
+
+# Health of the *default* CMD below. The Celery roles run the same image with a
+# different command and no HTTP listener, so compose.yml and
+# deploy/ansible/vars/services.yml override this per service — celery-worker
+# with `inspect ping`, celery-beat with a schedule-file check, and prestart with
+# `disable: true` because a one-shot migration job has no steady state.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fsS http://localhost:8000/api/v1/utils/health-check/ || exit 1
 
 CMD ["fastapi", "run", "--workers", "4", "app/main.py"]

@@ -141,6 +141,11 @@ services:
         condition: service_healthy
         restart: true
     command: bash scripts/prestart.sh
+    # The image declares an HTTP health check for its default CMD. prestart runs
+    # migrations and exits, so there is no steady state to probe — dependants
+    # wait on service_completed_successfully, not on health.
+    healthcheck:
+      disable: true
     environment: *backend-required-env
 
   celery-worker:
@@ -233,7 +238,7 @@ services:
     image: greensecops/frontend:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -251,7 +256,7 @@ services:
     image: greensecops/landing:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -272,7 +277,7 @@ services:
     image: greensecops/docs:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
       interval: 10s
       retries: 5
       start_period: 10s

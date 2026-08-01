@@ -52,15 +52,15 @@ greensecops_services:
   frontend:
     image: frontend
     command: null
-    port: 80
-    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    port: 8080
+    health_check: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
     needs_app_env: false
 
   landing:
     image: landing
     command: null
-    port: 80
-    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    port: 8080
+    health_check: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
     needs_app_env: false
     # The landing page reads these at container start to render its links and
     # legal copy; they are plain configuration, not secrets.
@@ -76,8 +76,8 @@ greensecops_services:
   docs:
     image: docs
     command: null
-    port: 80
-    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    port: 8080
+    health_check: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
     needs_app_env: false
 
 # Build-time arguments, as the KEY=VALUE strings buildx takes directly. The
