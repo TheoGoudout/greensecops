@@ -19,6 +19,14 @@ inputs:
       `docker history` cannot tell whether a layer was cached.
     required: false
     default: ""
+  dockerfile_path:
+    description: >-
+      Repository-relative path of the Dockerfile this workflow builds, e.g.
+      `backend/Dockerfile`. Optional, but it is the join back to the static
+      engine: without it a measured finding cannot be attributed to a file, so
+      no fix can be generated from it.
+    required: false
+    default: ""
   sample_interval:
     description: Seconds between background telemetry samples
     required: false

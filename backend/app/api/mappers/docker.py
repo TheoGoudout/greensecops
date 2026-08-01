@@ -6,15 +6,23 @@ derived in one place, and the badge route reuses
 ``latest_completed_docker_scan`` so a target's grade has a single definition.
 """
 
+import json
+from typing import Any
+
 from app.models import (
+    DockerBuildEnrichment,
+    DockerBuildTelemetry,
+    DockerBuildTelemetryPublic,
     DockerFinding,
     DockerFindingPublic,
     DockerFix,
     DockerFixPublic,
+    DockerRuntimeFindingPublic,
     DockerScan,
     DockerScanPublic,
     DockerTarget,
     DockerTargetPublic,
+    Rule,
     ScanStatus,
 )
 
@@ -116,4 +124,63 @@ def to_docker_fix_public(fix: DockerFix) -> DockerFixPublic:
         pr_state=pr.pr_state if pr else None,
         created_at=fix.created_at,
         delivered_at=fix.delivered_at,
+    )
+
+
+def _decode_json_list(raw: str | None) -> list[dict[str, Any]]:
+    """Decode a collector-shaped JSON column, tolerating anything malformed.
+
+    These columns are written from the action's payload rather than by the
+    backend, so a client that shipped something unexpected must degrade to an
+    empty list here rather than 500 the whole tab.
+    """
+    if not raw:
+        return []
+    try:
+        decoded = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    return decoded if isinstance(decoded, list) else []
+
+
+def to_docker_runtime_finding_public(
+    enrichment: DockerBuildEnrichment,
+    rule: Rule | None = None,
+) -> DockerRuntimeFindingPublic:
+    """Dress one enrichment with its catalog rule, when it has one.
+
+    ``rule`` is passed in rather than looked up: the caller resolves the whole
+    page's slugs in one query, so a tab showing thirty findings does not issue
+    thirty selects.
+    """
+    return DockerRuntimeFindingPublic(
+        id=enrichment.id,
+        telemetry_id=enrichment.telemetry_id,
+        rule_slug=enrichment.rule_slug,
+        rule_title=rule.title if rule else None,
+        severity=rule.severity if rule else None,
+        category=rule.category if rule else None,
+        evidence=enrichment.evidence,
+        recommendation=enrichment.recommendation,
+        created_at=enrichment.created_at,
+    )
+
+
+def to_docker_build_telemetry_public(
+    telemetry: DockerBuildTelemetry,
+    findings: list[DockerRuntimeFindingPublic],
+) -> DockerBuildTelemetryPublic:
+    return DockerBuildTelemetryPublic(
+        id=telemetry.id,
+        workflow_run_id=telemetry.workflow_run_id,
+        image_ref=telemetry.image_ref,
+        dockerfile_path=telemetry.dockerfile_path,
+        image_size_bytes=telemetry.image_size_bytes,
+        context_size_bytes=telemetry.context_size_bytes,
+        build_duration_ms=telemetry.build_duration_ms,
+        cache_hit_ratio=telemetry.cache_hit_ratio,
+        layers=_decode_json_list(telemetry.layers),
+        containers=_decode_json_list(telemetry.containers),
+        collected_at=telemetry.collected_at,
+        findings=findings,
     )

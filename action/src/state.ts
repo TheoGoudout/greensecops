@@ -8,6 +8,19 @@ export const STATE_FILE = path.join(
   "greensecops-state.json",
 )
 
+/**
+ * Where the daemon leaves what it measured about containers.
+ *
+ * A file rather than a shared object because the daemon is a detached process:
+ * it is the only part of the action alive while containers exist, and the post
+ * step that reports them runs in a different process entirely. Sits beside
+ * STATE_FILE and follows the same convention.
+ */
+export const CONTAINERS_FILE = path.join(
+  process.env.RUNNER_TEMP ?? os.tmpdir(),
+  "greensecops-containers.json",
+)
+
 export function getGitHubContext(): GitHubContext {
   return {
     workflowRunId: parseInt(process.env.GITHUB_RUN_ID ?? "0", 10),

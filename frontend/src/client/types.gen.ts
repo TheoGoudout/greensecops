@@ -143,13 +143,38 @@ export type DockerBuildPayload = {
     context_size_bytes?: (number | null);
     build_duration_ms?: (number | null);
     cache_hit_ratio?: (number | null);
-    observed_builds?: (number | null);
     layers?: (Array<{
     [key: string]: unknown;
 }> | null);
     containers?: (Array<{
     [key: string]: unknown;
 }> | null);
+};
+
+/**
+ * One measured build, with the findings its measurements produced.
+ *
+ * ``layers`` and ``containers`` are stored as JSON text (they are
+ * collector-shaped and never queried relationally) and decoded here, so the
+ * frontend never parses a string out of a typed field.
+ */
+export type DockerBuildTelemetryPublic = {
+    id: string;
+    workflow_run_id: number;
+    image_ref?: (string | null);
+    dockerfile_path?: (string | null);
+    image_size_bytes?: (number | null);
+    context_size_bytes?: (number | null);
+    build_duration_ms?: (number | null);
+    cache_hit_ratio?: (number | null);
+    layers?: Array<{
+        [key: string]: unknown;
+    }>;
+    containers?: Array<{
+        [key: string]: unknown;
+    }>;
+    collected_at?: (string | null);
+    findings?: Array<DockerRuntimeFindingPublic>;
 };
 
 /**
@@ -207,6 +232,31 @@ export type DockerFixPublic = {
     pr_state?: (PullRequestState | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
+};
+
+/**
+ * One ``DockerBuildEnrichment`` dressed for the Runtime tab.
+ *
+ * The stored row carries only a rule slug; severity, category and title are
+ * resolved from the rule catalog here so the tab can sort and colour without
+ * a second request. All three are nullable because a Rego rule shipped
+ * without a seed entry in ``core/db.py`` still evaluates and still produces
+ * enrichments — it just has no catalog row to describe it.
+ */
+export type DockerRuntimeFindingPublic = {
+    id: string;
+    telemetry_id: string;
+    rule_slug: string;
+    rule_title?: (string | null);
+    severity?: (IssueSeverity | null);
+    category?: (IssueCategory | null);
+    evidence: string;
+    recommendation: string;
+    created_at?: (string | null);
+};
+
+export type DockerRuntimeFixRequest = {
+    enrichment_ids: Array<(string)>;
 };
 
 export type DockerScanPublic = {
@@ -980,6 +1030,12 @@ export type DockerListDockerFilesData = {
 
 export type DockerListDockerFilesResponse = (Array<DockerFilePublic>);
 
+export type DockerListDockerRuntimeData = {
+    targetId: string;
+};
+
+export type DockerListDockerRuntimeResponse = (Array<DockerBuildTelemetryPublic>);
+
 export type DockerListDockerFixesData = {
     targetId: string;
 };
@@ -993,6 +1049,16 @@ export type DockerTriggerDockerFixGenerationData = {
 };
 
 export type DockerTriggerDockerFixGenerationResponse = ({
+    [key: string]: (string | number);
+});
+
+export type DockerTriggerDockerRuntimeFixGenerationData = {
+    force?: boolean;
+    requestBody: DockerRuntimeFixRequest;
+    targetId: string;
+};
+
+export type DockerTriggerDockerRuntimeFixGenerationResponse = ({
     [key: string]: (string | number);
 });
 

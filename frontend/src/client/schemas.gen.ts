@@ -804,17 +804,6 @@ export const DockerBuildPayloadSchema = {
             ],
             title: 'Cache Hit Ratio'
         },
-        observed_builds: {
-            anyOf: [
-                {
-                    type: 'integer'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Observed Builds'
-        },
         layers: {
             anyOf: [
                 {
@@ -854,6 +843,129 @@ export const DockerBuildPayloadSchema = {
 A workflow can build several images, so this is posted once per image
 rather than once per run — which is exactly why it is not folded into
 TelemetryPayload.`
+} as const;
+
+export const DockerBuildTelemetryPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        workflow_run_id: {
+            type: 'integer',
+            title: 'Workflow Run Id'
+        },
+        image_ref: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Image Ref'
+        },
+        dockerfile_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dockerfile Path'
+        },
+        image_size_bytes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Image Size Bytes'
+        },
+        context_size_bytes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context Size Bytes'
+        },
+        build_duration_ms: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Build Duration Ms'
+        },
+        cache_hit_ratio: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cache Hit Ratio'
+        },
+        layers: {
+            items: {
+                additionalProperties: true,
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Layers'
+        },
+        containers: {
+            items: {
+                additionalProperties: true,
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Containers'
+        },
+        collected_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Collected At'
+        },
+        findings: {
+            items: {
+                '$ref': '#/components/schemas/DockerRuntimeFindingPublic'
+            },
+            type: 'array',
+            title: 'Findings'
+        }
+    },
+    type: 'object',
+    required: ['id', 'workflow_run_id'],
+    title: 'DockerBuildTelemetryPublic',
+    description: `One measured build, with the findings its measurements produced.
+
+\`\`layers\`\` and \`\`containers\`\` are stored as JSON text (they are
+collector-shaped and never queried relationally) and decoded here, so the
+frontend never parses a string out of a typed field.`
 } as const;
 
 export const DockerFilePublicSchema = {
@@ -1183,6 +1295,102 @@ export const DockerFixPublicSchema = {
     type: 'object',
     required: ['id', 'docker_target_id', 'file_path', 'llm_provider', 'llm_model', 'status'],
     title: 'DockerFixPublic'
+} as const;
+
+export const DockerRuntimeFindingPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        telemetry_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Telemetry Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        rule_title: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Rule Title'
+        },
+        severity: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/IssueSeverity'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        category: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/IssueCategory'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        evidence: {
+            type: 'string',
+            title: 'Evidence'
+        },
+        recommendation: {
+            type: 'string',
+            title: 'Recommendation'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'telemetry_id', 'rule_slug', 'evidence', 'recommendation'],
+    title: 'DockerRuntimeFindingPublic',
+    description: `One \`\`DockerBuildEnrichment\`\` dressed for the Runtime tab.
+
+The stored row carries only a rule slug; severity, category and title are
+resolved from the rule catalog here so the tab can sort and colour without
+a second request. All three are nullable because a Rego rule shipped
+without a seed entry in \`\`core/db.py\`\` still evaluates and still produces
+enrichments — it just has no catalog row to describe it.`
+} as const;
+
+export const DockerRuntimeFixRequestSchema = {
+    properties: {
+        enrichment_ids: {
+            items: {
+                type: 'string',
+                format: 'uuid'
+            },
+            type: 'array',
+            title: 'Enrichment Ids'
+        }
+    },
+    type: 'object',
+    required: ['enrichment_ids'],
+    title: 'DockerRuntimeFixRequest'
 } as const;
 
 export const DockerScanPublicSchema = {

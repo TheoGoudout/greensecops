@@ -647,3 +647,289 @@ def test_list_fixes_is_scoped_to_the_target(
     assert len(body) == 1
     assert body[0]["file_path"] == "Dockerfile"
     assert body[0]["status"] == "ready"
+
+
+# ─── GET /docker-targets/{id}/runtime ────────────────────────────────────────
+
+
+@pytest.fixture()
+def seeded_runtime_rule(db: Session) -> Rule:
+    rule = db.exec(
+        select(Rule).where(Rule.domain == RuleDomain.container_runtime)
+    ).first()
+    assert rule is not None
+    return rule
+
+
+def _make_telemetry(
+    db: Session, repo: Repository, dockerfile_path: str | None, **kwargs: object
+) -> "DockerBuildTelemetry":
+    from app.models import DockerBuildTelemetry
+
+    row = DockerBuildTelemetry(
+        repo_id=repo.id,
+        workflow_run_id=int(uuid.uuid4().int % 10**9),
+        dockerfile_path=dockerfile_path,
+        **kwargs,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def test_list_runtime_returns_builds_with_their_findings(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+    seeded_runtime_rule: Rule,
+) -> None:
+    from app.models import DockerBuildEnrichment
+
+    telemetry = _make_telemetry(
+        db,
+        repo,
+        f"{target.root_path}/Dockerfile",
+        image_size_bytes=2_400_000_000,
+        containers='[{"name": "api", "peak_rss_bytes": 90000000}]',
+    )
+    db.add(
+        DockerBuildEnrichment(
+            repo_id=repo.id,
+            telemetry_id=telemetry.id,
+            rule_slug=seeded_runtime_rule.slug,
+            evidence="container 'api' peaked at 90 MB",
+            recommendation="Set a limit from the measured peak.",
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["image_size_bytes"] == 2_400_000_000
+    # The JSON columns are decoded server-side so the tab never parses a string
+    # out of a typed field.
+    assert body[0]["containers"] == [{"name": "api", "peak_rss_bytes": 90000000}]
+    assert len(body[0]["findings"]) == 1
+    finding = body[0]["findings"][0]
+    assert finding["rule_slug"] == seeded_runtime_rule.slug
+    # Severity comes from the catalog, not from the stored enrichment.
+    assert finding["severity"] == seeded_runtime_rule.severity.value
+    assert finding["rule_title"] == seeded_runtime_rule.title
+
+
+def test_list_runtime_excludes_builds_owned_by_another_target(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+) -> None:
+    # A build under a *different* target's root must not appear here, or a
+    # monorepo would count the same image twice.
+    other = DockerTarget(repo_id=repo.id, root_path=f"other/{uuid.uuid4().hex[:8]}")
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+    _make_telemetry(db, repo, f"{other.root_path}/Dockerfile")
+
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_runtime_gives_unattributed_builds_to_the_repo_root(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    # A build reported without the action's dockerfile_path input names no
+    # file; the repo-root target is the only one that can claim it.
+    root = DockerTarget(repo_id=repo.id, root_path="")
+    db.add(root)
+    db.commit()
+    db.refresh(root)
+    _make_telemetry(db, repo, None)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{root.id}/runtime",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+# ─── POST /docker-targets/{id}/runtime-fixes ─────────────────────────────────
+
+
+def _make_enrichment(
+    db: Session, repo: Repository, telemetry_id: uuid.UUID, slug: str
+) -> "DockerBuildEnrichment":
+    from app.models import DockerBuildEnrichment
+
+    row = DockerBuildEnrichment(
+        repo_id=repo.id,
+        telemetry_id=telemetry_id,
+        rule_slug=slug,
+        evidence="container 'api' peaked at 420 MB with no memory limit set",
+        recommendation="Set a memory limit around 630 MB.",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def test_runtime_fix_queues_generation_for_the_measured_file(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+    seeded_runtime_rule: Rule,
+) -> None:
+    from app.models import DockerFix
+
+    file_path = f"{target.root_path}/Dockerfile"
+    telemetry = _make_telemetry(db, repo, file_path)
+    enrichment = _make_enrichment(db, repo, telemetry.id, seeded_runtime_rule.slug)
+
+    with patch(
+        "app.api.routes.docker.run_docker_fix_generation.delay"
+    ) as queued:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            headers=superuser_token_headers,
+            json={"enrichment_ids": [str(enrichment.id)]},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    queued.assert_called_once()
+    kwargs = queued.call_args.kwargs
+    assert kwargs["enrichment_ids"] == [str(enrichment.id)]
+    # No static finding exists for this file, so the task needs the target and
+    # path passed explicitly — there is no finding to read them off.
+    assert kwargs["file_path"] == file_path
+    assert kwargs["docker_target_id"] == str(target.id)
+
+    fix = db.exec(
+        select(DockerFix)
+        .where(DockerFix.docker_target_id == target.id)
+        .where(DockerFix.file_path == file_path)
+    ).first()
+    assert fix is not None
+
+
+def test_runtime_fix_skips_builds_with_no_dockerfile_path(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+    seeded_runtime_rule: Rule,
+) -> None:
+    # Without the join back to source there is no file to rewrite, and guessing
+    # one would push an edit to a file nobody measured.
+    telemetry = _make_telemetry(db, repo, None)
+    enrichment = _make_enrichment(db, repo, telemetry.id, seeded_runtime_rule.slug)
+
+    with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            headers=superuser_token_headers,
+            json={"enrichment_ids": [str(enrichment.id)]},
+        )
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "no_dockerfile_path", "queued": 0}
+    queued.assert_not_called()
+
+
+def test_runtime_fix_folds_in_open_static_findings_for_the_same_file(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+    seeded_docker_rule: Rule,
+    seeded_runtime_rule: Rule,
+    completed_scan: DockerScan,
+) -> None:
+    # One rewrite per file, or a runtime fix and a static fix would race to
+    # patch the same lines.
+    file_path = f"{target.root_path}/Dockerfile"
+    finding = DockerFinding(
+        scan_id=completed_scan.id,
+        docker_target_id=target.id,
+        rule_id=seeded_docker_rule.id,
+        file_path=file_path,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="runs as root",
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+
+    telemetry = _make_telemetry(db, repo, file_path)
+    enrichment = _make_enrichment(db, repo, telemetry.id, seeded_runtime_rule.slug)
+
+    with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            headers=superuser_token_headers,
+            json={"enrichment_ids": [str(enrichment.id)]},
+        )
+
+    assert response.status_code == 202
+    kwargs = queued.call_args.kwargs
+    assert kwargs["finding_ids"] == [str(finding.id)]
+    assert kwargs["enrichment_ids"] == [str(enrichment.id)]
+
+
+def test_runtime_fix_rejects_enrichments_from_another_repo(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+    repo: Repository,
+    target: DockerTarget,
+    seeded_runtime_rule: Rule,
+) -> None:
+    other_repo = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"dkapiowner/other-{uuid.uuid4().hex[:8]}",
+        installation_id=77777,
+    )
+    db.add(other_repo)
+    db.commit()
+    db.refresh(other_repo)
+    telemetry = _make_telemetry(db, other_repo, "Dockerfile")
+    enrichment = _make_enrichment(
+        db, other_repo, telemetry.id, seeded_runtime_rule.slug
+    )
+
+    with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            headers=superuser_token_headers,
+            json={"enrichment_ids": [str(enrichment.id)]},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 0
+    queued.assert_not_called()

@@ -1,6 +1,13 @@
 import { refreshOidcToken, sendSample } from "./api"
+import {
+  accumulate,
+  drainEvents,
+  loadUsage,
+  sampleContainers,
+  saveUsage,
+} from "./containers"
 import { getTopProcesses } from "./native"
-import { loadState, STATE_FILE } from "./state"
+import { CONTAINERS_FILE, loadState, STATE_FILE } from "./state"
 import { getMetricsSample } from "./telemetry"
 import type { SamplePayload } from "./types"
 
@@ -20,6 +27,9 @@ async function run(): Promise<void> {
   let { oidcToken } = state
   const { greensecopsUrl, workflowRunId } = state
   let lastTokenRefresh = Date.now()
+  // Events are drained in closed windows, so the first one has to start where
+  // the job did — a container that died before the first tick still counts.
+  let lastEventSweep = new Date(state.startedAt).getTime() / 1000
 
   async function maybeRefreshToken(): Promise<void> {
     if (Date.now() - lastTokenRefresh < TOKEN_REFRESH_INTERVAL_MS) return
@@ -34,9 +44,32 @@ async function run(): Promise<void> {
     }
   }
 
+  /**
+   * Fold this tick's container readings into the on-disk accumulator.
+   *
+   * Written every tick rather than once at the end because the daemon is
+   * SIGTERM'd by the post step — anything held only in memory would be lost
+   * exactly when it is about to be reported.
+   */
+  function sweepContainers(): void {
+    try {
+      const now = Date.now() / 1000
+      const usage = accumulate(
+        loadUsage(CONTAINERS_FILE),
+        sampleContainers(),
+        drainEvents(lastEventSweep, now),
+      )
+      lastEventSweep = now
+      saveUsage(CONTAINERS_FILE, usage)
+    } catch {
+      // container telemetry is strictly best-effort
+    }
+  }
+
   async function tick(): Promise<void> {
     try {
       await maybeRefreshToken()
+      sweepContainers()
       const metrics = getMetricsSample()
       const topProcesses = getTopProcesses()
       await sendSample(greensecopsUrl, oidcToken, {

@@ -1,6 +1,11 @@
-import * as childProcess from "node:child_process"
 import * as fs from "node:fs"
-import type { ContainerStats, DockerBuildPayload, DockerLayer } from "./types"
+import { run } from "./exec"
+import type {
+  ContainerStats,
+  ContainerUsageMap,
+  DockerBuildPayload,
+  DockerLayer,
+} from "./types"
 
 /**
  * Docker build/runtime collection.
@@ -15,26 +20,15 @@ import type { ContainerStats, DockerBuildPayload, DockerLayer } from "./types"
  *    `docker_build_metadata` action input. This is the only source of
  *    cache-hit data, which is the most valuable metric of the set.
  *
+ * Container behaviour is a third source and does not belong here: it has to be
+ * measured while the containers are alive, which the post step is far too late
+ * for. See containers.ts, which the daemon drives; this module only joins that
+ * accumulator onto what `docker inspect` can still see.
+ *
  * Every probe returns null on failure and is non-fatal, following telemetry.ts:
  * a runner without Docker, or with a different Docker, must never fail the
  * user's build over telemetry.
  */
-
-const EXEC_TIMEOUT_MS = 10_000
-const MAX_BUFFER = 8 * 1024 * 1024
-
-function run(cmd: string, args: string[]): string | null {
-  try {
-    return childProcess.execFileSync(cmd, args, {
-      encoding: "utf8",
-      timeout: EXEC_TIMEOUT_MS,
-      maxBuffer: MAX_BUFFER,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-  } catch {
-    return null
-  }
-}
 
 /** Image ids currently present, for diffing pre against post. */
 export function listImageIds(): string[] {
@@ -140,12 +134,28 @@ export function readCacheHitRatio(metadataPath: string): number | null {
   return cached / steps.length
 }
 
-/** Per-container runtime stats, for the reliability rules. */
-export function readContainers(): ContainerStats[] | null {
+/**
+ * Per-container stats for the runtime rules.
+ *
+ * Two halves that have to be joined. `docker inspect` supplies the *declared*
+ * shape — memory limit, healthcheck, restart count — but only for containers
+ * that still exist. The daemon's accumulator supplies what was *measured*, and
+ * survives the container's removal. A container that `docker compose down`
+ * cleaned up before the post step appears here from the accumulator alone,
+ * because dropping it would silently exclude exactly the short-lived
+ * containers most likely to have been OOM-killed.
+ */
+export function readContainers(
+  usage: ContainerUsageMap = {},
+): ContainerStats[] | null {
   const ids = run("docker", ["ps", "-aq"])
-  if (!ids) return null
+  // A runner without Docker has neither half; a runner with Docker but no
+  // surviving containers still has the accumulator.
+  if (!ids && Object.keys(usage).length === 0) return null
   const stats: ContainerStats[] = []
-  for (const id of ids
+  const seen = new Set<string>()
+
+  for (const id of (ids ?? "")
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)) {
@@ -158,15 +168,50 @@ export function readContainers(): ContainerStats[] | null {
     if (!out) continue
     const [name = "", oom = "", restarts = "", health = "none", limit = "0"] =
       out.trim().split("\t")
+    const cleanName = name.replace(/^\//, "")
+    const measured = usage[cleanName]
+    seen.add(cleanName)
     stats.push({
-      name: name.replace(/^\//, ""),
-      oom_killed: oom === "true",
+      name: cleanName,
+      // Either source is authoritative for an OOM: inspect reports it while
+      // the container survives, the event stream catches it when it does not.
+      oom_killed: oom === "true" || measured?.oom_killed === true,
       restart_count: Number.parseInt(restarts, 10) || 0,
       has_healthcheck: health !== "none",
       health_status: health,
       mem_limit_bytes: Number.parseInt(limit, 10) || 0,
+      peak_rss_bytes: measured?.peak_rss_bytes ?? null,
+      peak_pids: measured?.peak_pids ?? null,
+      cpu_throttled_percent: measured?.cpu_throttled_percent ?? null,
+      exit_code: measured?.exit_code ?? null,
+      observed: (measured?.samples ?? 0) > 0,
     })
   }
+
+  for (const [name, measured] of Object.entries(usage)) {
+    if (seen.has(name)) continue
+    stats.push({
+      name,
+      oom_killed: measured.oom_killed,
+      restart_count: 0,
+      // Unknown rather than false: the container is gone, so we cannot tell
+      // whether it declared a healthcheck. `none` keeps it out of the
+      // healthcheck rules instead of reporting a healthy one as unhealthy.
+      has_healthcheck: false,
+      health_status: "none",
+      // Null, not 0: `docker inspect` reports 0 for "explicitly unlimited",
+      // which container_unbounded_memory fires on. Reporting 0 for a container
+      // we simply could not inspect would invent that finding for every
+      // container the job cleaned up.
+      mem_limit_bytes: null,
+      peak_rss_bytes: measured.peak_rss_bytes,
+      peak_pids: measured.peak_pids,
+      cpu_throttled_percent: measured.cpu_throttled_percent,
+      exit_code: measured.exit_code,
+      observed: measured.samples > 0,
+    })
+  }
+
   return stats
 }
 
@@ -179,7 +224,11 @@ export function readContainers(): ContainerStats[] | null {
 export function collectBuild(
   imageId: string,
   workflowRunId: number,
-  options: { metadataPath?: string; dockerfilePath?: string } = {},
+  options: {
+    metadataPath?: string
+    dockerfilePath?: string
+    usage?: ContainerUsageMap
+  } = {},
 ): DockerBuildPayload | null {
   const imageSize = readImageSize(imageId)
   if (imageSize === null) return null
@@ -194,6 +243,6 @@ export function collectBuild(
       ? readCacheHitRatio(options.metadataPath)
       : null,
     layers: readLayers(imageId),
-    containers: readContainers(),
+    containers: readContainers(options.usage ?? {}),
   }
 }

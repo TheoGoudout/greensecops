@@ -60,13 +60,46 @@ export interface DockerLayer {
   instruction: string
 }
 
+/**
+ * What the daemon accumulated about one container over the life of the job.
+ *
+ * Kept separate from ContainerStats because it survives the container: peaks
+ * and terminal events are folded in while the container is alive, then merged
+ * with whatever `docker inspect` can still report in the post step.
+ */
+export interface ContainerUsage {
+  name: string
+  id: string
+  peak_rss_bytes: number | null
+  peak_pids: number | null
+  cpu_throttled_percent: number | null
+  oom_killed: boolean
+  exit_code: number | null
+  samples: number
+}
+
+export type ContainerUsageMap = Record<string, ContainerUsage>
+
 export interface ContainerStats {
   name: string
   oom_killed: boolean
   restart_count: number
   has_healthcheck: boolean
   health_status: string
-  mem_limit_bytes: number
+  // 0 means inspected and explicitly unlimited; null means the container was
+  // gone by the post step so no limit could be read. The rules have to tell
+  // those apart — "no limit set" is a finding, "we could not look" is not.
+  mem_limit_bytes: number | null
+  // Measured during the run by the daemon; null when the container was never
+  // sampled (it lived entirely between two ticks) or the kernel did not expose
+  // the counter. Null and 0 mean different things to the rules, so an
+  // unmeasured container must not report 0.
+  peak_rss_bytes: number | null
+  peak_pids: number | null
+  cpu_throttled_percent: number | null
+  exit_code: number | null
+  // False for a container that was still running when the job ended.
+  observed: boolean
 }
 
 // Hand-written counterpart of the generated DockerBuildPayload, whose layer
@@ -99,4 +132,8 @@ export interface ActionState {
   repository: string
   runnerSpecs: RunnerSpecs
   startedAt: string
+  // Image ids present before the job ran. The post step diffs against this to
+  // find what the workflow built, so an image the runner image already shipped
+  // is never reported as this build's output.
+  preImageIds: string[]
 }
