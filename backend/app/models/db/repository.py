@@ -10,6 +10,7 @@ from .base import get_datetime_utc
 
 if TYPE_CHECKING:
     from .analysis import Analysis
+    from .docker import DockerTarget
     from .organization import Organization
     from .pull_request import PullRequest
     from .telemetry import TelemetryRun
@@ -67,6 +68,9 @@ class Repository(SQLModel, table=True):
         back_populates="repository", cascade_delete=True
     )
     pull_requests: list["PullRequest"] = Relationship(
+        back_populates="repository", cascade_delete=True
+    )
+    docker_targets: list["DockerTarget"] = Relationship(
         back_populates="repository", cascade_delete=True
     )
     terraform_roots: list["TerraformRoot"] = Relationship(

@@ -224,6 +224,103 @@ class WorkflowFilePublic(SQLModel):
     raw_content: str | None = None
 
 
+class DockerTargetCreate(SQLModel):
+    repo_id: uuid.UUID
+    # "" means the repository root, which is what installation sync creates
+    # automatically. Explicit targets are for monorepos that want each
+    # sub-project graded separately.
+    root_path: str = Field(default="", max_length=512)
+
+
+class DockerTargetPublic(SQLModel):
+    id: uuid.UUID
+    repo_id: uuid.UUID
+    repo_full_name: str | None = None
+    root_path: str
+    enabled: bool
+    last_scanned_at: datetime | None = None
+    last_scanned_head_sha: str | None = None
+    latest_score: float | None = None
+    latest_grade: str | None = None
+    badge_sig: str | None = None
+
+
+class DockerScanPublic(SQLModel):
+    id: uuid.UUID
+    docker_target_id: uuid.UUID
+    status: ScanStatus
+    triggered_by: AnalysisTrigger
+    branch: str | None = None
+    commit_sha: str | None = None
+    score: float | None = None
+    grade: str | None = None
+    # The score is a mean of per-file scores; this is its denominator, without
+    # which a grade can't be reasoned about after the fact.
+    file_count: int | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class DockerFindingPublic(SQLModel):
+    id: uuid.UUID
+    scan_id: uuid.UUID
+    docker_target_id: uuid.UUID
+    rule_id: uuid.UUID
+    rule_slug: str
+    file_path: str
+    # Whichever locator the rule reports: a Compose rule names the service, a
+    # Dockerfile rule the build stage. Both null for a file-level rule.
+    service_name: str | None = None
+    stage_name: str | None = None
+    # 1-based line span of the offending instruction or service block, so the
+    # frontend can annotate the finding inline on the source.
+    line_start: int | None = None
+    line_end: int | None = None
+    severity: IssueSeverity
+    category: IssueCategory
+    message: str
+    context: str | None = None
+    status: FindingStatus
+    # The generated fix addressing this finding, if any — mirrors
+    # ``IssuePublic.fix_id`` / ``fix_status``.
+    fix_id: uuid.UUID | None = None
+    fix_status: FixStatus | None = None
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution_reason: FindingResolutionReason | None = None
+
+
+class DockerFixPublic(SQLModel):
+    id: uuid.UUID
+    docker_target_id: uuid.UUID
+    file_path: str
+    pr_id: uuid.UUID | None = None
+    llm_provider: LLMProvider
+    llm_model: str
+    status: FixStatus
+    full_content: str | None = None
+    error_message: str | None = None
+    pr_url: str | None = None
+    pr_branch: str | None = None
+    pr_state: PullRequestState | None = None
+    created_at: datetime | None = None
+    delivered_at: datetime | None = None
+
+
+class DockerFilePublic(SQLModel):
+    """A Dockerfile or Compose file's live source for a target.
+
+    Not persisted (mirroring ``TerraformFilePublic``): fetched from GitHub on
+    demand, so it carries no id/branch — just path and content. ``kind`` lets
+    the viewer pick a syntax highlighter without re-deriving it from the name.
+    """
+
+    path: str
+    raw_content: str
+    kind: str
+
+
 class TerraformRootCreate(SQLModel):
     repo_id: uuid.UUID
     root_path: str = Field(max_length=512)

@@ -51,6 +51,38 @@ export interface IngestPayload {
   phase?: TelemetryPhase
 }
 
+export interface DockerLayer {
+  index: number
+  size_bytes: number
+  // Instruction keyword only. `docker history` reports the literal RUN
+  // command, which routinely contains build args and inline credentials, so
+  // the text is discarded on the runner rather than shipped and redacted.
+  instruction: string
+}
+
+export interface ContainerStats {
+  name: string
+  oom_killed: boolean
+  restart_count: number
+  has_healthcheck: boolean
+  health_status: string
+  mem_limit_bytes: number
+}
+
+// Hand-written counterpart of the generated DockerBuildPayload, whose layer
+// and container arrays are untyped dicts.
+export interface DockerBuildPayload {
+  workflow_run_id: number
+  image_ref: string | null
+  dockerfile_path: string | null
+  image_size_bytes: number | null
+  context_size_bytes: number | null
+  build_duration_ms: number | null
+  cache_hit_ratio: number | null
+  layers: DockerLayer[] | null
+  containers: ContainerStats[] | null
+}
+
 export interface GitHubContext {
   workflowRunId: number
   repository: string

@@ -90,9 +90,9 @@ greensecops_services:
   frontend:
     image: frontend
     command: null
-    container_port: 80
+    container_port: 8080
     host_port: 8081
-    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    health_check: ["CMD", "curl", "-f", "http://localhost:8080/"]
     needs_app_env: false
     # nginx serving a built bundle.
     mem_limit: 128m
@@ -102,9 +102,9 @@ greensecops_services:
   landing:
     image: landing
     command: null
-    container_port: 80
+    container_port: 8080
     host_port: 8082
-    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    health_check: ["CMD", "curl", "-f", "http://localhost:8080/"]
     needs_app_env: false
     mem_limit: 128m
     mem_reservation: 32m
@@ -122,9 +122,9 @@ greensecops_services:
   docs:
     image: docs
     command: null
-    container_port: 80
+    container_port: 8080
     host_port: 8083
-    health_check: ["CMD", "curl", "-f", "http://localhost/"]
+    health_check: ["CMD", "curl", "-f", "http://localhost:8080/"]
     needs_app_env: false
     # Sphinx runs at build time; this is nginx serving the result.
     mem_limit: 128m

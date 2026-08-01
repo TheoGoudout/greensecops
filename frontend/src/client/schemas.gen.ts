@@ -732,6 +732,685 @@ export const CloudScanPublicSchema = {
     title: 'CloudScanPublic'
 } as const;
 
+export const DockerBuildPayloadSchema = {
+    properties: {
+        workflow_run_id: {
+            type: 'integer',
+            title: 'Workflow Run Id'
+        },
+        image_ref: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Image Ref'
+        },
+        dockerfile_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dockerfile Path'
+        },
+        image_size_bytes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Image Size Bytes'
+        },
+        context_size_bytes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context Size Bytes'
+        },
+        build_duration_ms: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Build Duration Ms'
+        },
+        cache_hit_ratio: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cache Hit Ratio'
+        },
+        observed_builds: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Observed Builds'
+        },
+        layers: {
+            anyOf: [
+                {
+                    items: {
+                        additionalProperties: true,
+                        type: 'object'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Layers'
+        },
+        containers: {
+            anyOf: [
+                {
+                    items: {
+                        additionalProperties: true,
+                        type: 'object'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Containers'
+        }
+    },
+    type: 'object',
+    required: ['workflow_run_id'],
+    title: 'DockerBuildPayload',
+    description: `One image build (and optionally its containers) observed in CI.
+
+A workflow can build several images, so this is posted once per image
+rather than once per run — which is exactly why it is not folded into
+TelemetryPayload.`
+} as const;
+
+export const DockerFilePublicSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        raw_content: {
+            type: 'string',
+            title: 'Raw Content'
+        },
+        kind: {
+            type: 'string',
+            title: 'Kind'
+        }
+    },
+    type: 'object',
+    required: ['path', 'raw_content', 'kind'],
+    title: 'DockerFilePublic',
+    description: `A Dockerfile or Compose file's live source for a target.
+
+Not persisted (mirroring \`\`TerraformFilePublic\`\`): fetched from GitHub on
+demand, so it carries no id/branch — just path and content. \`\`kind\`\` lets
+the viewer pick a syntax highlighter without re-deriving it from the name.`
+} as const;
+
+export const DockerFindingPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        scan_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Scan Id'
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
+        },
+        rule_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Rule Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        service_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Service Name'
+        },
+        stage_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Stage Name'
+        },
+        line_start: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line Start'
+        },
+        line_end: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line End'
+        },
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        }
+    },
+    type: 'object',
+    required: ['id', 'scan_id', 'docker_target_id', 'rule_id', 'rule_slug', 'file_path', 'severity', 'category', 'message', 'status'],
+    title: 'DockerFindingPublic'
+} as const;
+
+export const DockerFixGenerateRequestSchema = {
+    properties: {
+        finding_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string',
+                        format: 'uuid'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finding Ids'
+        }
+    },
+    type: 'object',
+    title: 'DockerFixGenerateRequest'
+} as const;
+
+export const DockerFixPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
+        llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        llm_model: {
+            type: 'string',
+            title: 'Llm Model'
+        },
+        status: {
+            '$ref': '#/components/schemas/FixStatus'
+        },
+        full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Content'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        delivered_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Delivered At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'docker_target_id', 'file_path', 'llm_provider', 'llm_model', 'status'],
+    title: 'DockerFixPublic'
+} as const;
+
+export const DockerScanPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
+        },
+        status: {
+            '$ref': '#/components/schemas/ScanStatus'
+        },
+        triggered_by: {
+            '$ref': '#/components/schemas/AnalysisTrigger'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Commit Sha'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        file_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Count'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        completed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Completed At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'docker_target_id', 'status', 'triggered_by'],
+    title: 'DockerScanPublic'
+} as const;
+
+export const DockerTargetCreateSchema = {
+    properties: {
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        root_path: {
+            type: 'string',
+            maxLength: 512,
+            title: 'Root Path',
+            default: ''
+        }
+    },
+    type: 'object',
+    required: ['repo_id'],
+    title: 'DockerTargetCreate'
+} as const;
+
+export const DockerTargetPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        repo_full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Full Name'
+        },
+        root_path: {
+            type: 'string',
+            title: 'Root Path'
+        },
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled'
+        },
+        last_scanned_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scanned At'
+        },
+        last_scanned_head_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scanned Head Sha'
+        },
+        latest_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Score'
+        },
+        latest_grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Grade'
+        },
+        badge_sig: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Badge Sig'
+        }
+    },
+    type: 'object',
+    required: ['id', 'repo_id', 'root_path', 'enabled'],
+    title: 'DockerTargetPublic'
+} as const;
+
 export const DynamicAnalysisStatusSchema = {
     type: 'string',
     enum: ['queued', 'running', 'enriched', 'failed'],

@@ -1,0 +1,25 @@
+# Every rule in the suite that this deliberately-bad pair should trip. The
+# validator asserts this set exactly, so a rule that stops firing here is a
+# regression and one that starts firing is a false positive.
+violations:
+  - add_remote_url
+  - apt_cache_not_cleaned
+  - compose_cap_add_sys_admin
+  - compose_depends_on_without_condition
+  - compose_docker_socket_mount
+  - compose_hardcoded_secret
+  - compose_host_network_mode
+  - compose_missing_resource_limits
+  - compose_missing_restart_policy
+  - compose_obsolete_version_key
+  - compose_privileged_container
+  - compose_unpinned_image_tag
+  - container_runs_as_root
+  - copy_before_dependency_install
+  - curl_pipe_shell
+  - heavy_base_image
+  - missing_healthcheck
+  - missing_oci_labels
+  - no_multistage_build
+  - secret_in_build_arg
+  - unpinned_base_image

@@ -1,0 +1,7 @@
+violations:
+  - compose_cap_add_sys_admin
+  - compose_docker_socket_mount
+  - compose_missing_resource_limits
+  - compose_missing_restart_policy
+  - compose_privileged_container
+  - compose_unpinned_image_tag

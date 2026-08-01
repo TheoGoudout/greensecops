@@ -1,4 +1,4 @@
-import type { IngestPayload, SamplePayload } from "./types"
+import type { DockerBuildPayload, IngestPayload, SamplePayload } from "./types"
 
 const TIMEOUT_MS = 5000
 const OIDC_AUDIENCE = "greensecops"
@@ -66,4 +66,17 @@ export async function refreshOidcToken(): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+/** Post one image build's measured facts. Best-effort, like every other probe. */
+export async function ingestDockerBuild(
+  baseUrl: string,
+  token: string,
+  payload: DockerBuildPayload,
+): Promise<boolean> {
+  return post(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/telemetry/docker-build`,
+    token,
+    payload,
+  )
 }

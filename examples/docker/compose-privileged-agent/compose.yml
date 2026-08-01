@@ -1,0 +1,10 @@
+# A Compose-only case: no Dockerfile in this folder, so it also proves the
+# engine reports on a target that contains only Compose files.
+services:
+  agent:
+    image: ghcr.io/example/agent:latest
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

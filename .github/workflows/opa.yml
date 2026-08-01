@@ -6,11 +6,13 @@ on:
     paths:
       - "backend/app/rules/**"
       - "backend/app/services/terraform/**"
+      - "backend/app/services/docker/**"
       - "examples/**"
       - "landing/index.html"
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
+      - "scripts/validate_docker_examples.py"
       - "scripts/validate_deploy_terraform.py"
       - "scripts/opa_terraform_eval.py"
       - "scripts/render_landing_examples.py"
@@ -21,11 +23,13 @@ on:
     paths:
       - "backend/app/rules/**"
       - "backend/app/services/terraform/**"
+      - "backend/app/services/docker/**"
       - "examples/**"
       - "landing/index.html"
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
+      - "scripts/validate_docker_examples.py"
       - "scripts/validate_deploy_terraform.py"
       - "scripts/opa_terraform_eval.py"
       - "scripts/render_landing_examples.py"
@@ -76,6 +80,9 @@ jobs:
 
       - name: Validate Terraform examples against the rule suite
         run: python scripts/validate_terraform_examples.py
+
+      - name: Validate Docker examples against the rule suite
+        run: python scripts/validate_docker_examples.py
 
       # The reference deployment of a product that scans Terraform has to be
       # one its own rules pass. Any violation fails the build.

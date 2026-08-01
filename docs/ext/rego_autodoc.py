@@ -35,6 +35,8 @@ _DOMAIN_LABELS = {
     "ci_telemetry": "CI Telemetry (dynamic)",
     "iac_terraform": "Terraform (IaC)",
     "cloud_aws": "AWS Cloud Posture (dynamic)",
+    "container_docker": "Docker & Compose (static)",
+    "container_runtime": "Docker Runtime (dynamic)",
 }
 
 
@@ -47,6 +49,22 @@ def _rst_escape(text: str) -> str:
     Only escapes what's actually free text; code-block content is untouched.
     """
     return text.replace("\\", "\\\\").replace("*", "\\*").replace("`", "\\`")
+
+
+def _summarize(text: str, limit: int = 120) -> str:
+    """Shorten a description for an index table without breaking RST.
+
+    Cutting at a fixed offset can land inside a word, and a fragment that ends
+    in an underscore is read by docutils as a reference — ``no_`` from a
+    description mentioning ``no_cache_bust`` becomes an unresolved target and
+    fails the ``-W`` build. Cutting on a word boundary (and dropping any
+    trailing underscore anyway) keeps the summary plain text.
+    """
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = head.rsplit(" ", 1)[0] if " " in head else head
+    return cut.rstrip("_ ") + "..."
 
 
 def _parse_metadata(filepath: Path) -> dict[str, Any] | None:
@@ -169,7 +187,7 @@ def _render_category_index(category: str, rules: list[dict[str, Any]]) -> str:
     table_rows = "\n".join(
         f"   * - :doc:`{r['rule_id']}`\n"
         f"     - {r['severity']}\n"
-        f"     - {r['description'][:120]}{'...' if len(r['description']) > 120 else ''}"
+        f"     - {_summarize(r['description'])}"
         for r in sorted(
             rules,
             key=lambda r: (_SEVERITY_ORDER.get(r["severity"], 4), r["rule_id"]),

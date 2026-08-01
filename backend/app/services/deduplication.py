@@ -52,6 +52,31 @@ def compute_terraform_finding_fingerprint(
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+def compute_docker_finding_fingerprint(
+    docker_target_id: uuid.UUID,
+    rule_id: uuid.UUID,
+    file_path: str,
+    discriminator: str | None = None,
+) -> str:
+    """Stable 16-char hex key for (target, rule, file_path[, discriminator]).
+
+    The Docker analogue of ``compute_terraform_finding_fingerprint``, keyed on
+    the file rather than a resource address: a Dockerfile has no addressable
+    resources, so the file *is* the unit a rule fires against. Rules that can
+    fire more than once per file supply a discriminator — the service name for
+    Compose rules, the stage name or offending instruction text for Dockerfile
+    rules — so two findings of the same rule in one file stay distinct across
+    re-scans.
+
+    Rules must **not** discriminate on a line number: an unrelated edit higher
+    up the file shifts every line below it and would orphan each finding's
+    resolved/ignored history on the next scan.
+    """
+    disc_part = "" if discriminator is None else discriminator
+    key = f"{docker_target_id}:{rule_id}:{file_path}:{disc_part}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
 def compute_cloud_finding_fingerprint(
     cloud_account_id: uuid.UUID,
     rule_id: uuid.UUID,

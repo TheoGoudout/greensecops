@@ -73,6 +73,7 @@ function RepoSubNav({ repoId }: { repoId: string }) {
 
 const infraSubItems = [
   { title: "Terraform", segment: "terraform" },
+  { title: "Docker", segment: "docker" },
   { title: "Cloud", segment: "cloud" },
   { title: "PRs", segment: "pull-requests" },
 ] as const

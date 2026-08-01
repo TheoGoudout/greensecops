@@ -47,7 +47,7 @@ locals {
       needs_app_env     = true
     }
     frontend = {
-      container_port    = 80
+      container_port    = 8080
       host_port         = 8081
       exposure          = "public"
       health_check_path = "/"
@@ -55,7 +55,7 @@ locals {
       needs_app_env     = false
     }
     landing = {
-      container_port    = 80
+      container_port    = 8080
       host_port         = 8082
       exposure          = "public"
       health_check_path = "/"
@@ -63,7 +63,7 @@ locals {
       needs_app_env     = false
     }
     docs = {
-      container_port    = 80
+      container_port    = 8080
       host_port         = 8083
       exposure          = "public"
       health_check_path = "/"

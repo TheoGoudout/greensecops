@@ -8,6 +8,13 @@ from .cloud import (
     to_cloud_finding_public,
     to_cloud_scan_public,
 )
+from .docker import (
+    latest_completed_docker_scan,
+    to_docker_finding_public,
+    to_docker_fix_public,
+    to_docker_scan_public,
+    to_docker_target_public,
+)
 from .repository import to_repo_public
 from .telemetry import (
     compute_telemetry_average,
@@ -36,4 +43,9 @@ __all__ = [
     "to_cloud_account_public",
     "to_cloud_scan_public",
     "to_cloud_finding_public",
+    "to_docker_target_public",
+    "to_docker_scan_public",
+    "to_docker_finding_public",
+    "to_docker_fix_public",
+    "latest_completed_docker_scan",
 ]

@@ -1,12 +1,25 @@
-FROM mcr.microsoft.com/playwright:v1.61.1-noble
+# Pinned by digest, not just by tag: Microsoft republishes the noble tag as the
+# base OS is patched, so the tag alone does not make the build reproducible.
+FROM mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
+
+LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
+LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y unzip \
-    && rm -rf /var/lib/apt/lists/*
+# Copied out of the official bun image rather than installed with
+# `curl https://bun.sh/install | bash`. Piping a remote script into a shell
+# executes whatever the host serves at build time, unverified; a digest-pinned
+# COPY --from is immutable, and it also drops the `unzip` package that only the
+# installer script needed. This mirrors how backend/Dockerfile obtains uv.
+COPY --from=oven/bun:1@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 \
+     /usr/local/bin/bun /usr/local/bin/bun
 
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:$PATH"
+# `bunx` is the same binary under a second name — bun dispatches on argv[0] —
+# and the CI suite invokes it directly (`docker compose run playwright bunx
+# playwright test`). The installer script this replaced created both, so the
+# link has to be recreated explicitly.
+RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
 
 COPY package.json bun.lock /app/
 
@@ -19,3 +32,10 @@ RUN bun install
 COPY ./frontend /app/frontend
 
 ARG VITE_API_URL
+
+# No USER here, deliberately. This image is a local/CI test harness: it is never
+# published and never deployed. `docker compose run --rm playwright` bind-mounts
+# ./frontend/blob-report and ./frontend/test-results from the host, and Docker
+# creates missing bind-mount sources owned by root — an unprivileged uid could
+# not write the reports the run exists to produce. container_runs_as_root is a
+# real finding on a shipped image; this one is not shipped.

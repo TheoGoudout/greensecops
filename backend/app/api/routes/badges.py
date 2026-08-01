@@ -5,11 +5,22 @@ from fastapi.responses import Response
 from sqlmodel import Session, col, select
 
 from app.api.deps import SessionDep
+from app.api.mappers.docker import latest_completed_docker_scan
 from app.api.mappers.terraform import latest_completed_terraform_scan
 from app.core.config import settings
-from app.models import Analysis, AnalysisStatus, Repository, TerraformRoot
+from app.models import (
+    Analysis,
+    AnalysisStatus,
+    DockerTarget,
+    Repository,
+    TerraformRoot,
+)
 from app.services.badge_renderer import render_badge, render_unknown_badge
-from app.services.badge_signing import verify_badge, verify_terraform_root_badge
+from app.services.badge_signing import (
+    verify_badge,
+    verify_docker_target_badge,
+    verify_terraform_root_badge,
+)
 from app.services.scoring import average_latest_scores, score_to_grade
 
 router = APIRouter(prefix="/badges", tags=["badges"])
@@ -199,6 +210,82 @@ def get_terraform_root_badge_json(
     return {
         "schemaVersion": 1,
         "label": "Terraform",
+        "message": grade,
+        "color": color,
+        "cacheSeconds": 300,
+    }
+
+
+def _docker_target_badge_grade(
+    session: Session, target_id: uuid.UUID
+) -> tuple[DockerTarget | None, str | None]:
+    target = session.get(DockerTarget, target_id)
+    if target is None:
+        return None, None
+    latest = latest_completed_docker_scan(target)
+    return target, (latest.grade if latest else None)
+
+
+@router.get("/docker/{target_id}.svg", response_class=Response)
+def get_docker_target_badge(
+    target_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> Response:
+    target, grade = _docker_target_badge_grade(session, target_id)
+
+    # An unknown badge for both the missing and the unauthorized case: a badge
+    # is unauthenticated, so distinguishing them would leak which private
+    # targets exist.
+    if target is None or (
+        target.repository
+        and target.repository.is_private
+        and not verify_docker_target_badge(str(target_id), sig)
+    ):
+        return Response(content=render_unknown_badge(), headers=_CACHE_HEADERS)
+
+    svg = (
+        render_unknown_badge() if grade is None else render_badge(grade, label="Docker")
+    )
+
+    return Response(content=svg, headers=_CACHE_HEADERS)
+
+
+@router.get("/docker/{target_id}.json")
+def get_docker_target_badge_json(
+    target_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> dict[str, object]:
+    """Shields.io-compatible JSON endpoint for a Docker target's badge."""
+    target, grade = _docker_target_badge_grade(session, target_id)
+
+    if target is None or (
+        target.repository
+        and target.repository.is_private
+        and not verify_docker_target_badge(str(target_id), sig)
+    ):
+        return {
+            "schemaVersion": 1,
+            "label": "Docker",
+            "message": "not configured",
+            "color": "lightgrey",
+        }
+
+    if grade is None:
+        return {
+            "schemaVersion": 1,
+            "label": "Docker",
+            "message": "pending",
+            "color": "lightgrey",
+        }
+
+    from app.services.badge_renderer import _GRADE_COLORS
+
+    color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
+    return {
+        "schemaVersion": 1,
+        "label": "Docker",
         "message": grade,
         "color": color,
         "cacheSeconds": 300,

@@ -79,6 +79,24 @@ class TerraformOpaViolation:
 
 
 @dataclass
+class DockerOpaViolation:
+    rule_slug: str
+    severity: str
+    category: str
+    message: str
+    file_path: str = ""
+    # Whichever of the two applies to the rule: a Compose rule names the
+    # service it fired on, a Dockerfile rule the build stage. Both nullable —
+    # a file-level rule (e.g. a missing OCI label) names neither.
+    service_name: str | None = None
+    stage_name: str | None = None
+    line_start: int | None = None
+    line_end: int | None = None
+    context: str | None = None
+    discriminator: str | None = None
+
+
+@dataclass
 class CloudOpaViolation:
     rule_slug: str
     severity: str
@@ -121,6 +139,8 @@ POLICY_PACKAGES = _discover_policy_packages("ci_workflow") or [
 IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
 CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages("cloud_aws")
 CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages("ci_telemetry")
+CONTAINER_DOCKER_POLICY_PACKAGES = _discover_policy_packages("container_docker")
+CONTAINER_RUNTIME_POLICY_PACKAGES = _discover_policy_packages("container_runtime")
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
@@ -227,6 +247,63 @@ async def evaluate_terraform(
             line_end=v.get("line_end"),
             context=v.get("context"),
             discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]
+
+
+async def evaluate_docker(
+    merged_document: dict[str, Any],
+) -> list[DockerOpaViolation]:
+    """Evaluate a target's merged Dockerfile/Compose document against rules.
+
+    Like ``evaluate_terraform``, parsing happens upstream (see
+    ``services/docker/merge.merge_docker_files``) — a target is many files
+    folded into one document so rules can correlate a Compose service with the
+    Dockerfile it builds, which a per-file call could not do.
+    """
+    raw_violations = await _evaluate_packages(
+        merged_document, CONTAINER_DOCKER_POLICY_PACKAGES
+    )
+    return [
+        DockerOpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "security"),
+            message=v.get("message", ""),
+            file_path=v.get("file_path", ""),
+            service_name=v.get("service_name"),
+            stage_name=v.get("stage_name"),
+            line_start=v.get("line_start"),
+            line_end=v.get("line_end"),
+            context=v.get("context"),
+            discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]
+
+
+async def evaluate_container_runtime(
+    telemetry: dict[str, Any],
+) -> list[CiTelemetryOpaViolation]:
+    """Evaluate a Docker build/runtime telemetry payload.
+
+    Dynamic counterpart of ``evaluate_docker``: same engine and rule-authoring
+    model, measured input instead of source. Reuses
+    ``CiTelemetryOpaViolation`` rather than introducing a near-identical
+    dataclass — both dynamic domains persist evidence/recommendation rather
+    than message/context, so the shape is genuinely the same one.
+    """
+    raw_violations = await _evaluate_packages(
+        telemetry, CONTAINER_RUNTIME_POLICY_PACKAGES
+    )
+    return [
+        CiTelemetryOpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "energy"),
+            evidence=v.get("evidence", ""),
+            recommendation=v.get("recommendation", ""),
         )
         for v in raw_violations
     ]

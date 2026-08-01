@@ -1,0 +1,14 @@
+# A development override. It restates only what local development changes, so
+# `api` here has no image, restart policy or limits — all inherited from
+# compose.yml. Absence-based rules must stay silent on this file; the
+# privileged flag below is a genuine finding and must still be reported.
+services:
+  api:
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./src:/app/src
+
+  debugger:
+    image: ghcr.io/example/debugger:0.3.0@sha256:4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c
+    privileged: true

@@ -7,12 +7,14 @@ import pytest
 
 from app.services.opa.evaluator import (
     CI_TELEMETRY_POLICY_PACKAGES,
+    CONTAINER_DOCKER_POLICY_PACKAGES,
     IAC_TERRAFORM_POLICY_PACKAGES,
     POLICY_PACKAGES,
     OpaUnavailableError,
     WorkflowParseError,
     _discover_policy_packages,
     evaluate_ci_telemetry,
+    evaluate_docker,
     evaluate_terraform,
     evaluate_workflow,
     parse_workflow_yaml,
@@ -272,6 +274,149 @@ def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
         violations = asyncio.run(evaluate_terraform({"resource": []}))
 
     assert violations == []
+
+
+# ─── Docker / Compose ────────────────────────────────────────────────────────
+
+
+def test_all_seeded_docker_rules_are_evaluated() -> None:
+    packages = _discover_policy_packages("container_docker")
+    assert len(packages) == 22
+    for slug in (
+        "container_runs_as_root",
+        "secret_in_build_arg",
+        "curl_pipe_shell",
+        "add_remote_url",
+        "compose_privileged_container",
+        "compose_docker_socket_mount",
+        "compose_host_network_mode",
+        "compose_cap_add_sys_admin",
+        "compose_hardcoded_secret",
+    ):
+        assert f"greensecops/container_docker/security/{slug}" in packages
+    for slug in (
+        "copy_before_dependency_install",
+        "apt_cache_not_cleaned",
+        "no_multistage_build",
+        "heavy_base_image",
+        "compose_missing_resource_limits",
+    ):
+        assert f"greensecops/container_docker/energy/{slug}" in packages
+    for slug in (
+        "missing_healthcheck",
+        "compose_missing_restart_policy",
+        "compose_depends_on_without_condition",
+        "compose_unpinned_image_tag",
+        # Pinning lives in reliability for both file types, matching
+        # ci_workflow/reliability/unpinned_actions.
+        "unpinned_base_image",
+    ):
+        assert f"greensecops/container_docker/reliability/{slug}" in packages
+    for slug in (
+        "maintainer_instruction_deprecated",
+        "compose_obsolete_version_key",
+        "missing_oci_labels",
+    ):
+        assert f"greensecops/container_docker/maintainability/{slug}" in packages
+    assert set(CONTAINER_DOCKER_POLICY_PACKAGES) == set(packages)
+
+
+def test_every_seeded_docker_rule_has_a_policy_package() -> None:
+    """A seeded Rule with no Rego file would show as enabled and never fire.
+
+    The reverse direction (a Rego file with no Rule row) is worse still —
+    docker_analysis drops those violations — so the two lists must agree
+    exactly.
+    """
+    from app.core.db import DOCKER_INITIAL_RULES
+
+    seeded = {str(rule["slug"]) for rule in DOCKER_INITIAL_RULES}
+    shipped = {pkg.rsplit("/", 1)[-1] for pkg in CONTAINER_DOCKER_POLICY_PACKAGES}
+    assert seeded == shipped
+
+
+def test_evaluate_docker_returns_violations_when_policy_matches() -> None:
+    violation = {
+        "rule": "compose_privileged_container",
+        "severity": "critical",
+        "category": "security",
+        "file_path": "compose.yml",
+        "service_name": "agent",
+        "line_start": 4,
+        "line_end": 9,
+        "message": "Service runs privileged",
+        "discriminator": "agent",
+    }
+    mock_cm = _mock_client(
+        {
+            "container_docker/security/compose_privileged_container": {
+                "result": {"violations": [violation]}
+            }
+        }
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_docker({"dockerfiles": [], "compose_files": []})
+        )
+
+    assert len(violations) == 1
+    assert violations[0].rule_slug == "compose_privileged_container"
+    assert violations[0].file_path == "compose.yml"
+    assert violations[0].service_name == "agent"
+    assert violations[0].stage_name is None
+    assert violations[0].line_start == 4
+    assert violations[0].line_end == 9
+    assert violations[0].discriminator == "agent"
+
+
+def test_evaluate_docker_carries_the_stage_name_for_dockerfile_rules() -> None:
+    violation = {
+        "rule": "container_runs_as_root",
+        "severity": "high",
+        "category": "security",
+        "file_path": "backend/Dockerfile",
+        "stage_name": "runtime",
+        "message": "Runs as root",
+    }
+    mock_cm = _mock_client(
+        {
+            "container_docker/security/container_runs_as_root": {
+                "result": {"violations": [violation]}
+            }
+        }
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_docker({"dockerfiles": [], "compose_files": []})
+        )
+
+    assert violations[0].stage_name == "runtime"
+    assert violations[0].service_name is None
+
+
+def test_evaluate_docker_returns_empty_when_no_violations() -> None:
+    mock_cm = _mock_client(
+        {pkg: {"result": {}} for pkg in CONTAINER_DOCKER_POLICY_PACKAGES}
+    )
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        violations = asyncio.run(
+            evaluate_docker({"dockerfiles": [], "compose_files": []})
+        )
+
+    assert violations == []
+
+
+def test_evaluate_docker_raises_when_opa_unreachable() -> None:
+    # A perfect score must never be reported just because OPA is down.
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
+        with pytest.raises(OpaUnavailableError):
+            asyncio.run(evaluate_docker({"dockerfiles": [], "compose_files": []}))
 
 
 # ─── CI telemetry ───────────────────────────────────────────────────────────

@@ -43,6 +43,18 @@ def tf_fix_branch(terraform_root_id: uuid.UUID) -> str:
     return f"greensecops/terraform-{str(terraform_root_id)[:8]}"
 
 
+# Matches the Docker-target fix branch ``greensecops/docker-<target_id[:8]>``
+# minted by docker_fix_branch(). A third distinct prefix, for the same reason
+# the Terraform one exists: the frontend matches an open PR to the engine that
+# produced it by branch name alone.
+DOCKER_FIX_BRANCH_RE = re.compile(r"greensecops/docker-([0-9a-f]{8})$")
+
+
+def docker_fix_branch(docker_target_id: uuid.UUID) -> str:
+    """Deterministic branch for a Docker target's fix PR (all its files)."""
+    return f"greensecops/docker-{str(docker_target_id)[:8]}"
+
+
 def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
     """Build PR-body issue summaries from the issues each fix actually resolved.
 

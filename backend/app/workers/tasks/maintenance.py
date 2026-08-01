@@ -9,13 +9,17 @@ from app.models import (
     Analysis,
     AnalysisFailureKind,
     AnalysisStatus,
+    CloudScan,
+    DockerScan,
     DynamicAnalysisStatus,
     Fix,
     FixStatus,
     PullRequest,
     PullRequestState,
     Repository,
+    ScanStatus,
     TelemetryRun,
+    TerraformScan,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -36,6 +40,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     swept_analyses = 0
     swept_fixes = 0
     swept_telemetry = 0
+    swept_scans = 0
     with Session(engine) as session:
         stuck_analyses = session.exec(
             select(Analysis)
@@ -94,20 +99,41 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             session.add(run)
             swept_telemetry += 1
 
-        if swept_analyses or swept_fixes or swept_telemetry:
+        # Scans were never swept: ScanMachine has declared a `swept` event
+        # since the IaC engine landed, but nothing ever fired it, so a worker
+        # crash left a DockerScan/TerraformScan/CloudScan queued or running
+        # forever. Every scan table is covered here, not just the new one.
+        for model in (DockerScan, TerraformScan, CloudScan):
+            stuck_scans = session.exec(
+                select(model)
+                .where(col(model.status).in_([ScanStatus.queued, ScanStatus.running]))
+                .where(model.created_at < cutoff)  # type: ignore[operator]
+            ).all()
+            for scan in stuck_scans:
+                sm.advance(scan, sm.ScanMachine, "swept")
+                scan.error_message = (
+                    "Timed out: the scan worker was interrupted before completion"
+                )
+                scan.failure_kind = AnalysisFailureKind.transient
+                session.add(scan)
+                swept_scans += 1
+
+        if swept_analyses or swept_fixes or swept_telemetry or swept_scans:
             session.commit()
             logger.warning(
-                "Swept %d stuck analysis(es), %d stuck fix(es) and %d stuck "
-                "telemetry run(s) to failed",
+                "Swept %d stuck analysis(es), %d stuck fix(es), %d stuck "
+                "telemetry run(s) and %d stuck scan(s) to failed",
                 swept_analyses,
                 swept_fixes,
                 swept_telemetry,
+                swept_scans,
             )
 
     return {
         "swept_analyses": swept_analyses,
         "swept_fixes": swept_fixes,
         "swept_telemetry": swept_telemetry,
+        "swept_scans": swept_scans,
     }
 
 

@@ -388,6 +388,326 @@ export type CloudScanPublic = {
 };
 
 /**
+ * DockerBuildPayload
+ * One image build (and optionally its containers) observed in CI.
+ *
+ * A workflow can build several images, so this is posted once per image
+ * rather than once per run — which is exactly why it is not folded into
+ * TelemetryPayload.
+ */
+export type DockerBuildPayload = {
+    /**
+     * Workflow Run Id
+     */
+    workflow_run_id: number;
+    /**
+     * Image Ref
+     */
+    image_ref?: string | null;
+    /**
+     * Dockerfile Path
+     */
+    dockerfile_path?: string | null;
+    /**
+     * Image Size Bytes
+     */
+    image_size_bytes?: number | null;
+    /**
+     * Context Size Bytes
+     */
+    context_size_bytes?: number | null;
+    /**
+     * Build Duration Ms
+     */
+    build_duration_ms?: number | null;
+    /**
+     * Cache Hit Ratio
+     */
+    cache_hit_ratio?: number | null;
+    /**
+     * Observed Builds
+     */
+    observed_builds?: number | null;
+    /**
+     * Layers
+     */
+    layers?: Array<{
+        [key: string]: unknown;
+    }> | null;
+    /**
+     * Containers
+     */
+    containers?: Array<{
+        [key: string]: unknown;
+    }> | null;
+};
+
+/**
+ * DockerFilePublic
+ * A Dockerfile or Compose file's live source for a target.
+ *
+ * Not persisted (mirroring ``TerraformFilePublic``): fetched from GitHub on
+ * demand, so it carries no id/branch — just path and content. ``kind`` lets
+ * the viewer pick a syntax highlighter without re-deriving it from the name.
+ */
+export type DockerFilePublic = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Raw Content
+     */
+    raw_content: string;
+    /**
+     * Kind
+     */
+    kind: string;
+};
+
+/**
+ * DockerFindingPublic
+ */
+export type DockerFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Service Name
+     */
+    service_name?: string | null;
+    /**
+     * Stage Name
+     */
+    stage_name?: string | null;
+    /**
+     * Line Start
+     */
+    line_start?: number | null;
+    /**
+     * Line End
+     */
+    line_end?: number | null;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * DockerFixGenerateRequest
+ */
+export type DockerFixGenerateRequest = {
+    /**
+     * Finding Ids
+     */
+    finding_ids?: Array<string> | null;
+};
+
+/**
+ * DockerFixPublic
+ */
+export type DockerFixPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Pr Id
+     */
+    pr_id?: string | null;
+    llm_provider: LlmProvider;
+    /**
+     * Llm Model
+     */
+    llm_model: string;
+    status: FixStatus;
+    /**
+     * Full Content
+     */
+    full_content?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    pr_state?: PullRequestState | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Delivered At
+     */
+    delivered_at?: string | null;
+};
+
+/**
+ * DockerScanPublic
+ */
+export type DockerScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * File Count
+     */
+    file_count?: number | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
+};
+
+/**
+ * DockerTargetCreate
+ */
+export type DockerTargetCreate = {
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Root Path
+     */
+    root_path?: string;
+};
+
+/**
+ * DockerTargetPublic
+ */
+export type DockerTargetPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Repo Full Name
+     */
+    repo_full_name?: string | null;
+    /**
+     * Root Path
+     */
+    root_path: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Last Scanned At
+     */
+    last_scanned_at?: string | null;
+    /**
+     * Last Scanned Head Sha
+     */
+    last_scanned_head_sha?: string | null;
+    /**
+     * Latest Score
+     */
+    latest_score?: number | null;
+    /**
+     * Latest Grade
+     */
+    latest_grade?: string | null;
+    /**
+     * Badge Sig
+     */
+    badge_sig?: string | null;
+};
+
+/**
  * DynamicAnalysisStatus
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
@@ -3685,6 +4005,77 @@ export type BadgesGetTerraformRootBadgeJsonResponses = {
 
 export type BadgesGetTerraformRootBadgeJsonResponse = BadgesGetTerraformRootBadgeJsonResponses[keyof BadgesGetTerraformRootBadgeJsonResponses];
 
+export type BadgesGetDockerTargetBadgeData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/docker/{target_id}.svg';
+};
+
+export type BadgesGetDockerTargetBadgeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetDockerTargetBadgeError = BadgesGetDockerTargetBadgeErrors[keyof BadgesGetDockerTargetBadgeErrors];
+
+export type BadgesGetDockerTargetBadgeResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type BadgesGetDockerTargetBadgeJsonData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/docker/{target_id}.json';
+};
+
+export type BadgesGetDockerTargetBadgeJsonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetDockerTargetBadgeJsonError = BadgesGetDockerTargetBadgeJsonErrors[keyof BadgesGetDockerTargetBadgeJsonErrors];
+
+export type BadgesGetDockerTargetBadgeJsonResponses = {
+    /**
+     * Response Badges-Get Docker Target Badge Json
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type BadgesGetDockerTargetBadgeJsonResponse = BadgesGetDockerTargetBadgeJsonResponses[keyof BadgesGetDockerTargetBadgeJsonResponses];
+
 export type TelemetryIngestTelemetryData = {
     body: TelemetryPayload;
     headers?: {
@@ -3718,6 +4109,40 @@ export type TelemetryIngestTelemetryResponses = {
 };
 
 export type TelemetryIngestTelemetryResponse = TelemetryIngestTelemetryResponses[keyof TelemetryIngestTelemetryResponses];
+
+export type TelemetryIngestDockerBuildData = {
+    body: DockerBuildPayload;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/telemetry/docker-build';
+};
+
+export type TelemetryIngestDockerBuildErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TelemetryIngestDockerBuildError = TelemetryIngestDockerBuildErrors[keyof TelemetryIngestDockerBuildErrors];
+
+export type TelemetryIngestDockerBuildResponses = {
+    /**
+     * Response Telemetry-Ingest Docker Build
+     * Successful Response
+     */
+    201: {
+        [key: string]: string;
+    };
+};
+
+export type TelemetryIngestDockerBuildResponse = TelemetryIngestDockerBuildResponses[keyof TelemetryIngestDockerBuildResponses];
 
 export type TelemetryIngestSampleData = {
     body: SamplePayload;
@@ -4523,6 +4948,381 @@ export type CloudListCloudFindingsResponses = {
 };
 
 export type CloudListCloudFindingsResponse = CloudListCloudFindingsResponses[keyof CloudListCloudFindingsResponses];
+
+export type DockerListDockerTargetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Repo Id
+         */
+        repo_id?: string | null;
+    };
+    url: '/api/v1/docker-targets/';
+};
+
+export type DockerListDockerTargetsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerTargetsError = DockerListDockerTargetsErrors[keyof DockerListDockerTargetsErrors];
+
+export type DockerListDockerTargetsResponses = {
+    /**
+     * Response Docker-List Docker Targets
+     * Successful Response
+     */
+    200: Array<DockerTargetPublic>;
+};
+
+export type DockerListDockerTargetsResponse = DockerListDockerTargetsResponses[keyof DockerListDockerTargetsResponses];
+
+export type DockerCreateDockerTargetData = {
+    body: DockerTargetCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/docker-targets/';
+};
+
+export type DockerCreateDockerTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerCreateDockerTargetError = DockerCreateDockerTargetErrors[keyof DockerCreateDockerTargetErrors];
+
+export type DockerCreateDockerTargetResponses = {
+    /**
+     * Successful Response
+     */
+    201: DockerTargetPublic;
+};
+
+export type DockerCreateDockerTargetResponse = DockerCreateDockerTargetResponses[keyof DockerCreateDockerTargetResponses];
+
+export type DockerToggleDockerTargetData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker-targets/{target_id}/toggle';
+};
+
+export type DockerToggleDockerTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerToggleDockerTargetError = DockerToggleDockerTargetErrors[keyof DockerToggleDockerTargetErrors];
+
+export type DockerToggleDockerTargetResponses = {
+    /**
+     * Response Docker-Toggle Docker Target
+     * Successful Response
+     */
+    200: {
+        [key: string]: string | boolean;
+    };
+};
+
+export type DockerToggleDockerTargetResponse = DockerToggleDockerTargetResponses[keyof DockerToggleDockerTargetResponses];
+
+export type DockerDeleteDockerTargetData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker-targets/{target_id}';
+};
+
+export type DockerDeleteDockerTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerDeleteDockerTargetError = DockerDeleteDockerTargetErrors[keyof DockerDeleteDockerTargetErrors];
+
+export type DockerDeleteDockerTargetResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DockerDeleteDockerTargetResponse = DockerDeleteDockerTargetResponses[keyof DockerDeleteDockerTargetResponses];
+
+export type DockerTriggerDockerScanData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/docker-targets/{target_id}/scan';
+};
+
+export type DockerTriggerDockerScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerDockerScanError = DockerTriggerDockerScanErrors[keyof DockerTriggerDockerScanErrors];
+
+export type DockerTriggerDockerScanResponses = {
+    /**
+     * Response Docker-Trigger Docker Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type DockerTriggerDockerScanResponse = DockerTriggerDockerScanResponses[keyof DockerTriggerDockerScanResponses];
+
+export type DockerListDockerScansData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/docker-targets/{target_id}/scans';
+};
+
+export type DockerListDockerScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerScansError = DockerListDockerScansErrors[keyof DockerListDockerScansErrors];
+
+export type DockerListDockerScansResponses = {
+    /**
+     * Response Docker-List Docker Scans
+     * Successful Response
+     */
+    200: Array<DockerScanPublic>;
+};
+
+export type DockerListDockerScansResponse = DockerListDockerScansResponses[keyof DockerListDockerScansResponses];
+
+export type DockerListDockerFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/docker-targets/{target_id}/findings';
+};
+
+export type DockerListDockerFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerFindingsError = DockerListDockerFindingsErrors[keyof DockerListDockerFindingsErrors];
+
+export type DockerListDockerFindingsResponses = {
+    /**
+     * Response Docker-List Docker Findings
+     * Successful Response
+     */
+    200: Array<DockerFindingPublic>;
+};
+
+export type DockerListDockerFindingsResponse = DockerListDockerFindingsResponses[keyof DockerListDockerFindingsResponses];
+
+export type DockerListDockerFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Ref
+         */
+        ref?: string | null;
+    };
+    url: '/api/v1/docker-targets/{target_id}/files';
+};
+
+export type DockerListDockerFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerFilesError = DockerListDockerFilesErrors[keyof DockerListDockerFilesErrors];
+
+export type DockerListDockerFilesResponses = {
+    /**
+     * Response Docker-List Docker Files
+     * Successful Response
+     */
+    200: Array<DockerFilePublic>;
+};
+
+export type DockerListDockerFilesResponse = DockerListDockerFilesResponses[keyof DockerListDockerFilesResponses];
+
+export type DockerListDockerFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker-targets/{target_id}/fixes';
+};
+
+export type DockerListDockerFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerFixesError = DockerListDockerFixesErrors[keyof DockerListDockerFixesErrors];
+
+export type DockerListDockerFixesResponses = {
+    /**
+     * Response Docker-List Docker Fixes
+     * Successful Response
+     */
+    200: Array<DockerFixPublic>;
+};
+
+export type DockerListDockerFixesResponse = DockerListDockerFixesResponses[keyof DockerListDockerFixesResponses];
+
+export type DockerTriggerDockerFixGenerationData = {
+    /**
+     * Body
+     */
+    body?: DockerFixGenerateRequest | null;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker-targets/{target_id}/fixes';
+};
+
+export type DockerTriggerDockerFixGenerationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerDockerFixGenerationError = DockerTriggerDockerFixGenerationErrors[keyof DockerTriggerDockerFixGenerationErrors];
+
+export type DockerTriggerDockerFixGenerationResponses = {
+    /**
+     * Response Docker-Trigger Docker Fix Generation
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type DockerTriggerDockerFixGenerationResponse = DockerTriggerDockerFixGenerationResponses[keyof DockerTriggerDockerFixGenerationResponses];
+
+export type DockerTriggerDockerDeliveryData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker-targets/{target_id}/deliver';
+};
+
+export type DockerTriggerDockerDeliveryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerDockerDeliveryError = DockerTriggerDockerDeliveryErrors[keyof DockerTriggerDockerDeliveryErrors];
+
+export type DockerTriggerDockerDeliveryResponses = {
+    /**
+     * Response Docker-Trigger Docker Delivery
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type DockerTriggerDockerDeliveryResponse = DockerTriggerDockerDeliveryResponses[keyof DockerTriggerDockerDeliveryResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;

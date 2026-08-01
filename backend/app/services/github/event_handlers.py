@@ -147,6 +147,56 @@ def enqueue_terraform_scans(
         )
 
 
+def enqueue_docker_scans(
+    session: Session,
+    repo: Repository,
+    branch: str,
+    commit_sha: str,
+    trigger: AnalysisTrigger,
+    changed_paths: set[str] | None,
+) -> None:
+    """Enqueue a scan for every enabled DockerTarget a push touched.
+
+    Same contract as ``enqueue_terraform_scans``: ``changed_paths`` of
+    ``None`` means "unknown" (new branch or force-push) and scans every
+    enabled target; default branch only, since DockerTarget has no per-branch
+    tracking.
+
+    The path filter differs in one respect. A Terraform root is always a real
+    directory, but a Docker target's ``root_path`` is ``""`` for the common
+    repository-root case, and every path is "under" the empty string — so an
+    empty root matches any push, which is exactly right for a target that
+    covers the whole repository.
+    """
+    if branch != repo.default_branch or branch.startswith("greensecops/"):
+        return
+    from app.models import DockerTarget
+
+    targets = session.exec(
+        select(DockerTarget)
+        .where(DockerTarget.repo_id == repo.id)
+        .where(DockerTarget.enabled == True)  # noqa: E712
+    ).all()
+    for target in targets:
+        if (
+            changed_paths is not None
+            and target.root_path
+            and not any(
+                p == target.root_path or p.startswith(f"{target.root_path}/")
+                for p in changed_paths
+            )
+        ):
+            continue
+        from app.workers.tasks.docker_analysis import run_docker_scan
+
+        run_docker_scan.delay(
+            docker_target_id=str(target.id),
+            branch=branch,
+            commit_sha=commit_sha,
+            trigger=trigger.value,
+        )
+
+
 # ─── Pull-request lifecycle ──────────────────────────────────────────────────
 
 

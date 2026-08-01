@@ -129,6 +129,120 @@ export type CloudScanPublic = {
 };
 
 /**
+ * One image build (and optionally its containers) observed in CI.
+ *
+ * A workflow can build several images, so this is posted once per image
+ * rather than once per run — which is exactly why it is not folded into
+ * TelemetryPayload.
+ */
+export type DockerBuildPayload = {
+    workflow_run_id: number;
+    image_ref?: (string | null);
+    dockerfile_path?: (string | null);
+    image_size_bytes?: (number | null);
+    context_size_bytes?: (number | null);
+    build_duration_ms?: (number | null);
+    cache_hit_ratio?: (number | null);
+    observed_builds?: (number | null);
+    layers?: (Array<{
+    [key: string]: unknown;
+}> | null);
+    containers?: (Array<{
+    [key: string]: unknown;
+}> | null);
+};
+
+/**
+ * A Dockerfile or Compose file's live source for a target.
+ *
+ * Not persisted (mirroring ``TerraformFilePublic``): fetched from GitHub on
+ * demand, so it carries no id/branch — just path and content. ``kind`` lets
+ * the viewer pick a syntax highlighter without re-deriving it from the name.
+ */
+export type DockerFilePublic = {
+    path: string;
+    raw_content: string;
+    kind: string;
+};
+
+export type DockerFindingPublic = {
+    id: string;
+    scan_id: string;
+    docker_target_id: string;
+    rule_id: string;
+    rule_slug: string;
+    file_path: string;
+    service_name?: (string | null);
+    stage_name?: (string | null);
+    line_start?: (number | null);
+    line_end?: (number | null);
+    severity: IssueSeverity;
+    category: IssueCategory;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type DockerFixGenerateRequest = {
+    finding_ids?: (Array<(string)> | null);
+};
+
+export type DockerFixPublic = {
+    id: string;
+    docker_target_id: string;
+    file_path: string;
+    pr_id?: (string | null);
+    llm_provider: LLMProvider;
+    llm_model: string;
+    status: FixStatus;
+    full_content?: (string | null);
+    error_message?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    pr_state?: (PullRequestState | null);
+    created_at?: (string | null);
+    delivered_at?: (string | null);
+};
+
+export type DockerScanPublic = {
+    id: string;
+    docker_target_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    score?: (number | null);
+    grade?: (string | null);
+    file_count?: (number | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
+};
+
+export type DockerTargetCreate = {
+    repo_id: string;
+    root_path?: string;
+};
+
+export type DockerTargetPublic = {
+    id: string;
+    repo_id: string;
+    repo_full_name?: (string | null);
+    root_path: string;
+    enabled: boolean;
+    last_scanned_at?: (string | null);
+    last_scanned_head_sha?: (string | null);
+    latest_score?: (number | null);
+    latest_grade?: (string | null);
+    badge_sig?: (string | null);
+};
+
+/**
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
  *
@@ -732,6 +846,22 @@ export type BadgesGetTerraformRootBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 
+export type BadgesGetDockerTargetBadgeData = {
+    sig?: (string | null);
+    targetId: string;
+};
+
+export type BadgesGetDockerTargetBadgeResponse = (unknown);
+
+export type BadgesGetDockerTargetBadgeJsonData = {
+    sig?: (string | null);
+    targetId: string;
+};
+
+export type BadgesGetDockerTargetBadgeJsonResponse = ({
+    [key: string]: unknown;
+});
+
 export type BillingGetSubscriptionResponse = (BillingSubscriptionPublic);
 
 export type BillingGetTierLimitsResponse = ({
@@ -793,6 +923,87 @@ export type CloudListCloudFindingsData = {
 };
 
 export type CloudListCloudFindingsResponse = (Array<CloudFindingPublic>);
+
+export type DockerCreateDockerTargetData = {
+    requestBody: DockerTargetCreate;
+};
+
+export type DockerCreateDockerTargetResponse = (DockerTargetPublic);
+
+export type DockerListDockerTargetsData = {
+    repoId?: (string | null);
+};
+
+export type DockerListDockerTargetsResponse = (Array<DockerTargetPublic>);
+
+export type DockerToggleDockerTargetData = {
+    targetId: string;
+};
+
+export type DockerToggleDockerTargetResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type DockerDeleteDockerTargetData = {
+    targetId: string;
+};
+
+export type DockerDeleteDockerTargetResponse = (void);
+
+export type DockerTriggerDockerScanData = {
+    branch?: (string | null);
+    targetId: string;
+};
+
+export type DockerTriggerDockerScanResponse = ({
+    [key: string]: (string);
+});
+
+export type DockerListDockerScansData = {
+    limit?: number;
+    targetId: string;
+};
+
+export type DockerListDockerScansResponse = (Array<DockerScanPublic>);
+
+export type DockerListDockerFindingsData = {
+    includeResolved?: boolean;
+    targetId: string;
+};
+
+export type DockerListDockerFindingsResponse = (Array<DockerFindingPublic>);
+
+export type DockerListDockerFilesData = {
+    ref?: (string | null);
+    targetId: string;
+};
+
+export type DockerListDockerFilesResponse = (Array<DockerFilePublic>);
+
+export type DockerListDockerFixesData = {
+    targetId: string;
+};
+
+export type DockerListDockerFixesResponse = (Array<DockerFixPublic>);
+
+export type DockerTriggerDockerFixGenerationData = {
+    force?: boolean;
+    requestBody?: (DockerFixGenerateRequest | null);
+    targetId: string;
+};
+
+export type DockerTriggerDockerFixGenerationResponse = ({
+    [key: string]: (string | number);
+});
+
+export type DockerTriggerDockerDeliveryData = {
+    force?: boolean;
+    targetId: string;
+};
+
+export type DockerTriggerDockerDeliveryResponse = ({
+    [key: string]: (string);
+});
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
@@ -1076,6 +1287,15 @@ export type TelemetryIngestTelemetryData = {
 };
 
 export type TelemetryIngestTelemetryResponse = ({
+    [key: string]: (string);
+});
+
+export type TelemetryIngestDockerBuildData = {
+    authorization?: (string | null);
+    requestBody: DockerBuildPayload;
+};
+
+export type TelemetryIngestDockerBuildResponse = ({
     [key: string]: (string);
 });
 

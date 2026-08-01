@@ -1,0 +1,10 @@
+# Base configuration. Complete on its own, and graded as such.
+services:
+  api:
+    image: ghcr.io/example/api:1.4.2@sha256:3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
