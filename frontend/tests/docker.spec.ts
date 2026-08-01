@@ -106,11 +106,12 @@ test.describe("Docker", () => {
   test("badges page shows copyable markdown per target", async ({ page }) => {
     await mockDockerTargets(page)
 
+    // Docker badges moved onto the shared Badges page as a tab; the old URL
+    // redirects there.
     await page.goto("/docker/badges")
+    await expect(page).toHaveURL(/\/badges\/docker/)
 
-    await expect(
-      page.getByRole("heading", { name: "Docker Badges" }),
-    ).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Badges" })).toBeVisible()
     await expect(
       page.getByText(`/api/v1/badges/docker/${MOCK_DOCKER_TARGET.id}.svg`),
     ).toBeVisible()
@@ -127,7 +128,6 @@ test.describe("Docker", () => {
 
     const pages: Array<[string, string]> = [
       ["/docker", "Docker - GreenSecOps"],
-      ["/docker/badges", "Docker Badges - GreenSecOps"],
       [`/docker/${MOCK_REPO.id}/analysis`, "Docker analysis - GreenSecOps"],
       [`/docker/${MOCK_REPO.id}/runtime`, "Docker runtime - GreenSecOps"],
       [`/docker/${MOCK_REPO.id}/pull-requests`, "Docker PRs - GreenSecOps"],
@@ -161,7 +161,7 @@ test.describe("Docker", () => {
     // Scope to the page's tab bar — the sidebar now carries its own Docker
     // link, which is exactly where that entry is supposed to live.
     const tabs = page.locator("nav.border-b")
-    await expect(tabs.getByRole("link", { name: "Terraform" })).toBeVisible()
+    await expect(tabs.getByRole("link", { name: "Analysis" })).toBeVisible()
     await expect(tabs.getByRole("link", { name: "Cloud" })).toBeVisible()
     await expect(tabs.getByRole("link", { name: "Docker" })).toHaveCount(0)
   })

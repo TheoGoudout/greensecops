@@ -35,7 +35,7 @@ test.describe("Navigation", () => {
       "Dashboard",
       "Repositories",
       "Docker",
-      "Docker Badges",
+      "Terraform",
       "Rules",
       "Badges",
       "Billing",
@@ -90,9 +90,10 @@ test.describe("Navigation", () => {
     const navLinks: Array<[string, RegExp]> = [
       ["Repositories", /\/repositories/],
       ["Docker", /\/docker$/],
-      ["Docker Badges", /\/docker\/badges/],
+      ["Terraform", /\/infrastructure$/],
       ["Rules", /\/rules/],
-      ["Badges", /\/badges/],
+      // One Badges entry now, with a tab per engine; it lands on the first tab.
+      ["Badges", /\/badges\/repositories/],
       ["Billing", /\/billing/],
       ["Dashboard", /\/dashboard/],
     ]
