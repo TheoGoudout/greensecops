@@ -40,5 +40,8 @@ jobs:
         run: cp .env.example .env && cp frontend/.env.example frontend/.env
       - run: docker compose -f compose.yml build
       - run: docker compose -f compose.yml down -v --remove-orphans
-      - run: docker compose -f compose.yml up -d --wait backend frontend
+      # landing is waited on alongside the two app services because its
+      # entrypoint templates the shipped pages at boot: a failure there leaves
+      # the container restart-looping, which only a started container shows.
+      - run: docker compose -f compose.yml up -d --wait backend frontend landing
       - run: docker compose -f compose.yml down -v --remove-orphans
