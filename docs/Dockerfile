@@ -37,7 +37,12 @@ LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecop
 LABEL org.opencontainers.image.licenses="MIT"
 
 COPY docs/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /build/docs/_build/html /usr/share/nginx/html
+# --chown so the docroot belongs to the uid that serves it. sphinx-build runs as
+# root in the builder stage, so without this the pages arrive root-owned and are
+# only readable here because the builder's umask happened to leave them 0644: a
+# generated file or a copied asset carrying a tighter mode would fail to open
+# and 403. Ownership by uid 101 makes serving independent of the builder's modes.
+COPY --chown=101:101 --from=builder /build/docs/_build/html /usr/share/nginx/html
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS -o /dev/null http://localhost:8080/ || exit 1
