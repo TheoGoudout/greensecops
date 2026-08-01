@@ -2,6 +2,7 @@ import { Link as RouterLink, useRouterState } from "@tanstack/react-router"
 import {
   Award,
   Boxes,
+  Container,
   CreditCard,
   GitBranch,
   LayoutDashboard,
@@ -73,7 +74,6 @@ function RepoSubNav({ repoId }: { repoId: string }) {
 
 const infraSubItems = [
   { title: "Terraform", segment: "terraform" },
-  { title: "Docker", segment: "docker" },
   { title: "Cloud", segment: "cloud" },
   { title: "PRs", segment: "pull-requests" },
 ] as const
@@ -113,6 +113,47 @@ function InfraSubNav({ repoId }: { repoId: string }) {
   )
 }
 
+const dockerSubItems = [
+  { title: "Analysis", segment: "analysis" },
+  { title: "PRs", segment: "pull-requests" },
+  { title: "Scan history", segment: "scans" },
+] as const
+
+function DockerSubNav({ repoId }: { repoId: string }) {
+  const { isMobile, setOpenMobile } = useSidebar()
+  const currentPath = useRouterState({
+    select: (s) => s.location.pathname,
+  })
+
+  const handleClick = () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }
+
+  return (
+    <SidebarMenuSub>
+      {dockerSubItems.map((item) => {
+        const href = `/docker/${repoId}/${item.segment}`
+        const isActive = currentPath.startsWith(href)
+        return (
+          <SidebarMenuSubItem key={item.segment}>
+            <SidebarMenuSubButton asChild isActive={isActive}>
+              <RouterLink
+                to={`/docker/$repoId/${item.segment}`}
+                params={{ repoId }}
+                onClick={handleClick}
+              >
+                {item.title}
+              </RouterLink>
+            </SidebarMenuSubButton>
+          </SidebarMenuSubItem>
+        )
+      })}
+    </SidebarMenuSub>
+  )
+}
+
 export function AppSidebar() {
   const { user: currentUser } = useAuth()
   const { isMobile, setOpenMobile } = useSidebar()
@@ -129,6 +170,13 @@ export function AppSidebar() {
   // "badges" is a static sibling route, not a repo id.
   const currentInfraRepoId =
     infraRepoMatch && infraRepoMatch[1] !== "badges" ? infraRepoMatch[1] : null
+
+  const dockerRepoMatch = currentPath.match(/^\/docker\/([^/]+)(?:\/.+)?$/)
+  // "badges" is a static sibling route, not a repo id.
+  const currentDockerRepoId =
+    dockerRepoMatch && dockerRepoMatch[1] !== "badges"
+      ? dockerRepoMatch[1]
+      : null
 
   const handleMenuClick = () => {
     if (isMobile) setOpenMobile(false)
@@ -156,6 +204,18 @@ export function AppSidebar() {
       ) : undefined,
     },
     { icon: Award, title: "Terraform Badges", path: "/infrastructure/badges" },
+  ]
+
+  const containerItems: NavItem[] = [
+    {
+      icon: Container,
+      title: "Docker",
+      path: "/docker",
+      children: currentDockerRepoId ? (
+        <DockerSubNav repoId={currentDockerRepoId} />
+      ) : undefined,
+    },
+    { icon: Award, title: "Docker Badges", path: "/docker/badges" },
   ]
 
   const configItems: NavItem[] = [
@@ -193,6 +253,7 @@ export function AppSidebar() {
         </SidebarGroup>
         <NavGroup label="CI/CD Analysis" items={analysisItems} />
         <NavGroup label="Infrastructure" items={infrastructureItems} />
+        <NavGroup label="Containers" items={containerItems} />
         <NavGroup label="Configuration" items={configItems} />
       </SidebarContent>
       <SidebarFooter>

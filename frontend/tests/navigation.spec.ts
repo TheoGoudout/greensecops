@@ -4,6 +4,7 @@ import {
   MOCK_USER,
   mockAnalyses,
   mockBilling,
+  mockDockerTargets,
   mockEvents,
   mockIssues,
   mockRepositories,
@@ -19,6 +20,7 @@ function setupAllMocks(page: import("@playwright/test").Page) {
     mockRepositories(page, []),
     mockAnalyses(page, []),
     mockIssues(page, []),
+    mockDockerTargets(page, []),
   ])
 }
 
@@ -32,6 +34,8 @@ test.describe("Navigation", () => {
     for (const label of [
       "Dashboard",
       "Repositories",
+      "Docker",
+      "Docker Badges",
       "Rules",
       "Badges",
       "Billing",
@@ -85,6 +89,8 @@ test.describe("Navigation", () => {
 
     const navLinks: Array<[string, RegExp]> = [
       ["Repositories", /\/repositories/],
+      ["Docker", /\/docker$/],
+      ["Docker Badges", /\/docker\/badges/],
       ["Rules", /\/rules/],
       ["Badges", /\/badges/],
       ["Billing", /\/billing/],
@@ -120,6 +126,8 @@ test.describe("Navigation", () => {
 
     const pages: Array<[string, string]> = [
       ["/dashboard", "Dashboard - GreenSecOps"],
+      // Docker page titles are asserted in docker.spec.ts — this loop shares
+      // one test timeout across every goto, so it stays short.
       ["/repositories", "Repositories - GreenSecOps"],
       ["/rules", "Rules - GreenSecOps"],
       ["/badges", "Badges - GreenSecOps"],

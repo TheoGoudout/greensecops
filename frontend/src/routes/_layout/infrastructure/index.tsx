@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
+import { worstGrade } from "@/lib/grades"
 import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/infrastructure/")({
@@ -32,16 +33,6 @@ interface RepoGroup {
   repoName: string
   roots: TerraformRootPublic[]
   worstGrade: string | null
-}
-
-// Grades are single letters A–F; F is worst. Surface a repo's worst root grade
-// as its headline, mirroring how the repo list shows one grade per repo.
-function worstGrade(roots: TerraformRootPublic[]): string | null {
-  const grades = roots
-    .map((r) => r.latest_grade)
-    .filter((g): g is string => !!g)
-  if (!grades.length) return null
-  return grades.reduce((worst, g) => (g > worst ? g : worst))
 }
 
 function InfrastructurePage() {
@@ -94,7 +85,8 @@ function InfrastructurePage() {
       }
     }
     const list = [...byRepo.values()]
-    for (const g of list) g.worstGrade = worstGrade(g.roots)
+    for (const g of list)
+      g.worstGrade = worstGrade(g.roots.map((r) => r.latest_grade))
     list.sort((a, b) => a.repoName.localeCompare(b.repoName))
     return list
   }, [roots])

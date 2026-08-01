@@ -51,6 +51,16 @@ const ID = {
   fixMergedPr: "00000000-0000-0000-0000-000000000075",
   subscription: "00000000-0000-0000-0000-000000000080",
   subscriptionPro: "00000000-0000-0000-0000-000000000081",
+  // Docker ids differ in their first 8 characters on purpose: dockerFixBranch()
+  // (src/lib/delivery.ts) derives a PR branch from that slice, so same-prefixed
+  // ids would give two targets the same branch.
+  dockerTargetRoot: "0000a001-0000-0000-0000-000000000001",
+  dockerTargetApi: "0000a002-0000-0000-0000-000000000002",
+  dockerScan: "0000a010-0000-0000-0000-000000000010",
+  dockerScanFailed: "0000a011-0000-0000-0000-000000000011",
+  dockerFinding: "0000a020-0000-0000-0000-000000000020",
+  dockerFix: "0000a030-0000-0000-0000-000000000030",
+  dockerPr: "0000a040-0000-0000-0000-000000000040",
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -178,6 +188,126 @@ export const MOCK_PR_OPEN = {
   repo_id: ID.repo,
   pr_branch: "greensecops/fixes-wf-00000000",
   pr_url: "https://github.com/acme/web-app/pull/42",
+  pr_state: "open" as const,
+  ci_status: "success" as const,
+  review_decision: "approved" as const,
+  mergeable_state: "clean",
+  externally_modified: false,
+  comment_url: null,
+  created_at: "2024-01-02T10:03:00Z",
+  updated_at: "2024-01-02T10:04:00Z",
+}
+
+// ── Docker (targets, files, findings, fixes, scans) ───────────────────
+const DOCKERFILE_RAW_CONTENT =
+  'FROM node:latest\nRUN apt-get update && apt-get install -y curl\nCOPY . /app\nCMD ["node", "index.js"]'
+
+export const MOCK_DOCKER_TARGET = {
+  id: ID.dockerTargetRoot,
+  repo_id: ID.repo,
+  repo_full_name: "acme/web-app",
+  root_path: "",
+  enabled: true,
+  last_scanned_at: "2024-01-02T10:00:00Z",
+  last_scanned_head_sha: "abc1234",
+  latest_score: 72,
+  latest_grade: "C",
+  badge_sig: "sig-root",
+}
+
+export const MOCK_DOCKER_TARGET_API = {
+  id: ID.dockerTargetApi,
+  repo_id: ID.repo,
+  repo_full_name: "acme/web-app",
+  root_path: "services/api",
+  enabled: true,
+  last_scanned_at: null,
+  last_scanned_head_sha: null,
+  latest_score: null,
+  latest_grade: "E",
+  badge_sig: "sig-api",
+}
+
+export const MOCK_DOCKER_FILE = {
+  path: "Dockerfile",
+  raw_content: DOCKERFILE_RAW_CONTENT,
+  kind: "dockerfile",
+}
+
+export const MOCK_DOCKER_FINDING = {
+  id: ID.dockerFinding,
+  scan_id: ID.dockerScan,
+  docker_target_id: ID.dockerTargetRoot,
+  rule_id: ID.ruleReliability,
+  rule_slug: "unpinned-base-image",
+  file_path: "Dockerfile",
+  service_name: null,
+  stage_name: null,
+  line_start: 1,
+  line_end: 1,
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "Base image node:latest is not pinned to a digest",
+  context: null,
+  status: "open" as const,
+  fix_id: null,
+  fix_status: null,
+  created_at: "2024-01-02T10:00:00Z",
+  resolved_at: null,
+}
+
+export const MOCK_DOCKER_FIX = {
+  id: ID.dockerFix,
+  docker_target_id: ID.dockerTargetRoot,
+  file_path: "Dockerfile",
+  pr_id: null,
+  llm_provider: "openai" as const,
+  llm_model: "gpt-4o",
+  status: "ready" as const,
+  full_content: 'FROM node:22-alpine\nCOPY . /app\nCMD ["node", "index.js"]',
+  error_message: null,
+  pr_url: null,
+  pr_branch: null,
+  pr_state: null,
+  created_at: "2024-01-02T10:02:00Z",
+  delivered_at: null,
+}
+
+export const MOCK_DOCKER_SCAN = {
+  id: ID.dockerScan,
+  docker_target_id: ID.dockerTargetRoot,
+  status: "completed" as const,
+  triggered_by: "manual" as const,
+  branch: "main",
+  commit_sha: "abc1234",
+  score: 72,
+  grade: "C",
+  file_count: 2,
+  error_message: null,
+  created_at: "2024-01-02T10:00:00Z",
+  completed_at: "2024-01-02T10:00:30Z",
+}
+
+export const MOCK_DOCKER_SCAN_FAILED = {
+  ...MOCK_DOCKER_SCAN,
+  id: ID.dockerScanFailed,
+  status: "failed" as const,
+  triggered_by: "webhook" as const,
+  score: null,
+  grade: null,
+  file_count: null,
+  error_message: "Could not fetch Docker files from GitHub",
+  completed_at: "2024-01-01T09:00:10Z",
+  created_at: "2024-01-01T09:00:00Z",
+}
+
+// Branch mirrors dockerFixBranch(ID.dockerTargetRoot) in src/lib/delivery.ts,
+// which is what the Docker PRs tab filters and maps on.
+export const MOCK_DOCKER_PR = {
+  id: ID.dockerPr,
+  repo_id: ID.repo,
+  pr_branch: `greensecops/docker-${ID.dockerTargetRoot.slice(0, 8)}`,
+  pr_url: "https://github.com/acme/web-app/pull/77",
   pr_state: "open" as const,
   ci_status: "success" as const,
   review_decision: "approved" as const,
@@ -726,7 +856,7 @@ export async function mockIssues(
       // star diagram), computed from the same fixture list the dashboard's
       // other issue-driven assertions use.
       const active = issues.filter(
-        (i: { ignored_at?: string | null }) => !i.ignored_at,
+        (i) => !(i as { ignored_at?: string | null }).ignored_at,
       )
       type Bucket = { open: number; resolved: number; critical_open: number }
       const byCategory = new Map<string, Bucket>()
@@ -922,6 +1052,55 @@ export async function mockInstallations(
 ) {
   await page.route("**/api/v1/installations/**", (route) => {
     route.fulfill({ json: installations })
+  })
+}
+
+export async function mockDockerTargets(
+  page: Page,
+  targets: Array<{ id: string; repo_id: string }> = [
+    MOCK_DOCKER_TARGET,
+    MOCK_DOCKER_TARGET_API,
+  ],
+  {
+    files = [MOCK_DOCKER_FILE],
+    findings = [MOCK_DOCKER_FINDING],
+    fixes = [MOCK_DOCKER_FIX],
+    scans = [MOCK_DOCKER_SCAN, MOCK_DOCKER_SCAN_FAILED],
+  } = {},
+) {
+  await page.route("**/api/v1/docker-targets/**", (route) => {
+    const url = route.request().url()
+    const method = route.request().method()
+    if (method === "DELETE") {
+      route.fulfill({ status: 204 })
+    } else if (method === "PATCH" && url.includes("/toggle")) {
+      route.fulfill({ json: { id: targets[0].id, enabled: false } })
+    } else if (method === "POST" && url.includes("/scan")) {
+      route.fulfill({
+        status: 202,
+        json: { status: "queued", docker_target_id: targets[0].id },
+      })
+    } else if (method === "POST" && url.includes("/fixes")) {
+      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
+    } else if (method === "POST" && url.includes("/deliver")) {
+      route.fulfill({ status: 202, json: { status: "queued" } })
+    } else if (url.includes("/files")) {
+      route.fulfill({ json: files })
+    } else if (url.includes("/findings")) {
+      route.fulfill({ json: findings })
+    } else if (url.includes("/fixes")) {
+      route.fulfill({ json: fixes })
+    } else if (url.includes("/scans")) {
+      // Only the target that has actually been scanned has a history.
+      const scanned = url.includes(targets[0].id) ? scans : []
+      route.fulfill({ json: scanned })
+    } else {
+      // Both the org-wide list (no repo_id) and the per-repo list land here.
+      const repoId = new URL(url).searchParams.get("repo_id")
+      route.fulfill({
+        json: repoId ? targets.filter((t) => t.repo_id === repoId) : targets,
+      })
+    }
   })
 }
 
