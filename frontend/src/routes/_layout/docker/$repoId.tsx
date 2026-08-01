@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import {
   createFileRoute,
   Link,
@@ -5,6 +6,8 @@ import {
   useRouterState,
 } from "@tanstack/react-router"
 import { ArrowLeft, Lock } from "lucide-react"
+import { DockerService } from "@/client"
+import { GradeBadge } from "@/components/GradeBadge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -12,31 +15,37 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useRepository } from "@/hooks/useRepository"
+import { worstGrade } from "@/lib/grades"
 import { cn } from "@/lib/utils"
 
-export const Route = createFileRoute("/_layout/infrastructure/$repoId")({
-  component: InfrastructureRepoLayout,
+export const Route = createFileRoute("/_layout/docker/$repoId")({
+  component: DockerRepoLayout,
   head: () => ({
-    meta: [{ title: "Infrastructure - GreenSecOps" }],
+    meta: [{ title: "Docker - GreenSecOps" }],
   }),
 })
 
 const navItems = [
-  { label: "Terraform", to: "terraform" },
-  { label: "Cloud", to: "cloud" },
+  { label: "Analysis", to: "analysis" },
   { label: "PRs", to: "pull-requests" },
+  { label: "Scan history", to: "scans" },
 ] as const
 
-function InfrastructureRepoLayout() {
+function DockerRepoLayout() {
   const { repoId } = Route.useParams()
   const currentPath = useRouterState({ select: (s) => s.location.pathname })
   const { repo, isLoading: repoLoading } = useRepository(repoId)
+
+  const { data: targets } = useQuery({
+    queryKey: ["docker-targets", "repo", repoId],
+    queryFn: () => DockerService.listDockerTargets({ repoId }),
+  })
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <Link
-          to="/infrastructure"
+          to="/docker"
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -60,17 +69,20 @@ function InfrastructureRepoLayout() {
               <TooltipContent>Private repository</TooltipContent>
             </Tooltip>
           )}
+          <GradeBadge
+            grade={worstGrade((targets ?? []).map((t) => t.latest_grade))}
+          />
         </div>
       </div>
 
       <nav className="flex gap-1 border-b overflow-x-auto scrollbar-none">
         {navItems.map((item) => {
-          const href = `/infrastructure/${repoId}/${item.to}`
+          const href = `/docker/${repoId}/${item.to}`
           const isActive = currentPath.startsWith(href)
           return (
             <Link
               key={item.to}
-              to={`/infrastructure/$repoId/${item.to}`}
+              to={`/docker/$repoId/${item.to}`}
               params={{ repoId }}
               className={cn(
                 "px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px",
