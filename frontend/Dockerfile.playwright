@@ -15,6 +15,12 @@ WORKDIR /app
 COPY --from=oven/bun:1@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 \
      /usr/local/bin/bun /usr/local/bin/bun
 
+# `bunx` is the same binary under a second name — bun dispatches on argv[0] —
+# and the CI suite invokes it directly (`docker compose run playwright bunx
+# playwright test`). The installer script this replaced created both, so the
+# link has to be recreated explicitly.
+RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
+
 COPY package.json bun.lock /app/
 
 COPY frontend/package.json /app/frontend/
