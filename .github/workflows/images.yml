@@ -90,6 +90,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve the image name
+        id: image
+        # A registry reference must be lowercase, and github.repository_owner
+        # preserves the account's real casing — "TheoGoudout", not
+        # "theogoudout" — so interpolating it directly makes every push fail
+        # with "invalid reference format". Workflow expressions have no
+        # lowercase function, so the conversion happens in the shell.
+        env:
+          IMAGE_SUFFIX: ${{ matrix.image }}
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/greensecops-${IMAGE_SUFFIX}" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -104,7 +116,7 @@ jobs:
           # Pushed without a tag; the merge job assembles the per-architecture
           # digests into one manifest. Tagging here would have the two
           # architectures overwrite each other.
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform }}
 
@@ -151,10 +163,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve the image name
+        id: image
+        # Same lowercasing as the build job — see the comment there.
+        env:
+          IMAGE_SUFFIX: ${{ matrix.image }}
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/greensecops-${IMAGE_SUFFIX}" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - id: meta
         uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.8.0
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
@@ -163,7 +183,7 @@ jobs:
       - name: Create the multi-architecture manifest
         working-directory: /tmp/digests
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+          IMAGE: ${{ steps.image.outputs.name }}
         run: |
           # Every file here is named for one architecture's digest; the tags
           # come from the metadata action as -t arguments.
@@ -173,7 +193,7 @@ jobs:
 
       - name: Confirm both architectures are present
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/greensecops-${{ matrix.image }}
+          IMAGE: ${{ steps.image.outputs.name }}
         run: |
           set -euo pipefail
           version='${{ steps.meta.outputs.version }}'
