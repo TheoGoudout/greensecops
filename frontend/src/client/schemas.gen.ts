@@ -732,6 +732,130 @@ export const CloudScanPublicSchema = {
     title: 'CloudScanPublic'
 } as const;
 
+export const DockerBuildPayloadSchema = {
+    properties: {
+        workflow_run_id: {
+            type: 'integer',
+            title: 'Workflow Run Id'
+        },
+        image_ref: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Image Ref'
+        },
+        dockerfile_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dockerfile Path'
+        },
+        image_size_bytes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Image Size Bytes'
+        },
+        context_size_bytes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context Size Bytes'
+        },
+        build_duration_ms: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Build Duration Ms'
+        },
+        cache_hit_ratio: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cache Hit Ratio'
+        },
+        observed_builds: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Observed Builds'
+        },
+        layers: {
+            anyOf: [
+                {
+                    items: {
+                        additionalProperties: true,
+                        type: 'object'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Layers'
+        },
+        containers: {
+            anyOf: [
+                {
+                    items: {
+                        additionalProperties: true,
+                        type: 'object'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Containers'
+        }
+    },
+    type: 'object',
+    required: ['workflow_run_id'],
+    title: 'DockerBuildPayload',
+    description: `One image build (and optionally its containers) observed in CI.
+
+A workflow can build several images, so this is posted once per image
+rather than once per run — which is exactly why it is not folded into
+TelemetryPayload.`
+} as const;
+
 export const DockerFilePublicSchema = {
     properties: {
         path: {

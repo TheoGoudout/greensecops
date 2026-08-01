@@ -129,6 +129,30 @@ export type CloudScanPublic = {
 };
 
 /**
+ * One image build (and optionally its containers) observed in CI.
+ *
+ * A workflow can build several images, so this is posted once per image
+ * rather than once per run — which is exactly why it is not folded into
+ * TelemetryPayload.
+ */
+export type DockerBuildPayload = {
+    workflow_run_id: number;
+    image_ref?: (string | null);
+    dockerfile_path?: (string | null);
+    image_size_bytes?: (number | null);
+    context_size_bytes?: (number | null);
+    build_duration_ms?: (number | null);
+    cache_hit_ratio?: (number | null);
+    observed_builds?: (number | null);
+    layers?: (Array<{
+    [key: string]: unknown;
+}> | null);
+    containers?: (Array<{
+    [key: string]: unknown;
+}> | null);
+};
+
+/**
  * A Dockerfile or Compose file's live source for a target.
  *
  * Not persisted (mirroring ``TerraformFilePublic``): fetched from GitHub on
@@ -1263,6 +1287,15 @@ export type TelemetryIngestTelemetryData = {
 };
 
 export type TelemetryIngestTelemetryResponse = ({
+    [key: string]: (string);
+});
+
+export type TelemetryIngestDockerBuildData = {
+    authorization?: (string | null);
+    requestBody: DockerBuildPayload;
+};
+
+export type TelemetryIngestDockerBuildResponse = ({
     [key: string]: (string);
 });
 

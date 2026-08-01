@@ -388,6 +388,61 @@ export type CloudScanPublic = {
 };
 
 /**
+ * DockerBuildPayload
+ * One image build (and optionally its containers) observed in CI.
+ *
+ * A workflow can build several images, so this is posted once per image
+ * rather than once per run — which is exactly why it is not folded into
+ * TelemetryPayload.
+ */
+export type DockerBuildPayload = {
+    /**
+     * Workflow Run Id
+     */
+    workflow_run_id: number;
+    /**
+     * Image Ref
+     */
+    image_ref?: string | null;
+    /**
+     * Dockerfile Path
+     */
+    dockerfile_path?: string | null;
+    /**
+     * Image Size Bytes
+     */
+    image_size_bytes?: number | null;
+    /**
+     * Context Size Bytes
+     */
+    context_size_bytes?: number | null;
+    /**
+     * Build Duration Ms
+     */
+    build_duration_ms?: number | null;
+    /**
+     * Cache Hit Ratio
+     */
+    cache_hit_ratio?: number | null;
+    /**
+     * Observed Builds
+     */
+    observed_builds?: number | null;
+    /**
+     * Layers
+     */
+    layers?: Array<{
+        [key: string]: unknown;
+    }> | null;
+    /**
+     * Containers
+     */
+    containers?: Array<{
+        [key: string]: unknown;
+    }> | null;
+};
+
+/**
  * DockerFilePublic
  * A Dockerfile or Compose file's live source for a target.
  *
@@ -4054,6 +4109,40 @@ export type TelemetryIngestTelemetryResponses = {
 };
 
 export type TelemetryIngestTelemetryResponse = TelemetryIngestTelemetryResponses[keyof TelemetryIngestTelemetryResponses];
+
+export type TelemetryIngestDockerBuildData = {
+    body: DockerBuildPayload;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/telemetry/docker-build';
+};
+
+export type TelemetryIngestDockerBuildErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TelemetryIngestDockerBuildError = TelemetryIngestDockerBuildErrors[keyof TelemetryIngestDockerBuildErrors];
+
+export type TelemetryIngestDockerBuildResponses = {
+    /**
+     * Response Telemetry-Ingest Docker Build
+     * Successful Response
+     */
+    201: {
+        [key: string]: string;
+    };
+};
+
+export type TelemetryIngestDockerBuildResponse = TelemetryIngestDockerBuildResponses[keyof TelemetryIngestDockerBuildResponses];
 
 export type TelemetryIngestSampleData = {
     body: SamplePayload;
