@@ -25,10 +25,12 @@ test_no_violation_with_deploy_restart_policy if {
 	count(violations) == 0
 }
 
-# `restart: "no"` is the default spelled out — it is not a policy.
-test_violation_when_restart_is_explicitly_no if {
-	violations := compose_missing_restart_policy.violations with input as _compose({"api": _service({"restart": "no"})})
-	count(violations) == 1
+# An explicit `restart: "no"` is a considered choice — the correct setting for
+# a one-shot migration container, where restarting on exit is actively wrong.
+# Only absence indicates nobody decided.
+test_no_violation_when_restart_is_explicitly_no if {
+	violations := compose_missing_restart_policy.violations with input as _compose({"prestart": _service({"restart": "no"})})
+	count(violations) == 0
 }
 
 # An override fragment restates only what it changes; the base file may well

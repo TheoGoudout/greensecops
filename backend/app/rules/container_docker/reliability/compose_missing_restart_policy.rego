@@ -29,6 +29,12 @@ _has_restart_policy(service) if {
 	policy != "no"
 }
 
+# An explicit `restart: "no"` is a considered choice, not the unconsidered
+# default this rule is about — it is the correct setting for a one-shot
+# migration or seed container, where restarting on exit would be actively
+# wrong (this rule's own fix text says so). Absence still fires.
+_has_restart_policy(service) if service.restart == "no"
+
 _has_restart_policy(service) if service.deploy.restart_policy
 
 violations contains violation if {

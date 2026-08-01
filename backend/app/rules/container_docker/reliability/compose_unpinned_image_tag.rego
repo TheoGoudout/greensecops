@@ -40,6 +40,13 @@ violations contains violation if {
 	is_object(service)
 	image := service.image
 	is_string(image)
+
+	# A service that also declares `build` is naming its own build *output*,
+	# not pulling an upstream image — the digest does not exist until the
+	# build runs, so there is nothing to pin. Found by running this engine
+	# against GreenSecOps's own compose.yml, where every first-party service
+	# was flagged.
+	not service.build
 	not contains(image, "@sha256:")
 	_unpinned(image)
 	violation := {

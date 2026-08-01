@@ -46,3 +46,15 @@ test_no_violation_for_build_only_service if {
 	violations := compose_unpinned_image_tag.violations with input as _compose({"api": {"build": {"context": "."}, "__start_line__": 2, "__end_line__": 4}})
 	count(violations) == 0
 }
+
+# A service that also builds is naming its own build output; the digest does
+# not exist until the build runs, so there is nothing to pin.
+test_no_violation_when_the_service_builds_the_image_it_names if {
+	violations := compose_unpinned_image_tag.violations with input as _compose({"backend": {
+		"image": "greensecops/backend:${TAG:-latest}",
+		"build": {"context": ".", "dockerfile": "backend/Dockerfile"},
+		"__start_line__": 2,
+		"__end_line__": 6,
+	}})
+	count(violations) == 0
+}
