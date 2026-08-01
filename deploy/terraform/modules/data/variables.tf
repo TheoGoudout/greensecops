@@ -3,6 +3,18 @@ variable "name_prefix" {
   type        = string
 }
 
+variable "create_managed_database" {
+  description = "Create an RDS instance. False in the single_host topology, where PostgreSQL runs as a container on the application host's persistent volume."
+  type        = bool
+  default     = true
+}
+
+variable "create_managed_cache" {
+  description = "Create an ElastiCache replication group. False in the single_host topology, where Redis runs as a container."
+  type        = bool
+  default     = true
+}
+
 variable "subnet_ids" {
   description = "Isolated subnet IDs the database and cache are placed in."
   type        = list(string)

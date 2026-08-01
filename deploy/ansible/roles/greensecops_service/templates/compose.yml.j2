@@ -1,34 +1,54 @@
 {{ ansible_managed | comment }}
-# One service per host. This is the split-host counterpart to the repository's
-# compose.yml: same images and same commands, but PostgreSQL, Redis and OPA are
-# reached over the network instead of over a compose bridge, so no db, redis,
-# minio or opa service is defined alongside.
+# The containers this host runs — whichever services its group owns, plus the
+# data tier when Terraform did not provision a managed equivalent.
+#
+# In the single_host topology this is the whole stack and is equivalent to the
+# repository's compose.yml. Above it, the set narrows and PostgreSQL, Redis and
+# object storage are reached over the network instead.
 #
 # Generated from deploy/ansible/vars/services.yml — edit that, not this.
 ---
 services:
-  {{ greensecops_role }}:
-    image: {{ greensecops_service_image }}
+{% for name in greensecops_group_services %}
+{% set svc = greensecops_services[name] %}
+  {{ name }}:
+    image: {{ greensecops_config.ECR_REGISTRY }}/greensecops/{{ svc.image }}:{{ greensecops_config.IMAGE_TAG }}
     restart: always
     env_file:
       - {{ greensecops_env_file }}
-{% if greensecops_service_spec.command %}
-    command: {{ greensecops_service_spec.command | trim }}
+{% if svc.mem_limit is defined %}
+    # Hard cap, soft floor and relative CPU weight, from services.yml. Bounded
+    # so that a container which misbehaves dies alone rather than leaving the
+    # kernel's OOM killer to choose a victim by score.
+    mem_limit: {{ svc.mem_limit }}
+    mem_reservation: {{ svc.mem_reservation }}
+    cpu_shares: {{ svc.cpu_shares }}
 {% endif %}
-{% if greensecops_service_spec.port %}
+{% if svc.command %}
+    command: {{ svc.command | trim }}
+{% endif %}
+{% if svc.host_port %}
     ports:
-      # Bound to every interface because the load balancer reaches the instance
-      # from another subnet; the security group is what limits who may connect.
-      - "{{ greensecops_service_spec.port }}:{{ greensecops_service_spec.port }}"
+      # Published on the host port the load balancer's target group points at.
+      # It differs from the container port where services share a box, because
+      # three nginx containers cannot all take :80.
+      - "{{ svc.host_port }}:{{ svc.container_port }}"
 {% endif %}
-{% if greensecops_service_spec.volumes is defined %}
+{% if svc.volumes is defined %}
     volumes:
-{% for volume in greensecops_service_spec.volumes %}
+{% for volume in svc.volumes %}
       - {{ volume }}
 {% endfor %}
 {% endif %}
+{% if greensecops_self_hosted_data_tier and name in greensecops_service_data_tier_dependents %}
+    depends_on:
+{% for dependency in greensecops_service_data_tier_dependents[name] %}
+      {{ dependency }}:
+        condition: service_healthy
+{% endfor %}
+{% endif %}
     healthcheck:
-      test: {{ greensecops_service_spec.health_check | to_json }}
+      test: {{ svc.health_check | to_json }}
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,17 +58,71 @@ services:
       options:
         awslogs-region: {{ greensecops_region }}
         awslogs-group: /greensecops/greensecops-{{ greensecops_environment }}/{{ greensecops_role }}
-        awslogs-stream: "{{ greensecops_role }}-{{ inventory_hostname }}"
-{% if greensecops_role == 'backend' %}
+        awslogs-stream: "{{ name }}-{{ inventory_hostname }}"
 
+{% endfor %}
+{% if greensecops_self_hosted_data_tier %}
+  # ------------------------------------------------------------------------
+  # Self-hosted data tier
+  # ------------------------------------------------------------------------
+  # PostgreSQL, Redis and object storage as containers, because this topology
+  # has no RDS, ElastiCache or real S3 bucket behind it. Their data lives on the
+  # persistent volume mounted at /var/lib/greensecops, which outlives the
+  # instance and is snapshotted daily — see modules/state_volume.
+{% for name, svc in greensecops_data_tier_services.items() %}
+  {{ name }}:
+    image: {{ svc.image_ref }}
+    restart: always
+    env_file:
+      - {{ greensecops_env_file }}
+{% if svc.mem_limit is defined %}
+    # The data tier carries the highest CPU weight on the box: under
+    # contention, a starved PostgreSQL is the worst outcome available.
+    mem_limit: {{ svc.mem_limit }}
+    mem_reservation: {{ svc.mem_reservation }}
+    cpu_shares: {{ svc.cpu_shares }}
+{% endif %}
+{% if svc.command is defined %}
+    command: {{ svc.command }}
+{% endif %}
+{% if svc.environment %}
+    environment:
+{% for key, value in svc.environment.items() %}
+      {{ key }}: "{{ value }}"
+{% endfor %}
+{% endif %}
+    volumes:
+{% for volume in svc.volumes %}
+      - {{ volume }}
+{% endfor %}
+    healthcheck:
+      test: {{ svc.health_check | to_json }}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: {{ greensecops_region }}
+        awslogs-group: /greensecops/greensecops-{{ greensecops_environment }}/{{ greensecops_role }}
+        awslogs-stream: "{{ name }}-{{ inventory_hostname }}"
+
+{% endfor %}
+{% endif %}
+{% if 'backend' in greensecops_group_services %}
   # Migrations, the object-store bucket check and the first-superuser seed.
   # Never started by `up` — the deploy runs it once with `compose run --rm`.
   prestart:
-    image: {{ greensecops_service_image }}
+    image: {{ greensecops_config.ECR_REGISTRY }}/greensecops/backend:{{ greensecops_config.IMAGE_TAG }}
     command: bash scripts/prestart.sh
     env_file:
       - {{ greensecops_env_file }}
     profiles:
       - migration
     restart: "no"
+    # Migrates and exits, so it never overlaps steady state.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
 {% endif %}

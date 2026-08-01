@@ -1,0 +1,155 @@
+name: pages
+
+# Publishes the three static surfaces — landing, dashboard and docs — to
+# Cloudflare Pages, so they never occupy a container on the application host.
+#
+# Only the API is genuinely dynamic. Serving the other three from a CDN removes
+# three nginx containers from the deployment and puts them behind unlimited
+# free bandwidth, which is why deploy/coolify/ can run the whole backend on one
+# small box. See deploy/coolify/README.md.
+#
+# Requires two repository secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
+# and the PUBLIC_* repository variables. Every job is skipped when the token is
+# absent, so a fork never fails on this.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - "frontend/**"
+      - "docs/**"
+      - "backend/app/rules/**"
+      - "examples/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+
+jobs:
+  landing:
+    name: Landing page
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install envsubst
+        # gettext-base is present on the current runner image, but the landing
+        # build silently produces pages full of literal ${APP_URL} if it ever
+        # is not — installing it explicitly makes that a build failure instead.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gettext-base
+
+      - name: Substitute the site's URLs and contact addresses
+        # landing/entrypoint.sh does this at container start-up. There is no
+        # container here, so the same substitution happens at build time from
+        # the same variable list — keep the two in step.
+        env:
+          APP_URL: ${{ vars.PUBLIC_APP_URL }}
+          DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
+          MARKETING_URL: ${{ vars.PUBLIC_MARKETING_URL }}
+          SUPPORT_EMAIL: ${{ vars.PUBLIC_SUPPORT_EMAIL }}
+          SALES_EMAIL: ${{ vars.PUBLIC_SALES_EMAIL }}
+          LEGAL_EMAIL: ${{ vars.PUBLIC_LEGAL_EMAIL }}
+          PRIVACY_EMAIL: ${{ vars.PUBLIC_PRIVACY_EMAIL }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/landing
+          cp -r landing/assets dist/landing/
+          for f in landing/*.html; do
+            envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' \
+              < "$f" > "dist/landing/$(basename "$f")"
+          done
+          # Reproduces `try_files $uri $uri.html` from landing/nginx.conf, so
+          # /pricing keeps resolving to pricing.html without the extension.
+          cp deploy/cloudflare/landing/_headers dist/landing/_headers
+          cp deploy/cloudflare/landing/_redirects dist/landing/_redirects
+
+      - name: Publish
+        if: env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/landing --project-name=greensecops-landing
+
+  frontend:
+    name: Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Build
+        # The same VITE_* arguments frontend/Dockerfile bakes in. They end up
+        # in the shipped bundle either way, so they are repository variables
+        # rather than secrets.
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ vars.PUBLIC_API_URL }}
+          VITE_GREENSECOPS_PUBLIC_URL: ${{ vars.PUBLIC_API_URL }}
+          VITE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.PUBLIC_GITHUB_CLIENT_ID }}
+          VITE_GITHUB_APP_NAME: ${{ vars.PUBLIC_GITHUB_APP_NAME }}
+        run: bun run build
+
+      - name: Add SPA routing rules
+        # TanStack Router does client-side routing, so every unmatched path has
+        # to fall through to index.html rather than 404.
+        run: cp deploy/cloudflare/frontend/_redirects frontend/dist/_redirects
+
+      - name: Publish
+        if: env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy frontend/dist --project-name=greensecops-dashboard
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.4"
+          enable-cache: true
+
+      - name: Build
+        # -W matches docs/Dockerfile and .github/workflows/docs.yml: a malformed
+        # rule METADATA block should fail the build, not ship a broken page.
+        env:
+          DOCS_BASE_URL: ${{ vars.PUBLIC_DOCS_URL }}
+        run: |
+          uv sync --package docs
+          uv run sphinx-build -b html -W docs docs/_build/html
+
+      - name: Publish
+        if: env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65 # v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy docs/_build/html --project-name=greensecops-docs

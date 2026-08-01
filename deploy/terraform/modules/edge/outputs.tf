@@ -10,12 +10,12 @@ output "public_alb_arn_suffix" {
 
 output "internal_alb_dns_name" {
   description = "DNS name of the internal load balancer. Becomes OPA_URL's host for the backend and the workers."
-  value       = aws_lb.internal.dns_name
+  value       = try(aws_lb.internal[0].dns_name, "")
 }
 
 output "internal_alb_arn_suffix" {
   description = "ARN suffix of the internal load balancer, for request-count scaling of the OPA group."
-  value       = aws_lb.internal.arn_suffix
+  value       = try(aws_lb.internal[0].arn_suffix, "")
 }
 
 output "public_target_group_arns" {
@@ -29,13 +29,13 @@ output "public_target_group_arn_suffixes" {
 }
 
 output "internal_target_group_arn" {
-  description = "Target group ARN the OPA Auto Scaling group registers with."
-  value       = aws_lb_target_group.internal.arn
+  description = "Target group ARN the OPA Auto Scaling group registers with. Empty when the topology has no internal load balancer."
+  value       = try(aws_lb_target_group.internal[0].arn, "")
 }
 
 output "internal_target_group_arn_suffix" {
-  description = "Target group ARN suffix for the OPA group's request-count scaling policy."
-  value       = aws_lb_target_group.internal.arn_suffix
+  description = "Target group ARN suffix for the OPA group's request-count scaling policy. Empty when the topology has no internal load balancer."
+  value       = try(aws_lb_target_group.internal[0].arn_suffix, "")
 }
 
 output "certificate_arn" {

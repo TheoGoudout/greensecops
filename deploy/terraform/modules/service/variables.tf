@@ -8,6 +8,11 @@ variable "role" {
   type        = string
 }
 
+variable "services" {
+  description = "Container names this group runs. Written to the instance and to a tag so Ansible renders a compose file with exactly these services, without re-deriving the topology."
+  type        = list(string)
+}
+
 variable "ami_id" {
   description = "AMI the instances boot from."
   type        = string
@@ -31,6 +36,12 @@ variable "subnet_ids" {
 variable "security_group_ids" {
   description = "Security groups attached to the instances."
   type        = list(string)
+}
+
+variable "assign_public_ip" {
+  description = "Give each instance a public address. Required when the group runs in public subnets because there is no NAT gateway to reach the internet through; inbound remains closed by the security group."
+  type        = bool
+  default     = false
 }
 
 variable "user_data" {

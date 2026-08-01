@@ -4,7 +4,12 @@ You can deploy the project using Docker Compose to a remote server.
 
 The production Compose file (`compose.yml`) is written for [Coolify](https://coolify.io/), a self-hostable deployment platform that builds the stack, injects secrets, and handles HTTPS and routing for the public-facing services. You can also run `compose.yml` by hand on any Docker host, as long as you provide the same variables yourself (see below).
 
-There is a second, larger path: **[deploy/README.md](deploy/README.md) provisions the stack on AWS with Terraform and configures it with Ansible.** The rest of this document describes the single-host Compose deployment, which remains the simplest way to run GreenSecOps.
+Two other paths exist, at opposite ends of the cost and complexity range:
+
+* **[deploy/coolify/README.md](deploy/coolify/README.md) — the cheapest, ~€20/month.** Coolify driving one small server at Hetzner — ARM or x86, whichever line has stock — with the three static surfaces on Cloudflare Pages and object storage on R2. Five containers instead of ten.
+* **[deploy/README.md](deploy/README.md) — AWS with Terraform and Ansible**, from ~$120/month on one instance up to ~$970 fully distributed, with a documented migration path between the two.
+
+The rest of this document describes the generic single-host Compose deployment, which both of those build on.
 
 ## Preparation
 
@@ -161,14 +166,20 @@ For production you wouldn't want to have the overrides in `compose.override.yml`
 
 Note that `compose.yml` does not publish any ports — in a Coolify deployment the platform's proxy routes the `SERVICE_URL_*` hostnames to the right containers and terminates HTTPS. On a plain Docker host you need to put your own reverse proxy in front of the `frontend`, `backend`, `landing`, and `docs` services.
 
+## Deploy with Coolify to Hetzner
+
+`deploy/coolify/` holds a Compose file and runbook for the cheapest supported deployment: one small server at Hetzner (~€13/month), the landing page, dashboard and docs on Cloudflare Pages, and scan artifacts in Cloudflare R2. The images are published for both amd64 and arm64, so it does not matter which of Hetzner's lines has stock on the day.
+
+It differs from the Compose file above in what it leaves out — no `frontend`, `landing`, `docs` or `minio` containers, and the Celery scheduler runs embedded in the worker rather than as its own service. See **[deploy/coolify/README.md](deploy/coolify/README.md)**, which also covers running Coolify's control plane on a Raspberry Pi and why that does not restrict which servers you can deploy to.
+
 ## Deploy to AWS with Terraform and Ansible
 
 `deploy/` holds a full AWS deployment: Terraform provisions the infrastructure, Ansible configures the instances and runs the containers. See **[deploy/README.md](deploy/README.md)** for the runbook.
 
 It differs from the Compose deployment above in three ways worth knowing before you choose between them:
 
-* **One Auto Scaling group per service** instead of seven containers on one host. The Celery workers and OPA scale on load; the rest are fixed-size groups that a rolling instance refresh replaces without dropping capacity.
-* **Managed data services.** RDS PostgreSQL replaces the `db` container, ElastiCache replaces `redis`, and real S3 replaces MinIO — the backend authenticates to it with the instance role rather than the `S3_ACCESS_KEY`/`S3_SECRET_KEY` pair (see `backend/app/services/storage/object_store.py`). `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL` and `S3_*` are all set by Terraform rather than hardcoded to in-network container names.
+* **It defaults to one EC2 instance running the whole stack**, PostgreSQL, Redis and MinIO included — the same shape as `compose.yml`, for roughly $120/month. Two larger topologies are reachable by changing one variable when load demands it: `consolidated` (three host groups, managed PostgreSQL and Redis, ~$330) and `distributed` (one group per service, multi-AZ, ~$970). deploy/README.md has the cost breakdown and says what should trigger each step.
+* **Managed data services, above the default topology.** RDS PostgreSQL replaces the `db` container, ElastiCache replaces `redis`, and real S3 replaces MinIO — the backend authenticates to it with the instance role rather than the `S3_ACCESS_KEY`/`S3_SECRET_KEY` pair (see `backend/app/services/storage/object_store.py`). `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL` and `S3_*` are all set by Terraform rather than hardcoded to in-network container names.
 * **Deploys and rollbacks are a click.** Two `workflow_dispatch` workflows (`deploy` and `rollback`) roll an environment forward or back from the Actions tab, with production gated behind a GitHub environment approval. AWS access is by OIDC — no long-lived keys in repository secrets.
 * **Configuration comes from SSM Parameter Store**, not Coolify magic variables. Terraform writes the values it knows (endpoints, hostnames, bucket names, image tag) and declares the secrets with placeholders you seed out of band, so no secret is ever written to Terraform state. Every variable documented above still applies — Ansible renders them into the same `.env` the backend reads.
 

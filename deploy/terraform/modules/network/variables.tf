@@ -13,10 +13,20 @@ variable "availability_zones" {
   type        = list(string)
 }
 
-variable "single_nat_gateway" {
-  description = "Route every private subnet through one NAT gateway instead of one per AZ. Cheaper, but the NAT's AZ becomes a single point of failure for egress."
-  type        = bool
-  default     = false
+variable "nat_gateway_count" {
+  description = "NAT gateways to create, from 0 to one per availability zone. Fewer than the AZ count makes the surviving gateways' AZs a single point of failure for egress; 0 means the private subnets have no route out at all, which is only viable when the instances sit in the public subnets instead."
+  type        = number
+
+  validation {
+    condition     = var.nat_gateway_count >= 0
+    error_message = "nat_gateway_count cannot be negative."
+  }
+}
+
+variable "interface_endpoints" {
+  description = "AWS service names to reach over PrivateLink instead of the internet, e.g. [\"ssm\", \"ecr.api\"]. Each is billed per availability zone — roughly $8/month each — so an empty list is the right default until the NAT data-processing charge they displace exceeds that."
+  type        = list(string)
+  default     = []
 }
 
 variable "flow_log_retention_days" {

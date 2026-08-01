@@ -16,7 +16,13 @@ locals {
   private_cidrs  = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr, 4, i + 4)]
   isolated_cidrs = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr, 4, i + 8)]
 
-  nat_gateway_count = var.single_nat_gateway ? 1 : local.az_count
+  # Clamped so a caller cannot ask for more gateways than there are AZs.
+  nat_gateway_count = min(var.nat_gateway_count, local.az_count)
+
+  # With no NAT there is nothing to route to, and the private subnets have no
+  # way out. The caller is expected to place instances in the public subnets in
+  # that case — see instances_are_public in the root module.
+  has_nat = local.nat_gateway_count > 0
 }
 
 resource "aws_vpc" "this" {
@@ -149,11 +155,13 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route" "private_nat" {
-  count = local.az_count
+  count = local.has_nat ? local.az_count : 0
 
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.this[var.single_nat_gateway ? 0 : count.index].id
+
+  # Fewer gateways than AZs: the extra subnets share the last one that exists.
+  nat_gateway_id = aws_nat_gateway.this[min(count.index, local.nat_gateway_count - 1)].id
 }
 
 resource "aws_route_table_association" "private" {
@@ -188,6 +196,8 @@ resource "aws_route_table_association" "isolated" {
 # keeps working if egress is ever locked down further.
 
 resource "aws_security_group" "endpoints" {
+  count = length(var.interface_endpoints) > 0 ? 1 : 0
+
   name        = "${var.name_prefix}-vpc-endpoints"
   description = "Allows instances in the VPC to reach the interface VPC endpoints over HTTPS."
   vpc_id      = aws_vpc.this.id
@@ -198,7 +208,9 @@ resource "aws_security_group" "endpoints" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints_https" {
-  security_group_id = aws_security_group.endpoints.id
+  count = length(var.interface_endpoints) > 0 ? 1 : 0
+
+  security_group_id = aws_security_group.endpoints[0].id
   description       = "HTTPS from anywhere inside the VPC."
   cidr_ipv4         = aws_vpc.this.cidr_block
   from_port         = 443
@@ -225,22 +237,16 @@ resource "aws_vpc_endpoint" "s3" {
 
 data "aws_region" "current" {}
 
+# Billed per endpoint per availability zone, so the list is a deliberate cost
+# decision rather than a default. See deploy/README.md.
 resource "aws_vpc_endpoint" "interface" {
-  for_each = toset([
-    "ssm",
-    "ssmmessages",
-    "ec2messages",
-    "ecr.api",
-    "ecr.dkr",
-    "logs",
-    "secretsmanager",
-  ])
+  for_each = toset(var.interface_endpoints)
 
   vpc_id              = aws_vpc.this.id
   service_name        = "com.amazonaws.${data.aws_region.current.region}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.endpoints.id]
+  security_group_ids  = [aws_security_group.endpoints[0].id]
   private_dns_enabled = true
 
   tags = merge(var.tags, {

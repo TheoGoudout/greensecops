@@ -1,7 +1,18 @@
 ---
-# Resolved from vars/services.yml once the role fact is known, so every task and
-# template refers to one variable instead of indexing the map repeatedly.
-greensecops_service_spec: "{{ greensecops_services[greensecops_role] }}"
+# Role-private. Anything the plays or other roles also read lives in
+# group_vars/all.yml instead.
 
-greensecops_service_image: >-
-  {{ greensecops_config.ECR_REGISTRY }}/greensecops/{{ greensecops_service_spec.image }}:{{ greensecops_config.IMAGE_TAG }}
+# Which containers must wait for the data tier to be healthy before starting.
+# Only consulted when the data tier is self-hosted; otherwise these are network
+# endpoints that already exist when the deploy begins.
+greensecops_service_data_tier_dependents:
+  backend: [db, redis, minio]
+  celery-worker: [db, redis]
+  celery-beat: [db, redis]
+
+# Directories on the persistent volume that the data-tier containers bind-mount.
+greensecops_service_state_directories:
+  - /var/lib/greensecops/postgres
+  - /var/lib/greensecops/redis
+  - /var/lib/greensecops/minio
+  - /var/lib/greensecops/celery

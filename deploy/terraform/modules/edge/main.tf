@@ -305,6 +305,8 @@ resource "aws_lb_listener_rule" "host_routing" {
 # --------------------------------------------------------------------------
 
 resource "aws_lb" "internal" {
+  count = var.internal_service == null ? 0 : 1
+
   name               = "${var.name_prefix}-internal"
   load_balancer_type = "application"
   internal           = true
@@ -320,6 +322,8 @@ resource "aws_lb" "internal" {
 }
 
 resource "aws_lb_target_group" "internal" {
+  count = var.internal_service == null ? 0 : 1
+
   name        = "${var.name_prefix}-opa"
   port        = var.internal_service.port
   protocol    = "HTTP"
@@ -352,13 +356,15 @@ resource "aws_lb_target_group" "internal" {
 # Plain HTTP: this listener is only reachable from the application security
 # groups inside the VPC, and OPA serves no TLS of its own.
 resource "aws_lb_listener" "internal" {
-  load_balancer_arn = aws_lb.internal.arn
+  count = var.internal_service == null ? 0 : 1
+
+  load_balancer_arn = aws_lb.internal[0].arn
   port              = var.internal_service.port
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.internal.arn
+    target_group_arn = aws_lb_target_group.internal[0].arn
   }
 
   tags = var.tags

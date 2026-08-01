@@ -25,12 +25,12 @@ variable "public_target_group_arn_suffixes" {
 }
 
 variable "postgres_instance_id" {
-  description = "RDS instance identifier the database alarms are scoped to."
+  description = "RDS instance identifier the database alarms are scoped to. Empty when PostgreSQL runs as a container, in which case no database alarms are created."
   type        = string
 }
 
 variable "redis_replication_group_id" {
-  description = "ElastiCache replication group ID the cache alarms are scoped to."
+  description = "ElastiCache replication group ID the cache alarms are scoped to. Empty when Redis runs as a container, in which case no cache alarms are created."
   type        = string
 }
 

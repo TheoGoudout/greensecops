@@ -1,41 +1,74 @@
 ---
-# The single source of truth for what each role runs.
+# The single source of truth for what each container is.
 #
-# This intentionally duplicates part of compose.yml. A split-host deployment
-# cannot reuse a single-host compose file — every service here runs alone on
-# its own instance group, reaching PostgreSQL, Redis and OPA over the network
-# instead of over a compose bridge. Keeping the duplication in one small file
-# makes the drift reviewable: if a command or a health check changes in
-# compose.yml, it changes here too, and deploy/README.md says so.
+# This intentionally duplicates part of compose.yml. Above the single_host
+# topology a host runs only some of these containers and reaches the rest over
+# the network, so a single-host compose file cannot be reused as-is. Keeping
+# the duplication in one small file makes the drift reviewable: if a command or
+# a health check changes in compose.yml, it changes here too, and
+# deploy/README.md says so.
 #
-# `image` names the ECR repository; the registry and tag come from Parameter
-# Store, so a rollback is a tag change rather than a rebuild.
+# `host_port` is what the container publishes on the instance. It differs from
+# the container port for the static sites because co-locating them means three
+# nginx containers cannot all take :80. It must stay in step with
+# service_topology in deploy/terraform/locals.tf, which points the load
+# balancer's target groups at the same numbers.
+#
+# `mem_limit`, `mem_reservation` and `cpu_shares` mirror compose.yml — see the
+# comment at the top of that file for why each is what it is. They matter most
+# in the single_host topology, where every container shares one instance and an
+# unbounded Celery worker would have the kernel's OOM killer pick a victim by
+# score rather than by importance. On the larger topologies a service usually
+# has its box to itself and the cap is simply never reached, which is the point:
+# the same numbers are correct everywhere, so migrating between topologies does
+# not mean re-tuning them.
+#
+# The caps sum to more than any instance type here has. They are ceilings, not
+# allocations; the reservations, about 2.2 GB in single_host, are what must fit.
 
 greensecops_services:
   backend:
     image: backend
     command: fastapi run --workers 4 app/main.py
-    port: 8000
+    container_port: 8000
+    host_port: 8000
     health_check: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
     needs_app_env: true
+    # Four uvicorn workers, each holding its own copy of the application.
+    mem_limit: 1536m
+    mem_reservation: 512m
+    cpu_shares: 1024
 
   celery-worker:
     image: backend
     command: >-
       celery -A app.workers.celery_app worker --loglevel=info
       --concurrency=${CELERY_CONCURRENCY:-4} -Q default,analysis,fixes
-    port: null
+    container_port: null
+    host_port: null
     health_check: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
     needs_app_env: true
+    # Prefork: CELERY_CONCURRENCY children plus a parent, each with the whole
+    # application, plus a scan's working set. Roughly 500m per worker plus 500m
+    # of parent — raise this in step with the concurrency. Lowest CPU weight of
+    # the application services, since scans should yield to the request path.
+    mem_limit: 3g
+    mem_reservation: 768m
+    cpu_shares: 512
 
   celery-beat:
     image: backend
     command: >-
       celery -A app.workers.celery_app beat --loglevel=info
       --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celery/celerybeat-schedule
-    port: null
+    container_port: null
+    host_port: null
     health_check: ["CMD-SHELL", "test -f /var/lib/celery/celerybeat-schedule"]
     needs_app_env: true
+    # Only ever enqueues; it does no work itself.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 256
     # PersistentScheduler keeps its cursor on disk; losing it re-fires every
     # periodic task at once, so it survives container replacement.
     volumes:
@@ -45,25 +78,38 @@ greensecops_services:
     image: opa
     command: >-
       run --server --addr=0.0.0.0:8181 --log-level=info /policies
-    port: 8181
+    container_port: 8181
+    host_port: 8181
     health_check: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
     needs_app_env: false
+    # The compiled rule bundle dominates, and it does not grow with load.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
 
   frontend:
     image: frontend
     command: null
-    port: 8080
+    container_port: 8080
+    host_port: 8081
     health_check: ["CMD", "curl", "-f", "http://localhost:8080/"]
     needs_app_env: false
+    # nginx serving a built bundle.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
 
   landing:
     image: landing
     command: null
-    port: 8080
+    container_port: 8080
+    host_port: 8082
     health_check: ["CMD", "curl", "-f", "http://localhost:8080/"]
     needs_app_env: false
-    # The landing page reads these at container start to render its links and
-    # legal copy; they are plain configuration, not secrets.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
+    # The landing container substitutes these into its HTML at start-up.
     environment_keys:
       - APP_URL
       - MARKETING_URL
@@ -76,9 +122,61 @@ greensecops_services:
   docs:
     image: docs
     command: null
-    port: 8080
+    container_port: 8080
+    host_port: 8083
     health_check: ["CMD", "curl", "-f", "http://localhost:8080/"]
     needs_app_env: false
+    # Sphinx runs at build time; this is nginx serving the result.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
+
+# Containers the deployment runs only when Terraform did not provision a
+# managed equivalent — that is, in the single_host topology. Pinned to the same
+# versions as compose.yml so local development and a deployed single host run
+# the same software.
+greensecops_data_tier_services:
+  db:
+    image_ref: postgres:18
+    # Highest CPU weight on the box: a starved database is the worst outcome
+    # under contention, and PostgreSQL sizes shared_buffers from its own
+    # defaults rather than from the cgroup, so the cap is what bounds it.
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 2048
+    volumes:
+      - /var/lib/greensecops/postgres:/var/lib/postgresql/data/pgdata
+    health_check: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+
+  redis:
+    image_ref: redis:8-alpine
+    # Broker as well as cache, so the working set grows with queue depth. If a
+    # backlog approaches this, set `maxmemory` rather than raising it.
+    mem_limit: 512m
+    mem_reservation: 64m
+    cpu_shares: 2048
+    volumes:
+      - /var/lib/greensecops/redis:/data
+    health_check: ["CMD", "redis-cli", "ping"]
+    environment: {}
+
+  minio:
+    image_ref: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 512
+    command: server /data --console-address ":9001"
+    volumes:
+      - /var/lib/greensecops/minio:/data
+    health_check: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
 
 # Build-time arguments, as the KEY=VALUE strings buildx takes directly. The
 # frontend and docs images bake their configuration in at build time, which is

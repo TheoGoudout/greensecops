@@ -1,8 +1,43 @@
+# Resource limits
+#
+# Every service is bounded, because nothing here bounds itself. A Celery worker
+# chewing through a large repository, or a scan that fans out further than
+# expected, will otherwise take as much memory as the host has — and when the
+# kernel's OOM killer steps in it chooses by score, not by importance. Left
+# unbounded, the container it kills is usually PostgreSQL, mid-write.
+#
+# The pattern is the same for every service:
+#
+#   mem_limit         hard cap. The container dies alone instead of taking the
+#                     host with it. Sized well above steady state, so hitting
+#                     it means something is genuinely wrong.
+#   mem_reservation   soft floor, used under memory pressure and the honest
+#                     number for capacity planning.
+#   cpu_shares        relative weight, and only consulted when the CPU is
+#                     actually contended. Deliberately not `cpus:`, which is a
+#                     hard ceiling: a scan should be free to use the whole box
+#                     when the box is idle, and yield when it is not. The
+#                     ordering is data tier (2048) > request path (1024) >
+#                     background work (512) > static files (256).
+#
+# The limits sum to more than any host this runs on. That is intended — they
+# are caps, not allocations, and only one service should ever approach its own.
+# The reservations are what has to fit: about 2.2 GB steady state, which is why
+# a 4 GB box works and an 8 GB box leaves room for something else.
+#
+# If you co-locate other projects on this host, these limits are what stops
+# GreenSecOps from being the noisy neighbour. See deploy/coolify/README.md.
+
 services:
 
   db:
     image: postgres:18
     restart: always
+    # PostgreSQL sizes shared_buffers from its own defaults, not from the
+    # cgroup, so the cap is what actually bounds it.
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 2048
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -20,6 +55,13 @@ services:
   redis:
     image: redis:8-alpine
     restart: always
+    # Broker as well as cache, so the working set grows with queue depth.
+    # Task messages are small — 512m is tens of thousands of queued tasks — but
+    # if a backlog ever gets near it, set `maxmemory` rather than raising this:
+    # a broker that evicts is better than a broker the kernel kills.
+    mem_limit: 512m
+    mem_reservation: 64m
+    cpu_shares: 2048
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -31,6 +73,12 @@ services:
   backend:
     image: greensecops/backend:${TAG:-latest}
     restart: always
+    # The image runs `fastapi run --workers 4`, and each uvicorn worker loads
+    # the whole application — SQLModel, boto3 and the LLM SDKs — so the floor
+    # is four copies of it, not one.
+    mem_limit: 1536m
+    mem_reservation: 512m
+    cpu_shares: 1024
     depends_on:
       db:
         condition: service_healthy
@@ -133,6 +181,10 @@ services:
   prestart:
     image: greensecops/backend:${TAG:-latest}
     restart: "no"
+    # Runs migrations and exits, so it never overlaps steady state.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -151,6 +203,16 @@ services:
   celery-worker:
     image: greensecops/backend:${TAG:-latest}
     restart: always
+    # The largest limit in the file, and the one that matters most. Prefork
+    # means CELERY_CONCURRENCY child processes plus a parent, each holding the
+    # whole application, and a scan's working set on top. Raise this in step
+    # with CELERY_CONCURRENCY — roughly 500m per worker plus 500m of parent.
+    #
+    # Lowest CPU weight of the application services: scans are background work
+    # and should yield to anything a user is waiting on.
+    mem_limit: 3g
+    mem_reservation: 768m
+    cpu_shares: 512
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -178,6 +240,10 @@ services:
   celery-beat:
     image: greensecops/backend:${TAG:-latest}
     restart: always
+    # Only ever enqueues; it does no work itself.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 256
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -202,6 +268,10 @@ services:
   minio:
     image: minio/minio:RELEASE.2025-04-08T15-41-24Z
     restart: always
+    # Absent from deploy/coolify/, which uses Cloudflare R2 instead.
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpu_shares: 512
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -221,6 +291,12 @@ services:
       context: .
       dockerfile: opa/Dockerfile
     restart: always
+    # Holds the compiled rule bundle in memory across evaluations, which is the
+    # whole reason it is a server rather than `opa eval` — the bundle is the
+    # bulk of the footprint and it does not grow with load.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 1024
     healthcheck:
       test: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
       interval: 10s
@@ -237,6 +313,11 @@ services:
   frontend:
     image: greensecops/frontend:${TAG:-latest}
     restart: always
+    # nginx serving a built bundle. compose.override.yml raises this for local
+    # development, where the service is a Vite dev server instead.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
@@ -255,6 +336,9 @@ services:
   landing:
     image: greensecops/landing:${TAG:-latest}
     restart: always
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
@@ -276,6 +360,10 @@ services:
   docs:
     image: greensecops/docs:${TAG:-latest}
     restart: always
+    # Sphinx runs at build time; the container is nginx serving the result.
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpu_shares: 256
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s

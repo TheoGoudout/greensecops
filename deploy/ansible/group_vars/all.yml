@@ -29,7 +29,25 @@ greensecops_unseeded_placeholder: changethis
 # rest — Stripe, Sentry, SMTP, the LLM providers not selected — are genuinely
 # optional and may stay at their placeholder, in which case the .env template
 # omits them entirely rather than writing a value the backend would reject.
-greensecops_required_secrets:
+# The containers this host runs, and whether it also runs the data tier. Both
+# are derived from facts tasks/fetch_config.yml sets, and both are read by more
+# than one role — so they belong to the play rather than to any of them.
+greensecops_group_services: "{{ (greensecops_group_service_list | default('')) | split(',') | select | list }}"
+
+greensecops_self_hosted_data_tier: "{{ (greensecops_config.SELF_HOSTED_DATA_TIER | default('false')) | bool }}"
+
+# The self-hosted data tier adds three: with no RDS or MinIO service to
+# generate them, the container credentials are seeded like any other secret.
+greensecops_required_secrets: >-
+  {{ greensecops_base_required_secrets
+     + (greensecops_self_hosted_data_tier | ternary(greensecops_self_hosted_required_secrets, [])) }}
+
+greensecops_self_hosted_required_secrets:
+  - POSTGRES_PASSWORD
+  - MINIO_ROOT_USER
+  - MINIO_ROOT_PASSWORD
+
+greensecops_base_required_secrets:
   - SECRET_KEY
   - FIRST_SUPERUSER
   - FIRST_SUPERUSER_PASSWORD
