@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlmodel import col, select
 
 from app.api.deps import (
@@ -65,7 +66,6 @@ class DockerBuildPayload(BaseModel):
     # Only the opt-in BuildKit metadata path can supply this; the zero-config
     # `docker history` collector cannot tell whether a layer was cached.
     cache_hit_ratio: float | None = None
-    observed_builds: int | None = None
     layers: list[dict[str, Any]] | None = None
     containers: list[dict[str, Any]] | None = None
 
@@ -80,6 +80,35 @@ class SamplePayload(BaseModel):
     # Top 5-10% resource-consuming processes from the proc-sampler binary
     # (Linux runners only); absent elsewhere or if sampling failed.
     top_processes: list[dict[str, Any]] | None = None
+
+
+def _count_observed_builds(
+    session: SessionDep,
+    repo_id: uuid.UUID,
+    telemetry: DockerBuildTelemetry,
+) -> int:
+    """How many builds of this Dockerfile we have now seen, including this one.
+
+    Server-side because it is a property of the *series*, and the runner has no
+    way to know it — it sees one job. ``image_layer_cache_ineffective`` gates on
+    this to avoid firing on a first build that legitimately missed every layer,
+    so a client-supplied count would let a caller suppress or force the rule.
+
+    Counted per ``dockerfile_path`` rather than per image: image ids change on
+    every build by definition, so counting those would always answer 1.
+    """
+    query = (
+        select(func.count())
+        .select_from(DockerBuildTelemetry)
+        .where(DockerBuildTelemetry.repo_id == repo_id)
+    )
+    if telemetry.dockerfile_path is None:
+        query = query.where(col(DockerBuildTelemetry.dockerfile_path).is_(None))
+    else:
+        query = query.where(
+            DockerBuildTelemetry.dockerfile_path == telemetry.dockerfile_path
+        )
+    return session.exec(query).one()
 
 
 def _lookup_repo(session: SessionDep, repository: str) -> Repository | None:
@@ -191,7 +220,8 @@ async def ingest_docker_build(
     )
 
     run_docker_telemetry_analysis.delay(
-        str(telemetry.id), observed_builds=payload.observed_builds or 0
+        str(telemetry.id),
+        observed_builds=_count_observed_builds(session, repo.id, telemetry),
     )
 
     logger.info(

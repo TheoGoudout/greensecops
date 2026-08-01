@@ -73,7 +73,10 @@ function RepoSubNav({ repoId }: { repoId: string }) {
 }
 
 const infraSubItems = [
-  { title: "Terraform", segment: "terraform" },
+  // "Analysis" rather than "Terraform": the parent item already names the
+  // engine, and nesting the same word under itself reads as a broken link.
+  // Mirrors the Docker section's Analysis tab.
+  { title: "Analysis", segment: "terraform" },
   { title: "Cloud", segment: "cloud" },
   { title: "PRs", segment: "pull-requests" },
 ] as const
@@ -115,6 +118,7 @@ function InfraSubNav({ repoId }: { repoId: string }) {
 
 const dockerSubItems = [
   { title: "Analysis", segment: "analysis" },
+  { title: "Runtime", segment: "runtime" },
   { title: "PRs", segment: "pull-requests" },
   { title: "Scan history", segment: "scans" },
 ] as const
@@ -191,19 +195,19 @@ export function AppSidebar() {
         <RepoSubNav repoId={currentRepoId} />
       ) : undefined,
     },
-    { icon: Award, title: "Badges", path: "/badges" },
   ]
 
   const infrastructureItems: NavItem[] = [
     {
+      // Named for what the page lists — Terraform roots — rather than
+      // repeating the group label. Cloud posture lives as a tab within it.
       icon: Boxes,
-      title: "Infrastructure",
+      title: "Terraform",
       path: "/infrastructure",
       children: currentInfraRepoId ? (
         <InfraSubNav repoId={currentInfraRepoId} />
       ) : undefined,
     },
-    { icon: Award, title: "Terraform Badges", path: "/infrastructure/badges" },
   ]
 
   const containerItems: NavItem[] = [
@@ -215,7 +219,13 @@ export function AppSidebar() {
         <DockerSubNav repoId={currentDockerRepoId} />
       ) : undefined,
     },
-    { icon: Award, title: "Docker Badges", path: "/docker/badges" },
+  ]
+
+  // Cross-cutting, like the dashboard: one page with a tab per engine rather
+  // than an entry inside each engine's group.
+  const overviewItems: NavItem[] = [
+    { icon: LayoutDashboard, title: "Dashboard", path: "/dashboard" },
+    { icon: Award, title: "Badges", path: "/badges" },
   ]
 
   const configItems: NavItem[] = [
@@ -236,24 +246,29 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Dashboard"
-                  isActive={currentPath.startsWith("/dashboard")}
-                  asChild
-                >
-                  <RouterLink to="/dashboard" onClick={handleMenuClick}>
-                    <LayoutDashboard />
-                    <span>Dashboard</span>
-                  </RouterLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {overviewItems.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton
+                    tooltip={item.title}
+                    isActive={currentPath.startsWith(item.path)}
+                    asChild
+                  >
+                    <RouterLink to={item.path} onClick={handleMenuClick}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </RouterLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {/* Ordered as the pipeline runs: build, package, then run. Both
+            auto-populated sections sit above the two that stay empty until
+            someone registers a Terraform root or connects a cloud account. */}
         <NavGroup label="CI/CD Analysis" items={analysisItems} />
-        <NavGroup label="Infrastructure" items={infrastructureItems} />
         <NavGroup label="Containers" items={containerItems} />
+        <NavGroup label="Infrastructure" items={infrastructureItems} />
         <NavGroup label="Configuration" items={configItems} />
       </SidebarContent>
       <SidebarFooter>

@@ -35,7 +35,7 @@ test.describe("Navigation", () => {
       "Dashboard",
       "Repositories",
       "Docker",
-      "Docker Badges",
+      "Terraform",
       "Rules",
       "Badges",
       "Billing",
@@ -90,9 +90,10 @@ test.describe("Navigation", () => {
     const navLinks: Array<[string, RegExp]> = [
       ["Repositories", /\/repositories/],
       ["Docker", /\/docker$/],
-      ["Docker Badges", /\/docker\/badges/],
+      ["Terraform", /\/infrastructure$/],
       ["Rules", /\/rules/],
-      ["Badges", /\/badges/],
+      // One Badges entry now, with a tab per engine; it lands on the first tab.
+      ["Badges", /\/badges\/repositories/],
       ["Billing", /\/billing/],
       ["Dashboard", /\/dashboard/],
     ]
@@ -121,6 +122,11 @@ test.describe("Navigation", () => {
   })
 
   test("page titles are correct", async ({ page }) => {
+    // Five full navigations share one test budget, and the first two are the
+    // heaviest routes in the app — enough to exhaust it on a cold dev server
+    // before the loop reaches /rules. Same reason docker.spec.ts marks its
+    // equivalent slow.
+    test.slow()
     await mockUserMe(page, MOCK_USER)
     await setupAllMocks(page)
 

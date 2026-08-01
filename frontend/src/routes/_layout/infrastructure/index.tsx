@@ -101,9 +101,9 @@ function InfrastructurePage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Infrastructure</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Terraform</h1>
           <p className="text-muted-foreground">
-            Terraform static analysis, cloud posture and fixes, per repository.
+            Terraform roots, cloud posture and fixes, per repository.
           </p>
         </div>
         <Button variant="outline" className="gap-2" onClick={openInstallPopup}>

@@ -13,17 +13,23 @@ from app.api.deps import (
     user_org_ids,
 )
 from app.api.mappers import (
+    to_docker_build_telemetry_public,
     to_docker_finding_public,
     to_docker_fix_public,
+    to_docker_runtime_finding_public,
     to_docker_scan_public,
     to_docker_target_public,
 )
 from app.models import (
+    DockerBuildEnrichment,
+    DockerBuildTelemetry,
+    DockerBuildTelemetryPublic,
     DockerFilePublic,
     DockerFinding,
     DockerFindingPublic,
     DockerFix,
     DockerFixPublic,
+    DockerRuntimeFindingPublic,
     DockerScan,
     DockerScanPublic,
     DockerTarget,
@@ -31,6 +37,7 @@ from app.models import (
     DockerTargetPublic,
     LLMProvider,
     Repository,
+    Rule,
 )
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
@@ -245,6 +252,97 @@ def list_docker_files(
     ]
 
 
+# How many measured builds the Runtime tab shows per target. Build telemetry
+# accrues one row per image per workflow run, so an unbounded query would grow
+# without limit on an active repo.
+_RUNTIME_PAGE_SIZE = 25
+
+
+def _owning_root_path(dockerfile_path: str | None, roots: list[str]) -> str:
+    """Which target a measured build belongs to: the longest root that prefixes it.
+
+    Telemetry is stored per repository, but targets partition a repository. A
+    build of ``backend/Dockerfile`` belongs to the ``backend`` target when one
+    exists and to the repo-root target otherwise, and it must appear under
+    exactly one — listing it under both would double-count it in a monorepo.
+
+    A build with no ``dockerfile_path`` (the action input was not set) falls to
+    the repo-root target, which is the only one that can claim it.
+    """
+    if not dockerfile_path:
+        return ""
+    best = ""
+    for root in roots:
+        if not root:
+            continue
+        if dockerfile_path == root or dockerfile_path.startswith(f"{root}/"):
+            if len(root) > len(best):
+                best = root
+    return best
+
+
+@router.get("/{target_id}/runtime", response_model=list[DockerBuildTelemetryPublic])
+def list_docker_runtime(
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[DockerBuildTelemetryPublic]:
+    """Measured builds for this target, each with the findings it produced."""
+    target = _get_target_for_user(target_id, session, current_user)
+
+    roots = list(
+        session.exec(
+            select(DockerTarget.root_path).where(DockerTarget.repo_id == target.repo_id)
+        ).all()
+    )
+    # Telemetry is stored per repository but shown per target, and which target
+    # owns a row is a longest-prefix match that SQL cannot express cleanly. So
+    # the fetch is widened by the number of targets before filtering: limiting
+    # to a page first would let a busy sibling target crowd this one's builds
+    # out of the window entirely.
+    rows = session.exec(
+        select(DockerBuildTelemetry)
+        .where(DockerBuildTelemetry.repo_id == target.repo_id)
+        .order_by(col(DockerBuildTelemetry.collected_at).desc())
+        .limit(_RUNTIME_PAGE_SIZE * max(len(roots), 1))
+    ).all()
+    mine = [
+        row
+        for row in rows
+        if _owning_root_path(row.dockerfile_path, roots) == target.root_path
+    ][:_RUNTIME_PAGE_SIZE]
+    if not mine:
+        return []
+
+    enrichments = session.exec(
+        select(DockerBuildEnrichment).where(
+            col(DockerBuildEnrichment.telemetry_id).in_([row.id for row in mine])
+        )
+    ).all()
+
+    # One catalog lookup for the whole page rather than one per finding.
+    slugs = {e.rule_slug for e in enrichments}
+    rules = (
+        session.exec(select(Rule).where(col(Rule.slug).in_(slugs))).all()
+        if slugs
+        else []
+    )
+    by_slug = {rule.slug: rule for rule in rules}
+
+    by_telemetry: dict[uuid.UUID, list[DockerRuntimeFindingPublic]] = defaultdict(list)
+    for enrichment in enrichments:
+        by_telemetry[enrichment.telemetry_id].append(
+            to_docker_runtime_finding_public(
+                enrichment, by_slug.get(enrichment.rule_slug)
+            )
+        )
+
+    return [
+        to_docker_build_telemetry_public(row, by_telemetry.get(row.id, []))
+        for row in mine
+    ]
+
+
 @router.get("/{target_id}/fixes", response_model=list[DockerFixPublic])
 def list_docker_fixes(
     target_id: uuid.UUID,
@@ -307,6 +405,95 @@ def trigger_docker_fix_generation(
             session.add(finding)
         session.commit()
         run_docker_fix_generation.delay(finding_ids=[str(f.id) for f in group])
+        queued += 1
+
+    return {"status": "queued", "queued": queued}
+
+
+class DockerRuntimeFixRequest(BaseModel):
+    # Which measured findings to act on. They must all belong to builds of the
+    # same Dockerfile, since the fix rewrites one file.
+    enrichment_ids: list[uuid.UUID]
+
+
+@router.post("/{target_id}/runtime-fixes", status_code=202)
+def trigger_docker_runtime_fix_generation(
+    target_id: uuid.UUID,
+    body: DockerRuntimeFixRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+    force: bool = False,
+) -> dict[str, str | int]:
+    """Generate a fix from measured runtime findings.
+
+    The join back to source is ``DockerBuildTelemetry.dockerfile_path``: without
+    it a measurement describes a container but names no file, and there is
+    nothing to rewrite. Builds reported without the action's ``dockerfile_path``
+    input are therefore skipped rather than guessed at.
+
+    Any open static findings for the same file are folded into the same call —
+    one LLM rewrite per file, exactly as the static route does, so a runtime fix
+    and a static fix can never race to patch the same lines.
+    """
+    target = _get_target_for_user(target_id, session, current_user)
+    repo = get_or_404(
+        session, Repository, target.repo_id, detail="Repository not found"
+    )
+
+    enrichments = list(
+        session.exec(
+            select(DockerBuildEnrichment)
+            .where(col(DockerBuildEnrichment.id).in_(body.enrichment_ids))
+            .where(DockerBuildEnrichment.repo_id == target.repo_id)
+        ).all()
+    )
+    if not enrichments:
+        return {"status": "no_findings", "queued": 0}
+
+    telemetry_ids = {e.telemetry_id for e in enrichments}
+    telemetry = session.exec(
+        select(DockerBuildTelemetry).where(
+            col(DockerBuildTelemetry.id).in_(telemetry_ids)
+        )
+    ).all()
+    paths = {t.id: t.dockerfile_path for t in telemetry}
+
+    by_file: dict[str, list[DockerBuildEnrichment]] = defaultdict(list)
+    for enrichment in enrichments:
+        path = paths.get(enrichment.telemetry_id)
+        if path:
+            by_file[path].append(enrichment)
+    if not by_file:
+        return {"status": "no_dockerfile_path", "queued": 0}
+
+    provider_str, model_str = resolve_llm_provider(repo)
+    queued = 0
+    for file_path, group in by_file.items():
+        static = list(
+            session.exec(
+                select(DockerFinding)
+                .where(DockerFinding.docker_target_id == target_id)
+                .where(DockerFinding.file_path == file_path)
+                .where(col(DockerFinding.resolved_at).is_(None))
+                .where(col(DockerFinding.ignored_at).is_(None))
+            ).all()
+        )
+        fix = _prepare_pending_fix(
+            session, target_id, file_path, provider_str, model_str, force
+        )
+        if fix is None:
+            continue
+        session.flush()
+        for finding in static:
+            finding.fix_id = fix.id
+            session.add(finding)
+        session.commit()
+        run_docker_fix_generation.delay(
+            finding_ids=[str(f.id) for f in static],
+            enrichment_ids=[str(e.id) for e in group],
+            docker_target_id=str(target_id),
+            file_path=file_path,
+        )
         queued += 1
 
     return {"status": "queued", "queued": queued}

@@ -25,6 +25,10 @@ import { Route as LayoutRepositoriesRouteImport } from './routes/_layout/reposit
 import { Route as LayoutRulesRouteImport } from './routes/_layout/rules'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
+import { Route as LayoutBadgesIndexRouteImport } from './routes/_layout/badges/index'
+import { Route as LayoutBadgesDockerRouteImport } from './routes/_layout/badges/docker'
+import { Route as LayoutBadgesRepositoriesRouteImport } from './routes/_layout/badges/repositories'
+import { Route as LayoutBadgesTerraformRouteImport } from './routes/_layout/badges/terraform'
 import { Route as LayoutDockerIndexRouteImport } from './routes/_layout/docker/index'
 import { Route as LayoutDockerRepoIdRouteImport } from './routes/_layout/docker/$repoId'
 import { Route as LayoutDockerBadgesRouteImport } from './routes/_layout/docker/badges'
@@ -39,6 +43,7 @@ import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/cal
 import { Route as LayoutDockerRepoIdIndexRouteImport } from './routes/_layout/docker/$repoId/index'
 import { Route as LayoutDockerRepoIdAnalysisRouteImport } from './routes/_layout/docker/$repoId/analysis'
 import { Route as LayoutDockerRepoIdPullRequestsRouteImport } from './routes/_layout/docker/$repoId/pull-requests'
+import { Route as LayoutDockerRepoIdRuntimeRouteImport } from './routes/_layout/docker/$repoId/runtime'
 import { Route as LayoutDockerRepoIdScansRouteImport } from './routes/_layout/docker/$repoId/scans'
 import { Route as LayoutInfrastructureRepoIdIndexRouteImport } from './routes/_layout/infrastructure/$repoId/index'
 import { Route as LayoutInfrastructureRepoIdCloudRouteImport } from './routes/_layout/infrastructure/$repoId/cloud'
@@ -130,6 +135,27 @@ const LayoutAnalysesAnalysisIdRoute =
     path: '/analyses/$analysisId',
     getParentRoute: () => LayoutRoute,
   } as any)
+const LayoutBadgesIndexRoute = LayoutBadgesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LayoutBadgesRoute,
+} as any)
+const LayoutBadgesDockerRoute = LayoutBadgesDockerRouteImport.update({
+  id: '/docker',
+  path: '/docker',
+  getParentRoute: () => LayoutBadgesRoute,
+} as any)
+const LayoutBadgesRepositoriesRoute =
+  LayoutBadgesRepositoriesRouteImport.update({
+    id: '/repositories',
+    path: '/repositories',
+    getParentRoute: () => LayoutBadgesRoute,
+  } as any)
+const LayoutBadgesTerraformRoute = LayoutBadgesTerraformRouteImport.update({
+  id: '/terraform',
+  path: '/terraform',
+  getParentRoute: () => LayoutBadgesRoute,
+} as any)
 const LayoutDockerIndexRoute = LayoutDockerIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -206,6 +232,12 @@ const LayoutDockerRepoIdPullRequestsRoute =
     path: '/pull-requests',
     getParentRoute: () => LayoutDockerRepoIdRoute,
   } as any)
+const LayoutDockerRepoIdRuntimeRoute =
+  LayoutDockerRepoIdRuntimeRouteImport.update({
+    id: '/runtime',
+    path: '/runtime',
+    getParentRoute: () => LayoutDockerRepoIdRoute,
+  } as any)
 const LayoutDockerRepoIdScansRoute = LayoutDockerRepoIdScansRouteImport.update({
   id: '/scans',
   path: '/scans',
@@ -273,7 +305,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/badges': typeof LayoutBadgesRoute
+  '/badges': typeof LayoutBadgesRouteWithChildren
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/docker': typeof LayoutDockerRouteWithChildren
@@ -282,6 +314,9 @@ export interface FileRoutesByFullPath {
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/badges/docker': typeof LayoutBadgesDockerRoute
+  '/badges/repositories': typeof LayoutBadgesRepositoriesRoute
+  '/badges/terraform': typeof LayoutBadgesTerraformRoute
   '/docker/$repoId': typeof LayoutDockerRepoIdRouteWithChildren
   '/docker/badges': typeof LayoutDockerBadgesRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
@@ -290,11 +325,13 @@ export interface FileRoutesByFullPath {
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/badges/': typeof LayoutBadgesIndexRoute
   '/docker/': typeof LayoutDockerIndexRoute
   '/infrastructure/': typeof LayoutInfrastructureIndexRoute
   '/repositories/': typeof LayoutRepositoriesIndexRoute
   '/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
+  '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
   '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
@@ -313,23 +350,27 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/badges': typeof LayoutBadgesRoute
   '/billing': typeof LayoutBillingRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/badges/docker': typeof LayoutBadgesDockerRoute
+  '/badges/repositories': typeof LayoutBadgesRepositoriesRoute
+  '/badges/terraform': typeof LayoutBadgesTerraformRoute
   '/docker/badges': typeof LayoutDockerBadgesRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/badges': typeof LayoutBadgesIndexRoute
   '/docker': typeof LayoutDockerIndexRoute
   '/infrastructure': typeof LayoutInfrastructureIndexRoute
   '/repositories': typeof LayoutRepositoriesIndexRoute
   '/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
+  '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
   '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
@@ -350,7 +391,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/badges': typeof LayoutBadgesRoute
+  '/_layout/badges': typeof LayoutBadgesRouteWithChildren
   '/_layout/billing': typeof LayoutBillingRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/docker': typeof LayoutDockerRouteWithChildren
@@ -360,6 +401,9 @@ export interface FileRoutesById {
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/_layout/badges/docker': typeof LayoutBadgesDockerRoute
+  '/_layout/badges/repositories': typeof LayoutBadgesRepositoriesRoute
+  '/_layout/badges/terraform': typeof LayoutBadgesTerraformRoute
   '/_layout/docker/$repoId': typeof LayoutDockerRepoIdRouteWithChildren
   '/_layout/docker/badges': typeof LayoutDockerBadgesRoute
   '/_layout/fixes/$fixId': typeof LayoutFixesFixIdRoute
@@ -368,11 +412,13 @@ export interface FileRoutesById {
   '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/_layout/badges/': typeof LayoutBadgesIndexRoute
   '/_layout/docker/': typeof LayoutDockerIndexRoute
   '/_layout/infrastructure/': typeof LayoutInfrastructureIndexRoute
   '/_layout/repositories/': typeof LayoutRepositoriesIndexRoute
   '/_layout/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/_layout/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
+  '/_layout/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/_layout/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
   '/_layout/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/_layout/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
@@ -403,6 +449,9 @@ export interface FileRouteTypes {
     | '/rules'
     | '/settings'
     | '/analyses/$analysisId'
+    | '/badges/docker'
+    | '/badges/repositories'
+    | '/badges/terraform'
     | '/docker/$repoId'
     | '/docker/badges'
     | '/fixes/$fixId'
@@ -411,11 +460,13 @@ export interface FileRouteTypes {
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
+    | '/badges/'
     | '/docker/'
     | '/infrastructure/'
     | '/repositories/'
     | '/docker/$repoId/analysis'
     | '/docker/$repoId/pull-requests'
+    | '/docker/$repoId/runtime'
     | '/docker/$repoId/scans'
     | '/infrastructure/$repoId/cloud'
     | '/infrastructure/$repoId/docker'
@@ -434,23 +485,27 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/badges'
     | '/billing'
     | '/dashboard'
     | '/rules'
     | '/settings'
     | '/'
     | '/analyses/$analysisId'
+    | '/badges/docker'
+    | '/badges/repositories'
+    | '/badges/terraform'
     | '/docker/badges'
     | '/fixes/$fixId'
     | '/infrastructure/badges'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
+    | '/badges'
     | '/docker'
     | '/infrastructure'
     | '/repositories'
     | '/docker/$repoId/analysis'
     | '/docker/$repoId/pull-requests'
+    | '/docker/$repoId/runtime'
     | '/docker/$repoId/scans'
     | '/infrastructure/$repoId/cloud'
     | '/infrastructure/$repoId/docker'
@@ -480,6 +535,9 @@ export interface FileRouteTypes {
     | '/_layout/settings'
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
+    | '/_layout/badges/docker'
+    | '/_layout/badges/repositories'
+    | '/_layout/badges/terraform'
     | '/_layout/docker/$repoId'
     | '/_layout/docker/badges'
     | '/_layout/fixes/$fixId'
@@ -488,11 +546,13 @@ export interface FileRouteTypes {
     | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
+    | '/_layout/badges/'
     | '/_layout/docker/'
     | '/_layout/infrastructure/'
     | '/_layout/repositories/'
     | '/_layout/docker/$repoId/analysis'
     | '/_layout/docker/$repoId/pull-requests'
+    | '/_layout/docker/$repoId/runtime'
     | '/_layout/docker/$repoId/scans'
     | '/_layout/infrastructure/$repoId/cloud'
     | '/_layout/infrastructure/$repoId/docker'
@@ -630,6 +690,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAnalysesAnalysisIdRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/badges/': {
+      id: '/_layout/badges/'
+      path: '/'
+      fullPath: '/badges/'
+      preLoaderRoute: typeof LayoutBadgesIndexRouteImport
+      parentRoute: typeof LayoutBadgesRoute
+    }
+    '/_layout/badges/docker': {
+      id: '/_layout/badges/docker'
+      path: '/docker'
+      fullPath: '/badges/docker'
+      preLoaderRoute: typeof LayoutBadgesDockerRouteImport
+      parentRoute: typeof LayoutBadgesRoute
+    }
+    '/_layout/badges/repositories': {
+      id: '/_layout/badges/repositories'
+      path: '/repositories'
+      fullPath: '/badges/repositories'
+      preLoaderRoute: typeof LayoutBadgesRepositoriesRouteImport
+      parentRoute: typeof LayoutBadgesRoute
+    }
+    '/_layout/badges/terraform': {
+      id: '/_layout/badges/terraform'
+      path: '/terraform'
+      fullPath: '/badges/terraform'
+      preLoaderRoute: typeof LayoutBadgesTerraformRouteImport
+      parentRoute: typeof LayoutBadgesRoute
+    }
     '/_layout/docker/': {
       id: '/_layout/docker/'
       path: '/'
@@ -728,6 +816,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutDockerRepoIdPullRequestsRouteImport
       parentRoute: typeof LayoutDockerRepoIdRoute
     }
+    '/_layout/docker/$repoId/runtime': {
+      id: '/_layout/docker/$repoId/runtime'
+      path: '/runtime'
+      fullPath: '/docker/$repoId/runtime'
+      preLoaderRoute: typeof LayoutDockerRepoIdRuntimeRouteImport
+      parentRoute: typeof LayoutDockerRepoIdRoute
+    }
     '/_layout/docker/$repoId/scans': {
       id: '/_layout/docker/$repoId/scans'
       path: '/scans'
@@ -801,9 +896,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface LayoutBadgesRouteChildren {
+  LayoutBadgesDockerRoute: typeof LayoutBadgesDockerRoute
+  LayoutBadgesRepositoriesRoute: typeof LayoutBadgesRepositoriesRoute
+  LayoutBadgesTerraformRoute: typeof LayoutBadgesTerraformRoute
+  LayoutBadgesIndexRoute: typeof LayoutBadgesIndexRoute
+}
+
+const LayoutBadgesRouteChildren: LayoutBadgesRouteChildren = {
+  LayoutBadgesDockerRoute: LayoutBadgesDockerRoute,
+  LayoutBadgesRepositoriesRoute: LayoutBadgesRepositoriesRoute,
+  LayoutBadgesTerraformRoute: LayoutBadgesTerraformRoute,
+  LayoutBadgesIndexRoute: LayoutBadgesIndexRoute,
+}
+
+const LayoutBadgesRouteWithChildren = LayoutBadgesRoute._addFileChildren(
+  LayoutBadgesRouteChildren,
+)
+
 interface LayoutDockerRepoIdRouteChildren {
   LayoutDockerRepoIdAnalysisRoute: typeof LayoutDockerRepoIdAnalysisRoute
   LayoutDockerRepoIdPullRequestsRoute: typeof LayoutDockerRepoIdPullRequestsRoute
+  LayoutDockerRepoIdRuntimeRoute: typeof LayoutDockerRepoIdRuntimeRoute
   LayoutDockerRepoIdScansRoute: typeof LayoutDockerRepoIdScansRoute
   LayoutDockerRepoIdIndexRoute: typeof LayoutDockerRepoIdIndexRoute
 }
@@ -811,6 +925,7 @@ interface LayoutDockerRepoIdRouteChildren {
 const LayoutDockerRepoIdRouteChildren: LayoutDockerRepoIdRouteChildren = {
   LayoutDockerRepoIdAnalysisRoute: LayoutDockerRepoIdAnalysisRoute,
   LayoutDockerRepoIdPullRequestsRoute: LayoutDockerRepoIdPullRequestsRoute,
+  LayoutDockerRepoIdRuntimeRoute: LayoutDockerRepoIdRuntimeRoute,
   LayoutDockerRepoIdScansRoute: LayoutDockerRepoIdScansRoute,
   LayoutDockerRepoIdIndexRoute: LayoutDockerRepoIdIndexRoute,
 }
@@ -912,7 +1027,7 @@ const LayoutRepositoriesRouteWithChildren =
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutBadgesRoute: typeof LayoutBadgesRoute
+  LayoutBadgesRoute: typeof LayoutBadgesRouteWithChildren
   LayoutBillingRoute: typeof LayoutBillingRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutDockerRoute: typeof LayoutDockerRouteWithChildren
@@ -927,7 +1042,7 @@ interface LayoutRouteChildren {
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
-  LayoutBadgesRoute: LayoutBadgesRoute,
+  LayoutBadgesRoute: LayoutBadgesRouteWithChildren,
   LayoutBillingRoute: LayoutBillingRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutDockerRoute: LayoutDockerRouteWithChildren,

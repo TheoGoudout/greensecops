@@ -27,6 +27,7 @@ export const Route = createFileRoute("/_layout/docker/$repoId")({
 
 const navItems = [
   { label: "Analysis", to: "analysis" },
+  { label: "Runtime", to: "runtime" },
   { label: "PRs", to: "pull-requests" },
   { label: "Scan history", to: "scans" },
 ] as const

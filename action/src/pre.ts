@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs"
 import * as path from "node:path"
 import * as core from "@actions/core"
 import { ingestTelemetry } from "./api"
+import { listImageIds } from "./docker"
 import { getGitHubContext, STATE_FILE } from "./state"
 import { reportIngest, runStep } from "./step"
 import { getMetricsSample, getRunnerSpecs } from "./telemetry"
@@ -48,6 +49,10 @@ async function run(): Promise<void> {
     repository: ctx.repository,
     runnerSpecs,
     startedAt: new Date().toISOString(),
+    // Baseline for the post step's diff. Empty on a runner without Docker,
+    // which simply means every image found later counts as newly built — the
+    // same answer, since there were none to begin with.
+    preImageIds: listImageIds(),
   }
 
   try {

@@ -622,6 +622,8 @@ def test_ingest_docker_build_persists_and_queues(
                     "image_size_bytes": 2400000000,
                     "context_size_bytes": 900000000,
                     "cache_hit_ratio": 0.18,
+                    # Sent by an older action; the server computes its own and
+                    # must ignore this rather than reject the request.
                     "observed_builds": 6,
                     "layers": [{"index": 0, "size_bytes": 1, "instruction": "RUN"}],
                     "containers": [{"name": "api", "oom_killed": False}],
@@ -667,3 +669,64 @@ def test_ingest_docker_build_requires_oidc(client: TestClient) -> None:
         json={"workflow_run_id": 1},
     )
     assert response.status_code in (401, 403)
+
+
+def test_observed_builds_is_counted_server_side_not_taken_from_the_client(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    """The runner sees one job, so it cannot know the series length.
+
+    ``image_layer_cache_ineffective`` gates on this count to avoid firing on a
+    first build that legitimately missed every layer — a client-supplied value
+    would let a caller suppress or force the rule at will.
+    """
+    _override_oidc(_oidc_claims(repo.full_name))
+    body = {
+        "workflow_run_id": 5001,
+        "dockerfile_path": "svc/Dockerfile",
+        "image_size_bytes": 100,
+        # Deliberately absurd: whatever the client claims must not be used.
+        "observed_builds": 999,
+    }
+    try:
+        with patch(
+            "app.workers.tasks.docker_telemetry_analysis."
+            "run_docker_telemetry_analysis.delay"
+        ) as delay:
+            for run_id in (5001, 5002, 5003):
+                client.post(
+                    f"{settings.API_V1_STR}/telemetry/docker-build",
+                    json={**body, "workflow_run_id": run_id},
+                )
+    finally:
+        _clear_oidc()
+
+    counts = [call.kwargs["observed_builds"] for call in delay.call_args_list]
+    assert counts == [1, 2, 3]
+
+
+def test_observed_builds_counts_each_dockerfile_separately(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    # Counted per dockerfile_path rather than per image: image ids change on
+    # every build by definition, so counting those would always answer 1.
+    _override_oidc(_oidc_claims(repo.full_name))
+    try:
+        with patch(
+            "app.workers.tasks.docker_telemetry_analysis."
+            "run_docker_telemetry_analysis.delay"
+        ) as delay:
+            for path in ("api/Dockerfile", "api/Dockerfile", "web/Dockerfile"):
+                client.post(
+                    f"{settings.API_V1_STR}/telemetry/docker-build",
+                    json={
+                        "workflow_run_id": 6001,
+                        "dockerfile_path": path,
+                        "image_size_bytes": 100,
+                    },
+                )
+    finally:
+        _clear_oidc()
+
+    counts = [call.kwargs["observed_builds"] for call in delay.call_args_list]
+    assert counts == [1, 2, 1]

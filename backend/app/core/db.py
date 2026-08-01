@@ -730,6 +730,33 @@ DOCKER_RUNTIME_INITIAL_RULES: list[dict[str, object]] = [
         "title": "Container never reached a healthy state",
         "description": "A healthcheck is defined but the container never passed it during the observed run — worse than having none, because the service looks correctly configured.",
     },
+    {
+        "slug": "container_unbounded_memory",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Container ran with no memory limit",
+        "description": "A container was observed doing real work with no memory limit declared. The measured counterpart to compose_missing_resource_limits — this one knows the peak, so the fix can name a number rather than guess one.",
+    },
+    {
+        "slug": "container_near_memory_limit",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Container peaked close to its memory limit",
+        "description": "Measured peak usage sits within a narrow margin of the declared limit. Nothing has failed yet — this is the reading that precedes an OOM kill, and only measurement shows it before the fact.",
+    },
+    {
+        "slug": "container_cpu_throttled",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.performance,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Container spent a large share of its scheduling periods throttled",
+        "description": "The kernel held the container at its CPU quota in a significant fraction of scheduling periods. Invisible to static analysis, which cannot know what the workload tries to do.",
+    },
 ]
 
 

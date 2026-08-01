@@ -190,8 +190,86 @@ describe("readContainers", () => {
         has_healthcheck: true,
         health_status: "healthy",
         mem_limit_bytes: 536_870_912,
+        peak_rss_bytes: null,
+        peak_pids: null,
+        cpu_throttled_percent: null,
+        exit_code: null,
+        observed: false,
       },
     ])
+  })
+
+  test("merges what the daemon measured onto the inspected container", () => {
+    mockDocker({ ps: "c1\n", inspect: "/api\tfalse\t0\thealthy\t536870912" })
+    const [container] =
+      readContainers({
+        api: {
+          name: "api",
+          id: "c1",
+          peak_rss_bytes: 90_000_000,
+          peak_pids: 12,
+          cpu_throttled_percent: 4.5,
+          oom_killed: false,
+          exit_code: 0,
+          samples: 3,
+        },
+      }) ?? []
+    expect(container.peak_rss_bytes).toBe(90_000_000)
+    expect(container.cpu_throttled_percent).toBe(4.5)
+    expect(container.mem_limit_bytes).toBe(536_870_912)
+    expect(container.observed).toBe(true)
+  })
+
+  test("keeps a container the post step can no longer see", () => {
+    // `docker compose down` removes containers before post runs. Dropping them
+    // would silently exclude exactly the short-lived ones most likely to have
+    // been OOM-killed.
+    mockDocker({ ps: "" })
+    const containers = readContainers({
+      worker: {
+        name: "worker",
+        id: "c9",
+        peak_rss_bytes: 700_000_000,
+        peak_pids: 4,
+        cpu_throttled_percent: null,
+        oom_killed: true,
+        exit_code: 137,
+        samples: 2,
+      },
+    })
+    expect(containers).toEqual([
+      {
+        name: "worker",
+        oom_killed: true,
+        restart_count: 0,
+        has_healthcheck: false,
+        health_status: "none",
+        mem_limit_bytes: null,
+        peak_rss_bytes: 700_000_000,
+        peak_pids: 4,
+        cpu_throttled_percent: null,
+        exit_code: 137,
+        observed: true,
+      },
+    ])
+  })
+
+  test("takes an OOM from the event stream when inspect missed it", () => {
+    mockDocker({ ps: "c1\n", inspect: "/api\tfalse\t0\tnone\t268435456" })
+    const [container] =
+      readContainers({
+        api: {
+          name: "api",
+          id: "c1",
+          peak_rss_bytes: 268_000_000,
+          peak_pids: null,
+          cpu_throttled_percent: null,
+          oom_killed: true,
+          exit_code: null,
+          samples: 1,
+        },
+      }) ?? []
+    expect(container.oom_killed).toBe(true)
   })
 
   test("treats 'none' health as no healthcheck", () => {
@@ -208,9 +286,27 @@ describe("readContainers", () => {
     expect(readContainers()).toEqual([])
   })
 
-  test("returns null when docker ps fails", () => {
+  test("returns null when docker ps fails and nothing was measured", () => {
     mockDocker({})
     expect(readContainers()).toBeNull()
+  })
+
+  test("still reports measured containers when docker ps fails", () => {
+    // A runner whose daemon went away mid-job still knows what it saw.
+    mockDocker({})
+    const containers = readContainers({
+      api: {
+        name: "api",
+        id: "c1",
+        peak_rss_bytes: 1000,
+        peak_pids: null,
+        cpu_throttled_percent: null,
+        oom_killed: false,
+        exit_code: null,
+        samples: 1,
+      },
+    })
+    expect(containers).toHaveLength(1)
   })
 })
 

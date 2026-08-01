@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models import DockerFinding
+    from app.models import DockerBuildEnrichment, DockerFinding
 
 DOCKER_FIX_SYSTEM_PROMPT = """You are a container and build-systems expert. Fix security, reliability, energy-efficiency and maintainability issues in a Dockerfile or a Docker Compose file.
 
@@ -34,6 +34,7 @@ Rules specific to Compose files:
 
 General:
 - Make the minimum changes required to fix the listed findings; leave unrelated lines untouched
+- When measured runtime facts are supplied, take the numbers from them. They come from observing the container actually run, so a limit derived from a measured peak is the point of the exercise — a round guess is what the measurement replaced
 
 Rules for <unfixed>:
 - List a finding here ONLY when it genuinely cannot be resolved by editing this file — e.g. it needs a digest you do not know, a file that lives elsewhere, or a base-image change that would break the build
@@ -44,7 +45,7 @@ DOCKER_FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following findings in this {
 
 **Findings to fix:**
 {findings_block}
-
+{runtime_block}
 **Current file (`{file_path}`):**
 ```{fence}
 {file_content}
@@ -52,12 +53,38 @@ DOCKER_FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following findings in this {
 
 Return the <full_content> and <unfixed> blocks — no markdown, no explanation."""
 
+RUNTIME_EVIDENCE_HEADER = """
+**Measured runtime facts** — observed while these containers actually ran in CI. Use these numbers rather than estimating:
+{evidence_block}
+"""
+
+NO_STATIC_FINDINGS_PLACEHOLDER = (
+    "(none from static analysis — the measured facts below are what to fix)"
+)
+
+
+def _build_runtime_block(enrichments: "list[DockerBuildEnrichment]") -> str:
+    """Render measured evidence as a distinct section, not as more findings.
+
+    Kept separate because the two are different kinds of claim: a static
+    finding says the file is wrong, a measurement says what the container did.
+    Collapsing them would invite the model to treat an observation as a defect
+    to be edited away.
+    """
+    if not enrichments:
+        return ""
+    evidence_block = "\n".join(
+        f"- [{e.rule_slug}] {e.evidence}\n  → {e.recommendation}" for e in enrichments
+    )
+    return RUNTIME_EVIDENCE_HEADER.format(evidence_block=evidence_block)
+
 
 def build_docker_fix_prompt(
     file_path: str,
     file_content: str,
     findings: "list[DockerFinding]",
     kind: str = "dockerfile",
+    runtime_findings: "list[DockerBuildEnrichment] | None" = None,
 ) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt) for one file's Docker findings.
 
@@ -65,6 +92,11 @@ def build_docker_fix_prompt(
     languages share one system prompt because the response contract and most
     of the editing rules are identical — the language-specific rules are
     sectioned within it rather than split across two prompts that would drift.
+
+    ``runtime_findings`` are measured enrichments for the same file. They can
+    accompany static findings, or stand alone: a measurement like "peaked at
+    420 MB with no limit set" is actionable even when no static rule fired,
+    which is the whole reason runtime telemetry can produce a fix at all.
     """
     findings_block = "\n".join(
         f"{i + 1}. [{finding.severity.value.upper()}] {finding.message}"
@@ -76,7 +108,8 @@ def build_docker_fix_prompt(
     user_prompt = DOCKER_FIX_USER_PROMPT_TEMPLATE.format(
         file_kind="Docker Compose file" if is_compose else "Dockerfile",
         fence="yaml" if is_compose else "dockerfile",
-        findings_block=findings_block,
+        findings_block=findings_block or NO_STATIC_FINDINGS_PLACEHOLDER,
+        runtime_block=_build_runtime_block(runtime_findings or []),
         file_path=file_path,
         file_content=file_content,
     )

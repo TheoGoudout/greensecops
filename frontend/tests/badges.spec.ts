@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test"
 import {
+  MOCK_DOCKER_TARGET,
   MOCK_REPO,
   MOCK_REPO_DISABLED,
   mockAnalyses,
   mockBilling,
+  mockDockerTargets,
   mockEvents,
   mockIssues,
   mockRules,
@@ -86,6 +88,57 @@ test.describe("Badges", () => {
     await page.goto("/badges")
 
     await expect(page.getByText("No repositories found.")).toBeVisible()
+  })
+
+  test("/badges lands on the repositories tab", async ({ page }) => {
+    await mockReposRoute(page, [MOCK_REPO])
+
+    await page.goto("/badges")
+
+    await expect(page).toHaveURL(/\/badges\/repositories/)
+    await expect(page.getByRole("heading", { name: "Badges" })).toBeVisible()
+  })
+
+  test("tabs switch between each engine's badges", async ({ page }) => {
+    await mockReposRoute(page, [MOCK_REPO])
+    await mockDockerTargets(page)
+
+    await page.goto("/badges")
+    // Scoped to the page's tab bar: the sidebar carries its own Docker link.
+    const tabs = page.locator("nav.border-b")
+    await tabs.getByRole("link", { name: "Docker", exact: true }).click()
+
+    await expect(page).toHaveURL(/\/badges\/docker/)
+    await expect(
+      page.getByText(`/api/v1/badges/docker/${MOCK_DOCKER_TARGET.id}.svg`),
+    ).toBeVisible()
+  })
+
+  test("terraform tab shows its own empty state", async ({ page }) => {
+    await mockReposRoute(page, [MOCK_REPO])
+    await page.route("**/api/v1/terraform-roots/**", (route) => {
+      route.fulfill({ json: [] })
+    })
+
+    await page.goto("/badges/terraform")
+
+    await expect(page.getByText("No Terraform roots found.")).toBeVisible()
+  })
+
+  test("the old per-engine badge URLs still resolve", async ({ page }) => {
+    // Both lived in the sidebar for a release, so bookmarks and older PR
+    // bodies point at them.
+    await mockReposRoute(page, [MOCK_REPO])
+    await page.route("**/api/v1/terraform-roots/**", (route) => {
+      route.fulfill({ json: [] })
+    })
+    await mockDockerTargets(page)
+
+    await page.goto("/infrastructure/badges")
+    await expect(page).toHaveURL(/\/badges\/terraform/)
+
+    await page.goto("/docker/badges")
+    await expect(page).toHaveURL(/\/badges\/docker/)
   })
 })
 

@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId")({
 })
 
 const navItems = [
-  { label: "Terraform", to: "terraform" },
+  { label: "Analysis", to: "terraform" },
   { label: "Cloud", to: "cloud" },
   { label: "PRs", to: "pull-requests" },
 ] as const
