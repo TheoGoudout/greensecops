@@ -238,7 +238,7 @@ services:
     image: greensecops/frontend:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -256,7 +256,7 @@ services:
     image: greensecops/landing:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -277,7 +277,7 @@ services:
     image: greensecops/docs:${TAG:-latest}
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/ || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
       retries: 5
       start_period: 10s

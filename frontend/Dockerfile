@@ -51,8 +51,8 @@ RUN bun run build
 # on 8080 and the deployment's container port is 8080 rather than 80.
 #
 # The alpine variant also drops the `apt-get install curl` layer this stage used
-# to carry purely to satisfy the health check: busybox wget serves the same
-# purpose and is already in the image.
+# to carry purely to satisfy the health check — the nginx alpine images install
+# curl themselves.
 FROM nginxinc/nginx-unprivileged:1.31.3-alpine@sha256:59ccf0943b0b8e8d9e6ea9039a39555730f544701a655c596f7df7d096c593f5
 
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
@@ -64,7 +64,7 @@ COPY ./frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY ./frontend/nginx-backend-not-found.conf /etc/nginx/extra-conf.d/backend-not-found.conf
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
+    CMD curl -fsS -o /dev/null http://localhost:8080/ || exit 1
 
 # Inherited from the base image, but stated here so the shipped uid is visible
 # in this file and survives a future base-image change.

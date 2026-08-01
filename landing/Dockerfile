@@ -19,9 +19,8 @@ COPY --chmod=0755 landing/entrypoint.sh /docker-entrypoint-landing.sh
 COPY --chown=101:101 landing/assets/ /usr/share/nginx/html/assets/
 COPY --chown=101:101 landing/*.html /usr/share/nginx/html/
 
-# wget, not curl: the alpine image ships busybox wget and no curl at all.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
+    CMD curl -fsS -o /dev/null http://localhost:8080/ || exit 1
 
 # Inherited from the base image, but stated here so the shipped uid is visible
 # in this file and survives a future base-image change.
