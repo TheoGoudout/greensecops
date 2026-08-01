@@ -1,0 +1,6 @@
+# Proves the override guard: `api` and `debugger` declare no restart policy or
+# resource limits in the override, and neither compose_missing_restart_policy
+# nor compose_missing_resource_limits may fire on a fragment. The privileged
+# flag is presence-based and must still be caught wherever it appears.
+violations:
+  - compose_privileged_container

@@ -30,3 +30,14 @@ test_violation_when_restart_is_explicitly_no if {
 	violations := compose_missing_restart_policy.violations with input as _compose({"api": _service({"restart": "no"})})
 	count(violations) == 1
 }
+
+# An override fragment restates only what it changes; the base file may well
+# declare a restart policy, so absence here is not evidence of anything.
+test_no_violation_on_a_compose_override_fragment if {
+	violations := compose_missing_restart_policy.violations with input as {"compose_files": [{
+		"__docker_file": "compose.override.yml",
+		"is_override": true,
+		"services": {"api": _service({})},
+	}]}
+	count(violations) == 0
+}

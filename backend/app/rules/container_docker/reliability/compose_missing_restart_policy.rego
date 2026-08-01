@@ -33,6 +33,10 @@ _has_restart_policy(service) if service.deploy.restart_policy
 
 violations contains violation if {
 	some cf in input.compose_files
+
+	# An override fragment inherits what it does not restate from the base
+	# file, so absence here proves nothing. See merge.is_override_file.
+	not cf.is_override
 	some name, service in cf.services
 	is_object(service)
 	_is_runnable(service)

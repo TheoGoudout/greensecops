@@ -6,6 +6,7 @@ from app.services.docker.merge import (
     COMPOSE,
     DOCKERFILE,
     classify_docker_file,
+    is_override_file,
     merge_docker_files,
 )
 
@@ -93,3 +94,38 @@ def test_merge_keeps_every_file_of_the_same_kind() -> None:
 
 def test_empty_input_produces_an_empty_document() -> None:
     assert merge_docker_files([]) == {"dockerfiles": [], "compose_files": []}
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("compose.override.yml", True),
+        ("compose.override.yaml", True),
+        ("docker-compose.override.yml", True),
+        ("deploy/compose.override.yml", True),
+        ("compose.yml", False),
+        # Passed explicitly with -f and may be a complete config, so it is
+        # graded as one.
+        ("compose.prod.yml", False),
+        ("Dockerfile", False),
+    ],
+)
+def test_is_override_file(path: str, expected: bool) -> None:
+    assert is_override_file(path) is expected
+
+
+def test_merge_flags_override_documents() -> None:
+    # Absence-based rules read this to decide whether a missing setting means
+    # anything; a fragment inherits from the base file.
+    merged = merge_docker_files(
+        [
+            ("compose.yml", "services:\n  api:\n    image: app:1.0\n"),
+            (
+                "compose.override.yml",
+                "services:\n  api:\n    ports:\n      - '80:80'\n",
+            ),
+        ]
+    )
+    by_path = {c["__docker_file"]: c for c in merged["compose_files"]}
+    assert by_path["compose.yml"]["is_override"] is False
+    assert by_path["compose.override.yml"]["is_override"] is True

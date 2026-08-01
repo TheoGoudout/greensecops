@@ -82,6 +82,26 @@ def classify_docker_file(path: str) -> str | None:
     return None
 
 
+def is_override_file(path: str) -> bool:
+    """True for a Compose *override* fragment (``compose.override.yml``).
+
+    An override is not a standalone configuration: Compose auto-loads it on
+    top of the base file, and a service listed in it inherits everything it
+    doesn't restate. That makes any rule which fires on the *absence* of a
+    setting unsound here — the base file may well supply it — so those rules
+    exclude override documents while rules that fire on the *presence* of
+    something dangerous keep firing everywhere.
+
+    Deliberately narrow: only the literal ``.override.`` infix qualifies,
+    because that is the one filename Compose loads automatically and therefore
+    the only one guaranteed to be a fragment. ``compose.prod.yml`` is passed
+    explicitly with ``-f`` and may be either a fragment or a complete config,
+    so it is treated as complete.
+    """
+    name = PurePosixPath(path).name.lower()
+    return classify_docker_file(path) == COMPOSE and ".override." in name
+
+
 def merge_docker_files(files: list[tuple[str, str]]) -> dict[str, list[Any]]:
     """Build the OPA input document from ``(path, content)`` pairs.
 
@@ -102,6 +122,9 @@ def merge_docker_files(files: list[tuple[str, str]]) -> dict[str, list[Any]]:
         elif kind == COMPOSE:
             parsed = parse_compose_content(path, content)
             if parsed is not None:
+                # Rules read this to decide whether absence of a setting means
+                # anything in this document. See ``is_override_file``.
+                parsed["is_override"] = is_override_file(path)
                 compose_files.append(parsed)
         else:
             logger.debug("Ignoring non-Docker file %s", path)
