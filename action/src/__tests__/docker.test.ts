@@ -201,18 +201,19 @@ describe("readContainers", () => {
 
   test("merges what the daemon measured onto the inspected container", () => {
     mockDocker({ ps: "c1\n", inspect: "/api\tfalse\t0\thealthy\t536870912" })
-    const [container] = readContainers({
-      api: {
-        name: "api",
-        id: "c1",
-        peak_rss_bytes: 90_000_000,
-        peak_pids: 12,
-        cpu_throttled_percent: 4.5,
-        oom_killed: false,
-        exit_code: 0,
-        samples: 3,
-      },
-    }) ?? []
+    const [container] =
+      readContainers({
+        api: {
+          name: "api",
+          id: "c1",
+          peak_rss_bytes: 90_000_000,
+          peak_pids: 12,
+          cpu_throttled_percent: 4.5,
+          oom_killed: false,
+          exit_code: 0,
+          samples: 3,
+        },
+      }) ?? []
     expect(container.peak_rss_bytes).toBe(90_000_000)
     expect(container.cpu_throttled_percent).toBe(4.5)
     expect(container.mem_limit_bytes).toBe(536_870_912)
@@ -255,18 +256,19 @@ describe("readContainers", () => {
 
   test("takes an OOM from the event stream when inspect missed it", () => {
     mockDocker({ ps: "c1\n", inspect: "/api\tfalse\t0\tnone\t268435456" })
-    const [container] = readContainers({
-      api: {
-        name: "api",
-        id: "c1",
-        peak_rss_bytes: 268_000_000,
-        peak_pids: null,
-        cpu_throttled_percent: null,
-        oom_killed: true,
-        exit_code: null,
-        samples: 1,
-      },
-    }) ?? []
+    const [container] =
+      readContainers({
+        api: {
+          name: "api",
+          id: "c1",
+          peak_rss_bytes: 268_000_000,
+          peak_pids: null,
+          cpu_throttled_percent: null,
+          oom_killed: true,
+          exit_code: null,
+          samples: 1,
+        },
+      }) ?? []
     expect(container.oom_killed).toBe(true)
   })
 

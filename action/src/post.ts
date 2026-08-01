@@ -33,7 +33,10 @@ function finalContainerSweep(state: ActionState): void {
     const usage = accumulate(
       loadUsage(CONTAINERS_FILE),
       sampleContainers(),
-      drainEvents(new Date(state.startedAt).getTime() / 1000, Date.now() / 1000),
+      drainEvents(
+        new Date(state.startedAt).getTime() / 1000,
+        Date.now() / 1000,
+      ),
     )
     saveUsage(CONTAINERS_FILE, usage)
   } catch {

@@ -97,7 +97,9 @@ describe("drainEvents", () => {
 
 describe("readCgroupThrottling", () => {
   test("reports the share of periods that were throttled", () => {
-    mockCgroup({ "cpu.stat": "usage_usec 100\nnr_periods 200\nnr_throttled 50\n" })
+    mockCgroup({
+      "cpu.stat": "usage_usec 100\nnr_periods 200\nnr_throttled 50\n",
+    })
     expect(readCgroupThrottling("abc")).toBe(25)
   })
 
@@ -149,10 +151,14 @@ describe("accumulate", () => {
     // A container that started and died between two ticks is never sampled,
     // but its OOM still has to reach the rules.
     mockCgroup({})
-    const usage = accumulate({}, [], [
-      { name: "worker", action: "oom", exitCode: null },
-      { name: "worker", action: "die", exitCode: 137 },
-    ])
+    const usage = accumulate(
+      {},
+      [],
+      [
+        { name: "worker", action: "oom", exitCode: null },
+        { name: "worker", action: "die", exitCode: 137 },
+      ],
+    )
     expect(usage.worker.oom_killed).toBe(true)
     expect(usage.worker.exit_code).toBe(137)
     expect(usage.worker.samples).toBe(0)
