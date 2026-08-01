@@ -30,7 +30,19 @@ _tag(image) := parts[1] if {
 	count(parts) == 2
 }
 
-_unpinned(image) if not _tag(image)
+# A tag supplied by interpolation (`app:${TAG:-latest}`) cannot be judged from
+# the file: what it resolves to is a property of the deploy, not of this text.
+# It has to be recognised explicitly because `${TAG:-latest}` contains a colon
+# of its own, which would otherwise make the reference parse as having no tag
+# at all and be reported as `:latest` — the one reading that is certainly
+# wrong. Only the tag position matters, so `${REGISTRY}/app:latest` is still
+# flagged. Found by running this engine against deploy/coolify/compose.yml.
+_interpolated_tag(image) if contains(_bare_name(image), "${")
+
+_unpinned(image) if {
+	not _interpolated_tag(image)
+	not _tag(image)
+}
 
 _unpinned(image) if _tag(image) == "latest"
 

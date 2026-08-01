@@ -58,3 +58,17 @@ test_no_violation_when_the_service_builds_the_image_it_names if {
 	}})
 	count(violations) == 0
 }
+
+# An interpolated tag is a property of the deploy, not of the file. It must not
+# be read as ":latest" just because "${TAG:-latest}" carries its own colon.
+test_no_violation_for_an_interpolated_tag if {
+	violations := compose_unpinned_image_tag.violations with input as _compose({"api": _service("${IMAGE_REGISTRY:-ghcr.io/acme}/api:${TAG:-latest}")})
+	count(violations) == 0
+}
+
+# Only the tag position is undecidable — an interpolated registry with a
+# literal :latest is still a floating reference.
+test_violation_for_interpolated_registry_with_literal_latest if {
+	violations := compose_unpinned_image_tag.violations with input as _compose({"api": _service("${IMAGE_REGISTRY:-ghcr.io/acme}/api:latest")})
+	count(violations) == 1
+}
