@@ -83,7 +83,8 @@ module "network" {
   name_prefix             = local.name_prefix
   vpc_cidr                = var.vpc_cidr
   availability_zones      = local.availability_zones
-  single_nat_gateway      = var.single_nat_gateway
+  nat_gateway_count       = local.nat_gateway_count
+  interface_endpoints     = local.interface_endpoints
   flow_log_retention_days = var.log_retention_days
   tags                    = local.common_tags
 }
@@ -95,16 +96,21 @@ module "security" {
   vpc_id      = module.network.vpc_id
   vpc_cidr    = module.network.vpc_cidr
 
-  services = {
-    for role, svc in local.service_topology : role => {
-      port     = svc.port
-      exposure = svc.exposure
+  # Keyed by host group, not by service: a group co-locating the three static
+  # sites has to expose all three of their host ports.
+  groups = {
+    for group, services in local.groups : group => {
+      public_ports   = [for svc in local.group_public_services[group] : local.service_topology[svc].host_port]
+      internal_ports = [for svc in local.group_internal_services[group] : local.service_topology[svc].host_port]
     }
   }
 
-  data_client_roles    = local.data_client_roles
-  public_ingress_cidrs = var.public_ingress_cidrs
-  tags                 = local.common_tags
+  data_client_groups     = local.data_client_groups
+  managed_database       = local.managed_database
+  managed_cache          = local.managed_cache
+  internal_load_balancer = local.internal_load_balancer
+  public_ingress_cidrs   = var.public_ingress_cidrs
+  tags                   = local.common_tags
 }
 
 # --------------------------------------------------------------------------
@@ -116,6 +122,9 @@ module "data" {
 
   name_prefix = local.name_prefix
   subnet_ids  = module.network.isolated_subnet_ids
+
+  create_managed_database = local.managed_database
+  create_managed_cache    = local.managed_cache
 
   postgres_security_group_id = module.security.postgres_security_group_id
   redis_security_group_id    = module.security.redis_security_group_id
@@ -148,18 +157,24 @@ module "iam" {
   source = "./modules/iam"
 
   name_prefix          = local.name_prefix
+  project              = var.project
+  environment          = var.environment
   ssm_parameter_prefix = local.ssm_prefix
 
+  # Permissions are the union of what a group's services need. In single_host
+  # that means the one group holds all of them; in distributed the static-site
+  # groups hold almost none.
   roles = {
-    for role in keys(local.service_topology) : role => {
-      # Only the roles running application code need the secret half of the
-      # parameter tree; the static-content containers take plain config only.
-      reads_secrets       = contains(local.data_client_roles, role)
-      uses_artifact_store = contains(["backend", "celery-worker"], role)
+    for group, services in local.groups : group => {
+      reads_secrets = local.group_reads_secrets[group]
 
       # Cloud-posture collection runs as a Celery task on the workers and is
       # triggered synchronously from the API, so both need to assume.
-      scans_customer_accounts = contains(["backend", "celery-worker"], role)
+      uses_artifact_store     = local.group_uses_artifacts[group]
+      scans_customer_accounts = local.group_uses_artifacts[group]
+
+      # Only a group that self-hosts the data tier attaches the state volume.
+      manages_state_volume = local.persistent_volume
     }
   }
 
@@ -190,18 +205,21 @@ module "edge" {
   domain_name     = var.domain_name
   hostnames       = local.hostnames
 
+  # Target groups stay per service even when several share a host — that is
+  # what lets a host-header rule reach the right container, by targeting the
+  # host port it publishes.
   public_services = {
-    for role in local.public_roles : role => {
-      port              = local.service_topology[role].port
-      health_check_path = local.service_topology[role].health_check_path
-      priority          = local.service_topology[role].priority
+    for svc, cfg in local.public_services : svc => {
+      port              = cfg.host_port
+      health_check_path = cfg.health_check_path
+      priority          = cfg.priority
     }
   }
 
-  internal_service = {
-    port              = local.service_topology["opa"].port
+  internal_service = local.internal_load_balancer ? {
+    port              = local.service_topology["opa"].host_port
     health_check_path = local.service_topology["opa"].health_check_path
-  }
+  } : null
 
   access_log_bucket_name    = var.access_log_bucket_name
   access_log_retention_days = var.artifact_retention_days
@@ -210,49 +228,78 @@ module "edge" {
 }
 
 # --------------------------------------------------------------------------
-# Services
+# Persistent state (single_host only)
 # --------------------------------------------------------------------------
-# One module instantiation per role. Everything role-specific lives in
-# local.service_topology and var.services, so adding an eighth container is a
-# map entry rather than another block.
+
+module "state_volume" {
+  source = "./modules/state_volume"
+  count  = local.persistent_volume ? 1 : 0
+
+  name_prefix = local.name_prefix
+
+  # Pinned to the first zone, and the host group with it: an EBS volume cannot
+  # cross availability zones. This is the concrete reason single_host has no
+  # redundancy, and the first thing `consolidated` fixes.
+  availability_zone = local.availability_zones[0]
+
+  size               = var.state_volume_size
+  snapshot_retention = var.state_volume_snapshot_retention
+  kms_key_arn        = aws_kms_key.environment.arn
+  tags               = local.common_tags
+}
+
+# --------------------------------------------------------------------------
+# Host groups
+# --------------------------------------------------------------------------
+# One module instantiation per group. What varies between topologies is only
+# how many groups there are and which services each runs — the module itself is
+# identical whether it is running one container or seven.
 
 module "service" {
   source   = "./modules/service"
-  for_each = local.service_topology
+  for_each = local.groups
 
   name_prefix = local.name_prefix
   role        = each.key
+  services    = each.value
 
   ami_id                = local.ami_id
-  instance_type         = var.services[each.key].instance_type
+  instance_type         = var.groups[each.key].instance_type
   instance_profile_name = module.iam.instance_profile_names[each.key]
-  subnet_ids            = module.network.private_subnet_ids
-  security_group_ids    = [module.security.service_security_group_ids[each.key]]
+
+  # With no NAT gateway the private subnets have no route out, so the instances
+  # sit in the public tier with a public address instead. Inbound is still shut
+  # by the security group; this only buys egress.
+  subnet_ids         = local.instance_subnet_ids
+  assign_public_ip   = local.instances_are_public
+  security_group_ids = [module.security.group_security_group_ids[each.key]]
 
   user_data = templatefile("${path.module}/modules/service/templates/user_data.sh.tftpl", {
     role        = each.key
     environment = var.environment
+    services    = join(",", each.value)
+
+    # Only the group that self-hosts the data tier claims the volume.
+    state_volume_tag = local.persistent_volume ? local.name_prefix : ""
   })
 
-  min_size         = var.services[each.key].min
-  max_size         = var.services[each.key].max
-  desired_capacity = var.services[each.key].desired
+  min_size         = var.groups[each.key].min
+  max_size         = var.groups[each.key].max
+  desired_capacity = var.groups[each.key].desired
 
-  target_group_arns = compact([
-    try(module.edge.public_target_group_arns[each.key], ""),
-    each.key == "opa" ? module.edge.internal_target_group_arn : "",
-  ])
-
-  # Celery scales on CPU because its work is analysis, not requests; OPA scales
-  # on request count because policy evaluation is cheap per call but frequent.
-  autoscaling = (
-    each.key == "celery-worker" ? { metric = "cpu", target_value = var.celery_worker_target_cpu } :
-    each.key == "opa" ? { metric = "requests", target_value = var.opa_target_requests_per_instance } :
-    null
+  target_group_arns = concat(
+    [for svc in local.group_public_services[each.key] : module.edge.public_target_group_arns[svc]],
+    local.internal_load_balancer && length(local.group_internal_services[each.key]) > 0
+    ? [module.edge.internal_target_group_arn]
+    : [],
   )
 
-  alb_arn_suffix          = each.key == "opa" ? module.edge.internal_alb_arn_suffix : module.edge.public_alb_arn_suffix
-  target_group_arn_suffix = each.key == "opa" ? module.edge.internal_target_group_arn_suffix : try(module.edge.public_target_group_arn_suffixes[each.key], "")
+  # Only meaningful where a service has a group to itself. A consolidated
+  # `worker` group scales on CPU; a single_host group scales not at all.
+  autoscaling = lookup(local.scaling_policies, each.key, null)
+
+  alb_arn_suffix          = lookup(local.group_alb_arn_suffix, each.key, module.edge.public_alb_arn_suffix)
+  target_group_arn_suffix = lookup(local.group_target_group_arn_suffix, each.key, "")
 
   kms_key_arn        = aws_kms_key.environment.arn
   log_retention_days = var.log_retention_days
@@ -273,8 +320,10 @@ module "observability" {
   public_alb_arn_suffix            = module.edge.public_alb_arn_suffix
   public_target_group_arn_suffixes = module.edge.public_target_group_arn_suffixes
 
-  postgres_instance_id       = "${local.name_prefix}-postgres"
-  redis_replication_group_id = "${local.name_prefix}-redis"
+  # Empty in single_host, where there is no RDS or ElastiCache to alarm on —
+  # the containers are covered by the group's CPU and disk alarms instead.
+  postgres_instance_id       = local.managed_database ? "${local.name_prefix}-postgres" : ""
+  redis_replication_group_id = local.managed_cache ? "${local.name_prefix}-redis" : ""
 
   kms_key_arn = aws_kms_key.environment.arn
   tags        = local.common_tags

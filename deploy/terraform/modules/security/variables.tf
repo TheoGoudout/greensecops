@@ -13,27 +13,32 @@ variable "vpc_cidr" {
   type        = string
 }
 
-variable "services" {
-  description = "Every deployed service, keyed by role. `port` is the container port the service listens on (null for the Celery roles, which accept no inbound traffic); `exposure` is \"public\" behind the internet-facing load balancer, \"internal\" behind the internal one, or \"none\"."
+variable "groups" {
+  description = "Every host group, keyed by group name. `public_ports` are reached from the internet-facing load balancer and `internal_ports` from the internal one; a group running only Celery has neither. A group is whatever set of containers shares a box — one per service in the distributed topology, one in total in single_host."
   type = map(object({
-    port     = optional(number)
-    exposure = string
+    public_ports   = list(number)
+    internal_ports = list(number)
   }))
-
-  validation {
-    condition     = alltrue([for svc in var.services : contains(["public", "internal", "none"], svc.exposure)])
-    error_message = "Each service's exposure must be one of: public, internal, none."
-  }
-
-  validation {
-    condition     = alltrue([for svc in var.services : svc.port != null if svc.exposure != "none"])
-    error_message = "A service with exposure \"public\" or \"internal\" must declare a port."
-  }
 }
 
-variable "data_client_roles" {
-  description = "Roles allowed to open connections to PostgreSQL, Redis and the internal OPA load balancer. Everything else is denied at the security-group level."
+variable "data_client_groups" {
+  description = "Groups running a container that opens a PostgreSQL or Redis connection. Everything else is denied at the security-group level."
   type        = list(string)
+}
+
+variable "managed_database" {
+  description = "Whether an RDS instance exists to guard. False when PostgreSQL runs as a container on the application host, where the Docker network is the only path to it."
+  type        = bool
+}
+
+variable "managed_cache" {
+  description = "Whether an ElastiCache replication group exists to guard."
+  type        = bool
+}
+
+variable "internal_load_balancer" {
+  description = "Whether an internal load balancer exists to guard. False when OPA shares a host with the backend and is reached over the Docker network instead."
+  type        = bool
 }
 
 variable "public_ingress_cidrs" {

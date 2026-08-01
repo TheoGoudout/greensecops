@@ -21,5 +21,75 @@ cat >/etc/greensecops/environment <<'ENVIRONMENT'
 ${environment}
 ENVIRONMENT
 
+# Which containers this host is responsible for. The deploy renders a compose
+# file from exactly this list, so a host never starts a service that belongs to
+# another group.
+cat >/etc/greensecops/services <<'SERVICES'
+${services}
+SERVICES
+
+%{ if state_volume_tag != "" ~}
+# --------------------------------------------------------------------------
+# Persistent state
+# --------------------------------------------------------------------------
+# This group self-hosts PostgreSQL, Redis and object storage, so their data
+# lives on a volume that outlives the instance. It is found by tag rather than
+# by ID, because an Auto Scaling group's launch template cannot know which
+# volume a replacement instance should claim.
+STATE_MOUNT=/var/lib/greensecops
+TOKEN=$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+metadata() { curl -fsS -H "X-aws-ec2-metadata-token: $TOKEN" "http://169.254.169.254/latest/meta-data/$1"; }
+
+INSTANCE_ID=$(metadata instance-id)
+REGION=$(metadata placement/region)
+AZ=$(metadata placement/availability-zone)
+
+VOLUME_ID=$(aws ec2 describe-volumes --region "$REGION" \
+  --filters "Name=tag:greensecops:state-volume,Values=${state_volume_tag}" \
+            "Name=availability-zone,Values=$AZ" \
+  --query 'Volumes[0].VolumeId' --output text)
+
+if [ "$VOLUME_ID" = "None" ] || [ -z "$VOLUME_ID" ]; then
+  echo "No state volume tagged ${state_volume_tag} in $AZ — refusing to start" >&2
+  exit 1
+fi
+
+# A replaced instance races the old one's detachment, so wait rather than fail.
+for _ in $(seq 1 30); do
+  STATE=$(aws ec2 describe-volumes --region "$REGION" --volume-ids "$VOLUME_ID" \
+    --query 'Volumes[0].State' --output text)
+  [ "$STATE" = "available" ] && break
+  [ "$STATE" = "in-use" ] || true
+  sleep 10
+done
+
+aws ec2 attach-volume --region "$REGION" --volume-id "$VOLUME_ID" \
+  --instance-id "$INSTANCE_ID" --device /dev/sdf
+aws ec2 wait volume-in-use --region "$REGION" --volume-ids "$VOLUME_ID"
+
+# NVMe renames the device, so resolve it by serial rather than trusting /dev/sdf.
+for _ in $(seq 1 30); do
+  DEVICE=$(lsblk -o NAME,SERIAL -dn | awk -v v="$${VOLUME_ID//-/}" '$2 == v {print "/dev/"$1}')
+  [ -n "$DEVICE" ] && break
+  sleep 2
+done
+
+if [ -z "$DEVICE" ]; then
+  echo "State volume $VOLUME_ID attached but no matching block device appeared" >&2
+  exit 1
+fi
+
+# Only format a volume that has never been used — reformatting on every boot
+# would silently destroy the database this exists to protect.
+if ! blkid "$DEVICE" >/dev/null 2>&1; then
+  mkfs.xfs "$DEVICE"
+fi
+
+install -d -m 0750 "$STATE_MOUNT"
+echo "$DEVICE $STATE_MOUNT xfs defaults,nofail 0 2" >>/etc/fstab
+mount "$STATE_MOUNT"
+%{ endif ~}
+
 # Marker the deploy playbook waits on, so it never configures a half-booted host.
 touch /etc/greensecops/bootstrap-complete

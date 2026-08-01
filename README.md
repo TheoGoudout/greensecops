@@ -78,7 +78,10 @@ Frontend docs: [frontend/README.md](./frontend/README.md).
 
 Deployment docs: [deployment.md](./deployment.md).
 
-To deploy on AWS with Terraform and Ansible instead of a single Docker host, see [deploy/README.md](./deploy/README.md).
+Two alternatives to a hand-run Docker host:
+
+* [deploy/coolify/README.md](./deploy/coolify/README.md) — Coolify on one small Hetzner server with Cloudflare Pages and R2, about €20/month.
+* [deploy/README.md](./deploy/README.md) — AWS with Terraform and Ansible, from one instance up to a fully distributed deployment.
 
 ## Development
 

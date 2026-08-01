@@ -10,14 +10,28 @@
 # intentional — the dashboard, API, docs and landing page are public — but the
 # rule not reporting it is a limitation of the rule, not a property of this
 # config.
+#
+# The unit here is the *host group*, not the service. A group is whatever set of
+# containers shares a box: seven groups in the distributed topology, three in
+# consolidated, one in single_host. Ports are opened per group because a group
+# co-locating the three static sites has to expose three of them.
 
 locals {
-  public_services   = { for role, svc in var.services : role => svc if svc.exposure == "public" }
-  internal_services = { for role, svc in var.services : role => svc if svc.exposure == "internal" }
+  data_clients = toset(var.data_client_groups)
 
-  # Cartesian product of "who may reach the data tier" × "which port", so a new
-  # data store or a new client role is one list entry rather than a new block.
-  data_clients = toset(var.data_client_roles)
+  # Flattened so one rule resource covers every (group, port) pair rather than
+  # needing a resource per group.
+  public_group_ports = merge([
+    for group, cfg in var.groups : {
+      for port in cfg.public_ports : "${group}-${port}" => { group = group, port = port }
+    }
+  ]...)
+
+  internal_group_ports = merge([
+    for group, cfg in var.groups : {
+      for port in cfg.internal_ports : "${group}-${port}" => { group = group, port = port }
+    }
+  ]...)
 }
 
 # --------------------------------------------------------------------------
@@ -70,6 +84,8 @@ resource "aws_vpc_security_group_egress_rule" "public_alb_to_targets" {
 }
 
 resource "aws_security_group" "internal_alb" {
+  count = var.internal_load_balancer ? 1 : 0
+
   name        = "${var.name_prefix}-internal-alb"
   description = "Internal load balancer fronting the OPA policy servers."
   vpc_id      = var.vpc_id
@@ -80,20 +96,22 @@ resource "aws_security_group" "internal_alb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "internal_alb_from_clients" {
-  for_each = local.data_clients
+  for_each = var.internal_load_balancer ? local.data_clients : toset([])
 
-  security_group_id            = aws_security_group.internal_alb.id
+  security_group_id            = aws_security_group.internal_alb[0].id
   description                  = "Policy evaluation requests from ${each.key}."
-  referenced_security_group_id = aws_security_group.service[each.key].id
-  from_port                    = var.services["opa"].port
-  to_port                      = var.services["opa"].port
+  referenced_security_group_id = aws_security_group.group[each.key].id
+  from_port                    = 8181
+  to_port                      = 8181
   ip_protocol                  = "tcp"
 
   tags = var.tags
 }
 
 resource "aws_vpc_security_group_egress_rule" "internal_alb_to_targets" {
-  security_group_id = aws_security_group.internal_alb.id
+  count = var.internal_load_balancer ? 1 : 0
+
+  security_group_id = aws_security_group.internal_alb[0].id
   description       = "Forward requests to targets inside the VPC only."
   cidr_ipv4         = var.vpc_cidr
   ip_protocol       = "-1"
@@ -102,26 +120,26 @@ resource "aws_vpc_security_group_egress_rule" "internal_alb_to_targets" {
 }
 
 # --------------------------------------------------------------------------
-# Application instances — one group per role
+# Host groups
 # --------------------------------------------------------------------------
 
-resource "aws_security_group" "service" {
-  for_each = var.services
+resource "aws_security_group" "group" {
+  for_each = var.groups
 
   name        = "${var.name_prefix}-${each.key}"
   description = "GreenSecOps ${each.key} instances."
   vpc_id      = var.vpc_id
 
   tags = merge(var.tags, {
-    Name               = "${var.name_prefix}-${each.key}"
-    "greensecops:role" = each.key
+    Name                = "${var.name_prefix}-${each.key}"
+    "greensecops:group" = each.key
   })
 }
 
-resource "aws_vpc_security_group_ingress_rule" "service_from_public_alb" {
-  for_each = local.public_services
+resource "aws_vpc_security_group_ingress_rule" "group_from_public_alb" {
+  for_each = local.public_group_ports
 
-  security_group_id            = aws_security_group.service[each.key].id
+  security_group_id            = aws_security_group.group[each.value.group].id
   description                  = "Traffic from the internet-facing load balancer."
   referenced_security_group_id = aws_security_group.public_alb.id
   from_port                    = each.value.port
@@ -131,12 +149,12 @@ resource "aws_vpc_security_group_ingress_rule" "service_from_public_alb" {
   tags = var.tags
 }
 
-resource "aws_vpc_security_group_ingress_rule" "service_from_internal_alb" {
-  for_each = local.internal_services
+resource "aws_vpc_security_group_ingress_rule" "group_from_internal_alb" {
+  for_each = var.internal_load_balancer ? local.internal_group_ports : {}
 
-  security_group_id            = aws_security_group.service[each.key].id
+  security_group_id            = aws_security_group.group[each.value.group].id
   description                  = "Traffic from the internal load balancer."
-  referenced_security_group_id = aws_security_group.internal_alb.id
+  referenced_security_group_id = aws_security_group.internal_alb[0].id
   from_port                    = each.value.port
   to_port                      = each.value.port
   ip_protocol                  = "tcp"
@@ -147,10 +165,10 @@ resource "aws_vpc_security_group_ingress_rule" "service_from_internal_alb" {
 # Instances need to reach GitHub, the LLM providers, Stripe, SMTP and ECR, all
 # of which are outside the VPC and none of which publish stable address ranges.
 # Egress is therefore open; inbound is what the tiers above constrain.
-resource "aws_vpc_security_group_egress_rule" "service_all" {
-  for_each = var.services
+resource "aws_vpc_security_group_egress_rule" "group_all" {
+  for_each = var.groups
 
-  security_group_id = aws_security_group.service[each.key].id
+  security_group_id = aws_security_group.group[each.key].id
   description       = "Outbound to AWS APIs, GitHub, LLM providers, Stripe and SMTP."
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
@@ -161,10 +179,15 @@ resource "aws_vpc_security_group_egress_rule" "service_all" {
 # --------------------------------------------------------------------------
 # Data tier
 # --------------------------------------------------------------------------
+# Only exists when the data tier is managed. Where PostgreSQL and Redis run as
+# containers on the application host, the Docker network is the only path to
+# them and there is no security group to write.
 
 resource "aws_security_group" "postgres" {
+  count = var.managed_database ? 1 : 0
+
   name        = "${var.name_prefix}-postgres"
-  description = "RDS PostgreSQL, reachable only from the application roles that hold a database session."
+  description = "RDS PostgreSQL, reachable only from the groups that hold a database session."
   vpc_id      = var.vpc_id
 
   tags = merge(var.tags, {
@@ -173,11 +196,11 @@ resource "aws_security_group" "postgres" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "postgres_from_clients" {
-  for_each = local.data_clients
+  for_each = var.managed_database ? local.data_clients : toset([])
 
-  security_group_id            = aws_security_group.postgres.id
+  security_group_id            = aws_security_group.postgres[0].id
   description                  = "PostgreSQL sessions from ${each.key}."
-  referenced_security_group_id = aws_security_group.service[each.key].id
+  referenced_security_group_id = aws_security_group.group[each.key].id
   from_port                    = var.postgres_port
   to_port                      = var.postgres_port
   ip_protocol                  = "tcp"
@@ -186,6 +209,8 @@ resource "aws_vpc_security_group_ingress_rule" "postgres_from_clients" {
 }
 
 resource "aws_security_group" "redis" {
+  count = var.managed_cache ? 1 : 0
+
   name        = "${var.name_prefix}-redis"
   description = "ElastiCache Redis, the Celery broker and token cache."
   vpc_id      = var.vpc_id
@@ -196,11 +221,11 @@ resource "aws_security_group" "redis" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "redis_from_clients" {
-  for_each = local.data_clients
+  for_each = var.managed_cache ? local.data_clients : toset([])
 
-  security_group_id            = aws_security_group.redis.id
+  security_group_id            = aws_security_group.redis[0].id
   description                  = "Redis connections from ${each.key}."
-  referenced_security_group_id = aws_security_group.service[each.key].id
+  referenced_security_group_id = aws_security_group.group[each.key].id
   from_port                    = var.redis_port
   to_port                      = var.redis_port
   ip_protocol                  = "tcp"

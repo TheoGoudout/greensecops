@@ -7,6 +7,7 @@
 # --------------------------------------------------------------------------
 
 resource "aws_db_subnet_group" "this" {
+  count      = var.create_managed_database ? 1 : 0
   name       = "${var.name_prefix}-postgres"
   subnet_ids = var.subnet_ids
 
@@ -16,6 +17,7 @@ resource "aws_db_subnet_group" "this" {
 }
 
 resource "aws_db_parameter_group" "this" {
+  count  = var.create_managed_database ? 1 : 0
   name   = "${var.name_prefix}-postgres"
   family = "postgres${var.postgres_version}"
 
@@ -36,6 +38,7 @@ resource "aws_db_parameter_group" "this" {
 }
 
 resource "aws_db_instance" "this" {
+  count          = var.create_managed_database ? 1 : 0
   identifier     = "${var.name_prefix}-postgres"
   engine         = "postgres"
   engine_version = var.postgres_version
@@ -56,9 +59,9 @@ resource "aws_db_instance" "this" {
   storage_encrypted     = true
   kms_key_id            = var.kms_key_arn
 
-  db_subnet_group_name   = aws_db_subnet_group.this.name
+  db_subnet_group_name   = aws_db_subnet_group.this[0].name
   vpc_security_group_ids = [var.postgres_security_group_id]
-  parameter_group_name   = aws_db_parameter_group.this.name
+  parameter_group_name   = aws_db_parameter_group.this[0].name
   publicly_accessible    = false
   multi_az               = var.postgres_multi_az
 
@@ -74,7 +77,7 @@ resource "aws_db_instance" "this" {
   performance_insights_enabled    = true
   performance_insights_kms_key_id = var.kms_key_arn
   monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
+  monitoring_role_arn             = aws_iam_role.rds_monitoring[0].arn
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
   deletion_protection       = var.postgres_deletion_protection
@@ -99,6 +102,7 @@ data "aws_iam_policy_document" "rds_monitoring_assume" {
 }
 
 resource "aws_iam_role" "rds_monitoring" {
+  count              = var.create_managed_database ? 1 : 0
   name               = "${var.name_prefix}-rds-monitoring"
   assume_role_policy = data.aws_iam_policy_document.rds_monitoring_assume.json
 
@@ -106,14 +110,16 @@ resource "aws_iam_role" "rds_monitoring" {
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {
-  role       = aws_iam_role.rds_monitoring.name
+  count = var.create_managed_database ? 1 : 0
+
+  role       = aws_iam_role.rds_monitoring[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
 # RDS creates these log groups on first write with no retention; declaring them
 # up front is the only way to stop the exported logs accumulating forever.
 resource "aws_cloudwatch_log_group" "postgres" {
-  for_each = toset(["postgresql", "upgrade"])
+  for_each = var.create_managed_database ? toset(["postgresql", "upgrade"]) : toset([])
 
   name              = "/aws/rds/instance/${var.name_prefix}-postgres/${each.key}"
   retention_in_days = var.log_retention_days
@@ -127,6 +133,7 @@ resource "aws_cloudwatch_log_group" "postgres" {
 # --------------------------------------------------------------------------
 
 resource "aws_elasticache_subnet_group" "this" {
+  count      = var.create_managed_cache ? 1 : 0
   name       = "${var.name_prefix}-redis"
   subnet_ids = var.subnet_ids
 
@@ -136,6 +143,7 @@ resource "aws_elasticache_subnet_group" "this" {
 }
 
 resource "aws_elasticache_replication_group" "this" {
+  count                = var.create_managed_cache ? 1 : 0
   replication_group_id = "${var.name_prefix}-redis"
   description          = "Celery broker, result backend and GitHub installation-token cache."
 
@@ -148,7 +156,7 @@ resource "aws_elasticache_replication_group" "this" {
   automatic_failover_enabled = var.redis_replica_count > 0
   multi_az_enabled           = var.redis_replica_count > 0
 
-  subnet_group_name  = aws_elasticache_subnet_group.this.name
+  subnet_group_name  = aws_elasticache_subnet_group.this[0].name
   security_group_ids = [var.redis_security_group_id]
 
   at_rest_encryption_enabled = true

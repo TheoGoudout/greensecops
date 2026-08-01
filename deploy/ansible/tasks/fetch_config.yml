@@ -16,21 +16,35 @@
   # A freshly scaled-out instance may still be running user_data when the
   # playbook reaches it; configuring a half-booted host fails in confusing ways.
 
-- name: Read this instance's role from disk
+- name: Read this instance's group from disk
   ansible.builtin.slurp:
     src: /etc/greensecops/role
   register: greensecops_role_file
   become: true
 
-- name: Record the role and what it needs
+- name: Read the containers this group runs
+  ansible.builtin.slurp:
+    src: /etc/greensecops/services
+  register: greensecops_services_file
+  become: true
+
+- name: Record the group, its services and what they need
   ansible.builtin.set_fact:
     greensecops_role: "{{ _role }}"
-    greensecops_needs_app_env: "{{ greensecops_services[_role].needs_app_env | bool }}"
+    greensecops_group_service_list: "{{ _services }}"
+    # Any service on this host that reads application configuration means the
+    # whole host needs the secret half of the parameter tree. A group running
+    # only static sites does not.
+    greensecops_needs_app_env: >-
+      {{ _services | split(',') | select
+         | map('extract', greensecops_services, 'needs_app_env')
+         | select | list | length > 0 }}
   vars:
     _role: "{{ (greensecops_role_file.content | b64decode) | trim }}"
-  # Prefer the on-disk value over the inventory tag: they agree, but the file is
-  # what the instance itself believes, and a mismatch is worth surfacing as a
-  # failed deploy rather than a silently wrong container.
+    _services: "{{ (greensecops_services_file.content | b64decode) | trim }}"
+  # Prefer the on-disk values over the inventory tags: they agree, but the file
+  # is what the instance itself believes, and a mismatch is worth surfacing as a
+  # failed deploy rather than a silently wrong set of containers.
 
 - name: Fetch the plain configuration parameters
   ansible.builtin.command:
@@ -126,13 +140,19 @@
   changed_when: false
   no_log: true
   become: true
-  when: greensecops_needs_app_env
+  when:
+    - greensecops_needs_app_env
+    - (greensecops_config.POSTGRES_SECRET_ARN | default('')) != ''
   # RDS owns and rotates this credential. Reading it at deploy time rather than
   # copying it into Parameter Store is what makes a rotation transparent: the
-  # next deploy simply picks up the new value.
+  # next deploy simply picks up the new value. In the single_host topology
+  # there is no RDS and no secret — POSTGRES_PASSWORD is an ordinary
+  # SecureString parameter, seeded like every other credential.
 
 - name: Extract the database password
   ansible.builtin.set_fact:
     greensecops_db_password: "{{ (greensecops_db_secret_raw.stdout | from_json).password }}"
   no_log: true
-  when: greensecops_needs_app_env
+  when:
+    - greensecops_needs_app_env
+    - not (greensecops_db_secret_raw.skipped | default(false))

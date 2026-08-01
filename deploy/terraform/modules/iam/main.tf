@@ -11,6 +11,7 @@ locals {
   secret_readers   = { for role, cfg in var.roles : role => cfg if cfg.reads_secrets }
   artifact_users   = { for role, cfg in var.roles : role => cfg if cfg.uses_artifact_store }
   account_scanners = { for role, cfg in var.roles : role => cfg if cfg.scans_customer_accounts }
+  volume_managers  = { for role, cfg in var.roles : role => cfg if cfg.manages_state_volume }
 }
 
 data "aws_iam_policy_document" "ec2_assume" {
@@ -318,4 +319,65 @@ resource "aws_iam_role_policy_attachment" "ansible_transfer" {
 
   role       = aws_iam_role.service[each.key].name
   policy_arn = aws_iam_policy.ansible_transfer.arn
+}
+
+# --------------------------------------------------------------------------
+# Persistent state volume
+# --------------------------------------------------------------------------
+# Only the single_host topology self-hosts PostgreSQL, Redis and object
+# storage. Its instance attaches the state volume itself at boot, because an
+# Auto Scaling group's launch template cannot know which volume a replacement
+# instance should claim.
+
+data "aws_iam_policy_document" "attach_state_volume" {
+  statement {
+    sid    = "DiscoverStateVolume"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeVolumes",
+      "ec2:DescribeTags",
+    ]
+    resources = ["*"]
+  }
+
+  # Scoped by tag on the volume side, so this cannot attach an arbitrary volume
+  # — only the one belonging to this environment.
+  statement {
+    sid     = "AttachStateVolume"
+    effect  = "Allow"
+    actions = ["ec2:AttachVolume", "ec2:DetachVolume"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:volume/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:instance/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/Project"
+      values   = [var.project]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/Environment"
+      values   = [var.environment]
+    }
+  }
+}
+
+resource "aws_iam_policy" "attach_state_volume" {
+  count = length(local.volume_managers) > 0 ? 1 : 0
+
+  name        = "${var.name_prefix}-attach-state-volume"
+  description = "Discover and attach the environment's persistent state volume at boot."
+  policy      = data.aws_iam_policy_document.attach_state_volume.json
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "attach_state_volume" {
+  for_each = local.volume_managers
+
+  role       = aws_iam_role.service[each.key].name
+  policy_arn = aws_iam_policy.attach_state_volume[0].arn
 }

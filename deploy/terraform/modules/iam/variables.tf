@@ -3,17 +3,28 @@ variable "name_prefix" {
   type        = string
 }
 
+variable "project" {
+  description = "Project slug, matched against the Project tag when scoping volume attachment."
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name, matched against the Environment tag when scoping volume attachment."
+  type        = string
+}
+
 variable "ssm_parameter_prefix" {
   description = "Parameter Store path holding this environment's configuration, e.g. /greensecops/production."
   type        = string
 }
 
 variable "roles" {
-  description = "Every deployed service role. `reads_secrets` grants the SecureString half of the parameter tree and the database password; `uses_artifact_store` grants read/write on the artifact bucket; `scans_customer_accounts` grants sts:AssumeRole for cloud-posture collection."
+  description = "Every host group. `reads_secrets` grants the SecureString half of the parameter tree and the database password; `uses_artifact_store` grants read/write on the artifact bucket; `scans_customer_accounts` grants sts:AssumeRole for cloud-posture collection."
   type = map(object({
     reads_secrets           = optional(bool, false)
     uses_artifact_store     = optional(bool, false)
     scans_customer_accounts = optional(bool, false)
+    manages_state_volume    = optional(bool, false)
   }))
 }
 

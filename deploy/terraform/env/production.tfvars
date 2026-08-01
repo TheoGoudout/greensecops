@@ -1,17 +1,23 @@
-# Production. Every value below is an example — the bucket names must be
-# globally unique and the domain and zone must be yours.
+# Production, on the single_host topology: every container on one box, exactly
+# like compose.yml, with PostgreSQL, Redis and MinIO running alongside the
+# application on a persistent volume.
 #
 #   terraform init -backend-config=env/production.backend.hcl
 #   terraform apply -var-file=env/production.tfvars
+#
+# This is the cheapest shape and has no redundancy: one instance, one
+# availability zone, one volume. When that stops being the right trade, move to
+# `consolidated` — env/examples/consolidated.tfvars shows exactly what changes,
+# and the migration section of deploy/README.md says what should trigger it.
 
 environment = "production"
 aws_region  = "eu-west-1"
+topology    = "single_host"
 
-# Network. One NAT gateway per AZ: a single gateway would make one AZ's
-# outage take out egress for the whole environment.
+# Two AZs because the load balancer requires subnets in at least two, even
+# though only the first one holds an instance.
 vpc_cidr                = "10.30.0.0/16"
-availability_zone_count = 3
-single_nat_gateway      = false
+availability_zone_count = 2
 
 # DNS. The hosted zone must already exist and be delegated.
 domain_name     = "greensecops.example.com"
@@ -33,27 +39,18 @@ image_tag = "latest"
 github_repository        = "TheoGoudout/greensecops"
 github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 
-# Two instances for anything on the request path, so a rolling instance
-# refresh never drops to zero capacity.
-services = {
-  backend       = { instance_type = "t4g.medium", min = 2, max = 4, desired = 2 }
-  frontend      = { instance_type = "t4g.small", min = 2, max = 2, desired = 2 }
-  landing       = { instance_type = "t4g.small", min = 2, max = 2, desired = 2 }
-  docs          = { instance_type = "t4g.small", min = 2, max = 2, desired = 2 }
-  celery-worker = { instance_type = "t4g.medium", min = 2, max = 10, desired = 2 }
-  celery-beat   = { instance_type = "t4g.small", min = 1, max = 1, desired = 1 }
-  opa           = { instance_type = "t4g.small", min = 2, max = 6, desired = 2 }
+# One group running all seven containers plus PostgreSQL, Redis and MinIO.
+# t4g.large (2 vCPU / 8 GiB) is the smallest size that comfortably holds the
+# lot; t4g.xlarge if the Celery workers are busy.
+groups = {
+  app = { instance_type = "t4g.large", min = 1, max = 1, desired = 1 }
 }
 
-# Data tier.
-postgres_instance_class        = "db.m7g.large"
-postgres_allocated_storage     = 100
-postgres_multi_az              = true
-postgres_backup_retention_days = 30
-postgres_deletion_protection   = true
+celery_concurrency = 4
 
-redis_node_type     = "cache.t4g.small"
-redis_replica_count = 1
+# The persistent volume is the only copy of the database in this topology.
+state_volume_size               = 100
+state_volume_snapshot_retention = 14
 
 artifact_bucket_name          = "greensecops-artifacts-production-CHANGEME"
 artifact_bucket_force_destroy = false
@@ -61,7 +58,7 @@ access_log_bucket_name        = "greensecops-alb-logs-production-CHANGEME"
 ansible_transfer_bucket_name  = "greensecops-ansible-production-CHANGEME"
 
 # Operations.
-log_retention_days  = 90
+log_retention_days  = 30
 deletion_protection = true
 alarm_email         = "platform@example.com"
 

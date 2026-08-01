@@ -107,6 +107,8 @@ resource "aws_cloudwatch_metric_alarm" "service_cpu" {
 # --------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "postgres_cpu" {
+  count = var.postgres_instance_id == "" ? 0 : 1
+
   alarm_name          = "${var.name_prefix}-postgres-cpu"
   alarm_description   = "Sustained high CPU on the database."
   namespace           = "AWS/RDS"
@@ -129,6 +131,8 @@ resource "aws_cloudwatch_metric_alarm" "postgres_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "postgres_storage" {
+  count = var.postgres_instance_id == "" ? 0 : 1
+
   alarm_name          = "${var.name_prefix}-postgres-free-storage"
   alarm_description   = "The database is running out of storage. Autoscaling should have grown it — check that it has not hit max_allocated_storage."
   namespace           = "AWS/RDS"
@@ -151,6 +155,8 @@ resource "aws_cloudwatch_metric_alarm" "postgres_storage" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "redis_memory" {
+  count = var.redis_replication_group_id == "" ? 0 : 1
+
   alarm_name          = "${var.name_prefix}-redis-memory"
   alarm_description   = "Redis is close to its maxmemory limit — Celery messages or cached installation tokens will start being evicted."
   namespace           = "AWS/ElastiCache"

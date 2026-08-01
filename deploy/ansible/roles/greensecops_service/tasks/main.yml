@@ -1,5 +1,5 @@
 ---
-- name: Create the state directory for this role
+- name: Create the host-side directories the containers bind-mount
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -7,9 +7,15 @@
     group: root
     mode: "0750"
   become: true
-  loop: "{{ greensecops_service_spec.volumes | default([]) | map('regex_replace', ':.*$', '') | list }}"
-  # celery-beat is the only role with a volume today: PersistentScheduler keeps
-  # its cursor on disk, and losing it re-fires every periodic task at once.
+  loop: "{{ _service_volumes + (greensecops_self_hosted_data_tier | ternary(greensecops_service_state_directories, [])) }}"
+  vars:
+    _service_volumes: >-
+      {{ greensecops_group_services
+         | map('extract', greensecops_services, 'volumes') | select | flatten
+         | map('regex_replace', ':.*$', '') | list }}
+  # In single_host these live on the persistent volume mounted by cloud-init,
+  # so PostgreSQL's data outlives the instance. celery-beat's schedule cursor
+  # sits alongside: losing it re-fires every periodic task at once.
 
 - name: Render the environment file
   ansible.builtin.template:
@@ -57,7 +63,7 @@
   become: true
   changed_when: true
   run_once: true
-  when: greensecops_role == 'backend'
+  when: "'backend' in greensecops_group_services"
   # Alembic migrations, the object-store bucket check and the first-superuser
   # seed, from backend/scripts/prestart.sh. Once per deploy rather than once
   # per instance: concurrent `alembic upgrade head` runs on one database race.

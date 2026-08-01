@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - "deploy/**"
+      - "compose.yml"
+      - "scripts/validate_coolify_compose.py"
       - ".github/workflows/deploy-checks.yml"
   pull_request:
     paths:
       - "deploy/**"
+      - "compose.yml"
+      - "scripts/validate_coolify_compose.py"
       - ".github/workflows/deploy-checks.yml"
 
 permissions: {}
@@ -55,6 +59,25 @@ jobs:
         run: |
           terraform -chdir=deploy/terraform/bootstrap init -backend=false -input=false
           terraform -chdir=deploy/terraform/bootstrap validate
+
+  coolify:
+    name: Coolify compose drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install "PyYAML>=6,<7"
+
+      - name: Check the Coolify compose against compose.yml
+        run: python scripts/validate_coolify_compose.py
 
   ansible:
     name: Ansible lint & syntax check

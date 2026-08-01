@@ -38,16 +38,23 @@ locals {
     MARKETING_URL        = local.urls.landing
     BACKEND_CORS_ORIGINS = local.urls.frontend
 
-    # Data tier. POSTGRES_PASSWORD is absent on purpose: it lives in the
-    # RDS-managed Secrets Manager secret, which Ansible reads separately.
-    POSTGRES_SERVER     = module.data.postgres_address
-    POSTGRES_PORT       = tostring(module.data.postgres_port)
+    # Data tier. Where these point depends on the topology: at RDS and
+    # ElastiCache when the data tier is managed, at container names on the
+    # Docker network when it is not. POSTGRES_PASSWORD is absent in the managed
+    # case on purpose — it lives in the RDS-managed Secrets Manager secret,
+    # which Ansible reads separately; when self-hosted it is an ordinary
+    # SecureString parameter alongside the others.
+    POSTGRES_SERVER     = local.postgres_server
+    POSTGRES_PORT       = local.postgres_port
     POSTGRES_DB         = module.data.postgres_database_name
     POSTGRES_USER       = module.data.postgres_username
     POSTGRES_SECRET_ARN = module.data.postgres_master_secret_arn
 
-    REDIS_URL = module.data.redis_url
-    OPA_URL   = "http://${module.edge.internal_alb_dns_name}:${local.service_topology["opa"].port}"
+    REDIS_URL = local.redis_url
+
+    # Behind the internal load balancer when OPA has its own hosts; over the
+    # Docker network when it shares one with the backend.
+    OPA_URL = local.opa_url
 
     # Object storage is real S3 here rather than MinIO: no endpoint override,
     # and no key pair, so boto3 falls back to the instance role.
@@ -57,6 +64,11 @@ locals {
     CELERY_CONCURRENCY = tostring(var.celery_concurrency)
 
     ANSIBLE_TRANSFER_BUCKET = module.data.ansible_transfer_bucket_name
+
+    # Tells Ansible which containers this deployment expects it to run, so the
+    # rendered compose file includes db/redis/minio exactly when Terraform did
+    # not provision managed equivalents.
+    SELF_HOSTED_DATA_TIER = tostring(!local.managed_database || !local.managed_cache)
   }
 
   # Declared, never populated by Terraform. The description is what an operator
@@ -90,6 +102,14 @@ locals {
     SENTRY_DSN = "Sentry DSN. Error reporting is disabled while unset."
   }
 
+  # Only needed when PostgreSQL runs as a container: with RDS the password is
+  # generated and rotated by AWS in Secrets Manager and never appears here.
+  self_hosted_secret_parameters = local.managed_database ? {} : {
+    POSTGRES_PASSWORD   = "Password for the self-hosted PostgreSQL container. Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    MINIO_ROOT_USER     = "Root user for the self-hosted MinIO container, also used as S3_ACCESS_KEY by the backend."
+    MINIO_ROOT_PASSWORD = "Root password for the self-hosted MinIO container, also used as S3_SECRET_KEY."
+  }
+
   # A value no running deployment would accept, so a parameter that was never
   # seeded fails loudly at deploy time instead of starting with a usable-looking
   # placeholder. The backend already refuses to boot on the literal
@@ -113,7 +133,7 @@ resource "aws_ssm_parameter" "config" {
 }
 
 resource "aws_ssm_parameter" "secret" {
-  for_each = local.secret_parameters
+  for_each = merge(local.secret_parameters, local.self_hosted_secret_parameters)
 
   name        = "${local.ssm_prefix}/secret/${each.key}"
   description = each.value
