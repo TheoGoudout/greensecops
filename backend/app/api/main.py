@@ -5,6 +5,7 @@ from app.api.routes import (
     badges,
     billing,
     cloud,
+    docker,
     events,
     fixes,
     github_oauth,
@@ -42,6 +43,7 @@ api_router.include_router(telemetry.router)
 api_router.include_router(billing.router)
 api_router.include_router(terraform.router)
 api_router.include_router(cloud.router)
+api_router.include_router(docker.router)
 
 if settings.ENVIRONMENT == "local":
     api_router.include_router(private.router)

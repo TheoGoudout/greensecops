@@ -1,0 +1,527 @@
+"""Tests for the /api/v1/docker-targets/ endpoints."""
+
+import uuid
+from dataclasses import dataclass
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
+
+from app.core.config import settings
+from app.models import (
+    AnalysisTrigger,
+    DockerFinding,
+    DockerScan,
+    DockerTarget,
+    IssueCategory,
+    IssueSeverity,
+    Organization,
+    OrgMember,
+    OrgRole,
+    Repository,
+    Rule,
+    RuleDomain,
+    ScanStatus,
+    UserTier,
+)
+
+# ─── Fixtures ────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def org(db: Session) -> Organization:
+    organization = Organization(
+        name=f"dkapi-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
+    )
+    db.add(organization)
+    db.commit()
+    db.refresh(organization)
+    return organization
+
+
+@pytest.fixture()
+def repo(db: Session, org: Organization) -> Repository:
+    repository = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"dkapiowner/repo-{uuid.uuid4().hex[:8]}",
+        installation_id=77777,
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+    return repository
+
+
+@pytest.fixture()
+def target(db: Session, repo: Repository) -> DockerTarget:
+    item = DockerTarget(repo_id=repo.id, root_path=f"svc/{uuid.uuid4().hex[:8]}")
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@pytest.fixture()
+def seeded_docker_rule(db: Session) -> Rule:
+    rule = db.exec(
+        select(Rule).where(Rule.domain == RuleDomain.container_docker)
+    ).first()
+    assert rule is not None
+    return rule
+
+
+@pytest.fixture()
+def completed_scan(db: Session, target: DockerTarget) -> DockerScan:
+    scan = DockerScan(
+        docker_target_id=target.id,
+        status=ScanStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+        score=72.0,
+        grade="B",
+        file_count=3,
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+    return scan
+
+
+@dataclass
+class FakeDockerFile:
+    path: str
+    content: str
+
+
+# ─── POST /docker-targets/ ────────────────────────────────────────────────────
+
+
+def test_create_docker_target(
+    client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/docker-targets/",
+        headers=superuser_token_headers,
+        json={"repo_id": str(repo.id), "root_path": "services/api"},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["root_path"] == "services/api"
+    assert body["enabled"] is True
+
+
+@pytest.mark.parametrize("raw", ["", "/", "./", "  "])
+def test_create_docker_target_normalizes_the_repository_root(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    raw: str,
+) -> None:
+    """All spellings of "the repo root" must collapse to one row.
+
+    The unique constraint is on the literal string, so without normalization a
+    repo could accumulate several root targets all scanning the same files.
+    """
+    response = client.post(
+        f"{settings.API_V1_STR}/docker-targets/",
+        headers=superuser_token_headers,
+        json={"repo_id": str(repo.id), "root_path": raw},
+    )
+    assert response.status_code == 201
+    assert response.json()["root_path"] == ""
+
+
+def test_create_docker_target_rejects_a_duplicate_path(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    target: DockerTarget,
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/docker-targets/",
+        headers=superuser_token_headers,
+        json={"repo_id": str(repo.id), "root_path": target.root_path},
+    )
+    assert response.status_code == 409
+
+
+def test_create_docker_target_requires_auth(
+    client: TestClient, repo: Repository
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/docker-targets/",
+        json={"repo_id": str(repo.id), "root_path": "x"},
+    )
+    assert response.status_code == 401
+
+
+# ─── GET /docker-targets/ ─────────────────────────────────────────────────────
+
+
+def test_list_docker_targets_filtered_by_repo(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    target: DockerTarget,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/",
+        headers=superuser_token_headers,
+        params={"repo_id": str(repo.id)},
+    )
+    assert response.status_code == 200
+    assert [t["id"] for t in response.json()] == [str(target.id)]
+
+
+def test_list_docker_targets_surfaces_the_latest_grade(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/",
+        headers=superuser_token_headers,
+        params={"repo_id": str(repo.id)},
+    )
+    body = response.json()[0]
+    assert body["latest_grade"] == "B"
+    assert body["latest_score"] == 72.0
+
+
+def test_a_failed_scan_does_not_define_the_grade(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+) -> None:
+    # A later failed scan must not erase the last good grade.
+    db.add(
+        DockerScan(
+            docker_target_id=target.id,
+            status=ScanStatus.failed,
+            triggered_by=AnalysisTrigger.manual,
+        )
+    )
+    db.commit()
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/",
+        headers=superuser_token_headers,
+        params={"repo_id": str(repo.id)},
+    )
+    assert response.json()[0]["latest_grade"] == "B"
+
+
+# ─── Tenant isolation ─────────────────────────────────────────────────────────
+
+
+def test_another_tenants_target_is_404_not_403(
+    client: TestClient,
+    db: Session,
+    target: DockerTarget,
+) -> None:
+    """Existence of another tenant's target must not be disclosed.
+
+    A 403 would confirm the id is real; the route returns the same 404 detail
+    for missing and unauthorized alike.
+    """
+    other_org = Organization(name=f"other-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
+    db.add(other_org)
+    db.commit()
+    db.refresh(other_org)
+    email = f"outsider-{uuid.uuid4().hex[:8]}@example.com"
+    from app import crud
+    from app.models import UserCreate
+
+    user = crud.create_user(
+        session=db, user_create=UserCreate(email=email, password="password12345")
+    )
+    db.add(OrgMember(org_id=other_org.id, user_id=user.id, role=OrgRole.owner))
+    db.commit()
+
+    login = client.post(
+        f"{settings.API_V1_STR}/login/access-token",
+        data={"username": email, "password": "password12345"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings", headers=headers
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Docker target not found"
+
+
+# ─── Scan trigger ─────────────────────────────────────────────────────────────
+
+
+def test_trigger_scan_queues_the_task(
+    client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
+) -> None:
+    with patch("app.api.routes.docker.run_docker_scan.delay") as delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/scan",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    delay.assert_called_once()
+
+
+def test_trigger_scan_is_forbidden_on_a_disabled_target(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+) -> None:
+    target.enabled = False
+    db.add(target)
+    db.commit()
+    response = client.post(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/scan",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 403
+
+
+def test_toggle_flips_enabled(
+    client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
+) -> None:
+    response = client.patch(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/toggle",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+
+
+def test_delete_removes_the_target(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+) -> None:
+    target_id = target.id
+    response = client.delete(
+        f"{settings.API_V1_STR}/docker-targets/{target_id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 204
+    # The route deletes through its own session, so this one still holds the
+    # row in its identity map. The id is captured above because expiring the
+    # instance would make reading it re-select a row that no longer exists.
+    db.expire_all()
+    assert db.get(DockerTarget, target_id) is None
+
+
+# ─── Findings ─────────────────────────────────────────────────────────────────
+
+
+def _add_finding(
+    db: Session,
+    target: DockerTarget,
+    scan: DockerScan,
+    rule: Rule,
+    **overrides: object,
+) -> DockerFinding:
+    values: dict[str, object] = {
+        "scan_id": scan.id,
+        "docker_target_id": target.id,
+        "rule_id": rule.id,
+        "file_path": "Dockerfile",
+        "fingerprint": uuid.uuid4().hex[:16],
+        "severity": IssueSeverity.high,
+        "category": IssueCategory.security,
+        "message": "runs as root",
+    }
+    values.update(overrides)
+    finding = DockerFinding(**values)  # type: ignore[arg-type]
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+def test_list_findings_returns_the_rule_slug_and_locators(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    _add_finding(
+        db,
+        target,
+        completed_scan,
+        seeded_docker_rule,
+        service_name="api",
+        line_start=4,
+        line_end=9,
+    )
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["rule_slug"] == seeded_docker_rule.slug
+    assert body["service_name"] == "api"
+    assert body["line_start"] == 4
+    assert body["line_end"] == 9
+
+
+def test_list_findings_hides_resolved_by_default(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    from datetime import datetime, timezone
+
+    _add_finding(
+        db,
+        target,
+        completed_scan,
+        seeded_docker_rule,
+        resolved_at=datetime.now(timezone.utc),
+    )
+    default = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings",
+        headers=superuser_token_headers,
+    )
+    assert default.json() == []
+
+    included = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings",
+        headers=superuser_token_headers,
+        params={"include_resolved": True},
+    )
+    assert len(included.json()) == 1
+
+
+# ─── Scans ────────────────────────────────────────────────────────────────────
+
+
+def test_list_scans_exposes_the_file_count(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    target: DockerTarget,
+    completed_scan: DockerScan,
+) -> None:
+    # The score is a mean of per-file scores; without the denominator the
+    # grade can't be reasoned about.
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/scans",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()[0]["file_count"] == 3
+
+
+# ─── Files ────────────────────────────────────────────────────────────────────
+
+
+def test_list_files_classifies_each_file(
+    client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
+) -> None:
+    with patch(
+        "app.api.routes.docker._fetch_docker_files",
+        return_value=[
+            FakeDockerFile(path="compose.yml", content="services: {}\n"),
+            FakeDockerFile(path="Dockerfile", content="FROM x\n"),
+        ],
+    ):
+        response = client.get(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/files",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 200
+    body = response.json()
+    # Sorted by path, and each carries the kind the viewer needs.
+    assert [f["path"] for f in body] == ["Dockerfile", "compose.yml"]
+    assert [f["kind"] for f in body] == ["dockerfile", "compose"]
+
+
+def test_list_files_reports_a_github_failure_as_502(
+    client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
+) -> None:
+    with patch(
+        "app.api.routes.docker._fetch_docker_files",
+        side_effect=RuntimeError("upstream is down"),
+    ):
+        response = client.get(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/files",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 502
+
+
+# ─── Badges ───────────────────────────────────────────────────────────────────
+
+
+def test_public_target_badge_needs_no_signature(
+    client: TestClient, target: DockerTarget, completed_scan: DockerScan
+) -> None:
+    response = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.svg")
+    assert response.status_code == 200
+    assert "Docker" in response.text
+    assert "B" in response.text
+
+
+def test_private_target_badge_requires_a_valid_signature(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+) -> None:
+    repo.is_private = True
+    db.add(repo)
+    db.commit()
+
+    unsigned = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.json")
+    assert unsigned.json()["message"] == "not configured"
+
+    from app.services.badge_signing import sign_docker_target_badge
+
+    signed = client.get(
+        f"{settings.API_V1_STR}/badges/docker/{target.id}.json",
+        params={"sig": sign_docker_target_badge(str(target.id))},
+    )
+    assert signed.json()["message"] == "B"
+
+
+def test_unknown_target_badge_is_indistinguishable_from_unauthorized(
+    client: TestClient,
+) -> None:
+    response = client.get(f"{settings.API_V1_STR}/badges/docker/{uuid.uuid4()}.json")
+    assert response.json()["message"] == "not configured"
+
+
+def test_superuser_sees_targets_across_orgs(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    target: DockerTarget,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/", headers=superuser_token_headers
+    )
+    assert response.status_code == 200
+    assert str(target.id) in {t["id"] for t in response.json()}
+
+
+def test_findings_for_a_missing_target_are_404(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{uuid.uuid4()}/findings",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 404

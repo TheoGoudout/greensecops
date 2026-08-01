@@ -129,6 +129,73 @@ export type CloudScanPublic = {
 };
 
 /**
+ * A Dockerfile or Compose file's live source for a target.
+ *
+ * Not persisted (mirroring ``TerraformFilePublic``): fetched from GitHub on
+ * demand, so it carries no id/branch — just path and content. ``kind`` lets
+ * the viewer pick a syntax highlighter without re-deriving it from the name.
+ */
+export type DockerFilePublic = {
+    path: string;
+    raw_content: string;
+    kind: string;
+};
+
+export type DockerFindingPublic = {
+    id: string;
+    scan_id: string;
+    docker_target_id: string;
+    rule_id: string;
+    rule_slug: string;
+    file_path: string;
+    service_name?: (string | null);
+    stage_name?: (string | null);
+    line_start?: (number | null);
+    line_end?: (number | null);
+    severity: IssueSeverity;
+    category: IssueCategory;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type DockerScanPublic = {
+    id: string;
+    docker_target_id: string;
+    status: ScanStatus;
+    triggered_by: AnalysisTrigger;
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    score?: (number | null);
+    grade?: (string | null);
+    file_count?: (number | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
+};
+
+export type DockerTargetCreate = {
+    repo_id: string;
+    root_path?: string;
+};
+
+export type DockerTargetPublic = {
+    id: string;
+    repo_id: string;
+    repo_full_name?: (string | null);
+    root_path: string;
+    enabled: boolean;
+    last_scanned_at?: (string | null);
+    last_scanned_head_sha?: (string | null);
+    latest_score?: (number | null);
+    latest_grade?: (string | null);
+    badge_sig?: (string | null);
+};
+
+/**
  * Lifecycle of the dynamic-analysis enrichment for a ``completed``-phase
  * telemetry run.
  *
@@ -732,6 +799,22 @@ export type BadgesGetTerraformRootBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 
+export type BadgesGetDockerTargetBadgeData = {
+    sig?: (string | null);
+    targetId: string;
+};
+
+export type BadgesGetDockerTargetBadgeResponse = (unknown);
+
+export type BadgesGetDockerTargetBadgeJsonData = {
+    sig?: (string | null);
+    targetId: string;
+};
+
+export type BadgesGetDockerTargetBadgeJsonResponse = ({
+    [key: string]: unknown;
+});
+
 export type BillingGetSubscriptionResponse = (BillingSubscriptionPublic);
 
 export type BillingGetTierLimitsResponse = ({
@@ -793,6 +876,62 @@ export type CloudListCloudFindingsData = {
 };
 
 export type CloudListCloudFindingsResponse = (Array<CloudFindingPublic>);
+
+export type DockerCreateDockerTargetData = {
+    requestBody: DockerTargetCreate;
+};
+
+export type DockerCreateDockerTargetResponse = (DockerTargetPublic);
+
+export type DockerListDockerTargetsData = {
+    repoId?: (string | null);
+};
+
+export type DockerListDockerTargetsResponse = (Array<DockerTargetPublic>);
+
+export type DockerToggleDockerTargetData = {
+    targetId: string;
+};
+
+export type DockerToggleDockerTargetResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type DockerDeleteDockerTargetData = {
+    targetId: string;
+};
+
+export type DockerDeleteDockerTargetResponse = (void);
+
+export type DockerTriggerDockerScanData = {
+    branch?: (string | null);
+    targetId: string;
+};
+
+export type DockerTriggerDockerScanResponse = ({
+    [key: string]: (string);
+});
+
+export type DockerListDockerScansData = {
+    limit?: number;
+    targetId: string;
+};
+
+export type DockerListDockerScansResponse = (Array<DockerScanPublic>);
+
+export type DockerListDockerFindingsData = {
+    includeResolved?: boolean;
+    targetId: string;
+};
+
+export type DockerListDockerFindingsResponse = (Array<DockerFindingPublic>);
+
+export type DockerListDockerFilesData = {
+    ref?: (string | null);
+    targetId: string;
+};
+
+export type DockerListDockerFilesResponse = (Array<DockerFilePublic>);
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
