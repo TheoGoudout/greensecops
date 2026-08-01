@@ -15,6 +15,13 @@ export APP_URL DOCS_URL MARKETING_URL SUPPORT_EMAIL SALES_EMAIL LEGAL_EMAIL PRIV
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 find /usr/share/nginx/html -name "*.html" | while read -r f; do
-  envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' < "$f" > "$tmp" && cat "$tmp" > "$f"
+  envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' < "$f" > "$tmp"
+  # Write only when the substitution changed something. The base image leaves
+  # its own root-owned 50x.html in the docroot; it carries no placeholder, so
+  # rewriting it was both pointless and impossible as uid 101 — the failed
+  # redirection tripped `set -e` and put the container in a restart loop. A
+  # page of ours that lost its uid 101 ownership does change here, so it still
+  # fails loudly rather than silently serving a literal ${APP_URL}.
+  cmp -s "$tmp" "$f" || cat "$tmp" > "$f"
 done
 exec "$@"
