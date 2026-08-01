@@ -122,6 +122,11 @@ test.describe("Navigation", () => {
   })
 
   test("page titles are correct", async ({ page }) => {
+    // Five full navigations share one test budget, and the first two are the
+    // heaviest routes in the app — enough to exhaust it on a cold dev server
+    // before the loop reaches /rules. Same reason docker.spec.ts marks its
+    // equivalent slow.
+    test.slow()
     await mockUserMe(page, MOCK_USER)
     await setupAllMocks(page)
 
