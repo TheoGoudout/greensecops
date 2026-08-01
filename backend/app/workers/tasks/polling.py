@@ -144,6 +144,28 @@ def _apply_push(
         eh.enqueue_workflow_analysis(
             repo, data.branch, data.head_sha, AnalysisTrigger.polled_push
         )
+        # External repos receive no webhooks, so this is their only path to an
+        # IaC/Docker scan. Without these two calls a polled repo's Terraform
+        # and Docker findings would never refresh after onboarding — the
+        # webhook handler has always done both, the poller never did.
+        # changed_paths is None because a poll observes only the new head, not
+        # which files moved: every enabled target is rescanned.
+        eh.enqueue_terraform_scans(
+            session,
+            repo,
+            data.branch,
+            data.head_sha,
+            AnalysisTrigger.polled_push,
+            changed_paths=None,
+        )
+        eh.enqueue_docker_scans(
+            session,
+            repo,
+            data.branch,
+            data.head_sha,
+            AnalysisTrigger.polled_push,
+            changed_paths=None,
+        )
         enqueued = True
     repo.last_polled_head_sha = data.head_sha
     repo.last_polled_at = now

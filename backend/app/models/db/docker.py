@@ -1,0 +1,143 @@
+import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import DateTime, UniqueConstraint
+from sqlmodel import Field, Relationship, SQLModel
+
+from ..enums import (
+    AnalysisFailureKind,
+    AnalysisTrigger,
+    FindingResolutionReason,
+    FindingStatus,
+    IssueCategory,
+    IssueSeverity,
+    ScanStatus,
+)
+from .base import get_datetime_utc
+
+if TYPE_CHECKING:
+    from .repository import Repository
+    from .rule import Rule
+
+
+class DockerTarget(SQLModel, table=True):
+    """A folder in a repo whose Dockerfiles and Compose files are scanned.
+
+    Mirrors ``TerraformRoot``, with one deliberate difference: a target is
+    created automatically at the repository root during installation sync
+    rather than registered by hand. Docker files are discoverable by filename
+    alone, so requiring the user to declare where they live — as the Terraform
+    engine does — would throw away the one activation advantage this engine
+    has. Extra targets can still be added for monorepos that want each
+    sub-project graded separately.
+    """
+
+    __tablename__ = "docker_target"
+    __table_args__ = (
+        UniqueConstraint("repo_id", "root_path", name="uq_docker_target_repo_path"),
+    )
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    # "" means the repository root. Normalized on the way in (see
+    # api/routes/docker.py) so "/", "./" and "" can't create duplicate rows
+    # that the unique constraint would treat as distinct.
+    root_path: str = Field(default="", max_length=512)
+    enabled: bool = Field(default=True)
+    last_scanned_head_sha: str | None = Field(default=None, max_length=40)
+    last_scanned_at: datetime | None = Field(
+        default=None, sa_type=DateTime(timezone=True)
+    )
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    repository: Optional["Repository"] = Relationship(back_populates="docker_targets")
+    scans: list["DockerScan"] = Relationship(
+        back_populates="docker_target", cascade_delete=True
+    )
+
+
+class DockerScan(SQLModel, table=True):
+    __tablename__ = "docker_scan"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    docker_target_id: uuid.UUID = Field(
+        foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
+    )
+    status: ScanStatus = Field(
+        default=ScanStatus.queued,
+        sa_column_kwargs={"server_default": ScanStatus.queued.value},
+    )
+    triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
+    branch: str | None = Field(default=None, max_length=255)
+    commit_sha: str | None = Field(default=None, max_length=64)
+    score: float | None = Field(default=None)
+    grade: str | None = Field(default=None, max_length=8)
+    # How many files the score was averaged over. Persisted because the score
+    # is a *mean of per-file scores* (see workers/tasks/docker_analysis.py) —
+    # without the denominator a grade can't be reasoned about after the fact.
+    file_count: int | None = Field(default=None)
+    error_message: str | None = Field(default=None, max_length=2048)
+    failure_kind: AnalysisFailureKind | None = Field(default=None)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    docker_target: DockerTarget | None = Relationship(back_populates="scans")
+    findings: list["DockerFinding"] = Relationship(
+        back_populates="scan", cascade_delete=True
+    )
+
+
+class DockerFinding(SQLModel, table=True):
+    __tablename__ = "docker_finding"
+    __table_args__ = (
+        UniqueConstraint(
+            "docker_target_id",
+            "fingerprint",
+            name="uq_docker_finding_target_fingerprint",
+        ),
+    )
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    scan_id: uuid.UUID = Field(
+        foreign_key="docker_scan.id", nullable=False, ondelete="CASCADE"
+    )
+    # Denormalized off the scan: a fingerprint's uniqueness/history scope is
+    # the target across scans, not one scan (mirrors Issue.workflow_file_id).
+    docker_target_id: uuid.UUID = Field(
+        foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
+    )
+    rule_id: uuid.UUID = Field(
+        foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
+    )
+    # A Dockerfile has no addressable resources, so the file *is* the unit a
+    # rule fires against. The two locators below narrow it: a Compose rule
+    # names the service, a Dockerfile rule the build stage. Both nullable — a
+    # file-level rule (a missing OCI label, an obsolete version key) has
+    # neither.
+    file_path: str = Field(max_length=512)
+    service_name: str | None = Field(default=None, max_length=255)
+    stage_name: str | None = Field(default=None, max_length=255)
+    line_start: int | None = Field(default=None)
+    line_end: int | None = Field(default=None)
+    fingerprint: str = Field(max_length=16, index=True)
+    severity: IssueSeverity
+    category: IssueCategory
+    status: FindingStatus = Field(
+        default=FindingStatus.open,
+        sa_column_kwargs={"server_default": FindingStatus.open.value},
+        index=True,
+    )
+    message: str = Field(max_length=2048)
+    context: str | None = Field(default=None, max_length=4096)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    resolution_reason: FindingResolutionReason | None = Field(default=None)
+    ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    scan: DockerScan | None = Relationship(back_populates="findings")
+    # One-directional (no back_populates on Rule): findings look up their rule,
+    # Rule doesn't need to know about the finding tables that reference it.
+    rule: Optional["Rule"] = Relationship()
