@@ -32,10 +32,10 @@ function DockerBadgeCard({ target }: { target: DockerTargetPublic }) {
   const markdown = dockerBadgeMarkdown(target)
   const svgUrl = dockerBadgeSvgUrl(target)
   const copied = copiedText === markdown
-  const path = target.root_path || "/"
-  const label = target.repo_full_name
-    ? `${target.repo_full_name} / ${path}`
-    : path
+  // A root-path target covers the whole repo, so the repo name says it all —
+  // appending "/" would just read as "acme/web-app / /".
+  const repo = target.repo_full_name ?? target.repo_id
+  const label = target.root_path ? `${repo} / ${target.root_path}` : repo
 
   return (
     <Card>
