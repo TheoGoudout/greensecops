@@ -17,6 +17,14 @@ export function tfFixBranch(terraformRootId: string): string {
   return `greensecops/terraform-${terraformRootId.slice(0, 8)}`
 }
 
+// Mirrors docker_fix_branch server-side (backend/app/services/delivery_pr.py):
+// one PR branch per Docker target, with a third distinct prefix so the
+// Infrastructure PRs tab can tell a Docker PR from a Terraform or CI-workflow
+// one by branch name alone.
+export function dockerFixBranch(dockerTargetId: string): string {
+  return `greensecops/docker-${dockerTargetId.slice(0, 8)}`
+}
+
 // Mirrors the fixed branch name delivery mints server-side for the
 // "Integrate action" PR (see backend/app/api/routes/repositories.py
 // integrate_action).

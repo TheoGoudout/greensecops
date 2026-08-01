@@ -157,9 +157,32 @@ export type DockerFindingPublic = {
     message: string;
     context?: (string | null);
     status: FindingStatus;
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
     created_at?: (string | null);
     resolved_at?: (string | null);
     resolution_reason?: (FindingResolutionReason | null);
+};
+
+export type DockerFixGenerateRequest = {
+    finding_ids?: (Array<(string)> | null);
+};
+
+export type DockerFixPublic = {
+    id: string;
+    docker_target_id: string;
+    file_path: string;
+    pr_id?: (string | null);
+    llm_provider: LLMProvider;
+    llm_model: string;
+    status: FixStatus;
+    full_content?: (string | null);
+    error_message?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    pr_state?: (PullRequestState | null);
+    created_at?: (string | null);
+    delivered_at?: (string | null);
 };
 
 export type DockerScanPublic = {
@@ -932,6 +955,31 @@ export type DockerListDockerFilesData = {
 };
 
 export type DockerListDockerFilesResponse = (Array<DockerFilePublic>);
+
+export type DockerListDockerFixesData = {
+    targetId: string;
+};
+
+export type DockerListDockerFixesResponse = (Array<DockerFixPublic>);
+
+export type DockerTriggerDockerFixGenerationData = {
+    force?: boolean;
+    requestBody?: (DockerFixGenerateRequest | null);
+    targetId: string;
+};
+
+export type DockerTriggerDockerFixGenerationResponse = ({
+    [key: string]: (string | number);
+});
+
+export type DockerTriggerDockerDeliveryData = {
+    force?: boolean;
+    targetId: string;
+};
+
+export type DockerTriggerDockerDeliveryResponse = ({
+    [key: string]: (string);
+});
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
+import sqlalchemy as sa
 from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -10,13 +11,16 @@ from ..enums import (
     AnalysisTrigger,
     FindingResolutionReason,
     FindingStatus,
+    FixStatus,
     IssueCategory,
     IssueSeverity,
+    LLMProvider,
     ScanStatus,
 )
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
+    from .pull_request import PullRequest
     from .repository import Repository
     from .rule import Rule
 
@@ -111,6 +115,12 @@ class DockerFinding(SQLModel, table=True):
     rule_id: uuid.UUID = Field(
         foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
     )
+    # The Docker fix that addresses this finding, if one has been generated.
+    # SET NULL (not CASCADE): dropping a fix must not delete finding history —
+    # mirrors ``Issue.fix_id`` and ``TerraformFinding.fix_id``.
+    fix_id: uuid.UUID | None = Field(
+        default=None, foreign_key="docker_fix.id", ondelete="SET NULL"
+    )
     # A Dockerfile has no addressable resources, so the file *is* the unit a
     # rule fires against. The two locators below narrow it: a Compose rule
     # names the service, a Dockerfile rule the build stage. Both nullable — a
@@ -141,3 +151,48 @@ class DockerFinding(SQLModel, table=True):
     # One-directional (no back_populates on Rule): findings look up their rule,
     # Rule doesn't need to know about the finding tables that reference it.
     rule: Optional["Rule"] = Relationship()
+    fix: Optional["DockerFix"] = Relationship(back_populates="findings")
+
+
+class DockerFix(SQLModel, table=True):
+    """An LLM-generated rewrite of one Docker file in a target.
+
+    Keyed to ``(docker_target_id, file_path)`` rather than a file row, because
+    Docker files aren't persisted — the same shape as ``TerraformFix``. One fix
+    per file per target; a target's PR carries all its patched files.
+    """
+
+    __tablename__ = "docker_fix"
+    __table_args__ = (
+        UniqueConstraint(
+            "docker_target_id", "file_path", name="uq_docker_fix_target_file"
+        ),
+    )
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    docker_target_id: uuid.UUID = Field(
+        foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
+    )
+    file_path: str = Field(max_length=512)
+    pr_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("pull_request.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    llm_provider: LLMProvider
+    llm_model: str = Field(max_length=255)
+    prompt_tokens: int | None = Field(default=None)
+    completion_tokens: int | None = Field(default=None)
+    langsmith_run_id: str | None = Field(default=None, max_length=255)
+    status: FixStatus = Field(default=FixStatus.pending)
+    full_content: str | None = Field(default=None)
+    error_message: str | None = Field(default=None, max_length=2048)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+    delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    docker_target: DockerTarget | None = Relationship()
+    findings: list["DockerFinding"] = Relationship(back_populates="fix")
+    pull_request: Optional["PullRequest"] = Relationship(back_populates="docker_fixes")

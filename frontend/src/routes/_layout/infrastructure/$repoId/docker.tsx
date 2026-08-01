@@ -1,14 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, Play, Trash2 } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronRight,
+  GitPullRequest,
+  Play,
+  Trash2,
+  Wand2,
+} from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type {
   DockerFilePublic,
   DockerFindingPublic,
+  DockerFixPublic,
   DockerTargetPublic,
+  PullRequestPublic,
 } from "@/client"
-import { DockerService } from "@/client"
+import { DockerService, FixesService } from "@/client"
 import { DockerFileViewer } from "@/components/DockerFileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -16,7 +25,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { scanStatusColor, scanStatusLabel } from "@/lib/status-colors"
+import { dockerFixBranch } from "@/lib/delivery"
+import {
+  fixStatusColor,
+  scanStatusColor,
+  scanStatusLabel,
+} from "@/lib/status-colors"
 import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/infrastructure/$repoId/docker")({
@@ -26,6 +40,10 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId/docker")({
   }),
 })
 
+// Fix statuses a worker is actively processing — used to disable actions.
+// Mirrors the server-side _IN_FLIGHT_FIX_STATUSES.
+const IN_FLIGHT = new Set(["pending", "generating", "delivering"])
+
 function DockerTab() {
   const { repoId } = Route.useParams()
   const [openTargets, setOpenTargets] = useState<Set<string>>(new Set())
@@ -34,6 +52,21 @@ function DockerTab() {
     queryKey: ["docker-targets", "repo", repoId],
     queryFn: () => DockerService.listDockerTargets({ repoId }),
   })
+
+  // A ready fix carries no PR of its own, so whether one already exists for
+  // its deterministic branch has to come from the real PullRequest rows.
+  const { data: pullRequests } = useQuery({
+    queryKey: ["pull-requests", "repo", repoId],
+    queryFn: () => FixesService.listPullRequests({ repoId }),
+  })
+
+  const prByBranch = useMemo(() => {
+    const map = new Map<string, PullRequestPublic>()
+    for (const pr of pullRequests ?? []) {
+      if (pr.pr_branch) map.set(pr.pr_branch, pr)
+    }
+    return map
+  }, [pullRequests])
 
   const toggleOpen = (id: string) =>
     setOpenTargets((prev) => {
@@ -74,6 +107,7 @@ function DockerTab() {
           target={target}
           isOpen={openTargets.has(target.id)}
           onToggleOpen={() => toggleOpen(target.id)}
+          existingPr={prByBranch.get(dockerFixBranch(target.id))}
         />
       ))}
     </div>
@@ -84,10 +118,12 @@ function TargetCard({
   target,
   isOpen,
   onToggleOpen,
+  existingPr,
 }: {
   target: DockerTargetPublic
   isOpen: boolean
   onToggleOpen: () => void
+  existingPr?: PullRequestPublic
 }) {
   const queryClient = useQueryClient()
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -106,6 +142,12 @@ function TargetCard({
     enabled: isOpen,
   })
 
+  const { data: fixes } = useQuery({
+    queryKey: ["docker-fixes", target.id],
+    queryFn: () => DockerService.listDockerFixes({ targetId: target.id }),
+    enabled: isOpen,
+  })
+
   const { data: scans } = useQuery({
     queryKey: ["docker-scans", target.id],
     queryFn: () => DockerService.listDockerScans({ targetId: target.id }),
@@ -116,6 +158,8 @@ function TargetCard({
     queryClient.invalidateQueries({ queryKey: ["docker-targets", "repo"] })
     queryClient.invalidateQueries({ queryKey: ["docker-findings", target.id] })
     queryClient.invalidateQueries({ queryKey: ["docker-scans", target.id] })
+    queryClient.invalidateQueries({ queryKey: ["docker-fixes", target.id] })
+    queryClient.invalidateQueries({ queryKey: ["pull-requests", "repo"] })
   }
 
   const toggleMutation = useMutation({
@@ -148,6 +192,49 @@ function TargetCard({
         description: apiErrorDetail(e),
       }),
   })
+
+  const generateMutation = useMutation({
+    mutationFn: (findingIds: string[]) =>
+      DockerService.triggerDockerFixGeneration({
+        targetId: target.id,
+        requestBody: findingIds.length
+          ? { finding_ids: findingIds }
+          : { finding_ids: null },
+      }),
+    onSuccess: () => {
+      toast.success("Fix generation queued")
+      invalidate()
+    },
+    onError: (e) =>
+      toast.error("Could not queue fixes", { description: apiErrorDetail(e) }),
+  })
+
+  const deliverMutation = useMutation({
+    mutationFn: (force: boolean) =>
+      DockerService.triggerDockerDelivery({ targetId: target.id, force }),
+    onSuccess: () => {
+      toast.success("Delivery queued")
+      invalidate()
+    },
+    onError: (e) =>
+      toast.error("Could not deliver fixes", {
+        description: apiErrorDetail(e),
+      }),
+  })
+
+  const fixByFile = useMemo(() => {
+    const map = new Map<string, DockerFixPublic>()
+    for (const fix of fixes ?? []) map.set(fix.file_path, fix)
+    return map
+  }, [fixes])
+
+  const hasReadyFix = (fixes ?? []).some((f) => f.status === "ready")
+  const deliverLabel =
+    existingPr?.pr_state === "closed"
+      ? "Reopen PR"
+      : existingPr
+        ? "Update PR"
+        : "Create PR"
 
   const findingsByFile = useMemo(() => {
     const map = new Map<string, DockerFindingPublic[]>()
@@ -231,15 +318,86 @@ function TargetCard({
 
       {isOpen && (
         <CardContent className="flex flex-col gap-4">
-          {(files ?? []).map((file: DockerFilePublic) => (
-            <DockerFileViewer
-              key={file.path}
-              path={file.path}
-              kind={file.kind}
-              rawContent={file.raw_content}
-              findings={findingsByFile.get(file.path) ?? []}
-            />
-          ))}
+          {(openFindingCount > 0 || hasReadyFix) && (
+            <div className="flex flex-wrap gap-2">
+              {openFindingCount > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={generateMutation.isPending}
+                  onClick={() => generateMutation.mutate([])}
+                >
+                  <Wand2 className="size-3.5" />
+                  Generate all fixes
+                </Button>
+              )}
+              {hasReadyFix && (
+                <Button
+                  size="sm"
+                  disabled={deliverMutation.isPending}
+                  onClick={() =>
+                    deliverMutation.mutate(existingPr?.pr_state === "closed")
+                  }
+                >
+                  <GitPullRequest className="size-3.5" />
+                  {deliverLabel}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {(files ?? []).map((file: DockerFilePublic) => {
+            const fileFindings = findingsByFile.get(file.path) ?? []
+            const fileFix = fixByFile.get(file.path)
+            const fixInFlight = fileFix ? IN_FLIGHT.has(fileFix.status) : false
+            const showFix =
+              fileFix?.status === "ready" || fileFix?.status === "delivered"
+            return (
+              <div key={file.path} className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {fileFix && (
+                    <StatusPill
+                      colorClass={fixStatusColor(fileFix.status)}
+                      className="capitalize shrink-0"
+                    >
+                      {fileFix.status}
+                    </StatusPill>
+                  )}
+                  {fileFix?.pr_url && (
+                    <a
+                      href={fileFix.pr_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      View PR
+                    </a>
+                  )}
+                  {fileFindings.length > 0 && !fixInFlight && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        generateMutation.mutate(fileFindings.map((f) => f.id))
+                      }
+                    >
+                      <Wand2 className="size-3.5" />
+                      Generate fix
+                    </Button>
+                  )}
+                </div>
+                <DockerFileViewer
+                  path={file.path}
+                  kind={file.kind}
+                  rawContent={file.raw_content}
+                  fullContent={
+                    showFix ? (fileFix?.full_content ?? undefined) : undefined
+                  }
+                  findings={fileFindings}
+                />
+              </div>
+            )
+          })}
 
           <div>
             <button

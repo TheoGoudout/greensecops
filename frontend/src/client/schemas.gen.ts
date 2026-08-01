@@ -855,6 +855,28 @@ export const DockerFindingPublicSchema = {
         status: {
             '$ref': '#/components/schemas/FindingStatus'
         },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
         created_at: {
             anyOf: [
                 {
@@ -893,6 +915,150 @@ export const DockerFindingPublicSchema = {
     type: 'object',
     required: ['id', 'scan_id', 'docker_target_id', 'rule_id', 'rule_slug', 'file_path', 'severity', 'category', 'message', 'status'],
     title: 'DockerFindingPublic'
+} as const;
+
+export const DockerFixGenerateRequestSchema = {
+    properties: {
+        finding_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string',
+                        format: 'uuid'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finding Ids'
+        }
+    },
+    type: 'object',
+    title: 'DockerFixGenerateRequest'
+} as const;
+
+export const DockerFixPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
+        llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        llm_model: {
+            type: 'string',
+            title: 'Llm Model'
+        },
+        status: {
+            '$ref': '#/components/schemas/FixStatus'
+        },
+        full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Content'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        delivered_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Delivered At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'docker_target_id', 'file_path', 'llm_provider', 'llm_model', 'status'],
+    title: 'DockerFixPublic'
 } as const;
 
 export const DockerScanPublicSchema = {

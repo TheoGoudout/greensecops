@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -686,6 +686,79 @@ export class DockerService {
             },
             query: {
                 ref: data.ref
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Docker Fixes
+     * @param data The data for the request.
+     * @param data.targetId
+     * @returns DockerFixPublic Successful Response
+     * @throws ApiError
+     */
+    public static listDockerFixes(data: DockerListDockerFixesData): CancelablePromise<DockerListDockerFixesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/docker-targets/{target_id}/fixes',
+            path: {
+                target_id: data.targetId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Docker Fix Generation
+     * Generate LLM fixes for a target's open findings, one whole-file fix each.
+     * @param data The data for the request.
+     * @param data.targetId
+     * @param data.force
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static triggerDockerFixGeneration(data: DockerTriggerDockerFixGenerationData): CancelablePromise<DockerTriggerDockerFixGenerationResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/docker-targets/{target_id}/fixes',
+            path: {
+                target_id: data.targetId
+            },
+            query: {
+                force: data.force
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Docker Delivery
+     * Deliver the target's ready fixes as a single PR (branch per target).
+     * @param data The data for the request.
+     * @param data.targetId
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerDockerDelivery(data: DockerTriggerDockerDeliveryData): CancelablePromise<DockerTriggerDockerDeliveryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/docker-targets/{target_id}/deliver',
+            path: {
+                target_id: data.targetId
+            },
+            query: {
+                force: data.force
             },
             errors: {
                 422: 'Validation Error'

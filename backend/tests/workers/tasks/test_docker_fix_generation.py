@@ -1,0 +1,262 @@
+"""Unit tests for the docker_fix_generation Celery task."""
+
+import uuid
+from dataclasses import dataclass
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from sqlmodel import Session, select
+
+from app.models import (
+    DockerFinding,
+    DockerFix,
+    DockerScan,
+    DockerTarget,
+    IssueCategory,
+    IssueSeverity,
+    LLMProvider,
+    Organization,
+    Repository,
+    Rule,
+    RuleDomain,
+    ScanStatus,
+    UserTier,
+)
+from app.models.enums import AnalysisTrigger, FixStatus
+from app.workers.tasks.docker_fix_generation import (
+    INVALID_COMPOSE_ERROR,
+    INVALID_DOCKERFILE_ERROR,
+    MISSING_CONTENT_ERROR,
+    run_docker_fix_generation,
+)
+
+
+@dataclass
+class FakeDockerFile:
+    path: str
+    content: str
+
+
+@dataclass
+class FakeLLMResponse:
+    content: str
+    prompt_tokens: int = 10
+    completion_tokens: int = 20
+    model: str = "gpt-4o-mini"
+    run_id: str | None = None
+
+
+_DOCKERFILE = 'FROM python:3.12-slim\nCMD ["python"]\n'
+_FIXED_DOCKERFILE = 'FROM python:3.12-slim\nUSER app\nCMD ["python"]\n'
+_COMPOSE = "services:\n  api:\n    image: app:1.0\n"
+
+
+@pytest.fixture()
+def org(db: Session) -> Organization:
+    item = Organization(name=f"fx-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@pytest.fixture()
+def repo(db: Session, org: Organization) -> Repository:
+    item = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"fxowner/repo-{uuid.uuid4().hex[:8]}",
+        installation_id=51001,
+        default_branch="main",
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@pytest.fixture()
+def target(db: Session, repo: Repository) -> DockerTarget:
+    item = DockerTarget(repo_id=repo.id, root_path="")
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@pytest.fixture()
+def rule(db: Session) -> Rule:
+    item = db.exec(
+        select(Rule).where(Rule.domain == RuleDomain.container_docker)
+    ).first()
+    assert item is not None
+    return item
+
+
+def _finding(
+    db: Session, target: DockerTarget, rule: Rule, file_path: str
+) -> DockerFinding:
+    scan = DockerScan(
+        docker_target_id=target.id,
+        status=ScanStatus.completed,
+        triggered_by=AnalysisTrigger.manual,
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+    finding = DockerFinding(
+        scan_id=scan.id,
+        docker_target_id=target.id,
+        rule_id=rule.id,
+        file_path=file_path,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=IssueSeverity.high,
+        category=IssueCategory.security,
+        message="runs as root",
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+def _pending_fix(db: Session, target: DockerTarget, file_path: str) -> DockerFix:
+    fix = DockerFix(
+        docker_target_id=target.id,
+        file_path=file_path,
+        llm_provider=LLMProvider.openai,
+        llm_model="gpt-4o-mini",
+        status=FixStatus.pending,
+    )
+    db.add(fix)
+    db.commit()
+    db.refresh(fix)
+    return fix
+
+
+def _run(
+    finding: DockerFinding, llm_content: str, source: str, path: str
+) -> dict[str, Any]:
+    with (
+        patch(
+            "app.workers.tasks.docker_fix_generation._fetch_docker_files",
+            return_value=[FakeDockerFile(path=path, content=source)],
+        ),
+        patch(
+            "app.workers.tasks.docker_fix_generation._generate_docker_fix",
+            new=AsyncMock(return_value=FakeLLMResponse(content=llm_content)),
+        ),
+    ):
+        return run_docker_fix_generation([str(finding.id)])
+
+
+def test_generation_stores_a_valid_rewrite(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    finding = _finding(db, target, rule, "Dockerfile")
+    fix = _pending_fix(db, target, "Dockerfile")
+    result = _run(
+        finding,
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>",
+        _DOCKERFILE,
+        "Dockerfile",
+    )
+    assert result["status"] == FixStatus.ready.value
+    db.refresh(fix)
+    assert fix.full_content == _FIXED_DOCKERFILE
+    assert fix.prompt_tokens == 10
+
+
+def test_an_unparseable_dockerfile_rewrite_is_discarded(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    """The gate that stops delivery pushing a broken build to a real branch."""
+    finding = _finding(db, target, rule, "Dockerfile")
+    fix = _pending_fix(db, target, "Dockerfile")
+    result = _run(
+        finding,
+        "<full_content>\n# only a comment, no instructions\n</full_content>",
+        _DOCKERFILE,
+        "Dockerfile",
+    )
+    assert result["status"] == FixStatus.failed.value
+    db.refresh(fix)
+    assert fix.error_message == INVALID_DOCKERFILE_ERROR
+    assert fix.full_content is None
+
+
+def test_an_invalid_compose_rewrite_is_discarded(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    finding = _finding(db, target, rule, "compose.yml")
+    fix = _pending_fix(db, target, "compose.yml")
+    result = _run(
+        finding,
+        "<full_content>\nservices: [unclosed\n</full_content>",
+        _COMPOSE,
+        "compose.yml",
+    )
+    assert result["status"] == FixStatus.failed.value
+    db.refresh(fix)
+    assert fix.error_message == INVALID_COMPOSE_ERROR
+
+
+def test_a_compose_rewrite_is_validated_as_yaml_not_as_a_dockerfile(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    """The validator must switch on the file kind, not assume Dockerfile.
+
+    Valid Compose YAML would fail a Dockerfile parse and vice versa, so a
+    single hard-coded validator would reject every rewrite of one kind.
+    """
+    finding = _finding(db, target, rule, "compose.yml")
+    fix = _pending_fix(db, target, "compose.yml")
+    fixed = "services:\n  api:\n    image: app:1.0\n    restart: unless-stopped\n"
+    result = _run(
+        finding, f"<full_content>\n{fixed}</full_content>", _COMPOSE, "compose.yml"
+    )
+    assert result["status"] == FixStatus.ready.value
+    db.refresh(fix)
+    assert fix.full_content == fixed
+
+
+def test_a_response_without_content_fails(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    finding = _finding(db, target, rule, "Dockerfile")
+    fix = _pending_fix(db, target, "Dockerfile")
+    result = _run(finding, "I could not do that.", _DOCKERFILE, "Dockerfile")
+    assert result["status"] == FixStatus.failed.value
+    db.refresh(fix)
+    assert fix.error_message == MISSING_CONTENT_ERROR
+
+
+def test_a_file_that_vanished_fails_the_fix(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    finding = _finding(db, target, rule, "Dockerfile")
+    fix = _pending_fix(db, target, "Dockerfile")
+    with patch(
+        "app.workers.tasks.docker_fix_generation._fetch_docker_files",
+        return_value=[],
+    ):
+        result = run_docker_fix_generation([str(finding.id)])
+    assert result["status"] == "failed"
+    db.refresh(fix)
+    assert fix.status == FixStatus.failed
+
+
+def test_without_a_pending_row_the_task_is_a_no_op(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    # The route creates the pending fix; a task that arrives without one must
+    # not invent work.
+    finding = _finding(db, target, rule, "Dockerfile")
+    result = run_docker_fix_generation([str(finding.id)])
+    assert result == {"status": "skipped", "detail": "no_pending_fix"}
+
+
+def test_unknown_finding_ids_are_an_error() -> None:
+    result = run_docker_fix_generation([str(uuid.uuid4())])
+    assert result == {"status": "error", "detail": "no_findings_found"}

@@ -466,6 +466,11 @@ export type DockerFindingPublic = {
     context?: string | null;
     status: FindingStatus;
     /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
      * Created At
      */
     created_at?: string | null;
@@ -474,6 +479,69 @@ export type DockerFindingPublic = {
      */
     resolved_at?: string | null;
     resolution_reason?: FindingResolutionReason | null;
+};
+
+/**
+ * DockerFixGenerateRequest
+ */
+export type DockerFixGenerateRequest = {
+    /**
+     * Finding Ids
+     */
+    finding_ids?: Array<string> | null;
+};
+
+/**
+ * DockerFixPublic
+ */
+export type DockerFixPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Pr Id
+     */
+    pr_id?: string | null;
+    llm_provider: LlmProvider;
+    /**
+     * Llm Model
+     */
+    llm_model: string;
+    status: FixStatus;
+    /**
+     * Full Content
+     */
+    full_content?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    pr_state?: PullRequestState | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Delivered At
+     */
+    delivered_at?: string | null;
 };
 
 /**
@@ -5056,6 +5124,116 @@ export type DockerListDockerFilesResponses = {
 };
 
 export type DockerListDockerFilesResponse = DockerListDockerFilesResponses[keyof DockerListDockerFilesResponses];
+
+export type DockerListDockerFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker-targets/{target_id}/fixes';
+};
+
+export type DockerListDockerFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerFixesError = DockerListDockerFixesErrors[keyof DockerListDockerFixesErrors];
+
+export type DockerListDockerFixesResponses = {
+    /**
+     * Response Docker-List Docker Fixes
+     * Successful Response
+     */
+    200: Array<DockerFixPublic>;
+};
+
+export type DockerListDockerFixesResponse = DockerListDockerFixesResponses[keyof DockerListDockerFixesResponses];
+
+export type DockerTriggerDockerFixGenerationData = {
+    /**
+     * Body
+     */
+    body?: DockerFixGenerateRequest | null;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker-targets/{target_id}/fixes';
+};
+
+export type DockerTriggerDockerFixGenerationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerDockerFixGenerationError = DockerTriggerDockerFixGenerationErrors[keyof DockerTriggerDockerFixGenerationErrors];
+
+export type DockerTriggerDockerFixGenerationResponses = {
+    /**
+     * Response Docker-Trigger Docker Fix Generation
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type DockerTriggerDockerFixGenerationResponse = DockerTriggerDockerFixGenerationResponses[keyof DockerTriggerDockerFixGenerationResponses];
+
+export type DockerTriggerDockerDeliveryData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker-targets/{target_id}/deliver';
+};
+
+export type DockerTriggerDockerDeliveryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerDockerDeliveryError = DockerTriggerDockerDeliveryErrors[keyof DockerTriggerDockerDeliveryErrors];
+
+export type DockerTriggerDockerDeliveryResponses = {
+    /**
+     * Response Docker-Trigger Docker Delivery
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type DockerTriggerDockerDeliveryResponse = DockerTriggerDockerDeliveryResponses[keyof DockerTriggerDockerDeliveryResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;

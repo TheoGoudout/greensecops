@@ -9,6 +9,8 @@ derived in one place, and the badge route reuses
 from app.models import (
     DockerFinding,
     DockerFindingPublic,
+    DockerFix,
+    DockerFixPublic,
     DockerScan,
     DockerScanPublic,
     DockerTarget,
@@ -72,6 +74,7 @@ def to_docker_scan_public(scan: DockerScan) -> DockerScanPublic:
 
 
 def to_docker_finding_public(finding: DockerFinding) -> DockerFindingPublic:
+    fix = finding.fix
     return DockerFindingPublic(
         id=finding.id,
         scan_id=finding.scan_id,
@@ -88,7 +91,29 @@ def to_docker_finding_public(finding: DockerFinding) -> DockerFindingPublic:
         message=finding.message,
         context=finding.context,
         status=finding.status,
+        fix_id=fix.id if fix else None,
+        fix_status=fix.status if fix else None,
         created_at=finding.created_at,
         resolved_at=finding.resolved_at,
         resolution_reason=finding.resolution_reason,
+    )
+
+
+def to_docker_fix_public(fix: DockerFix) -> DockerFixPublic:
+    pr = fix.pull_request
+    return DockerFixPublic(
+        id=fix.id,
+        docker_target_id=fix.docker_target_id,
+        file_path=fix.file_path,
+        pr_id=fix.pr_id,
+        llm_provider=fix.llm_provider,
+        llm_model=fix.llm_model,
+        status=fix.status,
+        full_content=fix.full_content,
+        error_message=fix.error_message,
+        pr_url=pr.pr_url if pr else None,
+        pr_branch=pr.pr_branch if pr else None,
+        pr_state=pr.pr_state if pr else None,
+        created_at=fix.created_at,
+        delivered_at=fix.delivered_at,
     )
