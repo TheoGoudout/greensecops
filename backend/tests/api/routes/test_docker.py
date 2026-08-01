@@ -525,3 +525,125 @@ def test_findings_for_a_missing_target_are_404(
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
+
+
+# ─── Fix generation and delivery ──────────────────────────────────────────────
+
+
+def test_generate_fixes_groups_findings_by_file(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    """One LLM call per file, not per finding.
+
+    Two findings in one file and one in another must queue two generations,
+    each carrying its file's whole finding set — cheaper than per-finding, and
+    it stops two fixes racing to patch the same lines.
+    """
+    _add_finding(db, target, completed_scan, seeded_docker_rule, file_path="Dockerfile")
+    _add_finding(db, target, completed_scan, seeded_docker_rule, file_path="Dockerfile")
+    _add_finding(
+        db, target, completed_scan, seeded_docker_rule, file_path="compose.yml"
+    )
+
+    with patch("app.api.routes.docker.run_docker_fix_generation.delay") as delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+            headers=superuser_token_headers,
+            json={},
+        )
+    assert response.status_code == 202
+    assert response.json()["queued"] == 2
+    assert delay.call_count == 2
+    queued_sizes = sorted(len(c.kwargs["finding_ids"]) for c in delay.call_args_list)
+    assert queued_sizes == [1, 2]
+
+
+def test_generate_fixes_with_no_open_findings_queues_nothing(
+    client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+        headers=superuser_token_headers,
+        json={},
+    )
+    assert response.status_code == 202
+    assert response.json() == {"status": "no_findings", "queued": 0}
+
+
+def test_a_second_generation_request_does_not_duplicate_an_in_flight_fix(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    _add_finding(db, target, completed_scan, seeded_docker_rule, file_path="Dockerfile")
+
+    with patch("app.api.routes.docker.run_docker_fix_generation.delay"):
+        first = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+            headers=superuser_token_headers,
+            json={},
+        )
+        second = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+            headers=superuser_token_headers,
+            json={},
+        )
+    assert first.json()["queued"] == 1
+    # The first request's fix is still pending, so the second must not reset it
+    # out from under the worker.
+    assert second.json()["queued"] == 0
+
+
+def test_deliver_returns_the_deterministic_branch(
+    client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
+) -> None:
+    from app.services.delivery_pr import docker_fix_branch
+
+    with patch("app.api.routes.docker.deliver_docker_fixes.delay") as delay:
+        response = client.post(
+            f"{settings.API_V1_STR}/docker-targets/{target.id}/deliver",
+            headers=superuser_token_headers,
+        )
+    assert response.status_code == 202
+    assert response.json()["pr_branch"] == docker_fix_branch(target.id)
+    delay.assert_called_once()
+
+
+def test_list_fixes_is_scoped_to_the_target(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    target: DockerTarget,
+) -> None:
+    from app.models import DockerFix, LLMProvider
+    from app.models.enums import FixStatus
+
+    db.add(
+        DockerFix(
+            docker_target_id=target.id,
+            file_path="Dockerfile",
+            llm_provider=LLMProvider.openai,
+            llm_model="gpt-4o-mini",
+            status=FixStatus.ready,
+            full_content="FROM python:3.12-slim\n",
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["file_path"] == "Dockerfile"
+    assert body[0]["status"] == "ready"

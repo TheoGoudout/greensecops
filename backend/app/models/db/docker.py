@@ -196,3 +196,72 @@ class DockerFix(SQLModel, table=True):
     docker_target: DockerTarget | None = Relationship()
     findings: list["DockerFinding"] = Relationship(back_populates="fix")
     pull_request: Optional["PullRequest"] = Relationship(back_populates="docker_fixes")
+
+
+class DockerBuildTelemetry(SQLModel, table=True):
+    """Measured facts about one image build observed in CI.
+
+    Deliberately *not* folded into ``TelemetryRun``. That row is keyed on
+    ``workflow_run_id`` and models "one runner, one run"; a workflow builds
+    several images, so the cardinality is wrong and it would mix two rule
+    domains into one payload. This is the parallel path, sitting beside
+    ci_telemetry exactly as ci_telemetry sits beside ci_workflow.
+
+    ``dockerfile_path`` is the join back to the *static* engine: it lets a
+    measured cache-hit ratio be shown against the DockerFinding that predicted
+    the problem from instruction order alone.
+    """
+
+    __tablename__ = "docker_build_telemetry"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    # BigInteger throughout, not the plain `int` SQLModel would map to INT4.
+    # A GitHub run id already exceeds 2^31, and an image over ~2.1 GB would
+    # overflow on insert — which is precisely the image `oversized_image`
+    # exists to report, so the default would fail on exactly the rows that
+    # matter most.
+    workflow_run_id: int = Field(sa_type=sa.BigInteger, index=True)
+    image_ref: str | None = Field(default=None, max_length=512)
+    dockerfile_path: str | None = Field(default=None, max_length=512)
+    image_size_bytes: int | None = Field(default=None, sa_type=sa.BigInteger)
+    context_size_bytes: int | None = Field(default=None, sa_type=sa.BigInteger)
+    build_duration_ms: int | None = Field(default=None, sa_type=sa.BigInteger)
+    # Only available from the opt-in BuildKit metadata path; the zero-config
+    # `docker history` collector cannot see whether a layer was cached.
+    cache_hit_ratio: float | None = Field(default=None)
+    # JSON-encoded per-layer detail and per-container runtime stats. Free-form
+    # because both are collector-shaped and evolve with the action, and neither
+    # is queried relationally.
+    layers: str | None = Field(default=None)
+    containers: str | None = Field(default=None)
+    collected_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )
+
+
+class DockerBuildEnrichment(SQLModel, table=True):
+    """A measured finding produced from Docker build/runtime telemetry.
+
+    A sibling of ``DynamicEnrichment`` rather than a generalisation of it —
+    the same call the project made when ``TerraformFinding`` was added beside
+    ``Issue``. Deliberately thinner than DockerFinding: no fingerprint, no
+    dedup and no resolution lifecycle, because a measurement is a fact about
+    one observed build, not a defect that persists until fixed.
+    """
+
+    __tablename__ = "docker_build_enrichment"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    repo_id: uuid.UUID = Field(
+        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
+    )
+    telemetry_id: uuid.UUID = Field(
+        foreign_key="docker_build_telemetry.id", nullable=False, ondelete="CASCADE"
+    )
+    rule_slug: str = Field(max_length=128, index=True)
+    evidence: str = Field(max_length=2048)
+    recommendation: str = Field(max_length=2048)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )

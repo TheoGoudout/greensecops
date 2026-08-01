@@ -9,7 +9,14 @@ from .analysis import Analysis
 from .base import get_datetime_utc
 from .billing import BillingSubscription
 from .cloud import CloudAccount, CloudFinding, CloudScan
-from .docker import DockerFinding, DockerFix, DockerScan, DockerTarget
+from .docker import (
+    DockerBuildEnrichment,
+    DockerBuildTelemetry,
+    DockerFinding,
+    DockerFix,
+    DockerScan,
+    DockerTarget,
+)
 from .fix import Fix
 from .issue import Issue
 from .organization import Organization, OrgMember
@@ -62,6 +69,8 @@ __all__ = [
     "DockerScan",
     "DockerFinding",
     "DockerFix",
+    "DockerBuildTelemetry",
+    "DockerBuildEnrichment",
     "TerraformFinding",
     "TerraformFix",
     "CloudAccount",

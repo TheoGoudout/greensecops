@@ -670,6 +670,69 @@ DOCKER_INITIAL_RULES: list[dict[str, object]] = [
 ]
 
 
+# Mirrors DOCKER_INITIAL_RULES for the Docker *dynamic* engine — evaluated
+# against measured build and runtime telemetry rather than source. Seeded like
+# every other domain for admin visibility and toggling, even though
+# DockerBuildEnrichment stays deliberately thinner than DockerFinding (no
+# fingerprint, dedup or resolution lifecycle) and isn't scored into a grade.
+DOCKER_RUNTIME_INITIAL_RULES: list[dict[str, object]] = [
+    {
+        "slug": "image_layer_cache_ineffective",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Image layer cache is not being reused",
+        "description": "Measured build telemetry shows most layers rebuilding rather than hitting the cache. The measured counterpart to copy_before_dependency_install, which infers the same problem from instruction order.",
+    },
+    {
+        "slug": "oversized_image",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.medium,
+        "severity_weight": 1.0,
+        "title": "Published image is very large",
+        "description": "Measured image size is above the threshold where pull time and registry storage begin to dominate — the shipped artifact's actual size, not an inference from the Dockerfile's shape.",
+    },
+    {
+        "slug": "bloated_build_context",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.energy,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Build context is far larger than the image",
+        "description": "The context uploaded to the builder dwarfs the image it produces, which almost always means a missing or incomplete .dockerignore. Invisible to static analysis, which cannot see the context's contents.",
+    },
+    {
+        "slug": "container_oom_killed",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Container was OOM-killed",
+        "description": "Measured runtime state shows the kernel terminated the container for exceeding its memory limit.",
+    },
+    {
+        "slug": "container_memory_limit_mismatch",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.low,
+        "severity_weight": 0.5,
+        "title": "Memory limit is far above measured peak usage",
+        "description": "The declared memory limit is many times the observed peak, reserving capacity the workload never uses.",
+    },
+    {
+        "slug": "healthcheck_never_healthy",
+        "domain": RuleDomain.container_runtime,
+        "category": IssueCategory.reliability,
+        "severity": IssueSeverity.high,
+        "severity_weight": 1.8,
+        "title": "Container never reached a healthy state",
+        "description": "A healthcheck is defined but the container never passed it during the observed run — worse than having none, because the service looks correctly configured.",
+    },
+]
+
+
 def _seed_rules(session: Session) -> list[str]:
     """Insert any rules from INITIAL_RULES not already present.
 
@@ -683,6 +746,7 @@ def _seed_rules(session: Session) -> list[str]:
         + CLOUD_INITIAL_RULES
         + CI_TELEMETRY_INITIAL_RULES
         + DOCKER_INITIAL_RULES
+        + DOCKER_RUNTIME_INITIAL_RULES
     ):
         existing = session.exec(
             select(Rule).where(Rule.slug == rule_data["slug"])

@@ -597,3 +597,73 @@ def test_analyze_inaccessible_repo_returns_403(
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
+
+
+# ─── POST /telemetry/docker-build ─────────────────────────────────────────────
+
+
+def test_ingest_docker_build_persists_and_queues(
+    client: TestClient, db: Session, repo: Repository
+) -> None:
+    from app.models import DockerBuildTelemetry
+
+    _override_oidc(_oidc_claims(repo.full_name))
+    try:
+        with patch(
+            "app.workers.tasks.docker_telemetry_analysis."
+            "run_docker_telemetry_analysis.delay"
+        ) as delay:
+            response = client.post(
+                f"{settings.API_V1_STR}/telemetry/docker-build",
+                json={
+                    "workflow_run_id": 12345678901,
+                    "image_ref": "sha256:abc",
+                    "dockerfile_path": "backend/Dockerfile",
+                    "image_size_bytes": 2400000000,
+                    "context_size_bytes": 900000000,
+                    "cache_hit_ratio": 0.18,
+                    "observed_builds": 6,
+                    "layers": [{"index": 0, "size_bytes": 1, "instruction": "RUN"}],
+                    "containers": [{"name": "api", "oom_killed": False}],
+                },
+            )
+    finally:
+        _clear_oidc()
+
+    assert response.status_code == 201
+    delay.assert_called_once()
+
+    row = db.exec(
+        select(DockerBuildTelemetry).where(DockerBuildTelemetry.repo_id == repo.id)
+    ).first()
+    assert row is not None
+    # Both of these exceed INT4 — a run id already does in practice, and an
+    # oversized image is exactly what this telemetry exists to report.
+    assert row.workflow_run_id == 12345678901
+    assert row.image_size_bytes == 2400000000
+    assert row.dockerfile_path == "backend/Dockerfile"
+
+
+def test_ingest_docker_build_ignores_unregistered_repos(
+    client: TestClient,
+) -> None:
+    _override_oidc(_oidc_claims("someone/not-registered"))
+    try:
+        response = client.post(
+            f"{settings.API_V1_STR}/telemetry/docker-build",
+            json={"workflow_run_id": 1},
+        )
+    finally:
+        _clear_oidc()
+    assert response.status_code == 201
+    assert response.json()["note"] == "repository_not_registered"
+
+
+def test_ingest_docker_build_requires_oidc(client: TestClient) -> None:
+    # The repository comes from the token claims, never the body — an
+    # unauthenticated post must not be able to attribute telemetry to a repo.
+    response = client.post(
+        f"{settings.API_V1_STR}/telemetry/docker-build",
+        json={"workflow_run_id": 1},
+    )
+    assert response.status_code in (401, 403)

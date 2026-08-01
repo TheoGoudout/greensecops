@@ -140,6 +140,7 @@ IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
 CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages("cloud_aws")
 CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages("ci_telemetry")
 CONTAINER_DOCKER_POLICY_PACKAGES = _discover_policy_packages("container_docker")
+CONTAINER_RUNTIME_POLICY_PACKAGES = _discover_policy_packages("container_runtime")
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
@@ -277,6 +278,32 @@ async def evaluate_docker(
             line_end=v.get("line_end"),
             context=v.get("context"),
             discriminator=v.get("discriminator"),
+        )
+        for v in raw_violations
+    ]
+
+
+async def evaluate_container_runtime(
+    telemetry: dict[str, Any],
+) -> list[CiTelemetryOpaViolation]:
+    """Evaluate a Docker build/runtime telemetry payload.
+
+    Dynamic counterpart of ``evaluate_docker``: same engine and rule-authoring
+    model, measured input instead of source. Reuses
+    ``CiTelemetryOpaViolation`` rather than introducing a near-identical
+    dataclass — both dynamic domains persist evidence/recommendation rather
+    than message/context, so the shape is genuinely the same one.
+    """
+    raw_violations = await _evaluate_packages(
+        telemetry, CONTAINER_RUNTIME_POLICY_PACKAGES
+    )
+    return [
+        CiTelemetryOpaViolation(
+            rule_slug=v.get("rule", "unknown"),
+            severity=v.get("severity", "medium"),
+            category=v.get("category", "energy"),
+            evidence=v.get("evidence", ""),
+            recommendation=v.get("recommendation", ""),
         )
         for v in raw_violations
     ]

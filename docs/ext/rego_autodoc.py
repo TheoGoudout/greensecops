@@ -36,6 +36,7 @@ _DOMAIN_LABELS = {
     "iac_terraform": "Terraform (IaC)",
     "cloud_aws": "AWS Cloud Posture (dynamic)",
     "container_docker": "Docker & Compose (static)",
+    "container_runtime": "Docker Runtime (dynamic)",
 }
 
 

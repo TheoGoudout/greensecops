@@ -11,6 +11,14 @@ inputs:
   greensecops_url:
     description: GreenSecOps instance URL (e.g. https://app.greensecops.com)
     required: true
+  docker_build_metadata:
+    description: >-
+      Path to a `docker buildx build --metadata-file` JSON. Optional. Without
+      it, image sizes and layers are still collected automatically, but
+      cache-hit data — the most useful Docker metric — is unavailable, because
+      `docker history` cannot tell whether a layer was cached.
+    required: false
+    default: ""
   sample_interval:
     description: Seconds between background telemetry samples
     required: false

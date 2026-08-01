@@ -1,7 +1,7 @@
 GreenSecOps
 ===========
 
-GreenSecOps grades your software delivery pipeline across five analysis engines, sharing one
+GreenSecOps grades your software delivery pipeline across six analysis engines, sharing one
 Rego-rule catalog and one grading model:
 
 - **CI Workflow** — static analysis of GitHub Actions YAML across five categories: security,
@@ -15,6 +15,9 @@ Rego-rule catalog and one grading model:
 - **Docker & Compose** — static analysis of Dockerfiles and Compose files anywhere in a
   repository, covering container privilege, image pinning, layer-cache efficiency and image
   size.
+- **Docker Runtime** — dynamic analysis of measured build and container telemetry (layer
+  cache-hit ratio, image and context size, OOM kills, health state), reported by the companion
+  GitHub Action.
 
 See :doc:`rules/index` for the full rule catalog. Each engine's scan/finding lifecycle is
 documented alongside the source in ``docs/state-machines.md``.

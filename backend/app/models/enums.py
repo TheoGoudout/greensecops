@@ -269,6 +269,7 @@ class RuleDomain(str, enum.Enum):
     cloud_aws = "cloud_aws"
     ci_telemetry = "ci_telemetry"
     container_docker = "container_docker"
+    container_runtime = "container_runtime"
 
 
 class ScanStatus(str, enum.Enum):

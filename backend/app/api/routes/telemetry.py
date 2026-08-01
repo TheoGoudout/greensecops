@@ -19,6 +19,7 @@ from app.api.mappers import (
     to_telemetry_run_public,
 )
 from app.models import (
+    DockerBuildTelemetry,
     DynamicAnalysisStatus,
     DynamicEnrichment,
     DynamicEnrichmentPublic,
@@ -42,6 +43,31 @@ class TelemetryPayload(BaseModel):
     runner_specs: dict[str, Any] = {}
     metrics: dict[str, Any] = {}
     phase: TelemetryPhase = TelemetryPhase.completed
+
+
+class DockerBuildPayload(BaseModel):
+    """One image build (and optionally its containers) observed in CI.
+
+    A workflow can build several images, so this is posted once per image
+    rather than once per run — which is exactly why it is not folded into
+    TelemetryPayload.
+    """
+
+    workflow_run_id: int
+    image_ref: str | None = None
+    # The join back to the static engine: lets a measured cache-hit ratio be
+    # shown against the DockerFinding that predicted the problem from
+    # instruction order alone.
+    dockerfile_path: str | None = None
+    image_size_bytes: int | None = None
+    context_size_bytes: int | None = None
+    build_duration_ms: int | None = None
+    # Only the opt-in BuildKit metadata path can supply this; the zero-config
+    # `docker history` collector cannot tell whether a layer was cached.
+    cache_hit_ratio: float | None = None
+    observed_builds: int | None = None
+    layers: list[dict[str, Any]] | None = None
+    containers: list[dict[str, Any]] | None = None
 
 
 class SamplePayload(BaseModel):
@@ -119,6 +145,62 @@ async def ingest_telemetry(
         payload.phase,
     )
     return {"status": "accepted", "telemetry_run_id": str(run.id)}
+
+
+@router.post("/docker-build", status_code=201)
+async def ingest_docker_build(
+    payload: DockerBuildPayload,
+    session: SessionDep,
+    claims: GitHubOidcClaims,
+) -> dict[str, str]:
+    """Ingest one image build's measured facts and queue its analysis.
+
+    Authenticated by the same GitHub OIDC flow as ``/ingest`` — the repository
+    comes from the token claims, never from the body.
+    """
+    repository: str = claims.get("repository", "")
+
+    repo = _lookup_repo(session, repository)
+    if not repo:
+        logger.info(
+            "Docker build telemetry received for unregistered repo %s — ignoring",
+            repository,
+        )
+        return {"status": "accepted", "note": "repository_not_registered"}
+
+    telemetry = DockerBuildTelemetry(
+        repo_id=repo.id,
+        workflow_run_id=payload.workflow_run_id,
+        image_ref=payload.image_ref,
+        dockerfile_path=payload.dockerfile_path,
+        image_size_bytes=payload.image_size_bytes,
+        context_size_bytes=payload.context_size_bytes,
+        build_duration_ms=payload.build_duration_ms,
+        cache_hit_ratio=payload.cache_hit_ratio,
+        layers=json.dumps(payload.layers) if payload.layers is not None else None,
+        containers=(
+            json.dumps(payload.containers) if payload.containers is not None else None
+        ),
+    )
+    session.add(telemetry)
+    session.commit()
+    session.refresh(telemetry)
+
+    from app.workers.tasks.docker_telemetry_analysis import (
+        run_docker_telemetry_analysis,
+    )
+
+    run_docker_telemetry_analysis.delay(
+        str(telemetry.id), observed_builds=payload.observed_builds or 0
+    )
+
+    logger.info(
+        "Docker build telemetry ingested: repo=%s run_id=%d image=%s",
+        repository,
+        payload.workflow_run_id,
+        payload.image_ref,
+    )
+    return {"status": "accepted", "telemetry_id": str(telemetry.id)}
 
 
 @router.post("/sample", status_code=200)
