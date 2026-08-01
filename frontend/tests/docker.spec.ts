@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import {
   MOCK_DOCKER_PR,
+  MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED,
   MOCK_DOCKER_TARGET,
   MOCK_PR_OPEN,
   MOCK_REPO,
@@ -128,6 +129,7 @@ test.describe("Docker", () => {
       ["/docker", "Docker - GreenSecOps"],
       ["/docker/badges", "Docker Badges - GreenSecOps"],
       [`/docker/${MOCK_REPO.id}/analysis`, "Docker analysis - GreenSecOps"],
+      [`/docker/${MOCK_REPO.id}/runtime`, "Docker runtime - GreenSecOps"],
       [`/docker/${MOCK_REPO.id}/pull-requests`, "Docker PRs - GreenSecOps"],
       [`/docker/${MOCK_REPO.id}/scans`, "Docker scan history - GreenSecOps"],
     ]
@@ -162,5 +164,86 @@ test.describe("Docker", () => {
     await expect(tabs.getByRole("link", { name: "Terraform" })).toBeVisible()
     await expect(tabs.getByRole("link", { name: "Cloud" })).toBeVisible()
     await expect(tabs.getByRole("link", { name: "Docker" })).toHaveCount(0)
+  })
+
+  // ─── Runtime tab ───────────────────────────────────────────────────────────
+
+  test("runtime tab shows measured builds and their findings", async ({
+    page,
+  }) => {
+    await mockDockerTargets(page)
+
+    await page.goto(`/docker/${MOCK_REPO.id}/runtime`)
+    await page.getByLabel("Expand target").first().click()
+
+    await expect(page.getByText("run #12345678901")).toBeVisible()
+    await expect(page.getByText("2.4 GB")).toBeVisible()
+    await expect(page.getByText("18%")).toBeVisible()
+    await expect(
+      page.getByText("Container ran with no memory limit"),
+    ).toBeVisible()
+    // The measurement itself, not just the advice.
+    await expect(
+      page.getByText(
+        "container 'api' peaked at 420 MB with no memory limit set",
+      ),
+    ).toBeVisible()
+  })
+
+  test("runtime tab renders per-container measurements", async ({ page }) => {
+    await mockDockerTargets(page)
+
+    await page.goto(`/docker/${MOCK_REPO.id}/runtime`)
+    await page.getByLabel("Expand target").first().click()
+
+    const row = page.getByRole("row", { name: /api/ })
+    await expect(row).toBeVisible()
+    await expect(row.getByText("420 MB")).toBeVisible()
+    // 0 is "explicitly unlimited", which is what the finding fired on.
+    await expect(row.getByText("none")).toBeVisible()
+  })
+
+  test("selecting a finding queues a runtime fix", async ({ page }) => {
+    await mockDockerTargets(page)
+
+    await page.goto(`/docker/${MOCK_REPO.id}/runtime`)
+    await page.getByLabel("Expand target").first().click()
+
+    await page.getByLabel("Select container_unbounded_memory").check()
+    await page.getByRole("button", { name: "Fix 1 finding" }).click()
+
+    await expect(page.getByText("Fix generation queued")).toBeVisible()
+  })
+
+  test("findings from a build with no dockerfile_path cannot be selected", async ({
+    page,
+  }) => {
+    // Without the join back to source there is no file to rewrite, so the row
+    // still renders the measurement but offers no checkbox.
+    await mockDockerTargets(page, undefined, {
+      runtime: [MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED],
+    })
+
+    await page.goto(`/docker/${MOCK_REPO.id}/runtime`)
+    await page.getByLabel("Expand target").first().click()
+
+    await expect(page.getByText("(no dockerfile_path reported)")).toBeVisible()
+    await expect(
+      page.getByText("Container ran with no memory limit"),
+    ).toBeVisible()
+    await expect(
+      page.getByLabel("Select container_unbounded_memory"),
+    ).toHaveCount(0)
+  })
+
+  test("runtime tab explains itself when nothing has been measured", async ({
+    page,
+  }) => {
+    await mockDockerTargets(page, undefined, { runtime: [] })
+
+    await page.goto(`/docker/${MOCK_REPO.id}/runtime`)
+    await page.getByLabel("Expand target").first().click()
+
+    await expect(page.getByText(/No measured builds yet/)).toBeVisible()
   })
 })

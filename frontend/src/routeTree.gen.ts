@@ -39,6 +39,7 @@ import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/cal
 import { Route as LayoutDockerRepoIdIndexRouteImport } from './routes/_layout/docker/$repoId/index'
 import { Route as LayoutDockerRepoIdAnalysisRouteImport } from './routes/_layout/docker/$repoId/analysis'
 import { Route as LayoutDockerRepoIdPullRequestsRouteImport } from './routes/_layout/docker/$repoId/pull-requests'
+import { Route as LayoutDockerRepoIdRuntimeRouteImport } from './routes/_layout/docker/$repoId/runtime'
 import { Route as LayoutDockerRepoIdScansRouteImport } from './routes/_layout/docker/$repoId/scans'
 import { Route as LayoutInfrastructureRepoIdIndexRouteImport } from './routes/_layout/infrastructure/$repoId/index'
 import { Route as LayoutInfrastructureRepoIdCloudRouteImport } from './routes/_layout/infrastructure/$repoId/cloud'
@@ -206,6 +207,12 @@ const LayoutDockerRepoIdPullRequestsRoute =
     path: '/pull-requests',
     getParentRoute: () => LayoutDockerRepoIdRoute,
   } as any)
+const LayoutDockerRepoIdRuntimeRoute =
+  LayoutDockerRepoIdRuntimeRouteImport.update({
+    id: '/runtime',
+    path: '/runtime',
+    getParentRoute: () => LayoutDockerRepoIdRoute,
+  } as any)
 const LayoutDockerRepoIdScansRoute = LayoutDockerRepoIdScansRouteImport.update({
   id: '/scans',
   path: '/scans',
@@ -295,6 +302,7 @@ export interface FileRoutesByFullPath {
   '/repositories/': typeof LayoutRepositoriesIndexRoute
   '/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
+  '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
   '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
@@ -330,6 +338,7 @@ export interface FileRoutesByTo {
   '/repositories': typeof LayoutRepositoriesIndexRoute
   '/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
+  '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
   '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
@@ -373,6 +382,7 @@ export interface FileRoutesById {
   '/_layout/repositories/': typeof LayoutRepositoriesIndexRoute
   '/_layout/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/_layout/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
+  '/_layout/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/_layout/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
   '/_layout/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/_layout/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
@@ -416,6 +426,7 @@ export interface FileRouteTypes {
     | '/repositories/'
     | '/docker/$repoId/analysis'
     | '/docker/$repoId/pull-requests'
+    | '/docker/$repoId/runtime'
     | '/docker/$repoId/scans'
     | '/infrastructure/$repoId/cloud'
     | '/infrastructure/$repoId/docker'
@@ -451,6 +462,7 @@ export interface FileRouteTypes {
     | '/repositories'
     | '/docker/$repoId/analysis'
     | '/docker/$repoId/pull-requests'
+    | '/docker/$repoId/runtime'
     | '/docker/$repoId/scans'
     | '/infrastructure/$repoId/cloud'
     | '/infrastructure/$repoId/docker'
@@ -493,6 +505,7 @@ export interface FileRouteTypes {
     | '/_layout/repositories/'
     | '/_layout/docker/$repoId/analysis'
     | '/_layout/docker/$repoId/pull-requests'
+    | '/_layout/docker/$repoId/runtime'
     | '/_layout/docker/$repoId/scans'
     | '/_layout/infrastructure/$repoId/cloud'
     | '/_layout/infrastructure/$repoId/docker'
@@ -728,6 +741,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutDockerRepoIdPullRequestsRouteImport
       parentRoute: typeof LayoutDockerRepoIdRoute
     }
+    '/_layout/docker/$repoId/runtime': {
+      id: '/_layout/docker/$repoId/runtime'
+      path: '/runtime'
+      fullPath: '/docker/$repoId/runtime'
+      preLoaderRoute: typeof LayoutDockerRepoIdRuntimeRouteImport
+      parentRoute: typeof LayoutDockerRepoIdRoute
+    }
     '/_layout/docker/$repoId/scans': {
       id: '/_layout/docker/$repoId/scans'
       path: '/scans'
@@ -804,6 +824,7 @@ declare module '@tanstack/react-router' {
 interface LayoutDockerRepoIdRouteChildren {
   LayoutDockerRepoIdAnalysisRoute: typeof LayoutDockerRepoIdAnalysisRoute
   LayoutDockerRepoIdPullRequestsRoute: typeof LayoutDockerRepoIdPullRequestsRoute
+  LayoutDockerRepoIdRuntimeRoute: typeof LayoutDockerRepoIdRuntimeRoute
   LayoutDockerRepoIdScansRoute: typeof LayoutDockerRepoIdScansRoute
   LayoutDockerRepoIdIndexRoute: typeof LayoutDockerRepoIdIndexRoute
 }
@@ -811,6 +832,7 @@ interface LayoutDockerRepoIdRouteChildren {
 const LayoutDockerRepoIdRouteChildren: LayoutDockerRepoIdRouteChildren = {
   LayoutDockerRepoIdAnalysisRoute: LayoutDockerRepoIdAnalysisRoute,
   LayoutDockerRepoIdPullRequestsRoute: LayoutDockerRepoIdPullRequestsRoute,
+  LayoutDockerRepoIdRuntimeRoute: LayoutDockerRepoIdRuntimeRoute,
   LayoutDockerRepoIdScansRoute: LayoutDockerRepoIdScansRoute,
   LayoutDockerRepoIdIndexRoute: LayoutDockerRepoIdIndexRoute,
 }

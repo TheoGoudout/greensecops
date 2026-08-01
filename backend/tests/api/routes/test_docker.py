@@ -11,6 +11,8 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import (
     AnalysisTrigger,
+    DockerBuildEnrichment,
+    DockerBuildTelemetry,
     DockerFinding,
     DockerScan,
     DockerTarget,
@@ -663,9 +665,7 @@ def seeded_runtime_rule(db: Session) -> Rule:
 
 def _make_telemetry(
     db: Session, repo: Repository, dockerfile_path: str | None, **kwargs: object
-) -> "DockerBuildTelemetry":
-    from app.models import DockerBuildTelemetry
-
+) -> DockerBuildTelemetry:
     row = DockerBuildTelemetry(
         repo_id=repo.id,
         workflow_run_id=int(uuid.uuid4().int % 10**9),
@@ -686,8 +686,6 @@ def test_list_runtime_returns_builds_with_their_findings(
     target: DockerTarget,
     seeded_runtime_rule: Rule,
 ) -> None:
-    from app.models import DockerBuildEnrichment
-
     telemetry = _make_telemetry(
         db,
         repo,
@@ -775,9 +773,7 @@ def test_list_runtime_gives_unattributed_builds_to_the_repo_root(
 
 def _make_enrichment(
     db: Session, repo: Repository, telemetry_id: uuid.UUID, slug: str
-) -> "DockerBuildEnrichment":
-    from app.models import DockerBuildEnrichment
-
+) -> DockerBuildEnrichment:
     row = DockerBuildEnrichment(
         repo_id=repo.id,
         telemetry_id=telemetry_id,
@@ -805,9 +801,7 @@ def test_runtime_fix_queues_generation_for_the_measured_file(
     telemetry = _make_telemetry(db, repo, file_path)
     enrichment = _make_enrichment(db, repo, telemetry.id, seeded_runtime_rule.slug)
 
-    with patch(
-        "app.api.routes.docker.run_docker_fix_generation.delay"
-    ) as queued:
+    with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
         response = client.post(
             f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
             headers=superuser_token_headers,

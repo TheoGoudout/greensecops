@@ -61,6 +61,10 @@ const ID = {
   dockerFinding: "0000a020-0000-0000-0000-000000000020",
   dockerFix: "0000a030-0000-0000-0000-000000000030",
   dockerPr: "0000a040-0000-0000-0000-000000000040",
+  dockerTelemetry: "0000a050-0000-0000-0000-000000000050",
+  dockerTelemetryUnattributed: "0000a051-0000-0000-0000-000000000051",
+  dockerRuntimeFinding: "0000a060-0000-0000-0000-000000000060",
+  dockerRuntimeFindingUnattributed: "0000a061-0000-0000-0000-000000000061",
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -299,6 +303,64 @@ export const MOCK_DOCKER_SCAN_FAILED = {
   error_message: "Could not fetch Docker files from GitHub",
   completed_at: "2024-01-01T09:00:10Z",
   created_at: "2024-01-01T09:00:00Z",
+}
+
+export const MOCK_DOCKER_RUNTIME_FINDING = {
+  id: ID.dockerRuntimeFinding,
+  telemetry_id: ID.dockerTelemetry,
+  rule_slug: "container_unbounded_memory",
+  rule_title: "Container ran with no memory limit",
+  severity: "medium" as const,
+  category: "energy" as const,
+  evidence: "container 'api' peaked at 420 MB with no memory limit set",
+  recommendation:
+    "Set a memory limit for 'api' — measured peak was 420 MB, so a limit around 630 MB leaves headroom.",
+  created_at: "2024-01-02T10:05:00Z",
+}
+
+export const MOCK_DOCKER_RUNTIME_BUILD = {
+  id: ID.dockerTelemetry,
+  workflow_run_id: 12345678901,
+  image_ref: "sha256:abc",
+  dockerfile_path: "Dockerfile",
+  image_size_bytes: 2_400_000_000,
+  context_size_bytes: 900_000_000,
+  build_duration_ms: null,
+  cache_hit_ratio: 0.18,
+  layers: [{ index: 0, size_bytes: 500_000_000, instruction: "RUN" }],
+  containers: [
+    {
+      name: "api",
+      oom_killed: false,
+      restart_count: 0,
+      has_healthcheck: true,
+      health_status: "healthy",
+      // 0 is "inspected and explicitly unlimited" — what the finding fires on.
+      mem_limit_bytes: 0,
+      peak_rss_bytes: 420_000_000,
+      peak_pids: 12,
+      cpu_throttled_percent: null,
+      exit_code: null,
+      observed: true,
+    },
+  ],
+  collected_at: "2024-01-02T10:05:00Z",
+  findings: [MOCK_DOCKER_RUNTIME_FINDING],
+}
+
+// A build reported without the action's dockerfile_path input: its findings
+// are real but cannot drive a fix, because nothing names a file to rewrite.
+export const MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED = {
+  ...MOCK_DOCKER_RUNTIME_BUILD,
+  id: ID.dockerTelemetryUnattributed,
+  dockerfile_path: null,
+  findings: [
+    {
+      ...MOCK_DOCKER_RUNTIME_FINDING,
+      id: ID.dockerRuntimeFindingUnattributed,
+      telemetry_id: ID.dockerTelemetryUnattributed,
+    },
+  ],
 }
 
 // Branch mirrors dockerFixBranch(ID.dockerTargetRoot) in src/lib/delivery.ts,
@@ -1066,6 +1128,8 @@ export async function mockDockerTargets(
     findings = [MOCK_DOCKER_FINDING],
     fixes = [MOCK_DOCKER_FIX],
     scans = [MOCK_DOCKER_SCAN, MOCK_DOCKER_SCAN_FAILED],
+    runtime = [MOCK_DOCKER_RUNTIME_BUILD],
+    runtimeFixQueued = 1,
   } = {},
 ) {
   await page.route("**/api/v1/docker-targets/**", (route) => {
@@ -1080,6 +1144,19 @@ export async function mockDockerTargets(
         status: 202,
         json: { status: "queued", docker_target_id: targets[0].id },
       })
+      // Before the generic /fixes branches: "/runtime-fixes" contains "/fixes",
+      // so the broader check would swallow it.
+    } else if (method === "POST" && url.includes("/runtime-fixes")) {
+      route.fulfill({
+        status: 202,
+        json: {
+          status: runtimeFixQueued ? "queued" : "no_dockerfile_path",
+          queued: runtimeFixQueued,
+        },
+      })
+    } else if (url.includes("/runtime")) {
+      // Only the scanned target has measured builds, mirroring /scans.
+      route.fulfill({ json: url.includes(targets[0].id) ? runtime : [] })
     } else if (method === "POST" && url.includes("/fixes")) {
       route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
     } else if (method === "POST" && url.includes("/deliver")) {

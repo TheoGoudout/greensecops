@@ -425,10 +425,6 @@ export type DockerBuildPayload = {
      */
     cache_hit_ratio?: number | null;
     /**
-     * Observed Builds
-     */
-    observed_builds?: number | null;
-    /**
      * Layers
      */
     layers?: Array<{
@@ -440,6 +436,69 @@ export type DockerBuildPayload = {
     containers?: Array<{
         [key: string]: unknown;
     }> | null;
+};
+
+/**
+ * DockerBuildTelemetryPublic
+ * One measured build, with the findings its measurements produced.
+ *
+ * ``layers`` and ``containers`` are stored as JSON text (they are
+ * collector-shaped and never queried relationally) and decoded here, so the
+ * frontend never parses a string out of a typed field.
+ */
+export type DockerBuildTelemetryPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Workflow Run Id
+     */
+    workflow_run_id: number;
+    /**
+     * Image Ref
+     */
+    image_ref?: string | null;
+    /**
+     * Dockerfile Path
+     */
+    dockerfile_path?: string | null;
+    /**
+     * Image Size Bytes
+     */
+    image_size_bytes?: number | null;
+    /**
+     * Context Size Bytes
+     */
+    context_size_bytes?: number | null;
+    /**
+     * Build Duration Ms
+     */
+    build_duration_ms?: number | null;
+    /**
+     * Cache Hit Ratio
+     */
+    cache_hit_ratio?: number | null;
+    /**
+     * Layers
+     */
+    layers?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Containers
+     */
+    containers?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Collected At
+     */
+    collected_at?: string | null;
+    /**
+     * Findings
+     */
+    findings?: Array<DockerRuntimeFindingPublic>;
 };
 
 /**
@@ -597,6 +656,59 @@ export type DockerFixPublic = {
      * Delivered At
      */
     delivered_at?: string | null;
+};
+
+/**
+ * DockerRuntimeFindingPublic
+ * One ``DockerBuildEnrichment`` dressed for the Runtime tab.
+ *
+ * The stored row carries only a rule slug; severity, category and title are
+ * resolved from the rule catalog here so the tab can sort and colour without
+ * a second request. All three are nullable because a Rego rule shipped
+ * without a seed entry in ``core/db.py`` still evaluates and still produces
+ * enrichments — it just has no catalog row to describe it.
+ */
+export type DockerRuntimeFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Telemetry Id
+     */
+    telemetry_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    /**
+     * Rule Title
+     */
+    rule_title?: string | null;
+    severity?: IssueSeverity | null;
+    category?: IssueCategory | null;
+    /**
+     * Evidence
+     */
+    evidence: string;
+    /**
+     * Recommendation
+     */
+    recommendation: string;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * DockerRuntimeFixRequest
+ */
+export type DockerRuntimeFixRequest = {
+    /**
+     * Enrichment Ids
+     */
+    enrichment_ids: Array<string>;
 };
 
 /**
@@ -5214,6 +5326,37 @@ export type DockerListDockerFilesResponses = {
 
 export type DockerListDockerFilesResponse = DockerListDockerFilesResponses[keyof DockerListDockerFilesResponses];
 
+export type DockerListDockerRuntimeData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker-targets/{target_id}/runtime';
+};
+
+export type DockerListDockerRuntimeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListDockerRuntimeError = DockerListDockerRuntimeErrors[keyof DockerListDockerRuntimeErrors];
+
+export type DockerListDockerRuntimeResponses = {
+    /**
+     * Response Docker-List Docker Runtime
+     * Successful Response
+     */
+    200: Array<DockerBuildTelemetryPublic>;
+};
+
+export type DockerListDockerRuntimeResponse = DockerListDockerRuntimeResponses[keyof DockerListDockerRuntimeResponses];
+
 export type DockerListDockerFixesData = {
     body?: never;
     path: {
@@ -5285,6 +5428,44 @@ export type DockerTriggerDockerFixGenerationResponses = {
 };
 
 export type DockerTriggerDockerFixGenerationResponse = DockerTriggerDockerFixGenerationResponses[keyof DockerTriggerDockerFixGenerationResponses];
+
+export type DockerTriggerDockerRuntimeFixGenerationData = {
+    body: DockerRuntimeFixRequest;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker-targets/{target_id}/runtime-fixes';
+};
+
+export type DockerTriggerDockerRuntimeFixGenerationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerDockerRuntimeFixGenerationError = DockerTriggerDockerRuntimeFixGenerationErrors[keyof DockerTriggerDockerRuntimeFixGenerationErrors];
+
+export type DockerTriggerDockerRuntimeFixGenerationResponses = {
+    /**
+     * Response Docker-Trigger Docker Runtime Fix Generation
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type DockerTriggerDockerRuntimeFixGenerationResponse = DockerTriggerDockerRuntimeFixGenerationResponses[keyof DockerTriggerDockerRuntimeFixGenerationResponses];
 
 export type DockerTriggerDockerDeliveryData = {
     body?: never;

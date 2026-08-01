@@ -115,6 +115,7 @@ function InfraSubNav({ repoId }: { repoId: string }) {
 
 const dockerSubItems = [
   { title: "Analysis", segment: "analysis" },
+  { title: "Runtime", segment: "runtime" },
   { title: "PRs", segment: "pull-requests" },
   { title: "Scan history", segment: "scans" },
 ] as const

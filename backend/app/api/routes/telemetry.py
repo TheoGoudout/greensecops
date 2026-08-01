@@ -97,8 +97,10 @@ def _count_observed_builds(
     Counted per ``dockerfile_path`` rather than per image: image ids change on
     every build by definition, so counting those would always answer 1.
     """
-    query = select(func.count()).select_from(DockerBuildTelemetry).where(
-        DockerBuildTelemetry.repo_id == repo_id
+    query = (
+        select(func.count())
+        .select_from(DockerBuildTelemetry)
+        .where(DockerBuildTelemetry.repo_id == repo_id)
     )
     if telemetry.dockerfile_path is None:
         query = query.where(col(DockerBuildTelemetry.dockerfile_path).is_(None))

@@ -292,22 +292,25 @@ def list_docker_runtime(
 
     roots = list(
         session.exec(
-            select(DockerTarget.root_path).where(
-                DockerTarget.repo_id == target.repo_id
-            )
+            select(DockerTarget.root_path).where(DockerTarget.repo_id == target.repo_id)
         ).all()
     )
+    # Telemetry is stored per repository but shown per target, and which target
+    # owns a row is a longest-prefix match that SQL cannot express cleanly. So
+    # the fetch is widened by the number of targets before filtering: limiting
+    # to a page first would let a busy sibling target crowd this one's builds
+    # out of the window entirely.
     rows = session.exec(
         select(DockerBuildTelemetry)
         .where(DockerBuildTelemetry.repo_id == target.repo_id)
         .order_by(col(DockerBuildTelemetry.collected_at).desc())
-        .limit(_RUNTIME_PAGE_SIZE)
+        .limit(_RUNTIME_PAGE_SIZE * max(len(roots), 1))
     ).all()
     mine = [
         row
         for row in rows
         if _owning_root_path(row.dockerfile_path, roots) == target.root_path
-    ]
+    ][:_RUNTIME_PAGE_SIZE]
     if not mine:
         return []
 
@@ -329,7 +332,9 @@ def list_docker_runtime(
     by_telemetry: dict[uuid.UUID, list[DockerRuntimeFindingPublic]] = defaultdict(list)
     for enrichment in enrichments:
         by_telemetry[enrichment.telemetry_id].append(
-            to_docker_runtime_finding_public(enrichment, by_slug.get(enrichment.rule_slug))
+            to_docker_runtime_finding_public(
+                enrichment, by_slug.get(enrichment.rule_slug)
+            )
         )
 
     return [
