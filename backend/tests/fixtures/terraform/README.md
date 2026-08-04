@@ -78,6 +78,18 @@ recorded violations through a mocked `_evaluate` (the same arrangement
 `test_static_analysis_integration.py` uses). The parse, merge, tagging,
 fingerprinting, persistence and scoring around it are all real.
 
+That recording is only useful while it stays true, and a rule change can
+invalidate it without touching a single file here. CI guards against exactly
+that — `.github/workflows/opa.yml` runs
+
+```bash
+python scripts/regenerate_terraform_fixtures.py --check
+```
+
+which re-derives every `expected.json` from the live rule suite and fails if it
+differs, printing the diff. The diff is the useful part: it says precisely how
+a rule change lands on real-world Terraform.
+
 ## Adding a case
 
 1. Create a directory here named for the source, and drop in the `.tf` /
@@ -94,5 +106,5 @@ fingerprinting, persistence and scoring around it are all real.
 `expected.json` automatically — no test code changes needed.
 
 Re-run the same command after changing a rule under
-`backend/app/rules/iac_terraform/`, and review the diff: it shows precisely how
-the change lands on real-world Terraform.
+`backend/app/rules/iac_terraform/` and commit the result; CI's `--check` run
+fails until you do.

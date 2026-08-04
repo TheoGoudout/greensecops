@@ -10,16 +10,23 @@ parse → merge → OPA pipeline the example validators use
 
 pytest never runs this: the backend test environment has no ``opa`` binary, so
 ``_evaluate`` stays mocked there and ``expected.json`` is the recorded ground
-truth those tests replay. Re-run after vendoring a new case or changing a rule:
+truth those tests replay. That recording is only as good as its freshness — a
+rule change alters what the fixtures trip without touching any of their files —
+so ``--check`` runs in CI (``.github/workflows/opa.yml``) and fails when the
+recording no longer matches what the live rule suite produces.
 
-    python scripts/regenerate_terraform_fixtures.py
+Usage:
+    python scripts/regenerate_terraform_fixtures.py           # rewrite in place
+    python scripts/regenerate_terraform_fixtures.py --check   # fail if stale (CI)
 
 ``opa`` must be on ``PATH``, or set ``OPA_BIN`` to its location.
 """
 
 from __future__ import annotations
 
+import difflib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -76,33 +83,66 @@ def _violation_payload(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def main() -> int:
+def _render(case_dir: Path) -> str:
+    """The ``expected.json`` this case should have, per the live rule suite."""
+    files = _tf_files(case_dir)
+    raw_violations = evaluate_violations(merge_terraform_configs(files))
+    violations = sorted(
+        (_violation_payload(v) for v in raw_violations),
+        key=lambda v: (v["rule_slug"], v["resource_address"], v["message"]),
+    )
+    # One TerraformFinding per (rule, resource_address): the fingerprint
+    # (app/services/deduplication.py) keys on exactly that pair, so a rule
+    # that fires twice on one resource — terragoat's security group, open on
+    # both 22 and 80 — collapses to a single finding.
+    fingerprints = {(v["rule_slug"], v["resource_address"]) for v in violations}
+    payload = {
+        "source": SOURCES[case_dir.name],
+        "files": [name for name, _ in files],
+        "violations": violations,
+        "expected_finding_count": len(fingerprints),
+        "expected_grade": "A+++" if not fingerprints else None,
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def main(argv: list[str]) -> int:
+    check_only = "--check" in argv
+    stale = False
     for case_dir in sorted(p for p in FIXTURES.iterdir() if p.is_dir()):
-        files = _tf_files(case_dir)
-        if not files:
+        if not _tf_files(case_dir):
             continue
-        raw_violations = evaluate_violations(merge_terraform_configs(files))
-        violations = sorted(
-            (_violation_payload(v) for v in raw_violations),
-            key=lambda v: (v["rule_slug"], v["resource_address"], v["message"]),
-        )
-        # One TerraformFinding per (rule, resource_address): the fingerprint
-        # (app/services/deduplication.py) keys on exactly that pair, so a rule
-        # that fires twice on one resource — terragoat's security group, open on
-        # both 22 and 80 — collapses to a single finding.
-        fingerprints = {(v["rule_slug"], v["resource_address"]) for v in violations}
-        payload = {
-            "source": SOURCES[case_dir.name],
-            "files": [name for name, _ in files],
-            "violations": violations,
-            "expected_finding_count": len(fingerprints),
-            "expected_grade": "A+++" if not fingerprints else None,
-        }
         out = case_dir / "expected.json"
-        out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-        print(f"{case_dir.name}: {len(violations)} violations → {out.name}")
+        rendered = _render(case_dir)
+        current = out.read_text(encoding="utf-8") if out.exists() else ""
+        if rendered == current:
+            continue
+        stale = True
+        if check_only:
+            # The diff is the point: it shows exactly how a rule change lands on
+            # real-world Terraform, which is the reason the corpus exists.
+            print(
+                f"{case_dir.name}/expected.json no longer matches the rule suite. "
+                "Run: python scripts/regenerate_terraform_fixtures.py",
+                file=sys.stderr,
+            )
+            sys.stderr.writelines(
+                difflib.unified_diff(
+                    current.splitlines(keepends=True),
+                    rendered.splitlines(keepends=True),
+                    fromfile=f"{case_dir.name}/expected.json (recorded)",
+                    tofile=f"{case_dir.name}/expected.json (rule suite)",
+                )
+            )
+        else:
+            out.write_text(rendered, encoding="utf-8")
+            print(f"{case_dir.name}: expected.json updated ✅")
+    if check_only and stale:
+        return 1
+    if not stale:
+        print("Terraform test fixtures are in sync with the rule suite ✅")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

@@ -15,7 +15,9 @@ on:
       - "scripts/validate_docker_examples.py"
       - "scripts/validate_deploy_terraform.py"
       - "scripts/opa_terraform_eval.py"
+      - "scripts/regenerate_terraform_fixtures.py"
       - "scripts/render_landing_examples.py"
+      - "backend/tests/fixtures/terraform/**"
       - "scripts/opa/**"
       - "deploy/terraform/**"
       - ".github/workflows/opa.yml"
@@ -32,7 +34,9 @@ on:
       - "scripts/validate_docker_examples.py"
       - "scripts/validate_deploy_terraform.py"
       - "scripts/opa_terraform_eval.py"
+      - "scripts/regenerate_terraform_fixtures.py"
       - "scripts/render_landing_examples.py"
+      - "backend/tests/fixtures/terraform/**"
       - "scripts/opa/**"
       - "deploy/terraform/**"
       - ".github/workflows/opa.yml"
@@ -88,6 +92,14 @@ jobs:
       # one its own rules pass. Any violation fails the build.
       - name: Scan the AWS deployment Terraform with the rule suite
         run: python scripts/validate_deploy_terraform.py
+
+      # The backend's Terraform tests replay violations recorded from this
+      # suite, because the pytest environment has no opa binary. A rule change
+      # can therefore make that recording wrong without touching a single test
+      # file — this is what notices. The failure diff doubles as a report of how
+      # the change lands on real-world Terraform.
+      - name: Check the backend Terraform fixtures match the rule suite
+        run: python scripts/regenerate_terraform_fixtures.py --check
 
       - name: Check landing page is in sync with example files
         run: python scripts/render_landing_examples.py --check
