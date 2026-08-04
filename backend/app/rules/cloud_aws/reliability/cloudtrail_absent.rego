@@ -22,8 +22,16 @@ import rego.v1
 # to list them", and cannot tell those apart. Reporting is the right side to
 # err on: a missing audit trail is worth a look either way, and the message
 # says what to check.
+#
+# The key must be *present* though, not merely empty. collect_account_resources
+# always emits all eight resource keys, so an absent one means the document is
+# not a cloud snapshot at all — and a rule that fires on a missing key fires on
+# every document in every other engine, which is exactly what the cross-domain
+# check in scripts/validate_examples.py caught.
 violations contains violation if {
-	count(object.get(input, "cloudtrail_trails", [])) == 0
+	trails := input.cloudtrail_trails
+	is_array(trails)
+	count(trails) == 0
 
 	violation := {
 		"rule": "cloudtrail_absent",

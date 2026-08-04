@@ -11,11 +11,18 @@ test_violation_when_the_account_has_no_trails if {
 	v.resource_id == "account"
 }
 
-# The collector omits the key entirely when it collected nothing at all, which
-# has to read the same as an empty list rather than making the rule vacuous.
-test_violation_when_the_key_is_absent if {
+# collect_account_resources always emits all eight resource keys, so an absent
+# one means this is not a cloud snapshot. Firing on a missing key would make
+# the rule fire on every workflow, Dockerfile and Terraform document too — the
+# cross-domain check in scripts/validate_examples.py caught exactly that.
+test_no_violation_when_the_key_is_absent if {
 	violations := cloudtrail_absent.violations with input as {"s3_buckets": []}
-	count(violations) == 1
+	count(violations) == 0
+}
+
+test_no_violation_on_a_document_from_another_engine if {
+	violations := cloudtrail_absent.violations with input as {"jobs": {"build": {"steps": []}}}
+	count(violations) == 0
 }
 
 test_no_violation_when_a_trail_exists if {
