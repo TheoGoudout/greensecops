@@ -84,6 +84,30 @@ def test_merge_terraform_configs_tags_one_level_blocks_like_variable() -> None:
     assert merged["variable"][0]["region"]["__tf_file"] == "vars.tf"
 
 
+def test_merge_terraform_configs_tags_the_unnamed_terraform_block() -> None:
+    # `terraform` is the one block type whose entry *is* the attrs dict rather
+    # than a {name: attrs} mapping, so walking into its values stamps nothing —
+    # they are a version string and a nested list. Findings about a backend or
+    # a provider constraint had no file to point at until it was stamped at the
+    # top level.
+    files = [
+        (
+            "versions.tf",
+            'terraform {\n  required_version = ">= 1.9"\n'
+            '  required_providers {\n    aws = { source = "hashicorp/aws" }\n  }\n}',
+        ),
+    ]
+    merged = merge_terraform_configs(files)
+    assert merged["terraform"][0]["__tf_file"] == "versions.tf"
+
+
+def test_merge_terraform_configs_does_not_invent_a_local_named_tf_file() -> None:
+    # `locals` keys are user-chosen names, so stamping that block the way
+    # `terraform` is stamped would add a local called __tf_file.
+    merged = merge_terraform_configs([("locals.tf", 'locals {\n  env = "prod"\n}')])
+    assert "__tf_file" not in merged["locals"][0]
+
+
 def test_merge_terraform_configs_skips_unparseable_files() -> None:
     files = [
         ("main.tf", 'resource "aws_s3_bucket" "data" { bucket = "b1" }'),

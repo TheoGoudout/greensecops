@@ -56,6 +56,15 @@ def parse_terraform_content(path: str, raw_content: str) -> dict[str, Any] | Non
 # empty file_path because this distinction was missed on the first pass).
 _TWO_LEVEL_BLOCK_TYPES = {"resource", "data"}
 
+# ``terraform`` is the one block type that is *unnamed*: its entry is the attrs
+# dict itself, not a {name: attrs} mapping. Walking into its values therefore
+# stamps nothing (they are a version string and a nested list), which left
+# every finding about a backend or a provider constraint with no file to point
+# at. Stamped at the top level instead. ``locals`` is deliberately not treated
+# this way — its keys are user-chosen names, so stamping it would invent a
+# local called ``__tf_file``.
+_SINGLE_LEVEL_BLOCK_TYPES = {"terraform"}
+
 
 def _tag_source_file(top_level_key: str, block: Any, file_path: str) -> None:
     """Tag every attrs dict in a top-level block entry with its source file.
@@ -66,7 +75,9 @@ def _tag_source_file(top_level_key: str, block: Any, file_path: str) -> None:
     """
     if not isinstance(block, dict):
         return
-    if top_level_key in _TWO_LEVEL_BLOCK_TYPES:
+    if top_level_key in _SINGLE_LEVEL_BLOCK_TYPES:
+        block[_SOURCE_FILE_KEY] = file_path
+    elif top_level_key in _TWO_LEVEL_BLOCK_TYPES:
         for name_map in block.values():
             if not isinstance(name_map, dict):
                 continue
