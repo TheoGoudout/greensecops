@@ -3,6 +3,7 @@
 # description: A resource attribute contains a literal string matching the AWS access key ID format (AKIA...), rather than a variable or a secrets-manager reference.
 # custom:
 #   severity: critical
+#   severity_weight: 4.0
 #   detection: static_analysis
 #   examples:
 #     bad: |

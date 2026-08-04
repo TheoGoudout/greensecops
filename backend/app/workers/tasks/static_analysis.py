@@ -28,6 +28,7 @@ from app.models import (
     LLMProvider,
     Repository,
     Rule,
+    RuleDomain,
     WorkflowFile,
 )
 from app.services import state_machines as sm
@@ -302,6 +303,7 @@ def _register_rule_from_violation(
         .values(
             id=uuid.uuid4(),
             slug=slug,
+            domain=RuleDomain.workflow,
             category=category,
             severity=severity,
             title=slug.replace("_", " ").capitalize(),
@@ -309,10 +311,16 @@ def _register_rule_from_violation(
             enabled=True,
             severity_weight=1.0,
         )
-        .on_conflict_do_nothing(index_elements=["slug"])
+        # A slug identifies a rule only within its engine (migration 0048), so
+        # the conflict target is the composite constraint. Keyed on `slug`
+        # alone this silently no-opped whenever another engine already owned
+        # the name, and the follow-up select below then returned *that* rule.
+        .on_conflict_do_nothing(index_elements=["domain", "slug"])
     )
     session.execute(stmt)
-    rule = session.exec(select(Rule).where(Rule.slug == slug)).first()
+    rule = session.exec(
+        select(Rule).where(Rule.slug == slug).where(Rule.domain == RuleDomain.workflow)
+    ).first()
     if rule is not None:
         logger.info("Auto-registered new rule '%s' from OPA violation", slug)
     return rule
@@ -646,9 +654,17 @@ def _run_static_analysis_impl(
 
             _enrich_line_numbers(violations, content)
 
+            # Scoped to this engine, like cloud_scan/terraform_analysis/
+            # docker_analysis already do. Unscoped, a workflow violation whose
+            # slug is also a Terraform or cloud rule name bound to that other
+            # engine's Rule row, taking its severity and weight into the score.
             rule_map: dict[str, Rule] = {
                 r.slug: r
-                for r in session.exec(select(Rule).where(Rule.enabled == True)).all()  # noqa: E712
+                for r in session.exec(
+                    select(Rule)
+                    .where(Rule.enabled == True)  # noqa: E712
+                    .where(Rule.domain == RuleDomain.workflow)
+                ).all()
             }
 
             seen_fingerprints: set[str] = set()

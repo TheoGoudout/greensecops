@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from app.core.rego_metadata import RULES_DIR, iter_rule_files
+from app.models import RuleDomain
 from app.services.opa.evaluator import (
     CI_TELEMETRY_POLICY_PACKAGES,
     CONTAINER_DOCKER_POLICY_PACKAGES,
@@ -21,6 +23,18 @@ from app.services.opa.evaluator import (
 )
 
 
+def _shipped_rule_count(domain_dir: str) -> int:
+    """How many policy files that engine ships, counted from disk.
+
+    The counts used to be written out as literals here, which meant every rule
+    added to any engine failed this file until someone bumped a number. The
+    assertion that matters is that discovery finds *all* of them, not that
+    there are exactly N — so both sides now come from the tree, and the named
+    slugs below still pin the specific packages that must be wired up.
+    """
+    return len(list(iter_rule_files(RULES_DIR / domain_dir)))
+
+
 def test_all_seeded_rules_are_evaluated() -> None:
     """Every Rego rule shipped in app/rules must be an evaluated policy.
 
@@ -28,7 +42,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
     only 8 of 26 packages — and 2 of 6 security rules — were evaluated).
     """
     packages = _discover_policy_packages("ci_workflow")
-    assert len(packages) == 26
+    assert len(packages) == _shipped_rule_count("ci_workflow")
     # The security rules that were previously unwired must now be evaluated.
     for slug in (
         "hardcoded_secrets",
@@ -208,7 +222,7 @@ def test_discover_policy_packages_excludes_test_files() -> None:
 
 def test_all_seeded_terraform_rules_are_evaluated() -> None:
     packages = _discover_policy_packages("iac_terraform")
-    assert len(packages) == 8
+    assert len(packages) == _shipped_rule_count("iac_terraform")
     for slug in (
         "s3_bucket_public_acl",
         "open_ingress_security_group",
@@ -281,7 +295,7 @@ def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
 
 def test_all_seeded_docker_rules_are_evaluated() -> None:
     packages = _discover_policy_packages("container_docker")
-    assert len(packages) == 22
+    assert len(packages) == _shipped_rule_count("container_docker")
     for slug in (
         "container_runs_as_root",
         "secret_in_build_arg",
@@ -325,12 +339,18 @@ def test_every_seeded_docker_rule_has_a_policy_package() -> None:
     """A seeded Rule with no Rego file would show as enabled and never fire.
 
     The reverse direction (a Rego file with no Rule row) is worse still —
-    docker_analysis drops those violations — so the two lists must agree
-    exactly.
+    docker_analysis drops those violations — so the catalog and the evaluated
+    packages must agree exactly. Both are derived from the same tree now, so
+    this can only fail if discovery and cataloguing disagree about what counts
+    as a rule file.
     """
-    from app.core.db import DOCKER_INITIAL_RULES
+    from app.core.rule_registry import discover_rules
 
-    seeded = {str(rule["slug"]) for rule in DOCKER_INITIAL_RULES}
+    seeded = {
+        rule["slug"]
+        for rule in discover_rules()
+        if rule["domain"] == RuleDomain.container_docker
+    }
     shipped = {pkg.rsplit("/", 1)[-1] for pkg in CONTAINER_DOCKER_POLICY_PACKAGES}
     assert seeded == shipped
 
@@ -424,7 +444,7 @@ def test_evaluate_docker_raises_when_opa_unreachable() -> None:
 
 def test_all_seeded_ci_telemetry_rules_are_evaluated() -> None:
     packages = _discover_policy_packages("ci_telemetry")
-    assert len(packages) == 3
+    assert len(packages) == _shipped_rule_count("ci_telemetry")
     assert "greensecops/ci_telemetry/energy/runner_underutilized" in packages
     for slug in ("high_memory_pressure", "runner_disk_pressure"):
         assert f"greensecops/ci_telemetry/reliability/{slug}" in packages

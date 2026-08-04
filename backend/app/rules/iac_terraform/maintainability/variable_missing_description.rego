@@ -3,6 +3,7 @@
 # description: A variable block has no description, making it harder for other authors (and module consumers) to understand its purpose without reading the whole config.
 # custom:
 #   severity: low
+#   severity_weight: 0.4
 #   detection: static_analysis
 #   examples:
 #     bad: |

@@ -3,6 +3,7 @@
 # description: Jobs are chained together with a needs dependency into a sequential pipeline even though they may not consume each other's outputs. Running independent jobs in parallel reduces total pipeline duration and energy use.
 # custom:
 #   severity: low
+#   severity_weight: 0.6
 #   detection: heuristic
 #   examples:
 #     bad: |

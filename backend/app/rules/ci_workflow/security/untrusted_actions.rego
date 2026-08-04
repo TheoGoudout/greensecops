@@ -3,6 +3,7 @@
 # description: A third-party action (not from actions/ or github/) is used without pinning to a full commit SHA. This is a supply-chain attack vector.
 # custom:
 #   severity: high
+#   severity_weight: 2.0
 #   detection: pattern_matching
 #   examples:
 #     bad: |

@@ -3,6 +3,7 @@
 # description: An environment variable name matches common secret patterns (API_KEY, TOKEN, PASSWORD, SECRET) and its value appears to be a literal string rather than a secret reference.
 # custom:
 #   severity: critical
+#   severity_weight: 4.0
 #   detection: pattern_matching
 #   examples:
 #     bad: |
