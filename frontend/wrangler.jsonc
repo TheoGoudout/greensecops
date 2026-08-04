@@ -1,0 +1,16 @@
+{
+  // The dashboard as a Worker serving static assets. No Worker script: the
+  // API lives on the application host, and the bundle talks to it directly
+  // over VITE_API_URL, so nothing here needs to run server-side.
+  "name": "greensecops-dashboard",
+  "compatibility_date": "2026-08-04",
+  "assets": {
+    // Vite's default outDir.
+    "directory": "./dist",
+    // TanStack Router does client-side routing, so an unmatched path must
+    // return index.html with a 200 rather than a 404, or a deep link like
+    // /infrastructure/42/terraform breaks on reload. This is the native
+    // replacement for the `/*  /index.html  200` rule in _redirects.
+    "not_found_handling": "single-page-application"
+  }
+}

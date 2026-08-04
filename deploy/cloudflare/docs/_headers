@@ -1,0 +1,11 @@
+# The same security headers the landing page carries.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Sphinx copies docs/_static/ through verbatim — custom.css keeps its name
+# across builds — so this must not be immutable, for the same reason
+# ../landing/_headers is not.
+/_static/*
+  Cache-Control: public, max-age=3600

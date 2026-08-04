@@ -1,10 +1,16 @@
-# The security headers landing/nginx.conf sets. Pages serves no headers of its
-# own beyond caching, so they have to be declared here or they are simply lost
-# when the site moves off nginx.
+# The security headers landing/nginx.conf sets. Workers serves no headers of
+# its own beyond caching, so they have to be declared here or they are simply
+# lost when the site moves off nginx.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
 
+# landing/assets/ holds style.css, theme.js and hero-anim.js at stable names —
+# nothing here is content-hashed, so `immutable` would strand a stylesheet fix
+# in returning browsers for a year with no way to bust it. A short TTL plus the
+# ETag Workers attaches by default gets the caching without that trap. The
+# dashboard, whose asset filenames Vite does hash, is the surface that can
+# safely be immutable; see ../frontend/_headers.
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=3600
