@@ -4,3 +4,4 @@ violations:
   - rds_not_encrypted
   - resource_missing_tags
   - variable_missing_description
+  - rds_no_deletion_protection

@@ -5,3 +5,4 @@ violations:
   - compose_missing_restart_policy
   - compose_privileged_container
   - compose_unpinned_image_tag
+  - compose_unbounded_log_files

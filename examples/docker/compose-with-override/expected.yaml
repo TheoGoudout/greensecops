@@ -4,3 +4,5 @@
 # flag is presence-based and must still be caught wherever it appears.
 violations:
   - compose_privileged_container
+  - compose_missing_no_new_privileges
+  - compose_unbounded_log_files

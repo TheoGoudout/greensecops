@@ -15,8 +15,10 @@ FROM python:3.12-slim@sha256:0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071829
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
 LABEL org.opencontainers.image.licenses="MIT"
 
+WORKDIR /app
+
 COPY --from=builder /install /usr/local
-COPY . /app
+COPY . .
 
 RUN useradd --system --uid 10001 --no-create-home app
 USER app
@@ -24,4 +26,4 @@ USER app
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-CMD ["python", "/app/main.py"]
+CMD ["python", "main.py"]

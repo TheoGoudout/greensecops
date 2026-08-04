@@ -12,6 +12,17 @@ terraform {
       version = "~> 6.0"
     }
   }
+
+  # A root module keeps its state remotely: the local default has no locking,
+  # no history, and holds every resource attribute including the sensitive
+  # ones.
+  backend "s3" {
+    bucket       = "example-tfstate"
+    key          = "assets-split/terraform.tfstate"
+    region       = "eu-west-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
