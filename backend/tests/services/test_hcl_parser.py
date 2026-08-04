@@ -1,36 +1,93 @@
+"""Unit tests for the HCL parser, anchored in real-world Terraform.
+
+The modules under ``tests/fixtures/terraform/`` are vendored verbatim from
+public repositories (see the README there), so these tests exercise the parser
+against configuration people actually wrote — heredocs, ``dynamic`` blocks,
+``for_each`` comprehensions, interpolation, repeated nested blocks — rather than
+snippets shaped to fit the assertion. Synthetic input survives only where the
+test needs input that is deliberately malformed.
+"""
+
+import json
+from pathlib import Path
+
 from app.services.terraform.hcl_parser import (
     derive_module_path,
     merge_terraform_configs,
     parse_terraform_content,
 )
 
+_FIXTURES = Path(__file__).parent.parent / "fixtures" / "terraform"
+
+# bridgecrewio/terragoat's AWS estate — deliberately insecure, and written the
+# way real Terraform is written.
+_TERRAGOAT = _FIXTURES / "terragoat_aws"
+# terraform-aws-modules/terraform-aws-security-group — a hardened registry
+# module, all `for_each`/`dynamic`/`try()`, with fully described variables.
+_SECURITY_GROUP = _FIXTURES / "terraform_aws_security_group"
+
+
+def _load(path: Path) -> str:
+    return path.read_text()
+
+
+def _root(case_dir: Path) -> list[tuple[str, str]]:
+    """A whole vendored root module as ``(path, content)`` pairs."""
+    return [
+        (p.name, p.read_text())
+        for p in sorted(case_dir.iterdir())
+        if p.name.endswith((".tf", ".tf.json"))
+    ]
+
 
 def test_parse_terraform_content_parses_hcl() -> None:
-    raw = """
-    resource "aws_s3_bucket" "data" {
-      bucket = "my-bucket"
-    }
-    """
-    result = parse_terraform_content("main.tf", raw)
+    result = parse_terraform_content("s3.tf", _load(_TERRAGOAT / "s3.tf"))
     assert result is not None
-    assert result["resource"][0]["aws_s3_bucket"]["data"]["bucket"] == "my-bucket"
+    buckets = result["resource"][0]["aws_s3_bucket"]
+    assert buckets["data"]["bucket"] == "${local.resource_prefix.value}-data"
+
+
+def test_parse_terraform_content_parses_a_heredoc_and_nested_blocks() -> None:
+    # ec2.tf's aws_instance carries a shell heredoc in user_data and the
+    # security group repeats `ingress` twice — both are shapes a hand-written
+    # one-liner fixture never produces.
+    result = parse_terraform_content("ec2.tf", _load(_TERRAGOAT / "ec2.tf"))
+    assert result is not None
+    resources = {
+        name: attrs
+        for block in result["resource"]
+        for named in block.values()
+        for name, attrs in named.items()
+    }
+    assert "AWS_ACCESS_KEY_ID" in resources["web_host"]["user_data"]
+    assert len(resources["web-node"]["ingress"]) == 2
 
 
 def test_parse_terraform_content_preserves_source_line_span() -> None:
     # with_meta=True stamps 1-based start/end lines on every block's attrs dict
-    # so a rule can report the exact source span of a violation (spec #3).
-    raw = 'resource "aws_s3_bucket" "data" {\n  acl = "public-read"\n}\n'
-    result = parse_terraform_content("main.tf", raw)
+    # so a rule can report the exact source span of a violation (spec #3). The
+    # unencrypted EBS volume is the 34th-51st line of the real file.
+    raw = _load(_TERRAGOAT / "ec2.tf")
+    result = parse_terraform_content("ec2.tf", raw)
     assert result is not None
-    attrs = result["resource"][0]["aws_s3_bucket"]["data"]
-    assert attrs["__start_line__"] == 1
-    assert attrs["__end_line__"] == 3
+    volume = next(
+        block["aws_ebs_volume"]["web_host_storage"]
+        for block in result["resource"]
+        if "aws_ebs_volume" in block
+    )
+    start, end = volume["__start_line__"], volume["__end_line__"]
+    lines = raw.splitlines()
+    assert lines[start - 1].startswith('resource "aws_ebs_volume"')
+    assert lines[end - 1].strip() == "}"
 
 
 def test_parse_terraform_content_parses_tf_json() -> None:
-    raw = '{"resource": {"aws_s3_bucket": {"data": {"bucket": "my-bucket"}}}}'
-    result = parse_terraform_content("main.tf.json", raw)
-    assert result == {"resource": {"aws_s3_bucket": {"data": {"bucket": "my-bucket"}}}}
+    # JSON Terraform is the same document in the other syntax: round-trip a real
+    # parsed module through it and the parser must accept it unchanged.
+    parsed = parse_terraform_content("s3.tf", _load(_TERRAGOAT / "s3.tf"))
+    assert parsed is not None
+    result = parse_terraform_content("main.tf.json", json.dumps(parsed))
+    assert result == parsed
 
 
 def test_parse_terraform_content_returns_none_on_invalid_hcl() -> None:
@@ -44,32 +101,33 @@ def test_parse_terraform_content_returns_none_on_invalid_json() -> None:
 
 
 def test_merge_terraform_configs_concatenates_same_block_type_across_files() -> None:
-    files = [
-        ("main.tf", 'resource "aws_s3_bucket" "data" { bucket = "b1" }'),
-        ("network.tf", 'resource "aws_security_group" "web" { name = "sg1" }'),
-    ]
+    # Terraform treats a directory as one module, so resources declared in
+    # separate real files land in a single `resource` list.
+    files = _root(_TERRAGOAT)
+    per_file = {
+        name: len((parse_terraform_content(name, content) or {}).get("resource", []))
+        for name, content in files
+    }
+    contributors = [name for name, count in per_file.items() if count]
+    assert len(contributors) >= 3, "fixture no longer spreads resources across files"
+
     merged = merge_terraform_configs(files)
-    assert len(merged["resource"]) == 2
+    assert len(merged["resource"]) == sum(per_file.values())
 
 
 def test_merge_terraform_configs_tags_each_block_with_its_source_file() -> None:
-    files = [
-        ("main.tf", 'resource "aws_s3_bucket" "data" { bucket = "b1" }'),
-        ("network.tf", 'resource "aws_security_group" "web" { name = "sg1" }'),
-    ]
-    merged = merge_terraform_configs(files)
-    tagged_files = {
-        block["aws_s3_bucket"]["data"].get("__tf_file")
+    merged = merge_terraform_configs(_root(_TERRAGOAT))
+    source_of = {
+        f"{resource_type}.{name}": attrs["__tf_file"]
         for block in merged["resource"]
-        if "aws_s3_bucket" in block
+        for resource_type, named in block.items()
+        for name, attrs in named.items()
     }
-    assert tagged_files == {"main.tf"}
-    tagged_files_sg = {
-        block["aws_security_group"]["web"].get("__tf_file")
-        for block in merged["resource"]
-        if "aws_security_group" in block
-    }
-    assert tagged_files_sg == {"network.tf"}
+    # Each of these really is declared in the file it is tagged with.
+    assert source_of["aws_s3_bucket.data"] == "s3.tf"
+    assert source_of["aws_security_group.web-node"] == "ec2.tf"
+    assert source_of["aws_db_instance.default"] == "db-app.tf"
+    assert source_of["aws_lambda_function.analysis_lambda"] == "lambda.tf"
 
 
 def test_merge_terraform_configs_tags_one_level_blocks_like_variable() -> None:
@@ -77,20 +135,20 @@ def test_merge_terraform_configs_tags_one_level_blocks_like_variable() -> None:
     # resource/data ({name: attrs}, not {type: {name: attrs}}) — this is a
     # regression test for a bug where _tag_source_file assumed the
     # resource/data shape universally and silently left these untagged.
-    files = [
-        ("vars.tf", 'variable "region" { type = string }'),
-    ]
-    merged = merge_terraform_configs(files)
-    assert merged["variable"][0]["region"]["__tf_file"] == "vars.tf"
+    merged = merge_terraform_configs(_root(_SECURITY_GROUP))
+    variables = {
+        name: attrs for block in merged["variable"] for name, attrs in block.items()
+    }
+    assert len(variables) > 1
+    assert all(attrs["__tf_file"] == "variables.tf" for attrs in variables.values())
 
 
 def test_merge_terraform_configs_skips_unparseable_files() -> None:
-    files = [
-        ("main.tf", 'resource "aws_s3_bucket" "data" { bucket = "b1" }'),
-        ("broken.tf", "resource this is not valid !!!"),
-    ]
-    merged = merge_terraform_configs(files)
-    assert len(merged["resource"]) == 1
+    good = _root(_TERRAGOAT)
+    merged = merge_terraform_configs(
+        [*good, ("broken.tf", "resource this is not valid !!!")]
+    )
+    assert merged == merge_terraform_configs(good)
 
 
 def test_merge_terraform_configs_empty_input() -> None:

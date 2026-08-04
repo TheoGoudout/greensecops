@@ -1,0 +1,15 @@
+{
+  "source": {
+    "repository": "https://github.com/terraform-aws-modules/terraform-aws-security-group",
+    "path": ".",
+    "ref": "58d8e895915f5573767081142d063b7caf7a2b47",
+    "license": "Apache-2.0"
+  },
+  "files": [
+    "main.tf",
+    "variables.tf"
+  ],
+  "violations": [],
+  "expected_finding_count": 0,
+  "expected_grade": "A+++"
+}

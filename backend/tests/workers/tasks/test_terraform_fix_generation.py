@@ -1,7 +1,16 @@
-"""Unit tests for the terraform_fix_generation Celery task."""
+"""Unit tests for the terraform_fix_generation Celery task.
+
+The file a fix is generated against is real: ``s3.tf`` from bridgecrewio/terragoat
+(``tests/fixtures/terraform/`` — see the README there), whose ``aws_s3_bucket``
+genuinely has no versioning. The "fixed" content the mocked LLM returns is that
+same file with the companion ``aws_s3_bucket_versioning`` resource the rule
+accepts, so the round trip reads as an actual before/after rather than two
+unrelated snippets.
+"""
 
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -26,7 +35,26 @@ from app.models import (
 )
 from app.workers.tasks.terraform_fix_generation import run_terraform_fix_generation
 
-VALID_HCL = 'resource "aws_s3_bucket" "b" {\n  bucket = "x"\n}\n'
+_FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "terraform"
+
+# The unversioned bucket as it is written upstream.
+VULNERABLE_HCL = (_FIXTURES / "terragoat_aws" / "s3.tf").read_text()
+
+# The same file with versioning turned on the way a modern provider expects —
+# a separate aws_s3_bucket_versioning resource pointing back at the bucket,
+# which is exactly what s3_bucket_missing_versioning accepts as a fix.
+VALID_HCL = (
+    VULNERABLE_HCL
+    + """
+resource "aws_s3_bucket_versioning" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+"""
+)
 
 
 @dataclass
@@ -96,11 +124,11 @@ def _finding(
         scan_id=scan.id,
         terraform_root_id=root.id,
         rule_id=rule.id,
-        file_path="main.tf",
+        file_path="s3.tf",
         fingerprint=uuid.uuid4().hex[:16],
         severity=IssueSeverity.high,
         category=IssueCategory.security,
-        message="unencrypted bucket",
+        message="S3 bucket 'data' has no versioning configured.",
     )
     db.add(f)
     db.commit()
@@ -111,7 +139,7 @@ def _finding(
 def _pending_fix(db: Session, root: TerraformRoot) -> TerraformFix:
     fix = TerraformFix(
         terraform_root_id=root.id,
-        file_path="main.tf",
+        file_path="s3.tf",
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
         status=FixStatus.pending,
@@ -157,13 +185,17 @@ def test_success_marks_fix_ready(
     finding = _finding(db, root, scan, rule)
     fix = _pending_fix(db, root)
     llm = f"<full_content>\n{VALID_HCL}</full_content>\n<unfixed>\n</unfixed>"
-    with _patch_fetch([FakeFile("main.tf", "old\n")]), _patch_llm(llm):
+    with _patch_fetch([FakeFile("s3.tf", VULNERABLE_HCL)]), _patch_llm(llm):
         result = run_terraform_fix_generation([str(finding.id)])
     assert result["status"] == FixStatus.ready.value
     db.refresh(fix)
     assert fix.status == FixStatus.ready
     assert fix.full_content is not None
-    assert "aws_s3_bucket" in fix.full_content
+    # The bucket the finding was raised on survives, and versioning is now
+    # configured the way the rule expects.
+    assert 'resource "aws_s3_bucket" "data"' in fix.full_content
+    assert 'resource "aws_s3_bucket_versioning" "data"' in fix.full_content
+    assert 'status = "Enabled"' in fix.full_content
 
 
 def test_invalid_hcl_marks_fix_failed(
@@ -172,7 +204,7 @@ def test_invalid_hcl_marks_fix_failed(
     finding = _finding(db, root, scan, rule)
     fix = _pending_fix(db, root)
     llm = "<full_content>\nthis is ][ not valid hcl {{{\n</full_content>"
-    with _patch_fetch([FakeFile("main.tf", "old\n")]), _patch_llm(llm):
+    with _patch_fetch([FakeFile("s3.tf", VULNERABLE_HCL)]), _patch_llm(llm):
         result = run_terraform_fix_generation([str(finding.id)])
     assert result["status"] == FixStatus.failed.value
     db.refresh(fix)
@@ -185,7 +217,7 @@ def test_missing_content_marks_fix_failed(
 ) -> None:
     finding = _finding(db, root, scan, rule)
     fix = _pending_fix(db, root)
-    with _patch_fetch([FakeFile("main.tf", "old\n")]), _patch_llm("no block here"):
+    with _patch_fetch([FakeFile("s3.tf", VULNERABLE_HCL)]), _patch_llm("no block here"):
         result = run_terraform_fix_generation([str(finding.id)])
     assert result["status"] == FixStatus.failed.value
     db.refresh(fix)
@@ -212,7 +244,7 @@ def test_file_missing_from_fetch_marks_fix_failed(
 ) -> None:
     finding = _finding(db, root, scan, rule)
     fix = _pending_fix(db, root)
-    with _patch_fetch([FakeFile("other.tf", "x\n")]):
+    with _patch_fetch([FakeFile("other.tf", VULNERABLE_HCL)]):
         result = run_terraform_fix_generation([str(finding.id)])
     assert result["status"] == "failed"
     db.refresh(fix)

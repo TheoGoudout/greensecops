@@ -1,6 +1,7 @@
 """Tests for the /api/v1/terraform-roots/ endpoints."""
 
 import uuid
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -28,6 +29,8 @@ from app.models import (
     User,
     UserTier,
 )
+
+_FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "terraform"
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -466,9 +469,13 @@ def test_list_terraform_files(
 ) -> None:
     from types import SimpleNamespace
 
+    # A real registry module (terraform-aws-modules/terraform-aws-security-group,
+    # vendored under tests/fixtures/terraform/) rather than two stub lines — the
+    # endpoint hands whole files back, so it should be exercised over one.
+    module = _FIXTURES / "terraform_aws_security_group"
     fetched = [
-        SimpleNamespace(path="main.tf", content='resource "aws_s3_bucket" "b" {}\n'),
-        SimpleNamespace(path="variables.tf", content='variable "x" {}\n'),
+        SimpleNamespace(path=name, content=(module / name).read_text())
+        for name in ("main.tf", "variables.tf")
     ]
     with patch("app.api.routes.terraform._fetch_terraform_files", return_value=fetched):
         response = client.get(
@@ -478,7 +485,8 @@ def test_list_terraform_files(
     assert response.status_code == 200
     body = response.json()
     assert [f["path"] for f in body] == ["main.tf", "variables.tf"]
-    assert body[0]["raw_content"].startswith('resource "aws_s3_bucket"')
+    assert body[0]["raw_content"] == fetched[0].content
+    assert 'resource "aws_security_group" "this"' in body[0]["raw_content"]
 
 
 def test_list_terraform_files_github_failure_is_502(
