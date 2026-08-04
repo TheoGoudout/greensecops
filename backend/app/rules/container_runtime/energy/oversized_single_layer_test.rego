@@ -43,6 +43,7 @@ test_violation_exactly_at_the_dominant_share if {
 		_layer(0, 400000000),
 		_layer(1, 400000000),
 	])
+
 	# Both layers are exactly half, so both qualify.
 	count(violations) == 2
 }

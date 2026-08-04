@@ -28,7 +28,7 @@ violations contains violation if {
 		"rule": "slow_image_build",
 		"severity": "medium",
 		"category": "performance",
-		"evidence": sprintf("image build took %v minutes", [round(duration * 10 / 60000) / 10]),
+		"evidence": sprintf("image build took %v minutes", [round((duration * 10) / 60000) / 10]),
 		"recommendation": "Copy dependency manifests and install them before copying the source, so a code change does not invalidate the dependency layer, and persist a registry cache between CI runs.",
 	}
 }
