@@ -1,7 +1,15 @@
-"""Unit tests for the terraform_analysis Celery task (extracted impl function)."""
+"""Unit tests for the terraform_analysis Celery task (extracted impl function).
+
+The Terraform handed to the task is real: ``s3.tf`` and ``ec2.tf`` come from
+bridgecrewio/terragoat via ``tests/fixtures/terraform/`` (see the README there),
+and the resource addresses asserted on are the ones those files actually
+declare. Broader coverage of the corpus — every case, every block type, the
+recorded rule output — lives in ``test_terraform_analysis_integration.py``.
+"""
 
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -27,6 +35,15 @@ from app.workers.tasks.terraform_analysis import (
     TerraformFetchError,
     _run_terraform_scan_impl,
 )
+
+_FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "terraform"
+
+# Real files from the vendored corpus. `s3.tf` declares aws_s3_bucket.data;
+# `ec2.tf` declares aws_security_group.web-node — the addresses used below.
+_S3_TF = (_FIXTURES / "terragoat_aws" / "s3.tf").read_text()
+_EC2_TF = (_FIXTURES / "terragoat_aws" / "ec2.tf").read_text()
+# The hardened registry module, which the rule suite finds nothing in.
+_HARDENED_TF = (_FIXTURES / "terraform_aws_security_group" / "main.tf").read_text()
 
 
 @dataclass
@@ -130,7 +147,7 @@ def test_fetch_error_raises_terraform_fetch_error(
 def test_opa_unavailable_marks_scan_failed_transient(
     db: Session, terraform_root: TerraformRoot
 ) -> None:
-    files = [FakeTerraformFile(path="main.tf", content='resource "x" "y" {}')]
+    files = [FakeTerraformFile(path="s3.tf", content=_S3_TF)]
     with (
         _patch_fetch(files),
         patch(
@@ -152,16 +169,17 @@ def test_opa_unavailable_marks_scan_failed_transient(
 def test_creates_finding_and_computes_score(
     db: Session, terraform_root: TerraformRoot, seeded_terraform_rule: Rule
 ) -> None:
-    files = [FakeTerraformFile(path="main.tf", content='resource "x" "y" {}')]
+    files = [FakeTerraformFile(path="s3.tf", content=_S3_TF)]
     violation = TerraformOpaViolation(
         rule_slug=seeded_terraform_rule.slug,
         severity=seeded_terraform_rule.severity.value,
         category=seeded_terraform_rule.category.value,
         message="something is wrong",
         resource_address="aws_s3_bucket.data",
-        file_path="main.tf",
-        line_start=12,
-        line_end=30,
+        file_path="s3.tf",
+        # The real span of the aws_s3_bucket "data" block in the vendored file.
+        line_start=1,
+        line_end=21,
     )
     with _patch_fetch(files), _patch_evaluate([violation]):
         result = _run_terraform_scan_impl(str(terraform_root.id))
@@ -178,10 +196,10 @@ def test_creates_finding_and_computes_score(
     ).all()
     assert len(findings) == 1
     assert findings[0].resource_address == "aws_s3_bucket.data"
-    assert findings[0].file_path == "main.tf"
+    assert findings[0].file_path == "s3.tf"
     # Source line span from the violation is persisted (spec #3).
-    assert findings[0].line_start == 12
-    assert findings[0].line_end == 30
+    assert findings[0].line_start == 1
+    assert findings[0].line_end == 21
     # A file directly in the root has no module prefix.
     assert findings[0].module_path is None
     assert findings[0].terraform_address == "aws_s3_bucket.data"
@@ -197,17 +215,18 @@ def test_finding_in_submodule_dir_gets_module_path_and_address(
     # A resource whose file lives in a subdirectory of the root is attributed
     # to that directory as its module path, and its terraform_address carries
     # the module prefix (spec #9).
-    sub_file = f"{terraform_root.root_path}/modules/storage/main.tf"
-    files = [FakeTerraformFile(path=sub_file, content='resource "x" "y" {}')]
+    sub_file = f"{terraform_root.root_path}/modules/network/ec2.tf"
+    files = [FakeTerraformFile(path=sub_file, content=_EC2_TF)]
     violation = TerraformOpaViolation(
         rule_slug=seeded_terraform_rule.slug,
         severity=seeded_terraform_rule.severity.value,
         category=seeded_terraform_rule.category.value,
         message="something is wrong",
-        resource_address="aws_s3_bucket.logs",
+        resource_address="aws_security_group.web-node",
         file_path=sub_file,
-        line_start=42,
-        line_end=55,
+        # The real span of the aws_security_group "web-node" block.
+        line_start=77,
+        line_end=115,
     )
     with _patch_fetch(files), _patch_evaluate([violation]):
         result = _run_terraform_scan_impl(str(terraform_root.id))
@@ -219,16 +238,19 @@ def test_finding_in_submodule_dir_gets_module_path_and_address(
         )
     ).all()
     assert len(findings) == 1
-    assert findings[0].module_path == "modules/storage"
-    assert findings[0].terraform_address == "module.modules.storage.aws_s3_bucket.logs"
-    assert findings[0].line_start == 42
-    assert findings[0].line_end == 55
+    assert findings[0].module_path == "modules/network"
+    assert (
+        findings[0].terraform_address
+        == "module.modules.network.aws_security_group.web-node"
+    )
+    assert findings[0].line_start == 77
+    assert findings[0].line_end == 115
 
 
 def test_clean_root_scores_100_and_grade_a_plus_plus_plus(
     db: Session, terraform_root: TerraformRoot
 ) -> None:
-    files = [FakeTerraformFile(path="main.tf", content='resource "x" "y" {}')]
+    files = [FakeTerraformFile(path="main.tf", content=_HARDENED_TF)]
     with _patch_fetch(files), _patch_evaluate([]):
         result = _run_terraform_scan_impl(str(terraform_root.id))
 
@@ -241,14 +263,14 @@ def test_clean_root_scores_100_and_grade_a_plus_plus_plus(
 def test_unknown_rule_slug_is_skipped_not_persisted(
     db: Session, terraform_root: TerraformRoot
 ) -> None:
-    files = [FakeTerraformFile(path="main.tf", content='resource "x" "y" {}')]
+    files = [FakeTerraformFile(path="s3.tf", content=_S3_TF)]
     violation = TerraformOpaViolation(
         rule_slug=f"nonexistent-{uuid.uuid4().hex[:8]}",
         severity=IssueSeverity.high.value,
         category=IssueCategory.security.value,
         message="orphan violation",
         resource_address="aws_s3_bucket.data",
-        file_path="main.tf",
+        file_path="s3.tf",
     )
     with _patch_fetch(files), _patch_evaluate([violation]):
         result = _run_terraform_scan_impl(str(terraform_root.id))
@@ -260,14 +282,14 @@ def test_unknown_rule_slug_is_skipped_not_persisted(
 def test_rescan_resolves_stale_findings_not_seen_again(
     db: Session, terraform_root: TerraformRoot, seeded_terraform_rule: Rule
 ) -> None:
-    files = [FakeTerraformFile(path="main.tf", content='resource "x" "y" {}')]
+    files = [FakeTerraformFile(path="s3.tf", content=_S3_TF)]
     violation = TerraformOpaViolation(
         rule_slug=seeded_terraform_rule.slug,
         severity=seeded_terraform_rule.severity.value,
         category=seeded_terraform_rule.category.value,
         message="fixable issue",
         resource_address="aws_s3_bucket.data",
-        file_path="main.tf",
+        file_path="s3.tf",
     )
     with _patch_fetch(files), _patch_evaluate([violation]):
         _run_terraform_scan_impl(str(terraform_root.id))
