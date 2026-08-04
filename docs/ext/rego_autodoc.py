@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,32 @@ _DOMAIN_LABELS = {
     "container_docker": "Docker & Compose (static)",
     "container_runtime": "Docker Runtime (dynamic)",
 }
+
+# Each engine's examples are written in the language it actually analyses, so
+# highlighting them all as YAML was wrong for four of the six — and Pygments
+# treats a failed lex as a warning, which ``-W`` turns into a failed build the
+# moment an example contains JSON braces. Anything unlisted falls back to
+# ``text``, which never fails to lex.
+_EXAMPLE_LANGUAGES = {
+    "ci_workflow": "yaml",
+    "ci_telemetry": "yaml",
+    "iac_terraform": "terraform",
+    "cloud_aws": "bash",
+    "container_docker": "docker",
+    "container_runtime": "yaml",
+}
+
+
+def _example_language(domain: str, snippet: str) -> str:
+    """Pick the lexer for one example.
+
+    The Docker engine analyses two languages, so its examples are Dockerfiles
+    or Compose YAML depending on which rule they illustrate — the only case
+    where the engine alone does not settle it.
+    """
+    if domain == "container_docker" and re.match(r"^\s*services:", snippet):
+        return "yaml"
+    return _EXAMPLE_LANGUAGES.get(domain, "text")
 
 
 def _rst_escape(text: str) -> str:
@@ -136,10 +163,16 @@ def _render_rule_page(rule: dict[str, Any]) -> str:
         fix = _rst_escape((examples.get("fix") or "").strip())
         if bad:
             indented = "\n".join("   " + ln for ln in bad.splitlines())
-            parts.append(f"**Non-compliant:**\n\n.. code-block:: yaml\n\n{indented}\n")
+            parts.append(
+                "**Non-compliant:**\n\n.. code-block:: "
+                f"{_example_language(rule['domain'], bad)}\n\n{indented}\n"
+            )
         if good:
             indented = "\n".join("   " + ln for ln in good.splitlines())
-            parts.append(f"**Compliant:**\n\n.. code-block:: yaml\n\n{indented}\n")
+            parts.append(
+                "**Compliant:**\n\n.. code-block:: "
+                f"{_example_language(rule['domain'], good)}\n\n{indented}\n"
+            )
         if fix:
             parts.append(f"**Fix**: {fix}\n")
         examples_section = "\n".join(parts)

@@ -1,0 +1,11 @@
+# The Compose-only case: no Dockerfile, so every finding is about how the
+# services are wired rather than how an image was built. Deliberately clean on
+# resource limits, restart policies and image pinning, so what remains isolates
+# the networking, dependency-ordering and secret findings.
+violations:
+  - compose_dependency_without_healthcheck
+  - compose_depends_on_without_condition
+  - compose_hardcoded_secret
+  - compose_missing_no_new_privileges
+  - compose_port_bound_to_all_interfaces
+  - compose_unbounded_log_files

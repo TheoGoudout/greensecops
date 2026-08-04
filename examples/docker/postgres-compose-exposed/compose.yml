@@ -1,0 +1,51 @@
+# A local development stack, of the kind that ends up committed and then run on
+# a CI runner or a laptop on a conference network. There is no Dockerfile here
+# on purpose: this is the Compose-only shape, where every finding comes from
+# how the services are wired rather than from how an image was built.
+services:
+  db:
+    image: postgres:16
+    # Published on every interface, and Docker's own iptables rules sit in
+    # front of the host firewall — so this is reachable even where ufw says the
+    # port is closed.
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  cache:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  api:
+    image: ghcr.io/example/api:1.4.0
+    depends_on:
+      - db
+      - cache
+    environment:
+      DATABASE_URL: postgres://postgres:devpassword@db:5432/app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+volumes:
+  pgdata:

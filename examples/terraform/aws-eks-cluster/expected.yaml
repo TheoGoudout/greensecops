@@ -1,0 +1,12 @@
+# A first-pass EKS cluster. Everything here is either a resource default or the
+# shortcut that gets a cluster reachable from a laptop, which is what makes the
+# shape worth pinning: none of it required anyone to write something unusual.
+violations:
+  - cloudwatch_log_group_no_retention
+  - ecr_mutable_image_tags
+  - eks_public_endpoint
+  - iam_policy_wildcard_action
+  - missing_remote_backend
+  - output_missing_description
+  - provider_version_unconstrained
+  - variable_missing_type

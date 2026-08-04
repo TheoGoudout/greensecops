@@ -51,18 +51,18 @@ python scripts/validate_terraform_examples.py
 ## Rule slugs
 
 The slug is the `.rego` file name (without extension) under
-`backend/app/rules/iac_terraform/`. Current rules:
+`backend/app/rules/iac_terraform/`, and that file's `# METADATA` block is the
+single source of truth for the rule's title, description and severity — the
+docs site generates its catalog from it (`docs/ext/rego_autodoc.py`) and the
+`rule` table is seeded from it (`backend/app/core/rule_registry.py`).
 
-| Slug | Catches |
-| --- | --- |
-| `s3_bucket_public_acl` | S3 bucket with a `public-read` / `public-read-write` ACL |
-| `s3_bucket_missing_versioning` | S3 bucket with neither an inline `versioning` block nor a companion `aws_s3_bucket_versioning` resource |
-| `resource_missing_tags` | A taggable resource (s3, instance, sg, vpc, subnet, db, lambda, ebs) with no `tags` |
-| `variable_missing_description` | A `variable` block with no `description` |
-| `open_ingress_security_group` | Security-group ingress from `0.0.0.0/0` |
-| `unencrypted_ebs_volume` | `aws_ebs_volume` without `encrypted = true` |
-| `rds_not_encrypted` | `aws_db_instance` without `storage_encrypted = true` |
-| `hardcoded_credentials_in_tf` | A literal `AKIA…` AWS access-key ID in an attribute |
+A list of slugs is therefore deliberately *not* maintained here: it was, it
+went stale, and duplicating a generated catalog in prose is the same mistake
+one layer down. To see the current set:
+
+```bash
+ls backend/app/rules/iac_terraform/*/*.rego | grep -v _test
+```
 
 ## Current examples
 

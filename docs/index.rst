@@ -19,11 +19,14 @@ Rego-rule catalog and one grading model:
   cache-hit ratio, image and context size, OOM kills, health state), reported by the companion
   GitHub Action.
 
-See :doc:`rules/index` for the full rule catalog. Each engine's scan/finding lifecycle is
-documented alongside the source in ``docs/state-machines.md``.
+See :doc:`rules/index` for the full rule catalog, and :doc:`rule-authoring` for how to add
+to it — including what each engine's rules can see, and where the collectors run out of
+signal. Each engine's scan/finding lifecycle is documented alongside the source in
+``docs/state-machines.md``.
 
 .. toctree::
    :maxdepth: 2
 
    reference
    rules/index
+   rule-authoring

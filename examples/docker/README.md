@@ -18,7 +18,9 @@ firing) or starts producing a false positive fails the build.
 
 | Case | What it is for |
 | --- | --- |
-| `python-service-insecure/` | A deliberately bad Dockerfile + Compose pair. Trips 21 of the suite's 22 rules. |
+| `python-service-insecure/` | A deliberately bad Dockerfile + Compose pair. Trips most of the suite. |
+| `node-api-insecure/` | A first-pass Node service — single stage, source copied before the install, a registry token copied in, TLS verification off. |
+| `postgres-compose-exposed/` | A development stack with no Dockerfile: datastore ports published on every interface, dependencies with no health conditions. |
 | `python-service-hardened/` | The same application, fixed. Must trip **nothing**. |
 | `node-multistage/` | A correct multi-stage Node build — cached dependency layer, toolchain confined to the builder. Must trip nothing. |
 | `compose-privileged-agent/` | Compose-only, no Dockerfile: proves a target containing just Compose files still reports. |

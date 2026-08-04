@@ -1,0 +1,10 @@
+# A serverless API assembled from the provider docs' per-resource examples.
+# Deliberately clean on the things a docs example does get right — remote
+# state, tags, encryption at rest, log retention, variable descriptions — so
+# what remains is the set of resource *defaults* that are unsafe.
+violations:
+  - lambda_public_function_url
+  - provider_version_unconstrained
+  - rds_no_backup_retention
+  - rds_no_deletion_protection
+  - sqs_queue_unencrypted
