@@ -24,7 +24,7 @@ violations contains violation if {
 		"rule": "runner_disk_pressure",
 		"severity": "medium",
 		"category": "reliability",
-		"evidence": sprintf("disk_free_gb=%.1f", [disk_free_gb]),
+		"evidence": sprintf("disk_free_gb=%v", [round(disk_free_gb * 10) / 10]),
 		"recommendation": "Free up disk earlier in the job (prune caches/artifacts), or move to a runner with more disk.",
 	}
 }

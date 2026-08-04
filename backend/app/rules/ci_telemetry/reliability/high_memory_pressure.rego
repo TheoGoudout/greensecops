@@ -24,7 +24,7 @@ violations contains violation if {
 		"rule": "high_memory_pressure",
 		"severity": "high",
 		"category": "reliability",
-		"evidence": sprintf("RAM=%.1f%%", [ram_percent]),
+		"evidence": sprintf("RAM=%v%%", [round(ram_percent)]),
 		"recommendation": "Move to a larger runner or reduce the job's memory footprint — usage came close to exhausting available RAM.",
 	}
 }

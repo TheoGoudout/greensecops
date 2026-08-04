@@ -34,7 +34,7 @@ violations contains violation if {
 		"rule": "container_unbounded_memory",
 		"severity": "medium",
 		"category": "energy",
-		"evidence": sprintf("container '%v' peaked at %.0f MB with no memory limit set", [container.name, peak / 1000000]),
-		"recommendation": sprintf("Set a memory limit for '%v' — measured peak was %.0f MB, so a limit around %.0f MB leaves headroom.", [container.name, peak / 1000000, (peak * 1.5) / 1000000]),
+		"evidence": sprintf("container '%v' peaked at %v MB with no memory limit set", [container.name, round(peak / 1000000)]),
+		"recommendation": sprintf("Set a memory limit for '%v' — measured peak was %v MB, so a limit around %v MB leaves headroom.", [container.name, round(peak / 1000000), round((peak * 1.5) / 1000000)]),
 	}
 }

@@ -32,7 +32,7 @@ violations contains violation if {
 		"rule": "container_cpu_throttled",
 		"severity": "medium",
 		"category": "performance",
-		"evidence": sprintf("container '%v' was throttled in %.1f%% of its CPU scheduling periods", [container.name, throttled]),
+		"evidence": sprintf("container '%v' was throttled in %v%% of its CPU scheduling periods", [container.name, round(throttled)]),
 		"recommendation": sprintf("Raise the CPU quota for '%v' or reduce the work it attempts per period — throttling at this rate is paid as tail latency.", [container.name]),
 	}
 }

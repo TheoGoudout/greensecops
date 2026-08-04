@@ -32,7 +32,7 @@ violations contains violation if {
 		"rule": "image_layer_cache_ineffective",
 		"severity": "medium",
 		"category": "energy",
-		"evidence": sprintf("cache hit ratio %.0f%% across %v builds", [ratio * 100, builds]),
+		"evidence": sprintf("cache hit ratio %v%% across %v builds", [round(ratio * 100), builds]),
 		"recommendation": "Copy dependency manifests and install before copying source, and make sure the layer cache persists between CI runs.",
 	}
 }
