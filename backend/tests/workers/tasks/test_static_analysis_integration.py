@@ -36,10 +36,9 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
-from app.workers.tasks.static_analysis import (
-    _enrich_line_numbers,
-    _run_static_analysis_impl,
-)
+from app.services.opa.evaluator import _attach_positions
+from app.services.workflow_parser import parse_workflow_yaml
+from app.workers.tasks.static_analysis import _run_static_analysis_impl
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -120,172 +119,145 @@ def timeout_rule(db: Session) -> Rule:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# _enrich_line_numbers unit tests — no DB, no Celery
+# Line attribution against real workflows — no DB, no Celery
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def test_enrich_httpx_checkout_step_gets_line_number() -> None:
-    """checkout@v4 step in the httpx workflow resolves to a positive line number."""
+def _locate(violations: list[_Violation], content: str) -> None:
+    """Resolve each violation's line the way evaluate_workflow does."""
+    parsed = parse_workflow_yaml(content)
+    assert parsed is not None
+    for violation in violations:
+        _attach_positions(violation, parsed)
+
+
+def _unpinned(job: str, step: str, index: int) -> _Violation:
+    return _Violation(
+        "unpinned_actions",
+        "high",
+        "reliability",
+        "msg",
+        job=job,
+        step=step,
+        step_index=index,
+    )
+
+
+def test_httpx_step_resolves_to_its_own_line() -> None:
+    # httpx_test_suite.yml line 19 is `- uses: "actions/checkout@v4"`.
     content = _load("httpx_test_suite.yml")
+    v = _unpinned("tests", "actions/checkout@v4", 0)
+    _locate([v], content)
+    assert v.line_start == 19
+
+
+def test_httpx_steps_resolve_in_file_order() -> None:
+    content = _load("httpx_test_suite.yml")
+    checkout = _unpinned("tests", "actions/checkout@v4", 0)
+    setup_py = _unpinned("tests", "actions/setup-python@v6", 1)
+    _locate([checkout, setup_py], content)
+    assert checkout.line_start == 19
+    assert setup_py.line_start == 20
+
+
+def test_httpx_run_step_gets_a_line_too() -> None:
+    """A `run:` step is resolved like any other.
+
+    The previous implementation matched steps by their `uses` value, so a
+    `run:` step had no `uses` to match and every finding on one — the whole of
+    curl_pipe_shell_in_run, script_injection_expression,
+    deprecated_workflow_commands — was reported with no line at all.
+    """
+    content = _load("httpx_test_suite.yml")
+    # Index 3 is `- name: "Install dependencies"`, a run step.
     v = _Violation(
-        "unpinned_actions",
-        "high",
-        "reliability",
+        "deprecated_workflow_commands",
+        "low",
+        "maintainability",
         "msg",
         job="tests",
-        step="actions/checkout@v4",
+        step_index=3,
     )
-    _enrich_line_numbers([v], content)
-    assert v.line_start is not None and v.line_start > 0
+    _locate([v], content)
+    assert v.line_start is not None
+    assert v.line_start > 20
 
 
-def test_enrich_httpx_setup_python_step_gets_line_number() -> None:
+def test_httpx_job_level_violation_resolves_to_the_job_key() -> None:
     content = _load("httpx_test_suite.yml")
-    v = _Violation(
-        "unpinned_actions",
-        "high",
-        "reliability",
-        "msg",
-        job="tests",
-        step="actions/setup-python@v6",
-    )
-    _enrich_line_numbers([v], content)
-    assert v.line_start is not None and v.line_start > 0
+    v = _Violation("missing_timeout", "high", "reliability", "No timeout", job="tests")
+    _locate([v], content)
+    # `tests:` is line 10 in the fixture.
+    assert v.line_start == 10
 
 
-def test_enrich_httpx_checkout_line_before_setup_python_line() -> None:
-    """Steps appear in file order — checkout line < setup-python line."""
-    content = _load("httpx_test_suite.yml")
-    checkout = _Violation(
-        "unpinned_actions",
-        "high",
-        "reliability",
-        "msg",
-        job="tests",
-        step="actions/checkout@v4",
-    )
-    setup_py = _Violation(
-        "unpinned_actions",
-        "high",
-        "reliability",
-        "msg",
-        job="tests",
-        step="actions/setup-python@v6",
-    )
-    _enrich_line_numbers([checkout, setup_py], content)
-    assert checkout.line_start < setup_py.line_start
-
-
-def test_enrich_httpx_job_level_timeout_violation_gets_line() -> None:
-    """Job-level violation (step=None) resolves to the job key line."""
-    content = _load("httpx_test_suite.yml")
-    v = _Violation(
-        "missing_timeout", "high", "reliability", "No timeout", job="tests", step=None
-    )
-    _enrich_line_numbers([v], content)
-    assert v.line_start is not None and v.line_start > 0
-
-
-def test_enrich_celery_all_unit_violations_get_line_numbers() -> None:
-    """All violations in the celery Unit job (3 unpinned + 1 timeout) get line numbers."""
+def test_celery_every_violation_in_a_job_gets_a_line() -> None:
     content = _load("celery_ci.yml")
-    violations = [
-        _Violation(
-            "unpinned_actions",
-            "high",
-            "reliability",
-            "msg",
-            job="Unit",
-            step="actions/checkout@v7",
-        ),
-        _Violation(
-            "unpinned_actions",
-            "high",
-            "reliability",
-            "msg",
-            job="Unit",
-            step="actions/setup-python@v6",
-        ),
-        _Violation(
-            "unpinned_actions",
-            "high",
-            "reliability",
-            "msg",
-            job="Unit",
-            step="codecov/codecov-action@v7",
-        ),
-        _Violation(
-            "missing_timeout",
-            "high",
-            "reliability",
-            "No timeout",
-            job="Unit",
-            step=None,
-        ),
+    violations: list[_Violation] = [
+        _unpinned("Unit", "actions/checkout@v7", 0),
+        _unpinned("Unit", "actions/setup-python@v6", 1),
+        _unpinned("Unit", "codecov/codecov-action@v7", 5),
+        _Violation("missing_timeout", "high", "reliability", "No timeout", job="Unit"),
     ]
-    _enrich_line_numbers(violations, content)
+    _locate(violations, content)
     for v in violations:
         assert v.line_start is not None and v.line_start > 0, (
             f"Expected line_start for {v.rule_slug}/{v.step}"
         )
 
 
-def test_enrich_redis_py_missing_timeout_per_job_distinct_lines() -> None:
-    """Four redis-py jobs missing timeout each resolve to distinct line numbers."""
+def test_two_steps_using_one_action_get_distinct_lines() -> None:
+    """Keyed on the index, not the action name.
+
+    Matching on `uses` broke on the first hit, so every violation on a repeated
+    action reported the first occurrence's line.
+    """
+    content = _load("celery_ci.yml")
+    first = _unpinned("Unit", "actions/checkout@v7", 0)
+    second = _unpinned("Integration-tests", "actions/checkout@v7", 0)
+    _locate([first, second], content)
+    assert first.line_start is not None and second.line_start is not None
+    assert first.line_start != second.line_start
+
+
+def test_redis_py_each_job_resolves_to_a_distinct_line() -> None:
     content = _load("redis_py_integration.yml")
-    job_names = [
-        "dependency-audit",
-        "lint",
-        "build-and-test-package",
-        "install-package-from-commit",
-    ]
     violations = [
         _Violation(
             "missing_timeout",
             "high",
             "reliability",
-            f"Job '{j}' has no timeout",
-            job=j,
-            step=None,
+            f"Job '{job}' has no timeout",
+            job=job,
         )
-        for j in job_names
+        for job in (
+            "dependency-audit",
+            "lint",
+            "build-and-test-package",
+            "install-package-from-commit",
+        )
     ]
-    _enrich_line_numbers(violations, content)
-    line_starts = [v.line_start for v in violations]
-    assert all(ls is not None and ls > 0 for ls in line_starts)
-    assert len(set(line_starts)) == len(line_starts), (
-        "Each job must be on a distinct line"
-    )
+    _locate(violations, content)
+    starts = [v.line_start for v in violations]
+    assert all(s is not None and s > 0 for s in starts)
+    assert len(set(starts)) == len(starts), "each job must be on a distinct line"
 
 
-def test_enrich_unknown_job_leaves_line_start_unchanged() -> None:
-    """Violation referencing a non-existent job is silently skipped."""
+def test_unknown_job_leaves_the_line_unset() -> None:
     content = _load("httpx_test_suite.yml")
     v = _Violation(
-        "missing_timeout",
-        "high",
-        "reliability",
-        "msg",
-        job="nonexistent-job",
-        step=None,
+        "missing_timeout", "high", "reliability", "msg", job="nonexistent-job"
     )
-    _enrich_line_numbers([v], content)
+    _locate([v], content)
     assert v.line_start is None
 
 
-def test_enrich_unknown_step_leaves_line_start_unchanged() -> None:
-    """Violation referencing a step that does not exist in the job is skipped."""
+def test_out_of_range_step_index_falls_back_to_the_job() -> None:
+    # Better an approximate line on the right job than none at all.
     content = _load("httpx_test_suite.yml")
-    v = _Violation(
-        "unpinned_actions",
-        "high",
-        "reliability",
-        "msg",
-        job="tests",
-        step="nonexistent/action@v99",
-    )
-    _enrich_line_numbers([v], content)
-    assert v.line_start is None
+    v = _unpinned("tests", "nonexistent/action@v99", 99)
+    _locate([v], content)
+    assert v.line_start == 10
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -369,6 +341,7 @@ def test_httpx_analysis_issues_have_positive_line_numbers(
         ),
         _Violation("missing_timeout", "high", "reliability", "No timeout", job="tests"),
     ]
+    _locate(violations, content)
 
     with (
         patch(
@@ -492,6 +465,7 @@ def test_redis_py_analysis_creates_issues_per_job(
             step="actions/checkout@v7",
         ),
     ]
+    _locate(violations, content)
 
     with (
         patch(
@@ -574,6 +548,10 @@ def _load_scenario(name: str) -> tuple[str, list[_Violation], dict]:
     content = (_FIXTURES / f"{name}.yml").read_text()
     meta = json.loads((_FIXTURES / f"{name}.expected.json").read_text())
     violations = [_Violation(**v) for v in meta["violations"]]
+    # `_evaluate` is mocked below, so line attribution — which now happens
+    # inside evaluate_workflow rather than in the analysis task — has to be
+    # applied here for the fixture to stand in for what OPA really returns.
+    _locate(violations, content)
     return content, violations, meta
 
 

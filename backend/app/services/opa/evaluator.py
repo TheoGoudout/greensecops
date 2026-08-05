@@ -1,14 +1,16 @@
-import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
-from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
 
 from app.core.config import settings
+
+# Re-exported: parsing moved out so scripts/validate_examples.py can share it
+# without pulling in httpx, but evaluate_workflow's callers still import it here.
+from app.services.workflow_parser import parse_workflow_yaml as parse_workflow_yaml
+from app.services.yaml_positions import END_LINE_KEY, START_LINE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -143,23 +145,36 @@ CONTAINER_DOCKER_POLICY_PACKAGES = _discover_policy_packages("container_docker")
 CONTAINER_RUNTIME_POLICY_PACKAGES = _discover_policy_packages("container_runtime")
 
 
-def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
-    # ruamel.yaml defaults to the YAML 1.2 core schema, where the bare `on:`
-    # key stays the string "on" instead of being coerced to the boolean True
-    # (the YAML 1.1 behaviour of PyYAML's safe_load). That coercion silently
-    # broke every rule that reads `input.on` — e.g. pr_target_injection and
-    # missing_concurrency never matched a real workflow. typ="safe" returns
-    # plain dict/list/scalar types, so the result stays JSON-serialisable for
-    # the OPA request body.
-    yaml_parser = YAML(typ="safe")
-    try:
-        parsed = yaml_parser.load(io.StringIO(raw_content))
-    except YAMLError as exc:
-        logger.warning("Failed to parse workflow YAML: %s", exc)
-        return None
-    if not isinstance(parsed, dict):
-        return None
-    return parsed
+def _attach_positions(violation: OpaViolation, parsed: dict[str, Any]) -> None:
+    """Fill in a violation's line span from the parsed document.
+
+    Replaces a second, post-evaluation parse that resolved a line only when
+    the violation named a job and matched its step by ``uses`` — so every
+    finding on a ``run:`` step had no line at all, and two steps sharing an
+    action both reported the first one's line. Keyed on ``step_index``, which
+    every per-step rule already emits, it is exact for both.
+
+    A rule that reports its own span wins: it knows which part of the step is
+    at fault, where this only knows the step.
+    """
+    if violation.line_start is not None:
+        return
+    jobs = parsed.get("jobs")
+    if violation.job is None or not isinstance(jobs, dict):
+        return
+    node: Any = jobs.get(violation.job)
+    if not isinstance(node, dict):
+        return
+
+    if violation.step_index is not None:
+        steps = node.get("steps")
+        if isinstance(steps, list) and 0 <= violation.step_index < len(steps):
+            step = steps[violation.step_index]
+            if isinstance(step, dict):
+                node = step
+
+    violation.line_start = node.get(START_LINE_KEY)
+    violation.line_end = node.get(END_LINE_KEY)
 
 
 async def _evaluate_packages(
@@ -204,7 +219,7 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
         raise WorkflowParseError("Workflow file is not a valid YAML mapping")
 
     raw_violations = await _evaluate_packages(parsed, POLICY_PACKAGES)
-    return [
+    violations = [
         OpaViolation(
             rule_slug=v.get("rule", "unknown"),
             severity=v.get("severity", "medium"),
@@ -220,6 +235,11 @@ async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
         )
         for v in raw_violations
     ]
+    # Attribution lives here, where the parsed document already is, rather
+    # than in the analysis task — which had to re-parse the same bytes.
+    for violation in violations:
+        _attach_positions(violation, parsed)
+    return violations
 
 
 async def evaluate_terraform(

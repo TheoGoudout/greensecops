@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import redis as redis_sync
-from ruamel.yaml import YAML as RuamelYAML
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, delete, select
 
@@ -226,55 +225,6 @@ def _classify_failure(exc: BaseException) -> AnalysisFailureKind:
 
 class WorkflowFetchError(Exception):
     """Raised when workflow files cannot be fetched from GitHub (transient)."""
-
-
-def _enrich_line_numbers(violations: list[OpaViolation], raw_content: str) -> None:
-    """Populate line_start/line_end on violations using ruamel.yaml node positions."""
-    ryaml = RuamelYAML()
-    try:
-        doc = ryaml.load(raw_content)
-    except Exception:
-        return
-    if not isinstance(doc, dict):
-        return
-    jobs = doc.get("jobs")
-    if not isinstance(jobs, dict):
-        return
-    for v in violations:
-        if v.job is None:
-            continue
-        job = jobs.get(v.job)
-        if job is None:
-            continue
-        if v.step is None:
-            # Job-level: point to the job key line
-            try:
-                line = jobs.lc.key(v.job)[0] + 1  # type: ignore[attr-defined]
-                v.line_start = line
-                v.line_end = line
-            except Exception:
-                pass
-            continue
-        # Step-level: find the step with matching 'uses'
-        steps = job.get("steps")
-        if not isinstance(steps, list):
-            continue
-        for i, step in enumerate(steps):
-            if not isinstance(step, dict):
-                continue
-            uses = step.get("uses")
-            if uses == v.step:
-                try:
-                    # Point to the `uses:` key within the step, not the `-` bullet
-                    line = step.lc.key("uses")[0] + 1  # type: ignore[attr-defined]
-                except Exception:
-                    try:
-                        line = steps.lc.item(i)[0] + 1  # type: ignore[attr-defined]
-                    except Exception:
-                        break
-                v.line_start = line
-                v.line_end = line
-                break
 
 
 def _register_rule_from_violation(
@@ -651,8 +601,6 @@ def _run_static_analysis_impl(
                     batch_any_failed = True
                 results.append({"path": path, "status": "failed"})
                 continue
-
-            _enrich_line_numbers(violations, content)
 
             # Scoped to this engine, like cloud_scan/terraform_analysis/
             # docker_analysis already do. Unscoped, a workflow violation whose
