@@ -23,6 +23,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+from opa_eval import severity_rank
 from opa_terraform_eval import (
     ROOT,
     collect_tf_files,
@@ -33,12 +34,9 @@ from opa_terraform_eval import (
 
 DEPLOY_TF_DIR = ROOT / "deploy" / "terraform"
 
-_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-
-
 def _sort_key(violation: dict[str, Any]) -> tuple[int, str, str]:
     return (
-        _SEVERITY_ORDER.get(violation.get("severity", ""), 99),
+        severity_rank(str(violation.get("severity", ""))),
         str(violation.get("file_path", "")),
         str(violation.get("resource_address", "")),
     )
