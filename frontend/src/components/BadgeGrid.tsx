@@ -1,4 +1,6 @@
+import { useQuery } from "@tanstack/react-query"
 import { Check, Copy } from "lucide-react"
+import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -123,5 +125,38 @@ export function BadgeGrid({
         <BadgeCard key={entry.key} entry={entry} />
       ))}
     </div>
+  )
+}
+
+/**
+ * A badge page for one engine: fetch its subjects, map each to a badge entry.
+ *
+ * The three pages (repositories, Terraform roots, Docker targets) differ only
+ * in the query and the mapping, so everything else — loading, empty and error
+ * states, the grid itself — lives here once.
+ */
+export function BadgePage<T>({
+  queryKey,
+  queryFn,
+  toEntry,
+  subject,
+}: {
+  queryKey: string[]
+  queryFn: () => Promise<T[]>
+  toEntry: (item: T) => BadgeEntry
+  /** Plural noun for the empty and error states, e.g. "Docker targets". */
+  subject: string
+}) {
+  const { data, isLoading, isError } = useQuery({ queryKey, queryFn })
+  const entries = useMemo(() => (data ?? []).map(toEntry), [data, toEntry])
+
+  return (
+    <BadgeGrid
+      entries={entries}
+      isLoading={isLoading}
+      isError={isError}
+      errorLabel={`Failed to load ${subject}.`}
+      emptyLabel={`No ${subject} found.`}
+    />
   )
 }

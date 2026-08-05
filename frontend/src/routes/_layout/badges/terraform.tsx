@@ -1,12 +1,10 @@
-import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useMemo } from "react"
 import type { TerraformRootPublic } from "@/client"
 import { TerraformService } from "@/client"
 import {
   BADGE_API_BASE,
   type BadgeEntry,
-  BadgeGrid,
+  BadgePage,
   signedBadgeUrl,
 } from "@/components/BadgeGrid"
 
@@ -35,24 +33,12 @@ function toEntry(root: TerraformRootPublic): BadgeEntry {
 }
 
 function TerraformBadges() {
-  const {
-    data: roots,
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["terraform-roots"],
-    queryFn: () => TerraformService.listTerraformRoots({}),
-  })
-
-  const entries = useMemo(() => (roots ?? []).map(toEntry), [roots])
-
   return (
-    <BadgeGrid
-      entries={entries}
-      isLoading={isLoading}
-      isError={isError}
-      errorLabel="Failed to load Terraform roots."
-      emptyLabel="No Terraform roots found."
+    <BadgePage
+      queryKey={["terraform-roots"]}
+      queryFn={() => TerraformService.listTerraformRoots({})}
+      toEntry={toEntry}
+      subject="Terraform roots"
     />
   )
 }

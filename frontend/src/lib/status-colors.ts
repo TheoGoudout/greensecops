@@ -186,3 +186,28 @@ export function cloudAccountStatusColor(status: CloudAccountStatus): string {
 export function cloudAccountStatusLabel(status: CloudAccountStatus): string {
   return status.replace(/_/g, " ")
 }
+
+/**
+ * GitHub's `mergeable_state` as a compact, human indicator.
+ *
+ * Only surfaced when it carries a signal worth acting on: "clean" and unknown
+ * states return null rather than adding a pill that says nothing.
+ */
+export function mergeableIndicator(
+  state: string | null | undefined,
+): { label: string; cls: string } | null {
+  switch (state) {
+    case "dirty":
+      return { label: "conflicts", cls: STATUS_CLASSES.failed }
+    case "behind":
+      return { label: "behind base", cls: STATUS_CLASSES.pending }
+    case "blocked":
+      return { label: "blocked", cls: STATUS_CLASSES.pending }
+    case "unstable":
+      return { label: "checks pending", cls: STATUS_CLASSES.pending }
+    case "clean":
+      return { label: "mergeable", cls: STATUS_CLASSES.success }
+    default:
+      return null
+  }
+}
