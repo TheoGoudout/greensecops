@@ -1,0 +1,24 @@
+# The development override that undoes the base's hardening one field at a
+# time. Each of these is a plausible thing to reach for when something does not
+# work locally, and each is reported.
+#
+# Note how the merge semantics matter. `user` and `read_only` are scalars, so
+# the override replaces them. `cap_add` and `ports` are sequences, so they are
+# *appended* — the base's `cap_drop: [ALL]` and its loopback binding both still
+# apply, and the override's addition wins anyway.
+services:
+  api:
+    # Reached for because a bind-mounted source directory is owned by the
+    # developer's uid. Setting the uid explicitly would have solved that.
+    user: root
+    read_only: false
+    cap_add:
+      - SYS_PTRACE
+
+  db:
+    # The admin UI, published so a colleague can reach it — but on every
+    # interface, not just the one they are on. Note this is not a datastore
+    # port: compose_port_bound_to_all_interfaces covers those, and this is the
+    # case only the override rule catches.
+    ports:
+      - "9990:9990"

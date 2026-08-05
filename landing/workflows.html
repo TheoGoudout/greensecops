@@ -284,6 +284,10 @@
 <span class="token-key">on</span>:
   <span class="token-key">push</span>:
     <span class="token-key">branches</span>: [<span class="token-str">main</span>]
+    <span class="token-key">paths</span>:
+      - <span class="token-str">"src/**"</span>
+      - <span class="token-str">"package-lock.json"</span>
+      - <span class="token-str">".github/workflows/deploy.yml"</span>
 
 <span class="token-key">permissions</span>: {}
 
@@ -297,6 +301,8 @@
     <span class="token-key">steps</span>:
       - <span class="token-key">name</span>: <span class="token-str">Checkout</span>
         <span class="token-key">uses</span>: <span class="token-str">actions/checkout@11bd719…</span> <span class="token-comment"># v4.2.2</span>
+        <span class="token-key">with</span>:
+          <span class="token-key">persist-credentials</span>: <span class="token-str">false</span>
       - <span class="token-key">name</span>: <span class="token-str">Set up Node.js</span>
         <span class="token-key">uses</span>: <span class="token-str">actions/setup-node@39370e3…</span> <span class="token-comment"># v4.1.0</span>
         <span class="token-key">with</span>:

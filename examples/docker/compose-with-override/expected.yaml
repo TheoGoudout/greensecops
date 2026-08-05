@@ -1,6 +1,22 @@
-# Proves the override guard: `api` and `debugger` declare no restart policy or
-# resource limits in the override, and neither compose_missing_restart_policy
-# nor compose_missing_resource_limits may fire on a fragment. The privileged
-# flag is presence-based and must still be caught wherever it appears.
+# Proves the merge in both directions.
+#
+# Nothing here is reported against `api`, even though compose.yml alone would
+# trip four absence rules on it — the override supplies all four, and the rules
+# read the merged configuration. That is the false positive the merge removes.
+#
+# `debugger` exists only in the override and has no restart policy, no limits
+# and no log bound; all three are reported. Under the old `is_override` guard
+# they were silenced, because the guard skipped the whole document rather than
+# merging it. That is the false negative the merge removes.
+#
+# compose_missing_no_new_privileges does not appear: `api` sets it via the
+# override and `debugger` is privileged, which supersedes it.
+#
+# compose_privileged_container is presence-based, so it reads the files as they
+# sit on disk and reports compose.override.yml — the file the flag is in.
 violations:
   - compose_privileged_container
+  - compose_missing_resource_limits
+  - compose_missing_restart_policy
+  - compose_unbounded_log_files
+  - compose_missing_read_only_filesystem

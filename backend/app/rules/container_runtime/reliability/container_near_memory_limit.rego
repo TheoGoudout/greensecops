@@ -40,7 +40,7 @@ violations contains violation if {
 		"rule": "container_near_memory_limit",
 		"severity": "medium",
 		"category": "reliability",
-		"evidence": sprintf("container '%v' peaked at %.0f MB against a %.0f MB limit (%.0f%% of it)", [container.name, peak / 1000000, limit / 1000000, ratio * 100]),
-		"recommendation": sprintf("Raise '%v' above %.0f MB, or reduce what it retains — the current margin is too thin to absorb a heavier request.", [container.name, limit / 1000000]),
+		"evidence": sprintf("container '%v' peaked at %v MB against a %v MB limit (%v%% of it)", [container.name, round(peak / 1000000), round(limit / 1000000), round(ratio * 100)]),
+		"recommendation": sprintf("Raise '%v' above %v MB, or reduce what it retains — the current margin is too thin to absorb a heavier request.", [container.name, round(limit / 1000000)]),
 	}
 }

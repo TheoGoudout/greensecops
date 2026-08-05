@@ -3,6 +3,7 @@
 # description: Workflow triggers on pull_request_target and checks out the PR head ref. This grants untrusted code access to repository secrets.
 # custom:
 #   severity: critical
+#   severity_weight: 4.0
 #   detection: static_analysis
 #   examples:
 #     bad: |

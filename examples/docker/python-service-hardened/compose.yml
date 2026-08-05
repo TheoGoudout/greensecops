@@ -10,6 +10,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -26,8 +36,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    # Postgres writes to its data directory and to /run, so a read-only root
+    # needs both mounted. The data volume is what makes the database durable;
+    # the tmpfs is scratch that should not survive a restart anyway.
+    read_only: true
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp
+      - /run
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
           cpus: "2.0"
           memory: 1G
+
+volumes:
+  db-data:

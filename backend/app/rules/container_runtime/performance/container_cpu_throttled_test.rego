@@ -30,3 +30,14 @@ test_no_violation_when_no_quota_is_set if {
 	}]}
 	count(violations) == 0
 }
+
+# Regression for the sprintf %f/integer bug — a whole-number percentage is an
+# integer in the OPA input, and %f rejects it.
+test_evidence_is_readable_for_a_whole_number_percentage if {
+	violations := container_cpu_throttled.violations with input as {"containers": [{
+		"name": "api",
+		"cpu_throttled_percent": 42,
+	}]}
+	some v in violations
+	contains(v.evidence, "42%")
+}

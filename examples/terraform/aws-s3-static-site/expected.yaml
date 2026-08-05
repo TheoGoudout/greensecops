@@ -5,3 +5,5 @@ violations:
   - s3_bucket_public_acl
   - s3_bucket_missing_versioning
   - resource_missing_tags
+  - s3_public_access_block_disabled
+  - missing_remote_backend

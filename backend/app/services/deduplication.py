@@ -26,6 +26,12 @@ def compute_issue_fingerprint(
     discriminator is set by rules that can fire multiple times at the same
     (job, step_index) — e.g. hardcoded_secrets uses the env var name so that
     two different secrets in the same step produce distinct fingerprints.
+
+    Deliberately never keyed on a line number, matching
+    compute_docker_finding_fingerprint. An issue's identity has to survive an
+    unrelated edit that shifts the file; keying on the line meant a blank line
+    added at the top resolved every issue below it and inserted replacements,
+    discarding whether the user had ignored them.
     """
     step_part = "" if step_index is None else step_index
     disc_part = "" if discriminator is None else discriminator

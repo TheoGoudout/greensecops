@@ -1,9 +1,25 @@
-# A development override. It restates only what local development changes, so
-# `api` here has no image, restart policy or limits — all inherited from
-# compose.yml. Absence-based rules must stay silent on this file; the
-# privileged flag below is a genuine finding and must still be reported.
+# A development override. It has no image for `api` — that is inherited — but
+# it does supply the four settings the base omits, so the merged `api` is
+# fully configured and no absence-based rule may fire on it.
+#
+# `debugger` is the other direction: a service the override introduces, with
+# real gaps of its own. It is part of the running configuration and must be
+# graded like any other service.
 services:
   api:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

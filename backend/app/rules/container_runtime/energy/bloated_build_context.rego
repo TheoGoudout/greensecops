@@ -35,7 +35,7 @@ violations contains violation if {
 		"rule": "bloated_build_context",
 		"severity": "low",
 		"category": "energy",
-		"evidence": sprintf("context %.0f MB vs image %.0f MB (%.1fx)", [context_size / 1000000, image_size / 1000000, ratio]),
+		"evidence": sprintf("context %v MB vs image %v MB (%vx)", [round(context_size / 1000000), round(image_size / 1000000), round(ratio * 10) / 10]),
 		"recommendation": "Add or extend .dockerignore — the context is uploaded on every build.",
 	}
 }

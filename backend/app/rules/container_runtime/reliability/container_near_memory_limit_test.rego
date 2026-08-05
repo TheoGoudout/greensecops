@@ -54,3 +54,14 @@ test_no_violation_when_the_container_was_never_sampled if {
 	}]}
 	count(violations) == 0
 }
+
+# Regression for the sprintf %f/integer bug.
+test_evidence_is_readable_when_the_numbers_divide_evenly if {
+	violations := container_near_memory_limit.violations with input as {"containers": [{
+		"name": "api",
+		"peak_rss_bytes": 950000000,
+		"mem_limit_bytes": 1000000000,
+	}]}
+	some v in violations
+	v.evidence == "container 'api' peaked at 950 MB against a 1000 MB limit (95% of it)"
+}

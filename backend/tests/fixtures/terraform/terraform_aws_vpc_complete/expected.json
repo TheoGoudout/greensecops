@@ -9,7 +9,18 @@
     "main.tf",
     "versions.tf"
   ],
-  "violations": [],
-  "expected_finding_count": 0,
-  "expected_grade": "A+++"
+  "violations": [
+    {
+      "rule_slug": "missing_remote_backend",
+      "severity": "high",
+      "category": "reliability",
+      "message": "The root module declares no backend or cloud block, so state is kept in a local file with no locking and no backup \u2014 and that file holds every resource attribute, including the sensitive ones.",
+      "resource_address": "terraform",
+      "file_path": "versions.tf",
+      "line_start": 1,
+      "line_end": 10
+    }
+  ],
+  "expected_finding_count": 1,
+  "expected_grade": null
 }

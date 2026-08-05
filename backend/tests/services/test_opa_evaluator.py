@@ -1,17 +1,22 @@
 import asyncio
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
+from app.core.rego_metadata import RULES_DIR, iter_rule_files
+from app.models import RuleDomain
 from app.services.opa.evaluator import (
     CI_TELEMETRY_POLICY_PACKAGES,
     CONTAINER_DOCKER_POLICY_PACKAGES,
     IAC_TERRAFORM_POLICY_PACKAGES,
     POLICY_PACKAGES,
     OpaUnavailableError,
+    OpaViolation,
     WorkflowParseError,
+    _attach_positions,
     _discover_policy_packages,
     evaluate_ci_telemetry,
     evaluate_docker,
@@ -21,6 +26,18 @@ from app.services.opa.evaluator import (
 )
 
 
+def _shipped_rule_count(domain_dir: str) -> int:
+    """How many policy files that engine ships, counted from disk.
+
+    The counts used to be written out as literals here, which meant every rule
+    added to any engine failed this file until someone bumped a number. The
+    assertion that matters is that discovery finds *all* of them, not that
+    there are exactly N — so both sides now come from the tree, and the named
+    slugs below still pin the specific packages that must be wired up.
+    """
+    return len(list(iter_rule_files(RULES_DIR / domain_dir)))
+
+
 def test_all_seeded_rules_are_evaluated() -> None:
     """Every Rego rule shipped in app/rules must be an evaluated policy.
 
@@ -28,7 +45,7 @@ def test_all_seeded_rules_are_evaluated() -> None:
     only 8 of 26 packages — and 2 of 6 security rules — were evaluated).
     """
     packages = _discover_policy_packages("ci_workflow")
-    assert len(packages) == 26
+    assert len(packages) == _shipped_rule_count("ci_workflow")
     # The security rules that were previously unwired must now be evaluated.
     for slug in (
         "hardcoded_secrets",
@@ -133,6 +150,202 @@ def test_parse_on_key_is_not_coerced_to_boolean() -> None:
     assert "pull_request_target" in result["on"]
 
 
+# ─── Line positions ──────────────────────────────────────────────────────────
+
+_POSITIONED_WORKFLOW = """\
+name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          npm ci
+          npm test
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make lint
+"""
+
+
+def test_parse_stamps_each_job_with_its_source_span() -> None:
+    # __start_line__ is the line of the job's own key, so a finding points at
+    # `build:` rather than wherever inside it the offending value sits.
+    result = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    assert result is not None
+    assert result["jobs"]["build"]["__start_line__"] == 4
+    assert result["jobs"]["build"]["__end_line__"] == 10
+    assert result["jobs"]["lint"]["__start_line__"] == 13
+    assert result["jobs"]["lint"]["__end_line__"] == 16
+
+
+def test_parse_stamps_each_step_with_its_source_span() -> None:
+    result = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    assert result is not None
+    steps = result["jobs"]["build"]["steps"]
+    assert steps[0]["__start_line__"] == 9
+    # A `run:` step is stamped exactly like a `uses:` one — the old post-hoc
+    # enrichment matched steps by their `uses` value and so gave these no line.
+    assert steps[1]["__start_line__"] == 10
+
+
+def test_a_block_scalar_span_stops_at_its_opening_line() -> None:
+    # ruamel records where a `run: |` begins but not where its body ends, so
+    # the span of a step containing one covers the `run:` line only. Start is
+    # what a finding is anchored on, so this is a cosmetic limit — pinned here
+    # so the approximation is a decision rather than a surprise.
+    result = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    assert result is not None
+    script_step = result["jobs"]["build"]["steps"][1]
+    assert script_step["__start_line__"] == 10
+    assert script_step["__end_line__"] == 10  # the script runs to line 12
+
+
+def test_parse_does_not_stamp_env_blocks() -> None:
+    # env keys are environment variable names; an injected __start_line__ would
+    # read as one to workflow_env_holds_secret and hardcoded_secrets.
+    result = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    assert result is not None
+    assert set(result["jobs"]["build"]["env"]) == {"NODE_ENV"}
+
+
+def test_parse_does_not_stamp_the_jobs_mapping_itself() -> None:
+    # missing_top_level_permissions iterates the job names; an injected key
+    # there is a phantom job whose value is an integer.
+    result = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    assert result is not None
+    assert set(result["jobs"]) == {"build", "lint"}
+    assert set(result) == {"name", "on", "jobs"}
+
+
+def test_parse_output_stays_json_serialisable() -> None:
+    # The document is the body of the OPA request, so round-trip scalar types
+    # must have been converted back to plain ones.
+    result = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    json.dumps(result)
+
+
+def test_parse_stamps_nothing_for_a_job_with_no_body() -> None:
+    result = parse_workflow_yaml("jobs:\n  build:\n")
+    assert result is not None
+    assert result["jobs"]["build"] is None
+
+
+def _positioned() -> dict[str, Any]:
+    parsed = parse_workflow_yaml(_POSITIONED_WORKFLOW)
+    assert parsed is not None
+    return parsed
+
+
+def test_attach_positions_resolves_a_step_by_index() -> None:
+    v = OpaViolation(
+        rule_slug="r",
+        severity="high",
+        category="security",
+        message="m",
+        job="build",
+        step_index=1,
+    )
+    _attach_positions(v, _positioned())
+    assert v.line_start == 10
+
+
+def test_attach_positions_falls_back_to_the_job_span() -> None:
+    v = OpaViolation(
+        rule_slug="r", severity="high", category="security", message="m", job="build"
+    )
+    _attach_positions(v, _positioned())
+    assert v.line_start == 4
+    assert v.line_end == 10
+
+
+def test_attach_positions_distinguishes_two_steps_using_one_action() -> None:
+    # The old enrichment matched on the `uses` string and broke on the first
+    # hit, so both violations reported the first step's line.
+    parsed = parse_workflow_yaml(
+        "jobs:\n"
+        "  build:\n"
+        "    steps:\n"
+        "      - uses: actions/cache@v4\n"
+        "      - run: make\n"
+        "      - uses: actions/cache@v4\n"
+    )
+    assert parsed is not None
+    first = OpaViolation(
+        rule_slug="r",
+        severity="high",
+        category="security",
+        message="m",
+        job="build",
+        step="actions/cache@v4",
+        step_index=0,
+    )
+    second = OpaViolation(
+        rule_slug="r",
+        severity="high",
+        category="security",
+        message="m",
+        job="build",
+        step="actions/cache@v4",
+        step_index=2,
+    )
+    _attach_positions(first, parsed)
+    _attach_positions(second, parsed)
+    assert first.line_start == 4
+    assert second.line_start == 6
+
+
+def test_attach_positions_leaves_a_rule_supplied_span_alone() -> None:
+    # A rule that reports its own span knows which part of the step is at
+    # fault, where this only knows the step.
+    v = OpaViolation(
+        rule_slug="r",
+        severity="high",
+        category="security",
+        message="m",
+        job="build",
+        step_index=1,
+        line_start=99,
+        line_end=99,
+    )
+    _attach_positions(v, _positioned())
+    assert v.line_start == 99
+
+
+def test_attach_positions_skips_a_workflow_level_violation() -> None:
+    v = OpaViolation(
+        rule_slug="r", severity="info", category="maintainability", message="m"
+    )
+    _attach_positions(v, _positioned())
+    assert v.line_start is None
+
+
+def test_attach_positions_skips_an_unknown_job() -> None:
+    v = OpaViolation(
+        rule_slug="r", severity="high", category="security", message="m", job="nope"
+    )
+    _attach_positions(v, _positioned())
+    assert v.line_start is None
+
+
+def test_attach_positions_skips_an_out_of_range_step_index() -> None:
+    # Falls back to the job span rather than raising.
+    v = OpaViolation(
+        rule_slug="r",
+        severity="high",
+        category="security",
+        message="m",
+        job="build",
+        step_index=99,
+    )
+    _attach_positions(v, _positioned())
+    assert v.line_start == 4
+
+
 def test_evaluate_workflow_returns_violations_when_policy_matches() -> None:
     violation = {
         "rule": "unpinned_actions",
@@ -208,7 +421,7 @@ def test_discover_policy_packages_excludes_test_files() -> None:
 
 def test_all_seeded_terraform_rules_are_evaluated() -> None:
     packages = _discover_policy_packages("iac_terraform")
-    assert len(packages) == 8
+    assert len(packages) == _shipped_rule_count("iac_terraform")
     for slug in (
         "s3_bucket_public_acl",
         "open_ingress_security_group",
@@ -281,7 +494,7 @@ def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
 
 def test_all_seeded_docker_rules_are_evaluated() -> None:
     packages = _discover_policy_packages("container_docker")
-    assert len(packages) == 22
+    assert len(packages) == _shipped_rule_count("container_docker")
     for slug in (
         "container_runs_as_root",
         "secret_in_build_arg",
@@ -325,12 +538,18 @@ def test_every_seeded_docker_rule_has_a_policy_package() -> None:
     """A seeded Rule with no Rego file would show as enabled and never fire.
 
     The reverse direction (a Rego file with no Rule row) is worse still —
-    docker_analysis drops those violations — so the two lists must agree
-    exactly.
+    docker_analysis drops those violations — so the catalog and the evaluated
+    packages must agree exactly. Both are derived from the same tree now, so
+    this can only fail if discovery and cataloguing disagree about what counts
+    as a rule file.
     """
-    from app.core.db import DOCKER_INITIAL_RULES
+    from app.core.rule_registry import discover_rules
 
-    seeded = {str(rule["slug"]) for rule in DOCKER_INITIAL_RULES}
+    seeded = {
+        rule["slug"]
+        for rule in discover_rules()
+        if rule["domain"] == RuleDomain.container_docker
+    }
     shipped = {pkg.rsplit("/", 1)[-1] for pkg in CONTAINER_DOCKER_POLICY_PACKAGES}
     assert seeded == shipped
 
@@ -424,7 +643,7 @@ def test_evaluate_docker_raises_when_opa_unreachable() -> None:
 
 def test_all_seeded_ci_telemetry_rules_are_evaluated() -> None:
     packages = _discover_policy_packages("ci_telemetry")
-    assert len(packages) == 3
+    assert len(packages) == _shipped_rule_count("ci_telemetry")
     assert "greensecops/ci_telemetry/energy/runner_underutilized" in packages
     for slug in ("high_memory_pressure", "runner_disk_pressure"):
         assert f"greensecops/ci_telemetry/reliability/{slug}" in packages

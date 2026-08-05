@@ -33,7 +33,7 @@ violations contains violation if {
 		"rule": "container_memory_limit_mismatch",
 		"severity": "low",
 		"category": "reliability",
-		"evidence": sprintf("container '%v' peaked at %.0f MB under a %.0f MB limit (%.1fx)", [container.name, peak / 1000000, limit / 1000000, ratio]),
+		"evidence": sprintf("container '%v' peaked at %v MB under a %v MB limit (%vx)", [container.name, round(peak / 1000000), round(limit / 1000000), round(ratio * 10) / 10]),
 		"recommendation": "Set the memory limit from measured peak plus headroom rather than a round guess.",
 	}
 }

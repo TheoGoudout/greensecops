@@ -49,7 +49,11 @@ def test_merge_splits_dockerfiles_from_compose_files() -> None:
 
 def test_merge_ignores_unrecognised_files() -> None:
     merged = merge_docker_files([("README.md", "# hello"), ("main.tf", "locals {}")])
-    assert merged == {"dockerfiles": [], "compose_files": []}
+    assert merged == {
+        "dockerfiles": [],
+        "compose_files": [],
+        "effective_compose_files": [],
+    }
 
 
 def test_merge_skips_unparseable_files_without_dropping_the_rest() -> None:
@@ -87,13 +91,18 @@ def test_merge_keeps_every_file_of_the_same_kind() -> None:
             ),
         ]
     )
-    # Compose's runtime merge is deliberately not modelled: both files are
-    # evaluated as they appear on disk. See merge.py's module docstring.
+    # Both files stay in `compose_files` as they appear on disk, because a rule
+    # firing on the presence of something dangerous must report the file the
+    # line is actually in. The merge lives in `effective_compose_files`.
     assert len(merged["compose_files"]) == 2
 
 
 def test_empty_input_produces_an_empty_document() -> None:
-    assert merge_docker_files([]) == {"dockerfiles": [], "compose_files": []}
+    assert merge_docker_files([]) == {
+        "dockerfiles": [],
+        "compose_files": [],
+        "effective_compose_files": [],
+    }
 
 
 @pytest.mark.parametrize(
@@ -129,3 +138,44 @@ def test_merge_flags_override_documents() -> None:
     by_path = {c["__docker_file"]: c for c in merged["compose_files"]}
     assert by_path["compose.yml"]["is_override"] is False
     assert by_path["compose.override.yml"]["is_override"] is True
+
+
+def test_merge_folds_an_override_into_one_effective_document() -> None:
+    # The pair is one configuration, so it yields one effective document —
+    # carrying the override's port alongside the base's image.
+    merged = merge_docker_files(
+        [
+            ("compose.yml", "services:\n  api:\n    image: app:1.0\n"),
+            (
+                "compose.override.yml",
+                "services:\n  api:\n    ports:\n      - '80:80'\n",
+            ),
+        ]
+    )
+    effective = merged["effective_compose_files"]
+    assert [c["__docker_file"] for c in effective] == ["compose.yml"]
+    assert effective[0]["__compose_files"] == ["compose.yml", "compose.override.yml"]
+    assert effective[0]["services"]["api"] == {
+        "image": "app:1.0",
+        "ports": ["80:80"],
+        "__start_line__": 2,
+        "__end_line__": 3,
+        "__docker_file": "compose.yml",
+    }
+
+
+def test_a_compose_file_without_an_override_is_its_own_effective_document() -> None:
+    merged = merge_docker_files(
+        [("compose.yml", "services:\n  api:\n    image: app:1.0\n")]
+    )
+    assert merged["effective_compose_files"] == merged["compose_files"]
+
+
+def test_effective_documents_are_json_serialisable() -> None:
+    merged = merge_docker_files(
+        [
+            ("compose.yml", "services:\n  api:\n    image: app:1.0\n"),
+            ("compose.override.yml", "services:\n  api:\n    scale: 2\n"),
+        ]
+    )
+    json.dumps(merged)

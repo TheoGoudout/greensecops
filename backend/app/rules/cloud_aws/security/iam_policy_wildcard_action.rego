@@ -3,6 +3,7 @@
 # description: A customer-managed IAM policy has an Allow statement with Action set to "*" (or a service-wide "service:*"), granting far more permission than almost any real workload needs.
 # custom:
 #   severity: critical
+#   severity_weight: 4.0
 #   detection: cloud_posture
 #   examples:
 #     bad: |

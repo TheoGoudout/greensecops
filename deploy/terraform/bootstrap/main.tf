@@ -154,8 +154,20 @@ resource "aws_s3_bucket_policy" "state" {
 resource "aws_ecr_repository" "images" {
   for_each = toset(var.ecr_repository_names)
 
-  name                 = "${var.project}/${each.key}"
-  image_tag_mutability = "MUTABLE"
+  name = "${var.project}/${each.key}"
+
+  # Deploys push a short git SHA as the tag (deploy-reusable.yml derives it
+  # from `git rev-parse --short HEAD`), never a moving tag like `latest` —
+  # that one lives in GHCR. So a tag here already names exactly one build, and
+  # making that a guarantee is what lets a rollback to a previously-deployed
+  # tag be trusted to fetch the image that was deployed under it.
+  #
+  # The cost is that re-running a build for a commit already pushed fails
+  # instead of overwriting. That is the intended behaviour: the rebuilt image
+  # would not be byte-identical (dependencies move), so silently repointing
+  # the tag is the problem being prevented. To redeploy an existing tag, use
+  # the workflow's rollback path, which skips the build entirely.
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true

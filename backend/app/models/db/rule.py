@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 from ..enums import IssueCategory, IssueSeverity, RuleDomain
 
@@ -10,8 +10,18 @@ if TYPE_CHECKING:
 
 
 class Rule(SQLModel, table=True):
+    # A slug is unique *within* an engine, not globally. The same finding is
+    # real in more than one engine — `rds_not_encrypted` is a Terraform finding
+    # and a live-account finding — and those are separate rules with separate
+    # scores. While `slug` alone was unique, seeding inserted whichever engine
+    # came first and skipped the rest, so `open_ingress_security_group`,
+    # `rds_not_encrypted` and `s3_bucket_missing_versioning` had no cloud_aws
+    # row at all and every finding they produced was dropped by cloud_scan's
+    # `Rule.domain == cloud_aws` lookup (migration 0048).
+    __table_args__ = (UniqueConstraint("domain", "slug", name="uq_rule_domain_slug"),)
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    slug: str = Field(max_length=128, unique=True, index=True)
+    slug: str = Field(max_length=128, index=True)
     # Which analysis engine this rule belongs to. Existing rows all backfilled
     # to ``workflow`` (migration 0042); lets one Rule table and admin UI serve
     # the CI-workflow, Terraform and cloud engines.

@@ -26,7 +26,6 @@ from app.models import (
 )
 from app.services.github.app_client import WorkflowFileContent
 from app.workers.tasks.static_analysis import (
-    _enrich_line_numbers,
     _reanalyze_all_repositories_impl,
     _run_static_analysis_impl,
 )
@@ -323,6 +322,69 @@ def test_same_action_twice_creates_two_issues(
     assert len(issues) == 2
     assert {i.step_index for i in issues} == {0, 2}
     assert len({i.fingerprint for i in issues}) == 2
+
+
+def test_fingerprint_survives_the_finding_moving_to_another_line(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    """An unrelated edit that shifts a file must not change an issue's identity.
+
+    The discriminator used to fall back to the line number, so inserting a
+    blank line above a finding resolved it and inserted a replacement —
+    discarding whether the user had ignored it, and re-triggering fix
+    generation. Only the rule's own discriminator keys the hash now.
+    """
+
+    def _violation(line: int) -> FakeViolation:
+        return FakeViolation(
+            rule_slug=seeded_rule.slug,
+            severity=seeded_rule.severity.value,
+            category=seeded_rule.category.value,
+            line_start=line,
+            line_end=line,
+            message="Unpinned action",
+            job="build",
+            step="actions/cache@v3",
+            step_index=0,
+        )
+
+    def _analyse(line: int, content: str) -> None:
+        # The content has to differ between runs or the second is skipped as a
+        # duplicate — which is also the real scenario: a finding only moves
+        # because the file was edited.
+        workflow_file.raw_content = content
+        with (
+            patch(
+                "app.workers.tasks.static_analysis._fetch_workflow_files",
+                return_value=[workflow_file],
+            ),
+            patch(
+                "app.workers.tasks.static_analysis._evaluate",
+                return_value=[_violation(line)],
+            ),
+        ):
+            _run_static_analysis_impl(str(repo.id))
+
+    original = workflow_file.raw_content
+    _analyse(5, original)
+    first = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).all()
+    assert len(first) == 1
+    original_fingerprint = first[0].fingerprint
+
+    # An unrelated comment added at the top pushes the same finding down.
+    _analyse(8, "# an unrelated edit\n" + original)
+    db.expire_all()
+    after = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).all()
+
+    assert len(after) == 1, "the moved finding was recorded as a second issue"
+    assert after[0].fingerprint == original_fingerprint
+    assert after[0].resolved_at is None, "the moved finding was resolved as stale"
+    # The line itself is still updated in place — only the identity is stable.
+    assert after[0].line_start == 8
 
 
 def test_opa_failure_marks_analysis_failed(
@@ -942,216 +1004,6 @@ def test_reanalyze_all_enqueues_enabled_repos_with_force_and_release_trigger(
 
     assert result["status"] == "queued"
     assert int(result["repos"]) == len(enqueued_repo_ids)
-
-
-# ─── _enrich_line_numbers ─────────────────────────────────────────────────────
-
-
-def test_enrich_line_numbers_noop_on_invalid_yaml() -> None:
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-        )
-    ]
-    _enrich_line_numbers(violations, "not: valid: yaml: [[[")
-    # Should not raise; line_start/end remain unchanged (0)
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_noop_on_no_jobs() -> None:
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-        )
-    ]
-    _enrich_line_numbers(violations, "on: push\n")
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_skips_violation_with_no_job() -> None:
-    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job=None,
-        )
-    ]
-    _enrich_line_numbers(violations, content)
-    # No crash, job=None is skipped
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_skips_missing_job() -> None:
-    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="nonexistent",
-        )
-    ]
-    _enrich_line_numbers(violations, content)
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_job_level_violation() -> None:
-    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: []\n"
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-            step=None,
-        )
-    ]
-    _enrich_line_numbers(violations, content)
-    # Job-level: line_start should be populated (ruamel reports line of the job key)
-    assert violations[0].line_start > 0
-
-
-def test_enrich_line_numbers_step_found_does_not_raise() -> None:
-    # Step-level enrichment: even when lc.value(i) raises IndexError internally
-    # (a ruamel.yaml limitation for sequence items), the function must not raise
-    # and must leave line_start in a defined state.
-    content = (
-        "on: push\n"
-        "jobs:\n"
-        "  build:\n"
-        "    runs-on: ubuntu-latest\n"
-        "    steps:\n"
-        "      - uses: actions/checkout@v3\n"
-    )
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-            step="actions/checkout@v3",
-        )
-    ]
-    # Should not raise regardless of lc.value behaviour
-    _enrich_line_numbers(violations, content)
-    # line_start is either enriched (>0) or left unchanged (0); both are valid
-    assert violations[0].line_start >= 0
-
-
-def test_enrich_line_numbers_step_not_found_leaves_unchanged() -> None:
-    content = (
-        "on: push\n"
-        "jobs:\n"
-        "  build:\n"
-        "    runs-on: ubuntu-latest\n"
-        "    steps:\n"
-        "      - uses: actions/checkout@v3\n"
-    )
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-            step="actions/setup-node@v4",
-        )
-    ]
-    _enrich_line_numbers(violations, content)
-    # Step not found: line_start remains 0
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_noop_when_yaml_is_not_a_dict() -> None:
-    """YAML that parses to a list (not a dict) is a no-op."""
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-        )
-    ]
-    _enrich_line_numbers(violations, "- item1\n- item2\n")
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_skips_non_list_steps() -> None:
-    """Job whose `steps` value is not a list is skipped without error."""
-    content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: string_value\n"
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-            step="actions/checkout@v3",
-        )
-    ]
-    _enrich_line_numbers(violations, content)
-    assert violations[0].line_start == 0
-
-
-def test_enrich_line_numbers_skips_non_dict_step_entry() -> None:
-    """A step list entry that is not a dict (e.g. a plain string) is skipped."""
-    content = (
-        "on: push\n"
-        "jobs:\n"
-        "  build:\n"
-        "    runs-on: ubuntu-latest\n"
-        "    steps:\n"
-        "      - run: echo hello\n"
-        "      - uses: actions/checkout@v3\n"
-    )
-    violations = [
-        FakeViolation(
-            rule_slug="test",
-            severity="low",
-            category="energy",
-            line_start=0,
-            line_end=0,
-            message="m",
-            job="build",
-            step="actions/checkout@v3",
-        )
-    ]
-    _enrich_line_numbers(violations, content)
-    # The checkout step IS a dict and should be enriched
-    assert violations[0].line_start > 0
 
 
 # ─── Batch mode (multiple workflow files) ────────────────────────────────────

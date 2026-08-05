@@ -3,6 +3,7 @@
 # description: "continue-on-error: true is set on a step that is not explicitly intended to be optional. This can silently hide real failures."
 # custom:
 #   severity: medium
+#   severity_weight: 1.2
 #   detection: static_analysis
 #   examples:
 #     bad: |

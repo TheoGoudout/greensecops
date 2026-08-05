@@ -118,7 +118,9 @@ def _run_cloud_scan_impl(
                 "scan_id": str(scan.id),
             }
 
-        resource_count = sum(len(v) for v in resources.values())
+        # Every collector returns a list; the guard is so an account-level
+        # scalar added later fails a test rather than the scan.
+        resource_count = sum(len(v) for v in resources.values() if isinstance(v, list))
 
         rule_map: dict[str, Rule] = {
             r.slug: r
@@ -137,7 +139,8 @@ def _run_cloud_scan_impl(
             if rule is None:
                 logger.warning(
                     "Cloud violation for unknown rule slug %r — no matching "
-                    "Rule row (domain=cloud_aws); check CLOUD_INITIAL_RULES",
+                    "Rule row (domain=cloud_aws); the catalog is derived from "
+                    "the .rego files by app.core.rule_registry",
                     v.rule_slug,
                 )
                 continue
@@ -215,9 +218,12 @@ def _run_cloud_scan_impl(
 
 
 # How long a single account scan may hold the per-account lock before it is
-# considered dead and the lock expires on its own. Mirrors
-# terraform_analysis.SCAN_LOCK_TTL_SECONDS.
-SCAN_LOCK_TTL_SECONDS = 600
+# considered dead and the lock expires on its own. Longer than
+# terraform_analysis.SCAN_LOCK_TTL_SECONDS because a cloud scan is bounded by
+# the AWS API rather than by parsing: fourteen resource types across every
+# configured region. It has to outlast the worst realistic scan, or the lock
+# expires mid-run and a second scan races the first on CloudFinding upserts.
+SCAN_LOCK_TTL_SECONDS = 3600
 
 
 @celery_app.task(name="cloud_scan.run", bind=True, max_retries=3)

@@ -23,3 +23,10 @@ violations:
   - no_multistage_build
   - secret_in_build_arg
   - unpinned_base_image
+  - apt_recommends_not_disabled
+  - compose_dependency_without_healthcheck
+  - compose_missing_no_new_privileges
+  - compose_unbounded_log_files
+  - missing_workdir
+  - pip_cache_not_disabled
+  - compose_missing_read_only_filesystem

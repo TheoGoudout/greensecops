@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import redis as redis_sync
-from ruamel.yaml import YAML as RuamelYAML
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, delete, select
 
@@ -28,6 +27,7 @@ from app.models import (
     LLMProvider,
     Repository,
     Rule,
+    RuleDomain,
     WorkflowFile,
 )
 from app.services import state_machines as sm
@@ -227,55 +227,6 @@ class WorkflowFetchError(Exception):
     """Raised when workflow files cannot be fetched from GitHub (transient)."""
 
 
-def _enrich_line_numbers(violations: list[OpaViolation], raw_content: str) -> None:
-    """Populate line_start/line_end on violations using ruamel.yaml node positions."""
-    ryaml = RuamelYAML()
-    try:
-        doc = ryaml.load(raw_content)
-    except Exception:
-        return
-    if not isinstance(doc, dict):
-        return
-    jobs = doc.get("jobs")
-    if not isinstance(jobs, dict):
-        return
-    for v in violations:
-        if v.job is None:
-            continue
-        job = jobs.get(v.job)
-        if job is None:
-            continue
-        if v.step is None:
-            # Job-level: point to the job key line
-            try:
-                line = jobs.lc.key(v.job)[0] + 1  # type: ignore[attr-defined]
-                v.line_start = line
-                v.line_end = line
-            except Exception:
-                pass
-            continue
-        # Step-level: find the step with matching 'uses'
-        steps = job.get("steps")
-        if not isinstance(steps, list):
-            continue
-        for i, step in enumerate(steps):
-            if not isinstance(step, dict):
-                continue
-            uses = step.get("uses")
-            if uses == v.step:
-                try:
-                    # Point to the `uses:` key within the step, not the `-` bullet
-                    line = step.lc.key("uses")[0] + 1  # type: ignore[attr-defined]
-                except Exception:
-                    try:
-                        line = steps.lc.item(i)[0] + 1  # type: ignore[attr-defined]
-                    except Exception:
-                        break
-                v.line_start = line
-                v.line_end = line
-                break
-
-
 def _register_rule_from_violation(
     session: Session, violation: OpaViolation
 ) -> Rule | None:
@@ -302,6 +253,7 @@ def _register_rule_from_violation(
         .values(
             id=uuid.uuid4(),
             slug=slug,
+            domain=RuleDomain.workflow,
             category=category,
             severity=severity,
             title=slug.replace("_", " ").capitalize(),
@@ -309,10 +261,16 @@ def _register_rule_from_violation(
             enabled=True,
             severity_weight=1.0,
         )
-        .on_conflict_do_nothing(index_elements=["slug"])
+        # A slug identifies a rule only within its engine (migration 0048), so
+        # the conflict target is the composite constraint. Keyed on `slug`
+        # alone this silently no-opped whenever another engine already owned
+        # the name, and the follow-up select below then returned *that* rule.
+        .on_conflict_do_nothing(index_elements=["domain", "slug"])
     )
     session.execute(stmt)
-    rule = session.exec(select(Rule).where(Rule.slug == slug)).first()
+    rule = session.exec(
+        select(Rule).where(Rule.slug == slug).where(Rule.domain == RuleDomain.workflow)
+    ).first()
     if rule is not None:
         logger.info("Auto-registered new rule '%s' from OPA violation", slug)
     return rule
@@ -644,11 +602,17 @@ def _run_static_analysis_impl(
                 results.append({"path": path, "status": "failed"})
                 continue
 
-            _enrich_line_numbers(violations, content)
-
+            # Scoped to this engine, like cloud_scan/terraform_analysis/
+            # docker_analysis already do. Unscoped, a workflow violation whose
+            # slug is also a Terraform or cloud rule name bound to that other
+            # engine's Rule row, taking its severity and weight into the score.
             rule_map: dict[str, Rule] = {
                 r.slug: r
-                for r in session.exec(select(Rule).where(Rule.enabled == True)).all()  # noqa: E712
+                for r in session.exec(
+                    select(Rule)
+                    .where(Rule.enabled == True)  # noqa: E712
+                    .where(Rule.domain == RuleDomain.workflow)
+                ).all()
             }
 
             seen_fingerprints: set[str] = set()
@@ -664,11 +628,16 @@ def _run_static_analysis_impl(
                     if not rule.enabled:
                         continue
                     rule_map[v.rule_slug] = rule
-                disc = v.discriminator or (
-                    str(v.line_start) if v.line_start is not None else None
-                )
+                # Only the rule's own discriminator. Falling back to the line
+                # number made an issue's identity move whenever its line did —
+                # so inserting a blank line at the top of a workflow resolved
+                # every issue in it and created replacements, losing any
+                # `ignored` state and re-triggering fix generation. The other
+                # three engines never key on a line for exactly this reason
+                # (see compute_docker_finding_fingerprint); a rule that can
+                # fire twice at one (job, step_index) sets a discriminator.
                 fingerprint = compute_issue_fingerprint(
-                    wf_record.id, rule.id, v.job, v.step_index, disc
+                    wf_record.id, rule.id, v.job, v.step_index, v.discriminator
                 )
                 seen_fingerprints.add(fingerprint)
                 issue_count += 1

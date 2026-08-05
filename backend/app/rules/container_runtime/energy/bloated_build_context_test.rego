@@ -28,3 +28,15 @@ test_no_violation_for_a_small_context_with_a_high_ratio if {
 	}}
 	count(violations) == 0
 }
+
+# Regression for the sprintf %f/integer bug: a ratio or size that divides
+# evenly became an integer, which %f renders as "%!f(int=N)" in the finding
+# the user reads.
+test_evidence_is_readable_when_the_numbers_divide_evenly if {
+	violations := bloated_build_context.violations with input as {"build": {
+		"context_size_bytes": 400000000,
+		"image_size_bytes": 100000000,
+	}}
+	some v in violations
+	v.evidence == "context 400 MB vs image 100 MB (4x)"
+}

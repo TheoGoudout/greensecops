@@ -34,7 +34,7 @@ violations contains violation if {
 		"rule": "runner_underutilized",
 		"severity": "medium",
 		"category": "energy",
-		"evidence": sprintf("vCPUs=%v, CPU=%.1f%%, RAM=%.1f%%", [vcpus, cpu_percent, ram_percent]),
+		"evidence": sprintf("vCPUs=%v, CPU=%v%%, RAM=%v%%", [vcpus, round(cpu_percent), round(ram_percent)]),
 		"recommendation": sprintf("Consider downsizing from %v vCPUs — measured usage during the run was low.", [vcpus]),
 	}
 }

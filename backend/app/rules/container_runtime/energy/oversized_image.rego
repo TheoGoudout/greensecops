@@ -24,7 +24,7 @@ violations contains violation if {
 		"rule": "oversized_image",
 		"severity": "medium",
 		"category": "energy",
-		"evidence": sprintf("final image is %.1f GB", [size / 1000000000]),
+		"evidence": sprintf("final image is %v MB", [round(size / 1000000)]),
 		"recommendation": "Split the build into stages and ship only the artifact; check per-layer sizes to find what is large.",
 	}
 }

@@ -3,6 +3,7 @@
 # description: Job has no timeout-minutes set. Without a timeout, a hung job will consume runner minutes until the 6-hour GitHub default limit, blocking other workflows.
 # custom:
 #   severity: high
+#   severity_weight: 1.5
 #   detection: static_analysis
 #   examples:
 #     bad: |

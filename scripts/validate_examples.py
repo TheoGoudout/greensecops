@@ -23,7 +23,6 @@ True, which silently disables every ``input.on`` rule).
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import subprocess
@@ -50,8 +49,12 @@ OPA_BIN = os.environ.get("OPA_BIN", "opa")
 INSECURE_EXPECTED = {"hardcoded_secrets", "unpinned_actions", "caching_missing"}
 
 
-def _parse_yaml(text: str) -> object:
-    return YAML(typ="safe").load(io.StringIO(text))
+# Reuse the production parser rather than a local copy of it. The two had
+# already diverged once in spirit — a rule reading the `__start_line__` keys
+# the real parser stamps would have had its METADATA `bad` example silently
+# fail to fire here, passing CI while being broken in production.
+sys.path.insert(0, str(ROOT / "backend"))
+from app.services.workflow_parser import parse_workflow_yaml as _parse_yaml  # noqa: E402
 
 
 def _opa_eval(workflow: object, query: str, *, with_aggregate: bool = False) -> list:

@@ -3,6 +3,7 @@
 # description: Dependent jobs rebuild artifacts already produced by upstream jobs instead of downloading them via actions/download-artifact.
 # custom:
 #   severity: medium
+#   severity_weight: 0.8
 #   detection: heuristic
 #   examples:
 #     bad: |

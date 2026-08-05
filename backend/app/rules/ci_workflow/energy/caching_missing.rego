@@ -3,6 +3,7 @@
 # description: No cache action detected for package manager (pip, npm, gradle, cargo, etc.). Caching dependencies dramatically reduces build time and runner energy consumption.
 # custom:
 #   severity: high
+#   severity_weight: 1.5
 #   detection: pattern_matching
 #   examples:
 #     bad: |
