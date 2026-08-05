@@ -12,6 +12,7 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
+from app.api.engine_routes import get_target_for_user, prepare_pending_fix
 from app.api.mappers import (
     to_docker_build_telemetry_public,
     to_docker_finding_public,
@@ -35,28 +36,18 @@ from app.models import (
     DockerTarget,
     DockerTargetCreate,
     DockerTargetPublic,
-    LLMProvider,
     Repository,
     Rule,
 )
-from app.models.enums import FixStatus
-from app.services import state_machines as sm
 from app.services.delivery_pr import docker_fix_branch
 from app.services.docker.merge import classify_docker_file
+from app.services.engines import DOCKER_ENGINE
 from app.workers.tasks.docker_analysis import _fetch_docker_files, run_docker_scan
 from app.workers.tasks.docker_fix_delivery import deliver_docker_fixes
 from app.workers.tasks.docker_fix_generation import run_docker_fix_generation
 from app.workers.tasks.fix_generation import resolve_llm_provider
 
 router = APIRouter(prefix="/docker-targets", tags=["docker"])
-
-# Fix statuses a worker is actively processing — a fix here must not be reset
-# out from under the worker (mirrors fixes.IN_FLIGHT_STATUSES).
-_IN_FLIGHT_FIX_STATUSES = (
-    FixStatus.pending,
-    FixStatus.generating,
-    FixStatus.delivering,
-)
 
 
 class DockerFixGenerateRequest(BaseModel):
@@ -74,20 +65,6 @@ def _normalize_root_path(raw: str) -> str:
     """
     stripped = raw.strip().strip("/")
     return "" if stripped in ("", ".") else stripped
-
-
-def _get_target_for_user(
-    target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
-) -> DockerTarget:
-    # Both the missing and the unauthorized case return the same 404 detail so
-    # the API never discloses that another tenant's target exists.
-    target = get_or_404(
-        session, DockerTarget, target_id, detail="Docker target not found"
-    )
-    authorize_repo(
-        session, current_user, target.repo_id, detail="Docker target not found"
-    )
-    return target
 
 
 @router.post("/", response_model=DockerTargetPublic, status_code=201)
@@ -152,7 +129,7 @@ def list_docker_targets(
 def toggle_docker_target(
     target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> dict[str, str | bool]:
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     target.enabled = not target.enabled
     session.add(target)
     session.commit()
@@ -163,7 +140,7 @@ def toggle_docker_target(
 def delete_docker_target(
     target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     session.delete(target)
     session.commit()
 
@@ -175,7 +152,7 @@ def trigger_docker_scan(
     current_user: CurrentUser,
     branch: str | None = None,
 ) -> dict[str, str]:
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     if not target.enabled:
         raise HTTPException(status_code=403, detail="Docker target is disabled")
     run_docker_scan.delay(
@@ -191,7 +168,7 @@ def list_docker_scans(
     current_user: CurrentUser,
     limit: int = 20,
 ) -> list[DockerScanPublic]:
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     scans = session.exec(
         select(DockerScan)
         .where(DockerScan.docker_target_id == target.id)
@@ -208,7 +185,7 @@ def list_docker_findings(
     current_user: CurrentUser,
     include_resolved: bool = False,
 ) -> list[DockerFindingPublic]:
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     query = select(DockerFinding).where(DockerFinding.docker_target_id == target.id)
     if not include_resolved:
         query = query.where(col(DockerFinding.resolved_at).is_(None))
@@ -230,7 +207,7 @@ def list_docker_files(
     Docker files aren't persisted, so this reaches through to GitHub on each
     call — any failure there is upstream's, hence 502 rather than 500.
     """
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     repo = get_or_404(
         session, Repository, target.repo_id, detail="Repository not found"
     )
@@ -288,7 +265,7 @@ def list_docker_runtime(
     current_user: CurrentUser,
 ) -> list[DockerBuildTelemetryPublic]:
     """Measured builds for this target, each with the findings it produced."""
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
 
     roots = list(
         session.exec(
@@ -349,7 +326,7 @@ def list_docker_fixes(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> list[DockerFixPublic]:
-    _get_target_for_user(target_id, session, current_user)
+    get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     fixes = session.exec(
         select(DockerFix)
         .where(DockerFix.docker_target_id == target_id)
@@ -367,7 +344,7 @@ def trigger_docker_fix_generation(
     force: bool = False,
 ) -> dict[str, str | int]:
     """Generate LLM fixes for a target's open findings, one whole-file fix each."""
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     repo = get_or_404(
         session, Repository, target.repo_id, detail="Repository not found"
     )
@@ -394,8 +371,8 @@ def trigger_docker_fix_generation(
     provider_str, model_str = resolve_llm_provider(repo)
     queued = 0
     for file_path, group in by_file.items():
-        fix = _prepare_pending_fix(
-            session, target_id, file_path, provider_str, model_str, force
+        fix = prepare_pending_fix(
+            DOCKER_ENGINE, session, target_id, file_path, provider_str, model_str, force
         )
         if fix is None:
             continue
@@ -435,7 +412,7 @@ def trigger_docker_runtime_fix_generation(
     one LLM rewrite per file, exactly as the static route does, so a runtime fix
     and a static fix can never race to patch the same lines.
     """
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     repo = get_or_404(
         session, Repository, target.repo_id, detail="Repository not found"
     )
@@ -478,8 +455,8 @@ def trigger_docker_runtime_fix_generation(
                 .where(col(DockerFinding.ignored_at).is_(None))
             ).all()
         )
-        fix = _prepare_pending_fix(
-            session, target_id, file_path, provider_str, model_str, force
+        fix = prepare_pending_fix(
+            DOCKER_ENGINE, session, target_id, file_path, provider_str, model_str, force
         )
         if fix is None:
             continue
@@ -499,51 +476,6 @@ def trigger_docker_runtime_fix_generation(
     return {"status": "queued", "queued": queued}
 
 
-def _prepare_pending_fix(
-    session: SessionDep,
-    target_id: uuid.UUID,
-    file_path: str,
-    provider_str: str,
-    model_str: str,
-    force: bool,
-) -> DockerFix | None:
-    """Create or reuse the single (target, file) fix row, leaving it ``pending``.
-
-    Returns ``None`` when a fix is already in flight, or already resolved and
-    not being forced — nothing to (re)queue.
-    """
-    existing = session.exec(
-        select(DockerFix)
-        .where(DockerFix.docker_target_id == target_id)
-        .where(DockerFix.file_path == file_path)
-    ).first()
-    if existing is not None:
-        if existing.status in _IN_FLIGHT_FIX_STATUSES:
-            return None
-        if not force and existing.status != FixStatus.failed:
-            return None
-        # Reuse the row (the unique constraint allows only one per file): hard
-        # reset to pending for a fresh generation.
-        sm.force_to(existing, sm.FixMachine, FixStatus.pending)
-        existing.full_content = None
-        existing.error_message = None
-        existing.pr_id = None
-        existing.llm_provider = LLMProvider(provider_str)
-        existing.llm_model = model_str
-        session.add(existing)
-        return existing
-
-    fix = DockerFix(
-        docker_target_id=target_id,
-        file_path=file_path,
-        llm_provider=LLMProvider(provider_str),
-        llm_model=model_str,
-        status=FixStatus.pending,
-    )
-    session.add(fix)
-    return fix
-
-
 @router.post("/{target_id}/deliver", status_code=202)
 def trigger_docker_delivery(
     target_id: uuid.UUID,
@@ -552,7 +484,7 @@ def trigger_docker_delivery(
     force: bool = False,
 ) -> dict[str, str]:
     """Deliver the target's ready fixes as a single PR (branch per target)."""
-    target = _get_target_for_user(target_id, session, current_user)
+    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     deliver_docker_fixes.delay(docker_target_id=str(target.id), force=force)
     return {
         "status": "queued",

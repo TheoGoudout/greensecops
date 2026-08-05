@@ -7,9 +7,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
-import redis as redis_sync
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import Session, col, select
+from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
@@ -19,11 +18,9 @@ from app.models import (
     DockerFinding,
     DockerScan,
     DockerTarget,
-    FindingResolutionReason,
     IssueCategory,
     IssueSeverity,
     Repository,
-    Rule,
     RuleDomain,
     ScanStatus,
 )
@@ -31,6 +28,11 @@ from app.services import state_machines as sm
 from app.services.deduplication import compute_fingerprint
 from app.services.docker.merge import merge_docker_files
 from app.services.opa.evaluator import OpaUnavailableError
+from app.services.scan_support import (
+    load_enabled_rules,
+    resolve_stale_findings,
+    scan_lock,
+)
 from app.services.scoring import compute_score, score_to_grade
 from app.workers.celery_app import celery_app
 
@@ -39,36 +41,6 @@ logger = logging.getLogger(__name__)
 
 class DockerFetchError(Exception):
     """Raised when Docker files cannot be fetched from GitHub (transient)."""
-
-
-def _resolve_stale_findings(
-    session: Session, docker_target_id: uuid.UUID, seen_fingerprints: set[str]
-) -> None:
-    """Resolve open findings of a target not reported by the latest scan.
-
-    Covers findings the user fixed, and findings of rules removed or disabled
-    since the previous scan. Mirrors
-    terraform_analysis._resolve_stale_findings.
-    """
-    now = datetime.now(timezone.utc)
-    open_findings = session.exec(
-        select(DockerFinding)
-        .where(DockerFinding.docker_target_id == docker_target_id)
-        .where(col(DockerFinding.resolved_at).is_(None))
-    ).all()
-    stale = [f for f in open_findings if f.fingerprint not in seen_fingerprints]
-    for finding in stale:
-        sm.try_advance(finding, sm.FindingMachine, "resolve")
-        finding.resolved_at = now
-        finding.resolution_reason = FindingResolutionReason.no_longer_detected
-        session.add(finding)
-    if stale:
-        session.commit()
-        logger.info(
-            "Resolved %d stale docker finding(s) for target %s",
-            len(stale),
-            docker_target_id,
-        )
 
 
 def _run_docker_scan_impl(
@@ -144,14 +116,7 @@ def _run_docker_scan_impl(
                 "scan_id": str(scan.id),
             }
 
-        rule_map: dict[str, Rule] = {
-            r.slug: r
-            for r in session.exec(
-                select(Rule)
-                .where(Rule.enabled == True)  # noqa: E712
-                .where(Rule.domain == RuleDomain.container_docker)
-            ).all()
-        }
+        rule_map = load_enabled_rules(session, RuleDomain.container_docker)
 
         seen_fingerprints: set[str] = set()
         # Grouped by file, not flattened: see the scoring note below.
@@ -246,7 +211,14 @@ def _run_docker_scan_impl(
         session.add(scan)
         session.commit()
 
-        _resolve_stale_findings(session, target.id, seen_fingerprints)
+        resolve_stale_findings(
+            session,
+            DockerFinding,
+            "docker_target_id",
+            target.id,
+            seen_fingerprints,
+            "docker",
+        )
 
         target.last_scanned_at = datetime.now(timezone.utc)
         if commit_sha:
@@ -273,12 +245,6 @@ def _run_docker_scan_impl(
         }
 
 
-# How long a single target scan may hold the per-target lock before it is
-# considered dead and the lock expires on its own. Mirrors
-# terraform_analysis.SCAN_LOCK_TTL_SECONDS.
-SCAN_LOCK_TTL_SECONDS = 600
-
-
 @celery_app.task(name="docker_analysis.run", bind=True, max_retries=3)
 def run_docker_scan(
     self: Any,  # noqa: ANN401 — celery bound task instance
@@ -289,10 +255,8 @@ def run_docker_scan(
 ) -> dict[str, str | int | float]:
     # Per-target lock: concurrent scans of the same target race on
     # DockerFinding upserts and duplicate DockerScan rows.
-    lock_key = f"greensecops:lock:docker_scan:{docker_target_id}"
-    r = redis_sync.Redis.from_url(settings.REDIS_URL)
-    try:
-        if not r.set(lock_key, "1", nx=True, ex=SCAN_LOCK_TTL_SECONDS):
+    with scan_lock(f"docker_scan:{docker_target_id}") as acquired:
+        if not acquired:
             raise self.retry(countdown=30, max_retries=10)
         try:
             return _run_docker_scan_impl(
@@ -303,10 +267,6 @@ def run_docker_scan(
             )
         except DockerFetchError as exc:
             raise self.retry(exc=exc, countdown=30 * (2**self.request.retries))
-        finally:
-            r.delete(lock_key)
-    finally:
-        r.close()
 
 
 def _fetch_docker_files(

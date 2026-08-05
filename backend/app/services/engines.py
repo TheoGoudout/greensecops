@@ -51,6 +51,8 @@ class EngineSpec:
     name: str
     # Human-readable, used in log lines and PR headings.
     label: str
+    # What the user calls the thing they registered, for API error details.
+    target_label: str
     # What the user registers to be scanned: a Terraform root, a Docker target.
     target_model: type[Any]
     # Column on the fix/finding rows pointing back at that target.
@@ -72,6 +74,7 @@ class EngineSpec:
 TERRAFORM_ENGINE = EngineSpec(
     name="terraform",
     label="Terraform",
+    target_label="Terraform root",
     target_model=TerraformRoot,
     target_id_field="terraform_root_id",
     finding_model=TerraformFinding,
@@ -83,6 +86,7 @@ TERRAFORM_ENGINE = EngineSpec(
 DOCKER_ENGINE = EngineSpec(
     name="docker",
     label="Docker",
+    target_label="Docker target",
     target_model=DockerTarget,
     target_id_field="docker_target_id",
     finding_model=DockerFinding,

@@ -12,8 +12,8 @@ from app.models import Analysis
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import InstallationRepo
+from app.services.scan_support import SCAN_LOCK_TTL_SECONDS
 from app.workers.celery_app import celery_app
-from app.workers.tasks.static_analysis import ANALYSIS_LOCK_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def _sync_installation_repositories_impl(
             queued_key = f"greensecops:queued:static_analysis:{repo_id}"
             try:
                 already_queued = not r.set(
-                    queued_key, "1", nx=True, ex=ANALYSIS_LOCK_TTL_SECONDS
+                    queued_key, "1", nx=True, ex=SCAN_LOCK_TTL_SECONDS
                 )
             except Exception:
                 logger.warning(
