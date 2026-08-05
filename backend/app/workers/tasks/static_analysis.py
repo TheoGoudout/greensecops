@@ -680,11 +680,16 @@ def _run_static_analysis_impl(
                     if not rule.enabled:
                         continue
                     rule_map[v.rule_slug] = rule
-                disc = v.discriminator or (
-                    str(v.line_start) if v.line_start is not None else None
-                )
+                # Only the rule's own discriminator. Falling back to the line
+                # number made an issue's identity move whenever its line did —
+                # so inserting a blank line at the top of a workflow resolved
+                # every issue in it and created replacements, losing any
+                # `ignored` state and re-triggering fix generation. The other
+                # three engines never key on a line for exactly this reason
+                # (see compute_docker_finding_fingerprint); a rule that can
+                # fire twice at one (job, step_index) sets a discriminator.
                 fingerprint = compute_issue_fingerprint(
-                    wf_record.id, rule.id, v.job, v.step_index, disc
+                    wf_record.id, rule.id, v.job, v.step_index, v.discriminator
                 )
                 seen_fingerprints.add(fingerprint)
                 issue_count += 1

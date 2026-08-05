@@ -325,6 +325,69 @@ def test_same_action_twice_creates_two_issues(
     assert len({i.fingerprint for i in issues}) == 2
 
 
+def test_fingerprint_survives_the_finding_moving_to_another_line(
+    db: Session, repo: Repository, workflow_file: WorkflowFile, seeded_rule: Rule
+) -> None:
+    """An unrelated edit that shifts a file must not change an issue's identity.
+
+    The discriminator used to fall back to the line number, so inserting a
+    blank line above a finding resolved it and inserted a replacement —
+    discarding whether the user had ignored it, and re-triggering fix
+    generation. Only the rule's own discriminator keys the hash now.
+    """
+
+    def _violation(line: int) -> FakeViolation:
+        return FakeViolation(
+            rule_slug=seeded_rule.slug,
+            severity=seeded_rule.severity.value,
+            category=seeded_rule.category.value,
+            line_start=line,
+            line_end=line,
+            message="Unpinned action",
+            job="build",
+            step="actions/cache@v3",
+            step_index=0,
+        )
+
+    def _analyse(line: int, content: str) -> None:
+        # The content has to differ between runs or the second is skipped as a
+        # duplicate — which is also the real scenario: a finding only moves
+        # because the file was edited.
+        workflow_file.raw_content = content
+        with (
+            patch(
+                "app.workers.tasks.static_analysis._fetch_workflow_files",
+                return_value=[workflow_file],
+            ),
+            patch(
+                "app.workers.tasks.static_analysis._evaluate",
+                return_value=[_violation(line)],
+            ),
+        ):
+            _run_static_analysis_impl(str(repo.id))
+
+    original = workflow_file.raw_content
+    _analyse(5, original)
+    first = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).all()
+    assert len(first) == 1
+    original_fingerprint = first[0].fingerprint
+
+    # An unrelated comment added at the top pushes the same finding down.
+    _analyse(8, "# an unrelated edit\n" + original)
+    db.expire_all()
+    after = db.exec(
+        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+    ).all()
+
+    assert len(after) == 1, "the moved finding was recorded as a second issue"
+    assert after[0].fingerprint == original_fingerprint
+    assert after[0].resolved_at is None, "the moved finding was resolved as stale"
+    # The line itself is still updated in place — only the identity is stable.
+    assert after[0].line_start == 8
+
+
 def test_opa_failure_marks_analysis_failed(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
