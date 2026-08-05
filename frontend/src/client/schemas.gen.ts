@@ -532,11 +532,6 @@ export const CloudFindingPublicSchema = {
             format: 'uuid',
             title: 'Scan Id'
         },
-        cloud_account_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Cloud Account Id'
-        },
         rule_id: {
             type: 'string',
             format: 'uuid',
@@ -545,25 +540,6 @@ export const CloudFindingPublicSchema = {
         rule_slug: {
             type: 'string',
             title: 'Rule Slug'
-        },
-        resource_type: {
-            type: 'string',
-            title: 'Resource Type'
-        },
-        resource_id: {
-            type: 'string',
-            title: 'Resource Id'
-        },
-        region: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Region'
         },
         severity: {
             '$ref': '#/components/schemas/IssueSeverity'
@@ -622,10 +598,34 @@ export const CloudFindingPublicSchema = {
                     type: 'null'
                 }
             ]
+        },
+        cloud_account_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Cloud Account Id'
+        },
+        resource_type: {
+            type: 'string',
+            title: 'Resource Type'
+        },
+        resource_id: {
+            type: 'string',
+            title: 'Resource Id'
+        },
+        region: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Region'
         }
     },
     type: 'object',
-    required: ['id', 'scan_id', 'cloud_account_id', 'rule_id', 'rule_slug', 'resource_type', 'resource_id', 'severity', 'category', 'message', 'status'],
+    required: ['id', 'scan_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status', 'cloud_account_id', 'resource_type', 'resource_id'],
     title: 'CloudFindingPublic'
 } as const;
 
@@ -642,32 +642,11 @@ export const CloudScanPublicSchema = {
             format: 'uuid',
             title: 'Id'
         },
-        cloud_account_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Cloud Account Id'
-        },
         status: {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
             '$ref': '#/components/schemas/AnalysisTrigger'
-        },
-        region: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Region'
-        },
-        resource_count: {
-            type: 'integer',
-            title: 'Resource Count',
-            default: 0
         },
         score: {
             anyOf: [
@@ -725,10 +704,31 @@ export const CloudScanPublicSchema = {
                 }
             ],
             title: 'Completed At'
+        },
+        cloud_account_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Cloud Account Id'
+        },
+        region: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Region'
+        },
+        resource_count: {
+            type: 'integer',
+            title: 'Resource Count',
+            default: 0
         }
     },
     type: 'object',
-    required: ['id', 'cloud_account_id', 'status', 'triggered_by'],
+    required: ['id', 'status', 'triggered_by', 'cloud_account_id'],
     title: 'CloudScanPublic'
 } as const;
 
@@ -1005,11 +1005,6 @@ export const DockerFindingPublicSchema = {
             format: 'uuid',
             title: 'Scan Id'
         },
-        docker_target_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Docker Target Id'
-        },
         rule_id: {
             type: 'string',
             format: 'uuid',
@@ -1018,6 +1013,91 @@ export const DockerFindingPublicSchema = {
         rule_slug: {
             type: 'string',
             title: 'Rule Slug'
+        },
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
         },
         file_path: {
             type: 'string',
@@ -1066,90 +1146,10 @@ export const DockerFindingPublicSchema = {
                 }
             ],
             title: 'Line End'
-        },
-        severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
-        },
-        category: {
-            '$ref': '#/components/schemas/IssueCategory'
-        },
-        message: {
-            type: 'string',
-            title: 'Message'
-        },
-        context: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Context'
-        },
-        status: {
-            '$ref': '#/components/schemas/FindingStatus'
-        },
-        fix_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Fix Id'
-        },
-        fix_status: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/FixStatus'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Created At'
-        },
-        resolved_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Resolved At'
-        },
-        resolution_reason: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/FindingResolutionReason'
-                },
-                {
-                    type: 'null'
-                }
-            ]
         }
     },
     type: 'object',
-    required: ['id', 'scan_id', 'docker_target_id', 'rule_id', 'rule_slug', 'file_path', 'severity', 'category', 'message', 'status'],
+    required: ['id', 'scan_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status', 'docker_target_id', 'file_path'],
     title: 'DockerFindingPublic'
 } as const;
 
@@ -1181,11 +1181,6 @@ export const DockerFixPublicSchema = {
             type: 'string',
             format: 'uuid',
             title: 'Id'
-        },
-        docker_target_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Docker Target Id'
         },
         file_path: {
             type: 'string',
@@ -1290,10 +1285,15 @@ export const DockerFixPublicSchema = {
                 }
             ],
             title: 'Delivered At'
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
         }
     },
     type: 'object',
-    required: ['id', 'docker_target_id', 'file_path', 'llm_provider', 'llm_model', 'status'],
+    required: ['id', 'file_path', 'llm_provider', 'llm_model', 'status', 'docker_target_id'],
     title: 'DockerFixPublic'
 } as const;
 
@@ -1400,38 +1400,11 @@ export const DockerScanPublicSchema = {
             format: 'uuid',
             title: 'Id'
         },
-        docker_target_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Docker Target Id'
-        },
         status: {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
             '$ref': '#/components/schemas/AnalysisTrigger'
-        },
-        branch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Branch'
-        },
-        commit_sha: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Commit Sha'
         },
         score: {
             anyOf: [
@@ -1454,17 +1427,6 @@ export const DockerScanPublicSchema = {
                 }
             ],
             title: 'Grade'
-        },
-        file_count: {
-            anyOf: [
-                {
-                    type: 'integer'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'File Count'
         },
         error_message: {
             anyOf: [
@@ -1500,10 +1462,48 @@ export const DockerScanPublicSchema = {
                 }
             ],
             title: 'Completed At'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Commit Sha'
+        },
+        docker_target_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Docker Target Id'
+        },
+        file_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Count'
         }
     },
     type: 'object',
-    required: ['id', 'docker_target_id', 'status', 'triggered_by'],
+    required: ['id', 'status', 'triggered_by', 'docker_target_id'],
     title: 'DockerScanPublic'
 } as const;
 
@@ -3169,11 +3169,6 @@ export const TerraformFindingPublicSchema = {
             format: 'uuid',
             title: 'Scan Id'
         },
-        terraform_root_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Terraform Root Id'
-        },
         rule_id: {
             type: 'string',
             format: 'uuid',
@@ -3182,6 +3177,91 @@ export const TerraformFindingPublicSchema = {
         rule_slug: {
             type: 'string',
             title: 'Rule Slug'
+        },
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        terraform_root_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Terraform Root Id'
         },
         resource_address: {
             anyOf: [
@@ -3241,90 +3321,10 @@ export const TerraformFindingPublicSchema = {
                 }
             ],
             title: 'Terraform Address'
-        },
-        severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
-        },
-        category: {
-            '$ref': '#/components/schemas/IssueCategory'
-        },
-        message: {
-            type: 'string',
-            title: 'Message'
-        },
-        context: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Context'
-        },
-        status: {
-            '$ref': '#/components/schemas/FindingStatus'
-        },
-        fix_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Fix Id'
-        },
-        fix_status: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/FixStatus'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Created At'
-        },
-        resolved_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Resolved At'
-        },
-        resolution_reason: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/FindingResolutionReason'
-                },
-                {
-                    type: 'null'
-                }
-            ]
         }
     },
     type: 'object',
-    required: ['id', 'scan_id', 'terraform_root_id', 'rule_id', 'rule_slug', 'file_path', 'severity', 'category', 'message', 'status'],
+    required: ['id', 'scan_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status', 'terraform_root_id', 'file_path'],
     title: 'TerraformFindingPublic'
 } as const;
 
@@ -3356,11 +3356,6 @@ export const TerraformFixPublicSchema = {
             type: 'string',
             format: 'uuid',
             title: 'Id'
-        },
-        terraform_root_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Terraform Root Id'
         },
         file_path: {
             type: 'string',
@@ -3465,10 +3460,15 @@ export const TerraformFixPublicSchema = {
                 }
             ],
             title: 'Delivered At'
+        },
+        terraform_root_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Terraform Root Id'
         }
     },
     type: 'object',
-    required: ['id', 'terraform_root_id', 'file_path', 'llm_provider', 'llm_model', 'status'],
+    required: ['id', 'file_path', 'llm_provider', 'llm_model', 'status', 'terraform_root_id'],
     title: 'TerraformFixPublic'
 } as const;
 
@@ -3590,38 +3590,11 @@ export const TerraformScanPublicSchema = {
             format: 'uuid',
             title: 'Id'
         },
-        terraform_root_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Terraform Root Id'
-        },
         status: {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
             '$ref': '#/components/schemas/AnalysisTrigger'
-        },
-        branch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Branch'
-        },
-        commit_sha: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Commit Sha'
         },
         score: {
             anyOf: [
@@ -3679,10 +3652,37 @@ export const TerraformScanPublicSchema = {
                 }
             ],
             title: 'Completed At'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Commit Sha'
+        },
+        terraform_root_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Terraform Root Id'
         }
     },
     type: 'object',
-    required: ['id', 'terraform_root_id', 'status', 'triggered_by'],
+    required: ['id', 'status', 'triggered_by', 'terraform_root_id'],
     title: 'TerraformScanPublic'
 } as const;
 

@@ -1,23 +1,10 @@
 import uuid
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-import sqlalchemy as sa
-from sqlalchemy import DateTime, UniqueConstraint
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import UniqueConstraint
+from sqlmodel import Field, Relationship
 
-from ..enums import (
-    AnalysisFailureKind,
-    AnalysisTrigger,
-    FindingResolutionReason,
-    FindingStatus,
-    FixStatus,
-    IssueCategory,
-    IssueSeverity,
-    LLMProvider,
-    ScanStatus,
-)
-from .base import get_datetime_utc
+from .mixins import FileFixMixin, FindingMixin, RepoScanMixin, ScanTargetMixin
 
 if TYPE_CHECKING:
     from .pull_request import PullRequest
@@ -25,7 +12,7 @@ if TYPE_CHECKING:
     from .rule import Rule
 
 
-class TerraformRoot(SQLModel, table=True):
+class TerraformRoot(ScanTargetMixin, table=True):
     """A folder in a repo configured as a Terraform root to scan.
 
     One repo can have multiple roots (monorepo environments like envs/prod,
@@ -39,55 +26,28 @@ class TerraformRoot(SQLModel, table=True):
         UniqueConstraint("repo_id", "root_path", name="uq_terraform_root_repo_path"),
     )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(
-        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
-    )
+    # No default, unlike DockerTarget: a Terraform root is registered by hand
+    # and must say where it is.
     root_path: str = Field(max_length=512)
-    enabled: bool = Field(default=True)
-    # Polling/webhook cursor, mirrors Repository.last_polled_head_sha: the
-    # default-branch head last scanned, so a push that doesn't touch this
-    # root's files can be skipped cheaply in a later phase.
-    last_scanned_head_sha: str | None = Field(default=None, max_length=40)
-    last_scanned_at: datetime | None = Field(
-        default=None, sa_type=DateTime(timezone=True)
-    )
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
     repository: Optional["Repository"] = Relationship(back_populates="terraform_roots")
     scans: list["TerraformScan"] = Relationship(
         back_populates="terraform_root", cascade_delete=True
     )
 
 
-class TerraformScan(SQLModel, table=True):
+class TerraformScan(RepoScanMixin, table=True):
     __tablename__ = "terraform_scan"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     terraform_root_id: uuid.UUID = Field(
         foreign_key="terraform_root.id", nullable=False, ondelete="CASCADE"
     )
-    status: ScanStatus = Field(
-        default=ScanStatus.queued,
-        sa_column_kwargs={"server_default": ScanStatus.queued.value},
-    )
-    triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
-    branch: str | None = Field(default=None, max_length=255)
-    commit_sha: str | None = Field(default=None, max_length=64)
-    score: float | None = Field(default=None)
-    grade: str | None = Field(default=None, max_length=8)
-    error_message: str | None = Field(default=None, max_length=2048)
-    failure_kind: AnalysisFailureKind | None = Field(default=None)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
-    completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     terraform_root: TerraformRoot | None = Relationship(back_populates="scans")
     findings: list["TerraformFinding"] = Relationship(
         back_populates="scan", cascade_delete=True
     )
 
 
-class TerraformFinding(SQLModel, table=True):
+class TerraformFinding(FindingMixin, table=True):
     __tablename__ = "terraform_finding"
     __table_args__ = (
         UniqueConstraint(
@@ -104,9 +64,6 @@ class TerraformFinding(SQLModel, table=True):
     # the root across scans, not one scan (mirrors Issue.workflow_file_id).
     terraform_root_id: uuid.UUID = Field(
         foreign_key="terraform_root.id", nullable=False, ondelete="CASCADE"
-    )
-    rule_id: uuid.UUID = Field(
-        foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
     )
     # The Terraform fix that addresses this finding, if one has been generated.
     # SET NULL (not CASCADE): dropping a fix must not delete the finding history
@@ -125,22 +82,6 @@ class TerraformFinding(SQLModel, table=True):
     # resolved ``module {}`` invocation chain.
     module_path: str | None = Field(default=None, max_length=512)
     terraform_address: str | None = Field(default=None, max_length=1024)
-    fingerprint: str = Field(max_length=16, index=True)
-    severity: IssueSeverity
-    category: IssueCategory
-    status: FindingStatus = Field(
-        default=FindingStatus.open,
-        sa_column_kwargs={"server_default": FindingStatus.open.value},
-        index=True,
-    )
-    message: str = Field(max_length=2048)
-    context: str | None = Field(default=None, max_length=4096)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
-    resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
-    resolution_reason: FindingResolutionReason | None = Field(default=None)
-    ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     scan: TerraformScan | None = Relationship(back_populates="findings")
     # One-directional (no back_populates on Rule): findings look up their rule,
     # Rule doesn't need to know about the finding tables that reference it.
@@ -148,7 +89,7 @@ class TerraformFinding(SQLModel, table=True):
     fix: Optional["TerraformFix"] = Relationship(back_populates="findings")
 
 
-class TerraformFix(SQLModel, table=True):
+class TerraformFix(FileFixMixin, table=True):
     """An LLM-generated fix for a single ``.tf`` file in a Terraform root.
 
     Mirrors ``Fix`` (the CI-workflow fix), but keyed to a Terraform root +
@@ -168,27 +109,6 @@ class TerraformFix(SQLModel, table=True):
     terraform_root_id: uuid.UUID = Field(
         foreign_key="terraform_root.id", nullable=False, ondelete="CASCADE"
     )
-    file_path: str = Field(max_length=512)
-    pr_id: uuid.UUID | None = Field(
-        default=None,
-        sa_column=sa.Column(
-            sa.UUID,
-            sa.ForeignKey("pull_request.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-    )
-    llm_provider: LLMProvider
-    llm_model: str = Field(max_length=255)
-    prompt_tokens: int | None = Field(default=None)
-    completion_tokens: int | None = Field(default=None)
-    langsmith_run_id: str | None = Field(default=None, max_length=255)
-    status: FixStatus = Field(default=FixStatus.pending)
-    full_content: str | None = Field(default=None)
-    error_message: str | None = Field(default=None, max_length=2048)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
-    delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     terraform_root: TerraformRoot | None = Relationship()
     findings: list["TerraformFinding"] = Relationship(back_populates="fix")
     pull_request: Optional["PullRequest"] = Relationship(
