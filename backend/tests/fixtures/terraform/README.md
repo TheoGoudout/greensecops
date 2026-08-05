@@ -29,7 +29,7 @@ spans.
 | --- | --- | --- |
 | `terragoat_aws/` | [bridgecrewio/terragoat](https://github.com/bridgecrewio/terragoat) `terraform/aws/` (Apache-2.0) | The violation side. Bridgecrew's deliberately-insecure-but-realistic AWS estate: a security group open to `0.0.0.0/0` on both 22 and 80, an unencrypted EBS volume, three unversioned S3 buckets, an unencrypted RDS instance, and AWS keys baked into `user_data` and a Lambda's environment. Full of `merge()`, interpolation, heredocs, `depends_on` and a 170-line `aws_instance`. |
 | `terraform_aws_security_group/` | [terraform-aws-modules/terraform-aws-security-group](https://github.com/terraform-aws-modules/terraform-aws-security-group) (Apache-2.0) | The clean side, and the parser's stress test. One of the most-downloaded modules in the registry, built entirely out of `for_each` comprehensions, `dynamic` blocks, `try()`, `coalesce()`, `merge()` and `variable` blocks carrying `validation`. Trips nothing — a false-positive guard on hardened production code. |
-| `terraform_aws_vpc_complete/` | [terraform-aws-modules/terraform-aws-vpc](https://github.com/terraform-aws-modules/terraform-aws-vpc) `examples/complete/` (Apache-2.0) | Module-composition style: `module`, `locals`, `data`, `provider` and `terraform` blocks with only one raw resource. Exercises the one-level branch of `_tag_source_file` (everything that is not `resource`/`data`) on real code. Also trips nothing. |
+| `terraform_aws_vpc_complete/` | [terraform-aws-modules/terraform-aws-vpc](https://github.com/terraform-aws-modules/terraform-aws-vpc) `examples/complete/` (Apache-2.0) | Module-composition style: `module`, `locals`, `data`, `provider` and `terraform` blocks with only one raw resource. Exercises the one-level branch of `_tag_source_file` (everything that is not `resource`/`data`) on real code. Trips `missing_remote_backend` and nothing else — see below. |
 
 Exact commits are recorded per case in `expected.json` under `source.ref`. The
 `.tf` files are byte-for-byte upstream — no headers added, no reformatting — so
@@ -45,9 +45,20 @@ length, so no line or column shifts. `hardcoded_credentials_in_tf` still fires
 on `aws_instance.web_host` exactly as it does upstream. Nothing else in the
 corpus is modified; re-vendoring any other file must stay verbatim.
 
-Two of the three cases being violation-free is not an accident of selection:
-well-maintained public modules are clean under this rule suite, and proving the
-rules stay quiet on them is as valuable as proving they fire on terragoat.
+The clean cases are not an accident of selection: well-maintained public
+modules are clean under this rule suite, and proving the rules stay quiet on
+them is as valuable as proving they fire on terragoat.
+
+**Why `terraform_aws_vpc_complete` trips one rule.** It declares a `provider`
+block and a `terraform` block with no `backend`, which is what
+`missing_remote_backend` reports — accurately. It is an `examples/` directory,
+and an example is meant to be read and applied ad hoc rather than to hold
+durable state, so upstream is not wrong to omit a backend either. The rule sees
+a merged config, not a directory name, and cannot tell an example root module
+from a production one; both have a provider and no backend. The finding is kept
+rather than suppressed because it is true, and narrowing the rule on a
+filename heuristic would trade a real finding on production code for silence
+here. Worth revisiting if it turns out to be noisy on real repositories.
 
 ## `expected.json`
 

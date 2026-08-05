@@ -54,10 +54,40 @@
       "line_end": 115
     },
     {
+      "rule_slug": "rds_no_backup_retention",
+      "severity": "high",
+      "category": "reliability",
+      "message": "RDS instance 'default' has backup_retention_period = 0, so it takes no automated backups and cannot be restored to a point in time.",
+      "resource_address": "aws_db_instance.default",
+      "file_path": "db-app.tf",
+      "line_start": 1,
+      "line_end": 42
+    },
+    {
+      "rule_slug": "rds_no_deletion_protection",
+      "severity": "medium",
+      "category": "reliability",
+      "message": "RDS instance 'default' has no deletion protection, so a replacement or a destroy takes the database and its data with it.",
+      "resource_address": "aws_db_instance.default",
+      "file_path": "db-app.tf",
+      "line_start": 1,
+      "line_end": 42
+    },
+    {
       "rule_slug": "rds_not_encrypted",
       "severity": "high",
       "category": "security",
       "message": "RDS instance 'default' has no storage_encrypted = true \u2014 data at rest is unencrypted.",
+      "resource_address": "aws_db_instance.default",
+      "file_path": "db-app.tf",
+      "line_start": 1,
+      "line_end": 42
+    },
+    {
+      "rule_slug": "rds_publicly_accessible",
+      "severity": "critical",
+      "category": "security",
+      "message": "RDS instance 'default' is publicly accessible, so its endpoint resolves to a public IP reachable from the internet.",
       "resource_address": "aws_db_instance.default",
       "file_path": "db-app.tf",
       "line_start": 1,
@@ -94,6 +124,66 @@
       "line_end": 288
     },
     {
+      "rule_slug": "s3_public_access_block_disabled",
+      "severity": "high",
+      "category": "security",
+      "message": "Bucket 'data' has no public access block with all four settings enabled, so a later ACL or policy change can make it public.",
+      "resource_address": "aws_s3_bucket.data",
+      "file_path": "s3.tf",
+      "line_start": 1,
+      "line_end": 21
+    },
+    {
+      "rule_slug": "s3_public_access_block_disabled",
+      "severity": "high",
+      "category": "security",
+      "message": "Bucket 'data_science' has no public access block with all four settings enabled, so a later ACL or policy change can make it public.",
+      "resource_address": "aws_s3_bucket.data_science",
+      "file_path": "s3.tf",
+      "line_start": 89,
+      "line_end": 111
+    },
+    {
+      "rule_slug": "s3_public_access_block_disabled",
+      "severity": "high",
+      "category": "security",
+      "message": "Bucket 'financials' has no public access block with all four settings enabled, so a later ACL or policy change can make it public.",
+      "resource_address": "aws_s3_bucket.financials",
+      "file_path": "s3.tf",
+      "line_start": 42,
+      "line_end": 63
+    },
+    {
+      "rule_slug": "s3_public_access_block_disabled",
+      "severity": "high",
+      "category": "security",
+      "message": "Bucket 'flowbucket' has no public access block with all four settings enabled, so a later ACL or policy change can make it public.",
+      "resource_address": "aws_s3_bucket.flowbucket",
+      "file_path": "ec2.tf",
+      "line_start": 271,
+      "line_end": 288
+    },
+    {
+      "rule_slug": "s3_public_access_block_disabled",
+      "severity": "high",
+      "category": "security",
+      "message": "Bucket 'logs' has no public access block with all four settings enabled, so a later ACL or policy change can make it public.",
+      "resource_address": "aws_s3_bucket.logs",
+      "file_path": "s3.tf",
+      "line_start": 113,
+      "line_end": 141
+    },
+    {
+      "rule_slug": "s3_public_access_block_disabled",
+      "severity": "high",
+      "category": "security",
+      "message": "Bucket 'operations' has no public access block with all four settings enabled, so a later ACL or policy change can make it public.",
+      "resource_address": "aws_s3_bucket.operations",
+      "file_path": "s3.tf",
+      "line_start": 65,
+      "line_end": 87
+    },
+    {
       "rule_slug": "unencrypted_ebs_volume",
       "severity": "high",
       "category": "security",
@@ -104,6 +194,6 @@
       "line_end": 51
     }
   ],
-  "expected_finding_count": 8,
+  "expected_finding_count": 17,
   "expected_grade": null
 }

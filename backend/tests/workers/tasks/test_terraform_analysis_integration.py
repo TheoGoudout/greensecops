@@ -353,8 +353,11 @@ def test_terragoat_scan_persists_real_addresses_and_files(
         "aws_security_group.web-node",
         "aws_db_instance.default",
         "aws_s3_bucket.data",
+        "aws_s3_bucket.data_science",
         "aws_s3_bucket.financials",
         "aws_s3_bucket.flowbucket",
+        "aws_s3_bucket.logs",
+        "aws_s3_bucket.operations",
         "aws_ebs_volume.web_host_storage",
     }
     fetched_paths = {f.path for f in files}
@@ -480,6 +483,12 @@ def test_recorded_violations_still_point_at_the_vendored_code(case: str) -> None
         for resource_type, named in block.items()
         for name in named
     }
+    # A finding about the configuration itself has no resource to point at, so
+    # it names the top-level block instead — missing_remote_backend reports
+    # `terraform`, because the absent backend belongs to that block and to no
+    # resource. Those are valid targets, and admitting them keeps this test
+    # doing its actual job: catching a recording that drifted from the files.
+    declared |= {key for key in merged if not key.startswith("__")}
     for violation in expected["violations"]:
         assert violation["file_path"] in dict(files), (
             f"{case}: violation points at {violation['file_path']!r}, not in the case"
