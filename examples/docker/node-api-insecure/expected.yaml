@@ -26,3 +26,4 @@ violations:
   - secret_file_copied
   - shell_form_entrypoint
   - unpinned_base_image
+  - compose_missing_read_only_filesystem

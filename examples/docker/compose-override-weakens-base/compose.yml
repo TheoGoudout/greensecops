@@ -1,0 +1,64 @@
+# A carefully hardened base. Every setting here is a decision somebody made:
+# an unprivileged user, a read-only root, all capabilities dropped, and the
+# database port bound to loopback so it is not reachable from the network.
+#
+# The override beside it undoes all four. That is the whole point of this case
+# — reading either file alone gives the wrong answer about what runs.
+services:
+  api:
+    image: ghcr.io/example/api:1.4.2@sha256:3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  db:
+    image: postgres:17.2-alpine@sha256:1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809
+    user: "999:999"
+    read_only: true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:9990:9990"
+    tmpfs:
+      - /tmp
+      - /run
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+volumes:
+  db-data:

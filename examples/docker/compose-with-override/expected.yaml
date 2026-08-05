@@ -19,3 +19,4 @@ violations:
   - compose_missing_resource_limits
   - compose_missing_restart_policy
   - compose_unbounded_log_files
+  - compose_missing_read_only_filesystem

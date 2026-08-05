@@ -9,3 +9,4 @@ violations:
   - compose_missing_no_new_privileges
   - compose_port_bound_to_all_interfaces
   - compose_unbounded_log_files
+  - compose_missing_read_only_filesystem

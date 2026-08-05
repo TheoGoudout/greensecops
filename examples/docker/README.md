@@ -25,6 +25,7 @@ firing) or starts producing a false positive fails the build.
 | `node-multistage/` | A correct multi-stage Node build — cached dependency layer, toolchain confined to the builder. Must trip nothing. |
 | `compose-privileged-agent/` | Compose-only, no Dockerfile: proves a target containing just Compose files still reports. |
 | `compose-with-override/` | A base file and its override. Proves the merge in both directions — no absence finding against a service the override completes, and full grading of one the override introduces. |
+| `compose-override-weakens-base/` | An override that undoes the base's hardening one field at a time. Proves the four rules that read *both* lists: only the pair together shows that a setting was removed rather than never present. |
 
 The two clean cases matter as much as the bad one. A rule that fires on
 `python-service-hardened/` is producing noise on a file that is already
