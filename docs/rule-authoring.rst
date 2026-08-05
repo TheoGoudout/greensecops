@@ -37,15 +37,15 @@ Each engine gets exactly one document, and rules cannot read across engines.
    * - Engine
      - Input document
    * - ``ci_workflow``
-     - The parsed workflow YAML verbatim. No line numbers — see below.
+     - The parsed workflow YAML, with ``__start_line__``/``__end_line__`` stamped on each job and each step.
    * - ``ci_telemetry``
      - ``{"runner_specs": {...}, "metrics": {...}}`` as measured by the Action.
    * - ``iac_terraform``
      - Every ``.tf`` in the root merged into one config, list-concatenated per block type.
    * - ``cloud_aws``
-     - A normalized snapshot of eight AWS resource types.
+     - A normalized snapshot of fourteen AWS resource types.
    * - ``container_docker``
-     - ``{"dockerfiles": [...], "compose_files": [...]}`` for the whole target.
+     - ``{"dockerfiles": [...], "compose_files": [...], "effective_compose_files": [...]}`` for the whole target — see the trap below on which Compose list to read.
    * - ``container_runtime``
      - ``{"build": {...}, "containers": [...]}`` from the Action's post step.
 
@@ -78,9 +78,42 @@ whole number back to an integer, and ``sprintf``'s ``%f`` renders an integer as
 ``is_final``, or they fire on every builder stage that legitimately runs as
 root.
 
-**Compose overrides are not merged.** Each file is evaluated as it sits on
-disk, so a rule that fires on the *absence* of a setting must skip documents
-where ``is_override`` is true — the base file may well supply it.
+**Compose targets give you two lists, and which one you read follows from what
+you are asserting.** ``compose_files`` is the files as they sit on disk;
+``effective_compose_files`` is one document per *configuration*, with a base
+and its override merged the way Compose merges them.
+
+- A rule firing on the **presence** of something dangerous reads
+  ``compose_files``, so it reports the file the offending line is actually in.
+- A rule firing on the **absence** of a setting reads
+  ``effective_compose_files``, because absence is only meaningful about a
+  complete configuration. A setting the override supplies is then not reported
+  missing from the base, and a service the override introduces is graded rather
+  than skipped.
+
+Line spans and source paths are per *service*, not per document — a merged
+service keeps the base's span, but a service only the override declares keeps
+the override's. Prefer ``object.get(service, "__docker_file", object.get(cf,
+"__docker_file", ""))`` over the document's path alone, or a finding will cite
+a file the service does not appear in.
+
+The merge follows Compose's asymmetry: scalars replaced, mappings merged
+key-by-key, most sequences (``ports``, ``volumes``, ``cap_add``,
+``security_opt``) **appended**, and ``command`` / ``entrypoint`` / ``env_file``
+/ ``healthcheck`` replaced. That appending is what makes rules like
+``compose_override_adds_capabilities`` necessary — a base's ``cap_drop: [ALL]``
+does not cancel an override's ``cap_add``, so reading either file alone gives
+the wrong answer. Not modelled: ``extends:``, ``!reset``/``!override``,
+profiles, and ``${VAR}`` interpolation.
+
+**Two findings on one line is noise, however true each one is.** When a new
+rule would overlap an existing one, scope the new rule to what the old one does
+not cover rather than letting both fire.
+``compose_override_adds_capabilities`` excludes ``SYS_ADMIN`` and ``ALL``
+because ``compose_cap_add_sys_admin`` already reports them;
+``compose_override_exposes_bound_port`` excludes the datastore ports
+``compose_port_bound_to_all_interfaces`` owns. What is left to the new rule is
+the case nothing else reports, which is the part worth having.
 
 Where the engines run out of signal
 -----------------------------------
@@ -89,39 +122,46 @@ Several rules that would be worth having cannot be written today, because the
 collectors do not gather what they would need. In rough order of value per unit
 of work:
 
-**The AWS collector is the binding constraint.**
-``services/cloud/aws_collector.py`` returns eight resource types with a handful
-of scalar fields each, and the existing rules already read nearly all of them.
-Each of the following is a few lines in the collector and unlocks several
-rules: S3 **bucket policies** (public-principal detection, which the ACL and
-public-access-block rules cannot substitute for); security-group **egress**
-(only ingress is collected); **KMS key identity** on EBS/RDS/S3, where today
-there is only a boolean ``encrypted`` and so no way to distinguish a
-customer-managed key from the AWS-managed default; IAM **access-key age and
-last-used** via ``GetCredentialReport``; RDS ``backup_retention_period``,
-``multi_az`` and ``auto_minor_version_upgrade``; CloudTrail **multi-region and
-log-file validation**; Lambda **environment variables, VPC config and reserved
-concurrency**; and the services not collected at all — CloudWatch log
-retention, EKS, ECR, ELB/ALB listeners, Secrets Manager rotation.
+**An empty list and a missing permission are indistinguishable.** This is now
+the sharpest constraint on cloud rule design. ``aws_collector`` collects each
+resource type independently and, on an error, logs a warning and treats that
+type as empty — a deliberate choice, since a partial picture beats none. The
+cost is that ``count(input.eks_clusters) == 0`` means either "this account runs
+no EKS" or "the role cannot call ``eks:ListClusters``", and no rule can tell
+which.
 
-**CI-workflow findings have no line numbers.** The OPA input is the parsed YAML
-with no position data, so line attribution happens *after* evaluation, in a
-second ruamel parse (``static_analysis._enrich_line_numbers``). It only
-resolves a line when the violation names a job, and matches steps by
-``step.uses`` — so any finding on a ``run:`` step has no line at all. Parsing
-in round-trip mode and stamping ``__start_line__`` per job and step, exactly as
-``services/docker/compose_parser.py`` already does, would fix attribution for
-every existing rule at once and let rules reason about ordering directly.
+So a cloud rule keys on a resource being **present and misconfigured**, never
+on a list being empty. Where a rule genuinely needs the absence of something —
+``ebs_uses_aws_managed_key`` infers "AWS-managed" from a key ARN matching
+nothing in ``input.kms_keys`` — it must first assert the list is non-empty, and
+accept the missed finding on an account that truly has none. Firing instead
+would let an under-permissioned role manufacture a finding against every
+encrypted resource it can see, which is the one failure mode
+:doc:`cloud-scanning` commits against.
 
-**Compose merge semantics are not modelled.** Implementing the override and
-``extends:`` merge would make the absence-based Compose rules sound on
-multi-file projects, where they are currently skipped.
+Fixing this properly means the collector distinguishing "collected, empty" from
+"could not collect" in its output — a per-type status alongside the list — so a
+rule can require the former. That is a small change to the collector and a
+larger one to every rule that would use it.
 
 **There is no cross-engine input.** A rule cannot see a Compose file, the
 Dockerfile it builds, and the workflow that builds them at once. The highest
 value correlations need that — "this workflow builds this Dockerfile and skips
 the cache the Dockerfile was written for" is not expressible in any single
 engine.
+
+**Compose ``extends:`` is still unresolved.** The override merge is modelled
+(see the trap above), but ``extends:`` is not: its ``file:`` key can point at
+any path, including one ``classify_docker_file`` does not recognise, so it
+needs a second fetch pass rather than a merge. The same applies to
+``!reset``/``!override``, profiles and ``${VAR}`` interpolation, each of which
+changes what runs in a way the merge does not model.
+
+**Terraform has no cross-module resolution.** ``hcl_parser.derive_module_path``
+is a directory heuristic rather than resolved ``module {}`` invocation, so a
+rule cannot follow a variable from a root module into the child that consumes
+it. Combined with hcl2 not evaluating expressions, this is why Terraform rules
+treat an unresolved reference as configured.
 
 **Whole input domains are absent**: Kubernetes and Helm manifests, SBOM and
 dependency data, git and branch-protection metadata, other CI providers, other
