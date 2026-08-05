@@ -49,6 +49,15 @@ repos:
         files: ^(examples/.*\.ya?ml|landing/(index|workflows)\.html|scripts/render_landing_examples\.py)$
         pass_filenames: false
 
+      # Inject the shared head/nav/footer into every landing page, so the seven
+      # pages cannot drift apart the way they had before partials/ existed.
+      - id: build-landing-partials
+        name: Build landing pages from partials/
+        entry: python3 landing/build.py
+        language: system
+        files: ^landing/(partials/.*\.html|.*\.html|build\.py)$
+        pass_filenames: false
+
   # AWS deployment configuration (deploy/). The Terraform hooks run in a
   # container for the same reason backend/'s opa-fmt and opa-check do: a
   # contributor who only touches Python should not have to install Terraform.
