@@ -1,0 +1,109 @@
+{
+  "source": {
+    "repository": "https://github.com/bridgecrewio/terragoat",
+    "path": "terraform/aws",
+    "ref": "729f8da62c6a85ce4af5ad3d123de97776d954c4",
+    "license": "Apache-2.0"
+  },
+  "files": [
+    "db-app.tf",
+    "ec2.tf",
+    "lambda.tf",
+    "providers.tf",
+    "s3.tf"
+  ],
+  "violations": [
+    {
+      "rule_slug": "hardcoded_credentials_in_tf",
+      "severity": "critical",
+      "category": "security",
+      "message": "Resource 'aws_instance.web_host' has a hardcoded AWS access key ID literal.",
+      "resource_address": "aws_instance.web_host",
+      "file_path": "ec2.tf",
+      "line_start": 1,
+      "line_end": 32
+    },
+    {
+      "rule_slug": "hardcoded_credentials_in_tf",
+      "severity": "critical",
+      "category": "security",
+      "message": "Resource 'aws_lambda_function.analysis_lambda' has a hardcoded AWS access key ID literal.",
+      "resource_address": "aws_lambda_function.analysis_lambda",
+      "file_path": "lambda.tf",
+      "line_start": 32,
+      "line_end": 59
+    },
+    {
+      "rule_slug": "open_ingress_security_group",
+      "severity": "critical",
+      "category": "security",
+      "message": "Security group 'web-node' allows ingress from 0.0.0.0/0 on port 22.",
+      "resource_address": "aws_security_group.web-node",
+      "file_path": "ec2.tf",
+      "line_start": 77,
+      "line_end": 115
+    },
+    {
+      "rule_slug": "open_ingress_security_group",
+      "severity": "critical",
+      "category": "security",
+      "message": "Security group 'web-node' allows ingress from 0.0.0.0/0 on port 80.",
+      "resource_address": "aws_security_group.web-node",
+      "file_path": "ec2.tf",
+      "line_start": 77,
+      "line_end": 115
+    },
+    {
+      "rule_slug": "rds_not_encrypted",
+      "severity": "high",
+      "category": "security",
+      "message": "RDS instance 'default' has no storage_encrypted = true \u2014 data at rest is unencrypted.",
+      "resource_address": "aws_db_instance.default",
+      "file_path": "db-app.tf",
+      "line_start": 1,
+      "line_end": 42
+    },
+    {
+      "rule_slug": "s3_bucket_missing_versioning",
+      "severity": "medium",
+      "category": "reliability",
+      "message": "S3 bucket 'data' has no versioning configured \u2014 accidental overwrites/deletes can't be recovered.",
+      "resource_address": "aws_s3_bucket.data",
+      "file_path": "s3.tf",
+      "line_start": 1,
+      "line_end": 21
+    },
+    {
+      "rule_slug": "s3_bucket_missing_versioning",
+      "severity": "medium",
+      "category": "reliability",
+      "message": "S3 bucket 'financials' has no versioning configured \u2014 accidental overwrites/deletes can't be recovered.",
+      "resource_address": "aws_s3_bucket.financials",
+      "file_path": "s3.tf",
+      "line_start": 42,
+      "line_end": 63
+    },
+    {
+      "rule_slug": "s3_bucket_missing_versioning",
+      "severity": "medium",
+      "category": "reliability",
+      "message": "S3 bucket 'flowbucket' has no versioning configured \u2014 accidental overwrites/deletes can't be recovered.",
+      "resource_address": "aws_s3_bucket.flowbucket",
+      "file_path": "ec2.tf",
+      "line_start": 271,
+      "line_end": 288
+    },
+    {
+      "rule_slug": "unencrypted_ebs_volume",
+      "severity": "high",
+      "category": "security",
+      "message": "EBS volume 'web_host_storage' has no encrypted = true \u2014 data at rest is unencrypted.",
+      "resource_address": "aws_ebs_volume.web_host_storage",
+      "file_path": "ec2.tf",
+      "line_start": 34,
+      "line_end": 51
+    }
+  ],
+  "expected_finding_count": 8,
+  "expected_grade": null
+}

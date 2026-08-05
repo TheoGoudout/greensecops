@@ -9,7 +9,7 @@ a provider that does not charge for egress; and the periodic scheduler folds
 into the worker. What is left is five containers on one small server.
 
 ```
-Cloudflare Pages (free)   →  landing · dashboard · docs      static, CDN, unlimited bandwidth
+Cloudflare Workers (free) →  landing · dashboard · docs      static, CDN, unlimited bandwidth
 Cloudflare R2 (~$1.50)    →  scan artifacts                  S3-compatible, zero egress fees
 Hetzner CAX31 (€12.49)    →  backend · celery · opa
   or CPX31 (€13.60)          postgres · redis
@@ -23,7 +23,7 @@ Raspberry Pi              →  Coolify control plane           deploys over SSH;
 | Hetzner automated backups (20%) | €2.50 |
 | Hetzner volume, 100 GB | €4.40 |
 | Cloudflare R2, 100 GB stored | ~€1.40 |
-| Cloudflare Pages, 3 projects | free |
+| Cloudflare Workers, 3 static-asset Workers | free |
 | GHCR image hosting | free |
 | **Total** | **~€21–22** |
 
@@ -112,17 +112,24 @@ configuration, so keep its backups somewhere else.
 
 ## Setting it up
 
-### 1. Cloudflare — Pages, R2 and DNS
+### 1. Cloudflare — Workers, R2 and DNS
 
-Create three Pages projects — `greensecops-landing`, `greensecops-dashboard`,
-`greensecops-docs`. They can start empty; the workflow deploys into them.
+Nothing to create by hand: `pages.yml` deploys three Workers —
+`greensecops-landing`, `greensecops-dashboard`, `greensecops-docs` — and
+`wrangler deploy` creates each one on its first run. The name, the build output
+directory and the 404 behaviour of each live in the `wrangler.jsonc` beside the
+site it deploys (`landing/`, `frontend/`, `docs/`).
+
+Your zone must be on Cloudflare nameservers. Unlike Pages, Workers cannot serve
+a custom domain whose DNS is hosted elsewhere.
 
 Create an R2 bucket for scan artifacts and an R2 API token scoped to it. R2's
 S3 endpoint is `https://<account-id>.r2.cloudflarestorage.com`.
 
-Add two repository **secrets** — `CLOUDFLARE_API_TOKEN` (Pages: Edit, plus R2
-if you use the same token) and `CLOUDFLARE_ACCOUNT_ID` — and these repository
-**variables**, which are baked into the shipped JavaScript and are not secret:
+Add two repository **secrets** — `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit,
+plus R2 if you use the same token) and `CLOUDFLARE_ACCOUNT_ID` — and these
+repository **variables**, which are baked into the shipped JavaScript and are
+not secret:
 
 | Variable | Example |
 |---|---|
@@ -134,8 +141,8 @@ if you use the same token) and `CLOUDFLARE_ACCOUNT_ID` — and these repository
 | `PUBLIC_GITHUB_APP_NAME` | your GitHub App slug |
 | `PUBLIC_SUPPORT_EMAIL` … `PUBLIC_PRIVACY_EMAIL` | contact addresses |
 
-Point the apex, `app.` and `docs.` at their Pages projects as custom domains,
-and `api.` at the Hetzner server's address.
+Point the apex, `app.` and `docs.` at their Workers as custom domains, and
+`api.` at the Hetzner server's address.
 
 ### 2. Hetzner — the server
 

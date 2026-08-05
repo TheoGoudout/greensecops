@@ -1,0 +1,21 @@
+{
+  // The landing page as a Worker serving static assets. There is no Worker
+  // script — `assets.directory` alone is a complete deployment, and omitting
+  // `main` is what keeps every request free and unmetered.
+  "name": "greensecops-landing",
+  "compatibility_date": "2026-08-04",
+  "assets": {
+    // Built by .github/workflows/pages.yml, which runs the same envsubst pass
+    // over landing/*.html that entrypoint.sh runs at container start-up.
+    "directory": "./dist",
+    // Reproduces `error_page 404 /index.html` from nginx.conf: the workflow
+    // copies the substituted index.html to 404.html, and Workers serves it
+    // with a real 404 status. The `/* /index.html 404` line this replaces was
+    // a rewrite, which _redirects does not support — it never did anything.
+    //
+    // The default `html_handling` ("auto-trailing-slash") already resolves
+    // /pricing to pricing.html, which is the other half of nginx's
+    // `try_files $uri $uri.html`, so no _redirects file is needed at all.
+    "not_found_handling": "404-page"
+  }
+}

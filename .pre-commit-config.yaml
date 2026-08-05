@@ -1,12 +1,17 @@
 default_stages: [pre-commit]
 
 repos:
-  # General file hygiene
+  # General file hygiene. The Terraform under backend/tests/fixtures/terraform/
+  # is vendored byte-for-byte from public repos so the parser tests are anchored
+  # in code nobody here wrote — normalising its whitespace would quietly make it
+  # ours. See that directory's README.
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^backend/tests/fixtures/terraform/.*\.tf$
       - id: end-of-file-fixer
+        exclude: ^backend/tests/fixtures/terraform/.*\.tf$
       - id: check-yaml
         args: [--unsafe]  # allow custom tags in compose files
       - id: check-json
@@ -23,6 +28,7 @@ repos:
         args: [--maxkb=500]
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^backend/tests/fixtures/terraform/.*\.tf$
 
   # OpenAPI client generation
   - repo: local

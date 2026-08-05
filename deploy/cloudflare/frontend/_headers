@@ -1,0 +1,15 @@
+# The same security headers the landing page carries. The dashboard is the
+# surface that holds a session and talks to the API, so it is the last one that
+# should be missing them — frontend/nginx.conf never set any, and neither did
+# the original Pages deployment.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Vite emits everything under /assets/ with a content hash in the filename, so
+# a changed file is a changed URL and a one-year immutable cache is safe here.
+# index.html itself is deliberately left on the Workers default
+# (max-age=0, must-revalidate), which is what lets a deploy take effect at all.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

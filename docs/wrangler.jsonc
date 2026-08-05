@@ -1,0 +1,14 @@
+{
+  // The Sphinx documentation as a Worker serving static assets.
+  "name": "greensecops-docs",
+  "compatibility_date": "2026-08-04",
+  "assets": {
+    // Where `sphinx-build -b html docs docs/_build/html` writes.
+    "directory": "./_build/html"
+  }
+  // No `not_found_handling`: Sphinx emits no 404.html, so the default — a
+  // plain 404 for anything that is not a built page — is what we want, and
+  // is what the site already does today. Sphinx's own `_static/` and
+  // `_sources/` directories are served normally; only `_worker.js`,
+  // `_headers` and `_redirects` are special to Workers.
+}

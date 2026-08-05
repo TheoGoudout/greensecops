@@ -12,6 +12,15 @@ __pycache__
 .env
 frontend/.env
 
+# Static build output, assembled by .github/workflows/pages.yml and uploaded
+# to Cloudflare Workers. Never committed — the wrangler.jsonc beside each one
+# is the committed half.
+frontend/dist/
+landing/dist/
+
+# Local state that `wrangler dev` writes next to each wrangler.jsonc.
+.wrangler/
+
 # Sphinx build output and generated rule pages
 docs/_build/
 docs/rules/

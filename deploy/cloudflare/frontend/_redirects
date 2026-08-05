@@ -1,4 +1,0 @@
-# The dashboard is a single-page application: TanStack Router owns the routes,
-# so every unmatched path must return index.html with a 200 rather than a 404,
-# or a deep link like /infrastructure/42/terraform breaks on reload.
-/*  /index.html  200
