@@ -228,16 +228,16 @@ locals {
   # comparison at the top level of a for-expression fine, which is the form
   # used below. An unparseable file is a file the gate silently skips, so this
   # is worth the indirection.
-  artifact_services = ["backend", "celery-worker"]
+  cloud_scanning_services = ["backend", "celery-worker"]
 
   group_reads_secrets = {
     for group, services in local.groups :
     group => length(setintersection(toset(services), toset(local.data_client_services))) > 0
   }
 
-  group_uses_artifacts = {
+  group_scans_accounts = {
     for group, services in local.groups :
-    group => length(setintersection(toset(services), toset(local.artifact_services))) > 0
+    group => length(setintersection(toset(services), toset(local.cloud_scanning_services))) > 0
   }
 
   # Where the backend finds the policy server: behind the internal load

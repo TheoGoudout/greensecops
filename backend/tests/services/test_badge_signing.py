@@ -2,7 +2,6 @@
 
 from app.services.badge_signing import (
     build_badge_svg_url,
-    build_terraform_root_badge_svg_url,
     sign_badge,
     sign_terraform_root_badge,
     verify_badge,
@@ -46,12 +45,3 @@ def test_terraform_root_verify_roundtrip() -> None:
     assert verify_terraform_root_badge("root-1", "nope") is False
     assert verify_terraform_root_badge("root-1", None) is False
     assert verify_terraform_root_badge("root-2", sig) is False
-
-
-def test_terraform_root_build_url_signs_only_private() -> None:
-    public = build_terraform_root_badge_svg_url("root-1", private=False)
-    private = build_terraform_root_badge_svg_url("root-1", private=True)
-
-    assert public.endswith("/badges/terraform/root-1.svg")
-    assert "?sig=" not in public
-    assert f"?sig={sign_terraform_root_badge('root-1')}" in private

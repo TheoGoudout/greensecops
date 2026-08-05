@@ -19,28 +19,22 @@ variable "ssm_parameter_prefix" {
 }
 
 variable "roles" {
-  description = "Every host group. `reads_secrets` grants the SecureString half of the parameter tree and the database password; `uses_artifact_store` grants read/write on the artifact bucket; `scans_customer_accounts` grants sts:AssumeRole for cloud-posture collection."
+  description = "Every host group. `reads_secrets` grants the SecureString half of the parameter tree and the database password; `scans_customer_accounts` grants sts:AssumeRole for cloud-posture collection."
   type = map(object({
     reads_secrets           = optional(bool, false)
-    uses_artifact_store     = optional(bool, false)
     scans_customer_accounts = optional(bool, false)
     manages_state_volume    = optional(bool, false)
   }))
 }
 
 variable "kms_key_arn" {
-  description = "Customer-managed KMS key that encrypts the parameters, the artifact bucket and the database secret."
+  description = "Customer-managed KMS key that encrypts the parameters and the database secret."
   type        = string
 }
 
 variable "ecr_repository_arns" {
   description = "ARNs of the ECR repositories instances may pull from, as output by the bootstrap root."
   type        = list(string)
-}
-
-variable "artifact_bucket_arn" {
-  description = "ARN of the scan-artifact bucket."
-  type        = string
 }
 
 variable "database_secret_arn" {

@@ -273,21 +273,10 @@ variable "redis_replica_count" {
   default     = 1
 }
 
-variable "artifact_bucket_name" {
-  description = "Globally unique bucket name for large scan artifacts. Becomes S3_BUCKET."
-  type        = string
-}
-
-variable "artifact_retention_days" {
-  description = "Days before a scan artifact is expired. Artifacts are regenerable, so this is a cost control."
+variable "access_log_retention_days" {
+  description = "Days before a load-balancer access log object is expired."
   type        = number
   default     = 90
-}
-
-variable "artifact_bucket_force_destroy" {
-  description = "Allow `terraform destroy` to delete a non-empty artifact bucket. Useful for staging, dangerous in production."
-  type        = bool
-  default     = false
 }
 
 variable "access_log_bucket_name" {

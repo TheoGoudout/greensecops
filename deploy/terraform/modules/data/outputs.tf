@@ -32,16 +32,6 @@ output "redis_url" {
   value       = try("rediss://${aws_elasticache_replication_group.this[0].primary_endpoint_address}:${aws_elasticache_replication_group.this[0].port}/0?ssl_cert_reqs=required", "")
 }
 
-output "artifact_bucket_name" {
-  description = "Object-storage bucket for scan artifacts, for S3_BUCKET. Real S3 in every topology — it is a few dollars a month and means artifacts outlive the host."
-  value       = aws_s3_bucket.artifacts.id
-}
-
-output "artifact_bucket_arn" {
-  description = "ARN of the artifact bucket, used to scope the instance policies."
-  value       = aws_s3_bucket.artifacts.arn
-}
-
 output "ansible_transfer_bucket_name" {
   description = "Bucket Ansible's aws_ssm connection plugin stages files through."
   value       = aws_s3_bucket.ansible_transfer.id

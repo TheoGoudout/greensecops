@@ -74,23 +74,6 @@ def verify_terraform_root_badge(root_id: str, sig: str | None) -> bool:
     return hmac.compare_digest(sign_terraform_root_badge(root_id), sig)
 
 
-def build_terraform_root_badge_svg_url(root_id: str, *, private: bool) -> str:
-    """Absolute SVG badge URL for a Terraform root.
-
-    Private-repo roots get a signed URL (``?sig=``); public-repo roots get a
-    plain URL.
-    """
-    from app.core.config import settings
-
-    badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
-    base = (
-        f"{badge_host.rstrip('/')}{settings.API_V1_STR}/badges/terraform/{root_id}.svg"
-    )
-    if not private:
-        return base
-    return f"{base}?sig={sign_terraform_root_badge(root_id)}"
-
-
 def sign_docker_target_badge(target_id: str) -> str:
     """Return the badge signature for a Docker target, keyed by ``target_id``.
 
@@ -111,16 +94,3 @@ def verify_docker_target_badge(target_id: str, sig: str | None) -> bool:
     if not sig:
         return False
     return hmac.compare_digest(sign_docker_target_badge(target_id), sig)
-
-
-def build_docker_target_badge_svg_url(target_id: str, *, private: bool) -> str:
-    """Absolute SVG badge URL for a Docker target."""
-    from app.core.config import settings
-
-    badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
-    base = (
-        f"{badge_host.rstrip('/')}{settings.API_V1_STR}/badges/docker/{target_id}.svg"
-    )
-    if not private:
-        return base
-    return f"{base}?sig={sign_docker_target_badge(target_id)}"

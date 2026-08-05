@@ -83,9 +83,6 @@ class CloudScan(SQLModel, table=True):
     resource_count: int = Field(default=0)
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)
-    # Object-storage key for the raw normalized resource snapshot JSON, when
-    # persisted — can be large and may echo sensitive resource attributes.
-    artifact_object_key: str | None = Field(default=None, max_length=512)
     error_message: str | None = Field(default=None, max_length=2048)
     failure_kind: AnalysisFailureKind | None = Field(default=None)
     created_at: datetime | None = Field(

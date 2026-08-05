@@ -178,11 +178,6 @@ SERVICE_URL_FRONTEND=https://app.greensecops.com
 MARKETING_URL=https://greensecops.com
 DOCS_URL=https://docs.greensecops.com
 
-R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
-R2_ACCESS_KEY_ID=...
-R2_SECRET_ACCESS_KEY=...
-S3_BUCKET=greensecops-artifacts
-
 GITHUB_APP_ID=...
 GITHUB_APP_PRIVATE_KEY=...
 GITHUB_CLIENT_ID=...
@@ -221,13 +216,15 @@ perfectly reasonable deal before there is revenue to protect.
 
 **You are the ops team.** Nobody is paged but you. PostgreSQL backups are
 Hetzner's whole-volume snapshots, not point-in-time recovery — take a
-`pg_dump` to R2 on a schedule if the data starts to matter:
+`pg_dump` off the host on a schedule if the data starts to matter:
 
 ```bash
 docker compose exec -T db pg_dump -U "$POSTGRES_USER" greensecops \
-  | gzip | aws s3 cp - "s3://greensecops-artifacts/backups/$(date +%F).sql.gz" \
-      --endpoint-url "$R2_ENDPOINT_URL"
+  | gzip > "backups/$(date +%F).sql.gz"
 ```
+
+Ship those somewhere off the box — any object store or backup target will do;
+the deployment no longer provisions one of its own.
 
 **The worker cannot be scaled.** `--beat` runs the periodic scheduler inside
 the worker container, which is only safe with exactly one of them — two

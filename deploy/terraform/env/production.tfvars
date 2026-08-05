@@ -1,5 +1,5 @@
 # Production, on the single_host topology: every container on one box, exactly
-# like compose.yml, with PostgreSQL, Redis and MinIO running alongside the
+# like compose.yml, with PostgreSQL and Redis running alongside the
 # application on a persistent volume.
 #
 #   terraform init -backend-config=env/production.backend.hcl
@@ -39,7 +39,7 @@ image_tag = "latest"
 github_repository        = "TheoGoudout/greensecops"
 github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 
-# One group running all seven containers plus PostgreSQL, Redis and MinIO.
+# One group running all seven containers plus PostgreSQL and Redis.
 # t4g.large (2 vCPU / 8 GiB) is the smallest size that comfortably holds the
 # lot; t4g.xlarge if the Celery workers are busy.
 groups = {
@@ -52,8 +52,6 @@ celery_concurrency = 4
 state_volume_size               = 100
 state_volume_snapshot_retention = 14
 
-artifact_bucket_name          = "greensecops-artifacts-production-CHANGEME"
-artifact_bucket_force_destroy = false
 access_log_bucket_name        = "greensecops-alb-logs-production-CHANGEME"
 ansible_transfer_bucket_name  = "greensecops-ansible-production-CHANGEME"
 

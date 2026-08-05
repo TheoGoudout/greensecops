@@ -75,9 +75,6 @@ class TerraformScan(SQLModel, table=True):
     commit_sha: str | None = Field(default=None, max_length=64)
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)
-    # Object-storage key (see services/storage) for the fetched .tf bundle fed
-    # to hcl2json, when persisted — too large/sensitive for a Postgres column.
-    artifact_object_key: str | None = Field(default=None, max_length=512)
     error_message: str | None = Field(default=None, max_length=2048)
     failure_kind: AnalysisFailureKind | None = Field(default=None)
     created_at: datetime | None = Field(
