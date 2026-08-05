@@ -3,7 +3,7 @@ package greensecops.container_docker.energy.compose_unbounded_log_files_test
 import data.greensecops.container_docker.energy.compose_unbounded_log_files as unbounded_logs
 import rego.v1
 
-_compose(services) := {"compose_files": [{
+_compose(services) := {"effective_compose_files": [{
 	"__docker_file": "compose.yml",
 	"is_override": false,
 	"services": services,
@@ -71,13 +71,27 @@ test_no_violation_for_a_null_service if {
 }
 
 # An override fragment inherits logging from the base file, so its absence
-# there proves nothing.
-test_no_violation_in_an_override_fragment if {
-	violations := unbounded_logs.violations with input as {"compose_files": [{
-		"__docker_file": "compose.override.yml",
-		"is_override": true,
-		"services": {"api": _service({})},
-	}]}
+# there proves nothing — the rule reads only the merged configuration, and the
+# raw documents alongside it are for presence-based rules.
+test_no_violation_on_the_raw_files_of_a_merged_pair if {
+	violations := unbounded_logs.violations with input as {
+		"compose_files": [
+			{
+				"__docker_file": "compose.yml",
+				"is_override": false,
+				"services": {"api": _service({})},
+			},
+			{
+				"__docker_file": "compose.override.yml",
+				"is_override": true,
+				"services": {"api": {"logging": {"options": {"max-size": "10m"}}}},
+			},
+		],
+		"effective_compose_files": [{
+			"__docker_file": "compose.yml",
+			"services": {"api": _service({"logging": {"options": {"max-size": "10m"}}})},
+		}],
+	}
 	count(violations) == 0
 }
 

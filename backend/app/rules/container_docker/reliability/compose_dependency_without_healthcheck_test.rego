@@ -6,7 +6,7 @@ import rego.v1
 # Compose accepts `depends_on` as a list of names or as a map keyed by name
 # with a condition; both spellings have to be understood.
 
-_compose(services) := {"compose_files": [{
+_compose(services) := {"effective_compose_files": [{
 	"__docker_file": "compose.yml",
 	"is_override": false,
 	"services": services,
@@ -59,15 +59,33 @@ test_no_violation_when_the_dependency_is_not_defined_here if {
 	count(violations) == 0
 }
 
-test_no_violation_in_an_override_fragment if {
-	violations := dependency_unhealthy.violations with input as {"compose_files": [{
-		"__docker_file": "compose.override.yml",
-		"is_override": true,
-		"services": {
-			"db": _service({}),
-			"api": _service({"depends_on": ["db"]}),
-		},
-	}]}
+# The rule judges the merged configuration; the raw documents beside it exist
+# for presence-based rules, which need the file the offending line is in.
+test_no_violation_on_the_raw_files_of_a_merged_pair if {
+	violations := dependency_unhealthy.violations with input as {
+		"compose_files": [
+			{
+				"__docker_file": "compose.yml",
+				"is_override": false,
+				"services": {
+					"db": _service({}),
+					"api": _service({"depends_on": ["db"]}),
+				},
+			},
+			{
+				"__docker_file": "compose.override.yml",
+				"is_override": true,
+				"services": {"db": {"healthcheck": _healthcheck}},
+			},
+		],
+		"effective_compose_files": [{
+			"__docker_file": "compose.yml",
+			"services": {
+				"db": _service({"healthcheck": _healthcheck}),
+				"api": _service({"depends_on": ["db"]}),
+			},
+		}],
+	}
 	count(violations) == 0
 }
 

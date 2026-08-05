@@ -37,12 +37,13 @@ _has_restart_policy(service) if service.restart == "no"
 
 _has_restart_policy(service) if service.deploy.restart_policy
 
+# `effective_compose_files` is one document per configuration, with a base and
+# its override already merged — absence is only meaningful about a complete
+# configuration, so that is what this rule reads. The per-service
+# `__docker_file` is preferred over the document's because a service the
+# override introduces is not in the base file the merged document is named for.
 violations contains violation if {
-	some cf in input.compose_files
-
-	# An override fragment inherits what it does not restate from the base
-	# file, so absence here proves nothing. See merge.is_override_file.
-	not cf.is_override
+	some cf in input.effective_compose_files
 	some name, service in cf.services
 	is_object(service)
 	_is_runnable(service)
@@ -51,7 +52,7 @@ violations contains violation if {
 		"rule": "compose_missing_restart_policy",
 		"severity": "medium",
 		"category": "reliability",
-		"file_path": object.get(cf, "__docker_file", ""),
+		"file_path": object.get(service, "__docker_file", object.get(cf, "__docker_file", "")),
 		"service_name": name,
 		"line_start": object.get(service, "__start_line__", null),
 		"line_end": object.get(service, "__end_line__", null),

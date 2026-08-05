@@ -24,6 +24,7 @@ firing) or starts producing a false positive fails the build.
 | `python-service-hardened/` | The same application, fixed. Must trip **nothing**. |
 | `node-multistage/` | A correct multi-stage Node build — cached dependency layer, toolchain confined to the builder. Must trip nothing. |
 | `compose-privileged-agent/` | Compose-only, no Dockerfile: proves a target containing just Compose files still reports. |
+| `compose-with-override/` | A base file and its override. Proves the merge in both directions — no absence finding against a service the override completes, and full grading of one the override introduces. |
 
 The two clean cases matter as much as the bad one. A rule that fires on
 `python-service-hardened/` is producing noise on a file that is already
@@ -56,10 +57,29 @@ the folder is ignored. A file that fails to parse fails the case loudly rather
 than being silently skipped, so an example can never pass because it was not
 actually scanned.
 
-Note that Compose's runtime merge semantics are deliberately **not** modelled:
-`compose.yml` and `compose.override.yml` are each evaluated as they appear on
-disk, and `extends:` is not resolved. See the module docstring in
-`backend/app/services/docker/merge.py`.
+### How Compose overrides are graded
+
+`compose.yml` and `compose.override.yml` are one configuration, not two files,
+and are graded as one. The merge follows Compose's own semantics — scalars
+replaced, mappings merged key-by-key, most sequences (`ports`, `volumes`,
+`cap_add`, `security_opt`, …) **appended**, and `command` / `entrypoint` /
+`env_file` / `healthcheck` **replaced**. See
+`backend/app/services/docker/compose_merge.py`.
+
+Which list a rule reads follows from what it asserts:
+
+- A rule firing on the **presence** of something dangerous reads the files as
+  they sit on disk, so it reports the file the offending line is in.
+- A rule firing on the **absence** of a setting reads the merged configuration,
+  because absence is only meaningful about a complete one. A setting the
+  override supplies is no longer reported missing from the base, and a service
+  the override introduces is graded rather than skipped.
+
+`compose-with-override/` is the regression test for both directions.
+
+Still **not** modelled: `extends:` (its `file:` key can point at a path the
+fetcher never collected, so it needs a second fetch pass rather than a merge),
+the `!reset` / `!override` tags, profiles, and `${VAR}` interpolation.
 
 ## Running it locally
 

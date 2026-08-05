@@ -3,7 +3,7 @@ package greensecops.container_docker.security.compose_missing_no_new_privileges_
 import data.greensecops.container_docker.security.compose_missing_no_new_privileges as no_new_privs
 import rego.v1
 
-_compose(services) := {"compose_files": [{
+_compose(services) := {"effective_compose_files": [{
 	"__docker_file": "compose.yml",
 	"is_override": false,
 	"services": services,
@@ -59,12 +59,28 @@ test_no_violation_for_a_null_service if {
 	count(violations) == 0
 }
 
-test_no_violation_in_an_override_fragment if {
-	violations := no_new_privs.violations with input as {"compose_files": [{
-		"__docker_file": "compose.override.yml",
-		"is_override": true,
-		"services": {"api": _service({})},
-	}]}
+# Only the merged configuration reaches this rule; the raw documents beside it
+# serve the presence-based rules, which need the file the option is missing
+# from to be the file a reader would open.
+test_no_violation_on_the_raw_files_of_a_merged_pair if {
+	violations := no_new_privs.violations with input as {
+		"compose_files": [
+			{
+				"__docker_file": "compose.yml",
+				"is_override": false,
+				"services": {"api": _service({})},
+			},
+			{
+				"__docker_file": "compose.override.yml",
+				"is_override": true,
+				"services": {"api": {"security_opt": ["no-new-privileges:true"]}},
+			},
+		],
+		"effective_compose_files": [{
+			"__docker_file": "compose.yml",
+			"services": {"api": _service({"security_opt": ["no-new-privileges:true"]})},
+		}],
+	}
 	count(violations) == 0
 }
 

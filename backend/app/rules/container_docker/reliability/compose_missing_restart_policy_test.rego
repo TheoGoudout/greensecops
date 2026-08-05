@@ -3,7 +3,7 @@ package greensecops.container_docker.reliability.compose_missing_restart_policy_
 import data.greensecops.container_docker.reliability.compose_missing_restart_policy
 import rego.v1
 
-_compose(services) := {"compose_files": [{
+_compose(services) := {"effective_compose_files": [{
 	"__docker_file": "compose.yml",
 	"services": services,
 }]}
@@ -34,12 +34,26 @@ test_no_violation_when_restart_is_explicitly_no if {
 }
 
 # An override fragment restates only what it changes; the base file may well
-# declare a restart policy, so absence here is not evidence of anything.
-test_no_violation_on_a_compose_override_fragment if {
-	violations := compose_missing_restart_policy.violations with input as {"compose_files": [{
-		"__docker_file": "compose.override.yml",
-		"is_override": true,
-		"services": {"api": _service({})},
-	}]}
+# declare a restart policy, so absence here is not evidence of anything. Only
+# the merged configuration reaches this rule.
+test_no_violation_on_the_raw_files_of_a_merged_pair if {
+	violations := compose_missing_restart_policy.violations with input as {
+		"compose_files": [
+			{
+				"__docker_file": "compose.yml",
+				"is_override": false,
+				"services": {"api": _service({})},
+			},
+			{
+				"__docker_file": "compose.override.yml",
+				"is_override": true,
+				"services": {"api": {"restart": "unless-stopped"}},
+			},
+		],
+		"effective_compose_files": [{
+			"__docker_file": "compose.yml",
+			"services": {"api": _service({"restart": "unless-stopped"})},
+		}],
+	}
 	count(violations) == 0
 }

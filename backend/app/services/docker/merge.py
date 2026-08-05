@@ -8,12 +8,17 @@ correlate across them: a Compose service's ``build.dockerfile`` points at a
 Dockerfile in the same target, and a rule that wants to say "this service runs
 a root container" needs both documents in one input.
 
-**Not modelled in v1:** Compose's runtime merge semantics. ``compose.yml`` and
-``compose.override.yml`` are merged by the Compose CLI at invocation time, and
-``extends:`` pulls in fragments from other files. Each Compose file is
-evaluated as it appears on disk instead, so a setting that only becomes unsafe
-after an override is not seen, and one that an override *fixes* still reports.
-This is the same class of documented approximation as
+Two lists come out of it, because a Compose target answers two different
+questions. ``compose_files`` is the files as they sit on disk, which is what a
+rule firing on the *presence* of something dangerous must report — the line is
+in one of them. ``effective_compose_files`` is one document per configuration,
+with a base and its override merged the way Compose merges them (see
+``compose_merge``), which is what a rule firing on the *absence* of a setting
+must read, since absence is only meaningful about a complete configuration.
+
+``extends:`` is still not resolved — its ``file:`` key can point at a path the
+fetcher never collected, so it needs a second fetch pass rather than a merge.
+That remains the same class of documented approximation as
 ``hcl_parser.derive_module_path`` being a directory heuristic rather than
 resolved ``module {}`` invocation — honest and stable, not complete.
 
@@ -25,6 +30,7 @@ import logging
 from pathlib import PurePosixPath
 from typing import Any
 
+from .compose_merge import effective_compose_documents
 from .compose_parser import parse_compose_content
 from .dockerfile_parser import parse_dockerfile_content
 
@@ -87,10 +93,10 @@ def is_override_file(path: str) -> bool:
 
     An override is not a standalone configuration: Compose auto-loads it on
     top of the base file, and a service listed in it inherits everything it
-    doesn't restate. That makes any rule which fires on the *absence* of a
-    setting unsound here — the base file may well supply it — so those rules
-    exclude override documents while rules that fire on the *presence* of
-    something dangerous keep firing everywhere.
+    doesn't restate. That is what makes it a *fragment*, and the flag is how
+    ``compose_merge`` knows which document to fold into which — the merged
+    result is what absence-based rules read, so that a setting the override
+    supplies is no longer reported missing from the base.
 
     Deliberately narrow: only the literal ``.override.`` infix qualifies,
     because that is the one filename Compose loads automatically and therefore
@@ -109,6 +115,9 @@ def merge_docker_files(files: list[tuple[str, str]]) -> dict[str, list[Any]]:
     from ``GitHubAppClient`` — same rationale as ``merge_terraform_configs``.
     Files that fail to parse are skipped with a warning rather than aborting
     the scan; unrecognised filenames are ignored entirely.
+
+    See the module docstring for why ``compose_files`` and
+    ``effective_compose_files`` are both returned.
     """
     dockerfiles: list[Any] = []
     compose_files: list[Any] = []
@@ -129,4 +138,8 @@ def merge_docker_files(files: list[tuple[str, str]]) -> dict[str, list[Any]]:
         else:
             logger.debug("Ignoring non-Docker file %s", path)
 
-    return {"dockerfiles": dockerfiles, "compose_files": compose_files}
+    return {
+        "dockerfiles": dockerfiles,
+        "compose_files": compose_files,
+        "effective_compose_files": effective_compose_documents(compose_files),
+    }
