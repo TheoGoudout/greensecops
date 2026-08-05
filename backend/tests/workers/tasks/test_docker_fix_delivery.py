@@ -94,7 +94,7 @@ def _deliver(target: DockerTarget, result: FakeDeliveryResult, **kwargs: object)
             ],
         ),
         patch(
-            "app.workers.tasks.docker_fix_delivery._deliver",
+            "app.services.file_fix_delivery._deliver",
             new=AsyncMock(return_value=result),
         ),
     ):

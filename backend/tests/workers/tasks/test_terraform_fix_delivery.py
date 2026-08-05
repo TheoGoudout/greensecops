@@ -77,7 +77,7 @@ def _ready_fix(
 
 def _patch_deliver(result: FixDeliveryResult) -> Any:
     return patch(
-        "app.workers.tasks.terraform_fix_delivery._deliver",
+        "app.services.file_fix_delivery._deliver",
         new=AsyncMock(return_value=result),
     )
 

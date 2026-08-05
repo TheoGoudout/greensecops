@@ -3,13 +3,13 @@
 ``from app.api.mappers import X`` is unaffected by the internal split.
 """
 
+from .base import latest_completed_scan, to_public
 from .cloud import (
     to_cloud_account_public,
     to_cloud_finding_public,
     to_cloud_scan_public,
 )
 from .docker import (
-    latest_completed_docker_scan,
     to_docker_build_telemetry_public,
     to_docker_finding_public,
     to_docker_fix_public,
@@ -51,5 +51,6 @@ __all__ = [
     "to_docker_fix_public",
     "to_docker_build_telemetry_public",
     "to_docker_runtime_finding_public",
-    "latest_completed_docker_scan",
+    "latest_completed_scan",
+    "to_public",
 ]
