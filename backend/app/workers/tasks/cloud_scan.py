@@ -30,7 +30,7 @@ from app.services.cloud.aws_collector import (
     CloudCollectionError,
     collect_account_resources,
 )
-from app.services.deduplication import compute_cloud_finding_fingerprint
+from app.services.deduplication import compute_fingerprint
 from app.services.opa.evaluator import OpaUnavailableError
 from app.services.scoring import compute_score, score_to_grade
 from app.workers.celery_app import celery_app
@@ -144,7 +144,7 @@ def _run_cloud_scan_impl(
                     v.rule_slug,
                 )
                 continue
-            fingerprint = compute_cloud_finding_fingerprint(
+            fingerprint = compute_fingerprint(
                 account.id, rule.id, v.resource_id, v.discriminator
             )
             seen_fingerprints.add(fingerprint)

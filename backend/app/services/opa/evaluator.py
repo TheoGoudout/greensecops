@@ -1,7 +1,8 @@
+import dataclasses
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import httpx
 
@@ -12,7 +13,13 @@ from app.core.config import settings
 from app.services.workflow_parser import parse_workflow_yaml as parse_workflow_yaml
 from app.services.yaml_positions import END_LINE_KEY, START_LINE_KEY
 
+if TYPE_CHECKING:  # pragma: no cover - typing-only import
+    from _typeshed import DataclassInstance
+
 logger = logging.getLogger(__name__)
+
+# Any of the per-domain violation dataclasses below.
+V = TypeVar("V", bound="DataclassInstance")
 
 
 class WorkflowParseError(Exception):
@@ -213,28 +220,58 @@ async def _evaluate_packages(
     return raw_violations
 
 
+# A rego rule emits a flat object whose keys match the violation dataclasses'
+# field names one-for-one, with one exception: the slug is called ``rule``.
+_SLUG_KEY = "rule"
+
+
+def _violation(cls: type[V], raw: dict[str, Any], default_category: str) -> V:
+    """Build one violation dataclass from a raw OPA result object.
+
+    Field-name driven rather than hand-mapped, so a dataclass gaining a new
+    optional locator (a Compose ``service_name``, a cloud ``region``) needs no
+    change here. Anything the rule omitted falls back to the field's own
+    default; a required field the rule left out becomes ``""`` rather than
+    raising, because one malformed rule must not fail the whole evaluation.
+
+    ``default_category`` is per-domain: a rule that omits its category is
+    almost always in that engine's dominant one.
+    """
+    values: dict[str, Any] = {}
+    for field in dataclasses.fields(cls):
+        if field.name == "rule_slug":
+            values[field.name] = raw.get(_SLUG_KEY, "unknown")
+        elif field.name == "category":
+            values[field.name] = raw.get("category", default_category)
+        elif field.name == "severity":
+            values[field.name] = raw.get("severity", "medium")
+        elif field.name in raw:
+            values[field.name] = raw[field.name]
+        elif (
+            field.default is dataclasses.MISSING
+            and field.default_factory is dataclasses.MISSING
+        ):
+            values[field.name] = ""
+    return cls(**values)
+
+
+async def _evaluate(
+    payload: dict[str, Any],
+    packages: list[str],
+    cls: type[V],
+    default_category: str,
+) -> list[V]:
+    """Evaluate ``payload`` against ``packages`` and map the results to ``cls``."""
+    raw = await _evaluate_packages(payload, packages)
+    return [_violation(cls, v, default_category) for v in raw]
+
+
 async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
     parsed = parse_workflow_yaml(raw_content)
     if parsed is None:
         raise WorkflowParseError("Workflow file is not a valid YAML mapping")
 
-    raw_violations = await _evaluate_packages(parsed, POLICY_PACKAGES)
-    violations = [
-        OpaViolation(
-            rule_slug=v.get("rule", "unknown"),
-            severity=v.get("severity", "medium"),
-            category=v.get("category", "reliability"),
-            message=v.get("message", ""),
-            job=v.get("job"),
-            step=v.get("step"),
-            step_index=v.get("step_index"),
-            line_start=v.get("line_start"),
-            line_end=v.get("line_end"),
-            context=v.get("context"),
-            discriminator=v.get("discriminator"),
-        )
-        for v in raw_violations
-    ]
+    violations = await _evaluate(parsed, POLICY_PACKAGES, OpaViolation, "reliability")
     # Attribution lives here, where the parsed document already is, rather
     # than in the analysis task — which had to re-parse the same bytes.
     for violation in violations:
@@ -252,24 +289,9 @@ async def evaluate_terraform(
     files merged into one logical document before evaluation, not a single
     raw string.
     """
-    raw_violations = await _evaluate_packages(
-        parsed_config, IAC_TERRAFORM_POLICY_PACKAGES
+    return await _evaluate(
+        parsed_config, IAC_TERRAFORM_POLICY_PACKAGES, TerraformOpaViolation, "security"
     )
-    return [
-        TerraformOpaViolation(
-            rule_slug=v.get("rule", "unknown"),
-            severity=v.get("severity", "medium"),
-            category=v.get("category", "security"),
-            message=v.get("message", ""),
-            resource_address=v.get("resource_address"),
-            file_path=v.get("file_path", ""),
-            line_start=v.get("line_start"),
-            line_end=v.get("line_end"),
-            context=v.get("context"),
-            discriminator=v.get("discriminator"),
-        )
-        for v in raw_violations
-    ]
 
 
 async def evaluate_docker(
@@ -282,25 +304,12 @@ async def evaluate_docker(
     folded into one document so rules can correlate a Compose service with the
     Dockerfile it builds, which a per-file call could not do.
     """
-    raw_violations = await _evaluate_packages(
-        merged_document, CONTAINER_DOCKER_POLICY_PACKAGES
+    return await _evaluate(
+        merged_document,
+        CONTAINER_DOCKER_POLICY_PACKAGES,
+        DockerOpaViolation,
+        "security",
     )
-    return [
-        DockerOpaViolation(
-            rule_slug=v.get("rule", "unknown"),
-            severity=v.get("severity", "medium"),
-            category=v.get("category", "security"),
-            message=v.get("message", ""),
-            file_path=v.get("file_path", ""),
-            service_name=v.get("service_name"),
-            stage_name=v.get("stage_name"),
-            line_start=v.get("line_start"),
-            line_end=v.get("line_end"),
-            context=v.get("context"),
-            discriminator=v.get("discriminator"),
-        )
-        for v in raw_violations
-    ]
 
 
 async def evaluate_container_runtime(
@@ -314,19 +323,12 @@ async def evaluate_container_runtime(
     dataclass — both dynamic domains persist evidence/recommendation rather
     than message/context, so the shape is genuinely the same one.
     """
-    raw_violations = await _evaluate_packages(
-        telemetry, CONTAINER_RUNTIME_POLICY_PACKAGES
+    return await _evaluate(
+        telemetry,
+        CONTAINER_RUNTIME_POLICY_PACKAGES,
+        CiTelemetryOpaViolation,
+        "energy",
     )
-    return [
-        CiTelemetryOpaViolation(
-            rule_slug=v.get("rule", "unknown"),
-            severity=v.get("severity", "medium"),
-            category=v.get("category", "energy"),
-            evidence=v.get("evidence", ""),
-            recommendation=v.get("recommendation", ""),
-        )
-        for v in raw_violations
-    ]
 
 
 async def evaluate_ci_telemetry(
@@ -339,17 +341,9 @@ async def evaluate_ci_telemetry(
     counterpart of ``evaluate_workflow``'s static YAML analysis: same engine,
     same rule-authoring model, different signal.
     """
-    raw_violations = await _evaluate_packages(telemetry, CI_TELEMETRY_POLICY_PACKAGES)
-    return [
-        CiTelemetryOpaViolation(
-            rule_slug=v.get("rule", "unknown"),
-            severity=v.get("severity", "medium"),
-            category=v.get("category", "reliability"),
-            evidence=v.get("evidence", ""),
-            recommendation=v.get("recommendation", ""),
-        )
-        for v in raw_violations
-    ]
+    return await _evaluate(
+        telemetry, CI_TELEMETRY_POLICY_PACKAGES, CiTelemetryOpaViolation, "reliability"
+    )
 
 
 async def evaluate_cloud(resources: dict[str, Any]) -> list[CloudOpaViolation]:
@@ -360,18 +354,6 @@ async def evaluate_cloud(resources: dict[str, Any]) -> list[CloudOpaViolation]:
     normalized/merged across regions, mirroring how ``evaluate_terraform``
     takes an already-merged root config rather than raw files.
     """
-    raw_violations = await _evaluate_packages(resources, CLOUD_AWS_POLICY_PACKAGES)
-    return [
-        CloudOpaViolation(
-            rule_slug=v.get("rule", "unknown"),
-            severity=v.get("severity", "medium"),
-            category=v.get("category", "security"),
-            message=v.get("message", ""),
-            resource_type=v.get("resource_type", ""),
-            resource_id=v.get("resource_id", ""),
-            region=v.get("region"),
-            context=v.get("context"),
-            discriminator=v.get("discriminator"),
-        )
-        for v in raw_violations
-    ]
+    return await _evaluate(
+        resources, CLOUD_AWS_POLICY_PACKAGES, CloudOpaViolation, "security"
+    )

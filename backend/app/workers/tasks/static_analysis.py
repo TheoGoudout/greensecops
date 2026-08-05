@@ -33,7 +33,7 @@ from app.models import (
 from app.services import state_machines as sm
 from app.services.deduplication import (
     compute_content_hash,
-    compute_issue_fingerprint,
+    compute_fingerprint,
     is_duplicate,
 )
 from app.services.events import publisher as events_pub
@@ -634,9 +634,9 @@ def _run_static_analysis_impl(
                 # every issue in it and created replacements, losing any
                 # `ignored` state and re-triggering fix generation. The other
                 # three engines never key on a line for exactly this reason
-                # (see compute_docker_finding_fingerprint); a rule that can
-                # fire twice at one (job, step_index) sets a discriminator.
-                fingerprint = compute_issue_fingerprint(
+                # (see compute_fingerprint); a rule that can fire twice at one
+                # (job, step_index) sets a discriminator.
+                fingerprint = compute_fingerprint(
                     wf_record.id, rule.id, v.job, v.step_index, v.discriminator
                 )
                 seen_fingerprints.add(fingerprint)

@@ -28,7 +28,7 @@ from app.models import (
     ScanStatus,
 )
 from app.services import state_machines as sm
-from app.services.deduplication import compute_docker_finding_fingerprint
+from app.services.deduplication import compute_fingerprint
 from app.services.docker.merge import merge_docker_files
 from app.services.opa.evaluator import OpaUnavailableError
 from app.services.scoring import compute_score, score_to_grade
@@ -171,7 +171,7 @@ def _run_docker_scan_impl(
                     v.rule_slug,
                 )
                 continue
-            fingerprint = compute_docker_finding_fingerprint(
+            fingerprint = compute_fingerprint(
                 target.id, rule.id, v.file_path, v.discriminator
             )
             seen_fingerprints.add(fingerprint)

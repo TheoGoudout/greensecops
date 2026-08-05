@@ -2,26 +2,51 @@
 
 from app.services.badge_signing import (
     build_badge_svg_url,
+    repo_badge_message,
     sign_badge,
-    sign_terraform_root_badge,
     verify_badge,
-    verify_terraform_root_badge,
 )
 
+# Badge signatures are baked into URLs users paste into their READMEs, so a
+# change to how a message is built silently breaks every badge already out
+# there. These pin the three subject kinds against exactly that.
+_PINNED = {
+    repo_badge_message("acme", "web", "main"): "88ac476cdac520f86f20140118aa1b64",
+    "11111111-1111-1111-1111-111111111111": "ab7c1e6f0b6c01a4f12265b0aa38a921",
+    "22222222-2222-2222-2222-222222222222": "4f3ac07c37c2655a3f0e3e236729b7b4",
+}
 
-def test_sign_is_stable_and_branch_specific() -> None:
-    a = sign_badge("owner", "repo", "main")
-    assert a == sign_badge("owner", "repo", "main")
-    assert a != sign_badge("owner", "repo", "dev")
-    assert a != sign_badge("owner", "other", "main")
+
+def test_signatures_are_pinned() -> None:
+    for message, expected in _PINNED.items():
+        assert sign_badge(message) == expected
+
+
+def test_repo_badge_message_shape() -> None:
+    assert repo_badge_message("acme", "web", "main") == "acme/web/main"
+
+
+def test_sign_is_stable_and_message_specific() -> None:
+    a = sign_badge(repo_badge_message("owner", "repo", "main"))
+    assert a == sign_badge(repo_badge_message("owner", "repo", "main"))
+    assert a != sign_badge(repo_badge_message("owner", "repo", "dev"))
+    assert a != sign_badge(repo_badge_message("owner", "other", "main"))
 
 
 def test_verify_roundtrip() -> None:
-    sig = sign_badge("owner", "repo", "main")
-    assert verify_badge("owner", "repo", "main", sig) is True
-    assert verify_badge("owner", "repo", "main", "nope") is False
-    assert verify_badge("owner", "repo", "main", None) is False
-    assert verify_badge("owner", "repo", "dev", sig) is False
+    message = repo_badge_message("owner", "repo", "main")
+    sig = sign_badge(message)
+    assert verify_badge(message, sig) is True
+    assert verify_badge(message, "nope") is False
+    assert verify_badge(message, None) is False
+    assert verify_badge(repo_badge_message("owner", "repo", "dev"), sig) is False
+
+
+def test_id_keyed_subjects_are_distinct() -> None:
+    """A Terraform root and a Docker target are signed by bare row id, so two
+    different ids must never share a signature."""
+    assert sign_badge("root-1") == sign_badge("root-1")
+    assert sign_badge("root-1") != sign_badge("root-2")
 
 
 def test_build_url_signs_only_private() -> None:
@@ -30,18 +55,4 @@ def test_build_url_signs_only_private() -> None:
 
     assert public.endswith("/badges/owner/repo/main.svg")
     assert "?sig=" not in public
-    assert f"?sig={sign_badge('owner', 'repo', 'main')}" in private
-
-
-def test_terraform_root_sign_is_stable_and_id_specific() -> None:
-    a = sign_terraform_root_badge("root-1")
-    assert a == sign_terraform_root_badge("root-1")
-    assert a != sign_terraform_root_badge("root-2")
-
-
-def test_terraform_root_verify_roundtrip() -> None:
-    sig = sign_terraform_root_badge("root-1")
-    assert verify_terraform_root_badge("root-1", sig) is True
-    assert verify_terraform_root_badge("root-1", "nope") is False
-    assert verify_terraform_root_badge("root-1", None) is False
-    assert verify_terraform_root_badge("root-2", sig) is False
+    assert f"?sig={sign_badge(repo_badge_message('owner', 'repo', 'main'))}" in private

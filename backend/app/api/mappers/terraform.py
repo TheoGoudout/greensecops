@@ -29,9 +29,9 @@ def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
     latest_completed = latest_completed_terraform_scan(root)
     badge_sig: str | None = None
     if root.repository and root.repository.is_private:
-        from app.services.badge_signing import sign_terraform_root_badge
+        from app.services.badge_signing import sign_badge
 
-        badge_sig = sign_terraform_root_badge(str(root.id))
+        badge_sig = sign_badge(str(root.id))
     return TerraformRootPublic(
         id=root.id,
         repo_id=root.repo_id,
