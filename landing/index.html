@@ -79,14 +79,14 @@
       <div class="hero__copy">
         <div class="hero__eyebrow">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="6"/></svg>
-          CI/CD · Terraform · Cloud
+          CI/CD · Terraform · Docker · Cloud
         </div>
         <h1 class="hero__headline" id="hero-heading">
           Grade Your Whole&nbsp;Pipeline.<br>
           <span>Ship With Confidence.</span>
         </h1>
         <p class="hero__sub">
-          GreenSecOps grades every layer of your delivery pipeline — GitHub Actions workflows, Terraform, and your live AWS account — from A+++ to F across security, reliability, performance, energy efficiency, and maintainability, with AI-generated fixes ready to merge.
+          GreenSecOps grades every layer of your delivery pipeline — GitHub Actions workflows, Terraform, your Dockerfiles, and your live AWS account — from A+++ to F across security, reliability, performance, energy efficiency, and maintainability, with AI-generated fixes ready to merge.
         </p>
         <div class="hero__actions">
           <a href="${APP_URL}/signup" class="btn btn--primary btn--lg">
@@ -134,11 +134,11 @@
   <div class="container">
     <div class="section__header section__header--center">
       <div class="section__label">What We Analyze</div>
-      <h2 class="section__heading" id="surfaces-heading">Three surfaces, one grading engine</h2>
-      <p class="section__sub">GreenSecOps runs the same rule catalog and A+++ to F grade model across your CI/CD workflows, your Terraform, and your live AWS account. Pick a surface to see exactly what we check.</p>
+      <h2 class="section__heading" id="surfaces-heading">Four surfaces, one grading engine</h2>
+      <p class="section__sub">GreenSecOps runs the same rule catalog and A+++ to F grade model across your CI/CD workflows, your Terraform, your Dockerfiles, and your live AWS account. Pick a surface to see exactly what we check.</p>
     </div>
 
-    <div class="surfaces-grid surfaces-grid--3">
+    <div class="surfaces-grid">
       <a href="./workflows.html" class="surface-card surface-card--workflow">
         <div class="surface-card__icon">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -169,6 +169,24 @@
         <span class="surface-card__tag">Static analysis</span>
         <span class="surface-card__link">
           Explore Terraform
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <a href="./docker.html" class="surface-card surface-card--docker">
+        <div class="surface-card__icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="2.5" y="8.5" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="8" y="8.5" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="8" y="3.5" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M2 14c1.6 2.7 4.6 4 8 4 3.8 0 6.4-1.9 7.6-5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="surface-card__title">Docker &amp; Compose</div>
+        <p class="surface-card__desc">Every <code>Dockerfile</code> and Compose file in your repo, graded with no setup — root containers, unpinned base images, secrets in build args, broken layer caching — then fixed in a pull request.</p>
+        <span class="surface-card__tag">Static analysis</span>
+        <span class="surface-card__link">
+          Explore Docker
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
         </span>
       </a>
