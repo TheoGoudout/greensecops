@@ -16,27 +16,13 @@ identical ``__tf_file`` tagging and per-block-type list-concatenation feed OPA.
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-RULES_DIR = ROOT / "backend" / "app" / "rules"
-OPA_BIN = os.environ.get("OPA_BIN", "opa")
+from opa_eval import OPA_BIN, ROOT, RULES_DIR, domain_query, run_opa_eval
 
-# Evaluate ONLY the iac_terraform packages, exactly like production's
-# app.services.opa.evaluator.evaluate_terraform. The cross-domain aggregate is
-# deliberately not used here: some ci_workflow rules fire on a negation (e.g.
-# `not input.name`), which is vacuously true for a Terraform document and would
-# be a cross-domain false positive. This comprehension collects every violation
-# under greensecops.iac_terraform.<category>.<rule> and nothing else.
-TERRAFORM_VIOLATIONS_QUERY = (
-    "[v | v := data.greensecops.iac_terraform[_][_].violations[_]]"
-)
+TERRAFORM_VIOLATIONS_QUERY = domain_query("iac_terraform")
 
 # Reuse the exact parse+merge production feeds to OPA rather than
 # re-implementing HCL handling here.
@@ -81,30 +67,7 @@ def evaluate_violations(merged_config: dict[str, Any]) -> list[dict[str, Any]]:
     category, resource_address, file_path, line_start, line_end, message), so
     callers can either report them in detail or reduce them to slugs.
     """
-    with tempfile.NamedTemporaryFile(
-        "w", suffix=".json", delete=False, encoding="utf-8"
-    ) as handle:
-        json.dump(merged_config, handle)
-        input_path = handle.name
-    cmd = [
-        OPA_BIN,
-        "eval",
-        "-d",
-        str(RULES_DIR),
-        "-f",
-        "raw",
-        "-i",
-        input_path,
-        TERRAFORM_VIOLATIONS_QUERY,
-    ]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    finally:
-        os.unlink(input_path)
-    if proc.returncode != 0:
-        raise RuntimeError(f"opa eval failed:\n{proc.stderr.strip()}")
-    violations: list[dict[str, Any]] = json.loads(proc.stdout or "[]")
-    return violations
+    return run_opa_eval(merged_config, TERRAFORM_VIOLATIONS_QUERY)
 
 
 def collect_tf_files(

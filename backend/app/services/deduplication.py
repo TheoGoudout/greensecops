@@ -10,94 +10,48 @@ def compute_content_hash(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def compute_issue_fingerprint(
-    workflow_file_id: uuid.UUID,
-    rule_id: uuid.UUID,
-    job: str | None,
-    step_index: int | None,
-    discriminator: str | None = None,
+def compute_fingerprint(
+    scope_id: uuid.UUID, rule_id: uuid.UUID, *parts: str | int | None
 ) -> str:
-    """Stable 16-char hex key for (workflow_file, rule, job, step_index[, discriminator]).
+    """Stable 16-char hex identity for a violation, scoped to ``scope_id``.
 
-    Used as the unique identity of an issue across analysis re-runs. The
-    step's position in the job (not its action reference) keys the hash so
-    two steps using the same action get distinct fingerprints.
+    This is what an upsert matches on across re-runs, so a recurring violation
+    updates its existing row and keeps its resolved/ignored history instead of
+    inserting a duplicate. The scope is always the thing a violation persists
+    *against* — a workflow file, a Terraform root, a Docker target, a cloud
+    account — never a single analysis or scan, which is why that history
+    survives a re-scan at all.
 
-    discriminator is set by rules that can fire multiple times at the same
-    (job, step_index) — e.g. hardcoded_secrets uses the env var name so that
-    two different secrets in the same step produce distinct fingerprints.
+    ``parts`` are the locators that distinguish two violations of the same
+    rule within one scope, and each engine passes its own:
 
-    Deliberately never keyed on a line number, matching
-    compute_docker_finding_fingerprint. An issue's identity has to survive an
-    unrelated edit that shifts the file; keying on the line meant a blank line
-    added at the top resolved every issue below it and inserted replacements,
-    discarding whether the user had ignored them.
+    - workflow: ``(job, step_index, discriminator)``. The step's *position*
+      keys the hash, not its action reference, so two steps using the same
+      action stay distinct.
+    - terraform: ``(resource_address, discriminator)``.
+    - docker: ``(file_path, discriminator)`` — a Dockerfile has no addressable
+      resources, so the file is the unit a rule fires against.
+    - cloud: ``(resource_id, discriminator)``.
+
+    A ``discriminator`` is what a rule that can fire twice at the same locator
+    supplies to keep the two apart: the env var name for ``hardcoded_secrets``,
+    the service name for a Compose rule, the stage name for a Dockerfile rule.
+    It must **never** be a line number — an unrelated edit higher up the file
+    shifts every line below it and would orphan each finding's history on the
+    next scan.
+
+    ``None`` renders as an empty segment, so an absent locator and an empty one
+    produce the same key. That is deliberate: a rule either reports a locator
+    or it does not.
+
+    The key layout is load-bearing. Every fingerprint already in the database
+    was derived from it, so changing the joined string orphans every existing
+    row; ``tests/services/test_deduplication.py`` pins the output of every call
+    shape against exactly that risk.
     """
-    step_part = "" if step_index is None else step_index
-    disc_part = "" if discriminator is None else discriminator
-    key = f"{workflow_file_id}:{rule_id}:{job or ''}:{step_part}:{disc_part}"
-    return hashlib.sha256(key.encode()).hexdigest()[:16]
-
-
-def compute_terraform_finding_fingerprint(
-    terraform_root_id: uuid.UUID,
-    rule_id: uuid.UUID,
-    resource_address: str | None,
-    discriminator: str | None = None,
-) -> str:
-    """Stable 16-char hex key for (root, rule, resource_address[, discriminator]).
-
-    The Terraform analogue of ``compute_issue_fingerprint``: identifies a
-    finding across scan re-runs. Scoped to the root (not one scan) the same
-    way an Issue's fingerprint is scoped to its workflow file, not one
-    Analysis — a re-scan must recognize "the same" finding to keep its
-    resolved/ignored history rather than creating a duplicate row.
-    """
-    disc_part = "" if discriminator is None else discriminator
-    key = f"{terraform_root_id}:{rule_id}:{resource_address or ''}:{disc_part}"
-    return hashlib.sha256(key.encode()).hexdigest()[:16]
-
-
-def compute_docker_finding_fingerprint(
-    docker_target_id: uuid.UUID,
-    rule_id: uuid.UUID,
-    file_path: str,
-    discriminator: str | None = None,
-) -> str:
-    """Stable 16-char hex key for (target, rule, file_path[, discriminator]).
-
-    The Docker analogue of ``compute_terraform_finding_fingerprint``, keyed on
-    the file rather than a resource address: a Dockerfile has no addressable
-    resources, so the file *is* the unit a rule fires against. Rules that can
-    fire more than once per file supply a discriminator — the service name for
-    Compose rules, the stage name or offending instruction text for Dockerfile
-    rules — so two findings of the same rule in one file stay distinct across
-    re-scans.
-
-    Rules must **not** discriminate on a line number: an unrelated edit higher
-    up the file shifts every line below it and would orphan each finding's
-    resolved/ignored history on the next scan.
-    """
-    disc_part = "" if discriminator is None else discriminator
-    key = f"{docker_target_id}:{rule_id}:{file_path}:{disc_part}"
-    return hashlib.sha256(key.encode()).hexdigest()[:16]
-
-
-def compute_cloud_finding_fingerprint(
-    cloud_account_id: uuid.UUID,
-    rule_id: uuid.UUID,
-    resource_id: str,
-    discriminator: str | None = None,
-) -> str:
-    """Stable 16-char hex key for (account, rule, resource_id[, discriminator]).
-
-    The cloud-posture analogue of ``compute_terraform_finding_fingerprint``:
-    scoped to the account (not one scan), so re-scans recognize "the same"
-    finding across the resource's lifetime rather than creating a duplicate.
-    """
-    disc_part = "" if discriminator is None else discriminator
-    key = f"{cloud_account_id}:{rule_id}:{resource_id}:{disc_part}"
-    return hashlib.sha256(key.encode()).hexdigest()[:16]
+    segments = [str(scope_id), str(rule_id)]
+    segments += ["" if part is None else str(part) for part in parts]
+    return hashlib.sha256(":".join(segments).encode()).hexdigest()[:16]
 
 
 def find_completed_analysis(

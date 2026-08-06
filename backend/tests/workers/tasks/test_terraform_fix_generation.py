@@ -159,7 +159,7 @@ def _patch_fetch(files: list[FakeFile]) -> Any:
 
 def _patch_llm(content: str) -> Any:
     return patch(
-        "app.workers.tasks.terraform_fix_generation._generate_terraform_fix",
+        "app.services.file_fix_generation._generate",
         new=AsyncMock(return_value=FakeLLMResponse(content=content)),
     )
 

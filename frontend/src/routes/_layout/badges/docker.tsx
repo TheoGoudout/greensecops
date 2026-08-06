@@ -1,12 +1,10 @@
-import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useMemo } from "react"
 import type { DockerTargetPublic } from "@/client"
 import { DockerService } from "@/client"
 import {
   BADGE_API_BASE,
   type BadgeEntry,
-  BadgeGrid,
+  BadgePage,
   signedBadgeUrl,
 } from "@/components/BadgeGrid"
 
@@ -34,24 +32,12 @@ function toEntry(target: DockerTargetPublic): BadgeEntry {
 }
 
 function DockerBadges() {
-  const {
-    data: targets,
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["docker-targets"],
-    queryFn: () => DockerService.listDockerTargets({}),
-  })
-
-  const entries = useMemo(() => (targets ?? []).map(toEntry), [targets])
-
   return (
-    <BadgeGrid
-      entries={entries}
-      isLoading={isLoading}
-      isError={isError}
-      errorLabel="Failed to load Docker targets."
-      emptyLabel="No Docker targets found."
+    <BadgePage
+      queryKey={["docker-targets"]}
+      queryFn={() => DockerService.listDockerTargets({})}
+      toEntry={toEntry}
+      subject="Docker targets"
     />
   )
 }

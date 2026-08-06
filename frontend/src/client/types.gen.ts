@@ -96,12 +96,8 @@ export type CloudAccountStatus = 'pending_verification' | 'connected' | 'error' 
 export type CloudFindingPublic = {
     id: string;
     scan_id: string;
-    cloud_account_id: string;
     rule_id: string;
     rule_slug: string;
-    resource_type: string;
-    resource_id: string;
-    region?: (string | null);
     severity: IssueSeverity;
     category: IssueCategory;
     message: string;
@@ -110,22 +106,26 @@ export type CloudFindingPublic = {
     created_at?: (string | null);
     resolved_at?: (string | null);
     resolution_reason?: (FindingResolutionReason | null);
+    cloud_account_id: string;
+    resource_type: string;
+    resource_id: string;
+    region?: (string | null);
 };
 
 export type CloudProvider = 'aws';
 
 export type CloudScanPublic = {
     id: string;
-    cloud_account_id: string;
     status: ScanStatus;
     triggered_by: AnalysisTrigger;
-    region?: (string | null);
-    resource_count?: number;
     score?: (number | null);
     grade?: (string | null);
     error_message?: (string | null);
     created_at?: (string | null);
     completed_at?: (string | null);
+    cloud_account_id: string;
+    region?: (string | null);
+    resource_count?: number;
 };
 
 /**
@@ -193,24 +193,24 @@ export type DockerFilePublic = {
 export type DockerFindingPublic = {
     id: string;
     scan_id: string;
-    docker_target_id: string;
     rule_id: string;
     rule_slug: string;
-    file_path: string;
-    service_name?: (string | null);
-    stage_name?: (string | null);
-    line_start?: (number | null);
-    line_end?: (number | null);
     severity: IssueSeverity;
     category: IssueCategory;
     message: string;
     context?: (string | null);
     status: FindingStatus;
-    fix_id?: (string | null);
-    fix_status?: (FixStatus | null);
     created_at?: (string | null);
     resolved_at?: (string | null);
     resolution_reason?: (FindingResolutionReason | null);
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
+    docker_target_id: string;
+    file_path: string;
+    service_name?: (string | null);
+    stage_name?: (string | null);
+    line_start?: (number | null);
+    line_end?: (number | null);
 };
 
 export type DockerFixGenerateRequest = {
@@ -219,7 +219,6 @@ export type DockerFixGenerateRequest = {
 
 export type DockerFixPublic = {
     id: string;
-    docker_target_id: string;
     file_path: string;
     pr_id?: (string | null);
     llm_provider: LLMProvider;
@@ -232,6 +231,7 @@ export type DockerFixPublic = {
     pr_state?: (PullRequestState | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
+    docker_target_id: string;
 };
 
 /**
@@ -261,17 +261,17 @@ export type DockerRuntimeFixRequest = {
 
 export type DockerScanPublic = {
     id: string;
-    docker_target_id: string;
     status: ScanStatus;
     triggered_by: AnalysisTrigger;
-    branch?: (string | null);
-    commit_sha?: (string | null);
     score?: (number | null);
     grade?: (string | null);
-    file_count?: (number | null);
     error_message?: (string | null);
     created_at?: (string | null);
     completed_at?: (string | null);
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    docker_target_id: string;
+    file_count?: (number | null);
 };
 
 export type DockerTargetCreate = {
@@ -664,25 +664,25 @@ export type TerraformFilePublic = {
 export type TerraformFindingPublic = {
     id: string;
     scan_id: string;
-    terraform_root_id: string;
     rule_id: string;
     rule_slug: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
+    terraform_root_id: string;
     resource_address?: (string | null);
     file_path: string;
     line_start?: (number | null);
     line_end?: (number | null);
     module_path?: (string | null);
     terraform_address?: (string | null);
-    severity: IssueSeverity;
-    category: IssueCategory;
-    message: string;
-    context?: (string | null);
-    status: FindingStatus;
-    fix_id?: (string | null);
-    fix_status?: (FixStatus | null);
-    created_at?: (string | null);
-    resolved_at?: (string | null);
-    resolution_reason?: (FindingResolutionReason | null);
 };
 
 export type TerraformFixGenerateRequest = {
@@ -691,7 +691,6 @@ export type TerraformFixGenerateRequest = {
 
 export type TerraformFixPublic = {
     id: string;
-    terraform_root_id: string;
     file_path: string;
     pr_id?: (string | null);
     llm_provider: LLMProvider;
@@ -704,6 +703,7 @@ export type TerraformFixPublic = {
     pr_state?: (PullRequestState | null);
     created_at?: (string | null);
     delivered_at?: (string | null);
+    terraform_root_id: string;
 };
 
 export type TerraformRootCreate = {
@@ -726,16 +726,16 @@ export type TerraformRootPublic = {
 
 export type TerraformScanPublic = {
     id: string;
-    terraform_root_id: string;
     status: ScanStatus;
     triggered_by: AnalysisTrigger;
-    branch?: (string | null);
-    commit_sha?: (string | null);
     score?: (number | null);
     grade?: (string | null);
     error_message?: (string | null);
     created_at?: (string | null);
     completed_at?: (string | null);
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    terraform_root_id: string;
 };
 
 export type Token = {

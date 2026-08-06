@@ -1,7 +1,7 @@
 # One instance role per service rather than one shared role, so the blast
 # radius of a compromised landing-page container is a landing-page container.
-# Only the backend and the Celery workers can read secrets, touch the artifact
-# bucket, or assume a customer's cloud-posture role.
+# Only the backend and the Celery workers can read secrets or assume a
+# customer's cloud-posture role.
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
@@ -9,7 +9,6 @@ data "aws_region" "current" {}
 
 locals {
   secret_readers   = { for role, cfg in var.roles : role => cfg if cfg.reads_secrets }
-  artifact_users   = { for role, cfg in var.roles : role => cfg if cfg.uses_artifact_store }
   account_scanners = { for role, cfg in var.roles : role => cfg if cfg.scans_customer_accounts }
   volume_managers  = { for role, cfg in var.roles : role => cfg if cfg.manages_state_volume }
 }
@@ -193,52 +192,6 @@ resource "aws_iam_role_policy_attachment" "secret_read" {
   policy_arn = aws_iam_policy.secret_read.arn
 }
 
-# --------------------------------------------------------------------------
-# Artifact store
-# --------------------------------------------------------------------------
-
-data "aws_iam_policy_document" "artifact_store" {
-  statement {
-    sid       = "ListArtifactBucket"
-    effect    = "Allow"
-    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
-    resources = [var.artifact_bucket_arn]
-  }
-
-  statement {
-    sid    = "ReadWriteArtifacts"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-      "s3:AbortMultipartUpload",
-    ]
-    resources = ["${var.artifact_bucket_arn}/*"]
-  }
-
-  statement {
-    sid       = "UseBucketEncryptionKey"
-    effect    = "Allow"
-    actions   = ["kms:Decrypt", "kms:GenerateDataKey"]
-    resources = [var.kms_key_arn]
-  }
-}
-
-resource "aws_iam_policy" "artifact_store" {
-  name        = "${var.name_prefix}-artifact-store"
-  description = "Read and write large scan artifacts in the environment's object store."
-  policy      = data.aws_iam_policy_document.artifact_store.json
-
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "artifact_store" {
-  for_each = local.artifact_users
-
-  role       = aws_iam_role.service[each.key].name
-  policy_arn = aws_iam_policy.artifact_store.arn
-}
 
 # --------------------------------------------------------------------------
 # Customer cloud-posture scanning

@@ -6,11 +6,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import redis as redis_sync
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import Session, col, select
+from sqlmodel import Session
 
-from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     AnalysisFailureKind,
@@ -18,10 +16,8 @@ from app.models import (
     CloudAccount,
     CloudFinding,
     CloudScan,
-    FindingResolutionReason,
     IssueCategory,
     IssueSeverity,
-    Rule,
     RuleDomain,
     ScanStatus,
 )
@@ -30,8 +26,14 @@ from app.services.cloud.aws_collector import (
     CloudCollectionError,
     collect_account_resources,
 )
-from app.services.deduplication import compute_cloud_finding_fingerprint
+from app.services.deduplication import compute_fingerprint
 from app.services.opa.evaluator import OpaUnavailableError
+from app.services.scan_support import (
+    CLOUD_SCAN_LOCK_TTL_SECONDS,
+    load_enabled_rules,
+    resolve_stale_findings,
+    scan_lock,
+)
 from app.services.scoring import compute_score, score_to_grade
 from app.workers.celery_app import celery_app
 
@@ -39,35 +41,6 @@ logger = logging.getLogger(__name__)
 
 # Fallback when an account has no regions configured yet.
 _DEFAULT_REGION = "us-east-1"
-
-
-def _resolve_stale_findings(
-    session: Session, cloud_account_id: uuid.UUID, seen_fingerprints: set[str]
-) -> None:
-    """Resolve open findings of an account not reported by the latest scan.
-
-    Mirrors terraform_analysis._resolve_stale_findings — covers resources
-    that were fixed or deleted since the previous scan.
-    """
-    now = datetime.now(timezone.utc)
-    open_findings = session.exec(
-        select(CloudFinding)
-        .where(CloudFinding.cloud_account_id == cloud_account_id)
-        .where(col(CloudFinding.resolved_at).is_(None))
-    ).all()
-    stale = [f for f in open_findings if f.fingerprint not in seen_fingerprints]
-    for finding in stale:
-        sm.try_advance(finding, sm.FindingMachine, "resolve")
-        finding.resolved_at = now
-        finding.resolution_reason = FindingResolutionReason.no_longer_detected
-        session.add(finding)
-    if stale:
-        session.commit()
-        logger.info(
-            "Resolved %d stale cloud finding(s) for account %s",
-            len(stale),
-            cloud_account_id,
-        )
 
 
 def _run_cloud_scan_impl(
@@ -122,14 +95,7 @@ def _run_cloud_scan_impl(
         # scalar added later fails a test rather than the scan.
         resource_count = sum(len(v) for v in resources.values() if isinstance(v, list))
 
-        rule_map: dict[str, Rule] = {
-            r.slug: r
-            for r in session.exec(
-                select(Rule)
-                .where(Rule.enabled == True)  # noqa: E712
-                .where(Rule.domain == RuleDomain.cloud_aws)
-            ).all()
-        }
+        rule_map = load_enabled_rules(session, RuleDomain.cloud_aws)
 
         seen_fingerprints: set[str] = set()
         score_inputs: list[tuple[str, float]] = []
@@ -144,7 +110,7 @@ def _run_cloud_scan_impl(
                     v.rule_slug,
                 )
                 continue
-            fingerprint = compute_cloud_finding_fingerprint(
+            fingerprint = compute_fingerprint(
                 account.id, rule.id, v.resource_id, v.discriminator
             )
             seen_fingerprints.add(fingerprint)
@@ -198,7 +164,14 @@ def _run_cloud_scan_impl(
         session.add(account)
         session.commit()
 
-        _resolve_stale_findings(session, account.id, seen_fingerprints)
+        resolve_stale_findings(
+            session,
+            CloudFinding,
+            "cloud_account_id",
+            account.id,
+            seen_fingerprints,
+            "cloud",
+        )
 
         logger.info(
             "Cloud scan complete: account=%s score=%.1f grade=%s findings=%d",
@@ -217,15 +190,6 @@ def _run_cloud_scan_impl(
         }
 
 
-# How long a single account scan may hold the per-account lock before it is
-# considered dead and the lock expires on its own. Longer than
-# terraform_analysis.SCAN_LOCK_TTL_SECONDS because a cloud scan is bounded by
-# the AWS API rather than by parsing: fourteen resource types across every
-# configured region. It has to outlast the worst realistic scan, or the lock
-# expires mid-run and a second scan races the first on CloudFinding upserts.
-SCAN_LOCK_TTL_SECONDS = 3600
-
-
 @celery_app.task(name="cloud_scan.run", bind=True, max_retries=3)
 def run_cloud_scan(
     self: Any,  # noqa: ANN401 — celery bound task instance
@@ -233,22 +197,16 @@ def run_cloud_scan(
     trigger: str = "manual",
 ) -> dict[str, str | int | float]:
     # Per-account lock: concurrent scans of the same account race on
-    # CloudFinding upserts and duplicate CloudScan rows, mirroring
-    # terraform_analysis's per-root lock.
-    lock_key = f"greensecops:lock:cloud_scan:{cloud_account_id}"
-    r = redis_sync.Redis.from_url(settings.REDIS_URL)
-    try:
-        if not r.set(lock_key, "1", nx=True, ex=SCAN_LOCK_TTL_SECONDS):
+    # CloudFinding upserts and duplicate CloudScan rows.
+    with scan_lock(
+        f"cloud_scan:{cloud_account_id}", CLOUD_SCAN_LOCK_TTL_SECONDS
+    ) as acquired:
+        if not acquired:
             raise self.retry(countdown=30, max_retries=10)
-        try:
-            return _run_cloud_scan_impl(
-                cloud_account_id=cloud_account_id,
-                trigger=trigger,
-            )
-        finally:
-            r.delete(lock_key)
-    finally:
-        r.close()
+        return _run_cloud_scan_impl(
+            cloud_account_id=cloud_account_id,
+            trigger=trigger,
+        )
 
 
 async def _evaluate(resources: dict[str, Any]) -> Any:

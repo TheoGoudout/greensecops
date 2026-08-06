@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +12,17 @@ import yaml
 from sphinx.application import Sphinx
 from sphinx.util import logging
 
-logger = logging.getLogger(__name__)
+# The backend package is not installed in the docs environment, but
+# app.core.rego_metadata is deliberately stdlib-only so it can be imported
+# from here by path. See that module for why the scanning is shared.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from app.core.rego_metadata import (
+    iter_rule_files,
+    read_metadata_block,
+    severity_rank,
+)
 
-_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "unknown": 4}
+logger = logging.getLogger(__name__)
 
 _VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
@@ -95,28 +104,17 @@ def _summarize(text: str, limit: int = 120) -> str:
 
 
 def _parse_metadata(filepath: Path) -> dict[str, Any] | None:
-    content = filepath.read_text(encoding="utf-8")
-    lines = content.splitlines()
+    """The rule's METADATA block, parsed.
 
-    metadata_lines: list[str] = []
-    in_block = False
-
-    for line in lines:
-        if line.rstrip() == "# METADATA":
-            in_block = True
-            continue
-        if in_block:
-            if line.startswith("# "):
-                metadata_lines.append(line[2:])
-            elif line.rstrip() == "#":
-                metadata_lines.append("")
-            else:
-                break
-
-    if not metadata_lines:
+    Scanning is shared with the backend seeder and the CI validators
+    (``app.core.rego_metadata``), which returns the block's raw YAML text so
+    each of the three environments can parse it with the loader it already
+    has — this one has PyYAML.
+    """
+    block = read_metadata_block(filepath)
+    if block is None:
         return None
-
-    return yaml.safe_load("\n".join(metadata_lines)) or {}
+    return yaml.safe_load(block) or {}
 
 
 def _rule_info(filepath: Path, rules_base: Path) -> dict[str, Any] | None:
@@ -223,7 +221,7 @@ def _render_category_index(category: str, rules: list[dict[str, Any]]) -> str:
         f"     - {_summarize(r['description'])}"
         for r in sorted(
             rules,
-            key=lambda r: (_SEVERITY_ORDER.get(r["severity"], 4), r["rule_id"]),
+            key=lambda r: (severity_rank(r["severity"]), r["rule_id"]),
         )
     )
 
@@ -339,9 +337,7 @@ def generate_rule_pages(app: Sphinx) -> None:
     rules_out.mkdir(exist_ok=True)
     domains: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
-    for rego_file in sorted(rules_base.glob("**/*.rego")):
-        if rego_file.name.endswith("_test.rego"):
-            continue
+    for rego_file in iter_rule_files(rules_base):
         info = _rule_info(rego_file, rules_base)
         if info is None:
             logger.warning(

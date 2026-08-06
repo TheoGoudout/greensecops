@@ -23,26 +23,19 @@ True, which silently disables every ``input.on`` rule).
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
+from opa_eval import ROOT, RULES_DIR, run_opa_eval, slugs
 from ruamel.yaml import YAML
 
-ROOT = Path(__file__).resolve().parents[1]
-RULES_DIR = ROOT / "backend" / "app" / "rules"
 # Per-rule METADATA `good`/`bad` examples are only self-testable for the
 # ci_workflow domain, whose examples are literal GitHub Actions workflow YAML
 # that maps directly onto the OPA input schema. iac_terraform examples are
 # illustrative Terraform HCL and cloud_aws examples are illustrative CLI
 # output — neither parses as executable OPA input, so they are excluded here.
 CI_WORKFLOW_RULES_DIR = RULES_DIR / "ci_workflow"
-AGGREGATE_REGO = ROOT / "scripts" / "opa" / "aggregate.rego"
 EXAMPLES_DIR = ROOT / "examples"
-OPA_BIN = os.environ.get("OPA_BIN", "opa")
 
 # deploy-insecure.yml must keep tripping at least these (the landing page's
 # "1 critical, 2 high-severity issues" caption).
@@ -54,58 +47,30 @@ INSECURE_EXPECTED = {"hardcoded_secrets", "unpinned_actions", "caching_missing"}
 # the real parser stamps would have had its METADATA `bad` example silently
 # fail to fire here, passing CI while being broken in production.
 sys.path.insert(0, str(ROOT / "backend"))
-from app.services.workflow_parser import parse_workflow_yaml as _parse_yaml  # noqa: E402
-
-
-def _opa_eval(workflow: object, query: str, *, with_aggregate: bool = False) -> list:
-    """Run one `opa eval` and return the raw result list for `query`."""
-    with tempfile.NamedTemporaryFile(
-        "w", suffix=".json", delete=False, encoding="utf-8"
-    ) as handle:
-        json.dump(workflow, handle)
-        input_path = handle.name
-    cmd = [OPA_BIN, "eval", "-d", str(RULES_DIR)]
-    if with_aggregate:
-        cmd += ["-d", str(AGGREGATE_REGO)]
-    cmd += ["-f", "raw", "-i", input_path, query]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    finally:
-        os.unlink(input_path)
-    if proc.returncode != 0:
-        raise RuntimeError(f"opa eval failed ({query}):\n{proc.stderr.strip()}")
-    return json.loads(proc.stdout or "[]")
-
-
-def _slugs(violations: list) -> list[str]:
-    return sorted({v["rule"] for v in violations})
+from app.core.rego_metadata import read_metadata_block  # noqa: E402
+from app.services.workflow_parser import (
+    parse_workflow_yaml as _parse_yaml,  # noqa: E402
+)
 
 
 def _parse_metadata(rego_path: Path) -> dict:
-    """Extract the `# METADATA` YAML block from a .rego file."""
-    meta_lines: list[str] = []
-    in_block = False
-    for line in rego_path.read_text(encoding="utf-8").splitlines():
-        if line.rstrip() == "# METADATA":
-            in_block = True
-            continue
-        if in_block:
-            if line.startswith("# "):
-                meta_lines.append(line[2:])
-            elif line.rstrip() == "#":
-                meta_lines.append("")
-            else:
-                break
-    if not meta_lines:
+    """The rule's METADATA block, parsed with the loader this env has.
+
+    Scanning is shared with the backend seeder and the docs extension
+    (``app.core.rego_metadata``); see that module for why only the raw YAML
+    text is shared and not the parse.
+    """
+    block = read_metadata_block(rego_path)
+    if block is None:
         return {}
-    return YAML(typ="safe").load("\n".join(meta_lines)) or {}
+    return YAML(typ="safe").load(block) or {}
 
 
 def check_canonical_examples() -> list[str]:
     errors: list[str] = []
 
     reference = EXAMPLES_DIR / "deploy.yml"
-    violations = _opa_eval(
+    violations = run_opa_eval(
         _parse_yaml(reference.read_text(encoding="utf-8")),
         "data.aggregate.all_violations",
         with_aggregate=True,
@@ -113,13 +78,13 @@ def check_canonical_examples() -> list[str]:
     if violations:
         errors.append(
             f"{reference.name}: reference workflow must be violation-free, "
-            f"but tripped {_slugs(violations)}"
+            f"but tripped {slugs(violations)}"
         )
 
     insecure = EXAMPLES_DIR / "deploy-insecure.yml"
     tripped = set(
-        _slugs(
-            _opa_eval(
+        slugs(
+            run_opa_eval(
                 _parse_yaml(insecure.read_text(encoding="utf-8")),
                 "data.aggregate.all_violations",
                 with_aggregate=True,
@@ -146,7 +111,7 @@ def check_rule_metadata_examples() -> list[str]:
 
         good = examples.get("good")
         if good:
-            self_hits = _opa_eval(_parse_yaml(good), query)
+            self_hits = run_opa_eval(_parse_yaml(good), query)
             if self_hits:
                 errors.append(
                     f"{category}/{name}: 'good' example violates its own rule "
@@ -155,7 +120,7 @@ def check_rule_metadata_examples() -> list[str]:
 
         bad = examples.get("bad")
         if bad:
-            self_hits = _opa_eval(_parse_yaml(bad), query)
+            self_hits = run_opa_eval(_parse_yaml(bad), query)
             if not self_hits:
                 errors.append(
                     f"{category}/{name}: 'bad' example does not trigger its own rule "

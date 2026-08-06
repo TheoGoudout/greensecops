@@ -6,18 +6,14 @@ import sqlalchemy as sa
 from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..enums import (
-    AnalysisFailureKind,
-    AnalysisTrigger,
-    FindingResolutionReason,
-    FindingStatus,
-    FixStatus,
-    IssueCategory,
-    IssueSeverity,
-    LLMProvider,
-    ScanStatus,
-)
 from .base import get_datetime_utc
+from .mixins import (
+    EnrichmentMixin,
+    FileFixMixin,
+    FindingMixin,
+    RepoScanMixin,
+    ScanTargetMixin,
+)
 
 if TYPE_CHECKING:
     from .pull_request import PullRequest
@@ -25,7 +21,7 @@ if TYPE_CHECKING:
     from .rule import Rule
 
 
-class DockerTarget(SQLModel, table=True):
+class DockerTarget(ScanTargetMixin, table=True):
     """A folder in a repo whose Dockerfiles and Compose files are scanned.
 
     Mirrors ``TerraformRoot``, with one deliberate difference: a target is
@@ -42,59 +38,33 @@ class DockerTarget(SQLModel, table=True):
         UniqueConstraint("repo_id", "root_path", name="uq_docker_target_repo_path"),
     )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(
-        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
-    )
     # "" means the repository root. Normalized on the way in (see
     # api/routes/docker.py) so "/", "./" and "" can't create duplicate rows
     # that the unique constraint would treat as distinct.
     root_path: str = Field(default="", max_length=512)
-    enabled: bool = Field(default=True)
-    last_scanned_head_sha: str | None = Field(default=None, max_length=40)
-    last_scanned_at: datetime | None = Field(
-        default=None, sa_type=DateTime(timezone=True)
-    )
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
     repository: Optional["Repository"] = Relationship(back_populates="docker_targets")
     scans: list["DockerScan"] = Relationship(
         back_populates="docker_target", cascade_delete=True
     )
 
 
-class DockerScan(SQLModel, table=True):
+class DockerScan(RepoScanMixin, table=True):
     __tablename__ = "docker_scan"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     docker_target_id: uuid.UUID = Field(
         foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
     )
-    status: ScanStatus = Field(
-        default=ScanStatus.queued,
-        sa_column_kwargs={"server_default": ScanStatus.queued.value},
-    )
-    triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
-    branch: str | None = Field(default=None, max_length=255)
-    commit_sha: str | None = Field(default=None, max_length=64)
-    score: float | None = Field(default=None)
-    grade: str | None = Field(default=None, max_length=8)
     # How many files the score was averaged over. Persisted because the score
     # is a *mean of per-file scores* (see workers/tasks/docker_analysis.py) —
     # without the denominator a grade can't be reasoned about after the fact.
     file_count: int | None = Field(default=None)
-    error_message: str | None = Field(default=None, max_length=2048)
-    failure_kind: AnalysisFailureKind | None = Field(default=None)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
-    completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     docker_target: DockerTarget | None = Relationship(back_populates="scans")
     findings: list["DockerFinding"] = Relationship(
         back_populates="scan", cascade_delete=True
     )
 
 
-class DockerFinding(SQLModel, table=True):
+class DockerFinding(FindingMixin, table=True):
     __tablename__ = "docker_finding"
     __table_args__ = (
         UniqueConstraint(
@@ -112,9 +82,6 @@ class DockerFinding(SQLModel, table=True):
     docker_target_id: uuid.UUID = Field(
         foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
     )
-    rule_id: uuid.UUID = Field(
-        foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
-    )
     # The Docker fix that addresses this finding, if one has been generated.
     # SET NULL (not CASCADE): dropping a fix must not delete finding history —
     # mirrors ``Issue.fix_id`` and ``TerraformFinding.fix_id``.
@@ -131,22 +98,6 @@ class DockerFinding(SQLModel, table=True):
     stage_name: str | None = Field(default=None, max_length=255)
     line_start: int | None = Field(default=None)
     line_end: int | None = Field(default=None)
-    fingerprint: str = Field(max_length=16, index=True)
-    severity: IssueSeverity
-    category: IssueCategory
-    status: FindingStatus = Field(
-        default=FindingStatus.open,
-        sa_column_kwargs={"server_default": FindingStatus.open.value},
-        index=True,
-    )
-    message: str = Field(max_length=2048)
-    context: str | None = Field(default=None, max_length=4096)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
-    resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
-    resolution_reason: FindingResolutionReason | None = Field(default=None)
-    ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     scan: DockerScan | None = Relationship(back_populates="findings")
     # One-directional (no back_populates on Rule): findings look up their rule,
     # Rule doesn't need to know about the finding tables that reference it.
@@ -154,7 +105,7 @@ class DockerFinding(SQLModel, table=True):
     fix: Optional["DockerFix"] = Relationship(back_populates="findings")
 
 
-class DockerFix(SQLModel, table=True):
+class DockerFix(FileFixMixin, table=True):
     """An LLM-generated rewrite of one Docker file in a target.
 
     Keyed to ``(docker_target_id, file_path)`` rather than a file row, because
@@ -172,27 +123,6 @@ class DockerFix(SQLModel, table=True):
     docker_target_id: uuid.UUID = Field(
         foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
     )
-    file_path: str = Field(max_length=512)
-    pr_id: uuid.UUID | None = Field(
-        default=None,
-        sa_column=sa.Column(
-            sa.UUID,
-            sa.ForeignKey("pull_request.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-    )
-    llm_provider: LLMProvider
-    llm_model: str = Field(max_length=255)
-    prompt_tokens: int | None = Field(default=None)
-    completion_tokens: int | None = Field(default=None)
-    langsmith_run_id: str | None = Field(default=None, max_length=255)
-    status: FixStatus = Field(default=FixStatus.pending)
-    full_content: str | None = Field(default=None)
-    error_message: str | None = Field(default=None, max_length=2048)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
-    )
-    delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     docker_target: DockerTarget | None = Relationship()
     findings: list["DockerFinding"] = Relationship(back_populates="fix")
     pull_request: Optional["PullRequest"] = Relationship(back_populates="docker_fixes")
@@ -241,27 +171,16 @@ class DockerBuildTelemetry(SQLModel, table=True):
     )
 
 
-class DockerBuildEnrichment(SQLModel, table=True):
+class DockerBuildEnrichment(EnrichmentMixin, table=True):
     """A measured finding produced from Docker build/runtime telemetry.
 
     A sibling of ``DynamicEnrichment`` rather than a generalisation of it —
     the same call the project made when ``TerraformFinding`` was added beside
-    ``Issue``. Deliberately thinner than DockerFinding: no fingerprint, no
-    dedup and no resolution lifecycle, because a measurement is a fact about
-    one observed build, not a defect that persists until fixed.
+    ``Issue``.
     """
 
     __tablename__ = "docker_build_enrichment"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(
-        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
-    )
     telemetry_id: uuid.UUID = Field(
         foreign_key="docker_build_telemetry.id", nullable=False, ondelete="CASCADE"
-    )
-    rule_slug: str = Field(max_length=128, index=True)
-    evidence: str = Field(max_length=2048)
-    recommendation: str = Field(max_length=2048)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )

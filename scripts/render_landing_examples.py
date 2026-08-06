@@ -113,8 +113,7 @@ def _highlight_line(line: str) -> str:
     elif ": " in rest:
         key, value = rest.split(": ", 1)
         body = (
-            f'<span class="token-key">{_esc(key)}</span>: '
-            f"{_render_value(key, value)}"
+            f'<span class="token-key">{_esc(key)}</span>: {_render_value(key, value)}'
         )
     else:
         body = _render_value(None, rest)
@@ -210,7 +209,11 @@ def _render_hero_anim() -> str:
                 raw = after_lines[k]
                 out.append(_diff_span(raw, "ins", flag=False, fix=_fix_category(raw)))
 
-    return '<div class="wf-anim"><div class="wf-anim__code">' + "".join(out) + "</div></div>"
+    return (
+        '<div class="wf-anim"><div class="wf-anim__code">'
+        + "".join(out)
+        + "</div></div>"
+    )
 
 
 def render(html: str, path: Path) -> str:
@@ -222,9 +225,7 @@ def render(html: str, path: Path) -> str:
         end = f"<!-- codegen:{name}:end -->"
         pattern = re.compile(re.escape(start) + r".*?" + re.escape(end), re.DOTALL)
         if not pattern.search(html):
-            raise SystemExit(
-                f"markers for region '{name}' not found in {path.name}"
-            )
+            raise SystemExit(f"markers for region '{name}' not found in {path.name}")
         content = _render_hero_anim() if name == "hero" else _render_example(source)
         replacement = start + content + end
         html = pattern.sub(lambda _m, r=replacement: r, html, count=1)

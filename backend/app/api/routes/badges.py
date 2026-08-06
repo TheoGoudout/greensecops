@@ -5,8 +5,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, col, select
 
 from app.api.deps import SessionDep
-from app.api.mappers.docker import latest_completed_docker_scan
-from app.api.mappers.terraform import latest_completed_terraform_scan
+from app.api.mappers import latest_completed_scan
 from app.core.config import settings
 from app.models import (
     Analysis,
@@ -17,9 +16,8 @@ from app.models import (
 )
 from app.services.badge_renderer import render_badge, render_unknown_badge
 from app.services.badge_signing import (
+    repo_badge_message,
     verify_badge,
-    verify_docker_target_badge,
-    verify_terraform_root_badge,
 )
 from app.services.scoring import average_latest_scores, score_to_grade
 
@@ -81,7 +79,8 @@ def get_badge(
     # Private repos require a valid signature so a guessed full_name can't leak
     # their grade; public repos are served on plain URLs.
     if not db_repo or (
-        db_repo.is_private and not verify_badge(owner, repo, branch, sig)
+        db_repo.is_private
+        and not verify_badge(repo_badge_message(owner, repo, branch), sig)
     ):
         return Response(
             content=render_unknown_badge(),
@@ -110,7 +109,8 @@ def get_badge_json(
     ).first()
 
     if not db_repo or (
-        db_repo.is_private and not verify_badge(owner, repo, branch, sig)
+        db_repo.is_private
+        and not verify_badge(repo_badge_message(owner, repo, branch), sig)
     ):
         return {
             "schemaVersion": 1,
@@ -147,7 +147,7 @@ def _terraform_root_badge_grade(
     root = session.get(TerraformRoot, root_id)
     if root is None:
         return None, None
-    latest = latest_completed_terraform_scan(root)
+    latest = latest_completed_scan(root)
     return root, (latest.grade if latest else None)
 
 
@@ -162,7 +162,7 @@ def get_terraform_root_badge(
     if root is None or (
         root.repository
         and root.repository.is_private
-        and not verify_terraform_root_badge(str(root_id), sig)
+        and not verify_badge(str(root_id), sig)
     ):
         return Response(content=render_unknown_badge(), headers=_CACHE_HEADERS)
 
@@ -187,7 +187,7 @@ def get_terraform_root_badge_json(
     if root is None or (
         root.repository
         and root.repository.is_private
-        and not verify_terraform_root_badge(str(root_id), sig)
+        and not verify_badge(str(root_id), sig)
     ):
         return {
             "schemaVersion": 1,
@@ -222,7 +222,7 @@ def _docker_target_badge_grade(
     target = session.get(DockerTarget, target_id)
     if target is None:
         return None, None
-    latest = latest_completed_docker_scan(target)
+    latest = latest_completed_scan(target)
     return target, (latest.grade if latest else None)
 
 
@@ -240,7 +240,7 @@ def get_docker_target_badge(
     if target is None or (
         target.repository
         and target.repository.is_private
-        and not verify_docker_target_badge(str(target_id), sig)
+        and not verify_badge(str(target_id), sig)
     ):
         return Response(content=render_unknown_badge(), headers=_CACHE_HEADERS)
 
@@ -263,7 +263,7 @@ def get_docker_target_badge_json(
     if target is None or (
         target.repository
         and target.repository.is_private
-        and not verify_docker_target_badge(str(target_id), sig)
+        and not verify_badge(str(target_id), sig)
     ):
         return {
             "schemaVersion": 1,

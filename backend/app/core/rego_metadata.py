@@ -27,6 +27,19 @@ RULES_DIR = Path(__file__).resolve().parents[1] / "rules"
 _METADATA_MARKER = "# METADATA"
 _TEST_SUFFIX = "_test.rego"
 
+# Worst first, for any report that lists rules or violations in the order a
+# reader should act on them. Declared here rather than derived from
+# ``models.enums.IssueSeverity`` for the same reason as everything else in this
+# module: the docs and CI environments cannot import the models. The two must
+# agree, and ``tests/core/test_rego_metadata.py`` asserts that they do.
+SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+
+
+def severity_rank(severity: str) -> int:
+    """Sort key for ``severity``; anything unrecognised sorts last so an
+    unannotated rule never masks a real critical."""
+    return SEVERITY_ORDER.get(severity, len(SEVERITY_ORDER))
+
 
 def iter_rule_files(rules_dir: Path | None = None) -> Iterator[Path]:
     """Yield every policy ``.rego`` under ``rules_dir``, tests excluded.

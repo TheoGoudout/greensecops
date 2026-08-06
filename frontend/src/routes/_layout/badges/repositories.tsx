@@ -1,12 +1,10 @@
-import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useMemo } from "react"
 import type { RepositoryPublic } from "@/client"
 import { RepositoriesService } from "@/client"
 import {
   BADGE_API_BASE,
   type BadgeEntry,
-  BadgeGrid,
+  BadgePage,
   signedBadgeUrl,
 } from "@/components/BadgeGrid"
 
@@ -32,24 +30,12 @@ function toEntry(repo: RepositoryPublic): BadgeEntry {
 }
 
 function RepositoryBadges() {
-  const {
-    data: repos,
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["repositories"],
-    queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
-  })
-
-  const entries = useMemo(() => (repos ?? []).map(toEntry), [repos])
-
   return (
-    <BadgeGrid
-      entries={entries}
-      isLoading={isLoading}
-      isError={isError}
-      errorLabel="Failed to load repositories."
-      emptyLabel="No repositories found."
+    <BadgePage
+      queryKey={["repositories"]}
+      queryFn={() => RepositoriesService.listRepositories({ limit: 200 })}
+      toEntry={toEntry}
+      subject="repositories"
     />
   )
 }

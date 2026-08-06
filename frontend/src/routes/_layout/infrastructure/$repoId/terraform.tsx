@@ -19,9 +19,9 @@ import type {
   TerraformRootPublic,
 } from "@/client"
 import { FixesService, TerraformService } from "@/client"
+import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
-import { TerraformFileViewer } from "@/components/TerraformFileViewer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -438,13 +438,14 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
                       </Button>
                     )}
                   </div>
-                  <TerraformFileViewer
+                  <FileViewer
                     path={file.path}
                     rawContent={file.raw_content}
+                    grammar="hcl"
                     fullContent={
                       showFix ? (fileFix?.full_content ?? undefined) : undefined
                     }
-                    findings={fileFindings}
+                    annotations={fileFindings}
                   />
                 </div>
               )

@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-import redis as redis_sync
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, delete, select
 
@@ -33,11 +32,12 @@ from app.models import (
 from app.services import state_machines as sm
 from app.services.deduplication import (
     compute_content_hash,
-    compute_issue_fingerprint,
+    compute_fingerprint,
     is_duplicate,
 )
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.scan_support import scan_lock
 from app.workers.celery_app import celery_app
 
 if TYPE_CHECKING:
@@ -634,9 +634,9 @@ def _run_static_analysis_impl(
                 # every issue in it and created replacements, losing any
                 # `ignored` state and re-triggering fix generation. The other
                 # three engines never key on a line for exactly this reason
-                # (see compute_docker_finding_fingerprint); a rule that can
-                # fire twice at one (job, step_index) sets a discriminator.
-                fingerprint = compute_issue_fingerprint(
+                # (see compute_fingerprint); a rule that can fire twice at one
+                # (job, step_index) sets a discriminator.
+                fingerprint = compute_fingerprint(
                     wf_record.id, rule.id, v.job, v.step_index, v.discriminator
                 )
                 seen_fingerprints.add(fingerprint)
@@ -778,11 +778,6 @@ def _run_static_analysis_impl(
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 
 
-# How long a single repo analysis may hold the per-repo lock before it is
-# considered dead and the lock expires on its own.
-ANALYSIS_LOCK_TTL_SECONDS = 600
-
-
 @celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
 def run_static_analysis(
     self: Any,  # noqa: ANN401 — celery bound task instance
@@ -795,10 +790,8 @@ def run_static_analysis(
 ) -> dict[str, str | int]:
     # Per-repo lock: concurrent analyses of the same repo race on
     # WorkflowFile.raw_content updates and duplicate Analysis rows.
-    lock_key = f"greensecops:lock:static_analysis:{repo_id}"
-    r = redis_sync.Redis.from_url(settings.REDIS_URL)
-    try:
-        if not r.set(lock_key, "1", nx=True, ex=ANALYSIS_LOCK_TTL_SECONDS):
+    with scan_lock(f"static_analysis:{repo_id}") as acquired:
+        if not acquired:
             # Another analysis for this repo is already running.  Layers upstream
             # (installation sync dedup) should prevent true duplicates; the retry
             # here covers legitimate concurrent webhook events.  10 × 30 s = 300 s
@@ -816,10 +809,6 @@ def run_static_analysis(
         except WorkflowFetchError as exc:
             # Transient GitHub failure (rate limit, network): back off and retry.
             raise self.retry(exc=exc, countdown=30 * (2**self.request.retries))
-        finally:
-            r.delete(lock_key)
-    finally:
-        r.close()
 
 
 # Seconds to wait between successive per-repo analyses, to spread out the

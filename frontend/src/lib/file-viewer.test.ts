@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildDiffEntries } from "./WorkflowFileViewer"
+import { buildDiffEntries, computeSegments } from "./file-viewer"
 
 describe("buildDiffEntries", () => {
   it("returns original lines unchanged when there is no fixed content", () => {
@@ -76,5 +76,53 @@ describe("buildDiffEntries", () => {
     const result = buildDiffEntries("line1\nline2\n", "line1\nline2\n")
     const removals = result.filter((e) => e.type === "remove")
     expect(removals).toHaveLength(0)
+  })
+})
+
+describe("computeSegments", () => {
+  const lines = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      key: i,
+      lineNum: i + 1,
+      text: `line${i + 1}`,
+      type: "normal" as const,
+    }))
+
+  it("shows a file whole when nothing is annotated or changed", () => {
+    // Collapsing everything would leave the reader with an empty viewer.
+    expect(computeSegments(lines(40), new Set())).toEqual([
+      { kind: "lines", start: 0, end: 39 },
+    ])
+  })
+
+  it("returns nothing for an empty file", () => {
+    expect(computeSegments([], new Set())).toEqual([])
+  })
+
+  it("keeps context either side of an annotated line and folds the rest", () => {
+    // Annotation on line 21 (index 20) => indices 15..25 stay visible.
+    const segments = computeSegments(lines(40), new Set([21]))
+    expect(segments).toEqual([
+      { kind: "collapsed", start: 0, end: 14 },
+      { kind: "lines", start: 15, end: 25 },
+      { kind: "collapsed", start: 26, end: 39 },
+    ])
+  })
+
+  it("merges two annotations whose context windows overlap", () => {
+    const segments = computeSegments(lines(40), new Set([21, 24]))
+    expect(segments.filter((s) => s.kind === "lines")).toEqual([
+      { kind: "lines", start: 15, end: 28 },
+    ])
+  })
+
+  it("always shows changed lines, annotated or not", () => {
+    const entries = lines(20).map((line, i) =>
+      i === 10 ? { ...line, type: "add" as const, lineNum: null } : line,
+    )
+    const visible = computeSegments(entries, new Set()).filter(
+      (s) => s.kind === "lines",
+    )
+    expect(visible).toEqual([{ kind: "lines", start: 10, end: 10 }])
   })
 })

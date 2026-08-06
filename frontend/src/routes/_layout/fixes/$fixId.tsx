@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, GitPullRequest, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { FixesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { FileViewer } from "@/components/FileViewer"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
@@ -11,7 +12,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { WorkflowFileViewer } from "@/components/WorkflowFileViewer"
 import { fixStatusColor } from "@/lib/status-colors"
 import { apiErrorDetail } from "@/utils"
 
@@ -241,12 +241,14 @@ function FixDetail() {
       )}
 
       {fix?.base_content && (
-        <WorkflowFileViewer
+        <FileViewer
           path={fix.workflow_file_path ?? ""}
           rawContent={fix.base_content}
+          grammar="yaml"
           fullContent={fix.full_content ?? undefined}
-          issues={[]}
-          fix={fix}
+          annotations={[]}
+          noun="issue"
+          fileLevelLabel="Workflow-level issues"
         />
       )}
 

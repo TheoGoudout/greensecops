@@ -175,10 +175,10 @@ def test_private_svg_without_sig_returns_unknown(
 def test_private_svg_with_valid_sig_returns_grade(
     client: TestClient, db: Session, private_root: TerraformRoot
 ) -> None:
-    from app.services.badge_signing import sign_terraform_root_badge
+    from app.services.badge_signing import sign_badge
 
     _add_completed_scan(db, private_root, "A+")
-    sig = sign_terraform_root_badge(str(private_root.id))
+    sig = sign_badge(str(private_root.id))
 
     response = client.get(
         f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.svg",
@@ -219,10 +219,10 @@ def test_private_json_without_sig_not_configured(
 def test_private_json_with_valid_sig_returns_grade(
     client: TestClient, db: Session, private_root: TerraformRoot
 ) -> None:
-    from app.services.badge_signing import sign_terraform_root_badge
+    from app.services.badge_signing import sign_badge
 
     _add_completed_scan(db, private_root, "A+")
-    sig = sign_terraform_root_badge(str(private_root.id))
+    sig = sign_badge(str(private_root.id))
 
     response = client.get(
         f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.json",

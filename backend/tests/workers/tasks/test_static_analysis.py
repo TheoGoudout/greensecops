@@ -1172,7 +1172,7 @@ def test_run_static_analysis_task_acquires_and_releases_lock(
     fake_redis.set.return_value = True
     with (
         patch(
-            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            "app.services.scan_support.redis_sync.Redis.from_url",
             return_value=fake_redis,
         ),
         patch(
@@ -1201,7 +1201,7 @@ def test_run_static_analysis_task_retries_while_locked(
     fake_redis.set.side_effect = [False, True]
     with (
         patch(
-            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            "app.services.scan_support.redis_sync.Redis.from_url",
             return_value=fake_redis,
         ),
         patch(
@@ -1230,7 +1230,7 @@ def test_run_static_analysis_task_retries_on_fetch_error(
     fake_redis.set.return_value = True
     with (
         patch(
-            "app.workers.tasks.static_analysis.redis_sync.Redis.from_url",
+            "app.services.scan_support.redis_sync.Redis.from_url",
             return_value=fake_redis,
         ),
         patch(

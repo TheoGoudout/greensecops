@@ -63,11 +63,10 @@ def _base_sts_client() -> Any:  # noqa: ANN401 — boto3 client has no public st
     roles grant ``sts:AssumeRole`` trust to.
 
     Explicit credentials when configured (``AWS_ACCESS_KEY_ID``/
-    ``AWS_SECRET_ACCESS_KEY``), mirroring how ``services/storage/object_store``
-    is explicit about its own S3 credentials rather than relying on an
-    ambient chain. Falls back to boto3's default credential chain when unset,
-    so a deployment that already runs on an AWS instance/task role (rather
-    than static keys) still works without configuring anything.
+    ``AWS_SECRET_ACCESS_KEY``) rather than relying on an ambient chain. Falls
+    back to boto3's default credential chain when unset, so a deployment that
+    already runs on an AWS instance/task role (rather than static keys) still
+    works without configuring anything.
     """
     if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
         return boto3.client(
