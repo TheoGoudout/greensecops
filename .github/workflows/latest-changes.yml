@@ -3,7 +3,7 @@ name: Latest Changes
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     branches:
-      - master
+      - main
     types:
       - closed
   workflow_dispatch:

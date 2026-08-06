@@ -198,8 +198,9 @@ jobs:
           enable-cache: true
 
       - name: Build
-        # -W matches docs/Dockerfile and .github/workflows/docs.yml: a malformed
-        # rule METADATA block should fail the build, not ship a broken page.
+        # -W matches docs/Dockerfile: a malformed rule METADATA block should
+        # fail the build, not ship a broken page. This is the only place the
+        # documentation is built in CI, so it is also the only gate on that.
         env:
           DOCS_BASE_URL: ${{ vars.PUBLIC_DOCS_URL }}
         run: |
