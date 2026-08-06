@@ -52,8 +52,8 @@ celery_concurrency = 2
 state_volume_size               = 30
 state_volume_snapshot_retention = 3
 
-access_log_bucket_name        = "greensecops-alb-logs-staging-CHANGEME"
-ansible_transfer_bucket_name  = "greensecops-ansible-staging-CHANGEME"
+access_log_bucket_name       = "greensecops-alb-logs-staging-CHANGEME"
+ansible_transfer_bucket_name = "greensecops-ansible-staging-CHANGEME"
 
 # Operations.
 log_retention_days  = 14

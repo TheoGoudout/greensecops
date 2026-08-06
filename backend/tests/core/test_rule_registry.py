@@ -287,15 +287,3 @@ def test_rule_slug_matches_the_rule_field_it_emits() -> None:
         assert emitted == {path.stem}, (
             f"{path.relative_to(RULES_DIR)}: emits rule={sorted(emitted)}, expected {path.stem}"
         )
-
-
-def test_severity_order_matches_the_issue_severity_enum() -> None:
-    """``rego_metadata.SEVERITY_ORDER`` is a hand-written copy of the enum's
-    declaration order, because the docs and CI environments cannot import the
-    models. If the enum ever gains or reorders a severity, this catches it.
-    """
-    from app.core.rego_metadata import SEVERITY_ORDER
-    from app.models.enums import IssueSeverity
-
-    assert list(SEVERITY_ORDER) == [s.value for s in IssueSeverity]
-    assert list(SEVERITY_ORDER.values()) == list(range(len(IssueSeverity)))

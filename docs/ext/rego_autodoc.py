@@ -16,7 +16,7 @@ from sphinx.util import logging
 # app.core.rego_metadata is deliberately stdlib-only so it can be imported
 # from here by path. See that module for why the scanning is shared.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-from app.core.rego_metadata import (  # noqa: E402
+from app.core.rego_metadata import (
     iter_rule_files,
     read_metadata_block,
     severity_rank,
