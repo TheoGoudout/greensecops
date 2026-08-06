@@ -268,11 +268,11 @@ def test_private_svg_without_sig_returns_unknown(
 def test_private_svg_with_valid_sig_returns_grade(
     client: TestClient, db: Session, private_repo: Repository
 ) -> None:
-    from app.services.badge_signing import sign_badge
+    from app.services.badge_signing import repo_badge_message, sign_badge
 
     _add_grade(db, private_repo)
     owner, name = private_repo.full_name.split("/", 1)
-    sig = sign_badge(owner, name, "main")
+    sig = sign_badge(repo_badge_message(owner, name, "main"))
 
     response = client.get(
         f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg", params={"sig": sig}
@@ -312,11 +312,11 @@ def test_private_json_without_sig_not_configured(
 def test_private_json_with_valid_sig_returns_grade(
     client: TestClient, db: Session, private_repo: Repository
 ) -> None:
-    from app.services.badge_signing import sign_badge
+    from app.services.badge_signing import repo_badge_message, sign_badge
 
     _add_grade(db, private_repo)
     owner, name = private_repo.full_name.split("/", 1)
-    sig = sign_badge(owner, name, "main")
+    sig = sign_badge(repo_badge_message(owner, name, "main"))
 
     response = client.get(
         f"{settings.API_V1_STR}/badges/{owner}/{name}/main.json", params={"sig": sig}

@@ -18,8 +18,8 @@ import type {
   PullRequestPublic,
 } from "@/client"
 import { DockerService, FixesService } from "@/client"
-import { DockerFileViewer } from "@/components/DockerFileViewer"
 import { DockerFindingRow } from "@/components/DockerFindingRow"
+import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
@@ -380,14 +380,16 @@ function TargetCard({
                     </Button>
                   )}
                 </div>
-                <DockerFileViewer
+                <FileViewer
                   path={file.path}
-                  kind={file.kind}
                   rawContent={file.raw_content}
+                  // The API reports the kind, so the grammar is never
+                  // re-derived from the filename here.
+                  grammar={file.kind === "compose" ? "compose" : "dockerfile"}
                   fullContent={
                     showFix ? (fileFix?.full_content ?? undefined) : undefined
                   }
-                  findings={fileFindings}
+                  annotations={fileFindings}
                 />
                 {/* The viewer annotates findings inline, but a rule that fires
                     on the file as a whole (or past its last line) has no line

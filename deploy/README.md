@@ -16,7 +16,6 @@ between them is a variable change plus a data migration, not a rewrite.
 | Hosts | 1 | 6 (3 groups × 2) | 13 (7 groups) |
 | PostgreSQL | container | RDS | RDS Multi-AZ |
 | Redis | container | ElastiCache | ElastiCache + replica |
-| Object storage | MinIO container | real S3 | real S3 |
 | NAT gateways | 0 | 1 | 3 |
 | PrivateLink endpoints | 0 | 0 | 5 × 3 AZ |
 | Load balancers | 1 | 1 | 2 |
@@ -26,7 +25,7 @@ between them is a variable change plus a data migration, not a rewrite.
 
 **`single_host` is the default**, and is what `env/production.tfvars` ships
 with. Every container runs on one box exactly as `compose.yml` does, including
-PostgreSQL, Redis and MinIO:
+PostgreSQL and Redis:
 
 ```
                      Route53 → ALB (HTTPS, host-header routing)
@@ -42,7 +41,7 @@ PostgreSQL, Redis and MinIO:
                     │  celery-worker             │
                     │  celery-beat               │
                     │                            │
-                    │  db  redis  minio          │
+                    │  db  redis                 │
                     └─────────────┬──────────────┘
                                   │
                     persistent EBS volume, snapshotted daily
@@ -83,7 +82,6 @@ nothing else.
 |---|---|---|
 | `db` container | same | RDS PostgreSQL |
 | `redis` container | same | ElastiCache |
-| `minio` container | same | real S3 |
 | `opa` on the bridge | same | own group behind an internal LB |
 | Coolify's proxy | ALB + ACM, host-header routing | same |
 | `SERVICE_*` magic variables | SSM Parameter Store | same |
@@ -152,13 +150,12 @@ Required before the first deploy — Ansible refuses to proceed while any of the
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | OAuth credentials for GitHub login. |
 | `GITHUB_APP_NAME` | The App slug, baked into the frontend build. |
 
-On `single_host` three more are required, because the containers have no
-managed service to generate credentials for them:
+On `single_host` one more is required, because the container has no managed
+service to generate credentials for it:
 
 | Parameter | Notes |
 |---|---|
 | `POSTGRES_PASSWORD` | Password for the PostgreSQL container. |
-| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | MinIO credentials, also used as `S3_ACCESS_KEY`/`S3_SECRET_KEY`. |
 
 Optional; leave at the placeholder to keep the feature off: `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` (at least one is needed for fix generation), `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `SMTP_*`, `EMAILS_FROM_EMAIL`, `STRIPE_*`, `SENTRY_DSN`.
 
@@ -362,11 +359,9 @@ this is not a bare `apply`:
    containers; nothing is cut over yet.
 2. `pg_dump` from the container and restore into RDS. Redis needs nothing — it
    holds only the Celery broker and cached tokens, both regenerable.
-3. Copy the MinIO bucket contents to the S3 artifact bucket with `aws s3 sync`.
-   Artifacts are regenerable too, so this step is optional.
-4. Switch `topology = "consolidated"` and apply. The parameters flip to the
+3. Switch `topology = "consolidated"` and apply. The parameters flip to the
    managed endpoints, the groups split, and a NAT gateway appears.
-5. Deploy. Confirm, then remove the state volume — it is `prevent_destroy`, so
+4. Deploy. Confirm, then remove the state volume — it is `prevent_destroy`, so
    this means `terraform state rm` followed by deleting it by hand, which is
    deliberate friction on the only copy of the old database.
 

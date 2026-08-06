@@ -4,8 +4,6 @@
 #
 #   * No frontend, landing or docs containers. Those three surfaces are static
 #     and are published to Cloudflare Pages by .github/workflows/pages.yml.
-#   * No minio container. Object storage is Cloudflare R2, which is
-#     S3-compatible and charges nothing for egress.
 #   * No separate celery-beat container. The worker runs an embedded beat,
 #     which is safe because this deployment runs exactly one worker.
 #   * No build sections. Images are published to GHCR by
@@ -137,17 +135,8 @@ services:
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - REDIS_URL=redis://redis:6379/0
       - OPA_URL=http://opa:8181
-      # Object storage is Cloudflare R2. object_store.py sends path-style
-      # requests and explicit credentials whenever S3_ENDPOINT_URL is set,
-      # which is what R2 expects; S3_REGION must be "auto".
-      - S3_ENDPOINT_URL=${R2_ENDPOINT_URL}
-      - S3_ACCESS_KEY=${R2_ACCESS_KEY_ID}
-      - S3_SECRET_KEY=${R2_SECRET_ACCESS_KEY}
-      - S3_BUCKET=${S3_BUCKET:-greensecops-artifacts}
-      - S3_REGION=${S3_REGION:-auto}
-      # AWS (cloud posture scanning) — GreenSecOps's own identity, unrelated to
-      # the S3_* values above, which now authenticate to R2. A real IAM user's
-      # keys; unset disables cloud-posture scanning only.
+      # AWS (cloud posture scanning) — GreenSecOps's own identity. A real IAM
+      # user's keys; unset disables cloud-posture scanning only.
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}

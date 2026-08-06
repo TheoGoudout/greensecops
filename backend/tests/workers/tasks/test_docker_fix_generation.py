@@ -144,7 +144,7 @@ def _run(
             return_value=[FakeDockerFile(path=path, content=source)],
         ),
         patch(
-            "app.workers.tasks.docker_fix_generation._generate_docker_fix",
+            "app.services.file_fix_generation._generate",
             new=AsyncMock(return_value=FakeLLMResponse(content=llm_content)),
         ),
     ):

@@ -8,13 +8,14 @@ on:
       - "backend/app/services/terraform/**"
       - "backend/app/services/docker/**"
       - "examples/**"
-      - "landing/index.html"
+      - "landing/**"
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
       - "scripts/validate_docker_examples.py"
       - "scripts/validate_deploy_terraform.py"
       - "scripts/opa_terraform_eval.py"
+      - "scripts/opa_eval.py"
       - "scripts/regenerate_terraform_fixtures.py"
       - "scripts/render_landing_examples.py"
       - "backend/tests/fixtures/terraform/**"
@@ -27,13 +28,14 @@ on:
       - "backend/app/services/terraform/**"
       - "backend/app/services/docker/**"
       - "examples/**"
-      - "landing/index.html"
+      - "landing/**"
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
       - "scripts/validate_docker_examples.py"
       - "scripts/validate_deploy_terraform.py"
       - "scripts/opa_terraform_eval.py"
+      - "scripts/opa_eval.py"
       - "scripts/regenerate_terraform_fixtures.py"
       - "scripts/render_landing_examples.py"
       - "backend/tests/fixtures/terraform/**"
@@ -103,3 +105,9 @@ jobs:
 
       - name: Check landing page is in sync with example files
         run: python scripts/render_landing_examples.py --check
+
+      # The seven landing pages share their head, nav and footer from
+      # landing/partials/. Editing a page's copy directly instead of the
+      # partial is exactly the drift this catches.
+      - name: Check landing pages are in sync with partials
+        run: python landing/build.py --check

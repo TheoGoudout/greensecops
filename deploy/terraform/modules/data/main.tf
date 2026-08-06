@@ -1,5 +1,5 @@
 # The managed replacements for the three stateful services compose.yml runs on
-# the application host: PostgreSQL, Redis and MinIO. Everything here lives in
+# the application host: PostgreSQL and Redis. Everything here lives in
 # the isolated subnet tier, which has no route to a NAT gateway.
 
 # --------------------------------------------------------------------------
@@ -180,116 +180,12 @@ resource "aws_elasticache_replication_group" "this" {
 }
 
 # --------------------------------------------------------------------------
-# Object storage
-# --------------------------------------------------------------------------
-
-resource "aws_s3_bucket" "artifacts" {
-  bucket        = var.artifact_bucket_name
-  force_destroy = var.artifact_bucket_force_destroy
-
-  tags = merge(var.tags, {
-    Name = var.artifact_bucket_name
-  })
-}
-
-resource "aws_s3_bucket_versioning" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = var.kms_key_arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_ownership_controls" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
-  bucket     = aws_s3_bucket.artifacts.id
-  depends_on = [aws_s3_bucket_versioning.artifacts]
-
-  rule {
-    id     = "expire-scan-artifacts"
-    status = "Enabled"
-
-    filter {}
-
-    expiration {
-      days = var.artifact_retention_days
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 7
-    }
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 3
-    }
-  }
-}
-
-data "aws_iam_policy_document" "artifacts_tls_only" {
-  statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    actions = ["s3:*"]
-    resources = [
-      aws_s3_bucket.artifacts.arn,
-      "${aws_s3_bucket.artifacts.arn}/*",
-    ]
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "artifacts" {
-  bucket     = aws_s3_bucket.artifacts.id
-  policy     = data.aws_iam_policy_document.artifacts_tls_only.json
-  depends_on = [aws_s3_bucket_public_access_block.artifacts]
-}
-
-# --------------------------------------------------------------------------
 # Ansible file transfer
 # --------------------------------------------------------------------------
 # amazon.aws.aws_ssm copies files through S3 rather than over the session
 # channel, so the connection plugin needs a bucket of its own. Keeping it
-# separate from the artifact bucket means the instance roles' write access to
-# scratch space is not write access to customer scan data.
+# separate from the data tier means the instance roles' write access to
+# scratch space is not write access to anything else.
 
 resource "aws_s3_bucket" "ansible_transfer" {
   bucket        = var.ansible_transfer_bucket_name

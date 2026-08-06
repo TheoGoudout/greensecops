@@ -17,19 +17,10 @@ su postgres -c "psql -c \"ALTER USER postgres PASSWORD '<POSTGRES_PASSWORD>';\" 
 cd backend && uv run bash scripts/prestart.sh   # migrations + superuser seed
 ```
 
-Gotcha (added once the Terraform/cloud-posture object storage landed):
-`prestart.sh` also runs `app/storage_pre_start.py`, which retries
-`ensure_bucket()` against `S3_ENDPOINT_URL` (MinIO) for up to 5 minutes
-before failing — it blocks the whole script if no S3-compatible endpoint is
-reachable. In real deployments docker-compose's `depends_on: minio:
-condition: service_healthy` means MinIO is already up by the time this
-runs; in an environment without a docker daemon, either start a MinIO
-container/binary bound to `S3_ENDPOINT_URL` first, or run
-`python app/backend_pre_start.py`, `alembic upgrade head` and
-`python app/initial_data.py` individually instead of the full
-`prestart.sh`, skipping the storage step (nothing calls
-`put_object`/`get_object` yet, so it's safe to skip for UI verification
-that doesn't touch Terraform scan artifacts).
+`prestart.sh` needs only PostgreSQL: it waits for the DB, runs the
+migrations and seeds the superuser. (It used to block for up to 5 minutes on
+an S3-compatible endpoint via `storage_pre_start.py`; that object-storage
+stack was never used by any code path and has been removed.)
 
 If no docker daemon and no native postgres/redis services are available
 either (this sandbox's actual state as of 2026-07-23, despite the "no

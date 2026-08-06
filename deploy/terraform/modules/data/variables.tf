@@ -31,7 +31,7 @@ variable "redis_security_group_id" {
 }
 
 variable "kms_key_arn" {
-  description = "Customer-managed KMS key encrypting the database, the cache and the artifact bucket."
+  description = "Customer-managed KMS key encrypting the database and the cache."
   type        = string
 }
 
@@ -101,23 +101,6 @@ variable "redis_replica_count" {
   description = "Number of read replicas in the replication group. 1 or more enables automatic failover."
   type        = number
   default     = 1
-}
-
-variable "artifact_bucket_name" {
-  description = "Globally unique name for the bucket holding large scan artifacts (Terraform bundles, cloud snapshots)."
-  type        = string
-}
-
-variable "artifact_retention_days" {
-  description = "Days before a scan artifact is expired. Artifacts are regenerable, so this is a cost control rather than a retention policy."
-  type        = number
-  default     = 90
-}
-
-variable "artifact_bucket_force_destroy" {
-  description = "Allow `terraform destroy` to delete a non-empty artifact bucket. Useful for staging, dangerous in production."
-  type        = bool
-  default     = false
 }
 
 variable "log_retention_days" {

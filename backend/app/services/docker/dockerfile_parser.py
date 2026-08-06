@@ -57,10 +57,6 @@ _FROM_RE = re.compile(
 )
 
 
-class DockerfileParseError(Exception):
-    """Raised when a Dockerfile cannot be reduced to an instruction stream."""
-
-
 def _read_directives(lines: list[str]) -> tuple[str, str | None, int]:
     """Consume leading parser directives.
 

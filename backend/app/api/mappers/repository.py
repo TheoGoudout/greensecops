@@ -6,10 +6,10 @@ def to_repo_public(
 ) -> RepositoryPublic:
     badge_sig: str | None = None
     if repo.is_private and "/" in repo.full_name:
-        from app.services.badge_signing import sign_badge
+        from app.services.badge_signing import repo_badge_message, sign_badge
 
         owner, name = repo.full_name.split("/", 1)
-        badge_sig = sign_badge(owner, name, repo.default_branch)
+        badge_sig = sign_badge(repo_badge_message(owner, name, repo.default_branch))
     return RepositoryPublic(
         id=repo.id,
         org_id=repo.org_id,

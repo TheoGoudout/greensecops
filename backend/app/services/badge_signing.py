@@ -2,12 +2,23 @@
 
 A badge is an ``<img>`` fetched by whoever renders a README, so the request
 itself cannot be authenticated (GitHub's Camo proxy strips ``Referer`` and the
-fetch carries no session or token). Instead we bind each *private* repo's badge
-URL to its ``owner/repo/branch`` with an HMAC signature minted server-side: the
-badge endpoint serves a private repo's real grade only when the signature
+fetch carries no session or token). Instead we bind each *private* subject's
+badge URL to its identity with an HMAC signature minted server-side: the badge
+endpoint serves a private subject's real grade only when the signature
 verifies, and unsigned or guessed URLs fall back to the "unknown" badge. This
-closes the disclosure hole where any guessed ``full_name`` would otherwise be
-served. Public repos keep plain, unsigned URLs — their grades aren't sensitive.
+closes the disclosure hole where any guessed identifier would otherwise be
+served. Public subjects keep plain, unsigned URLs — their grades aren't
+sensitive.
+
+Three kinds of subject are signed, and each is only a different *message* over
+the same primitive: a repository (keyed by ``owner/repo/branch``, see
+:func:`repo_badge_message`), a Terraform root and a Docker target (both keyed
+by their row id). The id-keyed scheme is deliberate for the latter two: their
+paths contain ``/`` themselves — and a Docker target's is often empty for the
+repository root — so keying on the path would need URL escaping to no benefit.
+
+The message strings are load-bearing: they are baked into badge URLs users have
+already pasted into READMEs, so changing one silently breaks those badges.
 """
 
 import hashlib
@@ -18,20 +29,26 @@ import hmac
 _SIG_LEN = 32
 
 
-def sign_badge(owner: str, repo: str, branch: str) -> str:
-    """Return the badge signature for ``owner/repo/branch``."""
+def repo_badge_message(owner: str, repo: str, branch: str) -> str:
+    """The signed message identifying a repository's badge on one branch."""
+    return f"{owner}/{repo}/{branch}"
+
+
+def sign_badge(message: str) -> str:
+    """Return the badge signature for ``message``."""
     from app.core.config import settings
 
-    message = f"{owner}/{repo}/{branch}".encode()
-    digest = hmac.new(settings.SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
+    digest = hmac.new(
+        settings.SECRET_KEY.encode(), message.encode(), hashlib.sha256
+    ).hexdigest()
     return digest[:_SIG_LEN]
 
 
-def verify_badge(owner: str, repo: str, branch: str, sig: str | None) -> bool:
-    """Constant-time check that ``sig`` matches ``owner/repo/branch``."""
+def verify_badge(message: str, sig: str | None) -> bool:
+    """Constant-time check that ``sig`` matches ``message``."""
     if not sig:
         return False
-    return hmac.compare_digest(sign_badge(owner, repo, branch), sig)
+    return hmac.compare_digest(sign_badge(message), sig)
 
 
 def build_badge_svg_url(owner: str, repo: str, branch: str, *, private: bool) -> str:
@@ -49,78 +66,4 @@ def build_badge_svg_url(owner: str, repo: str, branch: str, *, private: bool) ->
     )
     if not private:
         return base
-    return f"{base}?sig={sign_badge(owner, repo, branch)}"
-
-
-def sign_terraform_root_badge(root_id: str) -> str:
-    """Return the badge signature for a Terraform root, keyed by ``root_id``.
-
-    Keyed on id rather than an ``owner/repo/root_path`` composite — root paths
-    contain ``/`` themselves, so an id-keyed scheme sidesteps URL-escaping
-    entirely instead of needing a path converter.
-    """
-    from app.core.config import settings
-
-    digest = hmac.new(
-        settings.SECRET_KEY.encode(), root_id.encode(), hashlib.sha256
-    ).hexdigest()
-    return digest[:_SIG_LEN]
-
-
-def verify_terraform_root_badge(root_id: str, sig: str | None) -> bool:
-    """Constant-time check that ``sig`` matches ``root_id``."""
-    if not sig:
-        return False
-    return hmac.compare_digest(sign_terraform_root_badge(root_id), sig)
-
-
-def build_terraform_root_badge_svg_url(root_id: str, *, private: bool) -> str:
-    """Absolute SVG badge URL for a Terraform root.
-
-    Private-repo roots get a signed URL (``?sig=``); public-repo roots get a
-    plain URL.
-    """
-    from app.core.config import settings
-
-    badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
-    base = (
-        f"{badge_host.rstrip('/')}{settings.API_V1_STR}/badges/terraform/{root_id}.svg"
-    )
-    if not private:
-        return base
-    return f"{base}?sig={sign_terraform_root_badge(root_id)}"
-
-
-def sign_docker_target_badge(target_id: str) -> str:
-    """Return the badge signature for a Docker target, keyed by ``target_id``.
-
-    Same id-keyed scheme as ``sign_terraform_root_badge``, and for the same
-    reason: a target's ``root_path`` contains ``/`` (and is often empty for the
-    repository root), so keying on it would need URL escaping to no benefit.
-    """
-    from app.core.config import settings
-
-    digest = hmac.new(
-        settings.SECRET_KEY.encode(), target_id.encode(), hashlib.sha256
-    ).hexdigest()
-    return digest[:_SIG_LEN]
-
-
-def verify_docker_target_badge(target_id: str, sig: str | None) -> bool:
-    """Constant-time check that ``sig`` matches ``target_id``."""
-    if not sig:
-        return False
-    return hmac.compare_digest(sign_docker_target_badge(target_id), sig)
-
-
-def build_docker_target_badge_svg_url(target_id: str, *, private: bool) -> str:
-    """Absolute SVG badge URL for a Docker target."""
-    from app.core.config import settings
-
-    badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
-    base = (
-        f"{badge_host.rstrip('/')}{settings.API_V1_STR}/badges/docker/{target_id}.svg"
-    )
-    if not private:
-        return base
-    return f"{base}?sig={sign_docker_target_badge(target_id)}"
+    return f"{base}?sig={sign_badge(repo_badge_message(owner, repo, branch))}"

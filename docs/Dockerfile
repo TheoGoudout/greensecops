@@ -17,6 +17,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY docs/ docs/
 COPY backend/app/rules/ backend/app/rules/
+# rego_autodoc reads each rule's METADATA block through app.core.rego_metadata,
+# shared with the backend seeder and the CI validators so the three cannot drift
+# on what a METADATA block is. That module is deliberately stdlib-only — no app
+# imports, no third-party ones — which is what lets this image take the single
+# file plus its (empty) package markers rather than the backend and its
+# dependency set. tests/core/test_rego_metadata.py enforces that constraint.
+COPY backend/app/__init__.py backend/app/
+COPY backend/app/core/__init__.py backend/app/core/rego_metadata.py backend/app/core/
 # The reference-workflow doc page is generated from the canonical example file.
 COPY examples/ examples/
 

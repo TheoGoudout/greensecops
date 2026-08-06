@@ -491,11 +491,11 @@ def test_private_target_badge_requires_a_valid_signature(
     unsigned = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.json")
     assert unsigned.json()["message"] == "not configured"
 
-    from app.services.badge_signing import sign_docker_target_badge
+    from app.services.badge_signing import sign_badge
 
     signed = client.get(
         f"{settings.API_V1_STR}/badges/docker/{target.id}.json",
-        params={"sig": sign_docker_target_badge(str(target.id))},
+        params={"sig": sign_badge(str(target.id))},
     )
     assert signed.json()["message"] == "B"
 

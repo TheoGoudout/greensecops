@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-import sqlalchemy as sa
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..enums import DynamicAnalysisStatus, TelemetryPhase
 from .base import get_datetime_utc
+from .mixins import EnrichmentMixin
 
 if TYPE_CHECKING:
     from .repository import Repository
@@ -32,7 +32,7 @@ class TelemetryRun(SQLModel, table=True):
     repository: Optional["Repository"] = Relationship(back_populates="telemetry_runs")
 
 
-class DynamicEnrichment(SQLModel, table=True):
+class DynamicEnrichment(EnrichmentMixin, table=True):
     """A runtime-telemetry finding produced by dynamic analysis.
 
     Persisted (rather than only logged) so the recommendations a telemetry run
@@ -43,25 +43,11 @@ class DynamicEnrichment(SQLModel, table=True):
 
     __tablename__ = "dynamic_enrichment"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    repo_id: uuid.UUID = Field(
-        foreign_key="repository.id", nullable=False, ondelete="CASCADE"
-    )
     telemetry_run_id: uuid.UUID = Field(
         foreign_key="telemetry_run.id", nullable=False, ondelete="CASCADE"
     )
     analysis_id: uuid.UUID | None = Field(
-        default=None,
-        sa_column=sa.Column(
-            sa.UUID,
-            sa.ForeignKey("analysis.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-    )
-    rule_slug: str = Field(max_length=128, index=True)
-    evidence: str = Field(max_length=2048)
-    recommendation: str = Field(max_length=2048)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+        default=None, foreign_key="analysis.id", ondelete="SET NULL"
     )
 
 

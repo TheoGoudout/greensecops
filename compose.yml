@@ -86,9 +86,6 @@ services:
       redis:
         condition: service_healthy
         restart: true
-      minio:
-        condition: service_healthy
-        restart: true
       prestart:
         condition: service_completed_successfully
     environment: &backend-required-env
@@ -116,17 +113,10 @@ services:
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - REDIS_URL=redis://redis:6379/0
       - OPA_URL=http://opa:8181
-      - S3_ENDPOINT_URL=http://minio:9000
-      - S3_ACCESS_KEY=${SERVICE_USER_MINIO}
-      - S3_SECRET_KEY=${SERVICE_PASSWORD_MINIO}
-      - S3_BUCKET=${S3_BUCKET:-greensecops-artifacts}
-      - S3_REGION=${S3_REGION:-us-east-1}
-      # AWS (cloud posture scanning) — GreenSecOps's own identity, distinct
-      # from S3_* above (which authenticates to MinIO, not AWS). Not a
-      # Coolify magic var: unlike SERVICE_USER_MINIO/SERVICE_PASSWORD_MINIO,
-      # this is a real external AWS account's credentials, which Coolify has
-      # no way to generate — it must be a real IAM user you create yourself.
-      # Optional: unset disables cloud-posture scanning only.
+      # AWS (cloud posture scanning) — GreenSecOps's own identity. Not a
+      # Coolify magic var: this is a real external AWS account's credentials,
+      # which Coolify has no way to generate — it must be a real IAM user you
+      # create yourself. Optional: unset disables cloud-posture scanning only.
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
@@ -223,9 +213,6 @@ services:
       redis:
         condition: service_healthy
         restart: true
-      minio:
-        condition: service_healthy
-        restart: true
       prestart:
         condition: service_completed_successfully
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default,analysis,fixes
@@ -251,9 +238,6 @@ services:
       redis:
         condition: service_healthy
         restart: true
-      minio:
-        condition: service_healthy
-        restart: true
       prestart:
         condition: service_completed_successfully
     command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler --schedule /tmp/celerybeat-schedule
@@ -264,26 +248,6 @@ services:
       retries: 3
       start_period: 30s
     environment: *backend-required-env
-
-  minio:
-    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
-    restart: always
-    # Absent from deploy/coolify/, which uses Cloudflare R2 instead.
-    mem_limit: 1g
-    mem_reservation: 256m
-    cpu_shares: 512
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
-      timeout: 5s
-    volumes:
-      - app-minio-data:/data
-    environment:
-      - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
-      - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
-    command: server /data --console-address ":9001"
 
   opa:
     image: greensecops/opa:${TAG:-latest}
@@ -379,4 +343,3 @@ services:
 volumes:
   app-db-data:
   app-redis-data:
-  app-minio-data:

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Assert deploy/coolify/compose.yml has not drifted from compose.yml.
 
-The Coolify deployment runs a different set of containers — no static sites, no
-MinIO, an embedded Celery beat — but the *application* configuration has to
-stay identical, because both start the same backend image. Coolify substitutes
+The Coolify deployment runs a different set of containers — no static sites, an
+embedded Celery beat — but the *application* configuration has to stay
+identical, because both start the same backend image. Coolify substitutes
 only the variables a compose file names, so a variable added to compose.yml and
 forgotten here does not fail loudly: it silently never reaches the container,
 and the setting quietly takes its default in production.
@@ -33,10 +33,6 @@ COOLIFY_COMPOSE = ROOT / "deploy" / "coolify" / "compose.yml"
 # Variables whose *value* legitimately differs between the two deployments.
 # Their presence is still required in both; only the value may diverge.
 EXPECTED_DIVERGENCE = {
-    "S3_ENDPOINT_URL": "Cloudflare R2 rather than the MinIO container",
-    "S3_ACCESS_KEY": "an R2 token rather than the MinIO root user",
-    "S3_SECRET_KEY": "an R2 token rather than the MinIO root password",
-    "S3_REGION": 'R2 requires "auto"',
     "FRONTEND_HOST": "Cloudflare Pages, so there is no SERVICE_URL_FRONTEND",
     "MARKETING_URL": "Cloudflare Pages, so there is no SERVICE_URL_LANDING",
     "DOCS_URL": "Cloudflare Pages, so there is no SERVICE_URL_DOCS",

@@ -24,6 +24,7 @@ import {
 import {
   ciStatusColor,
   ciStatusLabel,
+  mergeableIndicator,
   reviewDecisionColor,
   reviewDecisionLabel,
 } from "@/lib/status-colors"
@@ -44,43 +45,6 @@ const STATE_CLASSES: Record<string, string> = {
   closed: "bg-red-500/15 text-red-700 dark:text-red-400",
   draft: "bg-muted text-muted-foreground",
   open: "bg-green-500/15 text-green-700 dark:text-green-400",
-}
-
-// GitHub mergeable_state → a compact, human indicator. Only surfaced when it
-// carries a signal worth acting on (conflicts / blocked); "clean"/unknown stay
-// quiet to avoid noise.
-function mergeableIndicator(
-  state: string | null | undefined,
-): { label: string; cls: string } | null {
-  switch (state) {
-    case "dirty":
-      return {
-        label: "conflicts",
-        cls: "bg-red-500/15 text-red-700 dark:text-red-400",
-      }
-    case "behind":
-      return {
-        label: "behind base",
-        cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
-      }
-    case "blocked":
-      return {
-        label: "blocked",
-        cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
-      }
-    case "unstable":
-      return {
-        label: "checks pending",
-        cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
-      }
-    case "clean":
-      return {
-        label: "mergeable",
-        cls: "bg-green-500/15 text-green-700 dark:text-green-400",
-      }
-    default:
-      return null
-  }
 }
 
 function PullRequestsPage() {

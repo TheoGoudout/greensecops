@@ -26,8 +26,6 @@ The rest of this document describes the generic single-host Compose deployment, 
 * `SERVICE_PASSWORD_64_SECRETKEY`: Generated 64-character secret, passed to the backend as `SECRET_KEY` (signs JWTs).
 * `SERVICE_PASSWORD_FIRSTSUPERUSER`: Generated password for the first superuser account, passed as `FIRST_SUPERUSER_PASSWORD`.
 * `SERVICE_HEX_40_GITHUBWEBHOOKSECRET`: Generated 40-character hex secret, passed to the backend as `GITHUB_WEBHOOK_SECRET`. Copy this value into your GitHub App's webhook secret field after the first deploy.
-* `SERVICE_USER_MINIO`: Generated MinIO root user, passed to the `minio` service as `MINIO_ROOT_USER` and to the backend/worker services as `S3_ACCESS_KEY`.
-* `SERVICE_PASSWORD_MINIO`: Generated MinIO root password, passed as `MINIO_ROOT_PASSWORD` / `S3_SECRET_KEY`.
 * `SERVICE_URL_FRONTEND`: Public URL (scheme included) of the frontend dashboard. Passed directly as `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS`, and baked into the frontend build as `VITE_API_URL`'s counterpart on the landing page's `APP_URL`.
 * `SERVICE_URL_BACKEND`: Public URL of the backend API. Passed directly as `BACKEND_HOST` and baked into the frontend build as `VITE_API_URL`.
 * `SERVICE_URL_DOCS`: Public URL of the docs site. Passed directly as `DOCS_URL` (backend + landing) and the docs image's `DOCS_BASE_URL` build arg.
@@ -117,10 +115,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 * `POSTGRES_PORT`: The port of the PostgreSQL server. Default: `5432`.
 * `POSTGRES_DB`: The database name to use for this application. Default: `greensecops`.
-* `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL`, `S3_ENDPOINT_URL`: Hardcoded by `compose.yml` to the in-network services (`db`, `redis://redis:6379/0`, `http://opa:8181`, `http://minio:9000`); only relevant when running the backend outside the Compose stack, where they default to `localhost`-based values.
-* `S3_ACCESS_KEY`, `S3_SECRET_KEY`: MinIO credentials for object storage (large IaC/cloud scan artifacts). Fixed to `${SERVICE_USER_MINIO}`/`${SERVICE_PASSWORD_MINIO}` in `compose.yml`.
-* `S3_BUCKET`: The bucket name to use for object storage. Default: `greensecops-artifacts`.
-* `S3_REGION`: Region string passed to the S3 client (MinIO ignores its value but the SDK requires one). Default: `us-east-1`.
+* `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL`: Hardcoded by `compose.yml` to the in-network services (`db`, `redis://redis:6379/0`, `http://opa:8181`); only relevant when running the backend outside the Compose stack, where they default to `localhost`-based values.
 * `CELERY_CONCURRENCY`: Number of concurrent Celery worker processes/threads in the `celery-worker` service. Lower it to reduce CPU/memory strain on a smaller (e.g. staging) host; raise it to process more tasks in parallel. Default: `4` (`2` under `compose.override.yml` for local development).
 
 **LLM configuration**
@@ -132,7 +127,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **AWS cloud posture scanning (optional)**
 
-* `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: GreenSecOps's own AWS IAM user credentials — the identity a customer's IAM role grants `sts:AssumeRole` trust to for cloud-posture scanning. Distinct from the `S3_*` variables above, which authenticate to MinIO, not AWS. Not a Coolify magic variable: unlike `SERVICE_USER_MINIO`/`SERVICE_PASSWORD_MINIO` (an internal service Coolify also deploys), this is a real external AWS account's credentials, which Coolify has no way to generate — create an IAM user yourself and paste in its access key. Leave unset to disable cloud-posture scanning; every other feature works without it.
+* `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: GreenSecOps's own AWS IAM user credentials — the identity a customer's IAM role grants `sts:AssumeRole` trust to for cloud-posture scanning. Not a Coolify magic variable: this is a real external AWS account's credentials, which Coolify has no way to generate — create an IAM user yourself and paste in its access key. Leave unset to disable cloud-posture scanning; every other feature works without it.
 * `AWS_DEFAULT_REGION`: Region for the base STS client. Default: `us-east-1`.
 
 **Billing (optional)**
@@ -170,7 +165,7 @@ Note that `compose.yml` does not publish any ports — in a Coolify deployment t
 
 `deploy/coolify/` holds a Compose file and runbook for the cheapest supported deployment: one small server at Hetzner (~€13/month), the landing page, dashboard and docs on Cloudflare Workers, and scan artifacts in Cloudflare R2. The images are published for both amd64 and arm64, so it does not matter which of Hetzner's lines has stock on the day.
 
-It differs from the Compose file above in what it leaves out — no `frontend`, `landing`, `docs` or `minio` containers, and the Celery scheduler runs embedded in the worker rather than as its own service. See **[deploy/coolify/README.md](deploy/coolify/README.md)**, which also covers running Coolify's control plane on a Raspberry Pi and why that does not restrict which servers you can deploy to.
+It differs from the Compose file above in what it leaves out — no `frontend`, `landing` or `docs` containers, and the Celery scheduler runs embedded in the worker rather than as its own service. See **[deploy/coolify/README.md](deploy/coolify/README.md)**, which also covers running Coolify's control plane on a Raspberry Pi and why that does not restrict which servers you can deploy to.
 
 ## Deploy to AWS with Terraform and Ansible
 
@@ -178,8 +173,8 @@ It differs from the Compose file above in what it leaves out — no `frontend`, 
 
 It differs from the Compose deployment above in three ways worth knowing before you choose between them:
 
-* **It defaults to one EC2 instance running the whole stack**, PostgreSQL, Redis and MinIO included — the same shape as `compose.yml`, for roughly $120/month. Two larger topologies are reachable by changing one variable when load demands it: `consolidated` (three host groups, managed PostgreSQL and Redis, ~$330) and `distributed` (one group per service, multi-AZ, ~$970). deploy/README.md has the cost breakdown and says what should trigger each step.
-* **Managed data services, above the default topology.** RDS PostgreSQL replaces the `db` container, ElastiCache replaces `redis`, and real S3 replaces MinIO — the backend authenticates to it with the instance role rather than the `S3_ACCESS_KEY`/`S3_SECRET_KEY` pair (see `backend/app/services/storage/object_store.py`). `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL` and `S3_*` are all set by Terraform rather than hardcoded to in-network container names.
+* **It defaults to one EC2 instance running the whole stack**, PostgreSQL and Redis included — the same shape as `compose.yml`, for roughly $120/month. Two larger topologies are reachable by changing one variable when load demands it: `consolidated` (three host groups, managed PostgreSQL and Redis, ~$330) and `distributed` (one group per service, multi-AZ, ~$970). deploy/README.md has the cost breakdown and says what should trigger each step.
+* **Managed data services, above the default topology.** RDS PostgreSQL replaces the `db` container and ElastiCache replaces `redis`. `POSTGRES_SERVER`, `REDIS_URL` and `OPA_URL` are all set by Terraform rather than hardcoded to in-network container names.
 * **Deploys and rollbacks are a click.** Two `workflow_dispatch` workflows (`deploy` and `rollback`) roll an environment forward or back from the Actions tab, with production gated behind a GitHub environment approval. AWS access is by OIDC — no long-lived keys in repository secrets.
 * **Configuration comes from SSM Parameter Store**, not Coolify magic variables. Terraform writes the values it knows (endpoints, hostnames, bucket names, image tag) and declares the secrets with placeholders you seed out of band, so no secret is ever written to Terraform state. Every variable documented above still applies — Ansible renders them into the same `.env` the backend reads.
 

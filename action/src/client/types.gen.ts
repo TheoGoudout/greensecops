@@ -293,10 +293,6 @@ export type CloudFindingPublic = {
      */
     scan_id: string;
     /**
-     * Cloud Account Id
-     */
-    cloud_account_id: string;
-    /**
      * Rule Id
      */
     rule_id: string;
@@ -304,18 +300,6 @@ export type CloudFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    /**
-     * Resource Type
-     */
-    resource_type: string;
-    /**
-     * Resource Id
-     */
-    resource_id: string;
-    /**
-     * Region
-     */
-    region?: string | null;
     severity: IssueSeverity;
     category: IssueCategory;
     /**
@@ -336,6 +320,22 @@ export type CloudFindingPublic = {
      */
     resolved_at?: string | null;
     resolution_reason?: FindingResolutionReason | null;
+    /**
+     * Cloud Account Id
+     */
+    cloud_account_id: string;
+    /**
+     * Resource Type
+     */
+    resource_type: string;
+    /**
+     * Resource Id
+     */
+    resource_id: string;
+    /**
+     * Region
+     */
+    region?: string | null;
 };
 
 /**
@@ -351,20 +351,8 @@ export type CloudScanPublic = {
      * Id
      */
     id: string;
-    /**
-     * Cloud Account Id
-     */
-    cloud_account_id: string;
     status: ScanStatus;
     triggered_by: AnalysisTrigger;
-    /**
-     * Region
-     */
-    region?: string | null;
-    /**
-     * Resource Count
-     */
-    resource_count?: number;
     /**
      * Score
      */
@@ -385,6 +373,18 @@ export type CloudScanPublic = {
      * Completed At
      */
     completed_at?: string | null;
+    /**
+     * Cloud Account Id
+     */
+    cloud_account_id: string;
+    /**
+     * Region
+     */
+    region?: string | null;
+    /**
+     * Resource Count
+     */
+    resource_count?: number;
 };
 
 /**
@@ -537,10 +537,6 @@ export type DockerFindingPublic = {
      */
     scan_id: string;
     /**
-     * Docker Target Id
-     */
-    docker_target_id: string;
-    /**
      * Rule Id
      */
     rule_id: string;
@@ -548,6 +544,35 @@ export type DockerFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
     /**
      * File Path
      */
@@ -568,31 +593,6 @@ export type DockerFindingPublic = {
      * Line End
      */
     line_end?: number | null;
-    severity: IssueSeverity;
-    category: IssueCategory;
-    /**
-     * Message
-     */
-    message: string;
-    /**
-     * Context
-     */
-    context?: string | null;
-    status: FindingStatus;
-    /**
-     * Fix Id
-     */
-    fix_id?: string | null;
-    fix_status?: FixStatus | null;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Resolved At
-     */
-    resolved_at?: string | null;
-    resolution_reason?: FindingResolutionReason | null;
 };
 
 /**
@@ -613,10 +613,6 @@ export type DockerFixPublic = {
      * Id
      */
     id: string;
-    /**
-     * Docker Target Id
-     */
-    docker_target_id: string;
     /**
      * File Path
      */
@@ -656,6 +652,10 @@ export type DockerFixPublic = {
      * Delivered At
      */
     delivered_at?: string | null;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
 };
 
 /**
@@ -719,20 +719,8 @@ export type DockerScanPublic = {
      * Id
      */
     id: string;
-    /**
-     * Docker Target Id
-     */
-    docker_target_id: string;
     status: ScanStatus;
     triggered_by: AnalysisTrigger;
-    /**
-     * Branch
-     */
-    branch?: string | null;
-    /**
-     * Commit Sha
-     */
-    commit_sha?: string | null;
     /**
      * Score
      */
@@ -741,10 +729,6 @@ export type DockerScanPublic = {
      * Grade
      */
     grade?: string | null;
-    /**
-     * File Count
-     */
-    file_count?: number | null;
     /**
      * Error Message
      */
@@ -757,6 +741,22 @@ export type DockerScanPublic = {
      * Completed At
      */
     completed_at?: string | null;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Docker Target Id
+     */
+    docker_target_id: string;
+    /**
+     * File Count
+     */
+    file_count?: number | null;
 };
 
 /**
@@ -1693,10 +1693,6 @@ export type TerraformFindingPublic = {
      */
     scan_id: string;
     /**
-     * Terraform Root Id
-     */
-    terraform_root_id: string;
-    /**
      * Rule Id
      */
     rule_id: string;
@@ -1704,6 +1700,35 @@ export type TerraformFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
     /**
      * Resource Address
      */
@@ -1728,31 +1753,6 @@ export type TerraformFindingPublic = {
      * Terraform Address
      */
     terraform_address?: string | null;
-    severity: IssueSeverity;
-    category: IssueCategory;
-    /**
-     * Message
-     */
-    message: string;
-    /**
-     * Context
-     */
-    context?: string | null;
-    status: FindingStatus;
-    /**
-     * Fix Id
-     */
-    fix_id?: string | null;
-    fix_status?: FixStatus | null;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Resolved At
-     */
-    resolved_at?: string | null;
-    resolution_reason?: FindingResolutionReason | null;
 };
 
 /**
@@ -1773,10 +1773,6 @@ export type TerraformFixPublic = {
      * Id
      */
     id: string;
-    /**
-     * Terraform Root Id
-     */
-    terraform_root_id: string;
     /**
      * File Path
      */
@@ -1816,6 +1812,10 @@ export type TerraformFixPublic = {
      * Delivered At
      */
     delivered_at?: string | null;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
 };
 
 /**
@@ -1886,20 +1886,8 @@ export type TerraformScanPublic = {
      * Id
      */
     id: string;
-    /**
-     * Terraform Root Id
-     */
-    terraform_root_id: string;
     status: ScanStatus;
     triggered_by: AnalysisTrigger;
-    /**
-     * Branch
-     */
-    branch?: string | null;
-    /**
-     * Commit Sha
-     */
-    commit_sha?: string | null;
     /**
      * Score
      */
@@ -1920,6 +1908,18 @@ export type TerraformScanPublic = {
      * Completed At
      */
     completed_at?: string | null;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Terraform Root Id
+     */
+    terraform_root_id: string;
 };
 
 /**

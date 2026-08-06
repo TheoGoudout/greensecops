@@ -224,76 +224,77 @@ class WorkflowFilePublic(SQLModel):
     raw_content: str | None = None
 
 
-class DockerTargetCreate(SQLModel):
-    repo_id: uuid.UUID
-    # "" means the repository root, which is what installation sync creates
-    # automatically. Explicit targets are for monorepos that want each
-    # sub-project graded separately.
-    root_path: str = Field(default="", max_length=512)
+# --------------------------------------------------------------------------
+# Shared bases for the per-engine public schemas
+# --------------------------------------------------------------------------
+# The Terraform, Docker and cloud engines expose the same shape for a scan, a
+# finding and a fix; only their locators differ. These bases are that shape
+# written once. Pydantic flattens inherited fields, so the emitted OpenAPI
+# schema for each concrete class is exactly what it was when every field was
+# spelled out — the generated frontend/action clients are unaffected.
 
 
-class DockerTargetPublic(SQLModel):
+class ScanPublicBase(SQLModel):
+    """One engine run, as the UI shows it in a scan history list."""
+
     id: uuid.UUID
-    repo_id: uuid.UUID
-    repo_full_name: str | None = None
-    root_path: str
-    enabled: bool
-    last_scanned_at: datetime | None = None
-    last_scanned_head_sha: str | None = None
-    latest_score: float | None = None
-    latest_grade: str | None = None
-    badge_sig: str | None = None
-
-
-class DockerScanPublic(SQLModel):
-    id: uuid.UUID
-    docker_target_id: uuid.UUID
     status: ScanStatus
     triggered_by: AnalysisTrigger
-    branch: str | None = None
-    commit_sha: str | None = None
     score: float | None = None
     grade: str | None = None
-    # The score is a mean of per-file scores; this is its denominator, without
-    # which a grade can't be reasoned about after the fact.
-    file_count: int | None = None
     error_message: str | None = None
     created_at: datetime | None = None
     completed_at: datetime | None = None
 
 
-class DockerFindingPublic(SQLModel):
+class RepoScanPublicBase(ScanPublicBase):
+    """A scan of code in a repository, which records where it ran."""
+
+    branch: str | None = None
+    commit_sha: str | None = None
+
+
+class FindingPublicBase(SQLModel):
+    """A rule violation with its lifecycle, minus the engine's own locators."""
+
     id: uuid.UUID
     scan_id: uuid.UUID
-    docker_target_id: uuid.UUID
     rule_id: uuid.UUID
     rule_slug: str
-    file_path: str
-    # Whichever locator the rule reports: a Compose rule names the service, a
-    # Dockerfile rule the build stage. Both null for a file-level rule.
-    service_name: str | None = None
-    stage_name: str | None = None
-    # 1-based line span of the offending instruction or service block, so the
-    # frontend can annotate the finding inline on the source.
-    line_start: int | None = None
-    line_end: int | None = None
     severity: IssueSeverity
     category: IssueCategory
     message: str
     context: str | None = None
     status: FindingStatus
-    # The generated fix addressing this finding, if any — mirrors
-    # ``IssuePublic.fix_id`` / ``fix_status``.
-    fix_id: uuid.UUID | None = None
-    fix_status: FixStatus | None = None
     created_at: datetime | None = None
     resolved_at: datetime | None = None
     resolution_reason: FindingResolutionReason | None = None
 
 
-class DockerFixPublic(SQLModel):
+class FixablePublicBase(FindingPublicBase):
+    """A finding an engine can generate a fix for — mirrors
+    ``IssuePublic.fix_id``/``fix_status``. Cloud findings have no fix pipeline,
+    so they stay on the plain base."""
+
+    fix_id: uuid.UUID | None = None
+    fix_status: FixStatus | None = None
+
+
+class FilePublicBase(SQLModel):
+    """A file's live source, fetched from GitHub on demand.
+
+    Terraform and Docker files aren't persisted the way ``WorkflowFile`` is, so
+    these carry no id or branch — just the path and its content.
+    """
+
+    path: str
+    raw_content: str
+
+
+class FileFixPublicBase(SQLModel):
+    """An LLM rewrite of one file and the PR it was delivered on."""
+
     id: uuid.UUID
-    docker_target_id: uuid.UUID
     file_path: str
     pr_id: uuid.UUID | None = None
     llm_provider: LLMProvider
@@ -306,6 +307,63 @@ class DockerFixPublic(SQLModel):
     pr_state: PullRequestState | None = None
     created_at: datetime | None = None
     delivered_at: datetime | None = None
+
+
+class ScanTargetPublicBase(SQLModel):
+    """A registered scan target, carrying the grade of its latest scan.
+
+    A target's grade *is* its latest completed scan's grade; there is no
+    separate aggregation to keep in sync. ``badge_sig`` mirrors
+    ``RepositoryPublic.badge_sig`` — set only when the owning repo is private,
+    since public repos get plain, unsigned badge URLs.
+    """
+
+    id: uuid.UUID
+    repo_id: uuid.UUID
+    repo_full_name: str | None = None
+    root_path: str
+    enabled: bool
+    last_scanned_at: datetime | None = None
+    last_scanned_head_sha: str | None = None
+    latest_score: float | None = None
+    latest_grade: str | None = None
+    badge_sig: str | None = None
+
+
+class DockerTargetCreate(SQLModel):
+    repo_id: uuid.UUID
+    # "" means the repository root, which is what installation sync creates
+    # automatically. Explicit targets are for monorepos that want each
+    # sub-project graded separately.
+    root_path: str = Field(default="", max_length=512)
+
+
+class DockerTargetPublic(ScanTargetPublicBase):
+    pass
+
+
+class DockerScanPublic(RepoScanPublicBase):
+    docker_target_id: uuid.UUID
+    # The score is a mean of per-file scores; this is its denominator, without
+    # which a grade can't be reasoned about after the fact.
+    file_count: int | None = None
+
+
+class DockerFindingPublic(FixablePublicBase):
+    docker_target_id: uuid.UUID
+    file_path: str
+    # Whichever locator the rule reports: a Compose rule names the service, a
+    # Dockerfile rule the build stage. Both null for a file-level rule.
+    service_name: str | None = None
+    stage_name: str | None = None
+    # 1-based line span of the offending instruction or service block, so the
+    # frontend can annotate the finding inline on the source.
+    line_start: int | None = None
+    line_end: int | None = None
+
+
+class DockerFixPublic(FileFixPublicBase):
+    docker_target_id: uuid.UUID
 
 
 class DockerRuntimeFindingPublic(SQLModel):
@@ -351,7 +409,7 @@ class DockerBuildTelemetryPublic(SQLModel):
     findings: list[DockerRuntimeFindingPublic] = Field(default_factory=list)
 
 
-class DockerFilePublic(SQLModel):
+class DockerFilePublic(FilePublicBase):
     """A Dockerfile or Compose file's live source for a target.
 
     Not persisted (mirroring ``TerraformFilePublic``): fetched from GitHub on
@@ -359,8 +417,6 @@ class DockerFilePublic(SQLModel):
     the viewer pick a syntax highlighter without re-deriving it from the name.
     """
 
-    path: str
-    raw_content: str
     kind: str
 
 
@@ -369,45 +425,16 @@ class TerraformRootCreate(SQLModel):
     root_path: str = Field(max_length=512)
 
 
-class TerraformRootPublic(SQLModel):
-    id: uuid.UUID
-    repo_id: uuid.UUID
-    repo_full_name: str | None = None
-    root_path: str
-    enabled: bool
-    last_scanned_at: datetime | None = None
-    last_scanned_head_sha: str | None = None
-    # Populated from the root's latest scan, mirroring how RepositoryPublic
-    # surfaces the workflow-engine's grade — a root's grade IS its latest
-    # scan's grade, there's no separate aggregation.
-    latest_score: float | None = None
-    latest_grade: str | None = None
-    # HMAC signature for this root's badge, mirroring RepositoryPublic.badge_sig
-    # — only set when the owning repo is private (public repos get plain,
-    # unsigned badge URLs). The frontend appends it as ``?sig=``.
-    badge_sig: str | None = None
+class TerraformRootPublic(ScanTargetPublicBase):
+    pass
 
 
-class TerraformScanPublic(SQLModel):
-    id: uuid.UUID
+class TerraformScanPublic(RepoScanPublicBase):
     terraform_root_id: uuid.UUID
-    status: ScanStatus
-    triggered_by: AnalysisTrigger
-    branch: str | None = None
-    commit_sha: str | None = None
-    score: float | None = None
-    grade: str | None = None
-    error_message: str | None = None
-    created_at: datetime | None = None
-    completed_at: datetime | None = None
 
 
-class TerraformFindingPublic(SQLModel):
-    id: uuid.UUID
-    scan_id: uuid.UUID
+class TerraformFindingPublic(FixablePublicBase):
     terraform_root_id: uuid.UUID
-    rule_id: uuid.UUID
-    rule_slug: str
     resource_address: str | None = None
     file_path: str
     # 1-based line span of the offending block, when the scanner could locate
@@ -418,21 +445,9 @@ class TerraformFindingPublic(SQLModel):
     # root-module resources. See ``hcl_parser.derive_module_path``.
     module_path: str | None = None
     terraform_address: str | None = None
-    severity: IssueSeverity
-    category: IssueCategory
-    message: str
-    context: str | None = None
-    status: FindingStatus
-    # The generated fix addressing this finding, if any — mirrors
-    # ``IssuePublic.fix_id`` / ``fix_status``.
-    fix_id: uuid.UUID | None = None
-    fix_status: FixStatus | None = None
-    created_at: datetime | None = None
-    resolved_at: datetime | None = None
-    resolution_reason: FindingResolutionReason | None = None
 
 
-class TerraformFilePublic(SQLModel):
+class TerraformFilePublic(FilePublicBase):
     """A ``.tf`` file's live source for a Terraform root.
 
     Terraform files aren't persisted (unlike ``WorkflowFile``); they're fetched
@@ -440,25 +455,9 @@ class TerraformFilePublic(SQLModel):
     content, mirroring the shape of ``WorkflowFilePublic``.
     """
 
-    path: str
-    raw_content: str
 
-
-class TerraformFixPublic(SQLModel):
-    id: uuid.UUID
+class TerraformFixPublic(FileFixPublicBase):
     terraform_root_id: uuid.UUID
-    file_path: str
-    pr_id: uuid.UUID | None = None
-    llm_provider: LLMProvider
-    llm_model: str
-    status: FixStatus
-    full_content: str | None = None
-    error_message: str | None = None
-    pr_url: str | None = None
-    pr_branch: str | None = None
-    pr_state: PullRequestState | None = None
-    created_at: datetime | None = None
-    delivered_at: datetime | None = None
 
 
 class CloudAccountCreate(SQLModel):
@@ -484,37 +483,17 @@ class CloudAccountPublic(SQLModel):
     created_at: datetime | None = None
 
 
-class CloudScanPublic(SQLModel):
-    id: uuid.UUID
+class CloudScanPublic(ScanPublicBase):
     cloud_account_id: uuid.UUID
-    status: ScanStatus
-    triggered_by: AnalysisTrigger
     region: str | None = None
     resource_count: int = 0
-    score: float | None = None
-    grade: str | None = None
-    error_message: str | None = None
-    created_at: datetime | None = None
-    completed_at: datetime | None = None
 
 
-class CloudFindingPublic(SQLModel):
-    id: uuid.UUID
-    scan_id: uuid.UUID
+class CloudFindingPublic(FindingPublicBase):
     cloud_account_id: uuid.UUID
-    rule_id: uuid.UUID
-    rule_slug: str
     resource_type: str
     resource_id: str
     region: str | None = None
-    severity: IssueSeverity
-    category: IssueCategory
-    message: str
-    context: str | None = None
-    status: FindingStatus
-    created_at: datetime | None = None
-    resolved_at: datetime | None = None
-    resolution_reason: FindingResolutionReason | None = None
 
 
 class PullRequestPublic(SQLModel):

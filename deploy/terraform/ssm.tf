@@ -56,17 +56,12 @@ locals {
     # Docker network when it shares one with the backend.
     OPA_URL = local.opa_url
 
-    # Object storage is real S3 here rather than MinIO: no endpoint override,
-    # and no key pair, so boto3 falls back to the instance role.
-    S3_BUCKET = module.data.artifact_bucket_name
-    S3_REGION = var.aws_region
-
     CELERY_CONCURRENCY = tostring(var.celery_concurrency)
 
     ANSIBLE_TRANSFER_BUCKET = module.data.ansible_transfer_bucket_name
 
     # Tells Ansible which containers this deployment expects it to run, so the
-    # rendered compose file includes db/redis/minio exactly when Terraform did
+    # rendered compose file includes db/redis exactly when Terraform did
     # not provision managed equivalents.
     SELF_HOSTED_DATA_TIER = tostring(!local.managed_database || !local.managed_cache)
   }
@@ -105,9 +100,7 @@ locals {
   # Only needed when PostgreSQL runs as a container: with RDS the password is
   # generated and rotated by AWS in Secrets Manager and never appears here.
   self_hosted_secret_parameters = local.managed_database ? {} : {
-    POSTGRES_PASSWORD   = "Password for the self-hosted PostgreSQL container. Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
-    MINIO_ROOT_USER     = "Root user for the self-hosted MinIO container, also used as S3_ACCESS_KEY by the backend."
-    MINIO_ROOT_PASSWORD = "Root password for the self-hosted MinIO container, also used as S3_SECRET_KEY."
+    POSTGRES_PASSWORD = "Password for the self-hosted PostgreSQL container. Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
   }
 
   # A value no running deployment would accept, so a parameter that was never

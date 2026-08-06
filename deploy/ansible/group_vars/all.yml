@@ -36,16 +36,14 @@ greensecops_group_services: "{{ (greensecops_group_service_list | default('')) |
 
 greensecops_self_hosted_data_tier: "{{ (greensecops_config.SELF_HOSTED_DATA_TIER | default('false')) | bool }}"
 
-# The self-hosted data tier adds three: with no RDS or MinIO service to
-# generate them, the container credentials are seeded like any other secret.
+# The self-hosted data tier adds one more: with no RDS instance to generate
+# it, the container's password is seeded like any other secret.
 greensecops_required_secrets: >-
   {{ greensecops_base_required_secrets
      + (greensecops_self_hosted_data_tier | ternary(greensecops_self_hosted_required_secrets, [])) }}
 
 greensecops_self_hosted_required_secrets:
   - POSTGRES_PASSWORD
-  - MINIO_ROOT_USER
-  - MINIO_ROOT_PASSWORD
 
 greensecops_base_required_secrets:
   - SECRET_KEY

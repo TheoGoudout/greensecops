@@ -6,20 +6,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import redis as redis_sync
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import Session, col, select
+from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     AnalysisFailureKind,
     AnalysisTrigger,
-    FindingResolutionReason,
     IssueCategory,
     IssueSeverity,
     Repository,
-    Rule,
     RuleDomain,
     ScanStatus,
     TerraformFinding,
@@ -27,8 +24,13 @@ from app.models import (
     TerraformScan,
 )
 from app.services import state_machines as sm
-from app.services.deduplication import compute_terraform_finding_fingerprint
+from app.services.deduplication import compute_fingerprint
 from app.services.opa.evaluator import OpaUnavailableError
+from app.services.scan_support import (
+    load_enabled_rules,
+    resolve_stale_findings,
+    scan_lock,
+)
 from app.services.scoring import compute_score, score_to_grade
 from app.services.terraform.hcl_parser import (
     derive_module_path,
@@ -62,36 +64,6 @@ def _terraform_address(
     if not module_path:
         return resource_address
     return f"module.{module_path.replace('/', '.')}.{resource_address}"
-
-
-def _resolve_stale_findings(
-    session: Session, terraform_root_id: uuid.UUID, seen_fingerprints: set[str]
-) -> None:
-    """Resolve open findings of a root not reported by the latest scan.
-
-    Covers findings the user fixed manually, and findings of rules that were
-    removed or disabled since the previous scan. Mirrors
-    static_analysis._resolve_stale_issues.
-    """
-    now = datetime.now(timezone.utc)
-    open_findings = session.exec(
-        select(TerraformFinding)
-        .where(TerraformFinding.terraform_root_id == terraform_root_id)
-        .where(col(TerraformFinding.resolved_at).is_(None))
-    ).all()
-    stale = [f for f in open_findings if f.fingerprint not in seen_fingerprints]
-    for finding in stale:
-        sm.try_advance(finding, sm.FindingMachine, "resolve")
-        finding.resolved_at = now
-        finding.resolution_reason = FindingResolutionReason.no_longer_detected
-        session.add(finding)
-    if stale:
-        session.commit()
-        logger.info(
-            "Resolved %d stale terraform finding(s) for root %s",
-            len(stale),
-            terraform_root_id,
-        )
 
 
 def _run_terraform_scan_impl(
@@ -167,14 +139,7 @@ def _run_terraform_scan_impl(
                 "scan_id": str(scan.id),
             }
 
-        rule_map: dict[str, Rule] = {
-            r.slug: r
-            for r in session.exec(
-                select(Rule)
-                .where(Rule.enabled == True)  # noqa: E712
-                .where(Rule.domain == RuleDomain.iac_terraform)
-            ).all()
-        }
+        rule_map = load_enabled_rules(session, RuleDomain.iac_terraform)
 
         seen_fingerprints: set[str] = set()
         score_inputs: list[tuple[str, float]] = []
@@ -194,7 +159,7 @@ def _run_terraform_scan_impl(
                     v.rule_slug,
                 )
                 continue
-            fingerprint = compute_terraform_finding_fingerprint(
+            fingerprint = compute_fingerprint(
                 root.id, rule.id, v.resource_address, v.discriminator
             )
             seen_fingerprints.add(fingerprint)
@@ -252,7 +217,14 @@ def _run_terraform_scan_impl(
         session.add(scan)
         session.commit()
 
-        _resolve_stale_findings(session, root.id, seen_fingerprints)
+        resolve_stale_findings(
+            session,
+            TerraformFinding,
+            "terraform_root_id",
+            root.id,
+            seen_fingerprints,
+            "terraform",
+        )
 
         root.last_scanned_at = datetime.now(timezone.utc)
         if commit_sha:
@@ -277,12 +249,6 @@ def _run_terraform_scan_impl(
         }
 
 
-# How long a single root scan may hold the per-root lock before it is
-# considered dead and the lock expires on its own. Mirrors
-# static_analysis.ANALYSIS_LOCK_TTL_SECONDS.
-SCAN_LOCK_TTL_SECONDS = 600
-
-
 @celery_app.task(name="terraform_analysis.run", bind=True, max_retries=3)
 def run_terraform_scan(
     self: Any,  # noqa: ANN401 — celery bound task instance
@@ -292,12 +258,9 @@ def run_terraform_scan(
     trigger: str = "manual",
 ) -> dict[str, str | int | float]:
     # Per-root lock: concurrent scans of the same root race on TerraformFinding
-    # upserts and duplicate TerraformScan rows, mirroring static_analysis's
-    # per-repo lock.
-    lock_key = f"greensecops:lock:terraform_scan:{terraform_root_id}"
-    r = redis_sync.Redis.from_url(settings.REDIS_URL)
-    try:
-        if not r.set(lock_key, "1", nx=True, ex=SCAN_LOCK_TTL_SECONDS):
+    # upserts and duplicate TerraformScan rows.
+    with scan_lock(f"terraform_scan:{terraform_root_id}") as acquired:
+        if not acquired:
             raise self.retry(countdown=30, max_retries=10)
         try:
             return _run_terraform_scan_impl(
@@ -308,10 +271,6 @@ def run_terraform_scan(
             )
         except TerraformFetchError as exc:
             raise self.retry(exc=exc, countdown=30 * (2**self.request.retries))
-        finally:
-            r.delete(lock_key)
-    finally:
-        r.close()
 
 
 def _fetch_terraform_files(

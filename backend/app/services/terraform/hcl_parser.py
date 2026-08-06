@@ -18,10 +18,6 @@ logger = logging.getLogger(__name__)
 _SOURCE_FILE_KEY = "__tf_file"
 
 
-class TerraformParseError(Exception):
-    """Raised when a single Terraform file is not parseable HCL/JSON."""
-
-
 def parse_terraform_content(path: str, raw_content: str) -> dict[str, Any] | None:
     """Parse one ``.tf``/``.tf.json`` file's content to its dict representation.
 

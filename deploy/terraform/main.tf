@@ -139,9 +139,6 @@ module "data" {
   redis_node_type     = var.redis_node_type
   redis_replica_count = var.redis_replica_count
 
-  artifact_bucket_name          = var.artifact_bucket_name
-  artifact_retention_days       = var.artifact_retention_days
-  artifact_bucket_force_destroy = var.artifact_bucket_force_destroy
 
   ansible_transfer_bucket_name = var.ansible_transfer_bucket_name
 
@@ -170,8 +167,7 @@ module "iam" {
 
       # Cloud-posture collection runs as a Celery task on the workers and is
       # triggered synchronously from the API, so both need to assume.
-      uses_artifact_store     = local.group_uses_artifacts[group]
-      scans_customer_accounts = local.group_uses_artifacts[group]
+      scans_customer_accounts = local.group_scans_accounts[group]
 
       # Only a group that self-hosts the data tier attaches the state volume.
       manages_state_volume = local.persistent_volume
@@ -180,7 +176,6 @@ module "iam" {
 
   kms_key_arn                 = aws_kms_key.environment.arn
   ecr_repository_arns         = var.ecr_repository_arns
-  artifact_bucket_arn         = module.data.artifact_bucket_arn
   ansible_transfer_bucket_arn = module.data.ansible_transfer_bucket_arn
   database_secret_arn         = module.data.postgres_master_secret_arn
   tags                        = local.common_tags
@@ -222,7 +217,7 @@ module "edge" {
   } : null
 
   access_log_bucket_name    = var.access_log_bucket_name
-  access_log_retention_days = var.artifact_retention_days
+  access_log_retention_days = var.access_log_retention_days
   deletion_protection       = var.deletion_protection
   tags                      = local.common_tags
 }

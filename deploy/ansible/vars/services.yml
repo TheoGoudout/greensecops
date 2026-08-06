@@ -165,18 +165,6 @@ greensecops_data_tier_services:
     health_check: ["CMD", "redis-cli", "ping"]
     environment: {}
 
-  minio:
-    image_ref: minio/minio:RELEASE.2025-04-08T15-41-24Z
-    mem_limit: 1g
-    mem_reservation: 256m
-    cpu_shares: 512
-    command: server /data --console-address ":9001"
-    volumes:
-      - /var/lib/greensecops/minio:/data
-    health_check: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-    environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
 
 # Build-time arguments, as the KEY=VALUE strings buildx takes directly. The
 # frontend and docs images bake their configuration in at build time, which is

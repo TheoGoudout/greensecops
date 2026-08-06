@@ -6,7 +6,7 @@
 # Only consulted when the data tier is self-hosted; otherwise these are network
 # endpoints that already exist when the deploy begins.
 greensecops_service_data_tier_dependents:
-  backend: [db, redis, minio]
+  backend: [db, redis]
   celery-worker: [db, redis]
   celery-beat: [db, redis]
 
@@ -14,5 +14,4 @@ greensecops_service_data_tier_dependents:
 greensecops_service_state_directories:
   - /var/lib/greensecops/postgres
   - /var/lib/greensecops/redis
-  - /var/lib/greensecops/minio
   - /var/lib/greensecops/celery

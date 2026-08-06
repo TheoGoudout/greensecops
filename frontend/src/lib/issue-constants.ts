@@ -1,4 +1,4 @@
-import type { IssueCategory, IssueSeverity } from "@/client"
+import type { IssueCategory } from "@/client"
 import { IssueCategorySchema } from "@/client/schemas.gen"
 import { CATEGORY_META } from "@/components/CategoryIcon"
 
@@ -13,16 +13,4 @@ export const CATEGORY_SELECT_OPTIONS: Array<{
     value: c,
     label: `${CATEGORY_META[c].icon} ${CATEGORY_META[c].label}`,
   })),
-]
-
-export const SEVERITY_SELECT_OPTIONS: Array<{
-  value: IssueSeverity | "all"
-  label: string
-}> = [
-  { value: "all", label: "All severities" },
-  { value: "critical", label: "Critical" },
-  { value: "high", label: "High" },
-  { value: "medium", label: "Medium" },
-  { value: "low", label: "Low" },
-  { value: "info", label: "Info" },
 ]

@@ -23,6 +23,7 @@ import {
   type PullRequestPublic,
   RepositoriesService,
 } from "@/client"
+import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { IssueRow } from "@/components/IssueRow"
 import { StatusPill } from "@/components/StatusPill"
@@ -30,9 +31,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
-import { WorkflowFileViewer } from "@/components/WorkflowFileViewer"
 import { useRepository } from "@/hooks/useRepository"
 import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
+import { resolvedIssueIds } from "@/lib/file-viewer"
 import { severityRank } from "@/lib/severity"
 import {
   analysisStatusColor,
@@ -782,14 +783,17 @@ function StaticAnalysisPage() {
               </CardHeader>
               {wfOpen && (
                 <CardContent className="flex flex-col gap-3">
-                  <WorkflowFileViewer
+                  <FileViewer
                     path={wf.path}
                     rawContent={wf.raw_content ?? ""}
+                    grammar="yaml"
                     fullContent={
                       showFix ? (fileFix?.full_content ?? undefined) : undefined
                     }
-                    issues={fileIssues}
-                    fix={fileFix}
+                    annotations={fileIssues}
+                    noun="issue"
+                    fileLevelLabel="Workflow-level issues"
+                    resolvedIds={resolvedIssueIds(fileFix)}
                   />
 
                   {fileIssues.length > 0 && (
