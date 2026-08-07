@@ -22,8 +22,12 @@ from app.models import (
     TerraformFinding,
     TerraformRoot,
     TerraformScan,
+    UsageEngine,
+    UsageMeter,
 )
 from app.services import state_machines as sm
+from app.services.billing import quota as billing_quota
+from app.services.billing import usage as billing_usage
 from app.services.deduplication import compute_fingerprint
 from app.services.opa.evaluator import OpaUnavailableError
 from app.services.scan_support import (
@@ -71,6 +75,7 @@ def _run_terraform_scan_impl(
     branch: str = "",
     commit_sha: str = "",
     trigger: str = "manual",
+    billable: bool = True,
 ) -> dict[str, str | int | float]:
     with Session(engine) as session:
         root = session.get(TerraformRoot, uuid.UUID(terraform_root_id))
@@ -82,6 +87,23 @@ def _run_terraform_scan_impl(
 
         effective_branch = branch or repo.default_branch
         fetch_ref = commit_sha or branch or None
+
+        # Gate before doing any work — including before the GitHub fetch, which
+        # is the expensive part. Checked here rather than only in the route
+        # because most scans arrive from a push webhook, which has no route.
+        if billable and (
+            refusal := billing_quota.exhausted_message(
+                session, repo.org_id, engine=UsageEngine.terraform
+            )
+        ):
+            logger.warning(
+                "Terraform scan refused for root=%s: %s", terraform_root_id, refusal
+            )
+            return {
+                "status": "quota_exceeded",
+                "terraform_root_id": terraform_root_id,
+                "detail": refusal,
+            }
 
         try:
             fetched = _fetch_terraform_files(repo, root.root_path, ref=fetch_ref)
@@ -110,11 +132,25 @@ def _run_terraform_scan_impl(
             scan.completed_at = datetime.now(timezone.utc)
             session.add(scan)
             session.commit()
+            # Deliberately uncharged: an empty root evaluated no rules, and
+            # billing for "we looked and there was nothing there" would meter
+            # every push to a repo that merely *has* a registered root.
             return {
                 "status": "no_targets",
                 "terraform_root_id": terraform_root_id,
                 "scan_id": str(scan.id),
             }
+
+        if billable:
+            billing_usage.record_for_repo(
+                session,
+                repo=repo,
+                meter=UsageMeter.analyses,
+                engine=UsageEngine.terraform,
+                source_type="terraform_scan",
+                source_id=scan.id,
+                commit=False,
+            )
 
         try:
             merged = merge_terraform_configs([(f.path, f.content) for f in fetched])
@@ -256,6 +292,7 @@ def run_terraform_scan(
     branch: str = "",
     commit_sha: str = "",
     trigger: str = "manual",
+    billable: bool = True,
 ) -> dict[str, str | int | float]:
     # Per-root lock: concurrent scans of the same root race on TerraformFinding
     # upserts and duplicate TerraformScan rows.
@@ -264,6 +301,7 @@ def run_terraform_scan(
             raise self.retry(countdown=30, max_retries=10)
         try:
             return _run_terraform_scan_impl(
+                billable=billable,
                 terraform_root_id=terraform_root_id,
                 branch=branch,
                 commit_sha=commit_sha,

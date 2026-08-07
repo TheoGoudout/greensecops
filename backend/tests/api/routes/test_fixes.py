@@ -627,7 +627,12 @@ def test_generate_fixes_for_repo_blocks_net_new_over_quota(
 
     # Assert
     assert response.status_code == 402
-    assert "quota" in response.json()["detail"].lower()
+    detail = response.json()["detail"]
+    assert detail["code"] == "quota_exceeded"
+    assert detail["meter"] == "fixes"
+    # The whole batch is refused up front, naming its true size, rather
+    # than being let through one unit at a time.
+    assert detail["requested"] == free_fix_limit + 1
     mock_delay.assert_not_called()
 
 

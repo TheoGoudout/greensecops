@@ -220,6 +220,12 @@ export const BillingSubscriptionPublicSchema = {
         tier: {
             '$ref': '#/components/schemas/UserTier'
         },
+        effective_tier: {
+            '$ref': '#/components/schemas/UserTier'
+        },
+        status: {
+            '$ref': '#/components/schemas/SubscriptionStatus'
+        },
         analyses_used: {
             type: 'integer',
             title: 'Analyses Used'
@@ -256,11 +262,51 @@ export const BillingSubscriptionPublicSchema = {
                 }
             ],
             title: 'Period End'
+        },
+        grace_expires_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grace Expires At'
+        },
+        cancel_at_period_end: {
+            type: 'boolean',
+            title: 'Cancel At Period End',
+            default: false
+        },
+        trial_end: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Trial End'
+        },
+        billing_enabled: {
+            type: 'boolean',
+            title: 'Billing Enabled',
+            default: false
         }
     },
     type: 'object',
-    required: ['id', 'tier', 'analyses_used', 'fixes_used'],
-    title: 'BillingSubscriptionPublic'
+    required: ['id', 'tier', 'effective_tier', 'status', 'analyses_used', 'fixes_used'],
+    title: 'BillingSubscriptionPublic',
+    description: `The billing page's headline: plan, payment state, and usage.
+
+\`\`tier\`\` is the purchased plan and \`\`effective_tier\`\` is what limits are
+actually being applied — they differ exactly when a subscription is
+\`\`unpaid\`\` or \`\`canceled\`\`, and showing both is what lets the UI say "Pro,
+currently limited to Free" instead of silently misreporting one or other.`
 } as const;
 
 export const Body_auth_github_callbackSchema = {
@@ -385,6 +431,30 @@ export const CIStatusSchema = {
     enum: ['pending', 'success', 'failure', 'none'],
     title: 'CIStatus',
     description: 'Aggregate CI outcome for a PR, from ``check_suite`` webhooks.'
+} as const;
+
+export const CheckoutRequestSchema = {
+    properties: {
+        tier: {
+            '$ref': '#/components/schemas/UserTier'
+        }
+    },
+    type: 'object',
+    required: ['tier'],
+    title: 'CheckoutRequest'
+} as const;
+
+export const CheckoutSessionPublicSchema = {
+    properties: {
+        url: {
+            type: 'string',
+            title: 'Url'
+        }
+    },
+    type: 'object',
+    required: ['url'],
+    title: 'CheckoutSessionPublic',
+    description: 'The Stripe-hosted URL the browser must be sent to.'
 } as const;
 
 export const CloudAccountCreateSchema = {
@@ -2029,6 +2099,126 @@ export const InstallationSyncRequestSchema = {
     title: 'InstallationSyncRequest'
 } as const;
 
+export const InvoicePublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        stripe_invoice_id: {
+            type: 'string',
+            title: 'Stripe Invoice Id'
+        },
+        number: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Number'
+        },
+        status: {
+            '$ref': '#/components/schemas/InvoiceStatus'
+        },
+        amount_due_cents: {
+            type: 'integer',
+            title: 'Amount Due Cents'
+        },
+        amount_paid_cents: {
+            type: 'integer',
+            title: 'Amount Paid Cents'
+        },
+        currency: {
+            type: 'string',
+            title: 'Currency'
+        },
+        hosted_invoice_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Hosted Invoice Url'
+        },
+        invoice_pdf: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Invoice Pdf'
+        },
+        period_start: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Period Start'
+        },
+        period_end: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Period End'
+        },
+        paid_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Paid At'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'stripe_invoice_id', 'status', 'amount_due_cents', 'amount_paid_cents', 'currency'],
+    title: 'InvoicePublic'
+} as const;
+
+export const InvoiceStatusSchema = {
+    type: 'string',
+    enum: ['draft', 'open', 'paid', 'void', 'uncollectible'],
+    title: 'InvoiceStatus',
+    description: "Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only)."
+} as const;
+
 export const IssueCategorySchema = {
     type: 'string',
     enum: ['energy', 'reliability', 'security', 'performance', 'maintainability'],
@@ -2406,6 +2596,222 @@ export const OrganizationPublicSchema = {
     type: 'object',
     required: ['id', 'name', 'tier', 'fix_delivery_mode'],
     title: 'OrganizationPublic'
+} as const;
+
+export const OssApplicationCreateSchema = {
+    properties: {
+        repo_url: {
+            type: 'string',
+            maxLength: 512,
+            minLength: 1,
+            title: 'Repo Url'
+        },
+        license_name: {
+            type: 'string',
+            maxLength: 128,
+            minLength: 1,
+            title: 'License Name'
+        },
+        justification: {
+            type: 'string',
+            maxLength: 4096,
+            minLength: 1,
+            title: 'Justification'
+        }
+    },
+    type: 'object',
+    required: ['repo_url', 'license_name', 'justification'],
+    title: 'OssApplicationCreate'
+} as const;
+
+export const OssApplicationPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        user_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'User Id'
+        },
+        repo_url: {
+            type: 'string',
+            title: 'Repo Url'
+        },
+        license_name: {
+            type: 'string',
+            title: 'License Name'
+        },
+        justification: {
+            type: 'string',
+            title: 'Justification'
+        },
+        status: {
+            '$ref': '#/components/schemas/OssApplicationStatus'
+        },
+        review_note: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Review Note'
+        },
+        reviewed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Reviewed At'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['id', 'user_id', 'repo_url', 'license_name', 'justification', 'status'],
+    title: 'OssApplicationPublic'
+} as const;
+
+export const OssApplicationReviewSchema = {
+    properties: {
+        approve: {
+            type: 'boolean',
+            title: 'Approve'
+        },
+        review_note: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 2048
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Review Note'
+        }
+    },
+    type: 'object',
+    required: ['approve'],
+    title: 'OssApplicationReview'
+} as const;
+
+export const OssApplicationStatusSchema = {
+    type: 'string',
+    enum: ['pending', 'approved', 'rejected', 'withdrawn'],
+    title: 'OssApplicationStatus',
+    description: 'Review state of a request for the granted open-source plan.'
+} as const;
+
+export const PlanLimitsPublicSchema = {
+    properties: {
+        analyses: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Analyses'
+        },
+        fixes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fixes'
+        },
+        repos: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repos'
+        }
+    },
+    type: 'object',
+    title: 'PlanLimitsPublic',
+    description: `\`\`None\`\` means unlimited, at every layer up to the UI.`
+} as const;
+
+export const PlanPublicSchema = {
+    properties: {
+        tier: {
+            '$ref': '#/components/schemas/UserTier'
+        },
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        price_cents: {
+            type: 'integer',
+            title: 'Price Cents'
+        },
+        price_display: {
+            type: 'string',
+            title: 'Price Display'
+        },
+        tagline: {
+            type: 'string',
+            title: 'Tagline'
+        },
+        limits: {
+            '$ref': '#/components/schemas/PlanLimitsPublic'
+        },
+        auto_fix: {
+            type: 'boolean',
+            title: 'Auto Fix'
+        },
+        public_repos_only: {
+            type: 'boolean',
+            title: 'Public Repos Only'
+        },
+        is_purchasable: {
+            type: 'boolean',
+            title: 'Is Purchasable'
+        },
+        features: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Features',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['tier', 'name', 'price_cents', 'price_display', 'tagline', 'limits', 'auto_fix', 'public_repos_only', 'is_purchasable'],
+    title: 'PlanPublic'
 } as const;
 
 export const PrivateUserCreateSchema = {
@@ -2801,7 +3207,7 @@ export const RulePublicSchema = {
 
 export const SSESignalSchema = {
     type: 'string',
-    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'fix.landed', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened', 'repository.suspended', 'repository.archived', 'repository.inaccessible', 'repository.restored', 'dynamic.queued', 'dynamic.running', 'dynamic.enriched', 'dynamic.failed'],
+    enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'fix.landed', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened', 'repository.suspended', 'repository.archived', 'repository.inaccessible', 'repository.restored', 'dynamic.queued', 'dynamic.running', 'dynamic.enriched', 'dynamic.failed', 'analysis.quota_exceeded', 'subscription.activated', 'subscription.past_due', 'subscription.unpaid', 'subscription.canceled', 'subscription.updated'],
     title: 'SSESignal'
 } as const;
 
@@ -2897,6 +3303,22 @@ Deliberately separate from \`\`AnalysisStatus\`\`: that enum's \`\`no_workflows\
 value is workflow-specific vocabulary. \`\`no_targets\`\` covers both "no .tf
 files under this root" and "no resources of the scanned types in this
 account/region".`
+} as const;
+
+export const SubscriptionStatusSchema = {
+    type: 'string',
+    enum: ['incomplete', 'trialing', 'active', 'past_due', 'unpaid', 'pending_cancellation', 'canceled'],
+    title: 'SubscriptionStatus',
+    description: `Lifecycle of a \`\`BillingSubscription\`\` — see \`\`BillingSubscriptionMachine\`\`.
+
+Orthogonal to \`\`UserTier\`\`: the tier says *what was bought*, this says
+*whether it is currently being paid for*. The combination is resolved by
+\`\`services/billing/lifecycle.effective_tier\`\`, which is the only thing
+quota enforcement reads.
+
+\`\`past_due\`\` deliberately keeps full paid service — it is the grace window,
+not a punishment. Only \`\`unpaid\`\` (grace expired) and \`\`canceled\`\` fall
+back to Free limits, and neither ever removes data.`
 } as const;
 
 export const TelemetryAveragePublicSchema = {
@@ -3721,6 +4143,110 @@ export const UpdatePasswordSchema = {
     type: 'object',
     required: ['current_password', 'new_password'],
     title: 'UpdatePassword'
+} as const;
+
+export const UsageBreakdownPublicSchema = {
+    properties: {
+        meter: {
+            '$ref': '#/components/schemas/UsageMeter'
+        },
+        engine: {
+            '$ref': '#/components/schemas/UsageEngine'
+        },
+        quantity: {
+            type: 'integer',
+            title: 'Quantity'
+        }
+    },
+    type: 'object',
+    required: ['meter', 'engine', 'quantity'],
+    title: 'UsageBreakdownPublic',
+    description: 'How much of one meter a single engine accounted for this period.'
+} as const;
+
+export const UsageEngineSchema = {
+    type: 'string',
+    enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry', 'carryover'],
+    title: 'UsageEngine',
+    description: `Which engine produced a usage record.
+
+Every one of these debits the same shared pool; the tag exists so a user
+can see *where* their allowance went, and so tests can assert that each
+engine is actually metered.`
+} as const;
+
+export const UsageMeterSchema = {
+    type: 'string',
+    enum: ['analyses', 'fixes'],
+    title: 'UsageMeter',
+    description: `Which allowance a usage record draws down.
+
+\`\`repos\`\` is absent on purpose: it is a live capacity count (how many
+repositories are enabled right now), not something consumed over time, so
+it is measured by querying rather than by ledger entries.`
+} as const;
+
+export const UsagePublicSchema = {
+    properties: {
+        period_start: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Period Start'
+        },
+        period_end: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Period End'
+        },
+        analyses_used: {
+            type: 'integer',
+            title: 'Analyses Used',
+            default: 0
+        },
+        fixes_used: {
+            type: 'integer',
+            title: 'Fixes Used',
+            default: 0
+        },
+        repos_used: {
+            type: 'integer',
+            title: 'Repos Used',
+            default: 0
+        },
+        limits: {
+            '$ref': '#/components/schemas/PlanLimitsPublic'
+        },
+        breakdown: {
+            items: {
+                '$ref': '#/components/schemas/UsageBreakdownPublic'
+            },
+            type: 'array',
+            title: 'Breakdown',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['limits'],
+    title: 'UsagePublic',
+    description: `Per-meter usage with the engine split behind it.
+
+The breakdown is what answers "why am I at 90%" — before the ledger there
+was no way to tell a user that their Terraform roots, not their workflows,
+were spending the allowance.`
 } as const;
 
 export const UserCreateSchema = {

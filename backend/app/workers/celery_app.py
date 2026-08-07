@@ -8,6 +8,7 @@ celery_app = Celery(
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=[
+        "app.workers.tasks.billing",
         "app.workers.tasks.static_analysis",
         "app.workers.tasks.dynamic_analysis",
         "app.workers.tasks.fix_generation",
@@ -50,10 +51,23 @@ celery_app.conf.update(
         "fix_generation.*": {"queue": "fixes"},
         "fix_delivery.*": {"queue": "fixes"},
         "maintenance.*": {"queue": "analysis"},
+        "billing.*": {"queue": "default"},
         "polling.*": {"queue": "analysis"},
         "app.workers.tasks.installation_sync.*": {"queue": "analysis"},
     },
     beat_schedule={
+        # Advance the dunning schedule, expire closed grace windows, and
+        # finalise cancellations whose period has ended. Daily, early UTC: the
+        # work is date-based, so running it more often would only re-scan.
+        "billing-dunning": {
+            "task": "billing.run_dunning",
+            "schedule": crontab(minute=20, hour=4),
+        },
+        # Warn owners crossing 80%/100% of a meter, before they meet a 402.
+        "billing-quota-warnings": {
+            "task": "billing.run_quota_warnings",
+            "schedule": crontab(minute=40, hour=8),
+        },
         # Fail analyses/fixes stuck in transient states after worker crashes.
         "sweep-stuck-states": {
             "task": "maintenance.sweep_stuck_states",

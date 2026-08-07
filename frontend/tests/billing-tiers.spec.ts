@@ -5,7 +5,11 @@ import {
   MOCK_SUBSCRIPTION_PRO,
   MOCK_TIER_LIMITS,
   MOCK_TIER_LIMITS_PRO,
+  MOCK_USAGE,
+  MOCK_USAGE_AT_LIMIT,
+  MOCK_USAGE_PRO,
   mockAnalyses,
+  mockBilling,
   mockEvents,
   mockIssues,
   mockRepositories,
@@ -15,15 +19,24 @@ import {
 
 const MOCK_TIER_LIMITS_ULTIMATE = {
   tier: "ultimate",
-  limits: { analyses: 999999, fixes: 999999, repos: 999999 },
+  limits: { analyses: null, fixes: null, repos: null },
 }
 
 const MOCK_SUBSCRIPTION_ULTIMATE = {
   ...MOCK_SUBSCRIPTION_PRO,
   tier: "ultimate" as const,
+  effective_tier: "ultimate" as const,
   analyses_used: 120,
   fixes_used: 45,
   repos_used: 8,
+}
+
+const MOCK_USAGE_ULTIMATE = {
+  ...MOCK_USAGE,
+  analyses_used: 120,
+  fixes_used: 45,
+  repos_used: 8,
+  limits: { analyses: null, fixes: null, repos: null },
 }
 
 test.describe("Billing Tiers", () => {
@@ -37,134 +50,130 @@ test.describe("Billing Tiers", () => {
   })
 
   test("free tier shows Free label and $0 price", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION })
-      }
-    })
+    await mockBilling(page)
 
     await page.goto("/billing")
 
-    await expect(page.getByText("Free")).toBeVisible()
-    await expect(page.getByText("$0/mo")).toBeVisible()
+    await expect(page.getByText("Free").first()).toBeVisible()
+    await expect(page.getByText("$0/mo").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("free tier shows usage counts", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION })
-      }
-    })
+  test("free tier shows usage against the published limits", async ({
+    page,
+  }) => {
+    await mockBilling(page)
 
     await page.goto("/billing")
 
-    await expect(page.getByText(/12.*50|50.*12/).first()).toBeVisible()
+    // 12 of 100 — the numbers in backend/app/core/plans.py, which are also what
+    // the marketing page renders.
+    await expect(page.getByText("12").first()).toBeVisible()
+    await expect(page.getByText("/ 100")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("pro tier shows Pro label", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS_PRO })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION_PRO })
-      }
-    })
+  test("pro tier shows Pro label and its higher limits", async ({ page }) => {
+    await mockBilling(
+      page,
+      MOCK_SUBSCRIPTION_PRO,
+      MOCK_TIER_LIMITS_PRO,
+      MOCK_USAGE_PRO,
+    )
 
     await page.goto("/billing")
 
     await expect(page.getByText("Pro").first()).toBeVisible()
+    await expect(page.getByText("/ 10,000")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("pro tier shows higher limits than free", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS_PRO })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION_PRO })
-      }
-    })
+  test("ultimate tier renders unlimited as ∞, not a huge number", async ({
+    page,
+  }) => {
+    await mockBilling(
+      page,
+      MOCK_SUBSCRIPTION_ULTIMATE,
+      MOCK_TIER_LIMITS_ULTIMATE,
+      MOCK_USAGE_ULTIMATE,
+    )
 
     await page.goto("/billing")
 
-    await expect(page.getByText(/500/).first()).toBeVisible()
+    await expect(page.getByText("Ultimate").first()).toBeVisible()
+    // `null` means unlimited all the way from the catalog to the bar.
+    await expect(page.getByText("/ ∞").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("ultimate tier shows Ultimate label", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS_ULTIMATE })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION_ULTIMATE })
-      }
-    })
+  test("usage at the limit shows the full state", async ({ page }) => {
+    await mockBilling(
+      page,
+      MOCK_SUBSCRIPTION_AT_LIMIT,
+      MOCK_TIER_LIMITS,
+      MOCK_USAGE_AT_LIMIT,
+    )
 
     await page.goto("/billing")
 
-    await expect(page.getByText("Ultimate")).toBeVisible()
+    await expect(page.getByText("100").first()).toBeVisible()
+    await expect(page.getByText("/ 100")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("usage at limit shows warning or full state", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION_AT_LIMIT })
-      }
-    })
+  test("plan cards are rendered from the catalog", async ({ page }) => {
+    await mockBilling(page)
 
     await page.goto("/billing")
 
-    await expect(page.getByText(/50.*50|50 \/ 50/).first()).toBeVisible()
-    await expect(page.locator("body")).not.toContainText("Something went wrong")
-  })
-
-  test("free tier shows manage subscription button", async ({ page }) => {
-    await page.route("**/api/v1/billing/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/limits")) {
-        route.fulfill({ json: MOCK_TIER_LIMITS })
-      } else {
-        route.fulfill({ json: MOCK_SUBSCRIPTION })
-      }
-    })
-
-    await page.goto("/billing")
-
-    await expect(page.getByText("Free")).toBeVisible()
+    // Served by GET /billing/plans rather than hard-coded in the frontend, so
+    // the app and the marketing site cannot disagree about what a plan costs.
+    await expect(page.getByRole("heading", { name: "Plans" })).toBeVisible()
+    await expect(page.getByText("$19/mo")).toBeVisible()
+    await expect(page.getByText("$79/mo")).toBeVisible()
+    await expect(page.getByText("$299/mo")).toBeVisible()
+    // "Current plan" is also the usage card's title; mean the badge.
     await expect(
-      page.getByRole("button", { name: /manage subscription/i }),
+      page.locator('[data-slot="badge"]').filter({ hasText: "Current plan" }),
     ).toBeVisible()
-    await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 
-  test("billing checkout button calls billing API", async ({ page }) => {
+  test("upgrade button calls checkout", async ({ page }) => {
     let checkoutCalled = false
 
     await page.route("**/api/v1/billing/**", (route) => {
       const url = route.request().url()
-      const method = route.request().method()
-      if (method === "POST" && url.includes("/checkout")) {
+      if (route.request().method() === "POST" && url.includes("/checkout")) {
         checkoutCalled = true
         route.fulfill({
-          json: { checkout_url: "https://checkout.stripe.com/test" },
+          json: { url: "https://checkout.stripe.com/c/pay/test" },
         })
       } else if (url.includes("/limits")) {
         route.fulfill({ json: MOCK_TIER_LIMITS })
+      } else if (url.includes("/usage")) {
+        route.fulfill({ json: MOCK_USAGE })
+      } else if (url.includes("/plans")) {
+        route.fulfill({
+          json: [
+            {
+              tier: "pro",
+              name: "Pro",
+              price_cents: 7900,
+              price_display: "$79/mo",
+              tagline: "Growing teams.",
+              limits: { analyses: 10000, fixes: 1000, repos: 100 },
+              auto_fix: true,
+              public_repos_only: false,
+              is_purchasable: true,
+              features: [],
+            },
+          ],
+        })
+      } else if (
+        url.includes("/invoices") ||
+        url.includes("/oss-application")
+      ) {
+        route.fulfill({ json: [] })
       } else {
         route.fulfill({ json: MOCK_SUBSCRIPTION })
       }
@@ -172,12 +181,9 @@ test.describe("Billing Tiers", () => {
 
     await page.goto("/billing")
 
-    const checkoutBtn = page.getByRole("button", {
-      name: /upgrade|subscribe|get pro/i,
-    })
-    if (await checkoutBtn.isVisible()) {
-      await checkoutBtn.click()
-      expect(checkoutCalled).toBe(true)
-    }
+    const upgrade = page.getByRole("button", { name: "Upgrade to Pro" })
+    await expect(upgrade).toBeVisible()
+    await upgrade.click()
+    await expect.poll(() => checkoutCalled).toBe(true)
   })
 })

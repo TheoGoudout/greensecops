@@ -779,45 +779,178 @@ export const MOCK_RULE_DISABLED = {
 }
 
 // ── Billing ────────────────────────────────────────────────────────────
+// Limits mirror backend/app/core/plans.py. They are pinned there by
+// tests/services/billing/test_usage.py and rendered into the marketing page by
+// scripts/render_landing_pricing.py, so these three places agree by
+// construction rather than by anyone remembering.
+export const MOCK_PLANS = [
+  {
+    tier: "free" as const,
+    name: "Free",
+    price_cents: 0,
+    price_display: "$0/mo",
+    tagline: "Personal projects and evaluation. No credit card required.",
+    limits: { analyses: 100, fixes: 10, repos: 3 },
+    auto_fix: false,
+    public_repos_only: false,
+    is_purchasable: false,
+    features: ["Full five-pillar grading"],
+  },
+  {
+    tier: "starter" as const,
+    name: "Starter",
+    price_cents: 1900,
+    price_display: "$19/mo",
+    tagline: "Small teams and growing solo developers.",
+    limits: { analyses: 1000, fixes: 100, repos: 20 },
+    auto_fix: true,
+    public_repos_only: false,
+    is_purchasable: true,
+    features: ["Automatic fix pull requests"],
+  },
+  {
+    tier: "pro" as const,
+    name: "Pro",
+    price_cents: 7900,
+    price_display: "$79/mo",
+    tagline: "Growing teams that need higher limits and faster support.",
+    limits: { analyses: 10000, fixes: 1000, repos: 100 },
+    auto_fix: true,
+    public_repos_only: false,
+    is_purchasable: true,
+    features: ["Priority email support"],
+  },
+  {
+    tier: "ultimate" as const,
+    name: "Ultimate",
+    price_cents: 29900,
+    price_display: "$299/mo",
+    tagline: "Large organisations with unlimited need.",
+    limits: { analyses: null, fixes: null, repos: null },
+    auto_fix: true,
+    public_repos_only: false,
+    is_purchasable: true,
+    features: ["Unlimited everything"],
+  },
+  {
+    tier: "open_source" as const,
+    name: "Open Source",
+    price_cents: 0,
+    price_display: "Free",
+    tagline: "For qualifying public open-source projects.",
+    limits: { analyses: 2000, fixes: 300, repos: null },
+    auto_fix: true,
+    public_repos_only: true,
+    is_purchasable: false,
+    features: ["OSS badge for your README"],
+  },
+]
+
 export const MOCK_SUBSCRIPTION = {
   id: ID.subscription,
   tier: "free" as const,
+  effective_tier: "free" as const,
+  status: "active" as const,
   analyses_used: 12,
   fixes_used: 2,
   repos_used: 1,
-  period_start: null,
-  period_end: null,
+  period_start: "2026-08-01T00:00:00Z",
+  period_end: "2026-09-01T00:00:00Z",
+  grace_expires_at: null,
+  cancel_at_period_end: false,
+  trial_end: null,
+  billing_enabled: true,
+}
+
+export const MOCK_USAGE = {
+  period_start: "2026-08-01T00:00:00Z",
+  period_end: "2026-09-01T00:00:00Z",
+  analyses_used: 12,
+  fixes_used: 2,
+  repos_used: 1,
+  limits: { analyses: 100, fixes: 10, repos: 3 },
+  breakdown: [
+    { meter: "analyses", engine: "terraform", quantity: 7 },
+    { meter: "analyses", engine: "workflow", quantity: 5 },
+    { meter: "fixes", engine: "workflow", quantity: 2 },
+  ],
 }
 
 export const MOCK_TIER_LIMITS = {
   tier: "free",
-  limits: { analyses: 50, fixes: 5, repos: 3 },
+  limits: { analyses: 100, fixes: 10, repos: 3 },
 }
 
 export const MOCK_SUBSCRIPTION_PRO = {
+  ...MOCK_SUBSCRIPTION,
   id: ID.subscriptionPro,
   tier: "pro" as const,
+  effective_tier: "pro" as const,
   analyses_used: 5,
   fixes_used: 10,
   repos_used: 2,
-  period_start: "2024-01-01T00:00:00Z",
-  period_end: "2024-02-01T00:00:00Z",
+}
+
+export const MOCK_USAGE_PRO = {
+  ...MOCK_USAGE,
+  analyses_used: 5,
+  fixes_used: 10,
+  repos_used: 2,
+  limits: { analyses: 10000, fixes: 1000, repos: 100 },
 }
 
 export const MOCK_TIER_LIMITS_PRO = {
   tier: "pro",
-  limits: { analyses: 500, fixes: 100, repos: 20 },
+  limits: { analyses: 10000, fixes: 1000, repos: 100 },
 }
 
 export const MOCK_SUBSCRIPTION_AT_LIMIT = {
-  id: ID.subscription,
-  tier: "free" as const,
-  analyses_used: 50,
-  fixes_used: 5,
+  ...MOCK_SUBSCRIPTION,
+  analyses_used: 100,
+  fixes_used: 10,
   repos_used: 3,
-  period_start: null,
-  period_end: null,
 }
+
+export const MOCK_USAGE_AT_LIMIT = {
+  ...MOCK_USAGE,
+  analyses_used: 100,
+  fixes_used: 10,
+  repos_used: 3,
+}
+
+// A Pro subscription whose payment failed. Still fully entitled — the grace
+// window is the whole point — but the UI must say so.
+export const MOCK_SUBSCRIPTION_PAST_DUE = {
+  ...MOCK_SUBSCRIPTION_PRO,
+  status: "past_due" as const,
+  grace_expires_at: "2099-01-10T00:00:00Z",
+}
+
+// Grace expired: still a Pro subscription, but metered at Free.
+export const MOCK_SUBSCRIPTION_UNPAID = {
+  ...MOCK_SUBSCRIPTION_PRO,
+  status: "unpaid" as const,
+  effective_tier: "free" as const,
+  grace_expires_at: "2020-01-10T00:00:00Z",
+}
+
+export const MOCK_INVOICES = [
+  {
+    id: ID.subscription,
+    stripe_invoice_id: "in_test_1",
+    number: "GS-0001",
+    status: "paid" as const,
+    amount_due_cents: 7900,
+    amount_paid_cents: 7900,
+    currency: "usd",
+    hosted_invoice_url: "https://invoice.stripe.com/i/test",
+    invoice_pdf: null,
+    period_start: "2026-08-01T00:00:00Z",
+    period_end: "2026-09-01T00:00:00Z",
+    paid_at: "2026-08-01T00:00:00Z",
+    created_at: "2026-08-01T00:00:00Z",
+  },
+]
 
 // ── AI Providers ───────────────────────────────────────────────────────
 export const MOCK_AI_PROVIDERS = {
@@ -1080,11 +1213,25 @@ export async function mockBilling(
   page: Page,
   subscription = MOCK_SUBSCRIPTION,
   limits = MOCK_TIER_LIMITS,
+  usage = MOCK_USAGE,
+  { plans = MOCK_PLANS, invoices = [] as unknown[] } = {},
 ) {
   await page.route("**/api/v1/billing/**", (route) => {
     const url = route.request().url()
+    // Longest-prefix-ish ordering: /oss-applications must be tested before
+    // /oss-application, and /subscription is the fallback.
     if (url.includes("/limits")) {
       route.fulfill({ json: limits })
+    } else if (url.includes("/usage")) {
+      route.fulfill({ json: usage })
+    } else if (url.includes("/plans")) {
+      route.fulfill({ json: plans })
+    } else if (url.includes("/invoices")) {
+      route.fulfill({ json: invoices })
+    } else if (url.includes("/oss-application")) {
+      route.fulfill({ json: [] })
+    } else if (url.includes("/checkout") || url.includes("/portal")) {
+      route.fulfill({ json: { url: "https://checkout.stripe.com/c/pay/test" } })
     } else {
       route.fulfill({ json: subscription })
     }

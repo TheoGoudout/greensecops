@@ -2,8 +2,8 @@
 
 This document formalizes the core lifecycles — **Analysis**, **Issue**,
 **Fix**, **Pull Request**, **Repository**, **Telemetry (dynamic analysis)**,
-and the IaC/cloud-posture engines' **Scan**, **Finding**, and **Cloud
-Account** — as state machines: their **states**, the **input events** that
+the IaC/cloud-posture engines' **Scan**, **Finding**, and **Cloud Account**,
+and the **Billing Subscription** — as state machines: their **states**, the **input events** that
 drive transitions, and the **outputs** (SSE signals) each transition emits.
 It is kept in sync with the code in
 [`backend/app/services/state_machines/`](../backend/app/services/state_machines),
@@ -14,7 +14,7 @@ which is the single source of truth.
 Each lifecycle is a [`python-statemachine`](https://pypi.org/project/python-statemachine/)
 `StateMachine` subclass (`analysis.py`, `fix.py`, `pull_request.py`,
 `issue.py`, `repository.py`, `telemetry.py`, `scan.py`, `finding.py`,
-`cloud_account.py`). States carry the persisted status-enum value they map
+`cloud_account.py`, `billing.py`). States carry the persisted status-enum value they map
 to; events declare the transitions; a per-machine `outputs` map records the
 `SSESignal` each event emits.
 
@@ -751,3 +751,93 @@ stateDiagram-v2
 trust policy or permissions may have changed while the account sat disabled,
 so re-enabling forces a re-verify (the next scan) before it's trusted as
 `connected` again, rather than resuming on stale trust.
+
+---
+
+## 10. Billing subscription — `BillingSubscriptionMachine`
+
+The *payment* lifecycle, which is orthogonal to the plan. `UserTier` says what
+was bought and never changes on its own; these states say whether it is
+currently being paid for. Only
+`services/billing/lifecycle.effective_tier` combines the two, and it is the
+single thing quota enforcement reads.
+
+- **States** — `SubscriptionStatus`: `incomplete`(init), `trialing`, `active`,
+  `past_due`, `unpaid`, `pending_cancellation`, `canceled`(final)
+- **Events** — `checkout_completed`, `trial_started`, `trial_converted`,
+  `trial_ended`, `payment_failed`, `payment_succeeded`, `grace_expired`,
+  `cancel_requested`, `resumed`, `period_ended`, `subscription_deleted`,
+  `plan_changed`
+- **Code** — `state_machines/billing.py`; `services/billing/lifecycle.py`
+  (transitions), `api/routes/billing.py` (the Stripe webhook),
+  `workers/tasks/billing.py` (dunning and grace expiry)
+
+| Event | From → To |
+|---|---|
+| `checkout_completed` | `incomplete` → `active` |
+| `trial_started` | `incomplete` → `trialing` |
+| `trial_converted` | `trialing` → `active` |
+| `trial_ended` | `trialing` → `past_due` |
+| `payment_failed` | `active`, `trialing` → `past_due` |
+| `payment_succeeded` | `past_due`, `unpaid` → `active` |
+| `grace_expired` | `past_due` → `unpaid` |
+| `cancel_requested` | `active`, `trialing`, `past_due` → `pending_cancellation` |
+| `resumed` | `pending_cancellation` → `active` |
+| `period_ended` | `pending_cancellation` → `canceled` |
+| `subscription_deleted` | any non-final → `canceled` |
+| `plan_changed` | `active` → `active`, `trialing` → `trialing` (self) |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Incomplete
+    Incomplete --> Active: checkout_completed
+    Incomplete --> Trialing: trial_started
+    Trialing --> Active: trial_converted
+    Trialing --> PastDue: trial_ended
+    Active --> PastDue: payment_failed
+    Trialing --> PastDue: payment_failed
+    PastDue --> Active: payment_succeeded
+    PastDue --> Unpaid: grace_expired
+    Unpaid --> Active: payment_succeeded
+    Active --> PendingCancellation: cancel_requested
+    Trialing --> PendingCancellation: cancel_requested
+    PastDue --> PendingCancellation: cancel_requested
+    PendingCancellation --> Active: resumed
+    PendingCancellation --> Canceled: period_ended
+    Incomplete --> Canceled: subscription_deleted
+    Trialing --> Canceled: subscription_deleted
+    Active --> Canceled: subscription_deleted
+    PastDue --> Canceled: subscription_deleted
+    Unpaid --> Canceled: subscription_deleted
+    PendingCancellation --> Canceled: subscription_deleted
+    Canceled --> [*]
+```
+
+**The grace window is the shape worth understanding.** A failed payment moves
+`active → past_due` and *nothing else happens*: the account keeps its full paid
+limits while `workers/tasks/billing.py` emails reminders on days 0, 3, 7 and 13
+(`BILLING_DUNNING_DAYS`). Only when the window closes does `grace_expired` move
+it to `unpaid`, which is the first state that costs the user anything — and
+even then it is a limit change, not a deletion. `ENTITLED_STATUSES` in
+`state_machines/billing.py` is that policy written once:
+
+| Status | Limits applied | Why |
+|---|---|---|
+| `trialing`, `active` | the purchased plan | paid, or promised |
+| `past_due` | the purchased plan | inside the grace window |
+| `pending_cancellation` | the purchased plan | paid through period end |
+| `unpaid`, `canceled`, `incomplete` | Free | nothing has been collected |
+
+**Why `incomplete` is the initial state:** it is the genuine "nothing has been
+paid yet" state a Checkout-created subscription starts in. Accounts that never
+bought anything are created directly as `active` on the free tier via the
+column default — there is nothing to collect from them, so there is nothing to
+be incomplete about.
+
+**Why transitions go through `try_advance`, not `advance`:** almost every
+caller is a Stripe webhook, and Stripe redelivers and reorders exactly like
+GitHub does. A `payment_failed` arriving twice must be a no-op rather than a
+crash — and, critically, must not restart the grace window, which is why
+`lifecycle.transition` only stamps `grace_expires_at` on a transition that
+actually fired. Redelivery is also caught earlier, by the `stripe_event_id`
+recorded in `billing_webhook_event`.

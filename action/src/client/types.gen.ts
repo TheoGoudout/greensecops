@@ -114,6 +114,12 @@ export type BatchFixRequest = {
 
 /**
  * BillingSubscriptionPublic
+ * The billing page's headline: plan, payment state, and usage.
+ *
+ * ``tier`` is the purchased plan and ``effective_tier`` is what limits are
+ * actually being applied — they differ exactly when a subscription is
+ * ``unpaid`` or ``canceled``, and showing both is what lets the UI say "Pro,
+ * currently limited to Free" instead of silently misreporting one or other.
  */
 export type BillingSubscriptionPublic = {
     /**
@@ -121,6 +127,8 @@ export type BillingSubscriptionPublic = {
      */
     id: string;
     tier: UserTier;
+    effective_tier: UserTier;
+    status: SubscriptionStatus;
     /**
      * Analyses Used
      */
@@ -141,6 +149,22 @@ export type BillingSubscriptionPublic = {
      * Period End
      */
     period_end?: string | null;
+    /**
+     * Grace Expires At
+     */
+    grace_expires_at?: string | null;
+    /**
+     * Cancel At Period End
+     */
+    cancel_at_period_end?: boolean;
+    /**
+     * Trial End
+     */
+    trial_end?: string | null;
+    /**
+     * Billing Enabled
+     */
+    billing_enabled?: boolean;
 };
 
 /**
@@ -204,6 +228,24 @@ export type BodyLoginLoginAccessToken = {
  * Aggregate CI outcome for a PR, from ``check_suite`` webhooks.
  */
 export type CiStatus = 'pending' | 'success' | 'failure' | 'none';
+
+/**
+ * CheckoutRequest
+ */
+export type CheckoutRequest = {
+    tier: UserTier;
+};
+
+/**
+ * CheckoutSessionPublic
+ * The Stripe-hosted URL the browser must be sent to.
+ */
+export type CheckoutSessionPublic = {
+    /**
+     * Url
+     */
+    url: string;
+};
 
 /**
  * CloudAccountCreate
@@ -1032,6 +1074,67 @@ export type InstallationSyncRequest = {
 };
 
 /**
+ * InvoicePublic
+ */
+export type InvoicePublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Stripe Invoice Id
+     */
+    stripe_invoice_id: string;
+    /**
+     * Number
+     */
+    number?: string | null;
+    status: InvoiceStatus;
+    /**
+     * Amount Due Cents
+     */
+    amount_due_cents: number;
+    /**
+     * Amount Paid Cents
+     */
+    amount_paid_cents: number;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Hosted Invoice Url
+     */
+    hosted_invoice_url?: string | null;
+    /**
+     * Invoice Pdf
+     */
+    invoice_pdf?: string | null;
+    /**
+     * Period Start
+     */
+    period_start?: string | null;
+    /**
+     * Period End
+     */
+    period_end?: string | null;
+    /**
+     * Paid At
+     */
+    paid_at?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * InvoiceStatus
+ * Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only).
+ */
+export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+
+/**
  * IssueCategory
  */
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
@@ -1247,6 +1350,142 @@ export type OrganizationPublic = {
      * Created At
      */
     created_at?: string | null;
+};
+
+/**
+ * OssApplicationCreate
+ */
+export type OssApplicationCreate = {
+    /**
+     * Repo Url
+     */
+    repo_url: string;
+    /**
+     * License Name
+     */
+    license_name: string;
+    /**
+     * Justification
+     */
+    justification: string;
+};
+
+/**
+ * OssApplicationPublic
+ */
+export type OssApplicationPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Repo Url
+     */
+    repo_url: string;
+    /**
+     * License Name
+     */
+    license_name: string;
+    /**
+     * Justification
+     */
+    justification: string;
+    status: OssApplicationStatus;
+    /**
+     * Review Note
+     */
+    review_note?: string | null;
+    /**
+     * Reviewed At
+     */
+    reviewed_at?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * OssApplicationReview
+ */
+export type OssApplicationReview = {
+    /**
+     * Approve
+     */
+    approve: boolean;
+    /**
+     * Review Note
+     */
+    review_note?: string | null;
+};
+
+/**
+ * OssApplicationStatus
+ * Review state of a request for the granted open-source plan.
+ */
+export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+
+/**
+ * PlanLimitsPublic
+ * ``None`` means unlimited, at every layer up to the UI.
+ */
+export type PlanLimitsPublic = {
+    /**
+     * Analyses
+     */
+    analyses?: number | null;
+    /**
+     * Fixes
+     */
+    fixes?: number | null;
+    /**
+     * Repos
+     */
+    repos?: number | null;
+};
+
+/**
+ * PlanPublic
+ */
+export type PlanPublic = {
+    tier: UserTier;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Price Cents
+     */
+    price_cents: number;
+    /**
+     * Price Display
+     */
+    price_display: string;
+    /**
+     * Tagline
+     */
+    tagline: string;
+    limits: PlanLimitsPublic;
+    /**
+     * Auto Fix
+     */
+    auto_fix: boolean;
+    /**
+     * Public Repos Only
+     */
+    public_repos_only: boolean;
+    /**
+     * Is Purchasable
+     */
+    is_purchasable: boolean;
+    /**
+     * Features
+     */
+    features?: Array<string>;
 };
 
 /**
@@ -1477,7 +1716,7 @@ export type RulePublic = {
 /**
  * SSESignal
  */
-export type SseSignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed';
+export type SseSignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed' | 'analysis.quota_exceeded' | 'subscription.activated' | 'subscription.past_due' | 'subscription.unpaid' | 'subscription.canceled' | 'subscription.updated';
 
 /**
  * SamplePayload
@@ -1525,6 +1764,21 @@ export type SamplePayload = {
  * account/region".
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
+ * SubscriptionStatus
+ * Lifecycle of a ``BillingSubscription`` — see ``BillingSubscriptionMachine``.
+ *
+ * Orthogonal to ``UserTier``: the tier says *what was bought*, this says
+ * *whether it is currently being paid for*. The combination is resolved by
+ * ``services/billing/lifecycle.effective_tier``, which is the only thing
+ * quota enforcement reads.
+ *
+ * ``past_due`` deliberately keeps full paid service — it is the grace window,
+ * not a punishment. Only ``unpaid`` (grace expired) and ``canceled`` fall
+ * back to Free limits, and neither ever removes data.
+ */
+export type SubscriptionStatus = 'incomplete' | 'trialing' | 'active' | 'past_due' | 'unpaid' | 'pending_cancellation' | 'canceled';
 
 /**
  * TelemetryAveragePublic
@@ -1948,6 +2202,75 @@ export type UpdatePassword = {
      * New Password
      */
     new_password: string;
+};
+
+/**
+ * UsageBreakdownPublic
+ * How much of one meter a single engine accounted for this period.
+ */
+export type UsageBreakdownPublic = {
+    meter: UsageMeter;
+    engine: UsageEngine;
+    /**
+     * Quantity
+     */
+    quantity: number;
+};
+
+/**
+ * UsageEngine
+ * Which engine produced a usage record.
+ *
+ * Every one of these debits the same shared pool; the tag exists so a user
+ * can see *where* their allowance went, and so tests can assert that each
+ * engine is actually metered.
+ */
+export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
+
+/**
+ * UsageMeter
+ * Which allowance a usage record draws down.
+ *
+ * ``repos`` is absent on purpose: it is a live capacity count (how many
+ * repositories are enabled right now), not something consumed over time, so
+ * it is measured by querying rather than by ledger entries.
+ */
+export type UsageMeter = 'analyses' | 'fixes';
+
+/**
+ * UsagePublic
+ * Per-meter usage with the engine split behind it.
+ *
+ * The breakdown is what answers "why am I at 90%" — before the ledger there
+ * was no way to tell a user that their Terraform roots, not their workflows,
+ * were spending the allowance.
+ */
+export type UsagePublic = {
+    /**
+     * Period Start
+     */
+    period_start?: string | null;
+    /**
+     * Period End
+     */
+    period_end?: string | null;
+    /**
+     * Analyses Used
+     */
+    analyses_used?: number;
+    /**
+     * Fixes Used
+     */
+    fixes_used?: number;
+    /**
+     * Repos Used
+     */
+    repos_used?: number;
+    limits: PlanLimitsPublic;
+    /**
+     * Breakdown
+     */
+    breakdown?: Array<UsageBreakdownPublic>;
 };
 
 /**
@@ -4393,6 +4716,23 @@ export type TelemetryAnalyzeTelemetryResponses = {
 
 export type TelemetryAnalyzeTelemetryResponse = TelemetryAnalyzeTelemetryResponses[keyof TelemetryAnalyzeTelemetryResponses];
 
+export type BillingListPlansData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/plans';
+};
+
+export type BillingListPlansResponses = {
+    /**
+     * Response Billing-List Plans
+     * Successful Response
+     */
+    200: Array<PlanPublic>;
+};
+
+export type BillingListPlansResponse = BillingListPlansResponses[keyof BillingListPlansResponses];
+
 export type BillingGetSubscriptionData = {
     body?: never;
     path?: never;
@@ -4408,6 +4748,22 @@ export type BillingGetSubscriptionResponses = {
 };
 
 export type BillingGetSubscriptionResponse = BillingGetSubscriptionResponses[keyof BillingGetSubscriptionResponses];
+
+export type BillingGetUsageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/usage';
+};
+
+export type BillingGetUsageResponses = {
+    /**
+     * Successful Response
+     */
+    200: UsagePublic;
+};
+
+export type BillingGetUsageResponse = BillingGetUsageResponses[keyof BillingGetUsageResponses];
 
 export type BillingGetTierLimitsData = {
     body?: never;
@@ -4427,6 +4783,167 @@ export type BillingGetTierLimitsResponses = {
 };
 
 export type BillingGetTierLimitsResponse = BillingGetTierLimitsResponses[keyof BillingGetTierLimitsResponses];
+
+export type BillingListInvoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/invoices';
+};
+
+export type BillingListInvoicesResponses = {
+    /**
+     * Response Billing-List Invoices
+     * Successful Response
+     */
+    200: Array<InvoicePublic>;
+};
+
+export type BillingListInvoicesResponse = BillingListInvoicesResponses[keyof BillingListInvoicesResponses];
+
+export type BillingCreateCheckoutData = {
+    body: CheckoutRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/checkout';
+};
+
+export type BillingCreateCheckoutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BillingCreateCheckoutError = BillingCreateCheckoutErrors[keyof BillingCreateCheckoutErrors];
+
+export type BillingCreateCheckoutResponses = {
+    /**
+     * Successful Response
+     */
+    200: CheckoutSessionPublic;
+};
+
+export type BillingCreateCheckoutResponse = BillingCreateCheckoutResponses[keyof BillingCreateCheckoutResponses];
+
+export type BillingCreatePortalData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/portal';
+};
+
+export type BillingCreatePortalResponses = {
+    /**
+     * Successful Response
+     */
+    200: CheckoutSessionPublic;
+};
+
+export type BillingCreatePortalResponse = BillingCreatePortalResponses[keyof BillingCreatePortalResponses];
+
+export type BillingListMyOssApplicationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/oss-application';
+};
+
+export type BillingListMyOssApplicationsResponses = {
+    /**
+     * Response Billing-List My Oss Applications
+     * Successful Response
+     */
+    200: Array<OssApplicationPublic>;
+};
+
+export type BillingListMyOssApplicationsResponse = BillingListMyOssApplicationsResponses[keyof BillingListMyOssApplicationsResponses];
+
+export type BillingCreateOssApplicationData = {
+    body: OssApplicationCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/oss-application';
+};
+
+export type BillingCreateOssApplicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BillingCreateOssApplicationError = BillingCreateOssApplicationErrors[keyof BillingCreateOssApplicationErrors];
+
+export type BillingCreateOssApplicationResponses = {
+    /**
+     * Successful Response
+     */
+    201: OssApplicationPublic;
+};
+
+export type BillingCreateOssApplicationResponse = BillingCreateOssApplicationResponses[keyof BillingCreateOssApplicationResponses];
+
+export type BillingListOssApplicationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: OssApplicationStatus | null;
+    };
+    url: '/api/v1/billing/oss-applications';
+};
+
+export type BillingListOssApplicationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BillingListOssApplicationsError = BillingListOssApplicationsErrors[keyof BillingListOssApplicationsErrors];
+
+export type BillingListOssApplicationsResponses = {
+    /**
+     * Response Billing-List Oss Applications
+     * Successful Response
+     */
+    200: Array<OssApplicationPublic>;
+};
+
+export type BillingListOssApplicationsResponse = BillingListOssApplicationsResponses[keyof BillingListOssApplicationsResponses];
+
+export type BillingReviewOssApplicationData = {
+    body: OssApplicationReview;
+    path: {
+        /**
+         * Application Id
+         */
+        application_id: string;
+    };
+    query?: never;
+    url: '/api/v1/billing/oss-applications/{application_id}';
+};
+
+export type BillingReviewOssApplicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BillingReviewOssApplicationError = BillingReviewOssApplicationErrors[keyof BillingReviewOssApplicationErrors];
+
+export type BillingReviewOssApplicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: OssApplicationPublic;
+};
+
+export type BillingReviewOssApplicationResponse = BillingReviewOssApplicationResponses[keyof BillingReviewOssApplicationResponses];
 
 export type BillingStripeWebhookData = {
     body?: never;

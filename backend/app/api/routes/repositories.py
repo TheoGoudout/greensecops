@@ -261,7 +261,7 @@ def toggle_repository(
 ) -> dict[str, str | bool]:
     repo = _get_repo_for_user(repo_id, session, current_user)
     if enabled and not repo.enabled:
-        from app.api.routes.billing import enforce_quota
+        from app.services.billing.quota import enforce_quota
 
         enforce_quota(session, current_user, repo.org_id, "repos")
     repo.enabled = enabled
@@ -282,7 +282,7 @@ def toggle_auto_fix(
 ) -> dict[str, str | bool]:
     repo = _get_repo_for_user(repo_id, session, current_user)
     if enabled and not repo.auto_fix_enabled:
-        from app.api.routes.billing import enforce_auto_fix_enable
+        from app.services.billing.quota import enforce_auto_fix_enable
 
         enforce_auto_fix_enable(session, current_user, repo.org_id)
     repo.auto_fix_enabled = enabled

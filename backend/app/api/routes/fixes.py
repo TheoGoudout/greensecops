@@ -29,10 +29,13 @@ from app.models import (
     PullRequestState,
     Repository,
     Rule,
+    UsageEngine,
+    UsageMeter,
     User,
     WorkflowFile,
 )
 from app.services import state_machines as sm
+from app.services.billing import usage as billing_usage
 from app.services.delivery_pr import (
     WF_FIX_BRANCH_RE,
     build_delivery_pr_body,
@@ -124,6 +127,20 @@ def _create_pending_fixes(
         if wf_file is not None:
             wf_file.fix_generation_count += 1
             session.add(wf_file)
+            # The billable event is the *generation*, not the surviving row —
+            # a regenerate discards the old fix and bills again, which is why
+            # this counts alongside the lifetime counter rather than being
+            # derived from ``SELECT count(*) FROM fix``.
+            billing_usage.record_for_org(
+                session,
+                org_id=repo.org_id,
+                repo_id=repo.id,
+                meter=UsageMeter.fixes,
+                engine=UsageEngine.workflow,
+                source_type="fix",
+                source_id=fix.id,
+                commit=False,
+            )
         created.append(fix)
     session.commit()
     for fix in created:
@@ -417,7 +434,7 @@ def trigger_fix_generation_for_repo(
     Only issues from the latest analysis per workflow file are targeted.
     """
     repo = authorize_repo(session, current_user, repo_id)
-    from app.api.routes.billing import enforce_quota
+    from app.services.billing.quota import enforce_quota
 
     by_wf_file = _latest_unresolved_issues(
         session,
@@ -590,7 +607,7 @@ def regenerate_fixes_for_repo(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.api.routes.billing import enforce_quota
+    from app.services.billing.quota import enforce_quota
 
     # pr_state is nullable, and NULL != 'merged' is NULL in SQL — the IS NULL
     # arms keep fixes on stateless PR records eligible.
@@ -650,7 +667,7 @@ def regenerate_fixes_for_workflow(
     """
     fix = get_or_404(session, Fix, fix_id)
     _authorize_fix(session, current_user, fix)
-    from app.api.routes.billing import enforce_quota
+    from app.services.billing.quota import enforce_quota
 
     if fix.status in IN_FLIGHT_STATUSES:
         raise HTTPException(

@@ -37,14 +37,28 @@ export type BatchFixRequest = {
     issue_ids?: (Array<(string)> | null);
 };
 
+/**
+ * The billing page's headline: plan, payment state, and usage.
+ *
+ * ``tier`` is the purchased plan and ``effective_tier`` is what limits are
+ * actually being applied — they differ exactly when a subscription is
+ * ``unpaid`` or ``canceled``, and showing both is what lets the UI say "Pro,
+ * currently limited to Free" instead of silently misreporting one or other.
+ */
 export type BillingSubscriptionPublic = {
     id: string;
     tier: UserTier;
+    effective_tier: UserTier;
+    status: SubscriptionStatus;
     analyses_used: number;
     fixes_used: number;
     repos_used?: number;
     period_start?: (string | null);
     period_end?: (string | null);
+    grace_expires_at?: (string | null);
+    cancel_at_period_end?: boolean;
+    trial_end?: (string | null);
+    billing_enabled?: boolean;
 };
 
 export type Body_auth_github_callback = {
@@ -62,6 +76,17 @@ export type Body_login_login_access_token = {
     scope?: string;
     client_id?: (string | null);
     client_secret?: (string | null);
+};
+
+export type CheckoutRequest = {
+    tier: UserTier;
+};
+
+/**
+ * The Stripe-hosted URL the browser must be sent to.
+ */
+export type CheckoutSessionPublic = {
+    url: string;
 };
 
 /**
@@ -381,6 +406,27 @@ export type InstallationSyncRequest = {
     redirect_uri?: (string | null);
 };
 
+export type InvoicePublic = {
+    id: string;
+    stripe_invoice_id: string;
+    number?: (string | null);
+    status: InvoiceStatus;
+    amount_due_cents: number;
+    amount_paid_cents: number;
+    currency: string;
+    hosted_invoice_url?: (string | null);
+    invoice_pdf?: (string | null);
+    period_start?: (string | null);
+    period_end?: (string | null);
+    paid_at?: (string | null);
+    created_at?: (string | null);
+};
+
+/**
+ * Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only).
+ */
+export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+
 export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
 
 export type IssueCategoryStat = {
@@ -477,6 +523,56 @@ export type OrganizationPublic = {
     default_llm_model?: (string | null);
     fix_delivery_mode: FixDeliveryMode;
     created_at?: (string | null);
+};
+
+export type OssApplicationCreate = {
+    repo_url: string;
+    license_name: string;
+    justification: string;
+};
+
+export type OssApplicationPublic = {
+    id: string;
+    user_id: string;
+    repo_url: string;
+    license_name: string;
+    justification: string;
+    status: OssApplicationStatus;
+    review_note?: (string | null);
+    reviewed_at?: (string | null);
+    created_at?: (string | null);
+};
+
+export type OssApplicationReview = {
+    approve: boolean;
+    review_note?: (string | null);
+};
+
+/**
+ * Review state of a request for the granted open-source plan.
+ */
+export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+
+/**
+ * ``None`` means unlimited, at every layer up to the UI.
+ */
+export type PlanLimitsPublic = {
+    analyses?: (number | null);
+    fixes?: (number | null);
+    repos?: (number | null);
+};
+
+export type PlanPublic = {
+    tier: UserTier;
+    name: string;
+    price_cents: number;
+    price_display: string;
+    tagline: string;
+    limits: PlanLimitsPublic;
+    auto_fix: boolean;
+    public_repos_only: boolean;
+    is_purchasable: boolean;
+    features?: Array<(string)>;
 };
 
 export type PrivateUserCreate = {
@@ -591,7 +687,21 @@ export type SamplePayload = {
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
 
-export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed';
+export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed' | 'analysis.quota_exceeded' | 'subscription.activated' | 'subscription.past_due' | 'subscription.unpaid' | 'subscription.canceled' | 'subscription.updated';
+
+/**
+ * Lifecycle of a ``BillingSubscription`` — see ``BillingSubscriptionMachine``.
+ *
+ * Orthogonal to ``UserTier``: the tier says *what was bought*, this says
+ * *whether it is currently being paid for*. The combination is resolved by
+ * ``services/billing/lifecycle.effective_tier``, which is the only thing
+ * quota enforcement reads.
+ *
+ * ``past_due`` deliberately keeps full paid service — it is the grace window,
+ * not a punishment. Only ``unpaid`` (grace expired) and ``canceled`` fall
+ * back to Free limits, and neither ever removes data.
+ */
+export type SubscriptionStatus = 'incomplete' | 'trialing' | 'active' | 'past_due' | 'unpaid' | 'pending_cancellation' | 'canceled';
 
 /**
  * Averaged telemetry across a repo's runs.
@@ -746,6 +856,50 @@ export type Token = {
 export type UpdatePassword = {
     current_password: string;
     new_password: string;
+};
+
+/**
+ * How much of one meter a single engine accounted for this period.
+ */
+export type UsageBreakdownPublic = {
+    meter: UsageMeter;
+    engine: UsageEngine;
+    quantity: number;
+};
+
+/**
+ * Which engine produced a usage record.
+ *
+ * Every one of these debits the same shared pool; the tag exists so a user
+ * can see *where* their allowance went, and so tests can assert that each
+ * engine is actually metered.
+ */
+export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
+
+/**
+ * Which allowance a usage record draws down.
+ *
+ * ``repos`` is absent on purpose: it is a live capacity count (how many
+ * repositories are enabled right now), not something consumed over time, so
+ * it is measured by querying rather than by ledger entries.
+ */
+export type UsageMeter = 'analyses' | 'fixes';
+
+/**
+ * Per-meter usage with the engine split behind it.
+ *
+ * The breakdown is what answers "why am I at 90%" — before the ledger there
+ * was no way to tell a user that their Terraform roots, not their workflows,
+ * were spending the allowance.
+ */
+export type UsagePublic = {
+    period_start?: (string | null);
+    period_end?: (string | null);
+    analyses_used?: number;
+    fixes_used?: number;
+    repos_used?: number;
+    limits: PlanLimitsPublic;
+    breakdown?: Array<UsageBreakdownPublic>;
 };
 
 export type UserCreate = {
@@ -912,11 +1066,46 @@ export type BadgesGetDockerTargetBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 
+export type BillingListPlansResponse = (Array<PlanPublic>);
+
 export type BillingGetSubscriptionResponse = (BillingSubscriptionPublic);
+
+export type BillingGetUsageResponse = (UsagePublic);
 
 export type BillingGetTierLimitsResponse = ({
     [key: string]: unknown;
 });
+
+export type BillingListInvoicesResponse = (Array<InvoicePublic>);
+
+export type BillingCreateCheckoutData = {
+    requestBody: CheckoutRequest;
+};
+
+export type BillingCreateCheckoutResponse = (CheckoutSessionPublic);
+
+export type BillingCreatePortalResponse = (CheckoutSessionPublic);
+
+export type BillingListMyOssApplicationsResponse = (Array<OssApplicationPublic>);
+
+export type BillingCreateOssApplicationData = {
+    requestBody: OssApplicationCreate;
+};
+
+export type BillingCreateOssApplicationResponse = (OssApplicationPublic);
+
+export type BillingListOssApplicationsData = {
+    status?: (OssApplicationStatus | null);
+};
+
+export type BillingListOssApplicationsResponse = (Array<OssApplicationPublic>);
+
+export type BillingReviewOssApplicationData = {
+    applicationId: string;
+    requestBody: OssApplicationReview;
+};
+
+export type BillingReviewOssApplicationResponse = (OssApplicationPublic);
 
 export type BillingStripeWebhookData = {
     stripeSignature?: (string | null);

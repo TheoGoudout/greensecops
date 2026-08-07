@@ -18,6 +18,8 @@ on:
       - "scripts/opa_eval.py"
       - "scripts/regenerate_terraform_fixtures.py"
       - "scripts/render_landing_examples.py"
+      - "scripts/render_landing_pricing.py"
+      - "backend/app/core/plans.py"
       - "backend/tests/fixtures/terraform/**"
       - "scripts/opa/**"
       - "deploy/terraform/**"
@@ -38,6 +40,8 @@ on:
       - "scripts/opa_eval.py"
       - "scripts/regenerate_terraform_fixtures.py"
       - "scripts/render_landing_examples.py"
+      - "scripts/render_landing_pricing.py"
+      - "backend/app/core/plans.py"
       - "backend/tests/fixtures/terraform/**"
       - "scripts/opa/**"
       - "deploy/terraform/**"
@@ -105,6 +109,12 @@ jobs:
 
       - name: Check landing page is in sync with example files
         run: python scripts/render_landing_examples.py --check
+
+      # The pricing page's numbers are the same numbers the quota enforcer
+      # applies. This is what stops the marketing site advertising a limit the
+      # product does not actually give you.
+      - name: Check landing pricing is in sync with the plan catalog
+        run: python scripts/render_landing_pricing.py --check
 
       # The seven landing pages share their head, nav and footer from
       # landing/partials/. Editing a page's copy directly instead of the

@@ -29,7 +29,9 @@ from app.models import (
     TelemetryPhase,
     TelemetryRun,
     TelemetrySummaryPublic,
+    UsageEngine,
 )
+from app.services.billing.quota import enforce_quota
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +369,22 @@ def analyze_telemetry(
         .where(TelemetryRun.repo_id == repo.id)
         .where(TelemetryRun.phase == TelemetryPhase.completed)
     ).all()
+    # Each run is a separate analysis, so re-deriving a repo's whole telemetry
+    # history can cost hundreds at once. Checked up front so the user sees one
+    # clear 402 instead of a fan-out that half-completes.
+    #
+    # Note that telemetry *ingest* is deliberately not gated: storing what CI
+    # reported is cheap, and rejecting it would lose data the user cannot
+    # re-send. Only the analysis it triggers is metered, and the worker refuses
+    # that on its own if the allowance is spent.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "analyses",
+        requested=len(runs),
+        engine=UsageEngine.telemetry,
+    )
     for run in runs:
         run.dynamic_status = DynamicAnalysisStatus.queued
         session.add(run)

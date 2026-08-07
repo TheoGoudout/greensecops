@@ -17,9 +17,10 @@ from typing import Any
 from sqlmodel import select
 
 from app.api.deps import CurrentUser, SessionDep, authorize_repo, get_or_404
-from app.models import LLMProvider
+from app.models import LLMProvider, Repository, UsageEngine, UsageMeter
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
+from app.services.billing import usage as billing_usage
 from app.services.engines import EngineSpec
 
 
@@ -48,11 +49,18 @@ def prepare_pending_fix(
     provider_str: str,
     model_str: str,
     force: bool,
+    repo: Repository | None = None,
 ) -> Any | None:
     """Create or reuse the single (target, file) fix row, leaving it ``pending``.
 
     Returns ``None`` when a fix is already in flight, or already resolved and
     not being forced — nothing to (re)queue.
+
+    Passing ``repo`` charges the org's ``fixes`` allowance for the generation
+    this call is about to queue. Every early return above leaves it uncharged,
+    which is exactly right: those paths queue no LLM call. Terraform and Docker
+    fix generation was unmetered entirely before this — the same LLM spend as a
+    workflow fix, billed to nobody.
     """
     target_col = getattr(spec.fix_model, spec.target_id_field)
     existing = session.exec(
@@ -75,6 +83,7 @@ def prepare_pending_fix(
         existing.llm_provider = LLMProvider(provider_str)
         existing.llm_model = model_str
         session.add(existing)
+        _charge_fix(session, spec, repo, existing.id)
         return existing
 
     fix = spec.fix_model(
@@ -85,4 +94,33 @@ def prepare_pending_fix(
         status=FixStatus.pending,
     )
     session.add(fix)
+    session.flush()
+    _charge_fix(session, spec, repo, fix.id)
     return fix
+
+
+def _charge_fix(
+    session: SessionDep,
+    spec: EngineSpec,
+    repo: Repository | None,
+    fix_id: uuid.UUID,
+) -> None:
+    """Debit one ``fixes`` unit for a generation this engine is about to run.
+
+    A regenerate reuses the fix row but is still a fresh LLM call, so it is
+    charged again — usage counts generation events, not surviving rows.
+    ``spec.name`` already matches the ``UsageEngine`` values, so the mapping
+    needs no second table to keep in step.
+    """
+    if repo is None:
+        return
+    billing_usage.record_for_org(
+        session,
+        org_id=repo.org_id,
+        repo_id=repo.id,
+        meter=UsageMeter.fixes,
+        engine=UsageEngine(spec.name),
+        source_type=f"{spec.name}_fix",
+        source_id=fix_id,
+        commit=False,
+    )

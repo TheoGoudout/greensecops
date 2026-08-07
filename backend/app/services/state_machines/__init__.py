@@ -23,6 +23,10 @@ from .base import (
     output_for,
     try_advance,
 )
+from .billing import (
+    ENTITLED_STATUSES,
+    BillingSubscriptionMachine,
+)
 from .cloud_account import CloudAccountMachine
 from .finding import FindingMachine
 from .fix import (
@@ -47,6 +51,7 @@ __all__ = [
     "sync_access_flag",
     # machines
     "AnalysisMachine",
+    "BillingSubscriptionMachine",
     "CloudAccountMachine",
     "FindingMachine",
     "FixMachine",
@@ -55,6 +60,7 @@ __all__ = [
     "RepositoryMachine",
     "ScanMachine",
     "TelemetryMachine",
+    "ENTITLED_STATUSES",
     "IN_FLIGHT_STATUSES",
     "REJECTED_STATUSES",
     "DELIVERED_FIX_STATUSES",

@@ -23,8 +23,12 @@ from app.models import (
     Repository,
     RuleDomain,
     ScanStatus,
+    UsageEngine,
+    UsageMeter,
 )
 from app.services import state_machines as sm
+from app.services.billing import quota as billing_quota
+from app.services.billing import usage as billing_usage
 from app.services.deduplication import compute_fingerprint
 from app.services.docker.merge import merge_docker_files
 from app.services.opa.evaluator import OpaUnavailableError
@@ -48,6 +52,7 @@ def _run_docker_scan_impl(
     branch: str = "",
     commit_sha: str = "",
     trigger: str = "manual",
+    billable: bool = True,
 ) -> dict[str, str | int | float]:
     with Session(engine) as session:
         target = session.get(DockerTarget, uuid.UUID(docker_target_id))
@@ -59,6 +64,22 @@ def _run_docker_scan_impl(
 
         effective_branch = branch or repo.default_branch
         fetch_ref = commit_sha or branch or None
+
+        # Gate before the GitHub fetch, and here rather than only in the route:
+        # most scans arrive from a push webhook, which never touches a route.
+        if billable and (
+            refusal := billing_quota.exhausted_message(
+                session, repo.org_id, engine=UsageEngine.docker
+            )
+        ):
+            logger.warning(
+                "Docker scan refused for target=%s: %s", docker_target_id, refusal
+            )
+            return {
+                "status": "quota_exceeded",
+                "docker_target_id": docker_target_id,
+                "detail": refusal,
+            }
 
         try:
             fetched = _fetch_docker_files(repo, target.root_path, ref=fetch_ref)
@@ -87,11 +108,24 @@ def _run_docker_scan_impl(
             scan.completed_at = datetime.now(timezone.utc)
             session.add(scan)
             session.commit()
+            # Deliberately uncharged: nothing was evaluated (see the same
+            # decision in terraform_analysis and usage.py's counting rules).
             return {
                 "status": "no_targets",
                 "docker_target_id": docker_target_id,
                 "scan_id": str(scan.id),
             }
+
+        if billable:
+            billing_usage.record_for_repo(
+                session,
+                repo=repo,
+                meter=UsageMeter.analyses,
+                engine=UsageEngine.docker,
+                source_type="docker_scan",
+                source_id=scan.id,
+                commit=False,
+            )
 
         try:
             merged = merge_docker_files([(f.path, f.content) for f in fetched])
@@ -252,6 +286,7 @@ def run_docker_scan(
     branch: str = "",
     commit_sha: str = "",
     trigger: str = "manual",
+    billable: bool = True,
 ) -> dict[str, str | int | float]:
     # Per-target lock: concurrent scans of the same target race on
     # DockerFinding upserts and duplicate DockerScan rows.
@@ -260,6 +295,7 @@ def run_docker_scan(
             raise self.retry(countdown=30, max_retries=10)
         try:
             return _run_docker_scan_impl(
+                billable=billable,
                 docker_target_id=docker_target_id,
                 branch=branch,
                 commit_sha=commit_sha,
