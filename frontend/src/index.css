@@ -38,6 +38,10 @@
   --color-chart-6: var(--chart-6);
   --color-chart-7: var(--chart-7);
   --color-chart-8: var(--chart-8);
+  --color-heat-1: var(--heat-1);
+  --color-heat-2: var(--heat-2);
+  --color-heat-3: var(--heat-3);
+  --color-heat-4: var(--heat-4);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -76,6 +80,15 @@
   --chart-6: oklch(0.58 0.19 300);
   --chart-7: oklch(0.68 0.18 340);
   --chart-8: oklch(0.72 0.16 50);
+  /* Findings-density ramp for the category heatmap: red-400/600/700/900.
+     Validated as an ordinal ramp against the white card surface — monotone
+     lightness, adjacent dL >= 0.06, light end >= 2:1 contrast. Re-run
+     dataviz validate_palette.js --ordinal before changing any step; the
+     neighbouring Tailwind steps each fail one check or another. */
+  --heat-1: oklch(0.68 0.19 22.2);
+  --heat-2: oklch(0.53 0.23 27.4);
+  --heat-3: oklch(0.47 0.2 27.3);
+  --heat-4: oklch(0.38 0.14 26.4);
   --sidebar: oklch(0.96 0.01 152);
   --sidebar-foreground: oklch(0.15 0.02 152);
   --sidebar-primary: oklch(0.46 0.12 152);
@@ -194,6 +207,12 @@
   --chart-6: oklch(0.64 0.18 300);
   --chart-7: oklch(0.72 0.17 340);
   --chart-8: oklch(0.76 0.15 50);
+  /* Re-stepped for the dark card, not flipped: red-800/600/400/200. The light
+     palette's own steps fail the light-end contrast floor on this surface. */
+  --heat-1: oklch(0.42 0.17 26.8);
+  --heat-2: oklch(0.51 0.22 27.5);
+  --heat-3: oklch(0.68 0.19 22.2);
+  --heat-4: oklch(0.86 0.08 17.4);
   --sidebar: oklch(0.19 0.02 253);
   --sidebar-foreground: oklch(0.97 0.005 152);
   --sidebar-primary: oklch(0.6 0.13 152);

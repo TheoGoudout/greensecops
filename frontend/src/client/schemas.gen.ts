@@ -1760,6 +1760,237 @@ presented as their own "Runtime findings" class rather than merged into the
 static issue list.`
 } as const;
 
+export const EngineCoverageStatSchema = {
+    properties: {
+        total: {
+            type: 'integer',
+            title: 'Total'
+        },
+        enabled: {
+            type: 'integer',
+            title: 'Enabled'
+        },
+        scanned: {
+            type: 'integer',
+            title: 'Scanned'
+        },
+        never_scanned: {
+            type: 'integer',
+            title: 'Never Scanned'
+        },
+        latest_scan_failed: {
+            type: 'integer',
+            title: 'Latest Scan Failed'
+        }
+    },
+    type: 'object',
+    required: ['total', 'enabled', 'scanned', 'never_scanned', 'latest_scan_failed'],
+    title: 'EngineCoverageStat',
+    description: `How much of what could be scanned actually has been.
+
+\`\`enabled\`\` means different things per engine — a bool column for Docker
+and Terraform targets, \`\`CloudAccountStatus.connected\`\` for a cloud
+account. The CI engine's target is a \`\`WorkflowFile\`\`, which has no enable
+switch at all, so there \`\`enabled == total\`\`.`
+} as const;
+
+export const EngineFindingStatSchema = {
+    properties: {
+        open: {
+            type: 'integer',
+            title: 'Open'
+        },
+        resolved: {
+            type: 'integer',
+            title: 'Resolved'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        },
+        by_severity: {
+            items: {
+                '$ref': '#/components/schemas/SeverityStat'
+            },
+            type: 'array',
+            title: 'By Severity'
+        },
+        by_category: {
+            items: {
+                '$ref': '#/components/schemas/IssueCategoryStat'
+            },
+            type: 'array',
+            title: 'By Category'
+        }
+    },
+    type: 'object',
+    required: ['open', 'resolved', 'critical_open', 'by_severity', 'by_category'],
+    title: 'EngineFindingStat'
+} as const;
+
+export const EngineFixPipelineStatSchema = {
+    properties: {
+        unfixed: {
+            type: 'integer',
+            title: 'Unfixed'
+        },
+        in_progress: {
+            type: 'integer',
+            title: 'In Progress'
+        },
+        ready: {
+            type: 'integer',
+            title: 'Ready'
+        },
+        delivered: {
+            type: 'integer',
+            title: 'Delivered'
+        },
+        landed: {
+            type: 'integer',
+            title: 'Landed'
+        },
+        failed: {
+            type: 'integer',
+            title: 'Failed'
+        }
+    },
+    type: 'object',
+    required: ['unfixed', 'in_progress', 'ready', 'delivered', 'landed', 'failed'],
+    title: 'EngineFixPipelineStat',
+    description: `Open findings bucketed by the state of the fix addressing them.
+
+\`\`unfixed\`\` mirrors \`\`list_issues(unfixed=True)\`\`: no fix row at all, or a
+fix in one of the rejected/superseded states. The buckets are disjoint and
+sum to \`\`EngineFindingStat.open\`\`.`
+} as const;
+
+export const EngineFreshnessStatSchema = {
+    properties: {
+        last_completed_scan_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Completed Scan At'
+        },
+        last_scan_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scan At'
+        }
+    },
+    type: 'object',
+    required: ['last_completed_scan_at', 'last_scan_at'],
+    title: 'EngineFreshnessStat'
+} as const;
+
+export const EngineOverviewSchema = {
+    properties: {
+        engine: {
+            '$ref': '#/components/schemas/OverviewEngineKey'
+        },
+        section: {
+            '$ref': '#/components/schemas/OverviewSection'
+        },
+        label: {
+            type: 'string',
+            title: 'Label'
+        },
+        coverage: {
+            '$ref': '#/components/schemas/EngineCoverageStat'
+        },
+        freshness: {
+            '$ref': '#/components/schemas/EngineFreshnessStat'
+        },
+        score: {
+            '$ref': '#/components/schemas/EngineScoreStat'
+        },
+        findings: {
+            '$ref': '#/components/schemas/EngineFindingStat'
+        },
+        fixes: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/EngineFixPipelineStat'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        top_rules: {
+            items: {
+                '$ref': '#/components/schemas/TopRuleStat'
+            },
+            type: 'array',
+            title: 'Top Rules'
+        }
+    },
+    type: 'object',
+    required: ['engine', 'section', 'label', 'coverage', 'freshness', 'score', 'findings', 'fixes', 'top_rules'],
+    title: 'EngineOverview'
+} as const;
+
+export const EngineScoreStatSchema = {
+    properties: {
+        avg_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        scored_targets: {
+            type: 'integer',
+            title: 'Scored Targets'
+        },
+        by_grade: {
+            items: {
+                '$ref': '#/components/schemas/GradeStat'
+            },
+            type: 'array',
+            title: 'By Grade'
+        }
+    },
+    type: 'object',
+    required: ['avg_score', 'grade', 'scored_targets', 'by_grade'],
+    title: 'EngineScoreStat',
+    description: `Average of each target's latest *completed* scan score.
+
+A target whose latest scan failed keeps the score of its last good scan —
+the same rule \`\`api/mappers/base.latest_completed_scan\`\` applies per
+target, so a grade here always matches the one that engine's own list
+endpoint reports.`
+} as const;
+
 export const ExternalRepositoryCreateSchema = {
     properties: {
         full_name: {
@@ -2060,6 +2291,28 @@ export const FixStatusSchema = {
     type: 'string',
     enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr', 'superseded_by_deleted_file', 'landed'],
     title: 'FixStatus'
+} as const;
+
+export const GradeStatSchema = {
+    properties: {
+        grade: {
+            type: 'string',
+            title: 'Grade'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['grade', 'count'],
+    title: 'GradeStat',
+    description: `How many scan targets currently hold this grade.
+
+Emitted for every rung of \`\`services.scoring.GRADE_LADDER\`\` in order, best
+first, plus any grade found in the data that isn't on the ladder — grades
+are free-form \`\`VARCHAR(8)\`\`, so a row written before a ladder change must
+still be counted rather than silently dropped.`
 } as const;
 
 export const HTTPValidationErrorSchema = {
@@ -2723,6 +2976,129 @@ export const OssApplicationStatusSchema = {
     description: 'Review state of a request for the granted open-source plan.'
 } as const;
 
+export const OverviewEngineKeySchema = {
+    type: 'string',
+    enum: ['ci', 'docker', 'terraform', 'cloud'],
+    title: 'OverviewEngineKey',
+    description: `Which analysis engine a block of dashboard overview stats describes.
+
+A presentation-layer key, not a persisted column — \`\`Rule.domain\`\` stays
+the DB-level discriminator. The two exist because they don't line up:
+\`\`container_docker\`\` and \`\`container_runtime\`\` rules both produce findings
+on the Docker engine, so one key covers two domains.`
+} as const;
+
+export const OverviewPublicSchema = {
+    properties: {
+        generated_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Generated At'
+        },
+        totals: {
+            '$ref': '#/components/schemas/OverviewTotals'
+        },
+        engines: {
+            items: {
+                '$ref': '#/components/schemas/EngineOverview'
+            },
+            type: 'array',
+            title: 'Engines'
+        }
+    },
+    type: 'object',
+    required: ['generated_at', 'totals', 'engines'],
+    title: 'OverviewPublic'
+} as const;
+
+export const OverviewSectionSchema = {
+    type: 'string',
+    enum: ['ci', 'docker', 'infra'],
+    title: 'OverviewSection',
+    description: `Which collapsible dashboard section an engine renders under.
+
+Four engines, three sections: the Infrastructure page already shows
+Terraform and cloud posture as sibling tabs, so the dashboard groups them
+the same way rather than inventing a fourth top-level heading.`
+} as const;
+
+export const OverviewTotalsSchema = {
+    properties: {
+        targets: {
+            type: 'integer',
+            title: 'Targets'
+        },
+        enabled_targets: {
+            type: 'integer',
+            title: 'Enabled Targets'
+        },
+        never_scanned_targets: {
+            type: 'integer',
+            title: 'Never Scanned Targets'
+        },
+        open_findings: {
+            type: 'integer',
+            title: 'Open Findings'
+        },
+        resolved_findings: {
+            type: 'integer',
+            title: 'Resolved Findings'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        },
+        avg_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Avg Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        by_severity: {
+            items: {
+                '$ref': '#/components/schemas/SeverityStat'
+            },
+            type: 'array',
+            title: 'By Severity'
+        },
+        by_category: {
+            items: {
+                '$ref': '#/components/schemas/IssueCategoryStat'
+            },
+            type: 'array',
+            title: 'By Category'
+        },
+        engines_with_data: {
+            type: 'integer',
+            title: 'Engines With Data'
+        }
+    },
+    type: 'object',
+    required: ['targets', 'enabled_targets', 'never_scanned_targets', 'open_findings', 'resolved_findings', 'critical_open', 'avg_score', 'grade', 'by_severity', 'by_category', 'engines_with_data'],
+    title: 'OverviewTotals',
+    description: `All-engine roll-up for the dashboard's summary header.
+
+\`\`avg_score\`\` is the unweighted mean of the per-engine averages that
+exist, not of every target: averaging targets directly would let a repo
+with forty workflow files drown out a failing cloud posture.`
+} as const;
+
 export const PlanLimitsPublicSchema = {
     properties: {
         analyses: {
@@ -3303,6 +3679,29 @@ Deliberately separate from \`\`AnalysisStatus\`\`: that enum's \`\`no_workflows\
 value is workflow-specific vocabulary. \`\`no_targets\`\` covers both "no .tf
 files under this root" and "no resources of the scanned types in this
 account/region".`
+} as const;
+
+export const SeverityStatSchema = {
+    properties: {
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        open: {
+            type: 'integer',
+            title: 'Open'
+        },
+        resolved: {
+            type: 'integer',
+            title: 'Resolved'
+        }
+    },
+    type: 'object',
+    required: ['severity', 'open', 'resolved'],
+    title: 'SeverityStat',
+    description: `Open/resolved finding counts for one severity.
+
+Emitted for every \`\`IssueSeverity\`\` including zeros, so the frontend can
+render a fixed-segment severity bar without gap logic.`
 } as const;
 
 export const SubscriptionStatusSchema = {
@@ -4123,6 +4522,38 @@ export const TokenSchema = {
     type: 'object',
     required: ['access_token'],
     title: 'Token'
+} as const;
+
+export const TopRuleStatSchema = {
+    properties: {
+        rule_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Rule Id'
+        },
+        slug: {
+            type: 'string',
+            title: 'Slug'
+        },
+        title: {
+            type: 'string',
+            title: 'Title'
+        },
+        severity: {
+            '$ref': '#/components/schemas/IssueSeverity'
+        },
+        category: {
+            '$ref': '#/components/schemas/IssueCategory'
+        },
+        open: {
+            type: 'integer',
+            title: 'Open'
+        }
+    },
+    type: 'object',
+    required: ['rule_id', 'slug', 'title', 'severity', 'category', 'open'],
+    title: 'TopRuleStat',
+    description: 'A rule ranked by how many open findings it accounts for.'
 } as const;
 
 export const UpdatePasswordSchema = {

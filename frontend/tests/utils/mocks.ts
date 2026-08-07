@@ -1337,3 +1337,221 @@ export async function mockEvents(page: Page) {
     })
   })
 }
+
+// ─── Cross-engine dashboard overview ─────────────────────────────────────────
+
+const SEVERITIES = ["critical", "high", "medium", "low", "info"] as const
+const GRADE_LADDER = ["A+++", "A++", "A+", "A", "B", "C", "D", "F"] as const
+
+type EngineOverrides = {
+  open?: number
+  critical?: number
+  resolved?: number
+  scanned?: number
+  total?: number
+  score?: number | null
+  grade?: string | null
+  fixes?: Record<string, number> | null
+  topRules?: number
+}
+
+/**
+ * One engine's block of `/overview/` stats.
+ *
+ * Built rather than hand-written per engine so the invariants the real backend
+ * guarantees hold in the fixtures too: `by_severity` and `by_category` each sum
+ * to `open`, and the fix buckets partition it. A fixture that broke those would
+ * let a component bug through.
+ */
+function buildEngine(
+  engine: "ci" | "docker" | "terraform" | "cloud",
+  section: "ci" | "docker" | "infra",
+  label: string,
+  o: EngineOverrides = {},
+) {
+  const open = o.open ?? 0
+  const critical = Math.min(o.critical ?? 0, open)
+  const total = o.total ?? 0
+  const scanned = o.scanned ?? total
+  // Everything non-critical lands on "high" so the counts stay easy to assert.
+  const bySeverity = SEVERITIES.map((severity) => ({
+    severity,
+    open:
+      severity === "critical"
+        ? critical
+        : severity === "high"
+          ? open - critical
+          : 0,
+    resolved: severity === "high" ? (o.resolved ?? 0) : 0,
+  }))
+  const byCategory = [
+    "energy",
+    "reliability",
+    "security",
+    "performance",
+    "maintainability",
+  ].map((category, i) => ({
+    category,
+    // All the open findings sit on "security" so the heatmap has one hot cell.
+    open: category === "security" ? open : 0,
+    resolved: i === 0 ? (o.resolved ?? 0) : 0,
+    critical_open: category === "security" ? critical : 0,
+  }))
+  const fixes =
+    o.fixes === null
+      ? null
+      : {
+          unfixed: open,
+          in_progress: 0,
+          ready: 0,
+          delivered: 0,
+          landed: 0,
+          failed: 0,
+          ...(o.fixes ?? {}),
+        }
+  if (fixes) {
+    const addressed =
+      fixes.in_progress +
+      fixes.ready +
+      fixes.delivered +
+      fixes.landed +
+      fixes.failed
+    fixes.unfixed = Math.max(open - addressed, 0)
+  }
+  return {
+    engine,
+    section,
+    label,
+    coverage: {
+      total,
+      enabled: total,
+      scanned,
+      never_scanned: total - scanned,
+      latest_scan_failed: 0,
+    },
+    freshness: {
+      last_completed_scan_at: scanned > 0 ? "2025-01-15T10:00:00Z" : null,
+      last_scan_at: scanned > 0 ? "2025-01-15T10:00:00Z" : null,
+    },
+    score: {
+      avg_score: o.score === undefined ? (scanned > 0 ? 72 : null) : o.score,
+      grade: o.grade === undefined ? (scanned > 0 ? "B" : null) : o.grade,
+      scored_targets: scanned,
+      by_grade: GRADE_LADDER.map((grade) => ({
+        grade,
+        count: grade === "B" ? scanned : 0,
+      })),
+    },
+    findings: {
+      open,
+      resolved: o.resolved ?? 0,
+      critical_open: critical,
+      by_severity: bySeverity,
+      by_category: byCategory,
+    },
+    fixes,
+    top_rules: Array.from(
+      { length: o.topRules ?? (open > 0 ? 1 : 0) },
+      (_, i) => ({
+        rule_id: `00000000-0000-0000-0000-00000000000${i + 1}`,
+        slug: `${engine}_rule_${i + 1}`,
+        title: `${label} rule ${i + 1}`,
+        severity: "high",
+        category: "security",
+        open: Math.max(open - i, 1),
+      }),
+    ),
+  }
+}
+
+export function buildOverview(
+  overrides: Partial<
+    Record<"ci" | "docker" | "terraform" | "cloud", EngineOverrides>
+  > = {},
+) {
+  const engines = [
+    buildEngine("ci", "ci", "CI workflows", overrides.ci),
+    buildEngine("docker", "docker", "Docker", overrides.docker),
+    buildEngine("terraform", "infra", "Terraform", overrides.terraform),
+    // Cloud posture has no fix pipeline at all — `fixes` is null, never zeroes.
+    buildEngine("cloud", "infra", "Cloud posture", {
+      ...overrides.cloud,
+      fixes: null,
+    }),
+  ]
+  const sum = (pick: (e: (typeof engines)[number]) => number) =>
+    engines.reduce((total, e) => total + pick(e), 0)
+  const scored = engines.filter((e) => e.score.avg_score != null)
+  const avg =
+    scored.length > 0
+      ? scored.reduce((t, e) => t + (e.score.avg_score ?? 0), 0) / scored.length
+      : null
+  return {
+    generated_at: "2025-01-15T12:00:00Z",
+    totals: {
+      targets: sum((e) => e.coverage.total),
+      enabled_targets: sum((e) => e.coverage.enabled),
+      never_scanned_targets: sum((e) => e.coverage.never_scanned),
+      open_findings: sum((e) => e.findings.open),
+      resolved_findings: sum((e) => e.findings.resolved),
+      critical_open: sum((e) => e.findings.critical_open),
+      avg_score: avg,
+      grade: avg != null ? "B" : null,
+      by_severity: SEVERITIES.map((severity) => ({
+        severity,
+        open: sum(
+          (e) =>
+            e.findings.by_severity.find((s) => s.severity === severity)?.open ??
+            0,
+        ),
+        resolved: sum(
+          (e) =>
+            e.findings.by_severity.find((s) => s.severity === severity)
+              ?.resolved ?? 0,
+        ),
+      })),
+      by_category: [
+        "energy",
+        "reliability",
+        "security",
+        "performance",
+        "maintainability",
+      ].map((category) => ({
+        category,
+        open: sum(
+          (e) =>
+            e.findings.by_category.find((c) => c.category === category)?.open ??
+            0,
+        ),
+        resolved: sum(
+          (e) =>
+            e.findings.by_category.find((c) => c.category === category)
+              ?.resolved ?? 0,
+        ),
+        critical_open: sum(
+          (e) =>
+            e.findings.by_category.find((c) => c.category === category)
+              ?.critical_open ?? 0,
+        ),
+      })),
+      engines_with_data: engines.filter((e) => e.coverage.total > 0).length,
+    },
+    engines,
+  }
+}
+
+export const MOCK_OVERVIEW = buildOverview({
+  ci: { open: 3, critical: 1, resolved: 2, total: 2, scanned: 2, topRules: 2 },
+  docker: { open: 2, critical: 0, total: 1, scanned: 1 },
+  terraform: { open: 0, total: 1, scanned: 0, score: null, grade: null },
+  cloud: { open: 1, critical: 1, total: 1, scanned: 1 },
+})
+
+export async function mockOverview(
+  page: Page,
+  overview: unknown = MOCK_OVERVIEW,
+) {
+  await page.route("**/api/v1/overview/**", (route) => {
+    route.fulfill({ json: overview })
+  })
+}

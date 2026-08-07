@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MOCK_OVERVIEW } from "./utils/mocks"
 
 const MOCK_REPO = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -108,6 +109,12 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
     await page.route("**/api/v1/fixes/**", (route) => {
       route.fulfill({ json: [MOCK_FIX] })
     })
+
+    // The dashboard's summary and its three engine sections all read
+    // /overview/; without it they would fall through to the live API.
+    await page.route("**/api/v1/overview/**", (route) => {
+      route.fulfill({ json: MOCK_OVERVIEW })
+    })
   })
 
   test("repositories page loads and shows repository", async ({ page }) => {
@@ -118,10 +125,20 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
   test("dashboard shows recent analysis grade", async ({ page }) => {
     await page.goto("/")
-    await expect(page.getByText("Repository Health")).toBeVisible()
+    // The CI section carries the repo-level view; the analysis score shows as
+    // the repo's latest score in the repository health table.
+    await expect(page.getByText("Repository health")).toBeVisible()
     await expect(
-      page.getByText(`${MOCK_ANALYSIS.score}/100`).first(),
+      page.getByRole("link", { name: new RegExp(String(MOCK_ANALYSIS.score)) }),
     ).toBeVisible()
+    await expect(page.locator("body")).not.toContainText("Something went wrong")
+  })
+
+  test("dashboard summarises every analysis type", async ({ page }) => {
+    await page.goto("/")
+    for (const engine of ["ci", "docker", "terraform", "cloud"]) {
+      await expect(page.getByTestId(`engine-row-${engine}`)).toBeVisible()
+    }
     await expect(page.locator("body")).not.toContainText("Something went wrong")
   })
 

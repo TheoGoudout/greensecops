@@ -913,6 +913,162 @@ export type DynamicEnrichmentPublic = {
 };
 
 /**
+ * EngineCoverageStat
+ * How much of what could be scanned actually has been.
+ *
+ * ``enabled`` means different things per engine — a bool column for Docker
+ * and Terraform targets, ``CloudAccountStatus.connected`` for a cloud
+ * account. The CI engine's target is a ``WorkflowFile``, which has no enable
+ * switch at all, so there ``enabled == total``.
+ */
+export type EngineCoverageStat = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Enabled
+     */
+    enabled: number;
+    /**
+     * Scanned
+     */
+    scanned: number;
+    /**
+     * Never Scanned
+     */
+    never_scanned: number;
+    /**
+     * Latest Scan Failed
+     */
+    latest_scan_failed: number;
+};
+
+/**
+ * EngineFindingStat
+ */
+export type EngineFindingStat = {
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Resolved
+     */
+    resolved: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+    /**
+     * By Severity
+     */
+    by_severity: Array<SeverityStat>;
+    /**
+     * By Category
+     */
+    by_category: Array<IssueCategoryStat>;
+};
+
+/**
+ * EngineFixPipelineStat
+ * Open findings bucketed by the state of the fix addressing them.
+ *
+ * ``unfixed`` mirrors ``list_issues(unfixed=True)``: no fix row at all, or a
+ * fix in one of the rejected/superseded states. The buckets are disjoint and
+ * sum to ``EngineFindingStat.open``.
+ */
+export type EngineFixPipelineStat = {
+    /**
+     * Unfixed
+     */
+    unfixed: number;
+    /**
+     * In Progress
+     */
+    in_progress: number;
+    /**
+     * Ready
+     */
+    ready: number;
+    /**
+     * Delivered
+     */
+    delivered: number;
+    /**
+     * Landed
+     */
+    landed: number;
+    /**
+     * Failed
+     */
+    failed: number;
+};
+
+/**
+ * EngineFreshnessStat
+ */
+export type EngineFreshnessStat = {
+    /**
+     * Last Completed Scan At
+     */
+    last_completed_scan_at: string | null;
+    /**
+     * Last Scan At
+     */
+    last_scan_at: string | null;
+};
+
+/**
+ * EngineOverview
+ */
+export type EngineOverview = {
+    engine: OverviewEngineKey;
+    section: OverviewSection;
+    /**
+     * Label
+     */
+    label: string;
+    coverage: EngineCoverageStat;
+    freshness: EngineFreshnessStat;
+    score: EngineScoreStat;
+    findings: EngineFindingStat;
+    fixes: EngineFixPipelineStat | null;
+    /**
+     * Top Rules
+     */
+    top_rules: Array<TopRuleStat>;
+};
+
+/**
+ * EngineScoreStat
+ * Average of each target's latest *completed* scan score.
+ *
+ * A target whose latest scan failed keeps the score of its last good scan —
+ * the same rule ``api/mappers/base.latest_completed_scan`` applies per
+ * target, so a grade here always matches the one that engine's own list
+ * endpoint reports.
+ */
+export type EngineScoreStat = {
+    /**
+     * Avg Score
+     */
+    avg_score: number | null;
+    /**
+     * Grade
+     */
+    grade: string | null;
+    /**
+     * Scored Targets
+     */
+    scored_targets: number;
+    /**
+     * By Grade
+     */
+    by_grade: Array<GradeStat>;
+};
+
+/**
  * ExternalRepositoryCreate
  */
 export type ExternalRepositoryCreate = {
@@ -1048,6 +1204,26 @@ export type FixPublic = {
  * FixStatus
  */
 export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'superseded_by_deleted_file' | 'landed';
+
+/**
+ * GradeStat
+ * How many scan targets currently hold this grade.
+ *
+ * Emitted for every rung of ``services.scoring.GRADE_LADDER`` in order, best
+ * first, plus any grade found in the data that isn't on the ladder — grades
+ * are free-form ``VARCHAR(8)``, so a row written before a ladder change must
+ * still be counted rather than silently dropped.
+ */
+export type GradeStat = {
+    /**
+     * Grade
+     */
+    grade: string;
+    /**
+     * Count
+     */
+    count: number;
+};
 
 /**
  * HTTPValidationError
@@ -1430,6 +1606,97 @@ export type OssApplicationReview = {
 export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 /**
+ * OverviewEngineKey
+ * Which analysis engine a block of dashboard overview stats describes.
+ *
+ * A presentation-layer key, not a persisted column — ``Rule.domain`` stays
+ * the DB-level discriminator. The two exist because they don't line up:
+ * ``container_docker`` and ``container_runtime`` rules both produce findings
+ * on the Docker engine, so one key covers two domains.
+ */
+export type OverviewEngineKey = 'ci' | 'docker' | 'terraform' | 'cloud';
+
+/**
+ * OverviewPublic
+ */
+export type OverviewPublic = {
+    /**
+     * Generated At
+     */
+    generated_at: string;
+    totals: OverviewTotals;
+    /**
+     * Engines
+     */
+    engines: Array<EngineOverview>;
+};
+
+/**
+ * OverviewSection
+ * Which collapsible dashboard section an engine renders under.
+ *
+ * Four engines, three sections: the Infrastructure page already shows
+ * Terraform and cloud posture as sibling tabs, so the dashboard groups them
+ * the same way rather than inventing a fourth top-level heading.
+ */
+export type OverviewSection = 'ci' | 'docker' | 'infra';
+
+/**
+ * OverviewTotals
+ * All-engine roll-up for the dashboard's summary header.
+ *
+ * ``avg_score`` is the unweighted mean of the per-engine averages that
+ * exist, not of every target: averaging targets directly would let a repo
+ * with forty workflow files drown out a failing cloud posture.
+ */
+export type OverviewTotals = {
+    /**
+     * Targets
+     */
+    targets: number;
+    /**
+     * Enabled Targets
+     */
+    enabled_targets: number;
+    /**
+     * Never Scanned Targets
+     */
+    never_scanned_targets: number;
+    /**
+     * Open Findings
+     */
+    open_findings: number;
+    /**
+     * Resolved Findings
+     */
+    resolved_findings: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+    /**
+     * Avg Score
+     */
+    avg_score: number | null;
+    /**
+     * Grade
+     */
+    grade: string | null;
+    /**
+     * By Severity
+     */
+    by_severity: Array<SeverityStat>;
+    /**
+     * By Category
+     */
+    by_category: Array<IssueCategoryStat>;
+    /**
+     * Engines With Data
+     */
+    engines_with_data: number;
+};
+
+/**
  * PlanLimitsPublic
  * ``None`` means unlimited, at every layer up to the UI.
  */
@@ -1764,6 +2031,25 @@ export type SamplePayload = {
  * account/region".
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
+ * SeverityStat
+ * Open/resolved finding counts for one severity.
+ *
+ * Emitted for every ``IssueSeverity`` including zeros, so the frontend can
+ * render a fixed-segment severity bar without gap logic.
+ */
+export type SeverityStat = {
+    severity: IssueSeverity;
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Resolved
+     */
+    resolved: number;
+};
 
 /**
  * SubscriptionStatus
@@ -2188,6 +2474,31 @@ export type Token = {
      * Token Type
      */
     token_type?: string;
+};
+
+/**
+ * TopRuleStat
+ * A rule ranked by how many open findings it accounts for.
+ */
+export type TopRuleStat = {
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Title
+     */
+    title: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    /**
+     * Open
+     */
+    open: number;
 };
 
 /**
@@ -3309,6 +3620,40 @@ export type RepositoriesIntegrateActionResponses = {
 };
 
 export type RepositoriesIntegrateActionResponse = RepositoriesIntegrateActionResponses[keyof RepositoriesIntegrateActionResponses];
+
+export type OverviewGetOverviewData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Org Id
+         */
+        org_id?: string | null;
+        /**
+         * Top Rules Limit
+         */
+        top_rules_limit?: number;
+    };
+    url: '/api/v1/overview/';
+};
+
+export type OverviewGetOverviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OverviewGetOverviewError = OverviewGetOverviewErrors[keyof OverviewGetOverviewErrors];
+
+export type OverviewGetOverviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: OverviewPublic;
+};
+
+export type OverviewGetOverviewResponse = OverviewGetOverviewResponses[keyof OverviewGetOverviewResponses];
 
 export type EventsGetSseSignalsData = {
     body?: never;
