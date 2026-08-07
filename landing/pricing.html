@@ -475,12 +475,13 @@
                 Does GreenSecOps ever store my source code?
               </div>
               <p class="faq-item__a">
-                No. GreenSecOps reads workflow files (<code
-                  >.github/workflows/*.yml</code
-                >) via the GitHub API using the permissions you grant. Your
-                application source code is never requested, downloaded, or
-                stored — only the content of those workflow files, along with
-                the resulting analysis record, is persisted in our database.
+                No. GreenSecOps reads only the files it grades — workflow files
+                (<code>.github/workflows/*.yml</code>), Terraform files,
+                Dockerfiles and Compose files — via the GitHub API using the
+                permissions you grant. Your application source code is never
+                requested, downloaded, or stored; only the content of those
+                graded files, along with the resulting analysis record, is
+                persisted in our database.
               </p>
             </div>
             <div class="faq-item">

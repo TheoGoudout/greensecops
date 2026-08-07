@@ -90,9 +90,9 @@
           </h1>
           <p class="section__sub" style="margin: 0.875rem auto 0;">
             GreenSecOps runs the same Rego rule catalog and A+++ to F grade
-            model across three surfaces — your CI/CD workflows, your Terraform,
-            and your live AWS account. Pick a surface to see exactly what we
-            check.
+            model across four surfaces — your CI/CD workflows, your Terraform,
+            your Dockerfiles, and your live AWS account. Pick a surface to see
+            exactly what we check.
           </p>
         </div>
       </section>
@@ -101,7 +101,7 @@
       <section class="section" aria-labelledby="surfaces-heading">
         <div class="container">
           <h2 class="sr-only" id="surfaces-heading">Analysis surfaces</h2>
-          <div class="surfaces-grid surfaces-grid--3">
+          <div class="surfaces-grid">
             <a
               href="./workflows.html"
               class="surface-card surface-card--workflow"
@@ -211,6 +211,76 @@
               <span class="surface-card__tag">Static analysis</span>
               <span class="surface-card__link">
                 Explore Terraform
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </span>
+            </a>
+
+            <a href="./docker.html" class="surface-card surface-card--docker">
+              <div class="surface-card__icon">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="2.5"
+                    y="8.5"
+                    width="4"
+                    height="4"
+                    rx="0.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="8"
+                    y="8.5"
+                    width="4"
+                    height="4"
+                    rx="0.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="8"
+                    y="3.5"
+                    width="4"
+                    height="4"
+                    rx="0.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M2 14c1.6 2.7 4.6 4 8 4 3.8 0 6.4-1.9 7.6-5.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </div>
+              <div class="surface-card__title">Docker &amp; Compose</div>
+              <p class="surface-card__desc">
+                Every <code>Dockerfile</code> and Compose file in your repo,
+                graded with no setup — root containers, unpinned base images,
+                secrets in build args, broken layer caching — then fixed in a
+                pull request.
+              </p>
+              <span class="surface-card__tag">Static analysis</span>
+              <span class="surface-card__link">
+                Explore Docker
                 <svg
                   width="14"
                   height="14"

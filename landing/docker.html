@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docker &amp; Compose — GreenSecOps</title>
+  <meta name="description" content="GreenSecOps grades every Dockerfile and Compose file in your repository — container privilege, image pinning, layer-cache efficiency, image size — and generates a fix you can merge as a pull request." />
+  <!-- codegen:head:start -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("theme");
+        var theme = ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system";
+        var resolved = theme === "system"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : theme;
+        document.documentElement.classList.add(resolved);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="./assets/style.css" />
+  <link rel="icon" type="image/png" href="./assets/images/favicon.png" />
+<!-- codegen:head:end -->
+</head>
+<body>
+
+<!-- ═══════════════════════════════ NAV ═══════════════════════════════ -->
+<!-- codegen:nav:start -->
+<header>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="container">
+      <div class="nav__inner">
+        <a href="./index.html" class="nav__logo" aria-label="GreenSecOps home">
+          <img src="./assets/images/logo-mark.png" data-logo="light" width="24" height="24" alt="" aria-hidden="true">
+          <img src="./assets/images/logo-mark-dark.png" data-logo="dark" width="24" height="24" alt="" aria-hidden="true">
+          GreenSecOps
+        </a>
+        <div class="nav__links">
+          <a href="./features.html" class="nav__link">Features</a>
+          <a href="./pricing.html" class="nav__link">Pricing</a>
+          <a href="${DOCS_URL}" class="nav__link">Docs</a>
+          <div class="theme-menu">
+            <button type="button" class="theme-toggle" aria-label="Toggle theme" aria-haspopup="true">
+              <svg class="icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
+              <svg class="icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
+            </button>
+            <div class="theme-menu__dropdown" data-open="false" role="menu">
+              <button type="button" class="theme-menu__item" data-theme="light" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
+                Light
+              </button>
+              <button type="button" class="theme-menu__item" data-theme="dark" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
+                Dark
+              </button>
+              <button type="button" class="theme-menu__item" data-theme="system" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M5.5 14h5M8 11v3"/></svg>
+                System
+              </button>
+            </div>
+          </div>
+          <a href="${APP_URL}/login" class="btn btn--ghost btn--sm">Sign In</a>
+          <a href="${APP_URL}/signup" class="btn btn--primary btn--sm">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+</header>
+<!-- codegen:nav:end -->
+
+<main>
+
+<!-- HERO -->
+<section class="pricing-hero" aria-labelledby="docker-page-heading">
+  <div class="container container--narrow">
+    <div class="section__label" style="display:inline-block; margin-bottom:1rem;">Containers</div>
+    <h1 class="section__heading" id="docker-page-heading" style="font-size: clamp(2rem, 4vw, 3rem);">Grade every Dockerfile. Fix it in a pull request.</h1>
+    <p class="section__sub" style="margin: 0.875rem auto 0;">The same grading engine that scores your workflows and your Terraform reads every Dockerfile and Compose file in your repository — then rewrites the offending ones and opens a single pull request. Nothing to configure: it starts the moment you install the GitHub App.</p>
+    <div class="hero__actions" style="justify-content:center; margin-top:1.5rem;">
+      <a href="${APP_URL}/signup" class="btn btn--primary btn--lg">Start for Free</a>
+      <a href="#runtime" class="btn btn--outline btn--lg">See runtime evidence</a>
+    </div>
+  </div>
+</section>
+
+<!-- DOCKER: WHAT WE CHECK -->
+<section class="section" aria-labelledby="docker-checks-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">Dockerfiles &amp; Compose</div>
+      <h2 class="section__heading" id="docker-checks-heading">Every instruction, every service, graded</h2>
+      <p class="section__sub">GreenSecOps reads your <code>Dockerfile</code>s and Compose files together — a Compose file and its override are merged before grading — and scores them across four categories.</p>
+    </div>
+
+    <div class="checks-grid checks-grid--2x2">
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--security"></span>Security</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Containers that run as <code>root</code> because no <code>USER</code> was ever set</li>
+          <li class="check-card__item">Privileged services, added <code>SYS_ADMIN</code>, host PID/IPC namespaces, and mounted Docker sockets</li>
+          <li class="check-card__item">Credentials baked into a build arg or hardcoded in Compose</li>
+          <li class="check-card__item"><code>curl … | sh</code> installers and downloads with TLS verification switched off</li>
+          <li class="check-card__item">Database ports published on every interface instead of loopback</li>
+          <li class="check-card__item">An override file that quietly undoes the base file's hardening</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--reliability"></span>Reliability</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Base images pinned to a floating tag rather than a digest</li>
+          <li class="check-card__item">Missing <code>HEALTHCHECK</code>, and dependencies waited on without a health condition</li>
+          <li class="check-card__item">Shell-form <code>ENTRYPOINT</code> that swallows shutdown signals</li>
+          <li class="check-card__item">Services with no restart policy</li>
+          <li class="check-card__item">Images with no <code>CMD</code> or <code>ENTRYPOINT</code> at all</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--energy"></span>Energy</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Single-stage builds shipping a whole toolchain to production</li>
+          <li class="check-card__item">Heavy base images where a slim variant would do</li>
+          <li class="check-card__item"><code>COPY .</code> before the dependency install, busting the layer cache on every source change</li>
+          <li class="check-card__item">apt and pip caches left behind in the final image</li>
+          <li class="check-card__item">Services with no CPU or memory limits, and unbounded log files</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--maintainability"></span>Maintainability</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Missing <code>WORKDIR</code>, leaving paths to guesswork</li>
+          <li class="check-card__item">Missing OCI labels, so an image can't be traced back to its source</li>
+          <li class="check-card__item">The deprecated <code>MAINTAINER</code> instruction</li>
+          <li class="check-card__item">The obsolete Compose <code>version:</code> key</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCKER: HOW IT WORKS -->
+<section class="section section--alt" aria-labelledby="docker-how-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">How It Works</div>
+      <h2 class="section__heading" id="docker-how-heading">Nothing to configure</h2>
+      <p class="section__sub">Container files are recognisable by name, so GreenSecOps finds them itself. There is no folder to register and no manifest to keep current.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step__num">1</div>
+        <div>
+          <div class="step__title">Install the GitHub App</div>
+          <p class="step__desc">Your repository is registered for container analysis automatically, from the root down. Monorepos can add extra targets to have each sub-project graded separately.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">2</div>
+        <div>
+          <div class="step__title">Graded on every push</div>
+          <p class="step__desc"><code>Dockerfile</code>, <code>Dockerfile.*</code>, <code>*.Dockerfile</code>, <code>Containerfile</code>, <code>compose.yml</code> and <code>docker-compose*.yml</code> are all picked up. A Compose file and its override are merged first, which is the only way to see that an override removed a setting rather than never having had one.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">3</div>
+        <div>
+          <div class="step__title">Fix it in a pull request</div>
+          <p class="step__desc">Review each finding with remediation guidance, generate an AI fix, and ship every rewritten file as a single pull request — comments, stage names and indentation preserved.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCKER: BEFORE / AFTER -->
+<section class="section" aria-labelledby="docker-compare-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">See It In Action</div>
+      <h2 class="section__heading" id="docker-compare-heading">From root-and-rebuild to lean and locked down</h2>
+      <p class="section__sub">A first-pass Python service before GreenSecOps — and after its AI-generated fix splits the build, drops the toolchain, pins the base image and stops running as root.</p>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-panel">
+        <span class="compare-panel__label compare-panel__label--before">Before</span>
+        <div class="hero__code-card">
+          <div class="hero__code-header">
+            <span class="hero__dot hero__dot--red"></span>
+            <span class="hero__dot hero__dot--yellow"></span>
+            <span class="hero__dot hero__dot--green"></span>
+            <span class="hero__code-filename">Dockerfile</span>
+          </div>
+          <div class="hero__code-body"><span class="token-key">FROM</span> <span class="token-str">python:3.12</span>
+
+<span class="token-key">ARG</span> <span class="token-val">PIP_INDEX_TOKEN=</span><span class="token-str">pypi-AgEIcHlwaS5vcmcCJDY4YTk</span>
+
+<span class="token-key">RUN</span> <span class="token-val">apt-get update &amp;&amp; apt-get install -y build-essential curl</span>
+
+<span class="token-key">RUN</span> <span class="token-val">curl -fsSL https://example.com/install-agent.sh | sh</span>
+
+<span class="token-key">COPY</span> <span class="token-val">. /app</span>
+<span class="token-key">RUN</span> <span class="token-val">pip install -r /app/requirements.txt</span>
+
+<span class="token-key">CMD</span> [<span class="token-str">"python"</span>, <span class="token-str">"/app/main.py"</span>]</div>
+        </div>
+        <div class="compare-panel__grade">
+          <span class="grade-badge grade-badge--lg grade-badge--f" aria-label="Grade F">F</span>
+          <span class="compare-panel__grade-text">Runs as root, token in a build<br>arg, piped installer, unpinned<br>base, cache busted every push</span>
+        </div>
+      </div>
+
+      <div class="compare-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        <span>AI-generated fix</span>
+      </div>
+
+      <div class="compare-panel">
+        <span class="compare-panel__label compare-panel__label--after">After</span>
+        <div class="hero__code-card">
+          <div class="hero__code-header">
+            <span class="hero__dot hero__dot--red"></span>
+            <span class="hero__dot hero__dot--yellow"></span>
+            <span class="hero__dot hero__dot--green"></span>
+            <span class="hero__code-filename">Dockerfile</span>
+          </div>
+          <div class="hero__code-body"><span class="token-key">FROM</span> <span class="token-str">python:3.12-slim@sha256:0a1b2c3d…</span> <span class="token-key">AS</span> <span class="token-val">builder</span>
+<span class="token-key">RUN</span> <span class="token-val">apt-get update \
+ &amp;&amp; apt-get install -y --no-install-recommends build-essential \
+ &amp;&amp; rm -rf /var/lib/apt/lists/*</span>
+<span class="token-key">COPY</span> <span class="token-val">requirements.txt ./</span>
+<span class="token-key">RUN</span> <span class="token-val">pip install --no-cache-dir --prefix=/install -r requirements.txt</span>
+
+<span class="token-key">FROM</span> <span class="token-str">python:3.12-slim@sha256:0a1b2c3d…</span>
+<span class="token-key">LABEL</span> <span class="token-val">org.opencontainers.image.source=</span><span class="token-str">"https://github.com/acme/api"</span>
+<span class="token-key">WORKDIR</span> <span class="token-val">/app</span>
+<span class="token-key">COPY</span> <span class="token-comment">--from=builder</span> <span class="token-val">/install /usr/local</span>
+<span class="token-key">COPY</span> <span class="token-val">. .</span>
+
+<span class="token-key">RUN</span> <span class="token-val">useradd --system --uid 10001 --no-create-home app</span>
+<span class="token-key">USER</span> <span class="token-val">app</span>
+<span class="token-key">HEALTHCHECK</span> <span class="token-comment">--interval=30s --timeout=3s</span> \
+  <span class="token-key">CMD</span> <span class="token-val">python -c "…urlopen('http://localhost:8000/health')"</span>
+
+<span class="token-key">CMD</span> [<span class="token-str">"python"</span>, <span class="token-str">"main.py"</span>]</div>
+        </div>
+        <div class="compare-panel__grade">
+          <span class="grade-badge grade-badge--lg grade-badge--aaa" aria-label="Grade A plus plus plus">A+++</span>
+          <span class="compare-panel__grade-text">Multi-stage and digest-pinned,<br>unprivileged user, cached deps,<br>health-checked and labelled</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCKER RUNTIME -->
+<section class="section section--alt" id="runtime" aria-labelledby="runtime-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">Docker Runtime</div>
+      <h2 class="section__heading" id="runtime-heading">Fixes informed by what the container actually did</h2>
+      <p class="section__sub">Static analysis reads the file. The companion GitHub Action measures the build and the running container — and those measurements are handed to the fix generator as facts, so a memory limit comes from an observed peak rather than a round guess.</p>
+    </div>
+
+    <div class="checks-grid">
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--reliability"></span>What went wrong</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Containers killed by the OOM killer, or running close to their limit</li>
+          <li class="check-card__item">Restart loops and non-zero exits</li>
+          <li class="check-card__item">Health checks that never turned healthy</li>
+          <li class="check-card__item">A memory limit that doesn't match what the container needs</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--performance"></span>What it cost you</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">CPU throttling against the configured quota</li>
+          <li class="check-card__item">Slow image builds, with the time attributed</li>
+          <li class="check-card__item">Layer caching that isn't actually working — measured hit ratio, not a guess from the file</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--energy"></span>What you shipped</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Oversized images, and the single layer responsible</li>
+          <li class="check-card__item">Bloated build contexts uploaded to the daemon on every build</li>
+          <li class="check-card__item">Excessive layer counts</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="steps" style="margin-top: clamp(2rem, 4vw, 3rem);">
+      <div class="step">
+        <div class="step__num">1</div>
+        <div>
+          <div class="step__title">Add the telemetry action</div>
+          <p class="step__desc">Drop the GreenSecOps Telemetry action into the workflow that builds your image. It samples the build and the containers it starts, in the background, while your job runs.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">2</div>
+        <div>
+          <div class="step__title">Point it at the Dockerfile</div>
+          <p class="step__desc">Pass <code>dockerfile_path</code> — that's the join back to the static analysis — and a <code>docker buildx build --metadata-file</code> JSON if you have one. Cache-hit data, the most useful build metric, is only available from that metadata.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">3</div>
+        <div>
+          <div class="step__title">Measurements feed the fix</div>
+          <p class="step__desc">The observed facts arrive alongside the static findings when you generate a fix — kept deliberately separate, because a finding says the file is wrong while a measurement says what the container did.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" aria-labelledby="docker-cta-heading">
+  <div class="container">
+    <h2 class="cta__headline" id="docker-cta-heading">Grade your containers,<br>file to runtime</h2>
+    <p class="cta__sub">Install the GitHub App and every Dockerfile and Compose file in your repository is graded on the next push — free to start.</p>
+    <div class="cta__actions">
+      <a href="${APP_URL}/signup" class="btn btn--white btn--lg">Get Started for Free</a>
+      <a href="./workflows.html" class="btn btn--outline-white btn--lg">Explore CI/CD Workflows</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══════════════════════════════ FOOTER ═══════════════════════════════ -->
+<!-- codegen:footer:start -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <a href="./index.html" class="footer__logo" aria-label="GreenSecOps home">
+        <img src="./assets/images/logo-mark.png" width="18" height="18" alt="" aria-hidden="true">
+        GreenSecOps
+      </a>
+      <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
+      <nav class="footer__links" aria-label="Footer navigation">
+        <a href="./features.html" class="footer__link">Features</a>
+        <a href="./pricing.html" class="footer__link">Pricing</a>
+        <a href="./privacy.html" class="footer__link">Privacy</a>
+        <a href="./terms.html" class="footer__link">Terms</a>
+        <a href="${APP_URL}" class="footer__link">App</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+<!-- codegen:footer:end -->
+
+<script src="./assets/theme.js" defer></script>
+</body>
+</html>
