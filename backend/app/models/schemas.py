@@ -565,8 +565,8 @@ class EngineCoverageStat(SQLModel):
 
 
 class EngineFreshnessStat(SQLModel):
-    last_completed_scan_at: datetime | None = None
-    last_scan_at: datetime | None = None
+    last_completed_scan_at: datetime | None
+    last_scan_at: datetime | None
 
 
 class EngineScoreStat(SQLModel):
@@ -578,18 +578,18 @@ class EngineScoreStat(SQLModel):
     endpoint reports.
     """
 
-    avg_score: float | None = None
-    grade: str | None = None
+    avg_score: float | None
+    grade: str | None
     scored_targets: int
-    by_grade: list[GradeStat] = []
+    by_grade: list[GradeStat]
 
 
 class EngineFindingStat(SQLModel):
     open: int
     resolved: int
     critical_open: int
-    by_severity: list[SeverityStat] = []
-    by_category: list[IssueCategoryStat] = []
+    by_severity: list[SeverityStat]
+    by_category: list[IssueCategoryStat]
 
 
 class EngineFixPipelineStat(SQLModel):
@@ -619,8 +619,8 @@ class EngineOverview(SQLModel):
     # ``None`` for the cloud engine, which has no fix pipeline at all —
     # ``CloudFinding`` carries no ``fix_id``. An all-zero object would read as
     # "nothing left to fix" rather than "not a thing here".
-    fixes: EngineFixPipelineStat | None = None
-    top_rules: list[TopRuleStat] = []
+    fixes: EngineFixPipelineStat | None
+    top_rules: list[TopRuleStat]
 
 
 class OverviewTotals(SQLModel):
@@ -637,10 +637,10 @@ class OverviewTotals(SQLModel):
     open_findings: int
     resolved_findings: int
     critical_open: int
-    avg_score: float | None = None
-    grade: str | None = None
-    by_severity: list[SeverityStat] = []
-    by_category: list[IssueCategoryStat] = []
+    avg_score: float | None
+    grade: str | None
+    by_severity: list[SeverityStat]
+    by_category: list[IssueCategoryStat]
     engines_with_data: int
 
 
@@ -650,7 +650,7 @@ class OverviewPublic(SQLModel):
     # Always all four engines, zeroed where there is nothing to report, so the
     # dashboard can render a stable set of sections instead of appearing to
     # lose one when an org has no Terraform roots yet.
-    engines: list[EngineOverview] = []
+    engines: list[EngineOverview]
 
 
 class PullRequestPublic(SQLModel):

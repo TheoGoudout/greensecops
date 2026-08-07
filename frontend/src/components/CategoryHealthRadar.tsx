@@ -14,17 +14,25 @@ import { WidgetPagination } from "@/components/Common/WidgetPagination"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 
-export interface RepoHealthSeries {
-  repoId: string
+/**
+ * One plotted series. Deliberately not named after repositories: the axes are
+ * the five issue categories, which every analysis engine shares, so the same
+ * chart can plot repos, scan targets or engines depending on who calls it.
+ */
+export interface CategoryHealthSeries {
+  id: string
   name: string
   values: Record<IssueCategory, number>
 }
 
 interface CategoryHealthRadarProps {
   categories: IssueCategory[]
-  series: RepoHealthSeries[]
+  series: CategoryHealthSeries[]
   toggledIds: Set<string>
-  onToggle: (repoId: string) => void
+  onToggle: (id: string) => void
+  /** Describes what the series are, for screen readers. */
+  ariaLabel?: string
+  legendTestId?: string
 }
 
 const LEGEND_PAGE_SIZE = 8
@@ -75,10 +83,12 @@ export function CategoryHealthRadar({
   series,
   toggledIds,
   onToggle,
+  ariaLabel = "Category health by repository",
+  legendTestId = "category-health-legend",
 }: CategoryHealthRadarProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [legendPageIndex, setLegendPageIndex] = useState(0)
-  const visible = series.filter((s) => toggledIds.has(s.repoId))
+  const visible = series.filter((s) => toggledIds.has(s.id))
   const legendPageCount = Math.ceil(series.length / LEGEND_PAGE_SIZE)
   const clampedLegendPageIndex = Math.min(
     legendPageIndex,
@@ -89,25 +99,21 @@ export function CategoryHealthRadar({
     (clampedLegendPageIndex + 1) * LEGEND_PAGE_SIZE,
   )
 
-  // Recharts reads one row per axis, with each repo as its own column keyed
-  // by repoId — the shape a RadarChart with multiple <Radar> series expects.
+  // Recharts reads one row per axis, with each series as its own column keyed
+  // by id — the shape a RadarChart with multiple <Radar> series expects.
   const chartData = categories.map((category) => {
     const row: Record<string, string | number> = {
       category: `${CATEGORY_META[category].icon} ${CATEGORY_META[category].label}`,
     }
     for (const s of series) {
-      row[s.repoId] = s.values[category]
+      row[s.id] = s.values[category]
     }
     return row
   })
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <div
-        role="img"
-        aria-label="Category health by repository"
-        className="h-70 w-full min-w-0"
-      >
+      <div role="img" aria-label={ariaLabel} className="h-70 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart
             data={chartData}
@@ -119,14 +125,14 @@ export function CategoryHealthRadar({
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             {series.map((s, index) => {
               const color = SERIES_COLORS[index % SERIES_COLORS.length]
-              const isHovered = hoveredId === s.repoId
+              const isHovered = hoveredId === s.id
               const isDimmed = hoveredId !== null && !isHovered
               return (
                 <Radar
-                  key={s.repoId}
-                  dataKey={s.repoId}
-                  data-repo-id={s.repoId}
-                  hide={!toggledIds.has(s.repoId)}
+                  key={s.id}
+                  dataKey={s.id}
+                  data-series-id={s.id}
+                  hide={!toggledIds.has(s.id)}
                   stroke={color}
                   fill={color}
                   fillOpacity={isHovered ? 0.35 : 0.14}
@@ -145,30 +151,27 @@ export function CategoryHealthRadar({
       </div>
 
       <div className="flex flex-col gap-2 max-w-60 sm:shrink-0">
-        <ul
-          data-testid="category-health-legend"
-          className="flex flex-col gap-1"
-        >
+        <ul data-testid={legendTestId} className="flex flex-col gap-1">
           {pagedSeries.map((s) => {
-            const index = series.findIndex((o) => o.repoId === s.repoId)
+            const index = series.findIndex((o) => o.id === s.id)
             const color = SERIES_COLORS[index % SERIES_COLORS.length]
-            const isOn = toggledIds.has(s.repoId)
-            const checkboxId = `category-health-repo-${s.repoId}`
+            const isOn = toggledIds.has(s.id)
+            const checkboxId = `category-health-series-${s.id}`
             return (
-              <li key={s.repoId}>
+              <li key={s.id}>
                 <label
                   htmlFor={checkboxId}
                   className={cn(
                     "flex items-center gap-2 rounded px-1.5 py-1 text-xs cursor-pointer hover:bg-muted/50 transition-colors",
-                    hoveredId === s.repoId && "bg-muted/50",
+                    hoveredId === s.id && "bg-muted/50",
                   )}
-                  onMouseEnter={() => isOn && setHoveredId(s.repoId)}
+                  onMouseEnter={() => isOn && setHoveredId(s.id)}
                   onMouseLeave={() => setHoveredId(null)}
                 >
                   <Checkbox
                     id={checkboxId}
                     checked={isOn}
-                    onCheckedChange={() => onToggle(s.repoId)}
+                    onCheckedChange={() => onToggle(s.id)}
                   />
                   <span
                     aria-hidden="true"
@@ -184,7 +187,7 @@ export function CategoryHealthRadar({
           })}
           {visible.length === 0 && (
             <li className="px-1.5 py-1 text-xs text-muted-foreground">
-              No repositories selected.
+              Nothing selected.
             </li>
           )}
         </ul>

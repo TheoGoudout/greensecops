@@ -345,6 +345,78 @@ export type DynamicEnrichmentPublic = {
     created_at?: (string | null);
 };
 
+/**
+ * How much of what could be scanned actually has been.
+ *
+ * ``enabled`` means different things per engine — a bool column for Docker
+ * and Terraform targets, ``CloudAccountStatus.connected`` for a cloud
+ * account. The CI engine's target is a ``WorkflowFile``, which has no enable
+ * switch at all, so there ``enabled == total``.
+ */
+export type EngineCoverageStat = {
+    total: number;
+    enabled: number;
+    scanned: number;
+    never_scanned: number;
+    latest_scan_failed: number;
+};
+
+export type EngineFindingStat = {
+    open: number;
+    resolved: number;
+    critical_open: number;
+    by_severity: Array<SeverityStat>;
+    by_category: Array<IssueCategoryStat>;
+};
+
+/**
+ * Open findings bucketed by the state of the fix addressing them.
+ *
+ * ``unfixed`` mirrors ``list_issues(unfixed=True)``: no fix row at all, or a
+ * fix in one of the rejected/superseded states. The buckets are disjoint and
+ * sum to ``EngineFindingStat.open``.
+ */
+export type EngineFixPipelineStat = {
+    unfixed: number;
+    in_progress: number;
+    ready: number;
+    delivered: number;
+    landed: number;
+    failed: number;
+};
+
+export type EngineFreshnessStat = {
+    last_completed_scan_at: (string | null);
+    last_scan_at: (string | null);
+};
+
+export type EngineOverview = {
+    engine: OverviewEngineKey;
+    section: OverviewSection;
+    label: string;
+    coverage: EngineCoverageStat;
+    freshness: EngineFreshnessStat;
+    score: EngineScoreStat;
+    findings: EngineFindingStat;
+    fixes: (EngineFixPipelineStat | null);
+    top_rules: Array<TopRuleStat>;
+};
+
+/**
+ * Average of each target's latest *completed* scan score.
+ *
+ * A target whose latest scan failed keeps the score of its last good scan —
+ * the same rule ``api/mappers/base.latest_completed_scan`` applies per
+ * target, so a grade here always matches the one that engine's own list
+ * endpoint reports.
+ */
+export type EngineScoreStat = {
+    avg_score: (number | null);
+    grade: (string | null);
+    scored_targets: number;
+    by_grade: Array<GradeStat>;
+};
+
 export type ExternalRepositoryCreate = {
     full_name: string;
     installation_id?: (number | null);
@@ -396,6 +468,19 @@ export type FixPublic = {
 };
 
 export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'superseded_by_deleted_file' | 'landed';
+
+/**
+ * How many scan targets currently hold this grade.
+ *
+ * Emitted for every rung of ``services.scoring.GRADE_LADDER`` in order, best
+ * first, plus any grade found in the data that isn't on the ladder — grades
+ * are free-form ``VARCHAR(8)``, so a row written before a ladder change must
+ * still be counted rather than silently dropped.
+ */
+export type GradeStat = {
+    grade: string;
+    count: number;
+};
 
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
@@ -554,6 +639,52 @@ export type OssApplicationReview = {
 export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 /**
+ * Which analysis engine a block of dashboard overview stats describes.
+ *
+ * A presentation-layer key, not a persisted column — ``Rule.domain`` stays
+ * the DB-level discriminator. The two exist because they don't line up:
+ * ``container_docker`` and ``container_runtime`` rules both produce findings
+ * on the Docker engine, so one key covers two domains.
+ */
+export type OverviewEngineKey = 'ci' | 'docker' | 'terraform' | 'cloud';
+
+export type OverviewPublic = {
+    generated_at: string;
+    totals: OverviewTotals;
+    engines: Array<EngineOverview>;
+};
+
+/**
+ * Which collapsible dashboard section an engine renders under.
+ *
+ * Four engines, three sections: the Infrastructure page already shows
+ * Terraform and cloud posture as sibling tabs, so the dashboard groups them
+ * the same way rather than inventing a fourth top-level heading.
+ */
+export type OverviewSection = 'ci' | 'docker' | 'infra';
+
+/**
+ * All-engine roll-up for the dashboard's summary header.
+ *
+ * ``avg_score`` is the unweighted mean of the per-engine averages that
+ * exist, not of every target: averaging targets directly would let a repo
+ * with forty workflow files drown out a failing cloud posture.
+ */
+export type OverviewTotals = {
+    targets: number;
+    enabled_targets: number;
+    never_scanned_targets: number;
+    open_findings: number;
+    resolved_findings: number;
+    critical_open: number;
+    avg_score: (number | null);
+    grade: (string | null);
+    by_severity: Array<SeverityStat>;
+    by_category: Array<IssueCategoryStat>;
+    engines_with_data: number;
+};
+
+/**
  * ``None`` means unlimited, at every layer up to the UI.
  */
 export type PlanLimitsPublic = {
@@ -686,6 +817,18 @@ export type SamplePayload = {
  * account/region".
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
+ * Open/resolved finding counts for one severity.
+ *
+ * Emitted for every ``IssueSeverity`` including zeros, so the frontend can
+ * render a fixed-segment severity bar without gap logic.
+ */
+export type SeverityStat = {
+    severity: IssueSeverity;
+    open: number;
+    resolved: number;
+};
 
 export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed' | 'analysis.quota_exceeded' | 'subscription.activated' | 'subscription.past_due' | 'subscription.unpaid' | 'subscription.canceled' | 'subscription.updated';
 
@@ -851,6 +994,18 @@ export type TerraformScanPublic = {
 export type Token = {
     access_token: string;
     token_type?: string;
+};
+
+/**
+ * A rule ranked by how many open findings it accounts for.
+ */
+export type TopRuleStat = {
+    rule_id: string;
+    slug: string;
+    title: string;
+    severity: IssueSeverity;
+    category: IssueCategory;
+    open: number;
 };
 
 export type UpdatePassword = {
@@ -1440,6 +1595,13 @@ export type OrganizationsUpdateOrgAiPreferencesData = {
 };
 
 export type OrganizationsUpdateOrgAiPreferencesResponse = (OrganizationPublic);
+
+export type OverviewGetOverviewData = {
+    orgId?: (string | null);
+    topRulesLimit?: number;
+};
+
+export type OverviewGetOverviewResponse = (OverviewPublic);
 
 export type PrivateCreateUserData = {
     requestBody: PrivateUserCreate;
