@@ -406,3 +406,31 @@ class OssApplicationStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     withdrawn = "withdrawn"
+
+
+class OverviewEngineKey(str, enum.Enum):
+    """Which analysis engine a block of dashboard overview stats describes.
+
+    A presentation-layer key, not a persisted column — ``Rule.domain`` stays
+    the DB-level discriminator. The two exist because they don't line up:
+    ``container_docker`` and ``container_runtime`` rules both produce findings
+    on the Docker engine, so one key covers two domains.
+    """
+
+    ci = "ci"
+    docker = "docker"
+    terraform = "terraform"
+    cloud = "cloud"
+
+
+class OverviewSection(str, enum.Enum):
+    """Which collapsible dashboard section an engine renders under.
+
+    Four engines, three sections: the Infrastructure page already shows
+    Terraform and cloud posture as sibling tabs, so the dashboard groups them
+    the same way rather than inventing a fourth top-level heading.
+    """
+
+    ci = "ci"
+    docker = "docker"
+    infra = "infra"

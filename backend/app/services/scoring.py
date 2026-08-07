@@ -34,6 +34,12 @@ _GRADE_THRESHOLDS: list[tuple[float, str]] = [
     (0.0, "F"),
 ]
 
+# The grade rungs, best first. Public because callers that *count* grades
+# rather than compute them (the dashboard overview's grade distribution) need
+# to zero-fill the rungs nothing landed on, and deriving the ladder from a
+# private constant in two places is how the two drift apart.
+GRADE_LADDER: tuple[str, ...] = tuple(grade for _, grade in _GRADE_THRESHOLDS)
+
 
 def _compute_penalty(
     violations: list[tuple[str, float]],
