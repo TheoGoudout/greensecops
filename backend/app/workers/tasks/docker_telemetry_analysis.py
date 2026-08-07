@@ -7,7 +7,15 @@ from typing import Any
 from sqlmodel import Session, col, delete
 
 from app.core.db import engine
-from app.models import DockerBuildEnrichment, DockerBuildTelemetry
+from app.models import (
+    DockerBuildEnrichment,
+    DockerBuildTelemetry,
+    Repository,
+    UsageEngine,
+    UsageMeter,
+)
+from app.services.billing import quota as billing_quota
+from app.services.billing import usage as billing_usage
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -37,12 +45,42 @@ def _build_document(
 
 
 def _run_docker_telemetry_analysis_impl(
-    telemetry_id: str, observed_builds: int = 0
+    telemetry_id: str, observed_builds: int = 0, billable: bool = True
 ) -> dict[str, str | int]:
     with Session(engine) as session:
         telemetry = session.get(DockerBuildTelemetry, uuid.UUID(telemetry_id))
         if not telemetry:
             return {"status": "error", "detail": "telemetry_not_found"}
+
+        repo = session.get(Repository, telemetry.repo_id)
+        if repo is None:
+            return {"status": "error", "detail": "repository_not_found"}
+
+        # Ingested per docker build, so — like CI telemetry — this is a
+        # high-volume path that ran entirely unmetered before.
+        if billable and (
+            refusal := billing_quota.exhausted_message(
+                session, repo.org_id, engine=UsageEngine.telemetry
+            )
+        ):
+            logger.warning(
+                "Docker telemetry analysis refused for %s: %s", telemetry_id, refusal
+            )
+            return {
+                "status": "quota_exceeded",
+                "telemetry_id": telemetry_id,
+                "detail": refusal,
+            }
+
+        if billable:
+            billing_usage.record_for_repo(
+                session,
+                repo=repo,
+                meter=UsageMeter.analyses,
+                engine=UsageEngine.telemetry,
+                source_type="docker_build_telemetry",
+                source_id=telemetry.id,
+            )
 
         try:
             violations = asyncio.run(
@@ -90,8 +128,11 @@ def run_docker_telemetry_analysis(
     self: object,  # noqa: ARG001
     telemetry_id: str,
     observed_builds: int = 0,
+    billable: bool = True,
 ) -> dict[str, str | int]:
-    return _run_docker_telemetry_analysis_impl(telemetry_id, observed_builds)
+    return _run_docker_telemetry_analysis_impl(
+        telemetry_id, observed_builds, billable=billable
+    )
 
 
 async def _evaluate(document: dict[str, Any]) -> Any:

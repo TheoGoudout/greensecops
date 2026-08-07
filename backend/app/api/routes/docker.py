@@ -38,7 +38,9 @@ from app.models import (
     DockerTargetPublic,
     Repository,
     Rule,
+    UsageEngine,
 )
+from app.services.billing.quota import enforce_quota
 from app.services.delivery_pr import docker_fix_branch
 from app.services.docker.merge import classify_docker_file
 from app.services.engines import DOCKER_ENGINE
@@ -155,6 +157,13 @@ def trigger_docker_scan(
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     if not target.enabled:
         raise HTTPException(status_code=403, detail="Docker target is disabled")
+    repo = get_or_404(
+        session, Repository, target.repo_id, detail="Repository not found"
+    )
+    # Fail fast with a precise 402; the worker re-checks and is the real gate.
+    enforce_quota(
+        session, current_user, repo.org_id, "analyses", engine=UsageEngine.docker
+    )
     run_docker_scan.delay(
         docker_target_id=str(target.id), branch=branch or "", trigger="manual"
     )
@@ -368,11 +377,29 @@ def trigger_docker_fix_generation(
     for finding in findings:
         by_file[finding.file_path].append(finding)
 
+    # One whole-file LLM rewrite per file. Like the Terraform route, this had
+    # no quota check before — the same LLM spend as a workflow fix, unmetered.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "fixes",
+        requested=len(by_file),
+        engine=UsageEngine.docker,
+    )
+
     provider_str, model_str = resolve_llm_provider(repo)
     queued = 0
     for file_path, group in by_file.items():
         fix = prepare_pending_fix(
-            DOCKER_ENGINE, session, target_id, file_path, provider_str, model_str, force
+            DOCKER_ENGINE,
+            session,
+            target_id,
+            file_path,
+            provider_str,
+            model_str,
+            force,
+            repo=repo,
         )
         if fix is None:
             continue
@@ -443,6 +470,15 @@ def trigger_docker_runtime_fix_generation(
     if not by_file:
         return {"status": "no_dockerfile_path", "queued": 0}
 
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "fixes",
+        requested=len(by_file),
+        engine=UsageEngine.docker,
+    )
+
     provider_str, model_str = resolve_llm_provider(repo)
     queued = 0
     for file_path, group in by_file.items():
@@ -456,7 +492,14 @@ def trigger_docker_runtime_fix_generation(
             ).all()
         )
         fix = prepare_pending_fix(
-            DOCKER_ENGINE, session, target_id, file_path, provider_str, model_str, force
+            DOCKER_ENGINE,
+            session,
+            target_id,
+            file_path,
+            provider_str,
+            model_str,
+            force,
+            repo=repo,
         )
         if fix is None:
             continue

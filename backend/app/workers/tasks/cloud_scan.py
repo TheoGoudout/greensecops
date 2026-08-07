@@ -20,8 +20,12 @@ from app.models import (
     IssueSeverity,
     RuleDomain,
     ScanStatus,
+    UsageEngine,
+    UsageMeter,
 )
 from app.services import state_machines as sm
+from app.services.billing import quota as billing_quota
+from app.services.billing import usage as billing_usage
 from app.services.cloud.aws_collector import (
     CloudCollectionError,
     collect_account_resources,
@@ -46,6 +50,7 @@ _DEFAULT_REGION = "us-east-1"
 def _run_cloud_scan_impl(
     cloud_account_id: str,
     trigger: str = "manual",
+    billable: bool = True,
 ) -> dict[str, str | int | float]:
     with Session(engine) as session:
         account = session.get(CloudAccount, uuid.UUID(cloud_account_id))
@@ -53,6 +58,22 @@ def _run_cloud_scan_impl(
             return {"status": "error", "detail": "cloud_account_not_found"}
 
         regions = [r for r in account.regions.split(",") if r] or [_DEFAULT_REGION]
+
+        # Gate before assuming the cross-account role and calling out to AWS,
+        # which is by far the expensive part of this task.
+        if billable and (
+            refusal := billing_quota.exhausted_message(
+                session, account.org_id, engine=UsageEngine.cloud
+            )
+        ):
+            logger.warning(
+                "Cloud scan refused for account=%s: %s", cloud_account_id, refusal
+            )
+            return {
+                "status": "quota_exceeded",
+                "cloud_account_id": cloud_account_id,
+                "detail": refusal,
+            }
 
         scan = CloudScan(
             cloud_account_id=account.id,
@@ -62,6 +83,22 @@ def _run_cloud_scan_impl(
         session.add(scan)
         session.flush()
         sm.advance(scan, sm.ScanMachine, "started")
+
+        # Charged up front, unlike the repo engines, because a cloud scan has
+        # no cheap "nothing to look at" outcome to skip: by the time we know an
+        # account is empty we have already assumed the role and walked every
+        # configured region. ``repo_id`` is NULL — an AWS account belongs to the
+        # org, not to any one repository.
+        if billable:
+            billing_usage.record_for_org(
+                session,
+                org_id=account.org_id,
+                meter=UsageMeter.analyses,
+                engine=UsageEngine.cloud,
+                source_type="cloud_scan",
+                source_id=scan.id,
+                commit=False,
+            )
 
         try:
             resources = collect_account_resources(
@@ -195,6 +232,7 @@ def run_cloud_scan(
     self: Any,  # noqa: ANN401 — celery bound task instance
     cloud_account_id: str,
     trigger: str = "manual",
+    billable: bool = True,
 ) -> dict[str, str | int | float]:
     # Per-account lock: concurrent scans of the same account race on
     # CloudFinding upserts and duplicate CloudScan rows.
@@ -204,6 +242,7 @@ def run_cloud_scan(
         if not acquired:
             raise self.retry(countdown=30, max_retries=10)
         return _run_cloud_scan_impl(
+            billable=billable,
             cloud_account_id=cloud_account_id,
             trigger=trigger,
         )

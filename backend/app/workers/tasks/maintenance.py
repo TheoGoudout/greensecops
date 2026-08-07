@@ -296,11 +296,15 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
 
             # force=True: a stale *completed* analysis for the same hash would
             # otherwise dedup-skip the retry.
+            # billable=False: this is *our* retry of *our* transient failure
+            # (a worker crash, an OPA hiccup). The user did not ask for it, and
+            # charging for it would let a flapping worker eat their allowance.
             run_static_analysis.delay(
                 repo_id=str(repo.id),
                 branch=branch,
                 trigger="scheduled",
                 force=True,
+                billable=False,
             )
             scheduled += 1
     if scheduled or skipped_exhausted:

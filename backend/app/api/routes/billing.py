@@ -1,285 +1,118 @@
+"""Billing endpoints: plan, usage, invoices, checkout, portal, OSS applications.
+
+This module is deliberately thin. Quota enforcement lives in
+``services/billing/quota.py`` (the workers need it too, and a Celery task
+importing an API route module to reach it would be backwards); the plan catalog
+lives in ``core/plans.py``; every Stripe call goes through
+``services/billing/stripe_gateway.py``. What is left here is HTTP: read the
+request, call a service, shape a response.
+
+The one piece of real logic that stays is the webhook handler, because
+translating Stripe's event vocabulary into our lifecycle events is an
+integration concern rather than a domain one.
+"""
+
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
-import stripe
-from fastapi import APIRouter, Header, HTTPException, Request
-from sqlmodel import Session, col, func, select
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from sqlmodel import Session, col, select
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import (
+    CurrentUser,
+    SessionDep,
+    get_current_active_superuser,
+    get_or_404,
+)
 from app.core.config import settings
+from app.core.plans import get_plan, ordered_plans
 from app.models import (
-    Analysis,
-    AnalysisStatus,
     BillingSubscription,
     BillingSubscriptionPublic,
-    OrgMember,
-    OrgRole,
-    Repository,
+    BillingWebhookEvent,
+    CheckoutRequest,
+    CheckoutSessionPublic,
+    Invoice,
+    InvoicePublic,
+    InvoiceStatus,
+    OssApplication,
+    OssApplicationCreate,
+    OssApplicationPublic,
+    OssApplicationReview,
+    OssApplicationStatus,
+    PlanLimitsPublic,
+    PlanPublic,
+    SubscriptionStatus,
+    UsageBreakdownPublic,
+    UsagePublic,
     User,
     UserTier,
-    WorkflowFile,
     get_datetime_utc,
 )
+from app.services.billing import errors, stripe_gateway
+from app.services.billing import usage as usage_service
+from app.services.billing.lifecycle import (
+    apply_tier,
+    effective_tier,
+    get_or_create_subscription,
+    set_stripe_period,
+    transition,
+)
+from app.services.billing.lifecycle import (
+    # Aliased: the route below owns the ``get_subscription`` name, because it
+    # is the OpenAPI operation id and therefore the generated client's method.
+    get_subscription as load_subscription,
+)
+from app.services.billing.quota import snapshot
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
-_TIER_LIMITS: dict[str, dict[str, int | None]] = {
-    UserTier.free: {"analyses": 50, "fixes": 10, "repos": 3},
-    UserTier.starter: {"analyses": 500, "fixes": 50, "repos": 10},
-    UserTier.pro: {"analyses": None, "fixes": 500, "repos": None},
-    UserTier.ultimate: {"analyses": None, "fixes": None, "repos": None},
-    UserTier.open_source: {"analyses": None, "fixes": 20, "repos": 5},
-}
+
+# ─── Plan & usage ────────────────────────────────────────────────────────────
 
 
-# Tiers permitted to enable auto-fix (automatic PR delivery). ``free`` is
-# excluded — it is a paid feature. A platform superuser bypasses this gate
-# entirely, which is also how a sponsored open-source repo gets auto-fix
-# without upgrading the whole org's tier.
-_AUTO_FIX_TIERS: frozenset[UserTier] = frozenset(
-    {UserTier.starter, UserTier.pro, UserTier.ultimate, UserTier.open_source}
-)
+def _limits_public(tier: UserTier) -> PlanLimitsPublic:
+    limits = get_plan(tier).limits
+    return PlanLimitsPublic(
+        analyses=limits.analyses, fixes=limits.fixes, repos=limits.repos
+    )
 
 
-def _org_billing_owner(session: Session, org_id: uuid.UUID) -> User | None:
-    """Return the user whose tier/subscription an org's usage counts against.
+@router.get("/plans", response_model=list[PlanPublic])
+def list_plans() -> list[PlanPublic]:
+    """The plan catalog, in presentation order.
 
-    The billing owner is the earliest-joined ``owner`` member of the org.
-    Every org gets an owner member the moment it's linked (``add_org_owner``),
-    but a shared GitHub org can end up with several owner members if more than
-    one person links it — ordering by ``joined_at`` keeps that resolution
-    stable instead of arbitrary, so later members don't pool usage into (or
-    borrow quota from) their own separate personal tier.
+    Served rather than duplicated in the frontend so the app's plan cards, the
+    marketing pricing table and the quota enforcer cannot disagree about what a
+    plan includes — they all read ``core/plans.PLANS``.
     """
-    member = session.exec(
-        select(OrgMember)
-        .where(OrgMember.org_id == org_id, OrgMember.role == OrgRole.owner)
-        .order_by(col(OrgMember.joined_at), col(OrgMember.user_id))
-    ).first()
-    if member is None:
-        return None
-    return session.get(User, member.user_id)
-
-
-def _billing_owner_org_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
-    """Return org ids whose usage counts against ``user_id``'s tier.
-
-    Restricted to orgs where this user is the resolved billing owner, so a
-    user merely riding along as a later owner/member of someone else's org
-    doesn't inherit that org's usage.
-    """
-    owned_org_ids = session.exec(
-        select(OrgMember.org_id).where(
-            OrgMember.user_id == user_id, OrgMember.role == OrgRole.owner
-        )
-    ).all()
     return [
-        org_id
-        for org_id in owned_org_ids
-        if (owner := _org_billing_owner(session, org_id)) is not None
-        and owner.id == user_id
+        PlanPublic(
+            tier=plan.tier,
+            name=plan.name,
+            price_cents=plan.price_cents,
+            price_display=plan.price_display,
+            tagline=plan.tagline,
+            limits=PlanLimitsPublic(
+                analyses=plan.limits.analyses,
+                fixes=plan.limits.fixes,
+                repos=plan.limits.repos,
+            ),
+            auto_fix=plan.auto_fix,
+            public_repos_only=plan.public_repos_only,
+            # A plan Stripe cannot sell is not offered as a button. On a
+            # deployment with no Stripe credentials that is every plan.
+            is_purchasable=plan.is_purchasable and settings.billing_enabled,
+            features=list(plan.features),
+        )
+        for plan in ordered_plans()
     ]
-
-
-def _get_or_create_subscription(session: Session, user: User) -> BillingSubscription:
-    sub = session.exec(
-        select(BillingSubscription).where(BillingSubscription.user_id == user.id)
-    ).first()
-    if not sub:
-        sub = BillingSubscription(user_id=user.id, tier=UserTier.free)
-        session.add(sub)
-        session.commit()
-        session.refresh(sub)
-    return sub
-
-
-def _month_bounds(now: datetime) -> tuple[datetime, datetime]:
-    """UTC calendar-month bounds containing ``now``: [start, end)."""
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0, day=1)
-    end = (
-        start.replace(year=start.year + 1, month=1)
-        if start.month == 12
-        else start.replace(month=start.month + 1)
-    )
-    return start, end
-
-
-def _lifetime_fixes_used(session: Session, repo_ids: list[uuid.UUID]) -> int:
-    """All-time sum of billable fix generations across ``repo_ids``.
-
-    Monotonic by design (see ``WorkflowFile.fix_generation_count``) — this is
-    what makes a baseline snapshot in ``_ensure_current_period`` a valid way to
-    derive period-scoped usage without re-tagging every past generation.
-    """
-    return (
-        session.exec(
-            select(func.coalesce(func.sum(WorkflowFile.fix_generation_count), 0)).where(
-                col(WorkflowFile.repo_id).in_(repo_ids)
-            )
-        ).one()
-        or 0
-    )
-
-
-def _ensure_current_period(
-    session: Session, sub: BillingSubscription, lifetime_fixes_used: int
-) -> BillingSubscription:
-    """Roll ``sub`` onto the current billing period if the previous one ended.
-
-    A Stripe-paying tier's ``period_end`` is kept current by the webhook
-    (``_sync_subscription`` reads ``current_period_end``); this calendar-month
-    rollover is the fallback for tiers with no Stripe cycle (free,
-    open_source) and for a brand-new subscription no webhook has touched yet.
-    ``fixes_used_baseline`` is snapshotted at the lifetime sum so period usage
-    is computed as ``lifetime_sum - baseline`` without needing to timestamp
-    every individual past generation — but only on a genuine rollover
-    (``period_end`` existed and passed). On the very first period a
-    subscription ever has, there is no prior period to exclude, so the
-    baseline stays 0 and any usage generated before this first check still
-    counts within it.
-    """
-    now = get_datetime_utc()
-    if sub.period_end is not None and now < sub.period_end:
-        return sub
-    is_rollover = sub.period_end is not None
-    period_start, period_end = _month_bounds(now)
-    sub.period_start = period_start
-    sub.period_end = period_end
-    sub.fixes_used_baseline = lifetime_fixes_used if is_rollover else 0
-    session.add(sub)
-    session.commit()
-    session.refresh(sub)
-    return sub
-
-
-def _usage_for_user(
-    session: Session, user: User
-) -> tuple[int, int, list[uuid.UUID], BillingSubscription]:
-    """Return (analyses_used, fixes_used, enabled_repo_ids, subscription) for
-    the current billing period.
-
-    ``analyses_used`` and ``fixes_used`` are scoped to the current period
-    (reset monthly — see ``_ensure_current_period``); they still draw from
-    every repo ever attached to an org this user is the billing owner of,
-    enabled or not, since disabling a repo doesn't erase its history.
-    ``enabled_repo_ids`` (backing the "repos" limit and display count) is the
-    live, current set of enabled repos — a capacity metric, not a period one,
-    so it's expected to change as repos are toggled regardless of period.
-    """
-    sub = _get_or_create_subscription(session, user)
-    org_ids = _billing_owner_org_ids(session, user.id)
-    if not org_ids:
-        sub = _ensure_current_period(session, sub, 0)
-        return 0, 0, [], sub
-    all_repo_ids = list(
-        session.exec(
-            select(Repository.id).where(Repository.org_id.in_(org_ids))  # type: ignore[attr-defined]
-        ).all()
-    )
-    enabled_repo_ids = list(
-        session.exec(
-            select(Repository.id).where(
-                Repository.org_id.in_(org_ids),  # type: ignore[attr-defined]
-                Repository.enabled == True,  # noqa: E712
-            )
-        ).all()
-    )
-    if not all_repo_ids:
-        sub = _ensure_current_period(session, sub, 0)
-        return 0, 0, [], sub
-
-    lifetime_fixes_used = _lifetime_fixes_used(session, all_repo_ids)
-    sub = _ensure_current_period(session, sub, lifetime_fixes_used)
-
-    analyses_used = (
-        session.exec(
-            select(func.count(col(Analysis.id))).where(
-                col(Analysis.repo_id).in_(all_repo_ids),
-                Analysis.status == AnalysisStatus.completed,
-                col(Analysis.completed_at) >= sub.period_start,
-            )
-        ).one()
-        or 0
-    )
-    fixes_used = max(lifetime_fixes_used - sub.fixes_used_baseline, 0)
-    return analyses_used, fixes_used, enabled_repo_ids, sub
-
-
-def enforce_quota(
-    session: Session,
-    current_user: User,
-    org_id: uuid.UUID,
-    kind: str,
-    *,
-    requested: int = 1,
-) -> None:
-    """Raise HTTP 402 if creating ``requested`` new items would exceed the
-    tier limit for ``kind`` of ``org_id``'s billing owner.
-
-    ``kind`` is one of "analyses", "fixes", or "repos". ``current_user`` being
-    a superuser exempts the call outright (admin override); the org's billing
-    owner being a superuser exempts it too. A ``None`` limit means unlimited.
-    Usage for every kind is cumulative (it never decreases as items are
-    deleted or replaced), so regenerating a fix bills like a new one.
-
-    Usage is measured against the org's billing owner rather than
-    ``current_user`` directly, so a non-owner teammate triggering an action on
-    a shared org still debits and is blocked by the real billing owner's
-    quota instead of silently bypassing it.
-    """
-    if current_user.is_superuser:
-        return
-    user = _org_billing_owner(session, org_id)
-    if user is None or user.is_superuser:
-        return
-    limit = _TIER_LIMITS.get(user.tier, _TIER_LIMITS[UserTier.free]).get(kind)
-    if limit is None:
-        return
-    analyses_used, fixes_used, enabled_repo_ids, _sub = _usage_for_user(session, user)
-    used = {
-        "analyses": analyses_used,
-        "fixes": fixes_used,
-        "repos": len(enabled_repo_ids),
-    }[kind]
-    if used + requested > limit:
-        raise HTTPException(
-            status_code=402,
-            detail=(
-                f"{kind.capitalize()} quota reached for the {user.tier.value} tier "
-                f"({limit}). Upgrade your plan to continue."
-            ),
-        )
-
-
-def enforce_auto_fix_enable(
-    session: Session,
-    current_user: User,
-    org_id: uuid.UUID,
-) -> None:
-    """Raise HTTP 402 unless auto-fix may be enabled for ``org_id``.
-
-    Auto-fix (automatic PR delivery) is a paid feature: only a platform
-    superuser or an org whose billing owner is on a paid tier may enable it.
-    A superuser caller (or superuser billing owner) is exempt — that is the
-    mechanism for force-enabling auto-fix on a sponsored open-source repo
-    without upgrading its org's tier. Measured against the org's billing owner,
-    like ``enforce_quota``, so a non-owner teammate can't bypass the gate.
-    """
-    if current_user.is_superuser:
-        return
-    user = _org_billing_owner(session, org_id)
-    if user is None or user.is_superuser:
-        return
-    if user.tier not in _AUTO_FIX_TIERS:
-        raise HTTPException(
-            status_code=402,
-            detail=(
-                "Auto-fix is available on paid plans. Upgrade your plan to enable it."
-            ),
-        )
 
 
 @router.get("/subscription", response_model=BillingSubscriptionPublic)
@@ -287,98 +120,474 @@ def get_subscription(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> BillingSubscriptionPublic:
-    analyses_used, fixes_used, repo_ids, sub = _usage_for_user(session, current_user)
+    snap = snapshot(session, current_user)
+    sub = snap.subscription
 
     return BillingSubscriptionPublic(
         id=sub.id,
         tier=sub.tier,
-        analyses_used=analyses_used,
-        fixes_used=fixes_used,
-        repos_used=len(repo_ids),
+        # Both, deliberately: showing only one would either hide that a Pro
+        # account is currently limited to Free, or hide that it is still a Pro
+        # account waiting to be restored.
+        effective_tier=effective_tier(sub),
+        status=sub.status,
+        analyses_used=snap.analyses_used,
+        fixes_used=snap.fixes_used,
+        repos_used=snap.repos_used,
         period_start=sub.period_start,
         period_end=sub.period_end,
+        grace_expires_at=sub.grace_expires_at,
+        cancel_at_period_end=sub.cancel_at_period_end,
+        trial_end=sub.trial_end,
+        billing_enabled=settings.billing_enabled,
+    )
+
+
+@router.get("/usage", response_model=UsagePublic)
+def get_usage(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> UsagePublic:
+    """Current-period usage with the per-engine split behind each meter.
+
+    The breakdown is the point: "you are at 90% of your analyses" is not
+    actionable until you know it was the Terraform roots rather than the
+    workflows.
+    """
+    snap = snapshot(session, current_user)
+    sub = snap.subscription
+    breakdown = usage_service.period_breakdown(
+        session, current_user.id, sub.period_start, sub.period_end
+    )
+    return UsagePublic(
+        period_start=sub.period_start,
+        period_end=sub.period_end,
+        analyses_used=snap.analyses_used,
+        fixes_used=snap.fixes_used,
+        repos_used=snap.repos_used,
+        limits=_limits_public(effective_tier(sub)),
+        breakdown=[
+            UsageBreakdownPublic(meter=meter, engine=engine, quantity=quantity)
+            for meter, engine, quantity in breakdown
+        ],
     )
 
 
 @router.get("/limits")
-def get_tier_limits(current_user: CurrentUser) -> dict[str, object]:
-    tier = current_user.tier
-    limits = _TIER_LIMITS.get(tier, _TIER_LIMITS[UserTier.free])
+def get_tier_limits(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, object]:
+    """The limits actually being applied to this account.
+
+    Reads the subscription rather than ``User.tier``. Those two used to be read
+    by different endpoints, so an account could be metered against one and
+    shown the other.
+    """
+    sub = get_or_create_subscription(session, current_user)
+    tier = effective_tier(sub)
+    limits = get_plan(tier).limits
     return {
         "tier": tier,
-        "limits": limits,
+        "limits": {
+            "analyses": limits.analyses,
+            "fixes": limits.fixes,
+            "repos": limits.repos,
+        },
     }
 
 
-def _price_to_tier(price_id: str) -> UserTier | None:
-    mapping = {
-        settings.STRIPE_PRICE_STARTER: UserTier.starter,
-        settings.STRIPE_PRICE_PRO: UserTier.pro,
-        settings.STRIPE_PRICE_ULTIMATE: UserTier.ultimate,
-    }
-    return mapping.get(price_id)
-
-
-def _sync_subscription(
+@router.get("/invoices", response_model=list[InvoicePublic])
+def list_invoices(
     session: SessionDep,
-    customer_id: str,
-    stripe_sub_id: str,
-    price_id: str,
-    active: bool,
-    current_period_start: int | None = None,
-    current_period_end: int | None = None,
-) -> None:
-    tier = _price_to_tier(price_id) if active else UserTier.free
-    if tier is None:
-        logger.warning("Unknown Stripe price_id %s — defaulting to free", price_id)
-        tier = UserTier.free
+    current_user: CurrentUser,
+) -> list[InvoicePublic]:
+    sub = load_subscription(session, current_user.id)
+    if sub is None:
+        return []
+    invoices = session.exec(
+        select(Invoice)
+        .where(Invoice.subscription_id == sub.id)
+        .order_by(col(Invoice.created_at).desc())
+        .limit(100)
+    ).all()
+    return [InvoicePublic.model_validate(inv, from_attributes=True) for inv in invoices]
 
-    sub = session.exec(
-        select(BillingSubscription).where(
-            BillingSubscription.stripe_customer_id == customer_id
+
+# ─── Checkout & portal ───────────────────────────────────────────────────────
+
+
+@router.post("/checkout", response_model=CheckoutSessionPublic)
+def create_checkout(
+    body: CheckoutRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> CheckoutSessionPublic:
+    """Start a Stripe Checkout session for ``body.tier``."""
+    plan = get_plan(body.tier)
+    if not plan.is_purchasable:
+        # Free is the default state, and open_source is granted by review — a
+        # "buy" button for either would be a dead end, so say which it is.
+        raise errors.payment_required(
+            f"The {plan.name} plan cannot be purchased directly."
+            + (
+                " Apply for it from the billing page."
+                if body.tier == UserTier.open_source
+                else " Cancel your subscription from the billing portal to return to Free."
+            )
         )
+    sub = get_or_create_subscription(session, current_user)
+    if sub.tier == body.tier and sub.status in (
+        SubscriptionStatus.active,
+        SubscriptionStatus.trialing,
+    ):
+        raise errors.payment_required(f"You are already on the {plan.name} plan.")
+
+    url = stripe_gateway.create_checkout_session(
+        tier=body.tier,
+        customer_id=sub.stripe_customer_id,
+        customer_email=current_user.email,
+        # Carries our subscription id through Stripe and back, which is how the
+        # resulting subscription is matched to an account that may not have had
+        # a customer id yet.
+        client_reference_id=str(sub.id),
+        success_url=f"{errors.billing_url()}?checkout=success",
+        cancel_url=f"{errors.billing_url()}?checkout=cancelled",
+    )
+    return CheckoutSessionPublic(url=url)
+
+
+@router.post("/portal", response_model=CheckoutSessionPublic)
+def create_portal(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> CheckoutSessionPublic:
+    """Open the Stripe Customer Portal for card changes and cancellation."""
+    sub = load_subscription(session, current_user.id)
+    if sub is None or not sub.stripe_customer_id:
+        raise errors.payment_required(
+            "There is no payment method on this account yet. Choose a plan to "
+            "get started."
+        )
+    url = stripe_gateway.create_portal_session(
+        customer_id=sub.stripe_customer_id, return_url=errors.billing_url()
+    )
+    return CheckoutSessionPublic(url=url)
+
+
+# ─── Open-source applications ────────────────────────────────────────────────
+
+
+@router.post("/oss-application", response_model=OssApplicationPublic, status_code=201)
+def create_oss_application(
+    body: OssApplicationCreate,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> OssApplicationPublic:
+    """Apply for the granted open-source plan.
+
+    The pricing page has advertised this since launch with nothing behind the
+    button. Approval stays a human decision — whether a project is genuinely
+    open source is not something to infer from a URL.
+    """
+    existing = session.exec(
+        select(OssApplication)
+        .where(OssApplication.user_id == current_user.id)
+        .where(OssApplication.status == OssApplicationStatus.pending)
     ).first()
-    if not sub:
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="You already have an open-source application under review.",
+        )
+    application = OssApplication(
+        user_id=current_user.id,
+        repo_url=body.repo_url,
+        license_name=body.license_name,
+        justification=body.justification,
+    )
+    session.add(application)
+    session.commit()
+    session.refresh(application)
+    return OssApplicationPublic.model_validate(application, from_attributes=True)
+
+
+@router.get("/oss-application", response_model=list[OssApplicationPublic])
+def list_my_oss_applications(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[OssApplicationPublic]:
+    applications = session.exec(
+        select(OssApplication)
+        .where(OssApplication.user_id == current_user.id)
+        .order_by(col(OssApplication.created_at).desc())
+    ).all()
+    return [
+        OssApplicationPublic.model_validate(a, from_attributes=True)
+        for a in applications
+    ]
+
+
+@router.get(
+    "/oss-applications",
+    response_model=list[OssApplicationPublic],
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def list_oss_applications(
+    session: SessionDep,
+    status: OssApplicationStatus | None = None,
+) -> list[OssApplicationPublic]:
+    """The review queue, newest first."""
+    query = select(OssApplication)
+    if status is not None:
+        query = query.where(OssApplication.status == status)
+    applications = session.exec(
+        query.order_by(col(OssApplication.created_at).desc()).limit(200)
+    ).all()
+    return [
+        OssApplicationPublic.model_validate(a, from_attributes=True)
+        for a in applications
+    ]
+
+
+@router.patch(
+    "/oss-applications/{application_id}",
+    response_model=OssApplicationPublic,
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def review_oss_application(
+    application_id: uuid.UUID,
+    body: OssApplicationReview,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> OssApplicationPublic:
+    """Approve or reject an application; approval grants the plan immediately."""
+    application = get_or_404(session, OssApplication, application_id)
+    if application.status != OssApplicationStatus.pending:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Application was already {application.status.value}.",
+        )
+    application.status = (
+        OssApplicationStatus.approved if body.approve else OssApplicationStatus.rejected
+    )
+    application.review_note = body.review_note
+    application.reviewed_by_id = current_user.id
+    application.reviewed_at = get_datetime_utc()
+    session.add(application)
+
+    if body.approve:
+        applicant = session.get(User, application.user_id)
+        if applicant is not None:
+            sub = get_or_create_subscription(session, applicant)
+            apply_tier(session, sub, UserTier.open_source)
+    session.commit()
+    session.refresh(application)
+    return OssApplicationPublic.model_validate(application, from_attributes=True)
+
+
+# ─── Stripe webhook ──────────────────────────────────────────────────────────
+
+
+def _sub_by_stripe_ids(
+    session: Session, customer_id: str | None, stripe_sub_id: str | None
+) -> BillingSubscription | None:
+    """Find a subscription by customer id, falling back to subscription id.
+
+    Both are tried because the two arrive at different times: a Checkout
+    session knows the customer before we have stored a subscription id, and a
+    subscription update knows the subscription id before a customer has been
+    attached to our row.
+    """
+    if customer_id:
         sub = session.exec(
+            select(BillingSubscription).where(
+                BillingSubscription.stripe_customer_id == customer_id
+            )
+        ).first()
+        if sub is not None:
+            return sub
+    if stripe_sub_id:
+        return session.exec(
             select(BillingSubscription).where(
                 BillingSubscription.stripe_subscription_id == stripe_sub_id
             )
         ).first()
-    if not sub:
-        logger.warning("No subscription found for customer %s", customer_id)
+    return None
+
+
+def _period_from_items(data: dict[str, Any]) -> tuple[int | None, int | None]:
+    """Extract the current period, tolerating both Stripe API shapes.
+
+    Newer versions moved these onto the subscription item; older ones keep them
+    on the subscription itself.
+    """
+    items = data.get("items", {}).get("data", [])
+    item = items[0] if items else {}
+    return (
+        item.get("current_period_start") or data.get("current_period_start"),
+        item.get("current_period_end") or data.get("current_period_end"),
+    )
+
+
+# Stripe subscription status -> the lifecycle events that could produce it,
+# in the order they should be attempted.
+_STATUS_EVENTS: dict[str, tuple[str, ...]] = {
+    "trialing": ("trial_started",),
+    "active": (
+        "checkout_completed",
+        "trial_converted",
+        "payment_succeeded",
+        "resumed",
+    ),
+    "past_due": ("payment_failed", "trial_ended"),
+    "incomplete": ("payment_failed", "trial_ended"),
+    # Stripe's terminal dunning state maps onto ours via the grace boundary:
+    # if we had not noticed the failure yet, record it and then expire it.
+    "unpaid": ("grace_expired", "payment_failed"),
+    "canceled": ("subscription_deleted",),
+}
+
+
+def _first_legal(
+    session: Session, sub: BillingSubscription, events: tuple[str, ...]
+) -> bool:
+    """Fire the first of ``events`` that is legal from the current state."""
+    for event in events:
+        if transition(session, sub, event):
+            return True
+    return False
+
+
+def _handle_subscription_upsert(session: Session, data: dict[str, Any]) -> None:
+    """Apply ``customer.subscription.created|updated``.
+
+    Stripe's ``status`` is the authority on payment state, so it is mapped onto
+    our lifecycle events rather than assigned to the column directly — that way
+    an impossible jump is rejected by the machine instead of being written.
+    """
+    customer_id = data.get("customer")
+    stripe_sub_id = data.get("id")
+    sub = _sub_by_stripe_ids(session, customer_id, stripe_sub_id)
+    if sub is None:
+        logger.warning("No subscription found for Stripe customer %s", customer_id)
         return
 
-    sub.tier = tier
-    sub.stripe_subscription_id = stripe_sub_id
-    sub.stripe_customer_id = customer_id
+    items = data.get("items", {}).get("data", [])
+    price_id = items[0]["price"]["id"] if items else ""
+    tier = stripe_gateway.tier_for_price(price_id)
+    stripe_status = data.get("status", "")
 
-    # A paid tier's reset date follows its actual Stripe billing cycle rather
-    # than the calendar-month fallback _ensure_current_period otherwise uses.
-    # The baseline is re-snapshotted here too, else the first quota check of
-    # the new cycle would still see the old period's usage.
-    if current_period_start is not None and current_period_end is not None:
-        sub.period_start = datetime.fromtimestamp(current_period_start, tz=timezone.utc)
-        sub.period_end = datetime.fromtimestamp(current_period_end, tz=timezone.utc)
-        org_ids = _billing_owner_org_ids(session, sub.user_id)
-        repo_ids = (
-            list(
-                session.exec(
-                    select(Repository.id).where(Repository.org_id.in_(org_ids))  # type: ignore[attr-defined]
-                ).all()
-            )
-            if org_ids
-            else []
-        )
-        sub.fixes_used_baseline = _lifetime_fixes_used(session, repo_ids)
-
+    sub.stripe_subscription_id = stripe_sub_id or sub.stripe_subscription_id
+    sub.stripe_customer_id = customer_id or sub.stripe_customer_id
+    set_stripe_period(sub, *_period_from_items(data))
+    if trial_end := data.get("trial_end"):
+        sub.trial_end = datetime.fromtimestamp(trial_end, tz=timezone.utc)
     session.add(sub)
 
-    user = session.get(User, sub.user_id)
-    if user:
-        user.tier = tier
-        session.add(user)
-
+    if tier is not None and stripe_status in ("active", "trialing", "past_due"):
+        # Keep the purchased tier current even while past_due: the user still
+        # bought Pro, they are simply behind on paying for it.
+        if tier != sub.tier:
+            apply_tier(session, sub, tier)
+            transition(session, sub, "plan_changed")
+        else:
+            apply_tier(session, sub, tier)
     session.commit()
+
+    # Stripe's status -> our lifecycle event. ``transition`` is a no-op when the
+    # event is illegal from the current state, which is what makes redelivered
+    # and out-of-order webhooks safe.
+    # Several of our events can lead to the same Stripe status depending on
+    # where the subscription currently is, so each status names the events that
+    # could reach it and the first legal one wins. ``transition`` returning
+    # False simply means the subscription was already there.
+    _first_legal(session, sub, _STATUS_EVENTS.get(stripe_status, ()))
+
+    if data.get("cancel_at_period_end"):
+        transition(session, sub, "cancel_requested")
+
+
+def _handle_invoice(session: Session, data: dict[str, Any], event_type: str) -> None:
+    """Mirror an invoice and drive the payment lifecycle from it.
+
+    Invoices are stored so billing history survives independently of Stripe,
+    and so a dunning email can link straight to the thing that needs paying.
+    """
+    customer_id = data.get("customer")
+    stripe_sub_id = data.get("subscription")
+    sub = _sub_by_stripe_ids(session, customer_id, stripe_sub_id)
+    if sub is None:
+        logger.warning("Invoice %s has no matching subscription", data.get("id"))
+        return
+
+    stripe_invoice_id = str(data.get("id") or "")
+    if not stripe_invoice_id:
+        return
+    invoice = session.exec(
+        select(Invoice).where(Invoice.stripe_invoice_id == stripe_invoice_id)
+    ).first()
+    if invoice is None:
+        invoice = Invoice(subscription_id=sub.id, stripe_invoice_id=stripe_invoice_id)
+
+    status_map = {
+        "draft": InvoiceStatus.draft,
+        "open": InvoiceStatus.open,
+        "paid": InvoiceStatus.paid,
+        "void": InvoiceStatus.void,
+        "uncollectible": InvoiceStatus.uncollectible,
+    }
+    invoice.status = status_map.get(str(data.get("status")), invoice.status)
+    invoice.amount_due_cents = int(data.get("amount_due") or 0)
+    invoice.amount_paid_cents = int(data.get("amount_paid") or 0)
+    invoice.currency = str(data.get("currency") or "usd")
+    invoice.number = data.get("number")
+    invoice.hosted_invoice_url = data.get("hosted_invoice_url")
+    invoice.invoice_pdf = data.get("invoice_pdf")
+    if period_start := data.get("period_start"):
+        invoice.period_start = datetime.fromtimestamp(period_start, tz=timezone.utc)
+    if period_end := data.get("period_end"):
+        invoice.period_end = datetime.fromtimestamp(period_end, tz=timezone.utc)
+    if due_date := data.get("due_date"):
+        invoice.due_at = datetime.fromtimestamp(due_date, tz=timezone.utc)
+    session.add(invoice)
+    session.commit()
+
+    if event_type == "invoice.paid":
+        invoice.paid_at = get_datetime_utc()
+        session.add(invoice)
+        session.commit()
+        # Recovery from either side of the grace boundary, restoring the plan
+        # in full rather than leaving the account on Free until the next cycle.
+        _first_legal(
+            session,
+            sub,
+            ("payment_succeeded", "checkout_completed", "trial_converted"),
+        )
+        _notify(session, sub, "invoice_paid", invoice=invoice)
+    elif event_type == "invoice.payment_failed":
+        if transition(session, sub, "payment_failed"):
+            # Reminder zero goes out on the transition rather than waiting for
+            # the next daily dunning run, so the first the user hears of it is
+            # not up to 24 hours late.
+            _notify(session, sub, "payment_failed", invoice=invoice)
+
+
+def _notify(
+    session: Session, sub: BillingSubscription, kind: str, **context: Any
+) -> None:
+    """Send a billing email, never letting a delivery failure break a webhook.
+
+    Stripe retries any non-2xx, so raising out of a handler because SMTP was
+    briefly down would re-run the whole handler — and re-send whatever did
+    succeed.
+    """
+    from app.services.billing.notifications import send_billing_email
+
+    try:
+        send_billing_email(session, sub, kind, **context)
+    except Exception:
+        logger.exception("Failed to send %s billing email for %s", kind, sub.id)
 
 
 @router.post("/webhook/stripe", status_code=200)
@@ -387,68 +596,86 @@ async def stripe_webhook(
     session: SessionDep,
     stripe_signature: str | None = Header(default=None, alias="stripe-signature"),
 ) -> dict[str, str]:
-    if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_WEBHOOK_SECRET:
-        raise HTTPException(status_code=503, detail="Stripe not configured")
+    """Translate Stripe's events into lifecycle transitions.
 
+    Idempotent by event id: Stripe retries on any non-2xx and redelivers on its
+    own schedule, and without this a replayed ``invoice.payment_failed`` would
+    re-send a dunning email while a replayed subscription update would re-run a
+    transition.
+    """
     payload = await request.body()
-    try:
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-        event = stripe.Webhook.construct_event(  # type: ignore[no-untyped-call]
-            payload, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
-        )
-    except stripe.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    event = stripe_gateway.parse_webhook_event(payload, stripe_signature)
 
-    event_type: str = event["type"]
-    data = event["data"]["object"]
+    event_id = str(event.get("id") or "")
+    event_type: str = str(event["type"])
+    if event_id:
+        already = session.exec(
+            select(BillingWebhookEvent).where(
+                BillingWebhookEvent.stripe_event_id == event_id
+            )
+        ).first()
+        if already is not None:
+            logger.info(
+                "Ignoring redelivered Stripe event %s (%s)", event_id, event_type
+            )
+            return {"status": "duplicate"}
+
+    data = dict(event["data"]["object"])
 
     if event_type in ("customer.subscription.created", "customer.subscription.updated"):
-        customer_id: str = data["customer"]
-        stripe_sub_id: str = data["id"]
-        active: bool = data["status"] in ("active", "trialing")
-        items = data.get("items", {}).get("data", [])
-        price_id: str = items[0]["price"]["id"] if items else ""
-        # Newer Stripe API versions moved these onto the subscription item;
-        # fall back to the top-level subscription fields for older ones.
-        item = items[0] if items else {}
-        current_period_start = item.get("current_period_start") or data.get(
-            "current_period_start"
-        )
-        current_period_end = item.get("current_period_end") or data.get(
-            "current_period_end"
-        )
-        _sync_subscription(
-            session,
-            customer_id,
-            stripe_sub_id,
-            price_id,
-            active,
-            current_period_start=current_period_start,
-            current_period_end=current_period_end,
-        )
+        _handle_subscription_upsert(session, data)
 
     elif event_type == "customer.subscription.deleted":
-        customer_id = data["customer"]
-        stripe_sub_id = data["id"]
-        _sync_subscription(session, customer_id, stripe_sub_id, "", active=False)
+        sub = _sub_by_stripe_ids(session, data.get("customer"), data.get("id"))
+        if sub is not None:
+            transition(session, sub, "subscription_deleted")
+            # The tier reverts to free only once the subscription is really
+            # gone; ``effective_tier`` already reports Free from the moment it
+            # entered a non-entitled state.
+            apply_tier(session, sub, UserTier.free)
+            session.commit()
+            _notify(session, sub, "subscription_canceled")
 
     elif event_type == "checkout.session.completed":
         customer_id = data.get("customer", "")
         stripe_sub_id = data.get("subscription", "")
-        if customer_id and stripe_sub_id:
-            sub = session.exec(
-                select(BillingSubscription).where(
-                    BillingSubscription.stripe_subscription_id == stripe_sub_id
-                )
-            ).first()
-            if sub:
-                sub.stripe_customer_id = customer_id
-                session.add(sub)
-                session.commit()
+        reference = data.get("client_reference_id")
+        sub = None
+        if reference:
+            try:
+                sub = session.get(BillingSubscription, uuid.UUID(str(reference)))
+            except ValueError:
+                sub = None
+        if sub is None:
+            sub = _sub_by_stripe_ids(session, customer_id, stripe_sub_id)
+        if sub is not None:
+            sub.stripe_customer_id = customer_id or sub.stripe_customer_id
+            sub.stripe_subscription_id = stripe_sub_id or sub.stripe_subscription_id
+            session.add(sub)
+            session.commit()
+            if transition(session, sub, "checkout_completed"):
+                _notify(session, sub, "subscription_started")
+
+    elif event_type in (
+        "invoice.paid",
+        "invoice.payment_failed",
+        "invoice.finalized",
+        "invoice.voided",
+        "invoice.marked_uncollectible",
+    ):
+        _handle_invoice(session, data, event_type)
+
+    elif event_type == "customer.subscription.trial_will_end":
+        sub = _sub_by_stripe_ids(session, data.get("customer"), data.get("id"))
+        if sub is not None:
+            _notify(session, sub, "trial_ending")
 
     else:
         logger.debug("Unhandled Stripe event type: %s", event_type)
 
+    if event_id:
+        session.add(
+            BillingWebhookEvent(stripe_event_id=event_id, event_type=event_type)
+        )
+        session.commit()
     return {"status": "ok"}

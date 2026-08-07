@@ -25,8 +25,10 @@ from app.models import (
     CloudFindingPublic,
     CloudScan,
     CloudScanPublic,
+    UsageEngine,
 )
 from app.services import state_machines as sm
+from app.services.billing.quota import enforce_quota
 from app.workers.tasks.cloud_scan import run_cloud_scan
 
 router = APIRouter(prefix="/cloud-accounts", tags=["cloud"])
@@ -130,6 +132,11 @@ def trigger_cloud_scan(
     account = _get_account_for_user(account_id, session, current_user)
     if account.status == CloudAccountStatus.disabled:
         raise HTTPException(status_code=403, detail="Cloud account is disabled")
+    # Fail fast with a precise 402; the worker re-checks before assuming the
+    # cross-account role, which is the gate that actually holds.
+    enforce_quota(
+        session, current_user, account.org_id, "analyses", engine=UsageEngine.cloud
+    )
     run_cloud_scan.delay(cloud_account_id=str(account.id), trigger="manual")
     return {"status": "queued", "cloud_account_id": str(account_id)}
 

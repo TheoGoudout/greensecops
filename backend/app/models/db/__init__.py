@@ -7,7 +7,13 @@ how the definitions are organized internally.
 
 from .analysis import Analysis
 from .base import get_datetime_utc
-from .billing import BillingSubscription
+from .billing import (
+    BillingSubscription,
+    BillingUsageRecord,
+    BillingWebhookEvent,
+    Invoice,
+    OssApplication,
+)
 from .cloud import CloudAccount, CloudFinding, CloudScan
 from .docker import (
     DockerBuildEnrichment,
@@ -63,6 +69,10 @@ __all__ = [
     "TelemetryMetricSample",
     "DynamicEnrichment",
     "BillingSubscription",
+    "BillingUsageRecord",
+    "BillingWebhookEvent",
+    "Invoice",
+    "OssApplication",
     "TerraformRoot",
     "TerraformScan",
     "DockerTarget",

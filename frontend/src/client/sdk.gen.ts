@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingGetSubscriptionResponse, BillingGetTierLimitsResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
+import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutData, BillingCreateCheckoutResponse, BillingCreatePortalResponse, BillingListMyOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListOssApplicationsData, BillingListOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
 
 export class AnalysesService {
     /**
@@ -309,6 +309,23 @@ export class BadgesService {
 
 export class BillingService {
     /**
+     * List Plans
+     * The plan catalog, in presentation order.
+     *
+     * Served rather than duplicated in the frontend so the app's plan cards, the
+     * marketing pricing table and the quota enforcer cannot disagree about what a
+     * plan includes — they all read ``core/plans.PLANS``.
+     * @returns PlanPublic Successful Response
+     * @throws ApiError
+     */
+    public static listPlans(): CancelablePromise<BillingListPlansResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/plans'
+        });
+    }
+
+    /**
      * Get Subscription
      * @returns BillingSubscriptionPublic Successful Response
      * @throws ApiError
@@ -321,7 +338,29 @@ export class BillingService {
     }
 
     /**
+     * Get Usage
+     * Current-period usage with the per-engine split behind each meter.
+     *
+     * The breakdown is the point: "you are at 90% of your analyses" is not
+     * actionable until you know it was the Terraform roots rather than the
+     * workflows.
+     * @returns UsagePublic Successful Response
+     * @throws ApiError
+     */
+    public static getUsage(): CancelablePromise<BillingGetUsageResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/usage'
+        });
+    }
+
+    /**
      * Get Tier Limits
+     * The limits actually being applied to this account.
+     *
+     * Reads the subscription rather than ``User.tier``. Those two used to be read
+     * by different endpoints, so an account could be metered against one and
+     * shown the other.
      * @returns unknown Successful Response
      * @throws ApiError
      */
@@ -333,7 +372,139 @@ export class BillingService {
     }
 
     /**
+     * List Invoices
+     * @returns InvoicePublic Successful Response
+     * @throws ApiError
+     */
+    public static listInvoices(): CancelablePromise<BillingListInvoicesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/invoices'
+        });
+    }
+
+    /**
+     * Create Checkout
+     * Start a Stripe Checkout session for ``body.tier``.
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns CheckoutSessionPublic Successful Response
+     * @throws ApiError
+     */
+    public static createCheckout(data: BillingCreateCheckoutData): CancelablePromise<BillingCreateCheckoutResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/billing/checkout',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Create Portal
+     * Open the Stripe Customer Portal for card changes and cancellation.
+     * @returns CheckoutSessionPublic Successful Response
+     * @throws ApiError
+     */
+    public static createPortal(): CancelablePromise<BillingCreatePortalResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/billing/portal'
+        });
+    }
+
+    /**
+     * List My Oss Applications
+     * @returns OssApplicationPublic Successful Response
+     * @throws ApiError
+     */
+    public static listMyOssApplications(): CancelablePromise<BillingListMyOssApplicationsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/oss-application'
+        });
+    }
+
+    /**
+     * Create Oss Application
+     * Apply for the granted open-source plan.
+     *
+     * The pricing page has advertised this since launch with nothing behind the
+     * button. Approval stays a human decision — whether a project is genuinely
+     * open source is not something to infer from a URL.
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns OssApplicationPublic Successful Response
+     * @throws ApiError
+     */
+    public static createOssApplication(data: BillingCreateOssApplicationData): CancelablePromise<BillingCreateOssApplicationResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/billing/oss-application',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Oss Applications
+     * The review queue, newest first.
+     * @param data The data for the request.
+     * @param data.status
+     * @returns OssApplicationPublic Successful Response
+     * @throws ApiError
+     */
+    public static listOssApplications(data: BillingListOssApplicationsData = {}): CancelablePromise<BillingListOssApplicationsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/oss-applications',
+            query: {
+                status: data.status
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Review Oss Application
+     * Approve or reject an application; approval grants the plan immediately.
+     * @param data The data for the request.
+     * @param data.applicationId
+     * @param data.requestBody
+     * @returns OssApplicationPublic Successful Response
+     * @throws ApiError
+     */
+    public static reviewOssApplication(data: BillingReviewOssApplicationData): CancelablePromise<BillingReviewOssApplicationResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/billing/oss-applications/{application_id}',
+            path: {
+                application_id: data.applicationId
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
      * Stripe Webhook
+     * Translate Stripe's events into lifecycle transitions.
+     *
+     * Idempotent by event id: Stripe retries on any non-2xx and redelivers on its
+     * own schedule, and without this a replayed ``invoice.payment_failed`` would
+     * re-send a dunning email while a replayed subscription update would re-run a
+     * transition.
      * @param data The data for the request.
      * @param data.stripeSignature
      * @returns string Successful Response

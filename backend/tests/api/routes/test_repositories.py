@@ -297,7 +297,13 @@ def test_toggle_repository_enable_blocks_over_repo_quota(
 
     # Assert
     assert response.status_code == 402
-    assert "quota" in response.json()["detail"].lower()
+    # The 402 detail is a structured payload now, not a bare string: it
+    # names the meter, the cap and what to do next so the UI can render an
+    # upgrade button rather than pattern-matching prose.
+    detail = response.json()["detail"]
+    assert detail["code"] == "quota_exceeded"
+    assert detail["meter"] == "repos"
+    assert "repositories" in detail["message"]
     db.refresh(extra_repo)
     assert extra_repo.enabled is False
 
@@ -373,7 +379,10 @@ def test_toggle_auto_fix_blocked_on_free_tier(
     )
 
     assert response.status_code == 402
-    assert "paid" in response.json()["detail"].lower()
+    detail = response.json()["detail"]
+    assert detail["code"] == "feature_not_in_plan"
+    # Names the plan that unlocks it, not just "upgrade".
+    assert "Starter" in detail["message"]
     db.refresh(repo)
     assert repo.auto_fix_enabled is False
 

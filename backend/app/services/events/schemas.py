@@ -391,3 +391,36 @@ def dynamic_status(
         org_id=org_id,
         data={"repo_id": repo_id, "telemetry_run_id": telemetry_run_id},
     )
+
+
+# ─── Billing ─────────────────────────────────────────────────────────────────
+
+
+def analysis_quota_exceeded(
+    org_id: str, repo_id: str, meter: str, message: str
+) -> SSEEvent:
+    """Work was refused before dispatch because the allowance is spent.
+
+    Distinct from ``analysis_failed``: nothing broke and retrying will not
+    help, so the UI shows an upgrade prompt rather than a retry button.
+    """
+    return SSEEvent(
+        event=SSESignal.analysis_quota_exceeded,
+        org_id=org_id,
+        data={"repo_id": repo_id, "meter": meter, "message": message},
+    )
+
+
+def subscription_changed(
+    org_id: str, signal: SSESignal, tier: str, status: str
+) -> SSEEvent:
+    """A billing lifecycle transition's declared output.
+
+    Published to every org the subscription's owner is the billing owner of,
+    since SSE is routed by org while a subscription belongs to a user.
+    """
+    return SSEEvent(
+        event=signal,
+        org_id=org_id,
+        data={"tier": tier, "status": status},
+    )

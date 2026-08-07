@@ -1,0 +1,16 @@
+<mjml>
+  <mj-body background-color="#fafbfc">
+    <mj-section background-color="#fff" padding="40px 20px">
+      <mj-column vertical-align="middle" width="100%">
+        <mj-text align="center" padding="35px" font-size="20px" font-family="Arial, Helvetica, sans-serif" color="#333">{{ project_name }} - Your account is on Free plan limits</mj-text>
+        <mj-text align="center" font-size="16px" padding-left="25px" padding-right="25px" font-family="Arial, Helvetica, sans-serif" color="#555">Hello {{ username }}</mj-text>
+        <mj-text align="center" font-size="16px" padding-left="25px" padding-right="25px" font-family="Arial, Helvetica, sans-serif" color="#555">We were not able to collect payment for your <strong>{{ plan_name }}</strong> plan, so the account has moved to Free plan limits.</mj-text>
+        <mj-text align="center" font-size="16px" padding-left="25px" padding-right="25px" font-family="Arial, Helvetica, sans-serif" color="#555">That means {{ analyses_limit }} analyses and {{ fixes_limit }} AI fix generations a month, across {{ repos_limit }} repositories. <strong>None of your repositories, analyses or history have been removed.</strong></mj-text>
+        <mj-button align="center" font-size="18px" background-color="#c0392b" border-radius="8px" color="#fff" href="{{ billing_url }}" padding="15px 30px">Restore your plan</mj-button>
+        <mj-text align="center" font-size="16px" padding-left="25px" padding-right="25px" font-family="Arial, Helvetica, sans-serif" color="#555">Update your payment method and your {{ plan_name }} allowances come back immediately.</mj-text>
+        <mj-divider border-color="#ccc" border-width="2px"></mj-divider>
+        <mj-text align="center" font-size="14px" padding-left="25px" padding-right="25px" font-family="Arial, Helvetica, sans-serif" color="#555">You are receiving this because you have a {{ project_name }} account. Manage your plan any time from your <a href="{{ billing_url }}">billing page</a>.</mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

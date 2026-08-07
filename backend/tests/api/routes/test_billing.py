@@ -1,606 +1,712 @@
-"""Tests for the /api/v1/billing/ endpoints."""
+"""Tests for the /api/v1/billing/ endpoints and the Stripe webhook.
+
+The quota/usage/lifecycle *logic* is tested against the services in
+``tests/services/billing/``; this module covers the HTTP surface — what the
+billing page is served, what checkout refuses, and how Stripe's event
+vocabulary is translated into our lifecycle.
+"""
+
+from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import patch
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.api.routes import billing
 from app.core.config import settings
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    Fix,
-    FixStatus,
-    LLMProvider,
-    Organization,
-    OrgMember,
-    OrgRole,
-    Repository,
-    User,
+    Invoice,
+    InvoiceStatus,
+    OssApplication,
+    OssApplicationStatus,
+    SubscriptionStatus,
+    UsageEngine,
+    UsageMeter,
     UserTier,
-    WorkflowFile,
 )
+from app.services.billing.lifecycle import get_or_create_subscription
+from tests.utils.billing import (
+    make_subscription,
+    make_user,
+    owned_setup,
+    record_usage,
+)
+from tests.utils.user import authentication_token_from_email
 
-# ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-
-def _make_user(
-    db: Session, *, tier: UserTier = UserTier.free, is_superuser: bool = False
-) -> User:
-    user = User(
-        email=f"u-{uuid.uuid4().hex[:8]}@example.com",
-        hashed_password="x",
-        is_superuser=is_superuser,
-        tier=tier,
+@pytest.fixture
+def user_headers(client: TestClient, db: Session) -> dict[str, str]:
+    return authentication_token_from_email(
+        client=client, email=settings.EMAIL_TEST_USER, db=db
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
 
 
-def _make_org(db: Session) -> Organization:
-    org = Organization(name=f"org-{uuid.uuid4().hex[:8]}")
-    db.add(org)
-    db.commit()
-    db.refresh(org)
-    return org
+# ─── Plans ───────────────────────────────────────────────────────────────────
 
 
-def _link_owner(
-    db: Session, org: Organization, user: User, *, joined_at: datetime | None = None
-) -> OrgMember:
-    member = OrgMember(
-        org_id=org.id,
-        user_id=user.id,
-        role=OrgRole.owner,
-        joined_at=joined_at or datetime.now(timezone.utc),
-    )
-    db.add(member)
-    db.commit()
-    return member
-
-
-def _make_repo(db: Session, org: Organization, *, enabled: bool = True) -> Repository:
-    repo = Repository(
-        org_id=org.id,
-        github_repo_id=int(uuid.uuid4().int % 10**9),
-        full_name=f"owner/repo-{uuid.uuid4().hex[:8]}",
-        installation_id=99999,
-        enabled=enabled,
-    )
-    db.add(repo)
-    db.commit()
-    db.refresh(repo)
-    return repo
-
-
-def _make_workflow_file(db: Session, repo: Repository) -> WorkflowFile:
-    wf = WorkflowFile(
-        repo_id=repo.id,
-        path=".github/workflows/ci.yml",
-        content_hash=uuid.uuid4().hex,
-        raw_content="name: CI\non: push\njobs: {}\n",
-    )
-    db.add(wf)
-    db.commit()
-    db.refresh(wf)
-    return wf
-
-
-def _make_completed_analysis(
-    db: Session, repo: Repository, wf: WorkflowFile
-) -> Analysis:
-    analysis = Analysis(
-        repo_id=repo.id,
-        workflow_file_id=wf.id,
-        content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        # Real completion code always sets this (static_analysis.py); usage
-        # is now scoped to the current billing period by this timestamp.
-        completed_at=datetime.now(timezone.utc),
-    )
-    db.add(analysis)
-    db.commit()
-    return analysis
-
-
-def _make_fix(db: Session, wf: WorkflowFile) -> Fix:
-    fix = Fix(
-        workflow_file_id=wf.id,
-        llm_provider=LLMProvider.openai,
-        llm_model="gpt-4o",
-        status=FixStatus.ready,
-    )
-    db.add(fix)
-    # fixes_used counts this cumulative counter, not live Fix rows (a
-    # regenerate deletes and recreates the row) — mirror what the real
-    # generation route does when it creates a Fix.
-    wf.fix_generation_count += 1
-    db.add(wf)
-    db.commit()
-    return fix
-
-
-# ─── enforce_quota ────────────────────────────────────────────────────────────
-
-
-def test_enforce_quota_superuser_actor_exempt(db: Session) -> None:
-    # A superuser *actor* bypasses quota outright, regardless of the target
-    # org's billing owner — org_id doesn't even need to resolve to anything.
-    actor = User(
-        email=f"su-{uuid.uuid4().hex[:8]}@example.com",
-        hashed_password="x",
-        is_superuser=True,
-        tier=UserTier.free,
-    )
-    with patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}):
-        billing.enforce_quota(db, actor, uuid.uuid4(), "fixes")  # must not raise
-
-
-def test_enforce_quota_superuser_actor_bypasses_even_at_owners_limit(
-    db: Session,
+def test_list_plans_returns_the_catalog(
+    client: TestClient, user_headers: dict[str, str]
 ) -> None:
-    # The acting user is a superuser, but the org's real billing owner is a
-    # separate, regular user already at their limit. The admin override must
-    # still bypass the check.
-    actor = User(
-        email=f"admin-{uuid.uuid4().hex[:8]}@example.com",
-        hashed_password="x",
-        is_superuser=True,
-        tier=UserTier.free,
+    response = client.get(f"{settings.API_V1_STR}/billing/plans", headers=user_headers)
+    assert response.status_code == 200
+    plans = response.json()
+    assert [p["tier"] for p in plans] == [
+        "free",
+        "starter",
+        "pro",
+        "ultimate",
+        "open_source",
+    ]
+    free = next(p for p in plans if p["tier"] == "free")
+    assert free["limits"] == {"analyses": 100, "fixes": 10, "repos": 3}
+    ultimate = next(p for p in plans if p["tier"] == "ultimate")
+    assert ultimate["limits"]["analyses"] is None  # unlimited survives the wire
+
+
+def test_plans_are_not_purchasable_without_stripe(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    """A self-hosted install should not offer a button that 503s."""
+    with patch.object(settings, "STRIPE_SECRET_KEY", None):
+        response = client.get(
+            f"{settings.API_V1_STR}/billing/plans", headers=user_headers
+        )
+    assert all(p["is_purchasable"] is False for p in response.json())
+
+
+def test_plans_are_purchasable_with_stripe_configured(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    with patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"):
+        response = client.get(
+            f"{settings.API_V1_STR}/billing/plans", headers=user_headers
+        )
+    purchasable = {p["tier"] for p in response.json() if p["is_purchasable"]}
+    assert purchasable == {"starter", "pro", "ultimate"}
+
+
+# ─── Subscription & usage ────────────────────────────────────────────────────
+
+
+def test_subscription_reports_plan_status_and_usage(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/subscription", headers=user_headers
     )
-    owner = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, owner)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tier"] == "free"
+    assert body["effective_tier"] == "free"
+    assert body["status"] == "active"
+    assert body["period_end"] is not None
+    for key in ("analyses_used", "fixes_used", "repos_used"):
+        assert isinstance(body[key], int)
+
+
+def test_subscription_shows_both_tiers_when_downgraded(db: Session) -> None:
+    """A Pro account on Free limits must not silently report as Free.
+
+    Reporting only one of the two would either hide that the plan is currently
+    restricted, or hide that it is still a Pro plan waiting to be restored.
+    """
+    user = make_user(db, tier=UserTier.pro)
+    sub = make_subscription(
+        db, user, tier=UserTier.pro, status=SubscriptionStatus.unpaid
+    )
+    from app.services.billing.lifecycle import effective_tier
+
+    assert sub.tier == UserTier.pro
+    assert effective_tier(sub) == UserTier.free
+
+
+def test_usage_includes_the_per_engine_breakdown(db: Session) -> None:
+    user, org, repo = owned_setup(db)
+    get_or_create_subscription(db, user)
+    record_usage(db, user, org, engine=UsageEngine.terraform, repo=repo)
+    record_usage(db, user, org, engine=UsageEngine.terraform, repo=repo)
+    record_usage(db, user, org, engine=UsageEngine.workflow, repo=repo)
+    record_usage(db, user, org, meter=UsageMeter.fixes, engine=UsageEngine.docker)
+
+    from app.services.billing.quota import snapshot
+    from app.services.billing.usage import period_breakdown
+
+    snap = snapshot(db, user)
+    assert snap.analyses_used == 3
+    assert snap.fixes_used == 1
+
+    rows = period_breakdown(
+        db, user.id, snap.subscription.period_start, snap.subscription.period_end
+    )
+    engines = {(m.value, e.value): q for m, e, q in rows}
+    assert engines[("analyses", "terraform")] == 2
+    assert engines[("analyses", "workflow")] == 1
+    assert engines[("fixes", "docker")] == 1
+
+
+def test_limits_endpoint_reads_the_subscription(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    """It used to read ``User.tier`` while the enforcer read the subscription."""
+    response = client.get(f"{settings.API_V1_STR}/billing/limits", headers=user_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tier"] == "free"
+    assert body["limits"]["analyses"] == 100
+
+
+def test_invoices_are_empty_without_a_subscription(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/invoices", headers=user_headers
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+# ─── Checkout & portal ───────────────────────────────────────────────────────
+
+
+def test_checkout_refuses_a_plan_that_cannot_be_bought(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    with patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout",
+            headers=user_headers,
+            json={"tier": "open_source"},
+        )
+    assert response.status_code == 402
+    detail = response.json()["detail"]
+    # Says which route to take instead of just refusing.
+    assert "Apply for it" in detail["message"]
+
+
+def test_checkout_refuses_the_plan_you_are_already_on(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    with patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout",
+            headers=user_headers,
+            json={"tier": "free"},
+        )
+    assert response.status_code == 402
+
+
+def test_checkout_returns_the_stripe_url(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
     with (
-        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}),
-        patch.object(billing, "_usage_for_user", return_value=(0, 0, [], None)),
-    ):
-        billing.enforce_quota(db, actor, org.id, "fixes")  # must not raise
-
-
-def test_enforce_quota_blocks_at_limit(db: Session) -> None:
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    with patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}):
-        with pytest.raises(HTTPException) as exc:
-            billing.enforce_quota(db, user, org.id, "fixes")
-    assert exc.value.status_code == 402
-
-
-def test_enforce_quota_no_billing_owner_does_not_raise(db: Session) -> None:
-    # An org with no resolvable owner (e.g. orphaned data) can't be billed
-    # against — enforce_quota no-ops rather than crashing.
-    user = _make_user(db)
-    with patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}):
-        billing.enforce_quota(db, user, uuid.uuid4(), "fixes")  # must not raise
-
-
-def test_enforce_quota_regenerate_counts_as_new_usage(db: Session) -> None:
-    # Usage is a cumulative generation-event count, not a live-row count, so
-    # regenerating existing fixes has no "replacing" offset anymore — it must
-    # be blocked exactly like a brand-new generation once at the limit.
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    with (
-        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 5}}),
-        patch.object(billing, "_usage_for_user", return_value=(0, 5, [], None)),
-        pytest.raises(HTTPException) as exc,
-    ):
-        billing.enforce_quota(db, user, org.id, "fixes", requested=1)
-    assert exc.value.status_code == 402
-
-
-def test_enforce_quota_default_still_blocks_at_limit(db: Session) -> None:
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    with (
-        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 5}}),
-        patch.object(billing, "_usage_for_user", return_value=(0, 5, [], None)),
-        pytest.raises(HTTPException) as exc,
-    ):
-        billing.enforce_quota(db, user, org.id, "fixes")
-    assert exc.value.status_code == 402
-
-
-def test_enforce_quota_unlimited_tier(db: Session) -> None:
-    user = _make_user(db, tier=UserTier.ultimate)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    # ultimate has None (unlimited) for fixes → never blocks.
-    billing.enforce_quota(db, user, org.id, "fixes")  # must not raise
-
-
-def test_enforce_quota_repos_kind_blocks_at_limit(db: Session) -> None:
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    with (
-        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"repos": 3}}),
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
         patch.object(
-            billing,
-            "_usage_for_user",
-            return_value=(0, 0, [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()], None),
-        ),
-        pytest.raises(HTTPException) as exc,
+            billing.stripe_gateway,
+            "create_checkout_session",
+            return_value="https://checkout.stripe.com/c/pay/xyz",
+        ) as create,
     ):
-        billing.enforce_quota(db, user, org.id, "repos")
-    assert exc.value.status_code == 402
-    assert "Repos quota" in exc.value.detail
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout",
+            headers=user_headers,
+            json={"tier": "pro"},
+        )
+    assert response.status_code == 200
+    assert response.json()["url"].startswith("https://checkout.stripe.com/")
+    # Our subscription id rides along so the webhook can match the result back.
+    assert create.call_args.kwargs["client_reference_id"]
 
 
-# ─── Usage counting: monotonicity + org pooling ──────────────────────────────
-
-
-def test_disabling_repo_does_not_change_analyses_or_fixes_used(db: Session) -> None:
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    repo = _make_repo(db, org, enabled=True)
-    wf = _make_workflow_file(db, repo)
-    _make_completed_analysis(db, repo, wf)
-    _make_fix(db, wf)
-
-    analyses_before, fixes_before, repos_before, _sub = billing._usage_for_user(
-        db, user
-    )
-    assert analyses_before == 1
-    assert fixes_before == 1
-    assert repos_before == [repo.id]
-
-    repo.enabled = False
-    db.add(repo)
-    db.commit()
-
-    analyses_after, fixes_after, repos_after, _sub = billing._usage_for_user(db, user)
-    assert analyses_after == 1
-    assert fixes_after == 1
-    assert repos_after == []  # repos_used is a live "currently enabled" count
-
-    repo.enabled = True
-    db.add(repo)
-    db.commit()
-
-    analyses_final, fixes_final, repos_final, _sub = billing._usage_for_user(db, user)
-    assert analyses_final == 1
-    assert fixes_final == 1
-    assert repos_final == [repo.id]
-
-
-def test_second_org_owner_does_not_inherit_pooled_usage(db: Session) -> None:
-    org = _make_org(db)
-    first_owner = _make_user(db)
-    second_owner = _make_user(db)
-    now = datetime.now(timezone.utc)
-    _link_owner(db, org, first_owner, joined_at=now)
-    _link_owner(db, org, second_owner, joined_at=now + timedelta(minutes=1))
-
-    repo = _make_repo(db, org)
-    wf = _make_workflow_file(db, repo)
-    _make_completed_analysis(db, repo, wf)
-    _make_fix(db, wf)
-
-    analyses_first, fixes_first, repos_first, _sub = billing._usage_for_user(
-        db, first_owner
-    )
-    assert analyses_first == 1
-    assert fixes_first == 1
-    assert repos_first == [repo.id]
-
-    analyses_second, fixes_second, repos_second, _sub = billing._usage_for_user(
-        db, second_owner
-    )
-    assert analyses_second == 0
-    assert fixes_second == 0
-    assert repos_second == []
-
-
-def test_fixes_used_pools_across_all_orgs_owned_by_user(db: Session) -> None:
-    # A user who owns two separate orgs (e.g. two linked GitHub accounts) has
-    # their fixes_used pooled across both, not scoped to just one.
-    user = _make_user(db)
-    org_a = _make_org(db)
-    org_b = _make_org(db)
-    _link_owner(db, org_a, user)
-    _link_owner(db, org_b, user)
-
-    repo_a = _make_repo(db, org_a)
-    wf_a = _make_workflow_file(db, repo_a)
-    _make_fix(db, wf_a)
-
-    repo_b = _make_repo(db, org_b)
-    wf_b = _make_workflow_file(db, repo_b)
-    _make_fix(db, wf_b)
-
-    _, fixes_used, _, _sub = billing._usage_for_user(db, user)
-    assert fixes_used == 2
-
-
-def test_fixes_used_survives_fix_row_delete_and_recreate(db: Session) -> None:
-    # Regenerating a fix deletes and recreates its Fix row (see
-    # _create_pending_fixes) — fixes_used must still grow with each
-    # generation event instead of resetting to the live row count.
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    repo = _make_repo(db, org)
-    wf = _make_workflow_file(db, repo)
-
-    fix = _make_fix(db, wf)
-    _, fixes_used, _, _sub = billing._usage_for_user(db, user)
-    assert fixes_used == 1
-
-    db.delete(fix)
-    db.commit()
-    _make_fix(db, wf)  # regenerate: new row, same workflow file
-
-    _, fixes_used, _, _sub = billing._usage_for_user(db, user)
-    assert fixes_used == 2
-
-
-def test_enforce_quota_debits_billing_owner_not_acting_teammate(db: Session) -> None:
-    # A non-owner teammate acting on the org's repo is still checked and
-    # blocked against the real billing owner's quota.
-    org = _make_org(db)
-    owner = _make_user(db)
-    teammate = _make_user(db)
-    _link_owner(db, org, owner)
-    with (
-        patch.dict(billing._TIER_LIMITS, {UserTier.free: {"fixes": 0}}),
-        pytest.raises(HTTPException) as exc,
-    ):
-        billing.enforce_quota(db, teammate, org.id, "fixes")
-    assert exc.value.status_code == 402
-
-
-# ─── monthly usage reset ─────────────────────────────────────────────────────
-
-
-def test_month_bounds_mid_month() -> None:
-    now = datetime(2026, 7, 20, 15, 30, tzinfo=timezone.utc)
-    start, end = billing._month_bounds(now)
-    assert start == datetime(2026, 7, 1, tzinfo=timezone.utc)
-    assert end == datetime(2026, 8, 1, tzinfo=timezone.utc)
-
-
-def test_month_bounds_december_rolls_into_next_year() -> None:
-    now = datetime(2026, 12, 25, tzinfo=timezone.utc)
-    start, end = billing._month_bounds(now)
-    assert start == datetime(2026, 12, 1, tzinfo=timezone.utc)
-    assert end == datetime(2027, 1, 1, tzinfo=timezone.utc)
-
-
-def test_first_ever_period_does_not_baseline_away_existing_usage(db: Session) -> None:
-    # A user who already generated fixes before their subscription's first
-    # period check must still see that usage counted — there is no prior
-    # period to exclude it from.
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    repo = _make_repo(db, org)
-    wf = _make_workflow_file(db, repo)
-    _make_fix(db, wf)
-
-    _, fixes_used, _, sub = billing._usage_for_user(db, user)
-    assert fixes_used == 1
-    assert sub.fixes_used_baseline == 0
-    assert sub.period_start is not None
-    assert sub.period_end is not None
-
-
-def test_rollover_resets_period_usage_but_keeps_lifetime_count(db: Session) -> None:
-    # Simulated month crossing (not real elapsed time) — a real calendar
-    # rollover can't be forced just by editing period_end while "now" is
-    # still in the same month _month_bounds would recompute.
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    repo = _make_repo(db, org)
-    wf = _make_workflow_file(db, repo)
-
-    with patch.object(
-        billing,
-        "get_datetime_utc",
-        return_value=datetime(2026, 6, 15, tzinfo=timezone.utc),
-    ):
-        fix = _make_fix(db, wf)
-        _, fixes_used, _, sub = billing._usage_for_user(db, user)
-    assert fixes_used == 1
-    assert sub.period_start == datetime(2026, 6, 1, tzinfo=timezone.utc)
-
-    with patch.object(
-        billing,
-        "get_datetime_utc",
-        return_value=datetime(2026, 7, 5, tzinfo=timezone.utc),
-    ):
-        # Rollover is checked first — same order enforce_quota always uses in
-        # production (quota check precedes fix creation in the same request),
-        # so the baseline snapshot never includes usage from the new period.
-        _, _, _, rolled_sub = billing._usage_for_user(db, user)
-        assert rolled_sub.fixes_used_baseline == 1
-
-        # Regenerate (delete + recreate, same as the real fix-generation
-        # flow — Fix.workflow_file_id is unique) one more fix in the new month.
-        db.delete(fix)
-        db.commit()
-        _make_fix(db, wf)
-        _, fixes_used_after_rollover, _, sub_after = billing._usage_for_user(db, user)
-
-    # Only the fix generated in the new period counts...
-    assert fixes_used_after_rollover == 1
-    # ...but the lifetime baseline reflects everything generated before rollover.
-    assert sub_after.fixes_used_baseline == 1
-    assert sub_after.period_start == datetime(2026, 7, 1, tzinfo=timezone.utc)
-
-
-def test_analyses_used_excludes_completions_from_before_current_period(
-    db: Session,
+def test_checkout_503s_when_stripe_is_unconfigured(
+    client: TestClient, user_headers: dict[str, str]
 ) -> None:
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    repo = _make_repo(db, org)
-    wf = _make_workflow_file(db, repo)
-    analysis = Analysis(
-        repo_id=repo.id,
-        workflow_file_id=wf.id,
-        content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        # Fixed in "June" so the "July" period check below can exclude it —
-        # a real datetime.now() here would defeat the simulated month crossing.
-        completed_at=datetime(2026, 6, 15, tzinfo=timezone.utc),
+    """Self-hosted installs get a clear message, not an SDK stack trace."""
+    with patch.object(settings, "STRIPE_SECRET_KEY", None):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout",
+            headers=user_headers,
+            json={"tier": "pro"},
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "stripe_not_configured"
+
+
+def test_portal_refuses_without_a_payment_method(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/billing/portal", headers=user_headers
     )
-    db.add(analysis)
+    assert response.status_code == 402
+    assert "Choose a plan" in response.json()["detail"]["message"]
+
+
+# ─── Open-source applications ────────────────────────────────────────────────
+
+
+def test_oss_application_can_be_submitted_once(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    body = {
+        "repo_url": "https://github.com/acme/widget",
+        "license_name": "MIT",
+        "justification": "Public library used by several projects.",
+    }
+    first = client.post(
+        f"{settings.API_V1_STR}/billing/oss-application",
+        headers=user_headers,
+        json=body,
+    )
+    assert first.status_code == 201
+    assert first.json()["status"] == "pending"
+
+    # A second concurrent application would give reviewers duplicates.
+    second = client.post(
+        f"{settings.API_V1_STR}/billing/oss-application",
+        headers=user_headers,
+        json=body,
+    )
+    assert second.status_code == 409
+
+
+def test_oss_approval_grants_the_plan(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
+    applicant = make_user(db)
+    application = OssApplication(
+        user_id=applicant.id,
+        repo_url="https://github.com/acme/tool",
+        license_name="Apache-2.0",
+        justification="Open source.",
+    )
+    db.add(application)
     db.commit()
+    db.refresh(application)
 
+    response = client.patch(
+        f"{settings.API_V1_STR}/billing/oss-applications/{application.id}",
+        headers=superuser_token_headers,
+        json={"approve": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "approved"
+
+    db.refresh(applicant)
+    assert applicant.tier == UserTier.open_source
+    sub = get_or_create_subscription(db, applicant)
+    assert sub.tier == UserTier.open_source
+
+
+def test_oss_rejection_records_the_reason(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
+    """A decline the applicant can act on beats a silent no."""
+    applicant = make_user(db)
+    application = OssApplication(
+        user_id=applicant.id,
+        repo_url="https://github.com/acme/private-ish",
+        license_name="Proprietary",
+        justification="Please?",
+    )
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/billing/oss-applications/{application.id}",
+        headers=superuser_token_headers,
+        json={"approve": False, "review_note": "Licence is not OSI-approved."},
+    )
+    assert response.status_code == 200
+    assert response.json()["review_note"] == "Licence is not OSI-approved."
+    db.refresh(applicant)
+    assert applicant.tier == UserTier.free
+
+
+def test_oss_review_queue_is_superuser_only(
+    client: TestClient, user_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/oss-applications", headers=user_headers
+    )
+    assert response.status_code in (401, 403)
+
+
+def test_reviewing_twice_is_refused(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
+    applicant = make_user(db)
+    application = OssApplication(
+        user_id=applicant.id,
+        repo_url="https://github.com/acme/x",
+        license_name="MIT",
+        justification="…",
+        status=OssApplicationStatus.approved,
+    )
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
+    response = client.patch(
+        f"{settings.API_V1_STR}/billing/oss-applications/{application.id}",
+        headers=superuser_token_headers,
+        json={"approve": False},
+    )
+    assert response.status_code == 409
+
+
+# ─── Stripe webhook ──────────────────────────────────────────────────────────
+
+
+def _event(event_type: str, obj: dict[str, Any], event_id: str | None = None) -> dict:
+    return {
+        "id": event_id or f"evt_{uuid.uuid4().hex[:16]}",
+        "type": event_type,
+        "data": {"object": obj},
+    }
+
+
+def _post_event(client: TestClient, event: dict) -> Any:
+    """Post an event with signature verification stubbed out.
+
+    Verification itself is covered by its own test; every other webhook test is
+    about what the handler *does* with a valid event.
+    """
     with patch.object(
-        billing,
-        "get_datetime_utc",
-        return_value=datetime(2026, 6, 15, tzinfo=timezone.utc),
+        billing.stripe_gateway, "parse_webhook_event", return_value=event
     ):
-        analyses_used, _, _, _sub = billing._usage_for_user(db, user)
-    assert analyses_used == 1
-
-    # Simulated month crossing — the analysis completed in June no longer
-    # falls within July's period.
-    with patch.object(
-        billing,
-        "get_datetime_utc",
-        return_value=datetime(2026, 7, 5, tzinfo=timezone.utc),
-    ):
-        analyses_used_after, _, _, _ = billing._usage_for_user(db, user)
-    assert analyses_used_after == 0
+        return client.post(
+            f"{settings.API_V1_STR}/billing/webhook/stripe",
+            content=b"{}",
+            headers={"stripe-signature": "t=1,v1=x"},
+        )
 
 
-def test_stripe_sync_sets_period_from_current_period_fields(db: Session) -> None:
-    user = _make_user(db)
-    org = _make_org(db)
-    _link_owner(db, org, user)
-    repo = _make_repo(db, org)
-    wf = _make_workflow_file(db, repo)
-    _make_fix(db, wf)
+def _subscribed(db: Session, customer_id: str, tier: UserTier = UserTier.pro):  # type: ignore[no-untyped-def]
+    user, _org, _repo = owned_setup(db, tier=tier)
+    sub = get_or_create_subscription(db, user)
+    sub.stripe_customer_id = customer_id
+    sub.stripe_subscription_id = f"sub_{uuid.uuid4().hex[:12]}"
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    return sub
 
-    from app.models import BillingSubscription
 
-    sub = billing._get_or_create_subscription(db, user)
-    sub.stripe_customer_id = "cus_123"
+def test_invoice_payment_failed_opens_the_grace_window(
+    client: TestClient, db: Session
+) -> None:
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+
+    with patch.object(billing, "_notify"):
+        response = _post_event(
+            client,
+            _event(
+                "invoice.payment_failed",
+                {
+                    "id": f"in_{uuid.uuid4().hex[:12]}",
+                    "customer": customer,
+                    "subscription": sub.stripe_subscription_id,
+                    "status": "open",
+                    "amount_due": 7900,
+                    "amount_paid": 0,
+                    "currency": "usd",
+                    "hosted_invoice_url": "https://invoice.stripe.com/i/x",
+                },
+            ),
+        )
+    assert response.status_code == 200
+    db.refresh(sub)
+    assert sub.status == SubscriptionStatus.past_due
+    assert sub.grace_expires_at is not None
+    # Service continues in full through the window.
+    from app.services.billing.lifecycle import effective_tier
+
+    assert effective_tier(sub) == UserTier.pro
+
+
+def test_invoice_paid_restores_an_unpaid_subscription(
+    client: TestClient, db: Session
+) -> None:
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+    sub.status = SubscriptionStatus.unpaid
     db.add(sub)
     db.commit()
 
-    period_start_ts = int(datetime(2026, 6, 1, tzinfo=timezone.utc).timestamp())
-    period_end_ts = int(datetime(2026, 7, 1, tzinfo=timezone.utc).timestamp())
-    billing._sync_subscription(
-        db,
-        "cus_123",
-        "sub_123",
-        settings.STRIPE_PRICE_STARTER or "price_starter",
-        active=True,
-        current_period_start=period_start_ts,
-        current_period_end=period_end_ts,
-    )
-
+    with patch.object(billing, "_notify"):
+        response = _post_event(
+            client,
+            _event(
+                "invoice.paid",
+                {
+                    "id": f"in_{uuid.uuid4().hex[:12]}",
+                    "customer": customer,
+                    "subscription": sub.stripe_subscription_id,
+                    "status": "paid",
+                    "amount_due": 7900,
+                    "amount_paid": 7900,
+                    "currency": "usd",
+                },
+            ),
+        )
+    assert response.status_code == 200
     db.refresh(sub)
-    assert sub.period_start == datetime(2026, 6, 1, tzinfo=timezone.utc)
-    assert sub.period_end == datetime(2026, 7, 1, tzinfo=timezone.utc)
-    # Prior usage is frozen out of the freshly-set Stripe period.
-    assert sub.fixes_used_baseline == 1
-
-    refetched = db.get(BillingSubscription, sub.id)
-    assert refetched is not None
-    assert refetched.stripe_subscription_id == "sub_123"
+    assert sub.status == SubscriptionStatus.active
 
 
-# ─── GET /billing/subscription ───────────────────────────────────────────────
+def test_invoice_is_mirrored_into_the_database(client: TestClient, db: Session) -> None:
+    """Billing history has to survive independently of Stripe."""
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+    invoice_id = f"in_{uuid.uuid4().hex[:12]}"
+
+    with patch.object(billing, "_notify"):
+        _post_event(
+            client,
+            _event(
+                "invoice.paid",
+                {
+                    "id": invoice_id,
+                    "customer": customer,
+                    "subscription": sub.stripe_subscription_id,
+                    "status": "paid",
+                    "number": "GS-0001",
+                    "amount_due": 7900,
+                    "amount_paid": 7900,
+                    "currency": "usd",
+                    "hosted_invoice_url": "https://invoice.stripe.com/i/y",
+                    "period_start": int(
+                        datetime(2026, 8, 1, tzinfo=timezone.utc).timestamp()
+                    ),
+                    "period_end": int(
+                        datetime(2026, 9, 1, tzinfo=timezone.utc).timestamp()
+                    ),
+                },
+            ),
+        )
+    stored = db.exec(
+        select(Invoice).where(Invoice.stripe_invoice_id == invoice_id)
+    ).first()
+    assert stored is not None
+    assert stored.status == InvoiceStatus.paid
+    # Money is stored in minor units, exactly as Stripe reports it.
+    assert stored.amount_paid_cents == 7900
+    assert stored.number == "GS-0001"
+    assert stored.hosted_invoice_url == "https://invoice.stripe.com/i/y"
 
 
-def test_get_subscription_creates_if_not_exists(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    db: Session,
-) -> None:
-    # Act — first call creates the subscription
-    response = client.get(
-        f"{settings.API_V1_STR}/billing/subscription",
-        headers=superuser_token_headers,
+def test_a_redelivered_event_is_ignored(client: TestClient, db: Session) -> None:
+    """Stripe retries on any non-2xx and redelivers on its own schedule.
+
+    Without idempotency a replayed ``payment_failed`` would re-send a dunning
+    email and re-run a transition.
+    """
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+    event = _event(
+        "invoice.payment_failed",
+        {
+            "id": f"in_{uuid.uuid4().hex[:12]}",
+            "customer": customer,
+            "subscription": sub.stripe_subscription_id,
+            "status": "open",
+            "amount_due": 7900,
+            "amount_paid": 0,
+            "currency": "usd",
+        },
     )
 
-    # Assert
+    with patch.object(billing, "_notify") as notify:
+        first = _post_event(client, event)
+        second = _post_event(client, event)
+    assert first.json() == {"status": "ok"}
+    assert second.json() == {"status": "duplicate"}
+    assert notify.call_count == 1
+
+
+def test_subscription_deleted_returns_the_account_to_free(
+    client: TestClient, db: Session
+) -> None:
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+
+    with patch.object(billing, "_notify"):
+        _post_event(
+            client,
+            _event(
+                "customer.subscription.deleted",
+                {"id": sub.stripe_subscription_id, "customer": customer},
+            ),
+        )
+    db.refresh(sub)
+    assert sub.status == SubscriptionStatus.canceled
+    assert sub.tier == UserTier.free
+
+
+def test_subscription_updated_adopts_the_stripe_period(
+    client: TestClient, db: Session
+) -> None:
+    """A paid plan's allowance resets when it is re-billed, not on the 1st."""
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+    start = int(datetime(2026, 8, 17, tzinfo=timezone.utc).timestamp())
+    end = int(datetime(2026, 9, 17, tzinfo=timezone.utc).timestamp())
+
+    with (
+        patch.object(settings, "STRIPE_PRICE_PRO", "price_pro"),
+        patch.object(billing, "_notify"),
+    ):
+        _post_event(
+            client,
+            _event(
+                "customer.subscription.updated",
+                {
+                    "id": sub.stripe_subscription_id,
+                    "customer": customer,
+                    "status": "active",
+                    "items": {
+                        "data": [
+                            {
+                                "price": {"id": "price_pro"},
+                                "current_period_start": start,
+                                "current_period_end": end,
+                            }
+                        ]
+                    },
+                },
+            ),
+        )
+    db.refresh(sub)
+    assert sub.period_start == datetime(2026, 8, 17, tzinfo=timezone.utc)
+    assert sub.period_end == datetime(2026, 9, 17, tzinfo=timezone.utc)
+    assert sub.tier == UserTier.pro
+
+
+def test_subscription_updated_reads_the_legacy_period_fields(
+    client: TestClient, db: Session
+) -> None:
+    """Older Stripe API versions keep the period on the subscription itself."""
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+    start = int(datetime(2026, 5, 3, tzinfo=timezone.utc).timestamp())
+    end = int(datetime(2026, 6, 3, tzinfo=timezone.utc).timestamp())
+
+    with (
+        patch.object(settings, "STRIPE_PRICE_PRO", "price_pro"),
+        patch.object(billing, "_notify"),
+    ):
+        _post_event(
+            client,
+            _event(
+                "customer.subscription.updated",
+                {
+                    "id": sub.stripe_subscription_id,
+                    "customer": customer,
+                    "status": "active",
+                    "current_period_start": start,
+                    "current_period_end": end,
+                    "items": {"data": [{"price": {"id": "price_pro"}}]},
+                },
+            ),
+        )
+    db.refresh(sub)
+    assert sub.period_start == datetime(2026, 5, 3, tzinfo=timezone.utc)
+
+
+def test_upgrade_changes_the_tier(client: TestClient, db: Session) -> None:
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer, tier=UserTier.starter)
+
+    with (
+        patch.object(settings, "STRIPE_PRICE_ULTIMATE", "price_ultimate"),
+        patch.object(billing, "_notify"),
+    ):
+        _post_event(
+            client,
+            _event(
+                "customer.subscription.updated",
+                {
+                    "id": sub.stripe_subscription_id,
+                    "customer": customer,
+                    "status": "active",
+                    "items": {"data": [{"price": {"id": "price_ultimate"}}]},
+                },
+            ),
+        )
+    db.refresh(sub)
+    assert sub.tier == UserTier.ultimate
+
+
+def test_checkout_completed_activates_via_the_client_reference(
+    client: TestClient, db: Session
+) -> None:
+    """Matches a subscription that had no Stripe customer id yet."""
+    user, _org, _repo = owned_setup(db)
+    sub = get_or_create_subscription(db, user)
+    sub.status = SubscriptionStatus.incomplete
+    db.add(sub)
+    db.commit()
+
+    with patch.object(billing, "_notify") as notify:
+        _post_event(
+            client,
+            _event(
+                "checkout.session.completed",
+                {
+                    "customer": f"cus_{uuid.uuid4().hex[:12]}",
+                    "subscription": f"sub_{uuid.uuid4().hex[:12]}",
+                    "client_reference_id": str(sub.id),
+                },
+            ),
+        )
+    db.refresh(sub)
+    assert sub.status == SubscriptionStatus.active
+    assert sub.stripe_customer_id is not None
+    assert notify.call_args.args[2] == "subscription_started"
+
+
+def test_unknown_event_types_are_accepted_and_ignored(client: TestClient) -> None:
+    """Stripe sends far more than we handle; a 500 would make it retry forever."""
+    response = _post_event(client, _event("customer.discount.created", {"id": "di_1"}))
     assert response.status_code == 200
-    body = response.json()
-    assert "id" in body
-    assert body["tier"] == "free"
-    assert body["analyses_used"] == 0
-    assert body["fixes_used"] == 0
 
 
-def test_get_subscription_re_fetch_returns_same(
+def test_an_event_for_an_unknown_customer_is_not_an_error(
     client: TestClient,
-    superuser_token_headers: dict[str, str],
-    db: Session,
 ) -> None:
-    # Act — call twice
-    first = client.get(
-        f"{settings.API_V1_STR}/billing/subscription",
-        headers=superuser_token_headers,
+    response = _post_event(
+        client,
+        _event(
+            "customer.subscription.updated",
+            {"id": "sub_nope", "customer": "cus_nope", "status": "active", "items": {}},
+        ),
     )
-    second = client.get(
-        f"{settings.API_V1_STR}/billing/subscription",
-        headers=superuser_token_headers,
-    )
-
-    # Assert — same id returned both times
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json()["id"] == second.json()["id"]
-
-
-# ─── GET /billing/limits ──────────────────────────────────────────────────────
-
-
-def test_get_tier_limits_returns_tier_and_limits(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-) -> None:
-    # Act
-    response = client.get(
-        f"{settings.API_V1_STR}/billing/limits",
-        headers=superuser_token_headers,
-    )
-
-    # Assert
     assert response.status_code == 200
-    body = response.json()
-    assert "tier" in body
-    assert "limits" in body
-    limits = body["limits"]
-    assert "analyses" in limits
-    assert "fixes" in limits
-    assert "repos" in limits
 
 
-# ─── POST /billing/webhook/stripe ────────────────────────────────────────────
+def test_an_invalid_signature_is_rejected(client: TestClient) -> None:
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(settings, "STRIPE_WEBHOOK_SECRET", "whsec_x"),
+    ):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/webhook/stripe",
+            content=b"{}",
+            headers={"stripe-signature": "t=1,v1=bogus"},
+        )
+    assert response.status_code == 400
 
 
-def test_stripe_webhook_returns_503_when_not_configured(
-    client: TestClient,
-) -> None:
-    # Act — no authentication required for webhook endpoints;
-    # Stripe is not configured in the test environment so the endpoint
-    # should return 503 Service Unavailable.
-    response = client.post(
-        f"{settings.API_V1_STR}/billing/webhook/stripe",
-        json={},
-    )
-
-    # Assert
+def test_the_webhook_503s_when_stripe_is_unconfigured(client: TestClient) -> None:
+    with patch.object(settings, "STRIPE_SECRET_KEY", None):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/webhook/stripe", content=b"{}"
+        )
     assert response.status_code == 503
-    assert "not configured" in response.json()["detail"]

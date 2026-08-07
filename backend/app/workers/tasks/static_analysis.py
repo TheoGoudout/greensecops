@@ -27,9 +27,13 @@ from app.models import (
     Repository,
     Rule,
     RuleDomain,
+    UsageEngine,
+    UsageMeter,
     WorkflowFile,
 )
 from app.services import state_machines as sm
+from app.services.billing import quota as billing_quota
+from app.services.billing import usage as billing_usage
 from app.services.deduplication import (
     compute_content_hash,
     compute_fingerprint,
@@ -385,6 +389,7 @@ def _run_static_analysis_impl(
     trigger: str = "manual",
     workflow_file_id: str | None = None,
     force: bool = False,
+    billable: bool = True,
 ) -> dict[str, str | int]:
     with Session(engine) as session:
         repo = session.get(Repository, uuid.UUID(repo_id))
@@ -487,7 +492,27 @@ def _run_static_analysis_impl(
         # duplicate-skipped file is absent): the "necessary" set to regenerate.
         changed_wf_ids: set[uuid.UUID] = set()
 
+        # The real quota gate. The API pre-check cannot hold on its own — one
+        # trigger fans out to one analysis per workflow file, and most analyses
+        # arrive here from a push webhook, the polling sweep or installation
+        # sync, none of which pass through an API route at all. Counting down a
+        # locally-tracked budget (rather than re-querying) keeps the check off
+        # the hot path while still stopping the batch at exactly the cap.
+        budget = (
+            billing_quota.remaining(session, None, repo.org_id, "analyses")
+            if billable
+            else None
+        )
+        quota_stopped_at: str | None = None
+
         for wf_src in workflow_files_to_analyse:
+            if budget is not None and budget <= 0:
+                # Out of allowance mid-batch: stop rather than silently
+                # over-serving, and remember where so the caller can say which
+                # files went unanalysed instead of reporting a clean run.
+                quota_stopped_at = wf_src.path
+                break
+
             content = (
                 wf_src.raw_content
                 if isinstance(wf_src, WorkflowFile)
@@ -570,6 +595,25 @@ def _run_static_analysis_impl(
             )
             session.add(analysis)
             session.flush()
+            # Charged on creation, not completion. An in-flight analysis is
+            # invisible to a concurrent quota check otherwise, so two triggers
+            # arriving together would both read the old total and both pass.
+            # Charged in this transaction too, so an analysis that never
+            # commits leaves no phantom charge. A ``failed`` analysis still
+            # counts — the compute was spent, and refunding it would make
+            # failure an unlimited free retry loop.
+            if billable:
+                billing_usage.record_for_repo(
+                    session,
+                    repo=repo,
+                    meter=UsageMeter.analyses,
+                    engine=UsageEngine.workflow,
+                    source_type="analysis",
+                    source_id=analysis.id,
+                    commit=False,
+                )
+                if budget is not None:
+                    budget -= 1
             # Advance queued -> running as the worker begins OPA evaluation, so
             # a row that dies before this point is distinguishable (still
             # ``queued``) from one that hangs mid-eval (``running``).
@@ -775,6 +819,33 @@ def _run_static_analysis_impl(
                     repo_id,
                 )
 
+        if quota_stopped_at is not None:
+            # Say so loudly. A run that quietly analysed four of twelve files
+            # and reported "done" is worse than one that failed: the grade it
+            # produces looks authoritative while covering a fraction of the
+            # repo. The SSE signal is distinct from ``analysis.failed`` because
+            # nothing broke and retrying will not help — only upgrading will.
+            skipped = len(workflow_files_to_analyse) - len(results)
+            message = (
+                f"Analysis stopped after {len(results)} of "
+                f"{len(workflow_files_to_analyse)} workflow files: the monthly "
+                f"analysis allowance is exhausted. {skipped} file(s) were not "
+                f"analysed, starting with {quota_stopped_at}."
+            )
+            logger.warning(
+                "Quota exhausted mid-batch for repo=%s: %s", repo_id, message
+            )
+            events_pub.publish_event(
+                ev.analysis_quota_exceeded(org_id, repo_id, "analyses", message)
+            )
+            return {
+                "status": "quota_exceeded",
+                "repo_id": repo_id,
+                "analysed": len(results),
+                "skipped": skipped,
+                "results": str(results),
+            }
+
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 
 
@@ -787,7 +858,15 @@ def run_static_analysis(
     trigger: str = "manual",
     workflow_file_id: str | None = None,
     force: bool = False,
+    billable: bool = True,
 ) -> dict[str, str | int]:
+    """Run static analysis for a repository (or one of its workflow files).
+
+    ``billable=False`` is for runs the *platform* asked for rather than the
+    user: the maintenance sweeper retrying an analysis that failed transiently
+    on our side. Charging for our own flakiness would be wrong, and it would
+    also let a repeatedly-crashing worker eat a user's whole allowance.
+    """
     # Per-repo lock: concurrent analyses of the same repo race on
     # WorkflowFile.raw_content updates and duplicate Analysis rows.
     with scan_lock(f"static_analysis:{repo_id}") as acquired:
@@ -805,6 +884,7 @@ def run_static_analysis(
                 trigger=trigger,
                 workflow_file_id=workflow_file_id,
                 force=force,
+                billable=billable,
             )
         except WorkflowFetchError as exc:
             # Transient GitHub failure (rate limit, network): back off and retry.

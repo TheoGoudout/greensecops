@@ -49,6 +49,16 @@ repos:
         files: ^(examples/.*\.ya?ml|landing/(index|workflows)\.html|scripts/render_landing_examples\.py)$
         pass_filenames: false
 
+      # Regenerate the pricing cards and comparison table from the backend's
+      # plan catalog. The two used to be maintained separately and disagreed on
+      # the limits of every single plan.
+      - id: render-landing-pricing
+        name: Render landing pricing from the plan catalog
+        entry: python3 scripts/render_landing_pricing.py
+        language: system
+        files: ^(backend/app/core/plans\.py|landing/pricing\.html|scripts/render_landing_pricing\.py)$
+        pass_filenames: false
+
       # Inject the shared head/nav/footer into every landing page, so the seven
       # pages cannot drift apart the way they had before partials/ existed.
       - id: build-landing-partials

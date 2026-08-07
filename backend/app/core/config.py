@@ -215,6 +215,25 @@ class Settings(BaseSettings):
     STRIPE_PRICE_PRO: str | None = None
     STRIPE_PRICE_ULTIMATE: str | None = None
 
+    # Days a subscription keeps full paid service after a payment fails. The
+    # account stays on its plan for this whole window while dunning reminders
+    # go out; only when it closes does the account drop to Free limits.
+    BILLING_GRACE_PERIOD_DAYS: int = 14
+    # Days into the grace window on which a dunning reminder is sent. The last
+    # entry should sit a day before the window closes so the final warning
+    # still leaves time to act.
+    BILLING_DUNNING_DAYS: list[int] = [0, 3, 7, 13]
+
+    @property
+    def billing_enabled(self) -> bool:
+        """Whether this deployment can sell and manage subscriptions.
+
+        Self-hosted installs run fine without Stripe: every account simply
+        stays on its granted tier. The UI reads this to hide upgrade and
+        portal buttons rather than offering a button that 503s.
+        """
+        return bool(self.STRIPE_SECRET_KEY)
+
     # Observability
     SENTRY_DSN: HttpUrl | None = None
 

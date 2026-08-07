@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import col, select
+from sqlmodel import col, func, select
 
 from app.api.deps import (
     CurrentUser,
@@ -86,10 +86,28 @@ def trigger_analysis(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.api.routes.billing import enforce_quota
+    from app.services.billing.quota import enforce_quota
 
-    enforce_quota(session, current_user, repo.org_id, "analyses")
     effective_branch = branch or repo.default_branch
+    # One trigger fans out to one analysis *per workflow file*, so checking for
+    # a single unit here let a user one below their cap create twenty. The
+    # exact count is only known once the worker re-fetches from GitHub; the
+    # files we already know about on this branch are the best estimate
+    # available, and the worker's own gate stops the batch at the true cap
+    # either way.
+    known_files = session.exec(
+        select(func.count(col(WorkflowFile.id)))
+        .where(WorkflowFile.repo_id == repo_id)
+        .where(WorkflowFile.branch == effective_branch)
+        .where(col(WorkflowFile.deleted_at).is_(None))
+    ).one()
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "analyses",
+        requested=max(int(known_files or 0), 1),
+    )
     run_static_analysis.delay(
         repo_id=str(repo_id),
         branch=effective_branch,
@@ -120,7 +138,7 @@ def reanalyze_for_workflow(
     repo = authorize_repo(session, current_user, wf_file.repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.api.routes.billing import enforce_quota
+    from app.services.billing.quota import enforce_quota
 
     enforce_quota(session, current_user, repo.org_id, "analyses")
     effective_branch = wf_file.branch or repo.default_branch

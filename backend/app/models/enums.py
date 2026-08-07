@@ -254,6 +254,17 @@ class SSESignal(str, enum.Enum):
     dynamic_running = "dynamic.running"
     dynamic_enriched = "dynamic.enriched"
     dynamic_failed = "dynamic.failed"
+    # Analysis refused before any work was dispatched because the org's
+    # billing owner has no metered allowance left. Distinct from
+    # ``analysis_failed``: nothing broke, and a retry will not help.
+    analysis_quota_exceeded = "analysis.quota_exceeded"
+    # Billing lifecycle. The UI listens for these to refresh the billing page
+    # and raise/lower the past-due banner without polling.
+    subscription_activated = "subscription.activated"
+    subscription_past_due = "subscription.past_due"
+    subscription_unpaid = "subscription.unpaid"
+    subscription_canceled = "subscription.canceled"
+    subscription_updated = "subscription.updated"
 
 
 class RuleDomain(str, enum.Enum):
@@ -318,3 +329,80 @@ class CloudAccountStatus(str, enum.Enum):
     connected = "connected"
     error = "error"
     disabled = "disabled"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    """Lifecycle of a ``BillingSubscription`` — see ``BillingSubscriptionMachine``.
+
+    Orthogonal to ``UserTier``: the tier says *what was bought*, this says
+    *whether it is currently being paid for*. The combination is resolved by
+    ``services/billing/lifecycle.effective_tier``, which is the only thing
+    quota enforcement reads.
+
+    ``past_due`` deliberately keeps full paid service — it is the grace window,
+    not a punishment. Only ``unpaid`` (grace expired) and ``canceled`` fall
+    back to Free limits, and neither ever removes data.
+    """
+
+    # Checkout started but never paid. A subscription is born here only when it
+    # came from Checkout; accounts that never bought anything sit in ``active``
+    # on the free tier, because there is nothing to collect.
+    incomplete = "incomplete"
+    trialing = "trialing"
+    active = "active"
+    # Payment failed; inside the grace window. Full service continues.
+    past_due = "past_due"
+    # Grace window expired. Free limits until payment succeeds.
+    unpaid = "unpaid"
+    # Cancelled, but paid through the end of the current period.
+    pending_cancellation = "pending_cancellation"
+    canceled = "canceled"
+
+
+class UsageMeter(str, enum.Enum):
+    """Which allowance a usage record draws down.
+
+    ``repos`` is absent on purpose: it is a live capacity count (how many
+    repositories are enabled right now), not something consumed over time, so
+    it is measured by querying rather than by ledger entries.
+    """
+
+    analyses = "analyses"
+    fixes = "fixes"
+
+
+class UsageEngine(str, enum.Enum):
+    """Which engine produced a usage record.
+
+    Every one of these debits the same shared pool; the tag exists so a user
+    can see *where* their allowance went, and so tests can assert that each
+    engine is actually metered.
+    """
+
+    workflow = "workflow"
+    terraform = "terraform"
+    docker = "docker"
+    cloud = "cloud"
+    telemetry = "telemetry"
+    # Not produced by an engine: the one-off record the ledger migration writes
+    # to carry a subscription's pre-ledger fix usage into its current period.
+    carryover = "carryover"
+
+
+class InvoiceStatus(str, enum.Enum):
+    """Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only)."""
+
+    draft = "draft"
+    open = "open"
+    paid = "paid"
+    void = "void"
+    uncollectible = "uncollectible"
+
+
+class OssApplicationStatus(str, enum.Enum):
+    """Review state of a request for the granted open-source plan."""
+
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    withdrawn = "withdrawn"

@@ -31,7 +31,9 @@ from app.models import (
     TerraformRootPublic,
     TerraformScan,
     TerraformScanPublic,
+    UsageEngine,
 )
+from app.services.billing.quota import enforce_quota
 from app.services.delivery_pr import tf_fix_branch
 from app.services.engines import TERRAFORM_ENGINE
 from app.workers.tasks.fix_generation import resolve_llm_provider
@@ -142,6 +144,16 @@ def trigger_terraform_scan(
     root = get_target_for_user(TERRAFORM_ENGINE, root_id, session, current_user)
     if not root.enabled:
         raise HTTPException(status_code=403, detail="Terraform root is disabled")
+    repo = get_or_404(session, Repository, root.repo_id, detail="Repository not found")
+    # Fail fast with a precise 402 rather than letting the user watch a job
+    # disappear. The worker re-checks — that gate is the one that holds.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "analyses",
+        engine=UsageEngine.terraform,
+    )
     run_terraform_scan.delay(
         terraform_root_id=str(root.id),
         branch=branch or "",
@@ -255,6 +267,19 @@ def trigger_terraform_fix_generation(
     for finding in findings:
         by_file[finding.file_path].append(finding)
 
+    # One whole-file LLM rewrite per file, so the request costs as many fix
+    # generations as there are files. This route had no quota check at all
+    # before: Terraform fixes were the same LLM spend as workflow fixes and
+    # were metered against nobody.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "fixes",
+        requested=len(by_file),
+        engine=UsageEngine.terraform,
+    )
+
     provider_str, model_str = resolve_llm_provider(repo)
     queued = 0
     for file_path, group in by_file.items():
@@ -266,6 +291,7 @@ def trigger_terraform_fix_generation(
             provider_str,
             model_str,
             force,
+            repo=repo,
         )
         if fix is None:
             continue
