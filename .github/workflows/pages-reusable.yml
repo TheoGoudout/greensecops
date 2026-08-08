@@ -4,20 +4,23 @@ name: pages-reusable
 # dashboard and docs — and publish them to Cloudflare Workers as whichever
 # environment the caller asked for.
 #
-# The approval gate is the `environment:` declaration on each job below, exactly
-# as in deploy-reusable.yml. It does two things at once: it selects which GitHub
-# Environment's PUBLIC_* overrides the config job sees, and on `production` its
-# protection rules hold the run until a reviewer approves. `environment:` is a
-# job-level key — there is no way to scope it to a step — which is why the jobs
-# live here rather than being parameterised inside pages.yml.
+# The approval gate is the `environment:` declaration on the publishing jobs
+# below, exactly as in deploy-reusable.yml: on `production` its protection rules
+# hold the run until a reviewer approves. `environment:` is a job-level key —
+# there is no way to scope it to a step — which is why the jobs live here rather
+# than being parameterised inside pages.yml.
 #
 # Where the URLs come from: deploy/cloudflare/env/<environment>.env declares a
 # domain and three subdomain labels, and the `config` job derives the four
 # public URLs from them exactly as deploy/terraform/locals.tf:294 does, so a
-# hostname means the same thing on the AWS and Cloudflare paths. A PUBLIC_*
-# variable on the GitHub Environment overrides any derived value — the seam for
-# a fork, or for the OAuth client ID, which identifies an App installation
-# rather than describing the deployment.
+# hostname means the same thing on the AWS and Cloudflare paths.
+#
+# That file is the only source — no GitHub variable is consulted, and that is a
+# correctness requirement rather than a preference. The `vars` context flattens
+# organisation, repository and environment scope into one namespace with no way
+# to tell which scope a value came from, so a repository-scoped PUBLIC_API_URL
+# holding the production hostname would be read by the *staging* build and quietly
+# point it at the production database. Reading nothing removes the question.
 #
 # The config job also refuses to hand over an empty or CHANGEME value. Nothing
 # downstream would notice one: GitHub renders an unset variable as the empty
@@ -101,7 +104,13 @@ jobs:
     name: Resolve ${{ inputs.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: ${{ inputs.environment }}
+    # Deliberately not bound to `environment:`. It reads a tracked file and no
+    # GitHub variables, so it needs no environment to resolve against — and
+    # leaving it unbound means a malformed domain or an unseeded CHANGEME fails
+    # here, before a production dispatch wakes a reviewer for an approval that
+    # was never going to build. The gate itself is unaffected: the three
+    # publishing jobs below carry their own `environment:`, which is what
+    # production's protection rules actually hold.
     permissions:
       contents: read
     outputs:
@@ -124,19 +133,6 @@ jobs:
         id: resolve
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          # Overrides, empty unless set on the GitHub Environment. Anything set
-          # here beats the derived value, which is how a fork or a private
-          # deployment redirects a surface without editing a tracked file.
-          OVERRIDE_APP_URL: ${{ vars.PUBLIC_APP_URL }}
-          OVERRIDE_API_URL: ${{ vars.PUBLIC_API_URL }}
-          OVERRIDE_DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
-          OVERRIDE_MARKETING_URL: ${{ vars.PUBLIC_MARKETING_URL }}
-          OVERRIDE_GITHUB_APP_NAME: ${{ vars.PUBLIC_GITHUB_APP_NAME }}
-          OVERRIDE_GITHUB_CLIENT_ID: ${{ vars.PUBLIC_GITHUB_CLIENT_ID }}
-          OVERRIDE_SUPPORT_EMAIL: ${{ vars.PUBLIC_SUPPORT_EMAIL }}
-          OVERRIDE_SALES_EMAIL: ${{ vars.PUBLIC_SALES_EMAIL }}
-          OVERRIDE_LEGAL_EMAIL: ${{ vars.PUBLIC_LEGAL_EMAIL }}
-          OVERRIDE_PRIVACY_EMAIL: ${{ vars.PUBLIC_PRIVACY_EMAIL }}
         run: |
           set -euo pipefail
 
@@ -167,7 +163,7 @@ jobs:
             # label was not. Those are the three shapes a half-filled file makes.
             case "$2" in
               ""|https://|https://.*|https://*.|*CHANGEME*)
-                echo "::error::$1 is unset, incomplete or still CHANGEME for ${ENVIRONMENT}. Set it in ${file}, or override it with the matching PUBLIC_* variable on the ${ENVIRONMENT} GitHub Environment."
+                echo "::error::$1 is unset, incomplete or still CHANGEME for ${ENVIRONMENT}. Set it in ${file}."
                 missing=1
                 ;;
             esac
@@ -176,17 +172,17 @@ jobs:
 
           # The same derivation as deploy/terraform/locals.tf:294, so a hostname
           # means the same thing on both deployment paths.
-          emit app-url "${OVERRIDE_APP_URL:-https://${APP_SUBDOMAIN:-}.${DOMAIN:-}}"
-          emit api-url "${OVERRIDE_API_URL:-https://${API_SUBDOMAIN:-}.${DOMAIN:-}}"
-          emit docs-url "${OVERRIDE_DOCS_URL:-https://${DOCS_SUBDOMAIN:-}.${DOMAIN:-}}"
-          emit marketing-url "${OVERRIDE_MARKETING_URL:-https://${DOMAIN:-}}"
+          emit app-url "https://${APP_SUBDOMAIN:-}.${DOMAIN:-}"
+          emit api-url "https://${API_SUBDOMAIN:-}.${DOMAIN:-}"
+          emit docs-url "https://${DOCS_SUBDOMAIN:-}.${DOMAIN:-}"
+          emit marketing-url "https://${DOMAIN:-}"
 
-          emit github-app-name "${OVERRIDE_GITHUB_APP_NAME:-${GITHUB_APP_NAME:-}}"
-          emit github-client-id "${OVERRIDE_GITHUB_CLIENT_ID:-${GITHUB_CLIENT_ID:-}}"
-          emit support-email "${OVERRIDE_SUPPORT_EMAIL:-${SUPPORT_EMAIL:-}}"
-          emit sales-email "${OVERRIDE_SALES_EMAIL:-${SALES_EMAIL:-}}"
-          emit legal-email "${OVERRIDE_LEGAL_EMAIL:-${LEGAL_EMAIL:-}}"
-          emit privacy-email "${OVERRIDE_PRIVACY_EMAIL:-${PRIVACY_EMAIL:-}}"
+          emit github-app-name "${GITHUB_APP_NAME:-}"
+          emit github-client-id "${GITHUB_CLIENT_ID:-}"
+          emit support-email "${SUPPORT_EMAIL:-}"
+          emit sales-email "${SALES_EMAIL:-}"
+          emit legal-email "${LEGAL_EMAIL:-}"
+          emit privacy-email "${PRIVACY_EMAIL:-}"
 
           exit "${missing}"
 

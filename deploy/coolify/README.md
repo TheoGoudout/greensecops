@@ -152,12 +152,17 @@ API             https://api.greensecops.com            https://api.staging.green
 docs            https://docs.greensecops.com           https://docs.staging.greensecops.com
 ```
 
-Setting a `PUBLIC_*` **variable** on a GitHub Environment overrides the matching
-derived value. Nothing here is secret — every one of these is baked into the
-shipped JavaScript — so the override exists for forks and private deployments
-that would rather not carry a permanent diff against a tracked file, and for
-values like the OAuth client ID that identify your specific App installation
-rather than describing the deployment.
+**These files are the only source.** No GitHub variable is consulted, which is a
+correctness requirement rather than a preference: the `vars` context flattens
+organisation, repository and environment scope into one namespace with no way to
+tell them apart, so a repository-scoped `PUBLIC_API_URL` holding the production
+hostname would be read by the *staging* build and quietly point it at the
+production database. A fork edits the file. Nothing here is secret — every one
+of these values is baked into the shipped JavaScript.
+
+If you set the `PUBLIC_*` repository variables for an earlier version of this
+workflow, they are now unread and can be deleted. That is tidying, not a fix —
+nothing consults them.
 
 Anything left empty or still `CHANGEME` **fails the build**. That is deliberate:
 an unset variable renders as the empty string, and a dashboard built with
@@ -181,10 +186,10 @@ Total TLS, around $10/month.
 
 **Staging needs its own GitHub App.** The backend derives the OAuth callback
 from `FRONTEND_HOST`, and a GitHub App has a single webhook URL — production's
-App cannot also point at `api.staging`. Register a second App and set
-`PUBLIC_GITHUB_CLIENT_ID` on the staging environment from it (an environment
-value shadows the repository one, so staging cannot silently borrow
-production's).
+App cannot also point at `api.staging`. Staging's is already registered and its
+client ID is in `staging.env`. Production's is not: `production.env` still holds
+`CHANGEME`, so **a production dispatch fails at the config job until that App
+exists and its client ID is filled in.** Staging and previews are unaffected.
 
 Staging and pull-request previews serve the same pages as production, so
 `pages-reusable.yml` writes a `robots.txt` and an `X-Robots-Tag: noindex` header
