@@ -1,12 +1,14 @@
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import Header, HTTPException, Request
 from sqlmodel import Session, col, select
 
 from app import crud
 from app.api.deps import SessionDep
+from app.api.router import Role, RoleRouter
 from app.core.config import settings
+from app.core.rate_limit import LIMIT_WEBHOOK
 from app.models import (
     AnalysisTrigger,
     Fix,
@@ -26,7 +28,7 @@ from app.services.github.webhook_verifier import verify_webhook_signature
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+router = RoleRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 async def _is_duplicate_delivery(delivery_id: str | None) -> bool:
@@ -56,7 +58,7 @@ async def _is_duplicate_delivery(delivery_id: str | None) -> bool:
         return False
 
 
-@router.post("/github")
+@router.post("/github", role=Role.service, limit=LIMIT_WEBHOOK)
 async def github_webhook(
     request: Request,
     session: SessionDep,

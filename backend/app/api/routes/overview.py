@@ -24,11 +24,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import Query
 from sqlalchemy import and_, case, func, true
 from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser, SessionDep, authorize_org, user_org_ids
+from app.api.router import Role, RoleRouter
 from app.models import (
     Analysis,
     AnalysisStatus,
@@ -71,7 +72,7 @@ from app.models import (
 from app.services.scoring import GRADE_LADDER, score_to_grade
 from app.services.state_machines import IN_FLIGHT_STATUSES
 
-router = APIRouter(prefix="/overview", tags=["overview"])
+router = RoleRouter(prefix="/overview", tags=["overview"])
 
 
 # ─── Engine descriptor ────────────────────────────────────────────────────────
@@ -645,7 +646,7 @@ def _totals(engines: list[EngineOverview]) -> OverviewTotals:
 # ─── Route ────────────────────────────────────────────────────────────────────
 
 
-@router.get("/", response_model=OverviewPublic)
+@router.get("/", role=Role.user, response_model=OverviewPublic)
 def get_overview(
     session: SessionDep,
     current_user: CurrentUser,

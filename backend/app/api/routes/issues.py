@@ -2,12 +2,13 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import HTTPException, Query
 from sqlalchemy import case, func
 from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
 from app.api.mappers import to_issue_public
+from app.api.router import Role, RoleRouter
 from app.models import (
     Analysis,
     AnalysisStatus,
@@ -32,7 +33,7 @@ from app.services.scoring import (
 )
 from app.services.state_machines import REJECTED_STATUSES
 
-router = APIRouter(prefix="/issues", tags=["issues"])
+router = RoleRouter(prefix="/issues", tags=["issues"])
 
 
 def _authorize_issue(
@@ -47,7 +48,7 @@ def _authorize_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
 
 
-@router.get("/", response_model=list[IssuePublic])
+@router.get("/", role=Role.user, response_model=list[IssuePublic])
 def list_issues(
     session: SessionDep,
     current_user: CurrentUser,
@@ -138,7 +139,7 @@ def list_issues(
     return [to_issue_public(issue) for issue in session.exec(query).all()]
 
 
-@router.get("/stats", response_model=IssueStatsPublic)
+@router.get("/stats", role=Role.user, response_model=IssueStatsPublic)
 def get_issue_stats(
     session: SessionDep,
     current_user: CurrentUser,
@@ -302,7 +303,7 @@ def get_issue_stats(
     )
 
 
-@router.get("/{issue_id}", response_model=IssuePublic)
+@router.get("/{issue_id}", role=Role.org_member, response_model=IssuePublic)
 def get_issue(
     issue_id: uuid.UUID,
     session: SessionDep,
@@ -313,7 +314,7 @@ def get_issue(
     return to_issue_public(issue)
 
 
-@router.post("/{issue_id}/ignore", response_model=IssuePublic)
+@router.post("/{issue_id}/ignore", role=Role.org_admin, response_model=IssuePublic)
 def ignore_issue(
     issue_id: uuid.UUID,
     session: SessionDep,
@@ -335,7 +336,7 @@ def ignore_issue(
     return to_issue_public(issue)
 
 
-@router.post("/{issue_id}/unignore", response_model=IssuePublic)
+@router.post("/{issue_id}/unignore", role=Role.org_admin, response_model=IssuePublic)
 def unignore_issue(
     issue_id: uuid.UUID,
     session: SessionDep,

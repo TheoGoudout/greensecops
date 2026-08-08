@@ -4,7 +4,6 @@ import secrets
 from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
@@ -16,12 +15,14 @@ from app.api.deps import (
     RedisDep,
     SessionDep,
 )
+from app.api.router import Role, RoleRouter
 from app.core.config import settings
+from app.core.rate_limit import LIMIT_STREAM
 from app.models import OrgMember, SSESignal
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/events", tags=["events"])
+router = RoleRouter(prefix="/events", tags=["events"])
 
 _KEEPALIVE_SECONDS = 30
 _CHANNEL_PREFIX = "events:org"
@@ -79,13 +80,13 @@ async def _stream_events(
             pass
 
 
-@router.get("/signals", response_model=list[SSESignal])
+@router.get("/signals", role=Role.guest, response_model=list[SSESignal])
 async def get_sse_signals() -> list[SSESignal]:
     """Return all valid SSE signal types. Exposes SSESignal enum in OpenAPI for frontend codegen."""
     return list(SSESignal)
 
 
-@router.post("/ticket")
+@router.post("/ticket", role=Role.user)
 async def create_sse_ticket(
     current_user: CurrentUser,
     redis: RedisDep,
@@ -106,7 +107,7 @@ async def create_sse_ticket(
     return {"ticket": ticket, "expires_in": SSE_TICKET_TTL_SECONDS}
 
 
-@router.get("/stream")
+@router.get("/stream", role=Role.user_sse, limit=LIMIT_STREAM)
 async def stream_events(
     session: SessionDep,
     current_user: CurrentUserSSE,

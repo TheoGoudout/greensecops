@@ -177,6 +177,13 @@ services:
       - STRIPE_PRICE_STARTER=${STRIPE_PRICE_STARTER}
       - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
       - STRIPE_PRICE_ULTIMATE=${STRIPE_PRICE_ULTIMATE}
+      # Rate limiting. Coolify fronts the backend with Traefik, so the socket
+      # peer is always the proxy — X-Forwarded-For is the only real client
+      # address here, and the proxy overwrites any caller-supplied value.
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-True}
+      - RATE_LIMIT_DEFAULT=${RATE_LIMIT_DEFAULT:-300/minute}
+      - RATE_LIMIT_STORAGE_URI=${RATE_LIMIT_STORAGE_URI}
+      - RATE_LIMIT_TRUST_PROXY_HEADERS=${RATE_LIMIT_TRUST_PROXY_HEADERS:-True}
       # Observability
       - SENTRY_DSN=${SENTRY_DSN}
       # Celery

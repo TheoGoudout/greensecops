@@ -19,17 +19,18 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import Header, HTTPException, Request
 from sqlmodel import Session, col, select
 
 from app.api.deps import (
     CurrentUser,
     SessionDep,
-    get_current_active_superuser,
     get_or_404,
 )
+from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.plans import get_plan, ordered_plans
+from app.core.rate_limit import LIMIT_EXPENSIVE, LIMIT_PUBLIC, LIMIT_WEBHOOK
 from app.models import (
     BillingSubscription,
     BillingSubscriptionPublic,
@@ -71,7 +72,7 @@ from app.services.billing.quota import snapshot
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/billing", tags=["billing"])
+router = RoleRouter(prefix="/billing", tags=["billing"])
 
 
 # ─── Plan & usage ────────────────────────────────────────────────────────────
@@ -84,7 +85,13 @@ def _limits_public(tier: UserTier) -> PlanLimitsPublic:
     )
 
 
-@router.get("/plans", response_model=list[PlanPublic])
+# The one unauthenticated route in this module, and deliberately so: the plan
+# catalog is public pricing copy with nothing account-specific in it, and it has
+# never required a token. Declared guest rather than user so that stays a
+# decision on the record instead of an accident.
+@router.get(
+    "/plans", role=Role.guest, limit=LIMIT_PUBLIC, response_model=list[PlanPublic]
+)
 def list_plans() -> list[PlanPublic]:
     """The plan catalog, in presentation order.
 
@@ -115,7 +122,7 @@ def list_plans() -> list[PlanPublic]:
     ]
 
 
-@router.get("/subscription", response_model=BillingSubscriptionPublic)
+@router.get("/subscription", role=Role.user, response_model=BillingSubscriptionPublic)
 def get_subscription(
     session: SessionDep,
     current_user: CurrentUser,
@@ -143,7 +150,7 @@ def get_subscription(
     )
 
 
-@router.get("/usage", response_model=UsagePublic)
+@router.get("/usage", role=Role.user, response_model=UsagePublic)
 def get_usage(
     session: SessionDep,
     current_user: CurrentUser,
@@ -173,7 +180,7 @@ def get_usage(
     )
 
 
-@router.get("/limits")
+@router.get("/limits", role=Role.user)
 def get_tier_limits(
     session: SessionDep,
     current_user: CurrentUser,
@@ -197,7 +204,7 @@ def get_tier_limits(
     }
 
 
-@router.get("/invoices", response_model=list[InvoicePublic])
+@router.get("/invoices", role=Role.user, response_model=list[InvoicePublic])
 def list_invoices(
     session: SessionDep,
     current_user: CurrentUser,
@@ -217,7 +224,12 @@ def list_invoices(
 # ─── Checkout & portal ───────────────────────────────────────────────────────
 
 
-@router.post("/checkout", response_model=CheckoutSessionPublic)
+@router.post(
+    "/checkout",
+    role=Role.user,
+    limit=LIMIT_EXPENSIVE,
+    response_model=CheckoutSessionPublic,
+)
 def create_checkout(
     body: CheckoutRequest,
     session: SessionDep,
@@ -257,7 +269,12 @@ def create_checkout(
     return CheckoutSessionPublic(url=url)
 
 
-@router.post("/portal", response_model=CheckoutSessionPublic)
+@router.post(
+    "/portal",
+    role=Role.user,
+    limit=LIMIT_EXPENSIVE,
+    response_model=CheckoutSessionPublic,
+)
 def create_portal(
     session: SessionDep,
     current_user: CurrentUser,
@@ -278,7 +295,12 @@ def create_portal(
 # ─── Open-source applications ────────────────────────────────────────────────
 
 
-@router.post("/oss-application", response_model=OssApplicationPublic, status_code=201)
+@router.post(
+    "/oss-application",
+    role=Role.user,
+    response_model=OssApplicationPublic,
+    status_code=201,
+)
 def create_oss_application(
     body: OssApplicationCreate,
     session: SessionDep,
@@ -312,7 +334,9 @@ def create_oss_application(
     return OssApplicationPublic.model_validate(application, from_attributes=True)
 
 
-@router.get("/oss-application", response_model=list[OssApplicationPublic])
+@router.get(
+    "/oss-application", role=Role.user, response_model=list[OssApplicationPublic]
+)
 def list_my_oss_applications(
     session: SessionDep,
     current_user: CurrentUser,
@@ -330,8 +354,8 @@ def list_my_oss_applications(
 
 @router.get(
     "/oss-applications",
+    role=Role.admin,
     response_model=list[OssApplicationPublic],
-    dependencies=[Depends(get_current_active_superuser)],
 )
 def list_oss_applications(
     session: SessionDep,
@@ -352,8 +376,8 @@ def list_oss_applications(
 
 @router.patch(
     "/oss-applications/{application_id}",
+    role=Role.admin,
     response_model=OssApplicationPublic,
-    dependencies=[Depends(get_current_active_superuser)],
 )
 def review_oss_application(
     application_id: uuid.UUID,
@@ -590,7 +614,7 @@ def _notify(
         logger.exception("Failed to send %s billing email for %s", kind, sub.id)
 
 
-@router.post("/webhook/stripe", status_code=200)
+@router.post("/webhook/stripe", role=Role.service, limit=LIMIT_WEBHOOK, status_code=200)
 async def stripe_webhook(
     request: Request,
     session: SessionDep,

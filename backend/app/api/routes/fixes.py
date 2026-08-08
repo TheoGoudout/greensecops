@@ -2,7 +2,7 @@ import logging
 import uuid
 from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import col, delete, or_, select
 
@@ -14,7 +14,9 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
+from app.api.router import Role, RoleRouter
 from app.core.config import settings
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
     AnalysisStatus,
@@ -60,7 +62,7 @@ class BatchFixRequest(BaseModel):
     issue_ids: list[uuid.UUID] | None = None
 
 
-router = APIRouter(prefix="/fixes", tags=["fixes"])
+router = RoleRouter(prefix="/fixes", tags=["fixes"])
 
 # Statuses of fixes a worker is still processing; such fixes cannot be
 # regenerated out from under the worker. Sourced from the fix state machine so
@@ -338,7 +340,7 @@ def _fixes_to_public(session: SessionDep, fixes: list[Fix]) -> list[FixPublic]:
     return result
 
 
-@router.get("/", response_model=list[FixPublic])
+@router.get("/", role=Role.user, response_model=list[FixPublic])
 def list_fixes(
     session: SessionDep,
     current_user: CurrentUser,
@@ -381,7 +383,11 @@ def list_fixes(
     return _fixes_to_public(session, fixes)
 
 
-@router.get("/pull-requests/{repo_id}", response_model=list[PullRequestPublic])
+@router.get(
+    "/pull-requests/{repo_id}",
+    role=Role.org_member,
+    response_model=list[PullRequestPublic],
+)
 def list_pull_requests(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -403,7 +409,7 @@ def list_pull_requests(
     )
 
 
-@router.get("/{fix_id}", response_model=FixPublic)
+@router.get("/{fix_id}", role=Role.org_member, response_model=FixPublic)
 def get_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
@@ -419,7 +425,12 @@ def get_fix(
     return data
 
 
-@router.post("/generate-for-repo/{repo_id}", status_code=202)
+@router.post(
+    "/generate-for-repo/{repo_id}",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 def trigger_fix_generation_for_repo(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -478,7 +489,9 @@ class WorkflowDeliverRequest(BaseModel):
     fix_id: uuid.UUID
 
 
-@router.post("/deliver-for-workflow", status_code=202)
+@router.post(
+    "/deliver-for-workflow", role=Role.user, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_workflow_delivery(
     body: WorkflowDeliverRequest,
     session: SessionDep,
@@ -520,7 +533,12 @@ def trigger_workflow_delivery(
     return {"status": "queued"}
 
 
-@router.post("/deliver-for-repo/{repo_id}", status_code=202)
+@router.post(
+    "/deliver-for-repo/{repo_id}",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 def trigger_repo_delivery(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -567,7 +585,7 @@ def trigger_repo_delivery(
     return {"status": "queued"}
 
 
-@router.delete("/{fix_id}", status_code=204)
+@router.delete("/{fix_id}", role=Role.org_admin, status_code=204)
 def reject_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
@@ -591,7 +609,12 @@ def reject_fix(
         )
 
 
-@router.post("/regenerate-for-repo/{repo_id}", status_code=202)
+@router.post(
+    "/regenerate-for-repo/{repo_id}",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 def regenerate_fixes_for_repo(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -653,7 +676,12 @@ def regenerate_fixes_for_repo(
     return {"queued": len(pending_fixes)}
 
 
-@router.post("/regenerate-for-workflow/{fix_id}", status_code=202)
+@router.post(
+    "/regenerate-for-workflow/{fix_id}",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 def regenerate_fixes_for_workflow(
     fix_id: uuid.UUID,
     session: SessionDep,
@@ -710,7 +738,9 @@ def regenerate_fixes_for_workflow(
     return {"queued": len(pending_fixes)}
 
 
-@router.post("/{fix_id}/regenerate", status_code=202)
+@router.post(
+    "/{fix_id}/regenerate", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def regenerate_failed_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
@@ -821,7 +851,7 @@ def _relink_orphaned_fixes(session: SessionDep, repo: Repository) -> int:
     return relinked
 
 
-@router.post("/sync-pr-status/{repo_id}")
+@router.post("/sync-pr-status/{repo_id}", role=Role.org_member, limit=LIMIT_EXPENSIVE)
 async def sync_pr_statuses(
     repo_id: uuid.UUID,
     session: SessionDep,

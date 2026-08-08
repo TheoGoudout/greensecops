@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 from ruamel.yaml import YAML
 from sqlmodel import Session, col, select
 
@@ -14,7 +14,9 @@ from app.api.deps import (
     get_current_active_superuser,
 )
 from app.api.mappers import to_repo_public
+from app.api.router import Role, RoleRouter
 from app.core.config import settings
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
     AnalysisStatus,
@@ -38,7 +40,7 @@ from app.services.scoring import (
 SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
 
 
-router = APIRouter(prefix="/repositories", tags=["repositories"])
+router = RoleRouter(prefix="/repositories", tags=["repositories"])
 
 
 def _get_repo_for_user(
@@ -115,7 +117,7 @@ def _compute_grades_batch(
     return result
 
 
-@router.get("/", response_model=list[RepositoryPublic])
+@router.get("/", role=Role.user, response_model=list[RepositoryPublic])
 def list_repositories(
     session: SessionDep,
     current_user: CurrentUser,
@@ -141,7 +143,7 @@ def list_repositories(
     return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
 
 
-@router.get("/external", response_model=list[RepositoryPublic])
+@router.get("/external", role=Role.user, response_model=list[RepositoryPublic])
 def list_external_repositories(
     session: SessionDep,
     _superuser: SuperuserDep,
@@ -161,7 +163,13 @@ def list_external_repositories(
     return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
 
 
-@router.post("/external", response_model=RepositoryPublic, status_code=201)
+@router.post(
+    "/external",
+    role=Role.user,
+    limit=LIMIT_EXPENSIVE,
+    response_model=RepositoryPublic,
+    status_code=201,
+)
 async def create_external_repository(
     body: ExternalRepositoryCreate,
     session: SessionDep,
@@ -214,7 +222,7 @@ async def create_external_repository(
     return to_repo_public(repo, None, None)
 
 
-@router.get("/{repo_id}", response_model=RepositoryPublic)
+@router.get("/{repo_id}", role=Role.org_member, response_model=RepositoryPublic)
 def get_repository(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -225,7 +233,11 @@ def get_repository(
     return to_repo_public(repo, avg_score, grade)
 
 
-@router.get("/{repo_id}/workflow-files", response_model=list[WorkflowFilePublic])
+@router.get(
+    "/{repo_id}/workflow-files",
+    role=Role.org_member,
+    response_model=list[WorkflowFilePublic],
+)
 def list_workflow_files(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -252,7 +264,7 @@ def list_workflow_files(
     ]
 
 
-@router.patch("/{repo_id}/toggle")
+@router.patch("/{repo_id}/toggle", role=Role.org_admin)
 def toggle_repository(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -273,7 +285,7 @@ def toggle_repository(
     return {"repo_id": str(repo_id), "enabled": enabled}
 
 
-@router.patch("/{repo_id}/auto-fix")
+@router.patch("/{repo_id}/auto-fix", role=Role.org_admin)
 def toggle_auto_fix(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -291,7 +303,7 @@ def toggle_auto_fix(
     return {"repo_id": str(repo_id), "auto_fix_enabled": enabled}
 
 
-@router.get("/{repo_id}/branches", response_model=list[str])
+@router.get("/{repo_id}/branches", role=Role.org_member, response_model=list[str])
 def list_repository_branches(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -471,7 +483,12 @@ def _insert_badge_simple(readme_content: str, badge_markdown: str) -> str:
     return badge_markdown + "\n\n" + readme_content
 
 
-@router.post("/{repo_id}/integrate-action", status_code=202)
+@router.post(
+    "/{repo_id}/integrate-action",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 async def integrate_action(
     repo_id: uuid.UUID,
     session: SessionDep,

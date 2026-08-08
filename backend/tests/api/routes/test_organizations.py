@@ -166,7 +166,11 @@ def test_update_org_ai_preferences_non_member_forbidden(
         headers=normal_user_token_headers,
     )
 
-    assert response.status_code == 403
+    # 404, not 403: role=Role.org_admin routes a non-member through the same
+    # answer a missing organization gets, so probing this endpoint cannot be
+    # used to enumerate which organizations exist. The previous 403 ("Not a
+    # member of this organization") confirmed the org was real.
+    assert response.status_code == 404
 
 
 def test_update_org_ai_preferences_not_found(

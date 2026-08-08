@@ -1,7 +1,7 @@
 import uuid
 from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlmodel import col, select
 
@@ -21,6 +21,8 @@ from app.api.mappers import (
     to_docker_scan_public,
     to_docker_target_public,
 )
+from app.api.router import Role, RoleRouter
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     DockerBuildEnrichment,
     DockerBuildTelemetry,
@@ -49,7 +51,7 @@ from app.workers.tasks.docker_fix_delivery import deliver_docker_fixes
 from app.workers.tasks.docker_fix_generation import run_docker_fix_generation
 from app.workers.tasks.fix_generation import resolve_llm_provider
 
-router = APIRouter(prefix="/docker-targets", tags=["docker"])
+router = RoleRouter(prefix="/docker-targets", tags=["docker"])
 
 
 class DockerFixGenerateRequest(BaseModel):
@@ -69,7 +71,7 @@ def _normalize_root_path(raw: str) -> str:
     return "" if stripped in ("", ".") else stripped
 
 
-@router.post("/", response_model=DockerTargetPublic, status_code=201)
+@router.post("/", role=Role.user, response_model=DockerTargetPublic, status_code=201)
 def create_docker_target(
     target_in: DockerTargetCreate,
     session: SessionDep,
@@ -100,7 +102,7 @@ def create_docker_target(
     return to_docker_target_public(target)
 
 
-@router.get("/", response_model=list[DockerTargetPublic])
+@router.get("/", role=Role.user, response_model=list[DockerTargetPublic])
 def list_docker_targets(
     session: SessionDep,
     current_user: CurrentUser,
@@ -127,7 +129,7 @@ def list_docker_targets(
     return [to_docker_target_public(t) for t in targets]
 
 
-@router.patch("/{target_id}/toggle")
+@router.patch("/{target_id}/toggle", role=Role.org_admin)
 def toggle_docker_target(
     target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> dict[str, str | bool]:
@@ -138,7 +140,7 @@ def toggle_docker_target(
     return {"id": str(target.id), "enabled": target.enabled}
 
 
-@router.delete("/{target_id}", status_code=204)
+@router.delete("/{target_id}", role=Role.org_admin, status_code=204)
 def delete_docker_target(
     target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
@@ -147,7 +149,9 @@ def delete_docker_target(
     session.commit()
 
 
-@router.post("/{target_id}/scan", status_code=202)
+@router.post(
+    "/{target_id}/scan", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_docker_scan(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -170,7 +174,9 @@ def trigger_docker_scan(
     return {"status": "queued", "docker_target_id": str(target_id)}
 
 
-@router.get("/{target_id}/scans", response_model=list[DockerScanPublic])
+@router.get(
+    "/{target_id}/scans", role=Role.org_member, response_model=list[DockerScanPublic]
+)
 def list_docker_scans(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -187,7 +193,11 @@ def list_docker_scans(
     return [to_docker_scan_public(s) for s in scans]
 
 
-@router.get("/{target_id}/findings", response_model=list[DockerFindingPublic])
+@router.get(
+    "/{target_id}/findings",
+    role=Role.org_member,
+    response_model=list[DockerFindingPublic],
+)
 def list_docker_findings(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -204,7 +214,9 @@ def list_docker_findings(
     return [to_docker_finding_public(f) for f in findings]
 
 
-@router.get("/{target_id}/files", response_model=list[DockerFilePublic])
+@router.get(
+    "/{target_id}/files", role=Role.org_member, response_model=list[DockerFilePublic]
+)
 def list_docker_files(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -267,7 +279,11 @@ def _owning_root_path(dockerfile_path: str | None, roots: list[str]) -> str:
     return best
 
 
-@router.get("/{target_id}/runtime", response_model=list[DockerBuildTelemetryPublic])
+@router.get(
+    "/{target_id}/runtime",
+    role=Role.org_member,
+    response_model=list[DockerBuildTelemetryPublic],
+)
 def list_docker_runtime(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -329,7 +345,9 @@ def list_docker_runtime(
     ]
 
 
-@router.get("/{target_id}/fixes", response_model=list[DockerFixPublic])
+@router.get(
+    "/{target_id}/fixes", role=Role.org_member, response_model=list[DockerFixPublic]
+)
 def list_docker_fixes(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -344,7 +362,9 @@ def list_docker_fixes(
     return [to_docker_fix_public(f) for f in fixes]
 
 
-@router.post("/{target_id}/fixes", status_code=202)
+@router.post(
+    "/{target_id}/fixes", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_docker_fix_generation(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -420,7 +440,12 @@ class DockerRuntimeFixRequest(BaseModel):
     enrichment_ids: list[uuid.UUID]
 
 
-@router.post("/{target_id}/runtime-fixes", status_code=202)
+@router.post(
+    "/{target_id}/runtime-fixes",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 def trigger_docker_runtime_fix_generation(
     target_id: uuid.UUID,
     body: DockerRuntimeFixRequest,
@@ -519,7 +544,9 @@ def trigger_docker_runtime_fix_generation(
     return {"status": "queued", "queued": queued}
 
 
-@router.post("/{target_id}/deliver", status_code=202)
+@router.post(
+    "/{target_id}/deliver", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_docker_delivery(
     target_id: uuid.UUID,
     session: SessionDep,

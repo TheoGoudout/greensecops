@@ -234,6 +234,30 @@ class Settings(BaseSettings):
         """
         return bool(self.STRIPE_SECRET_KEY)
 
+    # Rate limiting
+    # Abuse/DoS guard, deliberately separate from the billing quota system in
+    # services/billing/quota.py: that meters *paid allowance* over a billing
+    # period and answers 402, this caps *request frequency* and answers 429.
+    RATE_LIMIT_ENABLED: bool = True
+    # Applied to every endpoint that does not declare its own limit. Requests
+    # are keyed by authenticated user id when a bearer token is present, and by
+    # client address otherwise (see core/rate_limit.rate_limit_key).
+    RATE_LIMIT_DEFAULT: str = "300/minute"
+    # Counter storage. Empty falls back to REDIS_URL so the limit is shared
+    # across the 4 uvicorn workers and every replica; an explicit "memory://"
+    # makes it per-process, which is only correct for tests.
+    RATE_LIMIT_STORAGE_URI: str = ""
+    # Read the client address from X-Forwarded-For instead of the socket peer.
+    # Enable ONLY behind a trusted reverse proxy (the Coolify/Traefik deploy):
+    # the header is caller-supplied, so trusting it on a directly-exposed
+    # backend lets anyone mint an unlimited number of rate-limit buckets.
+    RATE_LIMIT_TRUST_PROXY_HEADERS: bool = False
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def rate_limit_storage_uri(self) -> str:
+        return self.RATE_LIMIT_STORAGE_URI or self.REDIS_URL
+
     # Observability
     SENTRY_DSN: HttpUrl | None = None
 

@@ -1,17 +1,18 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import HTTPException, Query
 from sqlmodel import col, func, select
 
 from app.api.deps import (
     CurrentUser,
     SessionDep,
     authorize_repo,
-    get_current_active_superuser,
     get_or_404,
     user_org_ids,
 )
 from app.api.mappers import to_analysis_public
+from app.api.router import Role, RoleRouter
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
     AnalysisPublic,
@@ -26,10 +27,10 @@ from app.workers.tasks.static_analysis import (
     run_static_analysis,
 )
 
-router = APIRouter(prefix="/analyses", tags=["analyses"])
+router = RoleRouter(prefix="/analyses", tags=["analyses"])
 
 
-@router.get("/", response_model=list[AnalysisPublic])
+@router.get("/", role=Role.user, response_model=list[AnalysisPublic])
 def list_analyses(
     session: SessionDep,
     current_user: CurrentUser,
@@ -61,7 +62,7 @@ def list_analyses(
     return [to_analysis_public(a) for a in session.exec(query).all()]
 
 
-@router.get("/{analysis_id}", response_model=AnalysisPublic)
+@router.get("/{analysis_id}", role=Role.org_member, response_model=AnalysisPublic)
 def get_analysis(
     analysis_id: uuid.UUID,
     session: SessionDep,
@@ -75,7 +76,9 @@ def get_analysis(
     return to_analysis_public(analysis)
 
 
-@router.post("/trigger/{repo_id}", status_code=202)
+@router.post(
+    "/trigger/{repo_id}", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_analysis(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -120,7 +123,12 @@ def trigger_analysis(
     return {"status": "queued", "repo_id": str(repo_id)}
 
 
-@router.post("/reanalyze-for-workflow/{workflow_file_id}", status_code=202)
+@router.post(
+    "/reanalyze-for-workflow/{workflow_file_id}",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
+)
 def reanalyze_for_workflow(
     workflow_file_id: uuid.UUID,
     session: SessionDep,
@@ -157,8 +165,9 @@ def reanalyze_for_workflow(
 
 @router.post(
     "/reanalyze-all",
+    role=Role.admin,
+    limit=LIMIT_EXPENSIVE,
     status_code=202,
-    dependencies=[Depends(get_current_active_superuser)],
 )
 def reanalyze_all() -> dict[str, str]:
     """Fan out a fresh static analysis across all enabled repositories.
