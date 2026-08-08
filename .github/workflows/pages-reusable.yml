@@ -316,7 +316,12 @@ jobs:
           workingDirectory: landing
           # `versions upload` creates a version with its own preview URL and
           # shifts no traffic, so the staging Worker carries on serving main.
-          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }} --message "PR #${{ github.event.number }} at ${{ github.sha }}"
+          #
+          # No --message: wrangler-action splits this string on whitespace
+          # without honouring quotes, so `--message "PR #12 at abc"` arrives as
+          # `--message PR` and the rest is dropped. --tag carries the number,
+          # which is what the Cloudflare UI shows anyway.
+          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }}
 
       - name: Extract the preview URL
         id: preview
@@ -415,7 +420,7 @@ jobs:
           wranglerVersion: ${{ env.WRANGLER_VERSION }}
           packageManager: npm
           workingDirectory: frontend
-          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }} --message "PR #${{ github.event.number }} at ${{ github.sha }}"
+          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }}
 
       - name: Extract the preview URL
         id: preview
@@ -502,7 +507,7 @@ jobs:
           wranglerVersion: ${{ env.WRANGLER_VERSION }}
           packageManager: npm
           workingDirectory: docs
-          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }} --message "PR #${{ github.event.number }} at ${{ github.sha }}"
+          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }}
 
       - name: Extract the preview URL
         id: preview
