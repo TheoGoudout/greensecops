@@ -115,6 +115,17 @@ repos:
         files: ^(compose\.yml|deploy/coolify/compose\.yml|scripts/validate_coolify_compose\.py)$
         pass_filenames: false
 
+      # The landing page is substituted twice — by entrypoint.sh in a container
+      # and by pages-reusable.yml on Cloudflare — so the production URLs are
+      # written down twice. A mismatch renders two perfectly valid sites on two
+      # different hostnames, which is exactly the kind of thing nobody notices.
+      - id: landing-defaults-drift
+        name: Check the landing defaults against production.env
+        entry: python3 scripts/validate_landing_defaults.py
+        language: system
+        files: ^(landing/entrypoint\.sh|deploy/cloudflare/env/production\.env|scripts/validate_landing_defaults\.py)$
+        pass_filenames: false
+
       # The project's own rule suite, run against the project's own
       # infrastructure. Any violation fails the commit — see deploy/README.md.
       - id: deploy-terraform-opa

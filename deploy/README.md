@@ -173,10 +173,8 @@ In **Settings → Environments**, create `staging` and `production`. On each, se
 |---|---|
 | `AWS_DEPLOY_ROLE_ARN` | `terraform output github_deploy_role_arn` |
 | `AWS_REGION` | the environment's region |
-| `PUBLIC_APP_URL`, `PUBLIC_API_URL`, `PUBLIC_DOCS_URL`, `PUBLIC_MARKETING_URL` | the environment's hostnames |
-| `PUBLIC_GITHUB_CLIENT_ID`, `PUBLIC_GITHUB_APP_NAME` | the environment's GitHub App |
 
-The `PUBLIC_*` half is what `pages.yml` bakes into the static surfaces, and it belongs here rather than at repository scope because `VITE_API_URL` is compiled into the dashboard bundle — a staging dashboard built against the production API would write to the production database. The contact addresses (`PUBLIC_SUPPORT_EMAIL` … `PUBLIC_PRIVACY_EMAIL`) do not vary and stay at repository scope. See [`deploy/coolify/README.md`](coolify/README.md#1-cloudflare--workers-r2-and-dns) for the full table.
+The static surfaces need nothing here. Their public URLs are declared in [`deploy/cloudflare/env/`](cloudflare/env/) — one file per environment, derived the same way `deploy/terraform/locals.tf` derives them — and a `PUBLIC_*` variable on the environment is an *optional* override for a value you would rather not track, typically `PUBLIC_GITHUB_CLIENT_ID`. See [`deploy/coolify/README.md`](coolify/README.md#1-cloudflare--workers-r2-and-dns).
 
 On `production`, add **required reviewers**. That is the click: a run pauses until a reviewer approves, and only then can it obtain AWS credentials — the role's trust policy pins the OIDC subject to `repo:<owner>/<repo>:environment:production`, so an unapproved job is refused by AWS, not merely by GitHub. The same gate covers the static surfaces, which have no AWS role behind them: `pages.yml` will not publish to production until the run is approved.
 

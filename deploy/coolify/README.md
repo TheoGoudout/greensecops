@@ -137,38 +137,54 @@ Add two repository **secrets** — `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit
 plus R2 if you use the same token) and `CLOUDFLARE_ACCOUNT_ID`. One account
 serves both environments, so these stay at repository scope.
 
-The `PUBLIC_*` **variables** are baked into the shipped JavaScript and are not
-secret. The four URLs and the two GitHub App values differ per environment, so
-set them on the `staging` and `production` GitHub Environments (Settings →
-Environments); an environment's value shadows a repository one of the same name.
-The contact addresses are identical either side and stay at repository scope:
+**The public URLs live in the repository**, one file per environment, at
+[`deploy/cloudflare/env/`](../cloudflare/env/). Each declares a domain and three
+subdomain labels, and the workflow derives the four URLs from them the same way
+`deploy/terraform/locals.tf` does — so a hostname means the same thing on the
+AWS and Cloudflare paths:
 
-| Variable | Scope | Production | Staging |
-|---|---|---|---|
-| `PUBLIC_APP_URL` | environment | `https://app.greensecops.com` | `https://app-staging.greensecops.com` |
-| `PUBLIC_API_URL` | environment | `https://api.greensecops.com` | `https://api-staging.greensecops.com` |
-| `PUBLIC_DOCS_URL` | environment | `https://docs.greensecops.com` | `https://docs-staging.greensecops.com` |
-| `PUBLIC_MARKETING_URL` | environment | `https://greensecops.com` | `https://staging.greensecops.com` |
-| `PUBLIC_GITHUB_CLIENT_ID` | environment | your OAuth client ID | the staging App's |
-| `PUBLIC_GITHUB_APP_NAME` | environment | your GitHub App slug | the staging App's |
-| `PUBLIC_SUPPORT_EMAIL` … `PUBLIC_PRIVACY_EMAIL` | repository | contact addresses | same |
+```
+                deploy/cloudflare/env/production.env   deploy/cloudflare/env/staging.env
+DOMAIN          greensecops.com                        staging.greensecops.com
+landing         https://greensecops.com                https://staging.greensecops.com
+dashboard       https://app.greensecops.com            https://app.staging.greensecops.com
+API             https://api.greensecops.com            https://api.staging.greensecops.com
+docs            https://docs.greensecops.com           https://docs.staging.greensecops.com
+```
+
+Setting a `PUBLIC_*` **variable** on a GitHub Environment overrides the matching
+derived value. Nothing here is secret — every one of these is baked into the
+shipped JavaScript — so the override exists for forks and private deployments
+that would rather not carry a permanent diff against a tracked file, and for
+values like the OAuth client ID that identify your specific App installation
+rather than describing the deployment.
+
+Anything left empty or still `CHANGEME` **fails the build**. That is deliberate:
+an unset variable renders as the empty string, and a dashboard built with
+`VITE_API_URL=""` resolves every API call against its own Worker, which answers
+`200` with `index.html` — a green pipeline publishing a site that is broken only
+at runtime.
 
 Point the apex, `app.` and `docs.` at their Workers as custom domains, and
 `api.` at the Hetzner server's address. Do the same for the four staging
 hostnames.
 
-**Keep staging hostnames one label deep.** Cloudflare's free Universal SSL
-certificate covers `greensecops.com` and `*.greensecops.com` — one level, not
-two. `app-staging.greensecops.com` is covered; `app.staging.greensecops.com` is
-not, and would need Advanced Certificate Manager or Total TLS. Workers custom
-domains issue their own certificate and would survive either way, but the
-Coolify-proxied `api-` record would not, so keep all four consistent.
+**One TLS caveat on the nested staging hostnames.** Cloudflare's free Universal
+SSL covers `greensecops.com` and `*.greensecops.com` — one label deep, so
+`app.staging.greensecops.com` is not on that certificate. It does not matter for
+the three static surfaces: a Workers custom domain provisions its own
+per-hostname certificate at any depth. It matters for `api.staging.`, which is
+not a Worker — leave its DNS record **DNS-only (grey cloud)** so Coolify's proxy
+terminates TLS with its own Let's Encrypt certificate, exactly as production's
+`api.` already does. Proxying it instead needs Advanced Certificate Manager or
+Total TLS, around $10/month.
 
 **Staging needs its own GitHub App.** The backend derives the OAuth callback
 from `FRONTEND_HOST`, and a GitHub App has a single webhook URL — production's
-App cannot also point at `api-staging`. Register a second App and take the
-staging environment's `PUBLIC_GITHUB_CLIENT_ID` and `PUBLIC_GITHUB_APP_NAME`
-from it.
+App cannot also point at `api.staging`. Register a second App and set
+`PUBLIC_GITHUB_CLIENT_ID` on the staging environment from it (an environment
+value shadows the repository one, so staging cannot silently borrow
+production's).
 
 Staging and pull-request previews serve the same pages as production, so
 `pages-reusable.yml` writes a `robots.txt` and an `X-Robots-Tag: noindex` header
