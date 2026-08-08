@@ -140,7 +140,10 @@ jobs:
           LANDING_URL: ${{ needs.preview.outputs.landing-preview-url }}
           FRONTEND_URL: ${{ needs.preview.outputs.frontend-preview-url }}
           DOCS_URL: ${{ needs.preview.outputs.docs-preview-url }}
-          SHA: ${{ github.sha }}
+          # head.sha, not github.sha: on a pull_request event the latter is the
+          # ephemeral merge commit, which is not a commit on the branch and
+          # cannot be looked up by anyone reading the comment.
+          SHA: ${{ github.event.pull_request.head.sha }}
         # One comment per pull request, edited in place. A comment per push
         # would bury the review under deployment noise on any branch that takes
         # more than a couple of rounds, which is most of them. The marker is
