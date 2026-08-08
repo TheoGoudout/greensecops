@@ -114,11 +114,18 @@ configuration, so keep its backups somewhere else.
 
 ### 1. Cloudflare — Workers, R2 and DNS
 
-Nothing to create by hand: `pages.yml` deploys three Workers —
-`greensecops-landing`, `greensecops-dashboard`, `greensecops-docs` — and
-`wrangler deploy` creates each one on its first run. The name, the build output
-directory and the 404 behaviour of each live in the `wrangler.jsonc` beside the
-site it deploys (`landing/`, `frontend/`, `docs/`).
+Nothing to create by hand: `pages.yml` deploys **six** Workers — a production
+and a staging one for each surface — and `wrangler deploy` creates each on its
+first run. The build output directory and 404 behaviour live in the
+`wrangler.jsonc` beside the site it deploys (`landing/`, `frontend/`, `docs/`),
+where production is the top-level configuration and staging is the `env.staging`
+block:
+
+| Surface | Production Worker | Staging Worker |
+|---|---|---|
+| landing | `greensecops-landing` | `greensecops-landing-staging` |
+| dashboard | `greensecops-dashboard` | `greensecops-dashboard-staging` |
+| docs | `greensecops-docs` | `greensecops-docs-staging` |
 
 Your zone must be on Cloudflare nameservers. Unlike Pages, Workers cannot serve
 a custom domain whose DNS is hosted elsewhere.
@@ -127,22 +134,46 @@ Create an R2 bucket for scan artifacts and an R2 API token scoped to it. R2's
 S3 endpoint is `https://<account-id>.r2.cloudflarestorage.com`.
 
 Add two repository **secrets** — `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit,
-plus R2 if you use the same token) and `CLOUDFLARE_ACCOUNT_ID` — and these
-repository **variables**, which are baked into the shipped JavaScript and are
-not secret:
+plus R2 if you use the same token) and `CLOUDFLARE_ACCOUNT_ID`. One account
+serves both environments, so these stay at repository scope.
 
-| Variable | Example |
-|---|---|
-| `PUBLIC_APP_URL` | `https://app.greensecops.com` |
-| `PUBLIC_API_URL` | `https://api.greensecops.com` |
-| `PUBLIC_DOCS_URL` | `https://docs.greensecops.com` |
-| `PUBLIC_MARKETING_URL` | `https://greensecops.com` |
-| `PUBLIC_GITHUB_CLIENT_ID` | your OAuth client ID |
-| `PUBLIC_GITHUB_APP_NAME` | your GitHub App slug |
-| `PUBLIC_SUPPORT_EMAIL` … `PUBLIC_PRIVACY_EMAIL` | contact addresses |
+The `PUBLIC_*` **variables** are baked into the shipped JavaScript and are not
+secret. The four URLs and the two GitHub App values differ per environment, so
+set them on the `staging` and `production` GitHub Environments (Settings →
+Environments); an environment's value shadows a repository one of the same name.
+The contact addresses are identical either side and stay at repository scope:
+
+| Variable | Scope | Production | Staging |
+|---|---|---|---|
+| `PUBLIC_APP_URL` | environment | `https://app.greensecops.com` | `https://app-staging.greensecops.com` |
+| `PUBLIC_API_URL` | environment | `https://api.greensecops.com` | `https://api-staging.greensecops.com` |
+| `PUBLIC_DOCS_URL` | environment | `https://docs.greensecops.com` | `https://docs-staging.greensecops.com` |
+| `PUBLIC_MARKETING_URL` | environment | `https://greensecops.com` | `https://staging.greensecops.com` |
+| `PUBLIC_GITHUB_CLIENT_ID` | environment | your OAuth client ID | the staging App's |
+| `PUBLIC_GITHUB_APP_NAME` | environment | your GitHub App slug | the staging App's |
+| `PUBLIC_SUPPORT_EMAIL` … `PUBLIC_PRIVACY_EMAIL` | repository | contact addresses | same |
 
 Point the apex, `app.` and `docs.` at their Workers as custom domains, and
-`api.` at the Hetzner server's address.
+`api.` at the Hetzner server's address. Do the same for the four staging
+hostnames.
+
+**Keep staging hostnames one label deep.** Cloudflare's free Universal SSL
+certificate covers `greensecops.com` and `*.greensecops.com` — one level, not
+two. `app-staging.greensecops.com` is covered; `app.staging.greensecops.com` is
+not, and would need Advanced Certificate Manager or Total TLS. Workers custom
+domains issue their own certificate and would survive either way, but the
+Coolify-proxied `api-` record would not, so keep all four consistent.
+
+**Staging needs its own GitHub App.** The backend derives the OAuth callback
+from `FRONTEND_HOST`, and a GitHub App has a single webhook URL — production's
+App cannot also point at `api-staging`. Register a second App and take the
+staging environment's `PUBLIC_GITHUB_CLIENT_ID` and `PUBLIC_GITHUB_APP_NAME`
+from it.
+
+Staging and pull-request previews serve the same pages as production, so
+`pages-reusable.yml` writes a `robots.txt` and an `X-Robots-Tag: noindex` header
+into every non-production build. Nothing but that stops them competing with the
+real site in search results — there is no `robots.txt` in the repository.
 
 ### 2. Hetzner — the server
 
@@ -195,8 +226,18 @@ Cloudflare's.
 ### 5. Deploy
 
 Push to `main`. `images.yml` publishes the backend and OPA images to GHCR and
-`pages.yml` publishes the three static sites. Then hit **Deploy** in Coolify,
-which pulls the new images and restarts the stack.
+`pages.yml` publishes the three static sites **to staging**. Look at staging,
+then promote both halves:
+
+1. Run the **pages** workflow (Actions → pages → Run workflow) with
+   `environment: production`. It waits for the reviewer the `production`
+   environment requires.
+2. Hit **Deploy** in Coolify, which pulls the new images and restarts the stack.
+
+Do both, and close together. The dashboard ships a generated OpenAPI client, so
+a promoted dashboard talking to an unpromoted API breaks against a contract the
+server has not shipped yet. For a change that breaks compatibility, deploy the
+backend first.
 
 If your GHCR packages are private, add a registry credential in Coolify with a
 personal access token holding `read:packages`.
@@ -234,7 +275,9 @@ set `--concurrency` higher in the meantime.
 
 **Static sites deploy separately from the API.** A release that changes both
 the frontend and a backend contract lands in two places at slightly different
-times. For a change that breaks compatibility, deploy the backend first.
+times. Both promotions are manual so they can be done in one sitting — see
+step 5 — but nothing enforces the pairing, and nothing rolls one back when the
+other fails. For a change that breaks compatibility, deploy the backend first.
 
 ## Running other projects on the same server
 

@@ -12,5 +12,28 @@
     // /infrastructure/42/terraform breaks on reload. This is the native
     // replacement for the `/*  /index.html  200` rule in _redirects.
     "not_found_handling": "single-page-application"
+  },
+
+  // Everything above is production: `wrangler deploy` with no --env still
+  // targets `greensecops-dashboard`, so the live Worker is unaffected by the
+  // existence of this block.
+  //
+  // The dashboard is the surface where the split actually matters. VITE_API_URL
+  // is baked into the bundle at build time, so a staging dashboard is only
+  // staging if it was *built* against the staging API — the same assets cannot
+  // be promoted between the two, they have to be rebuilt. The environment's
+  // PUBLIC_* variables come from the matching GitHub Environment.
+  "env": {
+    "staging": {
+      "name": "greensecops-dashboard-staging",
+      // `assets` is repeated rather than left to environment inheritance.
+      // Wrangler does inherit it, but a named environment that silently
+      // resolves to no assets deploys an empty site, and this is the cheap
+      // way to make `deploy --dry-run --env staging` catch that instead.
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application"
+      }
+    }
   }
 }
