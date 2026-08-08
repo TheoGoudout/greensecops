@@ -101,11 +101,7 @@ jobs:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/pages-reusable.yml
     permissions:
-      # A reusable workflow cannot grant itself more than its caller holds, so
-      # the comment job's pull-requests:write has to be allowed from here. The
-      # three publishing jobs pin themselves back to contents:read.
       contents: read
-      pull-requests: write
     with:
       # Previews build against staging — its variables, its Worker, its
       # noindex headers — so an unreviewed branch can never resolve to the
@@ -115,3 +111,70 @@ jobs:
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  comment:
+    name: Preview URLs
+    needs: preview
+    # Lives here rather than in pages-reusable.yml because a called workflow's
+    # permissions are validated statically across every one of its jobs, before
+    # any `if:` is evaluated. A comment job in there asking for
+    # pull-requests:write failed the staging and production callers at startup
+    # — they grant only contents:read, and no condition could talk GitHub out
+    # of it. Here the permission is scoped to the one path that needs it.
+    #
+    # Skipped when there is no URL to report: a fork gets no secrets, so
+    # nothing was uploaded and its token could not comment anyway.
+    if: needs.preview.outputs.frontend-preview-url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Post or update the preview comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          LANDING_URL: ${{ needs.preview.outputs.landing-preview-url }}
+          FRONTEND_URL: ${{ needs.preview.outputs.frontend-preview-url }}
+          DOCS_URL: ${{ needs.preview.outputs.docs-preview-url }}
+          SHA: ${{ github.sha }}
+        # One comment per pull request, edited in place. A comment per push
+        # would bury the review under deployment noise on any branch that takes
+        # more than a couple of rounds, which is most of them. The marker is
+        # how the comment finds itself again on the next run.
+        run: |
+          set -euo pipefail
+          marker='<!-- pages-preview -->'
+
+          body=$(cat <<EOF
+          ${marker}
+          ### Preview
+
+          | Surface | URL |
+          |---|---|
+          | Landing | ${LANDING_URL:-—} |
+          | Dashboard | ${FRONTEND_URL:-—} |
+          | Documentation | ${DOCS_URL:-—} |
+
+          Built from \`${SHA}\` against the **staging** API and marked
+          \`noindex\`. These are Worker versions, not deployments — the staging
+          site itself still serves \`main\`.
+          EOF
+          )
+
+          # --paginate runs the filter once per page, so a match on any page
+          # prints an id and the rest print nothing. Take the first, without a
+          # pipe: `| head -1` would close gh's stdout early on a long thread and
+          # turn the SIGPIPE into a failure under `set -o pipefail`.
+          ids=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
+          id=${ids%%$'\n'*}
+
+          if [ -n "${id}" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -f body="${body}"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="${body}"
+          fi

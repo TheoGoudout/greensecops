@@ -79,6 +79,22 @@ on:
       CLOUDFLARE_ACCOUNT_ID:
         description: Cloudflare account the Workers live in.
         required: false
+    outputs:
+      # Empty on every run that is not a preview, and on preview runs with no
+      # Cloudflare credentials. pages.yml owns the job that reports these,
+      # because a called workflow's permissions are validated statically across
+      # all of its jobs — a `comment` job here asking for pull-requests:write
+      # would fail the staging and production callers at startup, before any
+      # `if:` was evaluated, even though it could never run on those paths.
+      landing-preview-url:
+        description: Preview URL for the landing page.
+        value: ${{ jobs.landing.outputs.preview-url }}
+      frontend-preview-url:
+        description: Preview URL for the dashboard.
+        value: ${{ jobs.frontend.outputs.preview-url }}
+      docs-preview-url:
+        description: Preview URL for the documentation.
+        value: ${{ jobs.docs.outputs.preview-url }}
 
 permissions: {}
 
@@ -514,66 +530,3 @@ jobs:
           workingDirectory: docs
           command: deploy ${{ env.WRANGLER_ENV }}
 
-  comment:
-    name: Preview URLs
-    needs: [landing, frontend, docs]
-    # Skipped when nothing was uploaded, which is the fork and
-    # unconfigured-account case — those runs have no URL to report and, on a
-    # fork, a read-only token that could not post one anyway.
-    if: inputs.preview && needs.frontend.outputs.preview-url != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    permissions:
-      # The one place this workflow writes anything back to GitHub. Scoped to
-      # the job so the three publishing jobs stay on contents:read, and needing
-      # no contents:read itself because it never checks the repository out.
-      pull-requests: write
-
-    steps:
-      - name: Post or update the preview comment
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.number }}
-          LANDING_URL: ${{ needs.landing.outputs.preview-url }}
-          FRONTEND_URL: ${{ needs.frontend.outputs.preview-url }}
-          DOCS_URL: ${{ needs.docs.outputs.preview-url }}
-          SHA: ${{ github.sha }}
-        # One comment per pull request, edited in place. A comment per push
-        # would bury the review under deployment noise on any branch that takes
-        # more than a couple of rounds, which is most of them. The marker is
-        # how the comment finds itself again on the next run.
-        run: |
-          set -euo pipefail
-          marker='<!-- pages-preview -->'
-
-          body=$(cat <<EOF
-          ${marker}
-          ### Preview
-
-          | Surface | URL |
-          |---|---|
-          | Landing | ${LANDING_URL:-—} |
-          | Dashboard | ${FRONTEND_URL:-—} |
-          | Documentation | ${DOCS_URL:-—} |
-
-          Built from \`${SHA}\` against the **staging** API and marked
-          \`noindex\`. These are Worker versions, not deployments — the staging
-          site itself still serves \`main\`.
-          EOF
-          )
-
-          # --paginate runs the filter once per page, so a match on any page
-          # prints an id and the rest print nothing. Take the first, without a
-          # pipe: `| head -1` would close gh's stdout early on a long thread and
-          # turn the SIGPIPE into a failure under `set -o pipefail`.
-          ids=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-            --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
-          id=${ids%%$'\n'*}
-
-          if [ -n "${id}" ]; then
-            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -f body="${body}"
-          else
-            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="${body}"
-          fi
