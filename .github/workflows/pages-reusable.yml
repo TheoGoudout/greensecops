@@ -1,0 +1,536 @@
+name: pages-reusable
+
+# The mechanics behind pages.yml: build the three static surfaces — landing,
+# dashboard and docs — and publish them to Cloudflare Workers as whichever
+# environment the caller asked for.
+#
+# The approval gate is the `environment:` declaration on the publishing jobs
+# below, exactly as in deploy-reusable.yml: on `production` its protection rules
+# hold the run until a reviewer approves. `environment:` is a job-level key —
+# there is no way to scope it to a step — which is why the jobs live here rather
+# than being parameterised inside pages.yml.
+#
+# Where the URLs come from: deploy/cloudflare/env/<environment>.env declares a
+# domain and three subdomain labels, and the `config` job derives the four
+# public URLs from them exactly as deploy/terraform/locals.tf:294 does, so a
+# hostname means the same thing on the AWS and Cloudflare paths.
+#
+# That file is the only source — no GitHub variable is consulted, and that is a
+# correctness requirement rather than a preference. The `vars` context flattens
+# organisation, repository and environment scope into one namespace with no way
+# to tell which scope a value came from, so a repository-scoped PUBLIC_API_URL
+# holding the production hostname would be read by the *staging* build and quietly
+# point it at the production database. Reading nothing removes the question.
+#
+# The config job also refuses to hand over an empty or CHANGEME value. Nothing
+# downstream would notice one: GitHub renders an unset variable as the empty
+# string, envsubst substitutes it happily, and a dashboard built with
+# VITE_API_URL="" resolves every API call against its own Worker, which answers
+# 200 with index.html because of not_found_handling. That is a green pipeline
+# publishing a site broken only at runtime, so it is caught up front.
+#
+# Production is the top-level configuration in each wrangler.jsonc; staging is a
+# named environment (`env.staging`) deploying a second, separate Worker. So the
+# only difference between publishing the two is the `--env staging` flag, which
+# WRANGLER_ENV below computes once.
+#
+# Nothing is promoted between environments — each is built from scratch. The
+# dashboard bakes VITE_API_URL into its bundle and the docs bake html_baseurl
+# into every page, so a staging artifact is not a production artifact wearing a
+# different label; it is a different artifact.
+#
+# `packageManager: npm` is set on every wrangler-action step rather than left to
+# the action's auto-detection, which looks for a lockfile in the working
+# directory only. There is none in landing/, frontend/ or docs/ today, so it
+# would pick npm anyway — but a stray bun.lock in landing/ or docs/ would flip
+# it to bun, which those two jobs never install.
+#
+# Requires two repository secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
+# — one account serves both environments. Publishing is skipped when the token
+# is absent, so a fork never fails on this: `pull_request` runs from a fork are
+# handed no secrets at all, which makes HAS_CLOUDFLARE false and drops them onto
+# the credential-free `deploy --dry-run` path with no fork check needed.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Environment to publish to.
+        required: true
+        type: string
+      preview:
+        description: >-
+          Upload a throwaway version and report its URL instead of deploying.
+          Used for pull requests, always against the staging Worker.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      # Named rather than inherited. `secrets: inherit` would hand this
+      # workflow every secret the repository holds — the GHCR, Smokeshow and
+      # pre-commit tokens included — for the two it actually uses.
+      #
+      # Neither is required: a fork gets no secrets at all, and an account with
+      # no Cloudflare setup has none to give. Both arrive empty there, which is
+      # exactly what HAS_CLOUDFLARE below tests for.
+      CLOUDFLARE_API_TOKEN:
+        description: Workers Scripts:Edit token. Empty disables publishing.
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        description: Cloudflare account the Workers live in.
+        required: false
+    outputs:
+      # Empty on every run that is not a preview, and on preview runs with no
+      # Cloudflare credentials. pages.yml owns the job that reports these,
+      # because a called workflow's permissions are validated statically across
+      # all of its jobs — a `comment` job here asking for pull-requests:write
+      # would fail the staging and production callers at startup, before any
+      # `if:` was evaluated, even though it could never run on those paths.
+      landing-preview-url:
+        description: Preview URL for the landing page.
+        value: ${{ jobs.landing.outputs.preview-url }}
+      frontend-preview-url:
+        description: Preview URL for the dashboard.
+        value: ${{ jobs.frontend.outputs.preview-url }}
+      docs-preview-url:
+        description: Preview URL for the documentation.
+        value: ${{ jobs.docs.outputs.preview-url }}
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ inputs.environment }}-${{ github.ref }}
+  # A superseded staging build is worth cancelling; a half-finished production
+  # rollout is not.
+  cancel-in-progress: ${{ inputs.environment != 'production' }}
+
+env:
+  # Pinned so a deploy is reproducible: wrangler-action installs whatever is
+  # latest on npm otherwise, which makes the deploying version a function of
+  # the date rather than of this repository.
+  WRANGLER_VERSION: "4.118.0"
+  # Production is the unnamed top-level configuration, so it takes no flag.
+  WRANGLER_ENV: ${{ inputs.environment == 'production' && '' || '--env staging' }}
+  # Empty on forks and on accounts that have not configured Cloudflare, which is
+  # what keeps this workflow green for them.
+  HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+
+jobs:
+  config:
+    name: Resolve ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Deliberately not bound to `environment:`. It reads a tracked file and no
+    # GitHub variables, so it needs no environment to resolve against — and
+    # leaving it unbound means a malformed domain or an unseeded CHANGEME fails
+    # here, before a production dispatch wakes a reviewer for an approval that
+    # was never going to build. The gate itself is unaffected: the three
+    # publishing jobs below carry their own `environment:`, which is what
+    # production's protection rules actually hold.
+    permissions:
+      contents: read
+    outputs:
+      app-url: ${{ steps.resolve.outputs.app-url }}
+      api-url: ${{ steps.resolve.outputs.api-url }}
+      docs-url: ${{ steps.resolve.outputs.docs-url }}
+      marketing-url: ${{ steps.resolve.outputs.marketing-url }}
+      github-app-name: ${{ steps.resolve.outputs.github-app-name }}
+      github-client-id: ${{ steps.resolve.outputs.github-client-id }}
+      support-email: ${{ steps.resolve.outputs.support-email }}
+      sales-email: ${{ steps.resolve.outputs.sales-email }}
+      legal-email: ${{ steps.resolve.outputs.legal-email }}
+      privacy-email: ${{ steps.resolve.outputs.privacy-email }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the environment's URLs
+        id: resolve
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          file="deploy/cloudflare/env/${ENVIRONMENT}.env"
+          if [ ! -f "${file}" ]; then
+            echo "::error::${file} does not exist. Every environment pages.yml can dispatch needs one."
+            exit 1
+          fi
+          set -a
+          # shellcheck source=/dev/null  # the path is an input, not a literal
+          . "./${file}"
+          set +a
+
+          missing=0
+
+          # Check one resolved value and publish it as a job output.
+          #
+          # Nothing downstream would fail on an empty one: GitHub renders an
+          # unset variable as the empty string, envsubst substitutes it happily,
+          # and a dashboard built with VITE_API_URL="" resolves every API call
+          # against its own Worker — which answers 200 with index.html because
+          # of not_found_handling, so the client parses HTML as JSON at runtime.
+          # A green build publishing a site broken only at runtime is the thing
+          # to prevent, so the check happens here or nowhere.
+          emit() {
+            # A bare https:// means DOMAIN was empty; a leading dot means the
+            # subdomain label was; a trailing dot means the domain was and the
+            # label was not. Those are the three shapes a half-filled file makes.
+            case "$2" in
+              ""|https://|https://.*|https://*.|*CHANGEME*)
+                echo "::error::$1 is unset, incomplete or still CHANGEME for ${ENVIRONMENT}. Set it in ${file}."
+                missing=1
+                ;;
+            esac
+            echo "$1=$2" >> "$GITHUB_OUTPUT"
+          }
+
+          # The same derivation as deploy/terraform/locals.tf:294, so a hostname
+          # means the same thing on both deployment paths.
+          emit app-url "https://${APP_SUBDOMAIN:-}.${DOMAIN:-}"
+          emit api-url "https://${API_SUBDOMAIN:-}.${DOMAIN:-}"
+          emit docs-url "https://${DOCS_SUBDOMAIN:-}.${DOMAIN:-}"
+          emit marketing-url "https://${DOMAIN:-}"
+
+          emit github-app-name "${GITHUB_APP_NAME:-}"
+          emit github-client-id "${GITHUB_CLIENT_ID:-}"
+          emit support-email "${SUPPORT_EMAIL:-}"
+          emit sales-email "${SALES_EMAIL:-}"
+          emit legal-email "${LEGAL_EMAIL:-}"
+          emit privacy-email "${PRIVACY_EMAIL:-}"
+
+          exit "${missing}"
+
+      - name: Summarise
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          APP_URL: ${{ steps.resolve.outputs.app-url }}
+          API_URL: ${{ steps.resolve.outputs.api-url }}
+          DOCS_URL: ${{ steps.resolve.outputs.docs-url }}
+          MARKETING_URL: ${{ steps.resolve.outputs.marketing-url }}
+        run: |
+          {
+            echo "## ${ENVIRONMENT}"
+            echo
+            echo "| Surface | URL |"
+            echo "|---|---|"
+            echo "| Landing | ${MARKETING_URL} |"
+            echo "| Dashboard | ${APP_URL} |"
+            echo "| API | ${API_URL} |"
+            echo "| Documentation | ${DOCS_URL} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  landing:
+    name: Landing page (${{ inputs.environment }})
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    # Declared explicitly rather than inherited: the caller has to grant
+    # pull-requests:write for the comment job below, and without this the three
+    # publishing jobs would silently widen to match it.
+    permissions:
+      contents: read
+    outputs:
+      preview-url: ${{ steps.preview.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install envsubst
+        # gettext-base is present on the current runner image, but the landing
+        # build silently produces pages full of literal ${APP_URL} if it ever
+        # is not — installing it explicitly makes that a build failure instead.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gettext-base
+
+      - name: Substitute the site's URLs and contact addresses
+        # landing/entrypoint.sh does this at container start-up. There is no
+        # container here, so the same substitution happens at build time from
+        # the same variable list — keep the two in step. entrypoint.sh's
+        # hardcoded defaults are the production values, which is why
+        # scripts/validate_landing_defaults.py asserts they still match
+        # deploy/cloudflare/env/production.env.
+        env:
+          APP_URL: ${{ needs.config.outputs.app-url }}
+          DOCS_URL: ${{ needs.config.outputs.docs-url }}
+          MARKETING_URL: ${{ needs.config.outputs.marketing-url }}
+          SUPPORT_EMAIL: ${{ needs.config.outputs.support-email }}
+          SALES_EMAIL: ${{ needs.config.outputs.sales-email }}
+          LEGAL_EMAIL: ${{ needs.config.outputs.legal-email }}
+          PRIVACY_EMAIL: ${{ needs.config.outputs.privacy-email }}
+        run: |
+          set -euo pipefail
+          mkdir -p landing/dist
+          cp -r landing/assets landing/dist/
+          for f in landing/*.html; do
+            envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' \
+              < "$f" > "landing/dist/$(basename "$f")"
+          done
+          # Reproduces `error_page 404 /index.html` from landing/nginx.conf.
+          # landing/wrangler.jsonc sets not_found_handling to "404-page", which
+          # serves this file — with a real 404 status — for anything unmatched.
+          # The extensionless paths the site links to need no rule: Workers'
+          # default html_handling resolves /pricing to pricing.html, which is
+          # the rest of nginx's `try_files $uri $uri.html`.
+          cp landing/dist/index.html landing/dist/404.html
+          cp deploy/cloudflare/landing/_headers landing/dist/_headers
+
+      - name: Keep this copy out of search results
+        # Staging and previews serve the same copy as production. Left alone
+        # they would be indexed and compete with it — there is no robots.txt in
+        # the repository, so nothing else prevents that. Both mechanisms are
+        # written because they catch different crawlers: robots.txt stops the
+        # ones that check before fetching, X-Robots-Tag stops the ones that do
+        # not check at all.
+        if: inputs.environment != 'production'
+        run: |
+          set -euo pipefail
+          printf '\n/*\n  X-Robots-Tag: noindex, nofollow\n' >> landing/dist/_headers
+          printf 'User-agent: *\nDisallow: /\n' > landing/dist/robots.txt
+
+      - name: Validate the Worker configuration
+        # Only where nothing else will validate it. A configured account runs
+        # either `versions upload` or `deploy` below, both of which resolve the
+        # config for real; this is the fork and unconfigured-account path.
+        if: env.HAS_CLOUDFLARE != 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: landing
+          # --dry-run resolves the config and the asset directory without
+          # contacting the account, so this runs on forks and pull requests.
+          command: deploy --dry-run ${{ env.WRANGLER_ENV }}
+
+      - name: Upload a preview version
+        id: preview-upload
+        if: inputs.preview && env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: landing
+          # `versions upload` creates a version with its own preview URL and
+          # shifts no traffic, so the staging Worker carries on serving main.
+          #
+          # No --message: wrangler-action splits this string on whitespace
+          # without honouring quotes, so `--message "PR #12 at abc"` arrives as
+          # `--message PR` and the rest is dropped. --tag carries the number,
+          # which is what the Cloudflare UI shows anyway.
+          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }}
+
+      - name: Extract the preview URL
+        id: preview
+        if: inputs.preview && env.HAS_CLOUDFLARE == 'true'
+        env:
+          STDOUT: ${{ steps.preview-upload.outputs.command-output }}
+          STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
+        run: |
+          set -euo pipefail
+          # wrangler reports the version preview URL on one stream or the other
+          # depending on how it detects the terminal, so search both.
+          url=$(printf '%s\n%s\n' "${STDOUT}" "${STDERR}" \
+            | grep -Eom1 'https://[a-z0-9.-]+\.workers\.dev' || true)
+          if [ -z "${url}" ]; then
+            echo "::warning::No preview URL in the wrangler output for landing."
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: ${{ !inputs.preview && env.HAS_CLOUDFLARE == 'true' }}
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: landing
+          command: deploy ${{ env.WRANGLER_ENV }}
+
+  frontend:
+    name: Dashboard (${{ inputs.environment }})
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    outputs:
+      preview-url: ${{ steps.preview.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Build
+        # The same VITE_* arguments frontend/Dockerfile bakes in. They end up
+        # in the shipped bundle either way, so they are variables rather than
+        # secrets — but they are *per-environment* now, because a staging
+        # dashboard built against the production API would write to the
+        # production database. This step is what makes the split real, and why
+        # the config job refuses to hand over an empty API URL.
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ needs.config.outputs.api-url }}
+          VITE_GREENSECOPS_PUBLIC_URL: ${{ needs.config.outputs.api-url }}
+          VITE_GITHUB_OAUTH_CLIENT_ID: ${{ needs.config.outputs.github-client-id }}
+          VITE_GITHUB_APP_NAME: ${{ needs.config.outputs.github-app-name }}
+        run: bun run build
+
+      - name: Add the response headers
+        # SPA routing needs no file: frontend/wrangler.jsonc sets
+        # not_found_handling to "single-page-application", which is what serves
+        # index.html with a 200 for every path TanStack Router owns.
+        run: cp deploy/cloudflare/frontend/_headers frontend/dist/_headers
+
+      - name: Keep this copy out of search results
+        if: inputs.environment != 'production'
+        run: |
+          set -euo pipefail
+          printf '\n/*\n  X-Robots-Tag: noindex, nofollow\n' >> frontend/dist/_headers
+          printf 'User-agent: *\nDisallow: /\n' > frontend/dist/robots.txt
+
+      - name: Validate the Worker configuration
+        if: env.HAS_CLOUDFLARE != 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: frontend
+          command: deploy --dry-run ${{ env.WRANGLER_ENV }}
+
+      - name: Upload a preview version
+        id: preview-upload
+        if: inputs.preview && env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: frontend
+          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }}
+
+      - name: Extract the preview URL
+        id: preview
+        if: inputs.preview && env.HAS_CLOUDFLARE == 'true'
+        env:
+          STDOUT: ${{ steps.preview-upload.outputs.command-output }}
+          STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
+        run: |
+          set -euo pipefail
+          url=$(printf '%s\n%s\n' "${STDOUT}" "${STDERR}" \
+            | grep -Eom1 'https://[a-z0-9.-]+\.workers\.dev' || true)
+          if [ -z "${url}" ]; then
+            echo "::warning::No preview URL in the wrangler output for the dashboard."
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: ${{ !inputs.preview && env.HAS_CLOUDFLARE == 'true' }}
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: frontend
+          command: deploy ${{ env.WRANGLER_ENV }}
+
+  docs:
+    name: Documentation (${{ inputs.environment }})
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    outputs:
+      preview-url: ${{ steps.preview.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.4"
+          enable-cache: true
+
+      - name: Build
+        # -W matches docs/Dockerfile: a malformed rule METADATA block should
+        # fail the build, not ship a broken page. This is the only place the
+        # documentation is built in CI, so it is also the only gate on that.
+        env:
+          DOCS_BASE_URL: ${{ needs.config.outputs.docs-url }}
+        run: |
+          uv sync --package docs
+          uv run sphinx-build -b html -W docs docs/_build/html
+
+      - name: Add the response headers
+        run: cp deploy/cloudflare/docs/_headers docs/_build/html/_headers
+
+      - name: Keep this copy out of search results
+        if: inputs.environment != 'production'
+        run: |
+          set -euo pipefail
+          printf '\n/*\n  X-Robots-Tag: noindex, nofollow\n' >> docs/_build/html/_headers
+          printf 'User-agent: *\nDisallow: /\n' > docs/_build/html/robots.txt
+
+      - name: Validate the Worker configuration
+        if: env.HAS_CLOUDFLARE != 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: docs
+          command: deploy --dry-run ${{ env.WRANGLER_ENV }}
+
+      - name: Upload a preview version
+        id: preview-upload
+        if: inputs.preview && env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: docs
+          command: versions upload ${{ env.WRANGLER_ENV }} --tag pr-${{ github.event.number }}
+
+      - name: Extract the preview URL
+        id: preview
+        if: inputs.preview && env.HAS_CLOUDFLARE == 'true'
+        env:
+          STDOUT: ${{ steps.preview-upload.outputs.command-output }}
+          STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
+        run: |
+          set -euo pipefail
+          url=$(printf '%s\n%s\n' "${STDOUT}" "${STDERR}" \
+            | grep -Eom1 'https://[a-z0-9.-]+\.workers\.dev' || true)
+          if [ -z "${url}" ]; then
+            echo "::warning::No preview URL in the wrangler output for the documentation."
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: ${{ !inputs.preview && env.HAS_CLOUDFLARE == 'true' }}
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          packageManager: npm
+          workingDirectory: docs
+          command: deploy ${{ env.WRANGLER_ENV }}

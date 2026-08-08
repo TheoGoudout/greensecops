@@ -114,11 +114,18 @@ configuration, so keep its backups somewhere else.
 
 ### 1. Cloudflare — Workers, R2 and DNS
 
-Nothing to create by hand: `pages.yml` deploys three Workers —
-`greensecops-landing`, `greensecops-dashboard`, `greensecops-docs` — and
-`wrangler deploy` creates each one on its first run. The name, the build output
-directory and the 404 behaviour of each live in the `wrangler.jsonc` beside the
-site it deploys (`landing/`, `frontend/`, `docs/`).
+Nothing to create by hand: `pages.yml` deploys **six** Workers — a production
+and a staging one for each surface — and `wrangler deploy` creates each on its
+first run. The build output directory and 404 behaviour live in the
+`wrangler.jsonc` beside the site it deploys (`landing/`, `frontend/`, `docs/`),
+where production is the top-level configuration and staging is the `env.staging`
+block:
+
+| Surface | Production Worker | Staging Worker |
+|---|---|---|
+| landing | `greensecops-landing` | `greensecops-landing-staging` |
+| dashboard | `greensecops-dashboard` | `greensecops-dashboard-staging` |
+| docs | `greensecops-docs` | `greensecops-docs-staging` |
 
 Your zone must be on Cloudflare nameservers. Unlike Pages, Workers cannot serve
 a custom domain whose DNS is hosted elsewhere.
@@ -127,22 +134,67 @@ Create an R2 bucket for scan artifacts and an R2 API token scoped to it. R2's
 S3 endpoint is `https://<account-id>.r2.cloudflarestorage.com`.
 
 Add two repository **secrets** — `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit,
-plus R2 if you use the same token) and `CLOUDFLARE_ACCOUNT_ID` — and these
-repository **variables**, which are baked into the shipped JavaScript and are
-not secret:
+plus R2 if you use the same token) and `CLOUDFLARE_ACCOUNT_ID`. One account
+serves both environments, so these stay at repository scope.
 
-| Variable | Example |
-|---|---|
-| `PUBLIC_APP_URL` | `https://app.greensecops.com` |
-| `PUBLIC_API_URL` | `https://api.greensecops.com` |
-| `PUBLIC_DOCS_URL` | `https://docs.greensecops.com` |
-| `PUBLIC_MARKETING_URL` | `https://greensecops.com` |
-| `PUBLIC_GITHUB_CLIENT_ID` | your OAuth client ID |
-| `PUBLIC_GITHUB_APP_NAME` | your GitHub App slug |
-| `PUBLIC_SUPPORT_EMAIL` … `PUBLIC_PRIVACY_EMAIL` | contact addresses |
+**The public URLs live in the repository**, one file per environment, at
+[`deploy/cloudflare/env/`](../cloudflare/env/). Each declares a domain and three
+subdomain labels, and the workflow derives the four URLs from them the same way
+`deploy/terraform/locals.tf` does — so a hostname means the same thing on the
+AWS and Cloudflare paths:
+
+```
+                deploy/cloudflare/env/production.env   deploy/cloudflare/env/staging.env
+DOMAIN          greensecops.com                        staging.greensecops.com
+landing         https://greensecops.com                https://staging.greensecops.com
+dashboard       https://app.greensecops.com            https://app.staging.greensecops.com
+API             https://api.greensecops.com            https://api.staging.greensecops.com
+docs            https://docs.greensecops.com           https://docs.staging.greensecops.com
+```
+
+**These files are the only source.** No GitHub variable is consulted, which is a
+correctness requirement rather than a preference: the `vars` context flattens
+organisation, repository and environment scope into one namespace with no way to
+tell them apart, so a repository-scoped `PUBLIC_API_URL` holding the production
+hostname would be read by the *staging* build and quietly point it at the
+production database. A fork edits the file. Nothing here is secret — every one
+of these values is baked into the shipped JavaScript.
+
+If you set the `PUBLIC_*` repository variables for an earlier version of this
+workflow, they are now unread and can be deleted. That is tidying, not a fix —
+nothing consults them.
+
+Anything left empty or still `CHANGEME` **fails the build**. That is deliberate:
+an unset variable renders as the empty string, and a dashboard built with
+`VITE_API_URL=""` resolves every API call against its own Worker, which answers
+`200` with `index.html` — a green pipeline publishing a site that is broken only
+at runtime.
 
 Point the apex, `app.` and `docs.` at their Workers as custom domains, and
-`api.` at the Hetzner server's address.
+`api.` at the Hetzner server's address. Do the same for the four staging
+hostnames.
+
+**One TLS caveat on the nested staging hostnames.** Cloudflare's free Universal
+SSL covers `greensecops.com` and `*.greensecops.com` — one label deep, so
+`app.staging.greensecops.com` is not on that certificate. It does not matter for
+the three static surfaces: a Workers custom domain provisions its own
+per-hostname certificate at any depth. It matters for `api.staging.`, which is
+not a Worker — leave its DNS record **DNS-only (grey cloud)** so Coolify's proxy
+terminates TLS with its own Let's Encrypt certificate, exactly as production's
+`api.` already does. Proxying it instead needs Advanced Certificate Manager or
+Total TLS, around $10/month.
+
+**Staging needs its own GitHub App.** The backend derives the OAuth callback
+from `FRONTEND_HOST`, and a GitHub App has a single webhook URL — production's
+App cannot also point at `api.staging`. Staging's is already registered and its
+client ID is in `staging.env`. Production's is not: `production.env` still holds
+`CHANGEME`, so **a production dispatch fails at the config job until that App
+exists and its client ID is filled in.** Staging and previews are unaffected.
+
+Staging and pull-request previews serve the same pages as production, so
+`pages-reusable.yml` writes a `robots.txt` and an `X-Robots-Tag: noindex` header
+into every non-production build. Nothing but that stops them competing with the
+real site in search results — there is no `robots.txt` in the repository.
 
 ### 2. Hetzner — the server
 
@@ -195,8 +247,18 @@ Cloudflare's.
 ### 5. Deploy
 
 Push to `main`. `images.yml` publishes the backend and OPA images to GHCR and
-`pages.yml` publishes the three static sites. Then hit **Deploy** in Coolify,
-which pulls the new images and restarts the stack.
+`pages.yml` publishes the three static sites **to staging**. Look at staging,
+then promote both halves:
+
+1. Run the **pages** workflow (Actions → pages → Run workflow) with
+   `environment: production`. It waits for the reviewer the `production`
+   environment requires.
+2. Hit **Deploy** in Coolify, which pulls the new images and restarts the stack.
+
+Do both, and close together. The dashboard ships a generated OpenAPI client, so
+a promoted dashboard talking to an unpromoted API breaks against a contract the
+server has not shipped yet. For a change that breaks compatibility, deploy the
+backend first.
 
 If your GHCR packages are private, add a registry credential in Coolify with a
 personal access token holding `read:packages`.
@@ -234,7 +296,9 @@ set `--concurrency` higher in the meantime.
 
 **Static sites deploy separately from the API.** A release that changes both
 the frontend and a backend contract lands in two places at slightly different
-times. For a change that breaks compatibility, deploy the backend first.
+times. Both promotions are manual so they can be done in one sitting — see
+step 5 — but nothing enforces the pairing, and nothing rolls one back when the
+other fails. For a change that breaks compatibility, deploy the backend first.
 
 ## Running other projects on the same server
 

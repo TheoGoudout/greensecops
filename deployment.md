@@ -167,6 +167,8 @@ Note that `compose.yml` does not publish any ports — in a Coolify deployment t
 
 It differs from the Compose file above in what it leaves out — no `frontend`, `landing` or `docs` containers, and the Celery scheduler runs embedded in the worker rather than as its own service. See **[deploy/coolify/README.md](deploy/coolify/README.md)**, which also covers running Coolify's control plane on a Raspberry Pi and why that does not restrict which servers you can deploy to.
 
+The three static surfaces have their own staging and production environments, deployed by `.github/workflows/pages.yml`: a push to `main` publishes staging, and production is a manual, reviewed run of the same workflow. Each environment is a separate set of Cloudflare Workers built from its own URLs, declared in [`deploy/cloudflare/env/`](deploy/cloudflare/env/) — `VITE_API_URL` is compiled into the dashboard bundle, so the two cannot be promoted between one another, only rebuilt. Those files are the only source: no GitHub variable is read for them, so a repository-scoped value cannot reach the wrong environment's build.
+
 ## Deploy to AWS with Terraform and Ansible
 
 `deploy/` holds a full AWS deployment: Terraform provisions the infrastructure, Ansible configures the instances and runs the containers. See **[deploy/README.md](deploy/README.md)** for the runbook.

@@ -167,14 +167,18 @@ Every variable maps one-to-one onto a setting in `backend/app/core/config.py`; [
 
 This is what makes deploying a single click, and what puts production behind an approval.
 
-In **Settings → Environments**, create `staging` and `production`. On each, set two **variables**:
+In **Settings → Environments**, create `staging` and `production`. On each, set these **variables**:
 
 | Variable | Value |
 |---|---|
 | `AWS_DEPLOY_ROLE_ARN` | `terraform output github_deploy_role_arn` |
 | `AWS_REGION` | the environment's region |
 
-On `production`, add **required reviewers**. That is the click: a run pauses until a reviewer approves, and only then can it obtain AWS credentials — the role's trust policy pins the OIDC subject to `repo:<owner>/<repo>:environment:production`, so an unapproved job is refused by AWS, not merely by GitHub.
+The static surfaces need nothing here. Their public URLs are declared in [`deploy/cloudflare/env/`](cloudflare/env/) — one file per environment, derived the same way `deploy/terraform/locals.tf` derives them — and no GitHub variable is consulted for them at all, because `vars` cannot distinguish repository from environment scope and a repository-scoped production URL would otherwise be read by the staging build. See [`deploy/coolify/README.md`](coolify/README.md#1-cloudflare--workers-r2-and-dns).
+
+On `production`, add **required reviewers**. That is the click: a run pauses until a reviewer approves, and only then can it obtain AWS credentials — the role's trust policy pins the OIDC subject to `repo:<owner>/<repo>:environment:production`, so an unapproved job is refused by AWS, not merely by GitHub. The same gate covers the static surfaces, which have no AWS role behind them: `pages.yml` will not publish to production until the run is approved.
+
+Also set `production`'s **deployment branches** rule to `main` only. This is the load-bearing guard on the Cloudflare side, where there is no AWS trust policy as a second line — without it, running `pages.yml` by hand from any branch could publish that branch to the live site.
 
 No AWS keys are stored in GitHub. The workflow exchanges a short-lived OIDC token for a session at run time.
 

@@ -5,8 +5,9 @@
   "name": "greensecops-landing",
   "compatibility_date": "2026-08-04",
   "assets": {
-    // Built by .github/workflows/pages.yml, which runs the same envsubst pass
-    // over landing/*.html that entrypoint.sh runs at container start-up.
+    // Built by .github/workflows/pages-reusable.yml, which runs the same
+    // envsubst pass over landing/*.html that entrypoint.sh runs at container
+    // start-up.
     "directory": "./dist",
     // Reproduces `error_page 404 /index.html` from nginx.conf: the workflow
     // copies the substituted index.html to 404.html, and Workers serves it
@@ -17,5 +18,24 @@
     // /pricing to pricing.html, which is the other half of nginx's
     // `try_files $uri $uri.html`, so no _redirects file is needed at all.
     "not_found_handling": "404-page"
+  },
+
+  // Everything above is production: `wrangler deploy` with no --env still
+  // targets `greensecops-landing`, so the live Worker is unaffected by the
+  // existence of this block. Staging is a second Worker on the same account,
+  // built from the same sources with the staging PUBLIC_* values substituted
+  // in — see .github/workflows/pages.yml for which event reaches which.
+  "env": {
+    "staging": {
+      "name": "greensecops-landing-staging",
+      // `assets` is repeated rather than left to environment inheritance.
+      // Wrangler does inherit it, but a named environment that silently
+      // resolves to no assets deploys an empty site, and this is the cheap
+      // way to make `deploy --dry-run --env staging` catch that instead.
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "404-page"
+      }
+    }
   }
 }

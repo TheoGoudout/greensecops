@@ -5,7 +5,8 @@ name: images
 # manifests covering amd64 and arm64.
 #
 # The other three images are gone from that deployment: landing, dashboard and
-# docs are static and go to Cloudflare Pages instead (.github/workflows/pages.yml).
+# docs are static and go to Cloudflare Workers instead
+# (.github/workflows/pages.yml).
 #
 # Both architectures, deliberately. Hetzner's cheapest lines go out of stock
 # routinely — CAX (Ampere/arm64) and CX (Intel/amd64) are frequently

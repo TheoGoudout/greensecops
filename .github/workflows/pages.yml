@@ -9,21 +9,30 @@ name: pages
 # small box. See deploy/coolify/README.md.
 #
 # Workers rather than Pages: Cloudflare's static-asset requests are free and
-# unmetered on both, but Pages is feature-frozen — Workers Logs, Logpush and
-# gradual deployments are Workers-only. Each surface carries its own
-# wrangler.jsonc next to the thing it deploys; this file only builds and hands
-# off. See https://developers.cloudflare.com/workers/static-assets/.
+# unmetered on both, but Pages is feature-frozen — Workers Logs, Logpush and the
+# versions this workflow uses for pull-request previews are Workers-only. Each
+# surface carries its own wrangler.jsonc next to the thing it deploys; the
+# mechanics live in pages-reusable.yml and this file only routes events to
+# environments. See https://developers.cloudflare.com/workers/static-assets/.
 #
-# `packageManager: npm` is set on every wrangler-action step rather than left to
-# the action's auto-detection, which looks for a lockfile in the working
-# directory only. There is none in landing/, frontend/ or docs/ today, so it
-# would pick npm anyway — but a stray bun.lock in landing/ or docs/ would flip
-# it to bun, which those two jobs never install.
+# Which event goes where:
 #
-# Requires two repository secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
-# and the PUBLIC_* repository variables. Publishing is skipped when the token is
-# absent, so a fork never fails on this — but the config validation below still
-# runs, on pull requests too, because `deploy --dry-run` needs no credentials.
+#   push to main         → staging, automatically
+#   workflow_dispatch    → staging or production, whichever was chosen
+#   pull_request         → a throwaway preview version of the staging Worker
+#
+# Production is deliberately not automatic. The dashboard ships a generated
+# OpenAPI client and the API is promoted by hand (Coolify's Deploy button, or
+# deploy.yml on AWS), so a dashboard that raced ahead of the backend on every
+# merge would break against a contract the server had not shipped yet. Making
+# both promotions manual lets them happen in one sitting. It is also why this
+# is not tag-driven: no part of this repository releases by tag, and gating only
+# the static half on tags would widen that gap rather than close it.
+#
+# Two guards keep production off the automatic path. The `if:` conditions below
+# are the visible one; the load-bearing one is the `production` GitHub
+# Environment's deployment-branch rule, which pins it to main and cannot be
+# bypassed by editing this file on a branch. Set both — see deploy/README.md.
 
 on:
   push:
@@ -38,6 +47,7 @@ on:
       - "examples/**"
       - "deploy/cloudflare/**"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/pages-reusable.yml"
   pull_request:
     paths:
       - "landing/**"
@@ -47,184 +57,127 @@ on:
       - "examples/**"
       - "deploy/cloudflare/**"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/pages-reusable.yml"
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to publish to
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
 
 permissions: {}
 
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  # Pinned so a deploy is reproducible: wrangler-action installs whatever is
-  # latest on npm otherwise, which makes the deploying version a function of
-  # the date rather than of this repository.
-  WRANGLER_VERSION: "4.118.0"
-  # Publishing only happens from main, and only when the account is configured.
-  # Pull requests validate the configuration and stop there.
-  HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && github.event_name != 'pull_request' }}
-
 jobs:
-  landing:
-    name: Landing page
+  staging:
+    name: Staging
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    uses: ./.github/workflows/pages-reusable.yml
+    permissions:
+      contents: read
+    with:
+      environment: staging
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  production:
+    name: Production
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
+    uses: ./.github/workflows/pages-reusable.yml
+    permissions:
+      contents: read
+    with:
+      environment: production
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  preview:
+    name: Preview
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/pages-reusable.yml
+    permissions:
+      contents: read
+    with:
+      # Previews build against staging — its variables, its Worker, its
+      # noindex headers — so an unreviewed branch can never resolve to the
+      # production API or touch the production Worker.
+      environment: staging
+      preview: true
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  comment:
+    name: Preview URLs
+    needs: preview
+    # Lives here rather than in pages-reusable.yml because a called workflow's
+    # permissions are validated statically across every one of its jobs, before
+    # any `if:` is evaluated. A comment job in there asking for
+    # pull-requests:write failed the staging and production callers at startup
+    # — they grant only contents:read, and no condition could talk GitHub out
+    # of it. Here the permission is scoped to the one path that needs it.
+    #
+    # Skipped when there is no URL to report: a fork gets no secrets, so
+    # nothing was uploaded and its token could not comment anyway.
+    if: needs.preview.outputs.frontend-preview-url != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+
+    permissions:
+      pull-requests: write
+
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install envsubst
-        # gettext-base is present on the current runner image, but the landing
-        # build silently produces pages full of literal ${APP_URL} if it ever
-        # is not — installing it explicitly makes that a build failure instead.
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq gettext-base
-
-      - name: Substitute the site's URLs and contact addresses
-        # landing/entrypoint.sh does this at container start-up. There is no
-        # container here, so the same substitution happens at build time from
-        # the same variable list — keep the two in step.
+      - name: Post or update the preview comment
         env:
-          APP_URL: ${{ vars.PUBLIC_APP_URL }}
-          DOCS_URL: ${{ vars.PUBLIC_DOCS_URL }}
-          MARKETING_URL: ${{ vars.PUBLIC_MARKETING_URL }}
-          SUPPORT_EMAIL: ${{ vars.PUBLIC_SUPPORT_EMAIL }}
-          SALES_EMAIL: ${{ vars.PUBLIC_SALES_EMAIL }}
-          LEGAL_EMAIL: ${{ vars.PUBLIC_LEGAL_EMAIL }}
-          PRIVACY_EMAIL: ${{ vars.PUBLIC_PRIVACY_EMAIL }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          LANDING_URL: ${{ needs.preview.outputs.landing-preview-url }}
+          FRONTEND_URL: ${{ needs.preview.outputs.frontend-preview-url }}
+          DOCS_URL: ${{ needs.preview.outputs.docs-preview-url }}
+          # head.sha, not github.sha: on a pull_request event the latter is the
+          # ephemeral merge commit, which is not a commit on the branch and
+          # cannot be looked up by anyone reading the comment.
+          SHA: ${{ github.event.pull_request.head.sha }}
+        # One comment per pull request, edited in place. A comment per push
+        # would bury the review under deployment noise on any branch that takes
+        # more than a couple of rounds, which is most of them. The marker is
+        # how the comment finds itself again on the next run.
         run: |
           set -euo pipefail
-          mkdir -p landing/dist
-          cp -r landing/assets landing/dist/
-          for f in landing/*.html; do
-            envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' \
-              < "$f" > "landing/dist/$(basename "$f")"
-          done
-          # Reproduces `error_page 404 /index.html` from landing/nginx.conf.
-          # landing/wrangler.jsonc sets not_found_handling to "404-page", which
-          # serves this file — with a real 404 status — for anything unmatched.
-          # The extensionless paths the site links to need no rule: Workers'
-          # default html_handling resolves /pricing to pricing.html, which is
-          # the rest of nginx's `try_files $uri $uri.html`.
-          cp landing/dist/index.html landing/dist/404.html
-          cp deploy/cloudflare/landing/_headers landing/dist/_headers
+          marker='<!-- pages-preview -->'
 
-      - name: Validate the Worker configuration
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          wranglerVersion: ${{ env.WRANGLER_VERSION }}
-          packageManager: npm
-          workingDirectory: landing
-          # --dry-run resolves the config and the asset directory without
-          # contacting the account, so this runs on forks and pull requests.
-          command: deploy --dry-run
+          body=$(cat <<EOF
+          ${marker}
+          ### Preview
 
-      - name: Publish
-        if: env.HAS_CLOUDFLARE == 'true'
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: ${{ env.WRANGLER_VERSION }}
-          packageManager: npm
-          workingDirectory: landing
-          command: deploy
+          | Surface | URL |
+          |---|---|
+          | Landing | ${LANDING_URL:-—} |
+          | Dashboard | ${FRONTEND_URL:-—} |
+          | Documentation | ${DOCS_URL:-—} |
 
-  frontend:
-    name: Dashboard
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+          Built from \`${SHA}\` against the **staging** API and marked
+          \`noindex\`. These are Worker versions, not deployments — the staging
+          site itself still serves \`main\`.
+          EOF
+          )
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.12
+          # --paginate runs the filter once per page, so a match on any page
+          # prints an id and the rest print nothing. Take the first, without a
+          # pipe: `| head -1` would close gh's stdout early on a long thread and
+          # turn the SIGPIPE into a failure under `set -o pipefail`.
+          ids=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
+          id=${ids%%$'\n'*}
 
-      - name: Install dependencies
-        run: bun ci
-
-      - name: Build
-        # The same VITE_* arguments frontend/Dockerfile bakes in. They end up
-        # in the shipped bundle either way, so they are repository variables
-        # rather than secrets.
-        working-directory: frontend
-        env:
-          VITE_API_URL: ${{ vars.PUBLIC_API_URL }}
-          VITE_GREENSECOPS_PUBLIC_URL: ${{ vars.PUBLIC_API_URL }}
-          VITE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.PUBLIC_GITHUB_CLIENT_ID }}
-          VITE_GITHUB_APP_NAME: ${{ vars.PUBLIC_GITHUB_APP_NAME }}
-        run: bun run build
-
-      - name: Add the response headers
-        # SPA routing needs no file: frontend/wrangler.jsonc sets
-        # not_found_handling to "single-page-application", which is what serves
-        # index.html with a 200 for every path TanStack Router owns.
-        run: cp deploy/cloudflare/frontend/_headers frontend/dist/_headers
-
-      - name: Validate the Worker configuration
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          wranglerVersion: ${{ env.WRANGLER_VERSION }}
-          packageManager: npm
-          workingDirectory: frontend
-          command: deploy --dry-run
-
-      - name: Publish
-        if: env.HAS_CLOUDFLARE == 'true'
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: ${{ env.WRANGLER_VERSION }}
-          packageManager: npm
-          workingDirectory: frontend
-          command: deploy
-
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.4"
-          enable-cache: true
-
-      - name: Build
-        # -W matches docs/Dockerfile: a malformed rule METADATA block should
-        # fail the build, not ship a broken page. This is the only place the
-        # documentation is built in CI, so it is also the only gate on that.
-        env:
-          DOCS_BASE_URL: ${{ vars.PUBLIC_DOCS_URL }}
-        run: |
-          uv sync --package docs
-          uv run sphinx-build -b html -W docs docs/_build/html
-
-      - name: Add the response headers
-        run: cp deploy/cloudflare/docs/_headers docs/_build/html/_headers
-
-      - name: Validate the Worker configuration
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          wranglerVersion: ${{ env.WRANGLER_VERSION }}
-          packageManager: npm
-          workingDirectory: docs
-          command: deploy --dry-run
-
-      - name: Publish
-        if: env.HAS_CLOUDFLARE == 'true'
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: ${{ env.WRANGLER_VERSION }}
-          packageManager: npm
-          workingDirectory: docs
-          command: deploy
+          if [ -n "${id}" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -f body="${body}"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="${body}"
+          fi
