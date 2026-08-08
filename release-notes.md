@@ -2,6 +2,10 @@
 
 ## Latest Changes
 
+### Features
+
+* feat(api): require an explicit role and rate limit on every endpoint. PR [#205](https://github.com/TheoGoudout/greensecops/pull/205) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ### Refactors
 
 * 🔧 Add FastAPI VS Code extension to recommended extensions. PR [#2206](https://github.com/fastapi/greensecops/pull/2206) by [@tiangolo](https://github.com/tiangolo).
