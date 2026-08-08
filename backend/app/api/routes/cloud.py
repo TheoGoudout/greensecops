@@ -1,7 +1,7 @@
 import secrets
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from sqlmodel import col, select
 
 from app.api.deps import (
@@ -16,6 +16,8 @@ from app.api.mappers import (
     to_cloud_finding_public,
     to_cloud_scan_public,
 )
+from app.api.router import Role, RoleRouter
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     CloudAccount,
     CloudAccountCreate,
@@ -31,7 +33,7 @@ from app.services import state_machines as sm
 from app.services.billing.quota import enforce_quota
 from app.workers.tasks.cloud_scan import run_cloud_scan
 
-router = APIRouter(prefix="/cloud-accounts", tags=["cloud"])
+router = RoleRouter(prefix="/cloud-accounts", tags=["cloud"])
 
 # Length of the generated external_id — long enough to be infeasible to
 # guess/replay against another customer's role trust policy.
@@ -50,7 +52,13 @@ def _get_account_for_user(
     return account
 
 
-@router.post("/", response_model=CloudAccountPublic, status_code=201)
+@router.post(
+    "/",
+    role=Role.user,
+    limit=LIMIT_EXPENSIVE,
+    response_model=CloudAccountPublic,
+    status_code=201,
+)
 def create_cloud_account(
     account_in: CloudAccountCreate,
     session: SessionDep,
@@ -70,7 +78,7 @@ def create_cloud_account(
     return to_cloud_account_public(account)
 
 
-@router.get("/", response_model=list[CloudAccountPublic])
+@router.get("/", role=Role.user, response_model=list[CloudAccountPublic])
 def list_cloud_accounts(
     session: SessionDep,
     current_user: CurrentUser,
@@ -91,7 +99,7 @@ def list_cloud_accounts(
     return [to_cloud_account_public(a) for a in accounts]
 
 
-@router.patch("/{account_id}/toggle")
+@router.patch("/{account_id}/toggle", role=Role.org_admin)
 def toggle_cloud_account(
     account_id: uuid.UUID,
     session: SessionDep,
@@ -110,7 +118,7 @@ def toggle_cloud_account(
     return {"cloud_account_id": str(account_id), "enabled": enabled}
 
 
-@router.delete("/{account_id}", status_code=204)
+@router.delete("/{account_id}", role=Role.org_admin, status_code=204)
 def delete_cloud_account(
     account_id: uuid.UUID,
     session: SessionDep,
@@ -123,7 +131,9 @@ def delete_cloud_account(
     session.commit()
 
 
-@router.post("/{account_id}/scan", status_code=202)
+@router.post(
+    "/{account_id}/scan", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_cloud_scan(
     account_id: uuid.UUID,
     session: SessionDep,
@@ -141,7 +151,9 @@ def trigger_cloud_scan(
     return {"status": "queued", "cloud_account_id": str(account_id)}
 
 
-@router.get("/{account_id}/scans", response_model=list[CloudScanPublic])
+@router.get(
+    "/{account_id}/scans", role=Role.org_member, response_model=list[CloudScanPublic]
+)
 def list_cloud_scans(
     account_id: uuid.UUID,
     session: SessionDep,
@@ -157,7 +169,11 @@ def list_cloud_scans(
     return [to_cloud_scan_public(s) for s in scans]
 
 
-@router.get("/{account_id}/findings", response_model=list[CloudFindingPublic])
+@router.get(
+    "/{account_id}/findings",
+    role=Role.org_member,
+    response_model=list[CloudFindingPublic],
+)
 def list_cloud_findings(
     account_id: uuid.UUID,
     session: SessionDep,

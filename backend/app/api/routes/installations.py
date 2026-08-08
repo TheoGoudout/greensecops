@@ -1,17 +1,19 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
 
 from app import crud
 from app.api.deps import CurrentUser, GitHubAppClientDep, SessionDep
+from app.api.router import Role, RoleRouter
 from app.api.routes.webhooks import _enqueue_installation_sync
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import Organization, OrganizationPublic, OrgMember
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/installations", tags=["installations"])
+router = RoleRouter(prefix="/installations", tags=["installations"])
 
 
 class InstallationSyncRequest(BaseModel):
@@ -19,7 +21,7 @@ class InstallationSyncRequest(BaseModel):
     redirect_uri: str | None = None
 
 
-@router.get("/", response_model=list[OrganizationPublic])
+@router.get("/", role=Role.user, response_model=list[OrganizationPublic])
 def list_installations(
     session: SessionDep,
     current_user: CurrentUser,
@@ -35,7 +37,12 @@ def list_installations(
     ]
 
 
-@router.post("/sync", response_model=list[OrganizationPublic])
+@router.post(
+    "/sync",
+    role=Role.user,
+    limit=LIMIT_EXPENSIVE,
+    response_model=list[OrganizationPublic],
+)
 async def sync_installations(
     body: InstallationSyncRequest,
     session: SessionDep,

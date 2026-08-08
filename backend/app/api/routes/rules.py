@@ -1,15 +1,16 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import HTTPException, Query
 from sqlmodel import col, select
 
-from app.api.deps import CurrentUser, SessionDep, get_current_active_superuser
+from app.api.deps import CurrentUser, SessionDep
+from app.api.router import Role, RoleRouter
 from app.models import IssueCategory, Rule, RulePublic
 
-router = APIRouter(prefix="/rules", tags=["rules"])
+router = RoleRouter(prefix="/rules", tags=["rules"])
 
 
-@router.get("/", response_model=list[RulePublic])
+@router.get("/", role=Role.user, response_model=list[RulePublic])
 def list_rules(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
@@ -31,7 +32,7 @@ def list_rules(
     return list(session.exec(query).all())
 
 
-@router.get("/{rule_id}", response_model=RulePublic)
+@router.get("/{rule_id}", role=Role.user, response_model=RulePublic)
 def get_rule(
     rule_id: uuid.UUID,
     session: SessionDep,
@@ -45,8 +46,8 @@ def get_rule(
 
 @router.patch(
     "/{rule_id}/toggle",
+    role=Role.admin,
     response_model=RulePublic,
-    dependencies=[Depends(get_current_active_superuser)],
 )
 def toggle_rule(
     rule_id: uuid.UUID,

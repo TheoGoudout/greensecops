@@ -1,9 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from sqlmodel import select
 
 from app.api.deps import CurrentUser, SessionDep
+from app.api.router import Role, RoleRouter
 from app.models import (
     AIProviderInfo,
     AIProvidersPublic,
@@ -11,11 +12,10 @@ from app.models import (
     OrganizationAIUpdate,
     OrganizationPublic,
     OrgMember,
-    OrgRole,
 )
 from app.services.llm.catalog import _KEY_MAP, load_provider_catalog
 
-router = APIRouter(prefix="/organizations", tags=["organizations"])
+router = RoleRouter(prefix="/organizations", tags=["organizations"])
 
 
 def _is_available(provider_id: str) -> bool:
@@ -23,7 +23,7 @@ def _is_available(provider_id: str) -> bool:
     return bool(val)
 
 
-@router.get("/ai-providers", response_model=AIProvidersPublic)
+@router.get("/ai-providers", role=Role.user, response_model=AIProvidersPublic)
 def list_ai_providers(
     current_user: CurrentUser,  # noqa: ARG001
 ) -> AIProvidersPublic:
@@ -44,7 +44,7 @@ def list_ai_providers(
     )
 
 
-@router.get("/", response_model=list[OrganizationPublic])
+@router.get("/", role=Role.user, response_model=list[OrganizationPublic])
 def list_my_organizations(
     session: SessionDep,
     current_user: CurrentUser,
@@ -68,31 +68,20 @@ def list_my_organizations(
     ]
 
 
-@router.patch("/{org_id}/ai-preferences", response_model=OrganizationPublic)
+@router.patch(
+    "/{org_id}/ai-preferences", role=Role.org_admin, response_model=OrganizationPublic
+)
 def update_org_ai_preferences(
     org_id: uuid.UUID,
     body: OrganizationAIUpdate,
     session: SessionDep,
-    current_user: CurrentUser,
 ) -> OrganizationPublic:
+    # Membership and rank are enforced by role=Role.org_admin before this runs;
+    # this endpoint's hand-rolled version of that check was the only place
+    # OrgRole was ever consulted in the API layer.
     org = session.get(Organization, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    member = session.exec(
-        select(OrgMember).where(
-            OrgMember.org_id == org_id, OrgMember.user_id == current_user.id
-        )
-    ).first()
-    if not current_user.is_superuser:
-        if not member:
-            raise HTTPException(
-                status_code=403, detail="Not a member of this organization"
-            )
-        if member.role not in (OrgRole.owner, OrgRole.admin):
-            raise HTTPException(
-                status_code=403,
-                detail="Only organization owners or admins can change AI settings",
-            )
     org.default_llm_provider = body.default_llm_provider
     org.default_llm_model = body.default_llm_model
     session.add(org)

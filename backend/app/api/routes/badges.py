@@ -1,12 +1,13 @@
 import uuid
 
-from fastapi import APIRouter
 from fastapi.responses import Response
 from sqlmodel import Session, col, select
 
 from app.api.deps import SessionDep
 from app.api.mappers import latest_completed_scan
+from app.api.router import Role, RoleRouter
 from app.core.config import settings
+from app.core.rate_limit import LIMIT_PUBLIC
 from app.models import (
     Analysis,
     AnalysisStatus,
@@ -21,7 +22,7 @@ from app.services.badge_signing import (
 )
 from app.services.scoring import average_latest_scores, score_to_grade
 
-router = APIRouter(prefix="/badges", tags=["badges"])
+router = RoleRouter(prefix="/badges", tags=["badges"])
 
 _CACHE_HEADERS = {
     "Cache-Control": "max-age=300, s-maxage=300",
@@ -62,7 +63,12 @@ def _avg_grade_for_branch(
     return "N/A" if has_no_workflows else None
 
 
-@router.get("/{owner}/{repo}/{branch}.svg", response_class=Response)
+@router.get(
+    "/{owner}/{repo}/{branch}.svg",
+    role=Role.guest,
+    limit=LIMIT_PUBLIC,
+    response_class=Response,
+)
 def get_badge(
     owner: str,
     repo: str,
@@ -93,7 +99,7 @@ def get_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/{owner}/{repo}/{branch}.json")
+@router.get("/{owner}/{repo}/{branch}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_badge_json(
     owner: str,
     repo: str,
@@ -151,7 +157,12 @@ def _terraform_root_badge_grade(
     return root, (latest.grade if latest else None)
 
 
-@router.get("/terraform/{root_id}.svg", response_class=Response)
+@router.get(
+    "/terraform/{root_id}.svg",
+    role=Role.guest,
+    limit=LIMIT_PUBLIC,
+    response_class=Response,
+)
 def get_terraform_root_badge(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -175,7 +186,7 @@ def get_terraform_root_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/terraform/{root_id}.json")
+@router.get("/terraform/{root_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_terraform_root_badge_json(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -226,7 +237,12 @@ def _docker_target_badge_grade(
     return target, (latest.grade if latest else None)
 
 
-@router.get("/docker/{target_id}.svg", response_class=Response)
+@router.get(
+    "/docker/{target_id}.svg",
+    role=Role.guest,
+    limit=LIMIT_PUBLIC,
+    response_class=Response,
+)
 def get_docker_target_badge(
     target_id: uuid.UUID,
     session: SessionDep,
@@ -251,7 +267,7 @@ def get_docker_target_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/docker/{target_id}.json")
+@router.get("/docker/{target_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_docker_target_badge_json(
     target_id: uuid.UUID,
     session: SessionDep,

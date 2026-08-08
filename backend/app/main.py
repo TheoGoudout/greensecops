@@ -1,10 +1,12 @@
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.main import api_router
 from app.core.config import settings
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -36,5 +38,13 @@ if settings.all_cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Rate limiting. Limits are attached per route by api.router.RoleRouter rather
+# than by slowapi's middleware — see the note in core/rate_limit.py for why the
+# middleware cannot see FastAPI 0.141's lazily-included routes. Only the
+# exception handler is app-level; app.state.limiter is what slowapi's own
+# machinery reaches for.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)

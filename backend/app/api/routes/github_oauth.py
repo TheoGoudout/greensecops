@@ -2,14 +2,16 @@ import secrets
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import Depends, Form, HTTPException
 from pydantic import HttpUrl
 from sqlmodel import select
 
 from app import crud
 from app.api.deps import GitHubAppClientDep, SessionDep
+from app.api.router import Role, RoleRouter
 from app.core import security
 from app.core.config import settings
+from app.core.rate_limit import LIMIT_AUTH
 from app.models import Token, User, UserCreate
 
 
@@ -45,10 +47,10 @@ class OAuth2AuthorizationCodeForm:
         self.code_verifier = code_verifier
 
 
-router = APIRouter(prefix="/auth/github", tags=["auth"])
+router = RoleRouter(prefix="/auth/github", tags=["auth"])
 
 
-@router.post("/callback")
+@router.post("/callback", role=Role.guest, limit=LIMIT_AUTH)
 async def github_callback(
     *,
     session: SessionDep,

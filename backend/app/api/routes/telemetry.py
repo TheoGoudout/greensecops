@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlmodel import col, select
@@ -19,6 +19,8 @@ from app.api.mappers import (
     to_dynamic_enrichment_public,
     to_telemetry_run_public,
 )
+from app.api.router import Role, RoleRouter
+from app.core.rate_limit import LIMIT_EXPENSIVE, LIMIT_INGEST
 from app.models import (
     DockerBuildTelemetry,
     DynamicAnalysisStatus,
@@ -35,7 +37,7 @@ from app.services.billing.quota import enforce_quota
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/telemetry", tags=["telemetry"])
+router = RoleRouter(prefix="/telemetry", tags=["telemetry"])
 
 
 class TelemetryPayload(BaseModel):
@@ -119,7 +121,7 @@ def _lookup_repo(session: SessionDep, repository: str) -> Repository | None:
     ).first()
 
 
-@router.post("/ingest", status_code=201)
+@router.post("/ingest", role=Role.service, limit=LIMIT_INGEST, status_code=201)
 async def ingest_telemetry(
     payload: TelemetryPayload,
     session: SessionDep,
@@ -178,7 +180,7 @@ async def ingest_telemetry(
     return {"status": "accepted", "telemetry_run_id": str(run.id)}
 
 
-@router.post("/docker-build", status_code=201)
+@router.post("/docker-build", role=Role.service, limit=LIMIT_INGEST, status_code=201)
 async def ingest_docker_build(
     payload: DockerBuildPayload,
     session: SessionDep,
@@ -235,7 +237,7 @@ async def ingest_docker_build(
     return {"status": "accepted", "telemetry_id": str(telemetry.id)}
 
 
-@router.post("/sample", status_code=200)
+@router.post("/sample", role=Role.service, limit=LIMIT_INGEST, status_code=200)
 async def ingest_sample(
     payload: SamplePayload,
     session: SessionDep,
@@ -288,7 +290,9 @@ def _enrichments_by_run(
     return grouped
 
 
-@router.get("/summary/{repo_id}", response_model=TelemetrySummaryPublic)
+@router.get(
+    "/summary/{repo_id}", role=Role.org_member, response_model=TelemetrySummaryPublic
+)
 def get_telemetry_summary(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -320,7 +324,11 @@ def get_telemetry_summary(
     return TelemetrySummaryPublic(average=average, runs=runs)
 
 
-@router.get("/findings/{repo_id}", response_model=list[DynamicEnrichmentPublic])
+@router.get(
+    "/findings/{repo_id}",
+    role=Role.org_member,
+    response_model=list[DynamicEnrichmentPublic],
+)
 def get_telemetry_findings(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -346,7 +354,9 @@ def get_telemetry_findings(
     ]
 
 
-@router.post("/analyze/{repo_id}", status_code=202)
+@router.post(
+    "/analyze/{repo_id}", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def analyze_telemetry(
     repo_id: uuid.UUID,
     session: SessionDep,

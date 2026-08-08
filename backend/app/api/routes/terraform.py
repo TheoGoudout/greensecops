@@ -1,7 +1,7 @@
 import uuid
 from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlmodel import col, select
 
@@ -19,6 +19,8 @@ from app.api.mappers import (
     to_terraform_root_public,
     to_terraform_scan_public,
 )
+from app.api.router import Role, RoleRouter
+from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Repository,
     TerraformFilePublic,
@@ -44,7 +46,7 @@ from app.workers.tasks.terraform_analysis import (
 from app.workers.tasks.terraform_fix_delivery import deliver_terraform_fixes
 from app.workers.tasks.terraform_fix_generation import run_terraform_fix_generation
 
-router = APIRouter(prefix="/terraform-roots", tags=["terraform"])
+router = RoleRouter(prefix="/terraform-roots", tags=["terraform"])
 
 
 class TerraformFixGenerateRequest(BaseModel):
@@ -53,7 +55,7 @@ class TerraformFixGenerateRequest(BaseModel):
     finding_ids: list[uuid.UUID] | None = None
 
 
-@router.post("/", response_model=TerraformRootPublic, status_code=201)
+@router.post("/", role=Role.user, response_model=TerraformRootPublic, status_code=201)
 def create_terraform_root(
     root_in: TerraformRootCreate,
     session: SessionDep,
@@ -84,7 +86,7 @@ def create_terraform_root(
     return to_terraform_root_public(root)
 
 
-@router.get("/", response_model=list[TerraformRootPublic])
+@router.get("/", role=Role.user, response_model=list[TerraformRootPublic])
 def list_terraform_roots(
     session: SessionDep,
     current_user: CurrentUser,
@@ -107,7 +109,7 @@ def list_terraform_roots(
     return [to_terraform_root_public(r) for r in roots]
 
 
-@router.patch("/{root_id}/toggle")
+@router.patch("/{root_id}/toggle", role=Role.org_admin)
 def toggle_terraform_root(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -121,7 +123,7 @@ def toggle_terraform_root(
     return {"terraform_root_id": str(root_id), "enabled": enabled}
 
 
-@router.delete("/{root_id}", status_code=204)
+@router.delete("/{root_id}", role=Role.org_admin, status_code=204)
 def delete_terraform_root(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -134,7 +136,9 @@ def delete_terraform_root(
     session.commit()
 
 
-@router.post("/{root_id}/scan", status_code=202)
+@router.post(
+    "/{root_id}/scan", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_terraform_scan(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -162,7 +166,9 @@ def trigger_terraform_scan(
     return {"status": "queued", "terraform_root_id": str(root_id)}
 
 
-@router.get("/{root_id}/scans", response_model=list[TerraformScanPublic])
+@router.get(
+    "/{root_id}/scans", role=Role.org_member, response_model=list[TerraformScanPublic]
+)
 def list_terraform_scans(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -178,7 +184,11 @@ def list_terraform_scans(
     return [to_terraform_scan_public(s) for s in scans]
 
 
-@router.get("/{root_id}/findings", response_model=list[TerraformFindingPublic])
+@router.get(
+    "/{root_id}/findings",
+    role=Role.org_member,
+    response_model=list[TerraformFindingPublic],
+)
 def list_terraform_findings(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -197,7 +207,9 @@ def list_terraform_findings(
     return [to_terraform_finding_public(f) for f in findings]
 
 
-@router.get("/{root_id}/files", response_model=list[TerraformFilePublic])
+@router.get(
+    "/{root_id}/files", role=Role.org_member, response_model=list[TerraformFilePublic]
+)
 def list_terraform_files(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -224,7 +236,9 @@ def list_terraform_files(
     ]
 
 
-@router.get("/{root_id}/fixes", response_model=list[TerraformFixPublic])
+@router.get(
+    "/{root_id}/fixes", role=Role.org_member, response_model=list[TerraformFixPublic]
+)
 def list_terraform_fixes(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -239,7 +253,9 @@ def list_terraform_fixes(
     return [to_terraform_fix_public(f) for f in fixes]
 
 
-@router.post("/{root_id}/fixes", status_code=202)
+@router.post(
+    "/{root_id}/fixes", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_terraform_fix_generation(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -306,7 +322,9 @@ def trigger_terraform_fix_generation(
     return {"status": "queued", "queued": queued}
 
 
-@router.post("/{root_id}/deliver", status_code=202)
+@router.post(
+    "/{root_id}/deliver", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
 def trigger_terraform_delivery(
     root_id: uuid.UUID,
     session: SessionDep,
