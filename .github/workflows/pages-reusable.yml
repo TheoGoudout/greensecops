@@ -110,7 +110,7 @@ env:
   # the date rather than of this repository.
   WRANGLER_VERSION: "4.118.0"
   # Production is the unnamed top-level configuration, so it takes no flag.
-  WRANGLER_ENV: ${{ inputs.environment == 'production' && '' || '--env staging' }}
+  WRANGLER_ENV: ${{ inputs.environment == 'production' && ' ' || '--env staging' }}
   # Empty on forks and on accounts that have not configured Cloudflare, which is
   # what keeps this workflow green for them.
   HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
