@@ -4,6 +4,7 @@ from fastapi.routing import APIRoute
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.cors import CORSMiddleware
 
+from app.__version__ import __version__
 from app.api.main import api_router
 from app.core.config import settings
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -18,6 +19,7 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
+    version=__version__,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     generate_unique_id_function=custom_generate_unique_id,
     swagger_ui_init_oauth={

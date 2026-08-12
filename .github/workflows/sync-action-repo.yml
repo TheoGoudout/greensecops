@@ -15,6 +15,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # A release fires this twice: once for the push to main (the release commit
+  # bumps action/package.json) and once for the published release. Both runs
+  # merge public main and push to it, and the second to arrive would be
+  # rejected non-fast-forward — see the comment on the subtree push below.
+  group: sync-action-repo
+  cancel-in-progress: false
+
 jobs:
   sync:
     name: Sync action/ to the public action repo

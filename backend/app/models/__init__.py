@@ -141,6 +141,7 @@ from .schemas import (
     UsagePublic,
     UserPublic,
     UsersPublic,
+    VersionInfo,
     WorkflowFilePublic,
 )
 
@@ -253,6 +254,7 @@ __all__ = [
     "UsageBreakdownPublic",
     "UsagePublic",
     "Message",
+    "VersionInfo",
     "Token",
     "TokenPayload",
     "NewPassword",

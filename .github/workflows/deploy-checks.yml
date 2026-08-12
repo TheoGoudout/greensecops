@@ -10,6 +10,19 @@ on:
       - "scripts/validate_coolify_compose.py"
       - "scripts/validate_landing_defaults.py"
       - ".github/workflows/deploy-checks.yml"
+      # The version-drift job below. Without these the job would be
+      # unreachable on exactly the commits it exists to police — none of the
+      # paths above match a manifest bump.
+      - "VERSION"
+      - "*/package.json"
+      - "*/pyproject.toml"
+      - "package.json"
+      - "pyproject.toml"
+      - "backend/app/__version__.py"
+      - "frontend/src/client/core/OpenAPI.ts"
+      - "scripts/_versions.py"
+      - "scripts/validate_versions.py"
+      - "scripts/bump_version.py"
   pull_request:
     paths:
       - "deploy/**"
@@ -18,6 +31,19 @@ on:
       - "scripts/validate_coolify_compose.py"
       - "scripts/validate_landing_defaults.py"
       - ".github/workflows/deploy-checks.yml"
+      # The version-drift job below. Without these the job would be
+      # unreachable on exactly the commits it exists to police — none of the
+      # paths above match a manifest bump.
+      - "VERSION"
+      - "*/package.json"
+      - "*/pyproject.toml"
+      - "package.json"
+      - "pyproject.toml"
+      - "backend/app/__version__.py"
+      - "frontend/src/client/core/OpenAPI.ts"
+      - "scripts/_versions.py"
+      - "scripts/validate_versions.py"
+      - "scripts/bump_version.py"
 
 permissions: {}
 
@@ -100,6 +126,23 @@ jobs:
       # with the standard library, so there is nothing to install.
       - name: Check the landing defaults against production.env
         run: python scripts/validate_landing_defaults.py
+
+  versions:
+    name: Version drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      # No dependencies: the script reads manifests with the standard library.
+      - name: Check every manifest against VERSION
+        run: python scripts/validate_versions.py
 
   ansible:
     name: Ansible lint & syntax check

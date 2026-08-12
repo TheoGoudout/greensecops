@@ -175,5 +175,10 @@ greensecops_build_args:
     - "VITE_GREENSECOPS_PUBLIC_URL={{ greensecops_config.BACKEND_HOST }}"
     - "VITE_GITHUB_APP_NAME={{ greensecops_secrets.GITHUB_APP_NAME }}"
     - "VITE_GITHUB_OAUTH_CLIENT_ID={{ greensecops_secrets.GITHUB_CLIENT_ID }}"
+    # The footer's environment badge. greensecops_environment is the
+    # environment being deployed (group_vars/all.yml), so the AWS path already
+    # knows the answer; image_tag is the short SHA build.yml is invoked with.
+    - "VITE_APP_ENVIRONMENT={{ greensecops_environment }}"
+    - "VITE_APP_COMMIT={{ image_tag | default('') }}"
   docs:
     - "DOCS_BASE_URL={{ greensecops_config.DOCS_URL }}"

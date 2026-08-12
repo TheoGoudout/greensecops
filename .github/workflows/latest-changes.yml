@@ -18,6 +18,14 @@ on:
 
 permissions: {}
 
+concurrency:
+  # Shared with release.yml, which also pushes to main. Without this, a pull
+  # request merging while a release is being cut rejects one of the two pushes
+  # as non-fast-forward — and when it is the release that loses, it stops
+  # half-done: manifests bumped, no tag, no draft.
+  group: main-write
+  cancel-in-progress: false
+
 jobs:
   latest-changes:
     name: Generate Latest Changes

@@ -244,24 +244,66 @@ Only `api.` needs a domain in Coolify — set it on the `backend` service so
 Coolify's proxy terminates TLS and routes to it. The other three hostnames are
 Cloudflare's.
 
+**`TAG` means different things on the two resources.** Staging keeps
+`TAG=latest` and tracks `main`, so every push redeploys it. On **production**,
+`TAG` is owned by `.github/workflows/release-deploy.yml`: publishing a release
+patches it to that release's tag over Coolify's API, alongside the resource's
+git ref. Set it to `latest` once when you create the resource and then leave it
+alone — editing it by hand pins production to whatever you typed until the next
+release overwrites it.
+
 ### 5. Deploy
 
-Push to `main`. `images.yml` publishes the backend and OPA images to GHCR and
-`pages.yml` publishes the three static sites **to staging**. Look at staging,
-then promote both halves:
+**Staging is automatic.** Push to `main`: `images.yml` publishes the backend and
+OPA images to GHCR as `latest`, `pages.yml` publishes the three static sites to
+the staging Workers, and Coolify's staging resource redeploys itself. Look at
+staging.
 
-1. Run the **pages** workflow (Actions → pages → Run workflow) with
-   `environment: production`. It waits for the reviewer the `production`
-   environment requires.
-2. Hit **Deploy** in Coolify, which pulls the new images and restarts the stack.
+**Production is two clicks**, and both halves move together:
 
-Do both, and close together. The dashboard ships a generated OpenAPI client, so
-a promoted dashboard talking to an unpromoted API breaks against a contract the
-server has not shipped yet. For a change that breaks compatibility, deploy the
-backend first.
+1. Actions → **release** → *Run workflow*, pick a bump. It sets the version
+   everywhere, closes off the accumulated release notes, tags `vX.Y.Z` and
+   opens a **draft** GitHub release. Nothing is deployed — this is reviewable
+   and undoable.
+2. Review the draft, then **publish** it. That runs `release-deploy.yml`, which
+   waits for the reviewer the `production` environment requires and then
+   promotes the API and the static sites in that order.
+
+The ordering is the point. The dashboard ships a generated OpenAPI client, so a
+promoted dashboard talking to an unpromoted API breaks against a contract the
+server has not shipped yet — `release-deploy.yml` deploys Coolify first and
+blocks until Coolify reports the deployment finished, so the dashboard can
+never get ahead. The reverse window still exists and is the tolerable one.
+
+Sequencing is not a substitute for compatibility, though: browsers hold the old
+dashboard bundle far longer than either deploy window, so a released API still
+has to serve clients built against the previous release.
+
+**What is running is visible in the dashboard footer** — the version, the
+environment outside production, and a warning badge when the API reports a
+different version from the dashboard.
 
 If your GHCR packages are private, add a registry credential in Coolify with a
 personal access token holding `read:packages`.
+
+#### What the release workflows need
+
+Three repository secrets, all for the Coolify half:
+
+| Secret | What it is |
+|---|---|
+| `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
+| `COOLIFY_TOKEN` | An API token with permission to update and deploy the resource |
+| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID |
+
+The Pi is not in the request path, but it *is* in the deploy path — if its API
+is not reachable from GitHub's runners, the Coolify job cannot run and
+production has to be promoted from Coolify's UI instead.
+
+`release.yml` reuses the existing `LATEST_CHANGES` PAT to push the release
+commit and the tag. That has to be a PAT rather than `GITHUB_TOKEN`: a push
+authenticated with `GITHUB_TOKEN` does not trigger other workflows, so
+`images.yml` would never build the release images.
 
 ### 6. Point GitHub at it
 
@@ -295,10 +337,16 @@ split beat back into its own container as the root `compose.yml` has it, and
 set `--concurrency` higher in the meantime.
 
 **Static sites deploy separately from the API.** A release that changes both
-the frontend and a backend contract lands in two places at slightly different
-times. Both promotions are manual so they can be done in one sitting — see
-step 5 — but nothing enforces the pairing, and nothing rolls one back when the
-other fails. For a change that breaks compatibility, deploy the backend first.
+the frontend and a backend contract still lands in two places at slightly
+different times. Publishing a release now drives both from one workflow, in a
+fixed order, and the dashboard job will not start until Coolify reports the API
+deployment finished — so the pairing is enforced and the gap is always the
+tolerable direction.
+
+What is still not solved: **nothing rolls the API back when the dashboard
+fails.** You are left with a new API and an old dashboard, which is survivable
+but not the intended end state, and the run summary says so. Rolling back means
+publishing the previous release, or repointing the Coolify resource by hand.
 
 ## Running other projects on the same server
 

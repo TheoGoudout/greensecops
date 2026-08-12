@@ -197,3 +197,66 @@ MailCatcher: <http://localhost:1080>
 Flower (Celery): <http://localhost:5555>
 
 OPA: <http://localhost:8181>
+
+## Versioning and releases
+
+The root `VERSION` file is the single source of truth. Every other place the
+version appears is derived from it, and `scripts/validate_versions.py` — a
+pre-commit hook and a CI job — fails if any of them drift:
+
+| File | Why it carries the version |
+|---|---|
+| `frontend/package.json` | `vite.config.ts` bakes it into the bundle for the dashboard footer |
+| `action/package.json` | the published GitHub Action's own version |
+| `backend/pyproject.toml` | the `app` package |
+| `docs/pyproject.toml` | the docs workspace member |
+| `backend/app/__version__.py` | what `FastAPI(version=)` and `/api/v1/utils/version/` report |
+| `frontend/src/client/core/OpenAPI.ts` | generated from the schema, which carries `info.version` |
+
+Never edit these by hand. `scripts/bump_version.py` writes all of them and
+regenerates `uv.lock`, which pins the `app` and `docs` workspace versions:
+
+```bash
+python scripts/bump_version.py 0.11.0        # explicit, including 0.11.0-rc1
+python scripts/bump_version.py --bump minor  # computed from VERSION
+```
+
+`package.json`, `pyproject.toml` and `landing/package.json` at the root
+deliberately carry **no** version — they are workspace roots and an unpublished
+member. The validator asserts they stay that way.
+
+### Cutting a release
+
+Two steps, and the first one deploys nothing.
+
+1. **Actions → release → Run workflow.** Pick `patch`/`minor`/`major`, or type
+   an exact version to override it (this is how a `0.11.0-rc1` gets cut). The
+   workflow bumps the version everywhere, renames the accumulated
+   `## Latest Changes` section of `release-notes.md` to `## X.Y.Z (date)` and
+   opens a fresh empty one, pushes the commit and the `vX.Y.Z` tag to `main`,
+   and opens a **draft** GitHub release. Pushing the tag is what starts
+   `images.yml` building `greensecops-{backend,opa}:vX.Y.Z`.
+
+2. **Publish the draft.** That runs `release-deploy.yml`: it waits for the
+   images, then — after the `production` environment's reviewer approves —
+   deploys the API through Coolify's API and blocks until Coolify reports the
+   deployment finished, then publishes the three static surfaces to Cloudflare.
+
+Between the two steps nothing has been deployed, so a release that looks wrong
+is undone by deleting the draft and the tag and reverting the commit.
+
+`release-notes.md` itself is written by `latest-changes.yml` on every merged
+pull request; you should not normally edit it by hand. It shares a `main-write`
+concurrency group with `release.yml` so the two cannot race to push.
+
+### Seeing what is deployed
+
+The dashboard footer shows the version it was built with. Outside production it
+also shows the short commit and an environment badge, because staging runs
+`main` — which is almost always ahead of the last release, so the version alone
+would not distinguish two staging builds.
+
+The API reports its own version at `/api/v1/utils/version/`, and the footer
+flags a mismatch. That matters because the dashboard and the API are promoted
+through different platforms (Cloudflare Workers and Coolify), so a half-finished
+promotion is otherwise invisible until it surfaces as a confusing error.

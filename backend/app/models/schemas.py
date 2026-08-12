@@ -858,6 +858,19 @@ class Message(SQLModel):
     message: str
 
 
+class VersionInfo(SQLModel):
+    """What the API is running, for the dashboard footer to compare against.
+
+    The dashboard and the API are promoted through different platforms —
+    Cloudflare Workers and Coolify — so the dashboard cannot infer the API's
+    version from its own. Reporting it here is what makes a half-finished
+    promotion visible instead of showing up later as a confusing 422.
+    """
+
+    version: str
+    environment: str
+
+
 class Token(SQLModel):
     access_token: str
     token_type: str = "bearer"

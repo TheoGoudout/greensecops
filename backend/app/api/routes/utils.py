@@ -1,8 +1,10 @@
 from pydantic.networks import EmailStr
 
+from app.__version__ import __version__
 from app.api.router import Role, RoleRouter
+from app.core.config import settings
 from app.core.rate_limit import LIMIT_EXPENSIVE, NO_RATE_LIMIT
-from app.models import Message
+from app.models import Message, VersionInfo
 from app.utils import generate_test_email, send_email
 
 router = RoleRouter(prefix="/utils", tags=["utils"])
@@ -35,3 +37,16 @@ def test_email(
 @router.get("/health-check/", role=Role.guest, limit=NO_RATE_LIMIT)
 async def health_check() -> bool:
     return True
+
+
+# Deliberately separate from health-check above rather than folded into it.
+# That endpoint returns a bare `true`, and both the container HEALTHCHECK and
+# deploy-reusable.yml's post-rollout smoke test depend on that shape.
+#
+# Guest role because the dashboard reads it before anyone signs in, and because
+# the version is not a secret — it is already in the shipped bundle on the other
+# side of the comparison.
+@router.get("/version/", role=Role.guest, limit=NO_RATE_LIMIT)
+async def version() -> VersionInfo:
+    """What this API is running, for the dashboard footer."""
+    return VersionInfo(version=__version__, environment=settings.ENVIRONMENT)

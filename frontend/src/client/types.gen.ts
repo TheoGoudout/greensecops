@@ -1112,6 +1112,19 @@ export type ValidationError = {
     };
 };
 
+/**
+ * What the API is running, for the dashboard footer to compare against.
+ *
+ * The dashboard and the API are promoted through different platforms —
+ * Cloudflare Workers and Coolify — so the dashboard cannot infer the API's
+ * version from its own. Reporting it here is what makes a half-finished
+ * promotion visible instead of showing up later as a confusing 422.
+ */
+export type VersionInfo = {
+    version: string;
+    environment: string;
+};
+
 export type WorkflowDeliverRequest = {
     fix_id: string;
 };
@@ -1889,6 +1902,8 @@ export type UtilsTestEmailData = {
 export type UtilsTestEmailResponse = (Message);
 
 export type UtilsHealthCheckResponse = (boolean);
+
+export type UtilsVersionResponse = (VersionInfo);
 
 export type WebhooksGithubWebhookData = {
     xGithubDelivery?: (string | null);
