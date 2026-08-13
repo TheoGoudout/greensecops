@@ -6,6 +6,10 @@
 
 * ⬆ Bump the docker group across 4 directories with 3 updates. PR [#211](https://github.com/TheoGoudout/greensecops/pull/211) by [@dependabot[bot]](https://github.com/apps/dependabot).
 
+### Internal
+
+* ⬆ bump the npm-packages group across 1 directory with 14 updates. PR [#212](https://github.com/TheoGoudout/greensecops/pull/212) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
 ## 0.11.0 (2026-08-13)
 
 ### Features
