@@ -3,7 +3,7 @@
 # Pinned by digest, not just by tag: `python` republishes 3.14.6-slim on every
 # base-OS patch, so the tag alone does not make the build reproducible.
 # Dependabot updates the digest alongside the tag (see .github/dependabot.yml).
-FROM python:3.14.6-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
+FROM python:3.15.0b4-slim@sha256:5a8eaccfe1e3f129a09c498616ec7046315e4a4f614e78424aedf806908cbecc AS builder
 
 # Install git
 # Used for dependencies specified by Git URLs
@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package app
 
 # ---- runtime ----
-FROM python:3.14.6-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
+FROM python:3.15.0b4-slim@sha256:5a8eaccfe1e3f129a09c498616ec7046315e4a4f614e78424aedf806908cbecc
 
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
 LABEL org.opencontainers.image.licenses="MIT"
