@@ -4,6 +4,7 @@
 
 ### Features
 
+* feat(release): semi-automated versioning and production deploy. PR [#207](https://github.com/TheoGoudout/greensecops/pull/207) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(cloudflare): split the static surfaces into staging and production. PR [#206](https://github.com/TheoGoudout/greensecops/pull/206) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(api): require an explicit role and rate limit on every endpoint. PR [#205](https://github.com/TheoGoudout/greensecops/pull/205) by [@TheoGoudout](https://github.com/TheoGoudout).
 
