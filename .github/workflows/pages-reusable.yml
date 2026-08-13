@@ -386,6 +386,24 @@ jobs:
           VITE_GREENSECOPS_PUBLIC_URL: ${{ needs.config.outputs.api-url }}
           VITE_GITHUB_OAUTH_CLIENT_ID: ${{ needs.config.outputs.github-client-id }}
           VITE_GITHUB_APP_NAME: ${{ needs.config.outputs.github-app-name }}
+          # The version itself is not passed in — vite.config.ts bakes it in
+          # from frontend/package.json, which scripts/bump_version.py writes.
+          # Only what differs between deployments of the same source is here.
+          #
+          # A preview is labelled as such rather than as staging: it is built
+          # against staging's API, but it is not the staging site, and the
+          # footer is where someone checks which of the two they are looking at.
+          VITE_APP_ENVIRONMENT: ${{ inputs.preview && 'preview' || inputs.environment }}
+          # Empty on production, where the version is exact and a commit would
+          # be noise; everywhere else the version alone is ambiguous, because
+          # staging runs main and main is almost always ahead of the last
+          # release.
+          #
+          # head.sha before github.sha for the same reason the preview comment
+          # in pages.yml prefers it: on a pull_request event the latter is the
+          # ephemeral merge commit, which is on no branch and cannot be looked
+          # up by whoever reads it out of the footer.
+          VITE_APP_COMMIT: ${{ inputs.environment != 'production' && (github.event.pull_request.head.sha || github.sha) || '' }}
         run: bun run build
 
       - name: Add the response headers

@@ -4971,6 +4971,28 @@ export const ValidationErrorSchema = {
     title: 'ValidationError'
 } as const;
 
+export const VersionInfoSchema = {
+    properties: {
+        version: {
+            type: 'string',
+            title: 'Version'
+        },
+        environment: {
+            type: 'string',
+            title: 'Environment'
+        }
+    },
+    type: 'object',
+    required: ['version', 'environment'],
+    title: 'VersionInfo',
+    description: `What the API is running, for the dashboard footer to compare against.
+
+The dashboard and the API are promoted through different platforms —
+Cloudflare Workers and Coolify — so the dashboard cannot infer the API's
+version from its own. Reporting it here is what makes a half-finished
+promotion visible instead of showing up later as a confusing 422.`
+} as const;
+
 export const WorkflowDeliverRequestSchema = {
     properties: {
         fix_id: {

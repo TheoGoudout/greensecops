@@ -178,7 +178,18 @@ The static surfaces need nothing here. Their public URLs are declared in [`deplo
 
 On `production`, add **required reviewers**. That is the click: a run pauses until a reviewer approves, and only then can it obtain AWS credentials — the role's trust policy pins the OIDC subject to `repo:<owner>/<repo>:environment:production`, so an unapproved job is refused by AWS, not merely by GitHub. The same gate covers the static surfaces, which have no AWS role behind them: `pages.yml` will not publish to production until the run is approved.
 
-Also set `production`'s **deployment branches** rule to `main` only. This is the load-bearing guard on the Cloudflare side, where there is no AWS trust policy as a second line — without it, running `pages.yml` by hand from any branch could publish that branch to the live site.
+Also set `production`'s **deployment branches and tags** rule to **Selected branches and tags**, with exactly two entries:
+
+| Rule type | Pattern |
+|---|---|
+| Branch | `main` |
+| Tag | `v*` |
+
+This is the load-bearing guard on the Cloudflare side, where there is no AWS trust policy as a second line — without it, running `pages.yml` by hand from any branch could publish that branch to the live site.
+
+The tag entry is what lets a release deploy at all. `release-deploy.yml` runs on a published release, so its ref is `refs/tags/vX.Y.Z` rather than a branch; with a branch-only rule the three publishing jobs in `pages-reusable.yml` **fail** — not skip — with *"not allowed to deploy to production due to environment protection rules"*, while the unbound `config` job succeeds, so the run goes half-green. The rule type is a per-entry dropdown: adding `v*` as a *branch* rule silently matches nothing.
+
+**Protect the tags too.** A `v*` tag entry means anyone who can push such a tag can publish to production, and tag creation is not covered by branch protection. Add a repository ruleset targeting `refs/tags/v*` that restricts creation to the accounts that should be cutting releases — otherwise this widens the blast radius the rest of this section narrows.
 
 No AWS keys are stored in GitHub. The workflow exchanges a short-lived OIDC token for a session at run time.
 

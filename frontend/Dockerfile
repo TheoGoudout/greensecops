@@ -37,6 +37,11 @@ ARG VITE_API_URL
 ARG VITE_GREENSECOPS_PUBLIC_URL
 ARG VITE_GITHUB_OAUTH_CLIENT_ID
 ARG VITE_GITHUB_APP_NAME
+# The version is not here: vite.config.ts bakes it in from frontend/package.json,
+# which is already in the build context. Only the things that differ per
+# deployment of the same source need passing in.
+ARG VITE_APP_ENVIRONMENT
+ARG VITE_APP_COMMIT
 
 RUN bun run build
 

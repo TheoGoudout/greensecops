@@ -1,0 +1,256 @@
+name: release-deploy
+
+# Promotes a published release to production, on both platforms.
+#
+# Triggered by publishing the draft release.yml opened — that click is the
+# human decision this whole flow is built around, and it is the only thing that
+# moves production. Staging is untouched here: it tracks main automatically
+# (pages.yml for the static surfaces, Coolify's own auto-deploy for the API).
+#
+# The two halves run in sequence, backend first, and that ordering is
+# load-bearing rather than tidy. The dashboard ships a *generated* OpenAPI
+# client, so the two mismatch directions are not equally bad:
+#
+#   dashboard ahead of API  ->  calls a contract the server has not shipped
+#   API ahead of dashboard  ->  fine, as long as the change was additive
+#
+# Run in parallel, Cloudflare wins the race every time — it is a static build
+# and a seconds-long upload, against Coolify pulling images, restarting
+# containers and running migrations — so parallel would put production in the
+# bad direction on every release. Worse, a Coolify failure after a successful
+# Cloudflare deploy would make that direction *permanent* until someone rolled
+# back by hand. Sequencing costs one dashboard build on a manual, infrequent,
+# reviewer-gated action. See deploy/coolify/README.md.
+#
+# Sequencing is not a substitute for compatibility: browsers hold the old
+# dashboard bundle far longer than either deploy window, so "old client, new
+# server" persists for hours regardless. Backward-compatible API changes are
+# the real mitigation; this only narrows the window for fresh page loads.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  # Never cancelled: interrupting a Coolify rollout half-way is exactly the
+  # state this workflow exists to avoid.
+  group: release-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  verify:
+    name: Verify the images
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Wait for the release images
+        # A poll, not a check. images.yml starts when release.yml pushes the
+        # tag, and it is four build jobs plus two manifest merges — if the
+        # draft is published promptly, which is the normal case, that run is
+        # still going. A one-shot check would turn an ordinary timing window
+        # into a failed release.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          echo "${GH_TOKEN}" | docker login "${REGISTRY}" -u "${GITHUB_ACTOR}" --password-stdin
+
+          owner=$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')
+          missing=""
+
+          for image in backend opa; do
+            reference="${REGISTRY}/${owner}/greensecops-${image}:${TAG}"
+            echo "Waiting for ${reference}"
+            found=false
+            for attempt in $(seq 1 30); do
+              if docker buildx imagetools inspect "${reference}" >/dev/null 2>&1; then
+                echo "  present after ${attempt} attempt(s)."
+                found=true
+                break
+              fi
+              sleep 60
+            done
+            if [ "${found}" != "true" ]; then
+              missing="${missing} ${reference}"
+            fi
+          done
+
+          if [ -n "${missing}" ]; then
+            echo "::error::Not published within 30 minutes:${missing}. Check the images.yml run for ${TAG}; nothing has been deployed."
+            exit 1
+          fi
+
+  coolify:
+    name: API (production)
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The approval gate. production's protection rules hold this until a
+    # reviewer approves, and one approval releases every job in the run that
+    # names the environment — so the dashboard job below is covered by the same
+    # click rather than asking for a second one.
+    environment: production
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Point the resource at the release and deploy it
+        id: trigger
+        # Two patches, because they do different jobs and neither is enough
+        # alone. git_branch decides which tree Coolify reads compose.yml from;
+        # the TAG variable decides which image that compose file pulls, and the
+        # resource's own variable overrides the ${TAG:-latest} default no
+        # matter which tree is checked out. Both are partial updates — no other
+        # field of the resource is touched, and no branch is created anywhere.
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          for name in COOLIFY_URL COOLIFY_TOKEN UUID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The ${name} secret is not set."
+              exit 1
+            fi
+          done
+
+          api() {
+            method=$1; path=$2; shift 2
+            curl -fsS --max-time 60 -X "${method}" \
+              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "${COOLIFY_URL}/api/v1${path}" "$@"
+          }
+
+          echo "Repointing ${UUID} at ${TAG}"
+          api PATCH "/applications/${UUID}" \
+            -d "$(jq -nc --arg ref "${TAG}" '{git_branch: $ref}')" >/dev/null
+
+          echo "Setting TAG=${TAG}"
+          api PATCH "/applications/${UUID}/envs" \
+            -d "$(jq -nc --arg v "${TAG}" '{key: "TAG", value: $v}')" >/dev/null
+
+          echo "Triggering the deploy"
+          deployment=$(api POST "/deploy?uuid=${UUID}&force=true" \
+            | jq -r '.deployments[0].deployment_uuid // empty')
+
+          if [ -z "${deployment}" ]; then
+            echo "::error::Coolify accepted the deploy request but returned no deployment_uuid, so it cannot be monitored."
+            exit 1
+          fi
+          echo "deployment=${deployment}" >> "$GITHUB_OUTPUT"
+          echo "Deployment ${deployment} queued."
+
+      - name: Monitor the deploy
+        # Coolify's queue has a documented long tail of deployments that sit in
+        # queued or in_progress indefinitely, so this caps the wait rather than
+        # leaning on the job timeout — a capped failure names the deployment
+        # and prints its log, a job timeout does neither.
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
+        run: |
+          set -euo pipefail
+          status="unknown"
+          for attempt in $(seq 1 90); do
+            body=$(curl -fsS --max-time 30 \
+              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+              "${COOLIFY_URL}/api/v1/deployments/${DEPLOYMENT}")
+            status=$(jq -r '.status // "unknown"' <<< "${body}")
+
+            case "${status}" in
+              finished)
+                echo "Deployed ${TAG} ✅"
+                exit 0
+                ;;
+              failed|cancelled-by-user)
+                echo "::error::Coolify reported '${status}' for deployment ${DEPLOYMENT}."
+                {
+                  echo "## Coolify deploy ${status}"
+                  echo
+                  echo "Deployment \`${DEPLOYMENT}\` for \`${TAG}\`."
+                  jq -r '.deployment_url // empty' <<< "${body}" | sed 's/^/Logs: /'
+                  echo
+                  echo '```'
+                  jq -r '.logs // "(no logs returned)"' <<< "${body}" | tail -100
+                  echo '```'
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+                ;;
+              queued|in_progress)
+                echo "  ${status} (${attempt}/90)"
+                ;;
+              *)
+                echo "  unrecognised status '${status}' (${attempt}/90)"
+                ;;
+            esac
+            sleep 10
+          done
+
+          echo "::error::Deployment ${DEPLOYMENT} was still '${status}' after 15 minutes. Check Coolify — the dashboard has NOT been promoted."
+          exit 1
+
+  cloudflare:
+    name: Static surfaces (production)
+    # Gated on the API being live, not merely started. The coolify job blocks
+    # until Coolify reports `finished`, so this ordering is real.
+    needs: [verify, coolify]
+    uses: ./.github/workflows/pages-reusable.yml
+    permissions:
+      contents: read
+    with:
+      environment: production
+    secrets:
+      # Named explicitly. pages-reusable.yml declares these as workflow_call
+      # secrets and deliberately does not inherit — and omitting them here
+      # would not fail: HAS_CLOUDFLARE would simply be false and the run would
+      # go green having deployed nothing at all.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  summary:
+    name: Summarise
+    needs: [verify, coolify, cloudflare]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          IMAGES: ${{ needs.verify.result }}
+          API: ${{ needs.coolify.result }}
+          STATIC: ${{ needs.cloudflare.result }}
+        run: |
+          {
+            echo "## Release ${TAG}"
+            echo
+            echo "| Stage | Result |"
+            echo "|---|---|"
+            echo "| Images | ${IMAGES} |"
+            echo "| API (Coolify) | ${API} |"
+            echo "| Static surfaces (Cloudflare) | ${STATIC} |"
+            echo
+            if [ "${API}" = "success" ] && [ "${STATIC}" != "success" ]; then
+              echo "> The API is on ${TAG} but the dashboard is not. That is the"
+              echo "> tolerable direction, but it is not the intended end state —"
+              echo "> re-run the failed job, or roll the API back in Coolify."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

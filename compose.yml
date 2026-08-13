@@ -301,6 +301,11 @@ services:
         - VITE_GREENSECOPS_PUBLIC_URL=${GREENSECOPS_PUBLIC_URL}
         - VITE_GITHUB_APP_NAME=${GITHUB_APP_NAME}
         - VITE_GITHUB_OAUTH_CLIENT_ID=${GITHUB_CLIENT_ID}
+        # Drives the footer's version badge. Defaults to "local" because that
+        # is what an unset ENVIRONMENT means for a compose stack — the badge
+        # must never silently read as production.
+        - VITE_APP_ENVIRONMENT=${ENVIRONMENT:-local}
+        - VITE_APP_COMMIT=${GIT_COMMIT:-}
 
   landing:
     image: greensecops/landing:${TAG:-latest}

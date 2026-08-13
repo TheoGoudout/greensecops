@@ -122,7 +122,7 @@ wheels = [
 
 [[package]]
 name = "app"
-version = "0.1.0"
+version = "0.10.0"
 source = { editable = "backend" }
 dependencies = [
     { name = "alembic" },
@@ -894,7 +894,7 @@ wheels = [
 
 [[package]]
 name = "docs"
-version = "0.1.0"
+version = "0.10.0"
 source = { virtual = "docs" }
 dependencies = [
     { name = "furo" },

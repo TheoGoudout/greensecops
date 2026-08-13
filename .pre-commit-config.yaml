@@ -115,6 +115,17 @@ repos:
         files: ^(compose\.yml|deploy/coolify/compose\.yml|scripts/validate_coolify_compose\.py)$
         pass_filenames: false
 
+      # The version lives in six places, all derived from the root VERSION
+      # file. A stale one is quiet: the dashboard footer and the API's
+      # /version/ endpoint would disagree about what is deployed, which is the
+      # single question they exist to answer.
+      - id: version-drift
+        name: Check every manifest against VERSION
+        entry: python3 scripts/validate_versions.py
+        language: system
+        files: ^(VERSION|package\.json|pyproject\.toml|(frontend|action|landing)/package\.json|(backend|docs)/pyproject\.toml|backend/app/__version__\.py|frontend/src/client/core/OpenAPI\.ts|scripts/(_versions|validate_versions|bump_version)\.py)$
+        pass_filenames: false
+
       # The landing page is substituted twice — by entrypoint.sh in a container
       # and by pages-reusable.yml on Cloudflare — so the production URLs are
       # written down twice. A mismatch renders two perfectly valid sites on two

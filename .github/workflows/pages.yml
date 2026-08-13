@@ -22,17 +22,20 @@ name: pages
 #   pull_request         → a throwaway preview version of the staging Worker
 #
 # Production is deliberately not automatic. The dashboard ships a generated
-# OpenAPI client and the API is promoted by hand (Coolify's Deploy button, or
-# deploy.yml on AWS), so a dashboard that raced ahead of the backend on every
-# merge would break against a contract the server had not shipped yet. Making
-# both promotions manual lets them happen in one sitting. It is also why this
-# is not tag-driven: no part of this repository releases by tag, and gating only
-# the static half on tags would widen that gap rather than close it.
+# OpenAPI client, so a dashboard that raced ahead of the backend on every merge
+# would break against a contract the server had not shipped yet.
+#
+# The ordinary way to reach production is now release-deploy.yml, which calls
+# pages-reusable.yml directly after it has deployed the API and waited for
+# Coolify to report the deployment finished. The `production` dispatch option
+# here remains as the manual escape hatch — republishing the static surfaces
+# without cutting a release, when only they need it.
 #
 # Two guards keep production off the automatic path. The `if:` conditions below
 # are the visible one; the load-bearing one is the `production` GitHub
-# Environment's deployment-branch rule, which pins it to main and cannot be
-# bypassed by editing this file on a branch. Set both — see deploy/README.md.
+# Environment's deployment rule, which admits only `main` and `v*` tags and
+# cannot be bypassed by editing this file on a branch. Set both — see
+# deploy/README.md.
 
 on:
   push:

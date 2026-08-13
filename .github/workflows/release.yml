@@ -1,0 +1,206 @@
+name: release
+
+# Cuts a release: Actions → release → Run workflow, pick a bump.
+#
+# This is the first half of a two-step promotion. It changes nothing that is
+# deployed — it bumps the version everywhere, closes off the accumulated
+# release notes, tags, and opens a **draft** GitHub release. Publishing that
+# draft is what promotes production, and that is release-deploy.yml.
+#
+# The draft is the review gate. Everything here is reversible with a tag delete
+# and a revert, because no production surface has been touched yet.
+#
+# What it writes, all from the root VERSION file (scripts/_versions.py has the
+# list): frontend/package.json, action/package.json, backend/pyproject.toml,
+# docs/pyproject.toml, backend/app/__version__.py, and uv.lock.
+#
+# Pushing the tag is what starts images.yml, which publishes
+# ghcr.io/<owner>/greensecops-{backend,opa}:vX.Y.Z. That has to happen with the
+# PAT rather than GITHUB_TOKEN: a push authenticated with GITHUB_TOKEN does not
+# trigger other workflows, so the images would never be built and the release
+# would have nothing to deploy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to increment
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: minor
+      version:
+        description: "Exact version, e.g. 0.11.0 or 0.11.0-rc1 (overrides bump)"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  # Shared with latest-changes.yml, which also pushes to main. Without this a
+  # pull request merging mid-run rejects the release push as non-fast-forward
+  # and leaves the release half-cut: manifests bumped locally, no tag, no
+  # draft. Never cancelled — an interrupted run is the state that is hard to
+  # reason about.
+  group: main-write
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Cut the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags are needed to notice an existing one, and the full history so
+          # the rebase below has something to rebase onto.
+          fetch-depth: 0
+          # The push uses an explicit remote URL carrying the PAT (see the
+          # "Push" step), which keeps the credential out of the checkout and
+          # out of .git/config — the same shape sync-action-repo.yml uses.
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.4"
+          enable-cache: true
+
+      - name: Resolve the version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          # Routed through env rather than interpolated into the script: a
+          # workflow input lands verbatim in the shell otherwise, which is the
+          # template-injection sink zizmor flags.
+          EXPLICIT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${EXPLICIT}" ]; then
+            version=$(python3 scripts/bump_version.py "${EXPLICIT}" --print-only)
+          else
+            version=$(python3 scripts/bump_version.py --bump "${BUMP}" --print-only)
+          fi
+
+          if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
+            echo "::error::Tag v${version} already exists. Pass an explicit version, or pick a different bump."
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version}."
+
+      - name: Bump the version everywhere
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/bump_version.py "${VERSION}"
+          python3 scripts/validate_versions.py
+
+      - name: Cut the release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/cut_release_notes.py "${VERSION}" --body-file "${RUNNER_TEMP}/release-body.md"
+
+      - name: Push the commit and the tag
+        env:
+          # zizmor: ignore[secrets-outside-env] -- the token is in env, which is
+          # the point; the URL below is assembled inside the shell so it never
+          # appears in a workflow expression.
+          TOKEN: ${{ secrets.LATEST_CHANGES }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN}" ]; then
+            echo "::error::The LATEST_CHANGES secret is not set. It is the PAT that lets this workflow push to main and create the tag; without it images.yml would never build the release images."
+            exit 1
+          fi
+
+          git config user.name "greensecops-bot"
+          git config user.email "bot@greensecops.com"
+
+          git add -A
+          git commit -m "chore: release ${TAG}"
+
+          remote="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # The concurrency group makes a collision with latest-changes.yml
+          # unlikely rather than impossible — it only serialises this repo's
+          # own runs, and a human can always push. Rebase and retry rather
+          # than failing a release for a race that resolves itself.
+          for attempt in 1 2 3; do
+            git pull --rebase "${remote}" main && break
+            if [ "${attempt}" = "3" ]; then
+              echo "::error::Could not rebase onto main after 3 attempts."
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+          # The tag is created after the rebase so it points at the commit that
+          # actually lands on main, not at a pre-rebase one that no branch
+          # contains.
+          git tag -a "${TAG}" -m "Release ${TAG}"
+
+          git push "${remote}" HEAD:main
+          git push "${remote}" "refs/tags/${TAG}"
+
+      - name: Open the release draft
+        env:
+          GH_TOKEN: ${{ secrets.LATEST_CHANGES }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # A hyphen in the version means a pre-release (0.11.0-rc1). Marking
+          # it as such is not cosmetic: sync-action-repo.yml branches on the
+          # release's `prerelease` flag and skips moving the floating major tag
+          # for one, which is what stops a candidate becoming what `@v0`
+          # resolves to.
+          prerelease=""
+          case "${VERSION}" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+
+          gh release create "${TAG}" \
+            --draft \
+            --title "${TAG}" \
+            --notes-file "${RUNNER_TEMP}/release-body.md" \
+            ${prerelease}
+
+      - name: Summarise
+        if: always()
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          OUTCOME: ${{ job.status }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          {
+            echo "## ${OUTCOME}: ${TAG}"
+            echo
+            if [ "${OUTCOME}" = "success" ]; then
+              echo "The version is bumped, the notes are cut and **${TAG}** is tagged."
+              echo "\`images.yml\` is now building \`greensecops-{backend,opa}:${TAG}\`."
+              echo
+              echo "Nothing is deployed yet. Review the draft at ${REPO_URL}/releases —"
+              echo "**publishing it** runs \`release-deploy.yml\`, which promotes Coolify"
+              echo "and then Cloudflare."
+            else
+              echo "The release did not complete. If the tag was pushed but the draft"
+              echo "was not created, delete the tag before retrying:"
+              echo
+              echo '```'
+              echo "git push origin :refs/tags/${TAG}"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
