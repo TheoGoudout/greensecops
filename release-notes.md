@@ -25,6 +25,7 @@
 
 ### Internal
 
+* ⬆ Bump the github-actions group across 1 directory with 2 updates. PR [#213](https://github.com/TheoGoudout/greensecops/pull/213) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump the python-packages group across 1 directory with 2 updates. PR [#214](https://github.com/TheoGoudout/greensecops/pull/214) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * 👷 Configure Dependabot to group updates and update weekly. PR [#2293](https://github.com/fastapi/greensecops/pull/2293) by [@YuriiMotov](https://github.com/YuriiMotov).
 * 🔥 Remove config files now in central GitHub repo. PR [#2300](https://github.com/fastapi/greensecops/pull/2300) by [@tiangolo](https://github.com/tiangolo).
