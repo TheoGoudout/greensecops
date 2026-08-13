@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Variable not set}
 
   adminer:
-    image: adminer:5.5.0
+    image: adminer:5.5.1
     restart: always
     # Unauthenticated DB admin UI — localhost only.
     ports:
