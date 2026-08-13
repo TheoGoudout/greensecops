@@ -70,9 +70,13 @@ updates:
     commit-message:
       prefix: ⬆
     ignore:
+      # `-0` is the lowest possible prerelease, so this also covers tags like
+      # 3.15.0rc1. A bare ">=3.15" does not: prereleases sort *below* the
+      # release they lead to, so release candidates slip past that constraint
+      # (they did once, and psycopg-binary ships no cp315 wheels).
       - dependency-name: "python"
         versions:
-          - ">=3.15"
+          - ">=3.15.0-0"
     groups:
       docker:
         patterns:
