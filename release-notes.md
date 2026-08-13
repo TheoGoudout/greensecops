@@ -25,6 +25,7 @@
 
 ### Internal
 
+* ⬆ Bump the pre-commit group across 2 directories with 1 update. PR [#209](https://github.com/TheoGoudout/greensecops/pull/209) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump the terraform group across 2 directories with 1 update. PR [#210](https://github.com/TheoGoudout/greensecops/pull/210) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump the github-actions group across 1 directory with 2 updates. PR [#213](https://github.com/TheoGoudout/greensecops/pull/213) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump the python-packages group across 1 directory with 2 updates. PR [#214](https://github.com/TheoGoudout/greensecops/pull/214) by [@dependabot[bot]](https://github.com/apps/dependabot).
