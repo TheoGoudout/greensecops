@@ -6,7 +6,7 @@
     "test": "bunx playwright test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.6",
-    "@playwright/test": "1.62.0"
+    "@biomejs/biome": "^2.5.7",
+    "@playwright/test": "1.62.1"
   }
 }
