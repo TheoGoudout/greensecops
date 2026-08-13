@@ -2,6 +2,8 @@
 
 ## Latest Changes
 
+## 0.11.0 (2026-08-13)
+
 ### Features
 
 * feat(release): semi-automated versioning and production deploy. PR [#207](https://github.com/TheoGoudout/greensecops/pull/207) by [@TheoGoudout](https://github.com/TheoGoudout).
