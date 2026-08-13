@@ -2,6 +2,8 @@
 
 ## Latest Changes
 
+## 0.11.1 (2026-08-13)
+
 ### Upgrades
 
 * ⬆ Bump the docker group across 4 directories with 3 updates. PR [#211](https://github.com/TheoGoudout/greensecops/pull/211) by [@dependabot[bot]](https://github.com/apps/dependabot).
