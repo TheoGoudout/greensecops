@@ -65,8 +65,11 @@ jobs:
         # Ansible reaches the instances over Session Manager; the plugin is the
         # local half of that transport and is not preinstalled on the runner.
         run: |
-          curl -fsSL -o /tmp/session-manager-plugin.deb \
-            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+          for i in {1..5}; do
+            curl -fsSL -o /tmp/session-manager-plugin.deb \
+              "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" && break
+            sleep 5
+          done
           sudo dpkg -i /tmp/session-manager-plugin.deb
           session-manager-plugin --version
 
@@ -76,11 +79,19 @@ jobs:
           cache: "pip"
 
       - name: Install Ansible
-        run: pip install "ansible-core${ANSIBLE_CORE_VERSION}"
+        run: |
+          for i in {1..5}; do
+            pip install "ansible-core${ANSIBLE_CORE_VERSION}" && break
+            sleep 5
+          done
 
       - name: Install collections
         working-directory: deploy/ansible
-        run: ansible-galaxy collection install -r requirements.yml -p collections
+        run: |
+          for i in {1..5}; do
+            ansible-galaxy collection install -r requirements.yml -p collections && break
+            sleep 5
+          done
 
       - name: Resolve the tag to deploy
         id: target
