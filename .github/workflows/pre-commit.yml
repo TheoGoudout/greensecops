@@ -6,6 +6,10 @@ on:
       - opened
       - synchronize
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 env:
@@ -66,8 +70,10 @@ jobs:
         # pinned to match opa/Dockerfile and .github/workflows/opa.yml so local,
         # server and CI evaluation all agree.
         run: |
-          curl -fsSL -o /usr/local/bin/opa \
-            "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static"
+          for i in {1..3}; do
+            curl -fsSL -o /usr/local/bin/opa \
+              "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static" && break || sleep 5
+          done
           chmod +x /usr/local/bin/opa
           opa version
         env:
@@ -88,7 +94,6 @@ jobs:
       - name: Run prek - pre-commit
         id: precommit
         run: uv run prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
-        continue-on-error: true
       - name: Commit and push changes
         if: env.HAS_SECRETS == 'true'
         run: |
