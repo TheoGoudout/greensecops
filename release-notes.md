@@ -2,6 +2,10 @@
 
 ## Latest Changes
 
+### Fixes
+
+* fix(release): upsert the Coolify TAG variable instead of only updating it. PR [#218](https://github.com/TheoGoudout/greensecops/pull/218) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ## 0.11.1 (2026-08-13)
 
 ### Upgrades
