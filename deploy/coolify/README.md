@@ -226,7 +226,8 @@ IMAGE_REGISTRY=ghcr.io/theogoudout
 TAG=latest
 
 SERVICE_URL_BACKEND=https://api.greensecops.com
-SERVICE_URL_FRONTEND=https://app.greensecops.com
+FRONTEND_HOST=https://app.greensecops.com
+GREENSECOPS_PUBLIC_URL=https://api.greensecops.com
 MARKETING_URL=https://greensecops.com
 DOCS_URL=https://docs.greensecops.com
 
@@ -234,11 +235,61 @@ GITHUB_APP_ID=...
 GITHUB_APP_PRIVATE_KEY=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
-GITHUB_APP_NAME=...
 OPENAI_API_KEY=...        # or ANTHROPIC_API_KEY / GOOGLE_API_KEY
 FIRST_SUPERUSER=you@example.com
 CELERY_CONCURRENCY=2
 ```
+
+On **staging** the URL block reads instead:
+
+```
+SERVICE_URL_BACKEND=https://api.staging.greensecops.com
+FRONTEND_HOST=https://app.staging.greensecops.com
+GREENSECOPS_PUBLIC_URL=https://api.staging.greensecops.com
+MARKETING_URL=https://staging.greensecops.com
+DOCS_URL=https://docs.staging.greensecops.com
+```
+
+— the same four hostnames `deploy/cloudflare/env/staging.env` gives the static
+builds, so both halves of the deployment agree on what a hostname means.
+
+**`FRONTEND_HOST` is not a magic variable here, and getting it wrong is silent.**
+The root `compose.yml` sets it from `SERVICE_URL_FRONTEND`, but only because the
+dashboard is a container there. In this stack it is a Cloudflare Worker, not a
+Coolify service, so Coolify generates no `SERVICE_URL_FRONTEND` and
+`deploy/coolify/compose.yml` reads `FRONTEND_HOST` directly. Coolify renders a
+variable it has never heard of as the empty string rather than failing, and the
+backend's `env_ignore_empty` then falls back to the `http://localhost:5173`
+default — which becomes the deployment's only CORS origin *and* the host of the
+GitHub OAuth callback. The result is a backend that starts cleanly, answers
+every request, and has every one of those answers discarded by the browser.
+`GREENSECOPS_PUBLIC_URL` (the API's own public URL, embedded as the default in
+generated customer workflows) empties the same way.
+
+**You should not have to type the three URLs at all.** CI writes
+`FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` onto the resource from
+`deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
+built from, so the two halves of a deployment cannot disagree about a hostname.
+`scripts/coolify_env_sync.sh` does it, called from `pages.yml` for staging and
+from `release-deploy.yml` for production. **Editing those three by hand in
+Coolify is pointless: the next sync overwrites them.** Change
+`deploy/cloudflare/env/<environment>.env` instead.
+
+Two things follow from CI owning them. The sync does not deploy — Coolify applies
+a variable on the resource's next deploy — so a *changed* URL reaches the
+containers on the following push, or immediately if you redeploy from Coolify.
+And they stay listed above because a resource CI has not reached yet still needs
+them: the first sync cannot run before the secrets exist.
+
+Belt and braces on top of that. The three carry `:?` in the compose file, so
+Coolify sorts them to the top of this tab with a red border while they are empty;
+and `backend/app/core/config.py` refuses to start outside `local` with
+`FRONTEND_HOST` at the localhost default, which is the gate that cannot be
+clicked past. Scheme included, no trailing slash.
+
+`GITHUB_APP_NAME` is deliberately absent: it is baked into the dashboard bundle
+at build time from `deploy/cloudflare/env/<environment>.env` and the backend
+never reads it.
 
 Only `api.` needs a domain in Coolify — set it on the `backend` service so
 Coolify's proxy terminates TLS and routes to it. The other three hostnames are
@@ -298,13 +349,18 @@ personal access token holding `read:packages`.
 
 #### What the release workflows need
 
-Three repository secrets, all for the Coolify half:
+Four repository secrets, all for the Coolify half:
 
 | Secret | What it is |
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
-| `COOLIFY_TOKEN` | An API token with permission to update and deploy the resource |
+| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy production |
 | `COOLIFY_PRODUCTION_UUID` | The production resource's UUID |
+| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Used only to sync its URLs and watch its automatic deploy — nothing here ever triggers one |
+
+Set all four or none. `pages.yml` refuses a partial set rather than skipping:
+syncing nothing and passing is exactly how staging kept a localhost
+`FRONTEND_HOST` for the life of the deployment.
 
 The Pi is not in the request path, but it *is* in the deploy path — if its API
 is not reachable from GitHub's runners, the Coolify job cannot run and

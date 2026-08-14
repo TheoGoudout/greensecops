@@ -2,9 +2,9 @@ import { OAuthError, OAuthErrorCode, useGitHubLogin } from "@react-oauth/github"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { FaGithub } from "react-icons/fa"
-import { AuthService } from "@/client"
+import { ApiError, AuthService } from "@/client"
 import { Button } from "@/components/ui/button"
-import { showErrorToast } from "@/utils"
+import { handleApiError, showErrorToast } from "@/utils"
 
 export function GitHubOAuthButton() {
   const navigate = useNavigate()
@@ -38,8 +38,26 @@ export function GitHubOAuthButton() {
           }
         }
         navigate({ to: "/" })
-      } catch {
-        showErrorToast("GitHub sign in failed. Please try again.")
+      } catch (err) {
+        // The handshake with GitHub already succeeded by this point — we hold a
+        // code — so blaming GitHub here is nearly always wrong. What failed is
+        // our own exchange call, and the backend says why: "GitHub Client ID
+        // not matching", "GitHub OAuth not configured", a rate limit. Reporting
+        // that verbatim is the difference between a one-minute fix and a hunt.
+        //
+        // A misconfigured deployment does not even get that far: a CORS block
+        // or an unreachable API rejects as a bare AxiosError with no response,
+        // which is a deployment fault rather than anything the user can retry
+        // their way out of, and says so.
+        console.error("GitHub OAuth code exchange failed", err)
+        if (err instanceof ApiError) {
+          handleApiError(err)
+        } else {
+          showErrorToast(
+            "Could not reach the GreenSecOps API. If this persists, the " +
+              "deployment is misconfigured rather than GitHub being down.",
+          )
+        }
       }
     },
     onError: (error) => {

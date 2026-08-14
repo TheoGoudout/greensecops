@@ -33,6 +33,10 @@ The rest of this document describes the generic single-host Compose deployment, 
 
 These `SERVICE_URL_*`/`FRONTEND_HOST`/`BACKEND_HOST`/`DOCS_URL`/`MARKETING_URL`/`BACKEND_CORS_ORIGINS` pairs are wired with flat `${SERVICE_URL_X}` references (no `${VAR:-default}` fallback chain) so Coolify's variable scanner reliably detects them — nested `${VAR:-${OTHER}}` defaults aren't documented as supported by Coolify's UI. This means these values are fixed to the corresponding magic variable in `compose.yml`; they're only independently overridable when running the compose file by hand without Coolify (see below), or in local dev via `compose.override.yml`.
 
+**The Coolify stack is the exception to the frontend half of this.** `deploy/coolify/compose.yml` runs no frontend, landing or docs container — those three are Cloudflare Workers — so Coolify generates no `SERVICE_URL_FRONTEND`, `SERVICE_URL_LANDING` or `SERVICE_URL_DOCS` for it, and that file reads `FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` directly instead. CI writes all three onto the resource from `deploy/cloudflare/env/<environment>.env` via `scripts/coolify_env_sync.sh`, so they are not typed by hand on this deployment and hand edits are overwritten on the next sync; see [deploy/coolify/README.md](deploy/coolify/README.md#4-configure), which explains what an unset `FRONTEND_HOST` costs. `scripts/validate_coolify_compose.py` records the divergence and checks that file stays documented.
+
+Those three also carry `${VAR:?}` there, which is the one interpolation form this repository does use with Coolify — it is Coolify's own documented syntax for a required variable, not a generic-compose trick, and it makes the UI sort an empty one to the top of the Environment Variables tab with a red border. The reasoning above still holds for everything else: no `${VAR:-default}` chains on the values Coolify's scanner has to detect.
+
 **Deploying without Coolify:** export these eleven variables in the shell (or a `.env` file next to `compose.yml`) before running `docker compose`. The CI workflow `.github/workflows/test-docker-compose.yml` shows a working set of test values.
 
 ## Environment Variables
@@ -68,12 +72,12 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **Hosts and URLs**
 
-* `FRONTEND_HOST`: Public URL of the frontend dashboard. Fixed to `${SERVICE_URL_FRONTEND}` in `compose.yml`.
+* `FRONTEND_HOST`: Public URL of the frontend dashboard, and — since the OAuth callback and the CORS origin are both derived from it — the one value that silently breaks every browser request if it is wrong. Fixed to `${SERVICE_URL_FRONTEND}` in `compose.yml`; set by hand in `deploy/coolify/compose.yml`. The backend refuses to start outside `local` if it is left at the `http://localhost:5173` default.
 * `BACKEND_HOST`: Public URL of the backend API. Fixed to `${SERVICE_URL_BACKEND}` in `compose.yml`.
 * `GREENSECOPS_PUBLIC_URL`: Public backend URL embedded in generated customer workflow files, added to the allowed CORS origins, and used as the badge-image host — when set, it overrides `BACKEND_HOST` for all three. Empty by default. Useful as a dev tunnel (e.g. ngrok) base URL so GitHub can reach a local backend; independently overridable even under Coolify since it has no matching magic var.
 * `MARKETING_URL`: Marketing/landing site URL, embedded in PR body attribution links and used by the landing page for its own legal-copy self-references. Fixed to `${SERVICE_URL_LANDING}` in `compose.yml`.
 * `DOCS_URL`: Public URL of the docs site, used for rule documentation links in PR messages. Fixed to `${SERVICE_URL_DOCS}` in `compose.yml`.
-* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. Fixed to `${SERVICE_URL_FRONTEND}` in `compose.yml`.
+* `BACKEND_CORS_ORIGINS`: A list of allowed CORS origins separated by commas. `FRONTEND_HOST` is always appended to it. Fixed to `${SERVICE_URL_FRONTEND}` in `compose.yml`, and to `${FRONTEND_HOST}` in `deploy/coolify/compose.yml`.
 
 **Branding**
 

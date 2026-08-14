@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, type Page, test } from "@playwright/test"
 import { MOCK_OVERVIEW } from "./utils/mocks"
 
 const MOCK_REPO = {
@@ -173,6 +173,26 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   })
 })
 
+/**
+ * Intercept window.open so the popup skips the real GitHub authorize page and
+ * lands directly on our same-origin callback with a code and the
+ * library-generated state (which the opener polls and verifies).
+ */
+async function stubPopupWithCode(page: Page) {
+  await page.addInitScript(() => {
+    const realOpen = window.open.bind(window)
+    window.open = ((url: string, target?: string, features?: string) => {
+      const authorize = new URL(url)
+      const state = authorize.searchParams.get("state") ?? ""
+      const redirectUri =
+        authorize.searchParams.get("redirect_uri") ??
+        `${location.origin}/auth/github/callback`
+      const callbackUrl = `${redirectUri}?code=test-code&state=${state}`
+      return realOpen(callbackUrl, target, features)
+    }) as typeof window.open
+  })
+}
+
 test.describe("GitHub OAuth login button", () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -205,21 +225,7 @@ test.describe("GitHub OAuth login button", () => {
       })
     })
 
-    // Intercept window.open so the popup skips the real GitHub authorize page and
-    // lands directly on our same-origin callback with a code and the
-    // library-generated state (which the opener polls and verifies).
-    await page.addInitScript(() => {
-      const realOpen = window.open.bind(window)
-      window.open = ((url: string, target?: string, features?: string) => {
-        const authorize = new URL(url)
-        const state = authorize.searchParams.get("state") ?? ""
-        const redirectUri =
-          authorize.searchParams.get("redirect_uri") ??
-          `${location.origin}/auth/github/callback`
-        const callbackUrl = `${redirectUri}?code=test-code&state=${state}`
-        return realOpen(callbackUrl, target, features)
-      }) as typeof window.open
-    })
+    await stubPopupWithCode(page)
 
     await page.goto("/login")
     await page.getByTestId("github-oauth-btn").click()
@@ -262,5 +268,48 @@ test.describe("GitHub OAuth login button", () => {
     expect(
       await page.evaluate(() => localStorage.getItem("access_token")),
     ).toBeNull()
+  })
+
+  // The handshake succeeding and the *exchange* failing is the case that had no
+  // coverage, and it is the one a misconfigured deployment actually hits: the
+  // popup closes normally and the toast has to say what went wrong. It used to
+  // say "GitHub sign in failed. Please try again." for every cause there is.
+  test("a rejected exchange reports the backend's reason", async ({ page }) => {
+    await page.route("**/api/v1/auth/github/callback**", (route) => {
+      route.fulfill({
+        status: 400,
+        json: { detail: "GitHub Client ID not matching" },
+      })
+    })
+    await stubPopupWithCode(page)
+
+    await page.goto("/login")
+    await page.getByTestId("github-oauth-btn").click()
+
+    await expect(page.getByText("GitHub Client ID not matching")).toBeVisible()
+    await expect(page).toHaveURL("/login")
+    expect(
+      await page.evaluate(() => localStorage.getItem("access_token")),
+    ).toBeNull()
+  })
+
+  test("an unreachable API is not reported as a GitHub failure", async ({
+    page,
+  }) => {
+    // What a CORS block or a dead API looks like to the client: the request
+    // rejects with no response at all, so there is no backend detail to quote
+    // and blaming GitHub would send the reader looking in the wrong place.
+    await page.route("**/api/v1/auth/github/callback**", (route) =>
+      route.abort("failed"),
+    )
+    await stubPopupWithCode(page)
+
+    await page.goto("/login")
+    await page.getByTestId("github-oauth-btn").click()
+
+    await expect(
+      page.getByText(/Could not reach the GreenSecOps API/),
+    ).toBeVisible()
+    await expect(page).toHaveURL("/login")
   })
 })

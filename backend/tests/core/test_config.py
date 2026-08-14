@@ -1,4 +1,6 @@
-from app.core.config import Settings
+import pytest
+
+from app.core.config import LOCAL_FRONTEND_HOST, Settings
 
 REQUIRED = {
     "PROJECT_NAME": "Test",
@@ -34,3 +36,35 @@ def test_all_cors_origins_omits_public_url_when_unset() -> None:
     settings = _settings()
     assert settings.GREENSECOPS_PUBLIC_URL == ""
     assert all("ngrok" not in origin for origin in settings.all_cors_origins)
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_default_frontend_host_is_rejected_when_deployed(environment: str) -> None:
+    """The localhost default is a bug outside local, not a fallback.
+
+    It is also what an *empty* FRONTEND_HOST resolves to, since env_ignore_empty
+    is on — which is how a deployment ends up with a localhost-only CORS origin
+    and a localhost OAuth callback while looking healthy from the server side.
+    """
+    with pytest.raises(ValueError, match="FRONTEND_HOST"):
+        _settings(ENVIRONMENT=environment, SECRET_KEY="a-real-key")
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_public_frontend_host_is_accepted_when_deployed(environment: str) -> None:
+    settings = _settings(
+        ENVIRONMENT=environment,
+        SECRET_KEY="a-real-key",
+        FRONTEND_HOST="https://app.staging.greensecops.com",
+    )
+    assert settings.all_cors_origins == ["https://app.staging.greensecops.com"]
+    assert (
+        settings.GITHUB_OAUTH_REDIRECT_URI
+        == "https://app.staging.greensecops.com/auth/github/callback"
+    )
+
+
+def test_default_frontend_host_is_fine_locally() -> None:
+    settings = _settings()
+    assert settings.ENVIRONMENT == "local"
+    assert settings.FRONTEND_HOST == LOCAL_FRONTEND_HOST

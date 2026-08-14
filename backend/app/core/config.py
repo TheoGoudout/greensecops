@@ -14,6 +14,8 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self
 
+LOCAL_FRONTEND_HOST = "http://localhost:5173"
+
 
 def parse_cors(v: Any) -> list[str] | str:
     if isinstance(v, str) and not v.startswith("["):
@@ -36,7 +38,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     # Hosts & URLs
-    FRONTEND_HOST: str = "http://localhost:5173"
+    # The dev-server default. Named because _reject_local_frontend_host below
+    # has to recognise it: outside local it is not a default but a bug.
+    FRONTEND_HOST: str = LOCAL_FRONTEND_HOST
     BACKEND_HOST: str = "http://localhost:8000"
     # Public-facing backend URL embedded in generated workflow files as default.
     # Set this to the canonical production URL so customer workflows point to prod
@@ -100,6 +104,22 @@ class Settings(BaseSettings):
                     "would be randomly regenerated per process, invalidating all "
                     "JWTs across restarts and replicas."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_local_frontend_host(self) -> Self:
+        if self.ENVIRONMENT != "local" and self.FRONTEND_HOST == LOCAL_FRONTEND_HOST:
+            raise ValueError(
+                f"FRONTEND_HOST is still {LOCAL_FRONTEND_HOST}, which cannot be "
+                f"right in {self.ENVIRONMENT}. It is the deployment's only "
+                "guaranteed CORS origin and the host of the GitHub OAuth "
+                "callback, so a localhost value leaves the API answering every "
+                "request while the browser discards every answer, and sends "
+                "users back to a callback that does not exist. Set it to the "
+                "dashboard's public origin. Note that an empty value reaches "
+                "here as this default: env_ignore_empty is on, and Coolify "
+                "substitutes an unset variable as the empty string."
+            )
         return self
 
     @model_validator(mode="after")
