@@ -2,6 +2,8 @@
 
 ## Latest Changes
 
+## 0.11.3 (2026-08-14)
+
 ### Fixes
 
 * fix(deploy): give staging the FRONTEND_HOST it never had, and let CI keep it. PR [#219](https://github.com/TheoGoudout/greensecops/pull/219) by [@TheoGoudout](https://github.com/TheoGoudout).

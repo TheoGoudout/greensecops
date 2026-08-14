@@ -11,4 +11,4 @@ but is an implementation detail of the packaging step, and it raises
 run from a source checkout included.
 """
 
-__version__ = "0.11.2"
+__version__ = "0.11.3"
