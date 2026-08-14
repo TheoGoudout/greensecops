@@ -226,7 +226,8 @@ IMAGE_REGISTRY=ghcr.io/theogoudout
 TAG=latest
 
 SERVICE_URL_BACKEND=https://api.greensecops.com
-SERVICE_URL_FRONTEND=https://app.greensecops.com
+FRONTEND_HOST=https://app.greensecops.com
+GREENSECOPS_PUBLIC_URL=https://api.greensecops.com
 MARKETING_URL=https://greensecops.com
 DOCS_URL=https://docs.greensecops.com
 
@@ -234,11 +235,44 @@ GITHUB_APP_ID=...
 GITHUB_APP_PRIVATE_KEY=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
-GITHUB_APP_NAME=...
 OPENAI_API_KEY=...        # or ANTHROPIC_API_KEY / GOOGLE_API_KEY
 FIRST_SUPERUSER=you@example.com
 CELERY_CONCURRENCY=2
 ```
+
+On **staging** the URL block reads instead:
+
+```
+SERVICE_URL_BACKEND=https://api.staging.greensecops.com
+FRONTEND_HOST=https://app.staging.greensecops.com
+GREENSECOPS_PUBLIC_URL=https://api.staging.greensecops.com
+MARKETING_URL=https://staging.greensecops.com
+DOCS_URL=https://docs.staging.greensecops.com
+```
+
+— the same four hostnames `deploy/cloudflare/env/staging.env` gives the static
+builds, so both halves of the deployment agree on what a hostname means.
+
+**`FRONTEND_HOST` is not a magic variable here, and getting it wrong is silent.**
+The root `compose.yml` sets it from `SERVICE_URL_FRONTEND`, but only because the
+dashboard is a container there. In this stack it is a Cloudflare Worker, not a
+Coolify service, so Coolify generates no `SERVICE_URL_FRONTEND` and
+`deploy/coolify/compose.yml` reads `FRONTEND_HOST` directly. Coolify renders a
+variable it has never heard of as the empty string rather than failing, and the
+backend's `env_ignore_empty` then falls back to the `http://localhost:5173`
+default — which becomes the deployment's only CORS origin *and* the host of the
+GitHub OAuth callback. The result is a backend that starts cleanly, answers
+every request, and has every one of those answers discarded by the browser.
+`GREENSECOPS_PUBLIC_URL` (the API's own public URL, embedded as the default in
+generated customer workflows) empties the same way.
+
+Set it to the dashboard's public origin, scheme included and no trailing slash.
+`backend/app/core/config.py` refuses to start outside `local` if it is still the
+localhost default, so a missed value fails the deploy instead of the browser.
+
+`GITHUB_APP_NAME` is deliberately absent: it is baked into the dashboard bundle
+at build time from `deploy/cloudflare/env/<environment>.env` and the backend
+never reads it.
 
 Only `api.` needs a domain in Coolify — set it on the `backend` service so
 Coolify's proxy terminates TLS and routes to it. The other three hostnames are

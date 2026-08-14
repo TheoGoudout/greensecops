@@ -11,16 +11,29 @@ and the setting quietly takes its default in production.
 That is exactly the kind of drift a comment cannot prevent, so this checks it:
 
 * every application environment variable the root backend service declares is
-  also declared by the Coolify backend and worker services, and
+  also declared by the Coolify backend and worker services,
 * both Coolify services agree with each other, since they share a YAML anchor
-  and a divergence would mean the anchor was accidentally broken.
+  and a divergence would mean the anchor was accidentally broken, and
+* every variable the Coolify compose reads without a default is either named in
+  the README's configuration block or recorded here as optional.
 
-Deliberate differences are listed in ``EXPECTED_DIVERGENCE`` with the reason.
-Adding to that list is a decision; forgetting a variable is a bug.
+The third check exists because the first two cannot see the other half of the
+loop. Naming a variable in the compose file only asks Coolify for it; something
+still has to tell the operator to set it, and that something is the README.
+``FRONTEND_HOST`` was named by the compose file and absent from the README for
+the whole life of the staging deployment: Coolify substituted the empty string,
+``env_ignore_empty`` fell back to ``http://localhost:5173``, and staging served
+a localhost-only CORS origin — a backend answering every request and a browser
+discarding every answer.
+
+Deliberate differences are listed in ``EXPECTED_DIVERGENCE`` and ``OPTIONAL``
+with the reason. Adding to those lists is a decision; forgetting a variable is a
+bug.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -29,6 +42,15 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 ROOT_COMPOSE = ROOT / "compose.yml"
 COOLIFY_COMPOSE = ROOT / "deploy" / "coolify" / "compose.yml"
+COOLIFY_README = ROOT / "deploy" / "coolify" / "README.md"
+
+# The README section whose first fenced block lists what the operator types into
+# Coolify's Environment Variables tab.
+CONFIG_HEADING = "### 4. Configure"
+
+# ``${NAME}`` or ``${NAME:-default}``. A variable with a default cannot be
+# forgotten into a wrong value, so only the undefaulted ones need documenting.
+VARIABLE_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:-[^}]*)?\}")
 
 # Variables whose *value* legitimately differs between the two deployments.
 # Their presence is still required in both; only the value may diverge.
@@ -37,6 +59,32 @@ EXPECTED_DIVERGENCE = {
     "MARKETING_URL": "Cloudflare Pages, so there is no SERVICE_URL_LANDING",
     "DOCS_URL": "Cloudflare Pages, so there is no SERVICE_URL_DOCS",
     "BACKEND_CORS_ORIGINS": "follows FRONTEND_HOST",
+}
+
+# Undefaulted variables the README's configuration block deliberately omits.
+# Every one of them turns a feature off when empty, which is a supported state
+# rather than a misconfiguration — unlike FRONTEND_HOST, whose empty value takes
+# a *wrong* default instead of no value at all.
+OPTIONAL = {
+    "ANTHROPIC_API_KEY": "alternative LLM provider; the block names one",
+    "GOOGLE_API_KEY": "alternative LLM provider; the block names one",
+    "AI_PROVIDERS_CONFIG": "per-provider overrides; defaults suffice",
+    "AWS_ACCESS_KEY_ID": "unset disables cloud-posture scanning only",
+    "AWS_SECRET_ACCESS_KEY": "unset disables cloud-posture scanning only",
+    "SMTP_HOST": "unset disables outbound email only",
+    "SMTP_USER": "follows SMTP_HOST",
+    "SMTP_PASSWORD": "follows SMTP_HOST",
+    "EMAILS_FROM_NAME": "defaults to PROJECT_NAME in config.py",
+    "GITHUB_BOT_TOKEN": "unset disables outreach PRs on external repos only",
+    "GITHUB_BOT_LOGIN": "derived from GITHUB_BOT_TOKEN when empty",
+    "STRIPE_SECRET_KEY": "unset disables billing only",
+    "STRIPE_WEBHOOK_SECRET": "follows STRIPE_SECRET_KEY",
+    "STRIPE_PRICE_STARTER": "follows STRIPE_SECRET_KEY",
+    "STRIPE_PRICE_PRO": "follows STRIPE_SECRET_KEY",
+    "STRIPE_PRICE_ULTIMATE": "follows STRIPE_SECRET_KEY",
+    "SENTRY_DSN": "unset disables error reporting only",
+    "LANGCHAIN_API_KEY": "unset disables LangSmith tracing only",
+    "RATE_LIMIT_STORAGE_URI": "falls back to REDIS_URL in config.py",
 }
 
 
@@ -48,9 +96,46 @@ def _declared(service: dict) -> set[str]:
     return {entry.split("=", 1)[0] for entry in environment}
 
 
+def _undefaulted_references(text: str) -> set[str]:
+    """Variables the compose file reads with no ``:-`` fallback of its own.
+
+    Coolify's own ``SERVICE_*`` magic variables are excluded: it generates those
+    at deploy time, so there is nothing for an operator to be told to set.
+    """
+    return {
+        match.group(1)
+        for match in VARIABLE_REFERENCE.finditer(text)
+        if match.group(2) is None and not match.group(1).startswith("SERVICE_")
+    }
+
+
+def _documented() -> set[str]:
+    """Variable names the README's configuration block tells the operator to set."""
+    _, heading, rest = COOLIFY_README.read_text(encoding="utf-8").partition(
+        CONFIG_HEADING
+    )
+    if not heading:
+        raise SystemExit(
+            f"{COOLIFY_README} no longer contains the heading {CONFIG_HEADING!r}, "
+            "so this script cannot find the configuration block it validates "
+            "against. Restore the heading or update CONFIG_HEADING."
+        )
+    blocks = rest.split("```")
+    if len(blocks) < 2:
+        raise SystemExit(
+            f"{COOLIFY_README}'s {CONFIG_HEADING!r} section has no fenced block."
+        )
+    return {
+        line.split("=", 1)[0].strip()
+        for line in blocks[1].splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+    }
+
+
 def main() -> int:
+    coolify_text = COOLIFY_COMPOSE.read_text(encoding="utf-8")
     root = yaml.safe_load(ROOT_COMPOSE.read_text(encoding="utf-8"))
-    coolify = yaml.safe_load(COOLIFY_COMPOSE.read_text(encoding="utf-8"))
+    coolify = yaml.safe_load(coolify_text)
 
     errors: list[str] = []
 
@@ -66,6 +151,9 @@ def main() -> int:
             "substitutes only what a compose file names, so each of these "
             "would silently fall back to its default:\n"
             + "\n".join(f"      - {name}" for name in missing)
+            + "\n    Add each one to that file's &app-env block, or record it "
+            "in EXPECTED_DIVERGENCE in this script if the difference is "
+            "deliberate."
         )
 
     # The two Coolify services share a YAML anchor; if they have diverged, the
@@ -78,21 +166,39 @@ def main() -> int:
             f"broken: {differing}"
         )
 
+    # Naming a variable in the compose file only asks Coolify for it. The README
+    # is what asks the operator for it, and an unasked-for variable arrives empty.
+    required = _undefaulted_references(coolify_text) - set(OPTIONAL)
+    undocumented = sorted(required - _documented())
+    if undocumented:
+        errors.append(
+            f"{len(undocumented)} variable(s) that deploy/coolify/compose.yml "
+            "reads with no default are missing from deploy/coolify/README.md's "
+            f"{CONFIG_HEADING!r} block, so nothing tells an operator to set "
+            "them and Coolify will substitute the empty string:\n"
+            + "\n".join(f"      - {name}" for name in undocumented)
+            + "\n    Document each one there, or add it to OPTIONAL in this "
+            "script with the feature it turns off when empty."
+        )
+
+    stale = sorted(set(OPTIONAL) - _undefaulted_references(coolify_text))
+    if stale:
+        errors.append(
+            "OPTIONAL in this script exempts variable(s) deploy/coolify/"
+            "compose.yml no longer reads without a default, so the exemption "
+            f"now hides nothing and should be deleted: {stale}"
+        )
+
     if errors:
         print("Coolify compose validation FAILED:\n", file=sys.stderr)
         for error in errors:
             print(f"  ✗ {error}\n", file=sys.stderr)
-        print(
-            "Add the variable to deploy/coolify/compose.yml's &app-env block, "
-            "or record it in EXPECTED_DIVERGENCE in this script if the "
-            "difference is deliberate.",
-            file=sys.stderr,
-        )
         return 1
 
     print(
         f"deploy/coolify/compose.yml declares all {len(reference)} application "
-        "variable(s) compose.yml does ✅"
+        f"variable(s) compose.yml does, and all {len(required)} it reads "
+        "without a default are documented ✅"
     )
     return 0
 
