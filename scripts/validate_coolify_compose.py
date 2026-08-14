@@ -48,9 +48,17 @@ COOLIFY_README = ROOT / "deploy" / "coolify" / "README.md"
 # Coolify's Environment Variables tab.
 CONFIG_HEADING = "### 4. Configure"
 
-# ``${NAME}`` or ``${NAME:-default}``. A variable with a default cannot be
-# forgotten into a wrong value, so only the undefaulted ones need documenting.
-VARIABLE_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:-[^}]*)?\}")
+# ``${NAME}``, ``${NAME:-default}`` or ``${NAME:?}``. A variable with a ``:-``
+# default cannot be forgotten into a wrong value, so only the undefaulted ones
+# need documenting.
+#
+# ``:?`` counts as undefaulted, and the second group is matched rather than
+# ignored on purpose: a pattern that only knew ``:-`` would not match ``:?`` at
+# all, which silently drops those variables out of the check below instead of
+# exempting them. Marking a variable required in Coolify's UI is a reason to
+# document it, not an excuse — and the three variables carrying ``:?`` today are
+# the ones that went undocumented and broke staging.
+VARIABLE_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:[-?][^}]*)?\}")
 
 # Variables whose *value* legitimately differs between the two deployments.
 # Their presence is still required in both; only the value may diverge.
@@ -99,13 +107,18 @@ def _declared(service: dict) -> set[str]:
 def _undefaulted_references(text: str) -> set[str]:
     """Variables the compose file reads with no ``:-`` fallback of its own.
 
+    A ``${NAME:?}`` reference counts as undefaulted: it makes Coolify demand a
+    value rather than supplying one, so an operator still has to be told what to
+    put there.
+
     Coolify's own ``SERVICE_*`` magic variables are excluded: it generates those
     at deploy time, so there is nothing for an operator to be told to set.
     """
     return {
         match.group(1)
         for match in VARIABLE_REFERENCE.finditer(text)
-        if match.group(2) is None and not match.group(1).startswith("SERVICE_")
+        if not (match.group(2) or "").startswith(":-")
+        and not match.group(1).startswith("SERVICE_")
     }
 
 

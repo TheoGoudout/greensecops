@@ -107,6 +107,26 @@ jobs:
       contents: read
 
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Before the repoint below, not after, and not in pages-reusable.yml where
+      # staging's equivalent lives — that workflow runs *after* this job has
+      # deployed, so a sync there would reach production's containers one
+      # release late, every release.
+      #
+      # Same values the dashboard is about to be built with, from the same file.
+      # The API cannot derive them: SERVICE_URL_* magic is per-service, and the
+      # dashboard, landing and docs are Cloudflare Workers rather than services
+      # in deploy/coolify/compose.yml, so nothing generates a hostname for them.
+      - name: Sync the public URLs
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
+        run: scripts/coolify_env_sync.sh production "${UUID}"
+
       - name: Point the resource at the release and deploy it
         id: trigger
         # Two settings, because they do different jobs and neither is enough

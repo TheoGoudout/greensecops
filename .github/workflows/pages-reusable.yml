@@ -79,6 +79,18 @@ on:
       CLOUDFLARE_ACCOUNT_ID:
         description: Cloudflare account the Workers live in.
         required: false
+      # The Coolify half of the same deployment. The static surfaces get their
+      # hostnames baked into a bundle here; the API has to be *told* the same
+      # hostnames, and cannot derive them — see the coolify-env job below.
+      COOLIFY_URL:
+        description: Base URL of the Coolify control plane. Empty disables the sync.
+        required: false
+      COOLIFY_TOKEN:
+        description: API token permitted to read and write the resource's variables.
+        required: false
+      COOLIFY_STAGING_UUID:
+        description: Staging resource UUID. Empty disables the sync.
+        required: false
     outputs:
       # Empty on every run that is not a preview, and on preview runs with no
       # Cloudflare credentials. pages.yml owns the job that reports these,
@@ -552,3 +564,163 @@ jobs:
           packageManager: npm
           workingDirectory: docs
           command: deploy ${{ env.WRANGLER_ENV }}
+
+  coolify-env:
+    name: API variables (${{ inputs.environment }})
+    needs: [config]
+    # Staging only, and never for a preview. Production's sync lives in
+    # release-deploy.yml instead, and has to: that workflow calls this one
+    # *after* it has already deployed the API, so a sync here would land one
+    # deploy late on every release. A preview has no Coolify resource of its
+    # own, and must never write to staging's.
+    if: ${{ inputs.environment == 'staging' && !inputs.preview }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Skip in one direction only. No Coolify secrets at all is a fork or an
+      # account that does not run one — nothing to do. *Some* of them is a
+      # misconfiguration, and going green having synced nothing is precisely
+      # how FRONTEND_HOST stayed unset on staging for the life of the
+      # deployment. The same distinction HAS_CLOUDFLARE draws above, in the
+      # same file, for the same reason.
+      - name: Check the Coolify secrets
+        id: secrets
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+        run: |
+          set -euo pipefail
+          present=0; missing=""
+          for name in COOLIFY_URL COOLIFY_TOKEN UUID; do
+            if [ -n "${!name}" ]; then
+              present=$((present + 1))
+            else
+              missing="${missing} ${name}"
+            fi
+          done
+
+          if [ "${present}" -eq 0 ]; then
+            echo "::notice::No Coolify secrets on this repository — skipping the API variable sync."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${missing}" ]; then
+            echo "::error::Coolify is partly configured: missing${missing}. Set all three or none — a partial set would sync nothing and still pass."
+            exit 1
+          fi
+
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Sync the public URLs
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: scripts/coolify_env_sync.sh "${ENVIRONMENT}" "${UUID}"
+
+      # Nothing here triggers a deploy: Coolify's git watcher redeploys staging
+      # on push to main by itself. This finds that deployment and reports how it
+      # ended, so "did staging come up?" is answerable from the Actions tab
+      # rather than only from Coolify's own UI.
+      - name: Watch the automatic deploy
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+        run: |
+          set -euo pipefail
+
+          # Newest first. A deploy we did not start may not have been queued yet
+          # when this job began, so give it a short grace period to appear.
+          deployment=""
+          for attempt in $(seq 1 6); do
+            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
+              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+              "${COOLIFY_URL}/api/v1/deployments/applications/${UUID}")
+            http=${response##*$'\n'}
+            body=${response%$'\n'*}
+
+            if [ "${http}" -lt 200 ] || [ "${http}" -ge 300 ]; then
+              echo "  HTTP ${http} listing deployments (${attempt}/6): ${body}"
+              sleep 10
+              continue
+            fi
+
+            deployment=$(jq -r '
+              (if type == "array" then . else (.data // .deployments // []) end)
+              | map(select(.status == "queued" or .status == "in_progress"))
+              | (.[0].deployment_uuid // empty)
+            ' <<< "${body}")
+            if [ -n "${deployment}" ]; then
+              break
+            fi
+            echo "  No deployment in flight yet (${attempt}/6)."
+            sleep 10
+          done
+
+          # Not a failure. Coolify's watcher may have finished before this job
+          # started, or the push may have touched nothing it redeploys for.
+          if [ -z "${deployment}" ]; then
+            echo "::warning::No Coolify deployment in flight for ${UUID}; nothing to watch."
+            exit 0
+          fi
+
+          echo "Watching deployment ${deployment}"
+          status="unknown"
+          for attempt in $(seq 1 90); do
+            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
+              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+              "${COOLIFY_URL}/api/v1/deployments/${deployment}")
+            http=${response##*$'\n'}
+            body=${response%$'\n'*}
+
+            if [ "${http}" -lt 200 ] || [ "${http}" -ge 300 ]; then
+              echo "  HTTP ${http} polling the deployment (${attempt}/90): ${body}"
+              sleep 10
+              continue
+            fi
+
+            status=$(jq -r '.status // "unknown"' <<< "${body}")
+
+            case "${status}" in
+              finished)
+                echo "Staging API deployed ✅"
+                exit 0
+                ;;
+              failed|cancelled-by-user)
+                echo "::error::Coolify reported '${status}' for deployment ${deployment}."
+                {
+                  echo "## Staging API deploy ${status}"
+                  echo
+                  jq -r '.deployment_url // empty' <<< "${body}" | sed 's/^/Logs: /'
+                  echo
+                  echo '```'
+                  jq -r '.logs // "(no logs returned)"' <<< "${body}" | tail -100
+                  echo '```'
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+                ;;
+              queued|in_progress)
+                echo "  ${status} (${attempt}/90)"
+                ;;
+              *)
+                echo "  unrecognised status '${status}' (${attempt}/90)"
+                ;;
+            esac
+            sleep 10
+          done
+
+          echo "::error::Deployment ${deployment} was still '${status}' after 15 minutes. Check Coolify."
+          exit 1

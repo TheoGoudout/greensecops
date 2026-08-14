@@ -266,9 +266,26 @@ every request, and has every one of those answers discarded by the browser.
 `GREENSECOPS_PUBLIC_URL` (the API's own public URL, embedded as the default in
 generated customer workflows) empties the same way.
 
-Set it to the dashboard's public origin, scheme included and no trailing slash.
-`backend/app/core/config.py` refuses to start outside `local` if it is still the
-localhost default, so a missed value fails the deploy instead of the browser.
+**You should not have to type the three URLs at all.** CI writes
+`FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` onto the resource from
+`deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
+built from, so the two halves of a deployment cannot disagree about a hostname.
+`scripts/coolify_env_sync.sh` does it, called from `pages.yml` for staging and
+from `release-deploy.yml` for production. **Editing those three by hand in
+Coolify is pointless: the next sync overwrites them.** Change
+`deploy/cloudflare/env/<environment>.env` instead.
+
+Two things follow from CI owning them. The sync does not deploy — Coolify applies
+a variable on the resource's next deploy — so a *changed* URL reaches the
+containers on the following push, or immediately if you redeploy from Coolify.
+And they stay listed above because a resource CI has not reached yet still needs
+them: the first sync cannot run before the secrets exist.
+
+Belt and braces on top of that. The three carry `:?` in the compose file, so
+Coolify sorts them to the top of this tab with a red border while they are empty;
+and `backend/app/core/config.py` refuses to start outside `local` with
+`FRONTEND_HOST` at the localhost default, which is the gate that cannot be
+clicked past. Scheme included, no trailing slash.
 
 `GITHUB_APP_NAME` is deliberately absent: it is baked into the dashboard bundle
 at build time from `deploy/cloudflare/env/<environment>.env` and the backend
@@ -332,13 +349,18 @@ personal access token holding `read:packages`.
 
 #### What the release workflows need
 
-Three repository secrets, all for the Coolify half:
+Four repository secrets, all for the Coolify half:
 
 | Secret | What it is |
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
-| `COOLIFY_TOKEN` | An API token with permission to update and deploy the resource |
+| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy production |
 | `COOLIFY_PRODUCTION_UUID` | The production resource's UUID |
+| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Used only to sync its URLs and watch its automatic deploy — nothing here ever triggers one |
+
+Set all four or none. `pages.yml` refuses a partial set rather than skipping:
+syncing nothing and passing is exactly how staging kept a localhost
+`FRONTEND_HOST` for the life of the deployment.
 
 The Pi is not in the request path, but it *is* in the deploy path — if its API
 is not reachable from GitHub's runners, the Coolify job cannot run and
