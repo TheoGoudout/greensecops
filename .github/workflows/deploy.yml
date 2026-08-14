@@ -36,6 +36,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy
+    timeout-minutes: 360
     uses: ./.github/workflows/deploy-reusable.yml
     permissions:
       id-token: write
