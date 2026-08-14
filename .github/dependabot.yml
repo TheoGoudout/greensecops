@@ -1,4 +1,28 @@
 version: 2
+
+# Playwright is one dependency that Dependabot sees as two. The npm package
+# `@playwright/test` is pinned to an exact version in frontend/package.json and
+# landing/package.json, and the browser image it drives —
+# `mcr.microsoft.com/playwright:v<x.y.z>-noble` in frontend/Dockerfile.playwright
+# — ships exactly the browser builds that release expects. Bump one without the
+# other and the runner aborts before the first test ("Executable doesn't exist
+# at /ms-playwright/..."), which is why the split produced two pull requests
+# that were both red on their own and only green if merged together.
+#
+# A multi-ecosystem group makes Dependabot open a single pull request carrying
+# both the bun and docker halves, so CI tests the pair it will actually ship.
+multi-ecosystem-groups:
+  frontend-stack:
+    schedule:
+      interval: weekly
+    # `commit-message`, `target-branch`, `milestone` and
+    # `pull-request-branch-name` are group-only: setting them on a member
+    # `updates` entry is a config error, so they live here. `labels` is the
+    # exception — group and ecosystem labels are merged.
+    commit-message:
+      prefix: ⬆
+    labels: [dependencies, internal]
+
 updates:
   # GitHub Actions
   - package-ecosystem: github-actions
@@ -33,16 +57,23 @@ updates:
       python-packages:
         patterns:
           - "*"
-  # bun
+  # bun — the whole workspace (frontend, landing, action) shares bun.lock at the
+  # repo root, so `@playwright/test` is bumped here and the image it has to match
+  # is bumped by the /frontend docker entry below. Both are in `frontend-stack`
+  # so those two bumps land in one pull request.
+  #
+  # `patterns: ["*"]` (required alongside `multi-ecosystem-group`) sends every
+  # bun dependency into that pull request, not just Playwright: Dependabot allows
+  # only one `updates` entry per package-ecosystem + directory pair, so there is
+  # no second bun entry left to carry the rest. This replaces the old
+  # `groups: npm-packages` single-ecosystem group, which bundled the same
+  # dependencies into a pull request of their own.
   - package-ecosystem: bun
     directory: /
-    schedule:
-      interval: weekly
+    patterns: ["*"]
+    multi-ecosystem-group: frontend-stack
     cooldown:
       default-days: 7
-    commit-message:
-      prefix: ⬆
-    labels: [dependencies, internal]
     ignore:
       - dependency-name: "@hey-api/openapi-ts"
       # typescript 7 (native compiler) breaks @vercel/ncc's ts-loader and
@@ -51,15 +82,21 @@ updates:
       - dependency-name: "typescript"
         versions:
           - ">=7"
-    groups:
-      npm-packages:
-        patterns:
-          - "*"
-  # Docker
+  # Docker, everywhere except /frontend.
+  #
+  # python is deliberately unpinned here. The old `>=3.15.0-0` ignore existed to
+  # keep release candidates out (a bare `>=3.15` does not: prereleases sort
+  # *below* the release they lead to, so 3.15.0rc1 slipped past it once, and
+  # psycopg-binary shipped no cp315 wheels). It also blocked 3.15.0 final and
+  # every stable release after it, which is not what we want. Dependabot's docker
+  # updater now filters prereleases itself, twice over: tags matching rc/alpha/
+  # beta/dev/preview/`3.15.0a2`-style patterns are dropped, and so is any tag
+  # numerically above whatever `latest` resolves to — and `python:latest` only
+  # ever points at a stable release. So this tracks the newest stable Python and
+  # stops at it.
   - package-ecosystem: docker
     directories:
       - /backend
-      - /frontend
       - /landing
       - /opa
       - /docs
@@ -69,18 +106,23 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
-    ignore:
-      # `-0` is the lowest possible prerelease, so this also covers tags like
-      # 3.15.0rc1. A bare ">=3.15" does not: prereleases sort *below* the
-      # release they lead to, so release candidates slip past that constraint
-      # (they did once, and psycopg-binary ships no cp315 wheels).
-      - dependency-name: "python"
-        versions:
-          - ">=3.15.0-0"
     groups:
       docker:
         patterns:
           - "*"
+  # Docker, /frontend only — split out because frontend/Dockerfile.playwright
+  # has to move with `@playwright/test` above, and a directory cannot appear in
+  # two entries of the same ecosystem. The other images in this directory
+  # (oven/bun, nginx-unprivileged) therefore ride along in the group pull
+  # request. nginx-unprivileged is also used by /landing and /docs, so it can be
+  # bumped by both this entry and the one above — to the same version, in two
+  # pull requests touching different Dockerfiles.
+  - package-ecosystem: docker
+    directory: /frontend
+    patterns: ["*"]
+    multi-ecosystem-group: frontend-stack
+    cooldown:
+      default-days: 7
   # Docker Compose
   - package-ecosystem: docker-compose
     directory: /
