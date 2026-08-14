@@ -247,10 +247,20 @@ Cloudflare's.
 **`TAG` means different things on the two resources.** Staging keeps
 `TAG=latest` and tracks `main`, so every push redeploys it. On **production**,
 `TAG` is owned by `.github/workflows/release-deploy.yml`: publishing a release
-patches it to that release's tag over Coolify's API, alongside the resource's
-git ref. Set it to `latest` once when you create the resource and then leave it
-alone — editing it by hand pins production to whatever you typed until the next
-release overwrites it.
+sets it to that release's tag over Coolify's API, alongside the resource's git
+ref.
+
+You do not need to create `TAG` on the production resource by hand — the
+workflow creates it if it is absent and updates it if it is not. Leave it alone
+after that: editing it by hand pins production to whatever you typed until the
+next release overwrites it.
+
+The two API calls are deliberately different operations, and the distinction is
+easy to get wrong. `PATCH /applications/{uuid}/envs` *updates* an existing
+variable and returns **404** when there is none; `POST` to the same path
+*creates* one. The first production release failed exactly here, on a resource
+where `TAG` had never been set, so the workflow now tries the update and falls
+back to the create.
 
 ### 5. Deploy
 

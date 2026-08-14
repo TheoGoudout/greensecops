@@ -109,12 +109,13 @@ jobs:
     steps:
       - name: Point the resource at the release and deploy it
         id: trigger
-        # Two patches, because they do different jobs and neither is enough
-        # alone. git_branch decides which tree Coolify reads compose.yml from;
-        # the TAG variable decides which image that compose file pulls, and the
-        # resource's own variable overrides the ${TAG:-latest} default no
-        # matter which tree is checked out. Both are partial updates — no other
-        # field of the resource is touched, and no branch is created anywhere.
+        # Two settings, because they do different jobs and neither is enough
+        # alone. git_branch decides which tree Coolify reads compose.yml from
+        # (it takes a tag, confirmed against the live API); the TAG variable
+        # decides which image that compose file pulls, and the resource's own
+        # variable overrides the ${TAG:-latest} default no matter which tree is
+        # checked out. Both are partial updates — no other field of the
+        # resource is touched, and no branch is created anywhere.
         env:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
@@ -129,25 +130,61 @@ jobs:
             fi
           done
 
-          api() {
-            method=$1; path=$2; shift 2
-            curl -fsS --max-time 60 -X "${method}" \
+          status=""; body=""
+
+          # Sets `status` and `body`. Call it directly — never inside $( ),
+          # which would run it in a subshell and discard both assignments.
+          #
+          # Not `curl -f`: that throws away the response body on an error
+          # status, which is the half of a 4xx that says *why*. Losing it
+          # turned the first real release failure into a bare
+          # "curl: (22) 404" with nothing to act on.
+          call() {
+            local method=$1 path=$2
+            shift 2
+            local response
+            response=$(curl -sS --max-time 60 -w '\n%{http_code}' -X "${method}" \
               -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
               -H "Content-Type: application/json" \
-              "${COOLIFY_URL}/api/v1${path}" "$@"
+              "${COOLIFY_URL}/api/v1${path}" "$@")
+            status=${response##*$'\n'}
+            body=${response%$'\n'*}
           }
 
-          echo "Repointing ${UUID} at ${TAG}"
-          api PATCH "/applications/${UUID}" \
-            -d "$(jq -nc --arg ref "${TAG}" '{git_branch: $ref}')" >/dev/null
+          require_ok() {
+            if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+              echo "::error::$1 failed with HTTP ${status}: ${body}"
+              exit 1
+            fi
+          }
 
+          tag_env=$(jq -nc --arg v "${TAG}" '{key: "TAG", value: $v}')
+
+          echo "Repointing ${UUID} at ${TAG}"
+          call PATCH "/applications/${UUID}" \
+            -d "$(jq -nc --arg ref "${TAG}" '{git_branch: $ref}')"
+          require_ok "Repointing the resource at ${TAG}"
+
+          # Upsert, because PATCH and POST are not interchangeable here: PATCH
+          # updates an existing variable and 404s when there is none; POST
+          # creates one. Which applies depends on whether TAG was ever set on
+          # this resource by hand — not something a release should have an
+          # opinion about. The first real release failed exactly here, 404ing
+          # on a resource where TAG had never been created.
           echo "Setting TAG=${TAG}"
-          api PATCH "/applications/${UUID}/envs" \
-            -d "$(jq -nc --arg v "${TAG}" '{key: "TAG", value: $v}')" >/dev/null
+          call PATCH "/applications/${UUID}/envs" -d "${tag_env}"
+          if [ "${status}" = "404" ]; then
+            echo "  No TAG variable on this resource yet — creating it."
+            call POST "/applications/${UUID}/envs" -d "${tag_env}"
+            require_ok "Creating the TAG variable"
+          else
+            require_ok "Setting the TAG variable"
+          fi
 
           echo "Triggering the deploy"
-          deployment=$(api POST "/deploy?uuid=${UUID}&force=true" \
-            | jq -r '.deployments[0].deployment_uuid // empty')
+          call POST "/deploy?uuid=${UUID}&force=true"
+          require_ok "Triggering the deploy"
+          deployment=$(jq -r '.deployments[0].deployment_uuid // empty' <<< "${body}")
 
           if [ -z "${deployment}" ]; then
             echo "::error::Coolify accepted the deploy request but returned no deployment_uuid, so it cannot be monitored."
@@ -170,9 +207,23 @@ jobs:
           set -euo pipefail
           status="unknown"
           for attempt in $(seq 1 90); do
-            body=$(curl -fsS --max-time 30 \
+            # Same reasoning as the trigger step: keep the body on an error
+            # status so a failure here says what Coolify actually returned
+            # rather than just a curl exit code. A transient 5xx mid-rollout
+            # is not fatal — retry it rather than abandoning a deploy that is
+            # very likely still progressing.
+            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
               -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
               "${COOLIFY_URL}/api/v1/deployments/${DEPLOYMENT}")
+            http=${response##*$'\n'}
+            body=${response%$'\n'*}
+
+            if [ "${http}" -lt 200 ] || [ "${http}" -ge 300 ]; then
+              echo "  HTTP ${http} polling the deployment (${attempt}/90): ${body}"
+              sleep 10
+              continue
+            fi
+
             status=$(jq -r '.status // "unknown"' <<< "${body}")
 
             case "${status}" in
