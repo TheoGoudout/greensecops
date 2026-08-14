@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@f813ab9668f2a0913ee3d055b39ed0ac5f7b1ffa # v5.1.0
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -88,6 +88,7 @@ jobs:
           SSM_PREFIX: /greensecops/${{ inputs.environment }}
           REQUESTED_TAG: ${{ inputs.image_tag }}
           ROLLBACK: ${{ inputs.rollback_to_previous }}
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
           current=$(aws ssm get-parameter --name "${SSM_PREFIX}/config/IMAGE_TAG" \
@@ -117,7 +118,7 @@ jobs:
             echo "build=${build}"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Deploying '${tag}' to ${{ inputs.environment }} (currently '${current}', build=${build})."
+          echo "Deploying '${tag}' to ${ENVIRONMENT} (currently '${current}', build=${build})."
 
       - name: Verify the tag exists in ECR
         # Cheap guard that turns a typo in a rollback tag into an error here
@@ -156,9 +157,10 @@ jobs:
         env:
           GREENSECOPS_ENV: ${{ inputs.environment }}
           AWS_REGION: ${{ vars.AWS_REGION }}
+          TAG: ${{ steps.target.outputs.tag }}
         run: |
           ansible-playbook -i localhost, playbooks/build.yml \
-            -e image_tag=${{ steps.target.outputs.tag }}
+            -e image_tag="${TAG}"
 
       - name: Point the environment at the new tag
         # Idempotent: the build step already set this when it ran. Required
@@ -206,9 +208,10 @@ jobs:
           PREVIOUS: ${{ steps.target.outputs.current }}
           BUILT: ${{ steps.target.outputs.build }}
           OUTCOME: ${{ job.status }}
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           {
-            echo "## ${OUTCOME}: ${{ inputs.environment }}"
+            echo "## ${OUTCOME}: ${ENVIRONMENT}"
             echo
             echo "| | |"
             echo "|---|---|"
@@ -218,9 +221,9 @@ jobs:
             echo
             if [ "${OUTCOME}" != "success" ]; then
               echo "The rollout did not complete. Run the **rollback** workflow"
-              echo "against \`${{ inputs.environment }}\` to return to \`${PREVIOUS}\`."
+              echo "against \`${ENVIRONMENT}\` to return to \`${PREVIOUS}\`."
             else
               echo "To undo this, run the **rollback** workflow against"
-              echo "\`${{ inputs.environment }}\` — it will deploy \`${PREVIOUS}\`."
+              echo "\`${ENVIRONMENT}\` — it will deploy \`${PREVIOUS}\`."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

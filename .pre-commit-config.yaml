@@ -30,6 +30,21 @@ repos:
         args: [--fix=lf]
         exclude: ^backend/tests/fixtures/terraform/.*\.tf$
 
+  # GitHub Actions static analysis. Offline only: the online audits need a
+  # GitHub token and network round-trips per action, which belongs in CI rather
+  # than in front of every commit. .github/workflows/zizmor.yml runs the full
+  # set, so what this hook catches is the cheap half, before it reaches a
+  # branch. Configuration is shared — both read .github/zizmor.yml.
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: Audit GitHub Actions workflows with zizmor
+        entry: uv run zizmor --no-online-audits --min-confidence=medium
+        language: system
+        files: ^(\.github/(workflows/.*\.ya?ml|zizmor\.yml)|action/(\.github/workflows/.*\.ya?ml|action\.yml)|.*\.pre-commit-config\.yaml)$
+        pass_filenames: false
+        args: ["."]
+
   # OpenAPI client generation
   - repo: local
     hooks:

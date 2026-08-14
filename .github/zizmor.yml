@@ -1,0 +1,62 @@
+# zizmor's ruleset for this repository.
+# Schema: https://docs.zizmor.sh/configuration/
+#
+# Two kinds of entry belong here and nothing else:
+#
+#   1. Policies that ratchet in a practice we already follow, so that losing it
+#      is a failing check rather than a quiet regression.
+#   2. Suppressions for findings that are wrong *about this repository* rather
+#      than wrong in general — and each one has to say why.
+#
+# Everything else gets fixed in the workflow. A suppression added because a
+# finding was inconvenient is how a linter becomes decoration, which is what
+# .github/workflows/zizmor.yml already had to be rescued from.
+#
+# A per-file, per-line exception belongs next to the line it excuses, as a
+# `# zizmor: ignore[audit-id] reason` comment, not here — release.yml and
+# issue-manager.yml both do that. This file is for repository-wide policy.
+#
+# Note: audit IDs are not validated. A typo here silently configures nothing,
+# so check any edit with `uv run zizmor --no-online-audits .` before pushing.
+
+rules:
+  # Which actions this repository is allowed to run at all.
+  #
+  # Pinning is already handled without configuration: zizmor's default
+  # `unpinned-uses` policy is hash-pin, and all 25 distinct `uses:` in this
+  # repository are SHA-pinned. What pinning cannot do is stop a *new* action
+  # from a party we have never vetted appearing in a workflow — a pinned SHA of
+  # an untrusted action is still an untrusted action running with our token.
+  #
+  # This allowlist is that gate. Introducing an action from a publisher not
+  # named below now requires a deliberate edit to this file, which shows up in
+  # review as "we are trusting someone new" instead of as one more `uses:` line
+  # in a 300-line workflow diff.
+  #
+  # Org-wide entries are for publishers we already depend on structurally (the
+  # runner images, our own action, our registry and cloud providers). Everything
+  # else is allowed one repository at a time.
+  forbidden-uses:
+    config:
+      allow:
+        # GitHub-maintained, and the runtime this repository is built on.
+        - actions/*
+        # Our own action, and the public mirror sync-action-repo.yml pushes to.
+        - theogoudout/*
+        - zizmorcore/*
+        # Toolchains and registries the build depends on by construction.
+        - astral-sh/*
+        - aws-actions/*
+        - cloudflare/*
+        - docker/*
+        - oven-sh/*
+        # Upstream of the project this repository was forked from; used by
+        # issue-manager.yml and latest-changes.yml.
+        - tiangolo/*
+        # Vetted individually — single-purpose actions, no org-wide trust.
+        - agilepathway/label-checker
+        - dorny/paths-filter
+        - eps1lon/actions-label-merge-conflict
+        - mxschmitt/action-tmate
+        - pre-commit-ci/lite-action
+        - re-actors/alls-green
