@@ -3,7 +3,7 @@ name: Latest Changes
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     branches:
-      - main
+      - master
     types:
       - closed
   workflow_dispatch:
@@ -16,15 +16,11 @@ on:
         required: false
         default: "false"
 
-permissions: {}
-
 concurrency:
-  # Shared with release.yml, which also pushes to main. Without this, a pull
-  # request merging while a release is being cut rejects one of the two pushes
-  # as non-fast-forward — and when it is the release that loses, it stops
-  # half-done: manifests bumped, no tag, no draft.
-  group: main-write
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   latest-changes:
@@ -39,12 +35,12 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
         run: echo "$GITHUB_CONTEXT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           # To allow latest-changes to commit to the main branch
           token: ${{ secrets.LATEST_CHANGES }} # zizmor: ignore[secrets-outside-env]
           persist-credentials: true # required by tiangolo/latest-changes
-      - uses: tiangolo/latest-changes@8a940392f4c65274539453a5d5a76d9550203ac1 # 0.7.1
+      - uses: tiangolo/latest-changes@c9b73efbc8992ef1a401e4235ea307a8ca8a724b # 0.6.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           latest_changes_file: ./release-notes.md
