@@ -14,6 +14,18 @@ _workflow(workflow_perms, job_perms) := {
 	}},
 }
 
+# `permissions: {}` is the deny-all baseline GitHub documents. From there a job
+# block is the only thing granting anything, so one scope on one job is the
+# tightest layout available — every other job still has nothing. The rule used
+# to report exactly that, thirteen times across this repository's own workflows.
+test_no_violation_when_the_workflow_denies_by_default if {
+	violations := wider_perms.violations with input as _workflow(
+		{},
+		{"contents": "write"},
+	)
+	count(violations) == 0
+}
+
 test_violation_when_a_job_adds_a_write_scope if {
 	violations := wider_perms.violations with input as _workflow(
 		{"contents": "read"},

@@ -27,6 +27,16 @@ RULES_DIR = Path(__file__).resolve().parents[1] / "rules"
 _METADATA_MARKER = "# METADATA"
 _TEST_SUFFIX = "_test.rego"
 
+# Shared Rego helpers, not rules. They live under ``rules/`` because the OPA
+# server loads exactly that directory (``opa/Dockerfile`` copies it to
+# ``/policies``), so a helper package outside it would not resolve for the
+# ``import data.greensecops.lib.*`` in every rule that uses one. They are not
+# rules, though: they carry no METADATA, declare no severity and emit no
+# ``violations``, so every consumer of ``iter_rule_files`` — the DB seed, the
+# docs generator, the example validators, the catalog tests — has to skip them.
+# Excluding them here rather than in each caller keeps the four in agreement.
+LIB_DIR = "lib"
+
 # Worst first, for any report that lists rules or violations in the order a
 # reader should act on them. Declared here rather than derived from
 # ``models.enums.IssueSeverity`` for the same reason as everything else in this
@@ -42,16 +52,22 @@ def severity_rank(severity: str) -> int:
 
 
 def iter_rule_files(rules_dir: Path | None = None) -> Iterator[Path]:
-    """Yield every policy ``.rego`` under ``rules_dir``, tests excluded.
+    """Yield every policy ``.rego`` under ``rules_dir``, tests and helpers excluded.
 
     Sorted so callers get a stable order — seeding, docs generation and the
     validators all report per-rule problems, and a stable order keeps their
     output diffable.
+
+    Anything under ``lib/`` is a shared helper rather than a rule; see
+    ``LIB_DIR``.
     """
     base = RULES_DIR if rules_dir is None else rules_dir
     for path in sorted(base.glob("**/*.rego")):
-        if not path.name.endswith(_TEST_SUFFIX):
-            yield path
+        if path.name.endswith(_TEST_SUFFIX):
+            continue
+        if LIB_DIR in path.relative_to(base).parts:
+            continue
+        yield path
 
 
 def extract_metadata_block(content: str) -> str | None:

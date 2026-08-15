@@ -23,11 +23,21 @@
 #       Add timeout-minutes to every job. Set a value slightly above the expected maximum duration (e.g. 15 minutes for a test suite that normally runs in 5 minutes).
 package greensecops.ci_workflow.reliability.missing_timeout
 
+import data.greensecops.lib.workflow as wf
 import rego.v1
 
 violations contains violation if {
 	some job_name, job in input.jobs
 	not job["timeout-minutes"]
+
+	# A job that calls a reusable workflow cannot carry `timeout-minutes` —
+	# GitHub rejects it, along with most other job-level keys, when `uses:` is
+	# present. The timeout belongs on the jobs inside the called workflow, where
+	# this rule will find it. Reporting the caller produced an unfixable
+	# finding, and the generated fix wrote a key that makes the workflow
+	# invalid.
+	not wf.is_reusable_call(job)
+
 	violation := {
 		"rule": "missing_timeout",
 		"severity": "high",

@@ -1,6 +1,6 @@
 # METADATA
-# title: Missing name on jobs or steps
-# description: Jobs or steps are missing a name field, making CI logs harder to read and debug.
+# title: Missing name on the workflow or a job
+# description: "The workflow or one of its jobs has no name, so the Actions UI and the checks list fall back to the file path and the job key. Steps are deliberately out of scope — an unnamed step shows its run command, which is usually clearer than a name would be, and reporting every one of them would bury the two places a name actually helps."
 # custom:
 #   severity: info
 #   detection: static_analysis
