@@ -1,27 +1,30 @@
 version: 2
 
-# Playwright is one dependency that Dependabot sees as two. The npm package
-# `@playwright/test` is pinned to an exact version in frontend/package.json and
-# landing/package.json, and the browser image it drives —
-# `mcr.microsoft.com/playwright:v<x.y.z>-noble` in frontend/Dockerfile.playwright
-# — ships exactly the browser builds that release expects. Bump one without the
-# other and the runner aborts before the first test ("Executable doesn't exist
-# at /ms-playwright/..."), which is why the split produced two pull requests
-# that were both red on their own and only green if merged together.
+# Playwright is one upgrade that Dependabot sees as two. The npm package
+# `@playwright/test` is exact-pinned in frontend/package.json and
+# landing/package.json, and the browsers it drives come from
+# `mcr.microsoft.com/playwright:v<x.y.z>-noble` in
+# frontend/Dockerfile.playwright. Playwright refuses to launch when the client
+# and the image disagree, so bumping either alone fails every shard in
+# auth.setup.ts with "Executable doesn't exist at /ms-playwright/..." — that is
+# commit b895eeb, cleaning up after exactly this split.
 #
-# A multi-ecosystem group makes Dependabot open a single pull request carrying
-# both the bun and docker halves, so CI tests the pair it will actually ship.
+# A multi-ecosystem group is the only way to get a bun bump and a docker bump
+# into the same pull request. The two `patterns` below route just Playwright
+# here; everything else stays in the `npm-packages` and `docker` groups it was
+# always in.
 multi-ecosystem-groups:
-  frontend-stack:
+  playwright:
     schedule:
       interval: weekly
     # `commit-message`, `target-branch`, `milestone` and
-    # `pull-request-branch-name` are group-only: setting them on a member
-    # `updates` entry is a config error, so they live here. `labels` is the
-    # exception — group and ecosystem labels are merged.
+    # `pull-request-branch-name` are group-only — setting them on a member
+    # `updates` entry is a config error, which is why the bun and docker
+    # entries below no longer carry a `commit-message` of their own. `labels`
+    # is the exception: group and ecosystem labels are merged.
     commit-message:
       prefix: ⬆
-    labels: [dependencies, internal]
+    labels: [dependencies, internal, playwright]
 
 updates:
   # GitHub Actions
@@ -43,7 +46,8 @@ updates:
       github-actions:
         patterns:
           - "*"
-  # Python uv
+  # Python uv — packages only. This never touches the interpreter version; that
+  # lives in the two Dockerfiles and is handled by the `python` group below.
   - package-ecosystem: uv
     directory: /
     schedule:
@@ -57,23 +61,26 @@ updates:
       python-packages:
         patterns:
           - "*"
-  # bun — the whole workspace (frontend, landing, action) shares bun.lock at the
-  # repo root, so `@playwright/test` is bumped here and the image it has to match
-  # is bumped by the /frontend docker entry below. Both are in `frontend-stack`
-  # so those two bumps land in one pull request.
+  # bun — one entry has to serve the whole workspace (frontend, landing,
+  # action), because they share bun.lock at the repo root and Dependabot allows
+  # only one entry per package-ecosystem + directory pair. So this entry does
+  # two jobs at once: the top-level `patterns` sends `@playwright/test` to the
+  # cross-ecosystem `playwright` pull request, and the `npm-packages` group
+  # below catches everything else exactly as before.
   #
-  # `patterns: ["*"]` (required alongside `multi-ecosystem-group`) sends every
-  # bun dependency into that pull request, not just Playwright: Dependabot allows
-  # only one `updates` entry per package-ecosystem + directory pair, so there is
-  # no second bun entry left to carry the rest. This replaces the old
-  # `groups: npm-packages` single-ecosystem group, which bundled the same
-  # dependencies into a pull request of their own.
+  # `*playwright*` rather than a literal name: Dependabot names docker images
+  # with their registry (`mcr.microsoft.com/playwright`) but documents a
+  # registry-stripped form for ECR, and the same pattern text has to match on
+  # both sides of the group. Nothing else here matches "playwright".
   - package-ecosystem: bun
     directory: /
-    patterns: ["*"]
-    multi-ecosystem-group: frontend-stack
+    schedule:
+      interval: weekly
+    patterns: ["*playwright*"]
+    multi-ecosystem-group: playwright
     cooldown:
       default-days: 7
+    labels: [dependencies, internal]
     ignore:
       - dependency-name: "@hey-api/openapi-ts"
       # typescript 7 (native compiler) breaks @vercel/ncc's ts-loader and
@@ -82,47 +89,56 @@ updates:
       - dependency-name: "typescript"
         versions:
           - ">=7"
-  # Docker, everywhere except /frontend.
+    groups:
+      npm-packages:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "*playwright*"
+  # Docker — one entry over every directory, split into groups rather than into
+  # entries, because a directory can appear only once per ecosystem.
   #
-  # python is deliberately unpinned here. The old `>=3.15.0-0` ignore existed to
-  # keep release candidates out (a bare `>=3.15` does not: prereleases sort
-  # *below* the release they lead to, so 3.15.0rc1 slipped past it once, and
-  # psycopg-binary shipped no cp315 wheels). It also blocked 3.15.0 final and
-  # every stable release after it, which is not what we want. Dependabot's docker
-  # updater now filters prereleases itself, twice over: tags matching rc/alpha/
-  # beta/dev/preview/`3.15.0a2`-style patterns are dropped, and so is any tag
-  # numerically above whatever `latest` resolves to — and `python:latest` only
-  # ever points at a stable release. So this tracks the newest stable Python and
-  # stops at it.
+  # `python` gets its own group so the interpreter bump is never bundled with
+  # nginx/opa/bun. It spans /backend (python:3.14.6-slim) and /docs
+  # (python:3.14-slim) and, because a group over `directories` produces a single
+  # pull request, both Dockerfiles move in one PR (cf. e7b8b0b, "Bump the docker
+  # group across 4 directories").
+  #
+  # python carries no `ignore` any more. The old `>=3.15.0-0` rule kept release
+  # candidates out — a bare ">=3.15" does not, since prereleases sort *below*
+  # the release they lead to, which is how 3.15.0rc1 slipped past once when
+  # psycopg-binary had no cp315 wheels — but it also blocked 3.15.0 final and
+  # every stable release after it. Dependabot's docker updater now drops
+  # prereleases by itself, twice over: tags matching rc/alpha/beta/dev/preview
+  # or `3.15.0a2` forms are rejected, and so is anything numerically above what
+  # `latest` resolves to, and `python:latest` only ever points at a stable
+  # release. The 30-day major/minor cooldown then holds a new feature release
+  # back until the wheels catch up, while 3.14.6 -> 3.14.7 still lands weekly.
   - package-ecosystem: docker
     directories:
       - /backend
+      - /docs
+      - /frontend
       - /landing
       - /opa
-      - /docs
     schedule:
       interval: weekly
+    patterns: ["*playwright*"]
+    multi-ecosystem-group: playwright
     cooldown:
       default-days: 7
-    commit-message:
-      prefix: ⬆
+      semver-major-days: 30
+      semver-minor-days: 30
     groups:
+      python:
+        patterns:
+          - "python"
       docker:
         patterns:
           - "*"
-  # Docker, /frontend only — split out because frontend/Dockerfile.playwright
-  # has to move with `@playwright/test` above, and a directory cannot appear in
-  # two entries of the same ecosystem. The other images in this directory
-  # (oven/bun, nginx-unprivileged) therefore ride along in the group pull
-  # request. nginx-unprivileged is also used by /landing and /docs, so it can be
-  # bumped by both this entry and the one above — to the same version, in two
-  # pull requests touching different Dockerfiles.
-  - package-ecosystem: docker
-    directory: /frontend
-    patterns: ["*"]
-    multi-ecosystem-group: frontend-stack
-    cooldown:
-      default-days: 7
+        exclude-patterns:
+          - "python"
+          - "*playwright*"
   # Docker Compose
   - package-ecosystem: docker-compose
     directory: /
