@@ -112,8 +112,15 @@ updates:
   # prereleases by itself, twice over: tags matching rc/alpha/beta/dev/preview
   # or `3.15.0a2` forms are rejected, and so is anything numerically above what
   # `latest` resolves to, and `python:latest` only ever points at a stable
-  # release. The 30-day major/minor cooldown then holds a new feature release
-  # back until the wheels catch up, while 3.14.6 -> 3.14.7 still lands weekly.
+  # release.
+  #
+  # A longer hold for feature releases specifically is not expressible here:
+  # Dependabot rejects `semver-major-days`/`semver-minor-days` for the docker
+  # ecosystem ("not supported for the package ecosystem 'docker'"), and
+  # `default-days` is a single value for the whole entry — raising it would
+  # also delay nginx and opa patches. So 3.15.0 can land a week after release;
+  # if psycopg-binary is again short of wheels, pin it in the PR rather than
+  # blocking the whole line here.
   - package-ecosystem: docker
     directories:
       - /backend
@@ -127,8 +134,6 @@ updates:
     multi-ecosystem-group: playwright
     cooldown:
       default-days: 7
-      semver-major-days: 30
-      semver-minor-days: 30
     groups:
       python:
         patterns:
