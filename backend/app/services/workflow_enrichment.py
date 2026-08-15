@@ -61,6 +61,8 @@ def attach_action_metadata(
     if not metadata:
         return
     referenced = workflow_uses(document)
-    relevant = {uses: dict(entry) for uses, entry in metadata.items() if uses in referenced}
+    relevant = {
+        uses: dict(entry) for uses, entry in metadata.items() if uses in referenced
+    }
     if relevant:
         document[ACTIONS_KEY] = relevant

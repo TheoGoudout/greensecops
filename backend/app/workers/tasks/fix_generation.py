@@ -48,7 +48,9 @@ def _remote_workflow_content(
         r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client = GitHubAppClient(redis_client=r)
-            files = await client.fetch_workflow_files(installation_id, full_name, ref=ref)
+            files = await client.fetch_workflow_files(
+                installation_id, full_name, ref=ref
+            )
         finally:
             await r.aclose()
         match = next((f for f in files if f.path == path), None)
@@ -67,19 +69,33 @@ def _remote_workflow_content(
 
 
 _USES_PIN_RE = re.compile(r"uses:\s*([^\s#]+)")
+_SHA_REF_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
-def unrequested_pin_changes(original: str, patched: str, issues: list["Issue"]) -> set[str]:
-    """Pins the rewrite moved that nothing in ``issues`` asked it to move.
+def unrequested_pin_changes(
+    original: str, patched: str, issues: list["Issue"]
+) -> set[str]:
+    """Pins the rewrite moved backwards or sideways rather than tightening them.
 
     The prompt already forbids this in capitals and the model did it anyway,
-    moving four actions backwards across releases in PR #220. A deterministic
-    check afterwards costs nothing and does not rely on the model's cooperation.
+    moving four actions across releases in PR #220. A deterministic check
+    afterwards costs nothing and does not rely on the model's cooperation.
 
-    When a pinning rule *is* among the issues, pin changes are the point of the
-    fix and this returns nothing.
+    Tightening is not moving. ``@v4`` becoming ``@<sha> # v4`` is the whole point
+    of a pinning fix, and ``sha_resolver.resolve_and_pin_refs`` performs exactly
+    that transition on its own afterwards, for any ref the model left symbolic —
+    so it happens whether or not a pinning rule was among the issues, and
+    flagging it would reject the tool's own correct output. What is reported is a
+    pin that was already exact and became a *different* exact pin, or a tag that
+    became a different tag: the shape of PR #220's
+    ``3d3c42e5 (v7.0.1) -> 9c091bb2 (v7.0.0)``.
     """
-    pinning_rules = {"unpinned_actions", "untrusted_actions", "impostor_commit", "stale_action_ref"}
+    pinning_rules = {
+        "unpinned_actions",
+        "untrusted_actions",
+        "impostor_commit",
+        "stale_action_ref",
+    }
     for issue in issues:
         slug = getattr(getattr(issue, "rule", None), "slug", None)
         if slug in pinning_rules:
@@ -88,16 +104,23 @@ def unrequested_pin_changes(original: str, patched: str, issues: list["Issue"]) 
     def pins(text: str) -> dict[str, str]:
         found: dict[str, str] = {}
         for ref in _USES_PIN_RE.findall(text):
-            action, _, version = ref.partition("@")
+            # `uses: "owner/action@v4"` is valid YAML, and the quotes are not
+            # part of the reference.
+            action, _, version = ref.strip("\"'").partition("@")
             if version:
                 found[action] = version
         return found
+
+    def tightened(before: str, after: str) -> bool:
+        return not _SHA_REF_RE.match(before) and bool(_SHA_REF_RE.match(after))
 
     before, after = pins(original), pins(patched)
     return {
         action
         for action, version in before.items()
-        if action in after and after[action] != version
+        if action in after
+        and after[action] != version
+        and not tightened(version, after[action])
     }
 
 

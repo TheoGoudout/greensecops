@@ -52,7 +52,9 @@ async def cache_get(cache: aioredis.Redis | None, key: str) -> str | None:
         return None
 
 
-async def cache_set(cache: aioredis.Redis | None, key: str, value: str, ttl: int) -> None:
+async def cache_set(
+    cache: aioredis.Redis | None, key: str, value: str, ttl: int
+) -> None:
     if cache is None:
         return
     try:

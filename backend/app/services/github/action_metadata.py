@@ -137,7 +137,9 @@ def _describe_sync(gh: Github, repo_name: str, ref: str) -> ActionMetadata:
     )
 
 
-def _reachability(repo: Any, sha: str, default_branch: str) -> tuple[str, list[str], str]:
+def _reachability(
+    repo: Any, sha: str, default_branch: str
+) -> tuple[str, list[str], str]:
     """Is ``sha`` on a branch or tag of ``repo``, and which tags point at it?
 
     Forks share an object store with their parent, so a commit pushed only to a

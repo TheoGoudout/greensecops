@@ -152,7 +152,9 @@ class GitHubAppClient:
         await self._redis.setex(cache_key, self._TOKEN_TTL, token)
         return token
 
-    async def github_for_installation(self, installation_id: int | None) -> Github | None:
+    async def github_for_installation(
+        self, installation_id: int | None
+    ) -> Github | None:
         """A PyGithub client authenticated as this installation, or None.
 
         Two callers now need the same token-to-client dance — fix generation,

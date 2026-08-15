@@ -88,7 +88,11 @@ def _stamp_uses_comment(
     uses = entry.get("uses")
     if not isinstance(uses, str):
         return
-    line = key_line(step_node, "uses", step_line) if hasattr(step_node, "lc") else step_line
+    line = (
+        key_line(step_node, "uses", step_line)
+        if hasattr(step_node, "lc")
+        else step_line
+    )
     candidate = uses_comments.get(line)
     if candidate is None:
         return
