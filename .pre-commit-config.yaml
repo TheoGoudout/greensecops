@@ -126,6 +126,19 @@ repos:
         files: ^(VERSION|package\.json|pyproject\.toml|(frontend|action|landing)/package\.json|(backend|docs)/pyproject\.toml|backend/app/__version__\.py|frontend/src/client/core/OpenAPI\.ts|scripts/(_versions|validate_versions|bump_version)\.py)$
         pass_filenames: false
 
+      # Dependabot proposed python:3.15.0b4-slim (#215) while dependabot.yml
+      # already carried an ignore rule meant to stop it, and the docker
+      # updater's own prerelease filter did not stop it either. The config
+      # cannot express the rule we want — a prerelease sorts below the release
+      # it leads to, so any range covering 3.15.0b4 also covers 3.15.0 final —
+      # so the guard lives in the tree instead.
+      - id: stable-base-images
+        name: Check base images pin a stable release
+        entry: python3 scripts/validate_stable_base_images.py
+        language: system
+        files: ^((backend|docs|frontend|landing|opa)/Dockerfile.*|scripts/validate_stable_base_images\.py)$
+        pass_filenames: false
+
       # The landing page is substituted twice — by entrypoint.sh in a container
       # and by pages-reusable.yml on Cloudflare — so the production URLs are
       # written down twice. A mismatch renders two perfectly valid sites on two
