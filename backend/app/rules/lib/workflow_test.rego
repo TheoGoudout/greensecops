@@ -85,8 +85,18 @@ test_looks_high_entropy if {
 test_known_credential_formats if {
 	wf.known_credential("AKIAIOSFODNN7EXAMPLE")
 	wf.known_credential("ghp_16C7e42F292c6912E7710c838347Ae178B4a")
-	wf.known_credential("-----BEGIN RSA PRIVATE KEY-----")
 	not wf.known_credential("testpassword")
+}
+
+# The PEM header is assembled rather than written out, so the literal string
+# never appears in the file. Spelled in full it trips the `detect-private-key`
+# pre-commit hook, which cannot tell a rule's own test fixture from a key
+# somebody committed by mistake — and the right resolution is to keep the
+# fixture out of its way rather than to exempt this file from the hook, which
+# would also exempt a real key added here later.
+test_known_credential_matches_a_pem_header if {
+	wf.known_credential(concat("", ["-----BEGIN RSA ", "PRIVATE KEY-----"]))
+	wf.known_credential(concat("", ["-----BEGIN ", "PRIVATE KEY-----"]))
 }
 
 # ─── Action references ───────────────────────────────────────────────────────
