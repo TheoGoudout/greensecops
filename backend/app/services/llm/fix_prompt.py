@@ -23,6 +23,8 @@ Rules for <full_content>:
 - CRITICAL: Only use SHAs from the "Known action commit SHAs" section. If you add an action whose SHA is NOT listed there, use its tag reference (e.g., `uses: actions/cache@v4`) — do NOT invent or guess a SHA.
 - CRITICAL: Never change the version/tag of an action already referenced in the workflow (e.g. do not bump `actions/checkout@v3` to `@v4`) — pin it to a SHA at its existing tag only. Version upgrades are handled by Dependabot, not by this fix. Only use a "latest" entry from the list below when introducing an action that isn't already used anywhere in the workflow
 - CRITICAL: Never remove `fetch-depth: 0` from a checkout step if the job contains any step that uses `--from-ref` or invokes `prek`
+- CRITICAL: Never change a branch name. Branch names in `on:`, `base`, `ref` and similar keys are facts about this repository, not conventions — the default branch is given below, and any other branch named in the file is there deliberately
+- CRITICAL: This is one file. Do not rename it, do not split it, and do not emit any other workflow — a workflow this repository does not have is not a fix
 - Make the minimum changes required to fix the listed issues; leave unrelated lines untouched
 
 Rules for <unfixed>:
@@ -46,9 +48,17 @@ Return the <full_content> and <unfixed> blocks — no markdown, no explanation."
 def build_fix_prompt(
     workflow_content: str,
     issues: "list[Issue]",
+    default_branch: str = "main",
     action_sha_map: dict[str, str] | None = None,
 ) -> tuple[str, str]:
-    """Returns (system_prompt, user_prompt) for one or more issues."""
+    """Returns (system_prompt, user_prompt) for one or more issues.
+
+    ``default_branch`` is stated explicitly because the model has no way to know
+    it and will otherwise fall back on its priors: a fix PR rewrote
+    latest-changes.yml from `main` to `master`, which is the convention of the
+    upstream template this repository came from and has never been the branch
+    here.
+    """
     issues_block = "\n".join(
         f"{i + 1}. [{issue.severity.value.upper()}] {issue.message}"
         f" (rule: {issue.rule.slug if issue.rule else 'unknown'}"
@@ -58,6 +68,10 @@ def build_fix_prompt(
     user_prompt = FIX_USER_PROMPT_TEMPLATE.format(
         issues_block=issues_block,
         workflow_content=workflow_content,
+    )
+    user_prompt += (
+        f"\n\n**This repository's default branch is `{default_branch}`.** Keep every"
+        " branch name in the file exactly as it is."
     )
     if action_sha_map:
         sha_block = "\n".join(
