@@ -1,4 +1,31 @@
 version: 2
+
+# Playwright is one upgrade that Dependabot sees as two. The npm package
+# `@playwright/test` is exact-pinned in frontend/package.json and
+# landing/package.json, and the browsers it drives come from
+# `mcr.microsoft.com/playwright:v<x.y.z>-noble` in
+# frontend/Dockerfile.playwright. Playwright refuses to launch when the client
+# and the image disagree, so bumping either alone fails every shard in
+# auth.setup.ts with "Executable doesn't exist at /ms-playwright/..." — that is
+# commit b895eeb, cleaning up after exactly this split.
+#
+# A multi-ecosystem group is the only way to get a bun bump and a docker bump
+# into the same pull request. The two `patterns` below route just Playwright
+# here; everything else stays in the `npm-packages` and `docker` groups it was
+# always in.
+multi-ecosystem-groups:
+  playwright:
+    schedule:
+      interval: weekly
+    # `commit-message`, `target-branch`, `milestone` and
+    # `pull-request-branch-name` are group-only — setting them on a member
+    # `updates` entry is a config error, which is why the bun and docker
+    # entries below no longer carry a `commit-message` of their own. `labels`
+    # is the exception: group and ecosystem labels are merged.
+    commit-message:
+      prefix: ⬆
+    labels: [dependencies, internal, playwright]
+
 updates:
   # GitHub Actions
   - package-ecosystem: github-actions
@@ -19,7 +46,8 @@ updates:
       github-actions:
         patterns:
           - "*"
-  # Python uv
+  # Python uv — packages only. This never touches the interpreter version; that
+  # lives in the two Dockerfiles and is handled by the `python` group below.
   - package-ecosystem: uv
     directory: /
     schedule:
@@ -33,15 +61,25 @@ updates:
       python-packages:
         patterns:
           - "*"
-  # bun
+  # bun — one entry has to serve the whole workspace (frontend, landing,
+  # action), because they share bun.lock at the repo root and Dependabot allows
+  # only one entry per package-ecosystem + directory pair. So this entry does
+  # two jobs at once: the top-level `patterns` sends `@playwright/test` to the
+  # cross-ecosystem `playwright` pull request, and the `npm-packages` group
+  # below catches everything else exactly as before.
+  #
+  # `*playwright*` rather than a literal name: Dependabot names docker images
+  # with their registry (`mcr.microsoft.com/playwright`) but documents a
+  # registry-stripped form for ECR, and the same pattern text has to match on
+  # both sides of the group. Nothing else here matches "playwright".
   - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
+    patterns: ["*playwright*"]
+    multi-ecosystem-group: playwright
     cooldown:
       default-days: 7
-    commit-message:
-      prefix: ⬆
     labels: [dependencies, internal]
     ignore:
       - dependency-name: "@hey-api/openapi-ts"
@@ -55,32 +93,57 @@ updates:
       npm-packages:
         patterns:
           - "*"
-  # Docker
+        exclude-patterns:
+          - "*playwright*"
+  # Docker — one entry over every directory, split into groups rather than into
+  # entries, because a directory can appear only once per ecosystem.
+  #
+  # `python` gets its own group so the interpreter bump is never bundled with
+  # nginx/opa/bun. It spans /backend (python:3.14.6-slim) and /docs
+  # (python:3.14-slim) and, because a group over `directories` produces a single
+  # pull request, both Dockerfiles move in one PR (cf. e7b8b0b, "Bump the docker
+  # group across 4 directories").
+  #
+  # python carries no `ignore` any more. The old `>=3.15.0-0` rule kept release
+  # candidates out — a bare ">=3.15" does not, since prereleases sort *below*
+  # the release they lead to, which is how 3.15.0rc1 slipped past once when
+  # psycopg-binary had no cp315 wheels — but it also blocked 3.15.0 final and
+  # every stable release after it. Dependabot's docker updater now drops
+  # prereleases by itself, twice over: tags matching rc/alpha/beta/dev/preview
+  # or `3.15.0a2` forms are rejected, and so is anything numerically above what
+  # `latest` resolves to, and `python:latest` only ever points at a stable
+  # release.
+  #
+  # A longer hold for feature releases specifically is not expressible here:
+  # Dependabot rejects `semver-major-days`/`semver-minor-days` for the docker
+  # ecosystem ("not supported for the package ecosystem 'docker'"), and
+  # `default-days` is a single value for the whole entry — raising it would
+  # also delay nginx and opa patches. So 3.15.0 can land a week after release;
+  # if psycopg-binary is again short of wheels, pin it in the PR rather than
+  # blocking the whole line here.
   - package-ecosystem: docker
     directories:
       - /backend
+      - /docs
       - /frontend
       - /landing
       - /opa
-      - /docs
     schedule:
       interval: weekly
+    patterns: ["*playwright*"]
+    multi-ecosystem-group: playwright
     cooldown:
       default-days: 7
-    commit-message:
-      prefix: ⬆
-    ignore:
-      # `-0` is the lowest possible prerelease, so this also covers tags like
-      # 3.15.0rc1. A bare ">=3.15" does not: prereleases sort *below* the
-      # release they lead to, so release candidates slip past that constraint
-      # (they did once, and psycopg-binary ships no cp315 wheels).
-      - dependency-name: "python"
-        versions:
-          - ">=3.15.0-0"
     groups:
+      python:
+        patterns:
+          - "python"
       docker:
         patterns:
           - "*"
+        exclude-patterns:
+          - "python"
+          - "*playwright*"
   # Docker Compose
   - package-ecosystem: docker-compose
     directory: /
