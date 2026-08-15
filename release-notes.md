@@ -4,6 +4,7 @@
 
 ### Internal
 
+* feat(ci): fail the commit when a base image pins a prerelease. PR [#225](https://github.com/TheoGoudout/greensecops/pull/225) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ Give Playwright and Python each their own Dependabot PR. PR [#221](https://github.com/TheoGoudout/greensecops/pull/221) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump tiangolo/latest-changes from 0.7.1 to 0.7.2 in the github-actions group across 1 directory. PR [#216](https://github.com/TheoGoudout/greensecops/pull/216) by [@dependabot[bot]](https://github.com/apps/dependabot).
 
