@@ -499,27 +499,18 @@ async def _generate_fixes(
 
     gh = None
     if installation_id is not None:
+        import redis.asyncio as aioredis
+
+        from app.core.config import settings
+        from app.services.github.app_client import GitHubAppClient
+
+        redis_client = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
-            import redis.asyncio as aioredis
-            from github import Auth, Github
-
-            from app.core.config import settings
-            from app.services.github.app_client import GitHubAppClient
-
-            redis_client = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
-            try:
-                token = await GitHubAppClient(redis_client).get_installation_token(
-                    installation_id
-                )
-                gh = Github(auth=Auth.Token(token))
-            finally:
-                await redis_client.aclose()
-        except Exception:
-            logger.warning(
-                "Failed to build authenticated GitHub client for SHA resolution, "
-                "falling back to unauthenticated",
-                exc_info=True,
+            gh = await GitHubAppClient(redis_client).github_for_installation(
+                installation_id
             )
+        finally:
+            await redis_client.aclose()
 
     action_sha_map = await resolve_action_shas(workflow_content, gh=gh)
     provider = get_provider(provider=provider_str, model=model_str)

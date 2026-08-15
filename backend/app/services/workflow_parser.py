@@ -11,6 +11,7 @@ as ``app/core/rego_metadata.py``.
 
 import io
 import logging
+import re
 from typing import Any
 
 from ruamel.yaml import YAML
@@ -20,9 +21,34 @@ from app.services.yaml_positions import convert_with_positions, key_line, stamp_
 
 logger = logging.getLogger(__name__)
 
+USES_COMMENT_KEY = "__uses_comment__"
 
-def _stamp_steps(job_node: Any, job_entry: dict[str, Any], fallback: int) -> None:
-    """Record each step's span on the converted job."""
+# `uses: owner/action@<sha> # v1.2.3` — the trailing comment is the only record
+# of which version a SHA pin is meant to be, and it is the half a human reads.
+# ruamel keeps comments in the round-trip tree, but `convert_with_positions`
+# produces plain JSON and drops them, so without this they never reach a rule.
+_USES_COMMENT_RE = re.compile(
+    r"""^\s*(?:-\s+)?uses:\s*(?P<uses>\S+)\s+\#\s*(?P<comment>.*?)\s*$"""
+)
+
+
+def _uses_comments(raw_content: str) -> dict[int, tuple[str, str]]:
+    """1-based line number → (uses value as written, trailing comment)."""
+    found: dict[int, tuple[str, str]] = {}
+    for offset, line in enumerate(raw_content.splitlines()):
+        match = _USES_COMMENT_RE.match(line)
+        if match:
+            found[offset + 1] = (match.group("uses"), match.group("comment"))
+    return found
+
+
+def _stamp_steps(
+    job_node: Any,
+    job_entry: dict[str, Any],
+    fallback: int,
+    uses_comments: dict[int, tuple[str, str]],
+) -> None:
+    """Record each step's span, and its ``uses:`` version comment, on the job."""
     steps = job_node.get("steps") if isinstance(job_node, dict) else None
     converted = job_entry.get("steps")
     if not (isinstance(steps, list) and isinstance(converted, list)):
@@ -34,7 +60,42 @@ def _stamp_steps(job_node: Any, job_entry: dict[str, Any], fallback: int) -> Non
         if not isinstance(entry, dict):
             # `- run: x` with a null body, or a malformed entry.
             continue
-        stamp_span(entry, step, key_line(steps, index, fallback))
+        step_line = key_line(steps, index, fallback)
+        stamp_span(entry, step, step_line)
+        _stamp_uses_comment(entry, step, step_line, uses_comments)
+
+
+def _stamp_uses_comment(
+    entry: dict[str, Any],
+    step_node: Any,
+    step_line: int,
+    uses_comments: dict[int, tuple[str, str]],
+) -> None:
+    """Attach the trailing comment on this step's ``uses:`` line, if any.
+
+    The position comes from ruamel, which is exact; only the text of that one
+    line is read with a regex. Reconstructing the mapping from a whole-file
+    regex instead would have to re-derive which step each match belongs to,
+    which is the kind of implicit coupling that rots the first time a workflow
+    uses flow style.
+
+    The comment is attached only when the token on the line matches the parsed
+    ``uses`` value. A mismatch means the line was not what it looked like —
+    flow style, an anchor, a folded scalar — and dropping the comment is the
+    safe direction: a missing comment makes ``ref_version_mismatch`` silent,
+    where a mis-attributed one would make it wrong.
+    """
+    uses = entry.get("uses")
+    if not isinstance(uses, str):
+        return
+    line = key_line(step_node, "uses", step_line) if hasattr(step_node, "lc") else step_line
+    candidate = uses_comments.get(line)
+    if candidate is None:
+        return
+    written, comment = candidate
+    if written.strip("\"'") != uses:
+        return
+    entry[USES_COMMENT_KEY] = comment
 
 
 def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
@@ -69,6 +130,7 @@ def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
 
     converted, _, _ = convert_with_positions(loaded, 1)
     document: dict[str, Any] = converted
+    uses_comments = _uses_comments(raw_content)
 
     jobs = loaded.get("jobs")
     converted_jobs = document.get("jobs")
@@ -80,6 +142,6 @@ def parse_workflow_yaml(raw_content: str) -> dict[str, Any] | None:
                 continue
             start = key_line(jobs, name, 1)
             stamp_span(entry, job, start)
-            _stamp_steps(job, entry, start)
+            _stamp_steps(job, entry, start, uses_comments)
 
     return document

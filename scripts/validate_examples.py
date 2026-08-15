@@ -48,9 +48,33 @@ INSECURE_EXPECTED = {"hardcoded_secrets", "unpinned_actions", "caching_missing"}
 # fail to fire here, passing CI while being broken in production.
 sys.path.insert(0, str(ROOT / "backend"))
 from app.core.rego_metadata import read_metadata_block  # noqa: E402
+from app.services.workflow_enrichment import (
+    attach_action_metadata,  # noqa: E402
+)
 from app.services.workflow_parser import (
     parse_workflow_yaml as _parse_yaml,  # noqa: E402
 )
+
+
+def _document(example_yaml: str, action_metadata: dict | None) -> dict:
+    """A rule's example snippet as the document OPA would actually evaluate.
+
+    Four rules — impostor_commit, stale_action_ref, ref_version_mismatch,
+    archived_action — decide on facts no workflow file contains, which
+    production supplies from the GitHub API. Their examples declare those facts
+    under ``custom.examples.action_metadata`` and they are attached here through
+    the same function production uses, so there is one definition of where
+    enrichment lives and the examples stay executable rather than becoming a
+    documented exception.
+
+    The fixture is invisible everywhere else: ``rule_registry`` reads ``custom``
+    by named keys, and ``rego_autodoc`` renders only bad/good/fix, so it neither
+    seeds nor appears on the published rule page.
+    """
+    document = _parse_yaml(example_yaml)
+    if document is not None:
+        attach_action_metadata(document, action_metadata)
+    return document
 
 
 def _parse_metadata(rego_path: Path) -> dict:
@@ -109,9 +133,11 @@ def check_rule_metadata_examples() -> list[str]:
         examples = (_parse_metadata(rego).get("custom") or {}).get("examples") or {}
         query = f"data.greensecops.ci_workflow.{category}.{name}.violations"
 
+        action_metadata = examples.get("action_metadata")
+
         good = examples.get("good")
         if good:
-            self_hits = run_opa_eval(_parse_yaml(good), query)
+            self_hits = run_opa_eval(_document(good, action_metadata), query)
             if self_hits:
                 errors.append(
                     f"{category}/{name}: 'good' example violates its own rule "
@@ -120,7 +146,7 @@ def check_rule_metadata_examples() -> list[str]:
 
         bad = examples.get("bad")
         if bad:
-            self_hits = run_opa_eval(_parse_yaml(bad), query)
+            self_hits = run_opa_eval(_document(bad, action_metadata), query)
             if not self_hits:
                 errors.append(
                     f"{category}/{name}: 'bad' example does not trigger its own rule "

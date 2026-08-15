@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from github.Repository import Repository as GithubRepository
 
 from app.core.config import settings
 from app.models.enums import CIStatus, PullRequestState, ReviewDecision
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.models import Repository
@@ -148,6 +151,33 @@ class GitHubAppClient:
         token = await asyncio.to_thread(_exchange)
         await self._redis.setex(cache_key, self._TOKEN_TTL, token)
         return token
+
+    async def github_for_installation(self, installation_id: int | None) -> Github | None:
+        """A PyGithub client authenticated as this installation, or None.
+
+        Two callers now need the same token-to-client dance — fix generation,
+        for resolving action SHAs into the prompt, and static analysis, for the
+        action metadata the pin-integrity rules read. It was inlined in the
+        first; a second copy would be a second place for the fallback behaviour
+        to drift.
+
+        None means "carry on unauthenticated or not at all", and the choice is
+        the caller's: the anonymous budget is 60 requests an hour, which is
+        enough to pin a handful of refs and not enough to describe every action
+        in a repository.
+        """
+        if installation_id is None:
+            return None
+        try:
+            token = await self.get_installation_token(installation_id)
+            return Github(auth=Auth.Token(token))
+        except Exception:
+            logger.warning(
+                "Failed to build an authenticated GitHub client for installation %s",
+                installation_id,
+                exc_info=True,
+            )
+            return None
 
     async def get_app_bot_login(self) -> str:
         """Return the authenticated App's own bot login (``<slug>[bot]``).
