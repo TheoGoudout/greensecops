@@ -126,6 +126,19 @@ repos:
         files: ^(VERSION|package\.json|pyproject\.toml|(frontend|action|landing)/package\.json|(backend|docs)/pyproject\.toml|backend/app/__version__\.py|frontend/src/client/core/OpenAPI\.ts|scripts/(_versions|validate_versions|bump_version)\.py)$
         pass_filenames: false
 
+      # @playwright/test (bun) and the browser image (docker) are two
+      # ecosystems to Dependabot, so they arrive as two pull requests and the
+      # first to land leaves the tree unable to run any test at all (b895eeb).
+      # #221 tried to merge them into one cross-ecosystem pull request and was
+      # reverted — a multi-ecosystem-group silently disables the `groups` block
+      # on the same entry. So the split stays, and this makes it loud.
+      - id: playwright-version-drift
+        name: Check the Playwright image against @playwright/test
+        entry: python3 scripts/validate_playwright_versions.py
+        language: system
+        files: ^(frontend/Dockerfile\.playwright|(frontend|landing)/package\.json|scripts/validate_playwright_versions\.py)$
+        pass_filenames: false
+
       # Dependabot proposed python:3.15.0b4-slim (#215) while dependabot.yml
       # already carried an ignore rule meant to stop it, and the docker
       # updater's own prerelease filter did not stop it either. The config
