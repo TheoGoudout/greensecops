@@ -1,6 +1,6 @@
 # METADATA
 # title: Sequential jobs without dependency
-# description: Jobs are chained together with a needs dependency into a sequential pipeline even though they may not consume each other's outputs. Running independent jobs in parallel reduces total pipeline duration and energy use.
+# description: "Three or more jobs are chained with needs: while passing nothing between them — no job outputs, no uploaded artifacts. Each link makes the next job wait for a runner it did not need to wait for, so the pipeline takes as long as the sum of its parts instead of its longest part. A chain that does carry data is not this, and is not reported."
 # custom:
 #   severity: low
 #   severity_weight: 0.6
@@ -14,10 +14,12 @@
 #             - run: npm run lint
 #         test:
 #           needs: lint
+#           runs-on: ubuntu-latest
 #           steps:
 #             - run: npm test
 #         build:
 #           needs: test
+#           runs-on: ubuntu-latest
 #           steps:
 #             - run: npm run build
 #     good: |
@@ -35,33 +37,71 @@
 #           steps:
 #             - run: npm run build
 #     fix: |
-#       Remove unnecessary needs: dependencies between jobs that do not share outputs. GitHub Actions runs independent jobs in parallel by default, so a lint -> test -> build chain often serialises work that could run at once.
+#       Drop the needs: links between jobs that do not consume each other's outputs or artifacts. GitHub runs independent jobs in parallel, so lint, test and build finish in the time of the slowest rather than the sum of all three. Keep needs: where a job genuinely reads a previous job's output or downloads its artifact.
 package greensecops.ci_workflow.energy.parallel_opportunity
 
+import data.greensecops.lib.workflow as wf
 import rego.v1
 
-# Detects a sequential needs: chain spanning three or more jobs (job C needs
-# job B, which in turn needs job A). A linear chain that deep usually forces
-# work into sequence that could run in parallel — as opposed to a genuine
-# fan-in (several jobs depending on one build), whose chain depth is only 1 and
-# is left alone.
+_uploads_artifact(job) if {
+	some step in job.steps
+	contains(step.uses, "actions/upload-artifact")
+}
 
-# The set of job names that a job declares in its needs: field, normalised
-# across the scalar (needs: build) and list (needs: [build, lint]) forms.
-_needs_names(job) := {job.needs} if is_string(job.needs)
+_downloads_artifact(job) if {
+	some step in job.steps
+	contains(step.uses, "actions/download-artifact")
+}
 
-_needs_names(job) := {n | some n in job.needs} if is_array(job.needs)
+# A link carries data if the downstream job reads the upstream job's outputs, or
+# if the upstream uploads an artifact the downstream downloads. Either way the
+# ordering is load-bearing and dropping it would break the pipeline.
+_link_carries_data(upstream_name, upstream_job, downstream_job) if {
+	wf.job_outputs_consumed(upstream_name)
+	regex.match(
+		sprintf(`needs\.%v\.outputs\.`, [regex.replace(upstream_name, `[.*+?^${}()|\[\]\\]`, `\\$0`)]),
+		json.marshal(downstream_job),
+	)
+}
 
-violations contains violation if {
+_link_carries_data(_, upstream_job, downstream_job) if {
+	_uploads_artifact(upstream_job)
+	_downloads_artifact(downstream_job)
+}
+
+# A -> B -> C where neither link carries anything. The previous version fired on
+# any chain of depth two, which is the shape of every ordinary pipeline, and
+# never checked whether the jobs shared outputs — the one thing its own message
+# asked the reader to consider.
+_idle_chains contains chain if {
 	some c_name, c_job in input.jobs
-	some b_name in _needs_names(c_job)
-	some a_name in _needs_names(input.jobs[b_name])
+	some b_name in wf.job_needs(c_job)
+	b_job := input.jobs[b_name]
+	some a_name in wf.job_needs(b_job)
+	a_job := input.jobs[a_name]
+
+	not _link_carries_data(b_name, b_job, c_job)
+	not _link_carries_data(a_name, a_job, b_job)
+
+	chain := sprintf("%v -> %v -> %v", [a_name, b_name, c_name])
+}
+
+# One finding for the workflow, not one per (a, b, c) triple. A diamond produced
+# a combinatorial number of identical findings before, all of which collapsed to
+# a single issue on the dedup key anyway — so the extra ones were pure noise with
+# an arbitrary winner deciding the message.
+violations contains violation if {
+	chains := _idle_chains
+	count(chains) > 0
+	listed := concat("; ", sort(chains))
+
 	violation := {
 		"rule": "parallel_opportunity",
 		"severity": "low",
 		"category": "energy",
 		"job": null,
-		"message": sprintf("Jobs form a sequential 'needs:' chain ('%v' -> '%v' -> '%v'). If these jobs do not consume each other's outputs, drop the needs: links so they run in parallel and cut total pipeline duration.", [a_name, b_name, c_name]),
-		"context": null,
+		"message": sprintf("Jobs are chained with needs: but pass nothing between them (%v). Each link makes a job wait for a runner it did not need to wait for. Drop the links and the jobs run in parallel.", [listed]),
+		"context": listed,
+		"discriminator": "needs-chain",
 	}
 }

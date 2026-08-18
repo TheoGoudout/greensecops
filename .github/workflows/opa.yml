@@ -51,7 +51,7 @@ permissions: {}
 
 env:
   # Pinned to match opa/Dockerfile so local, server and CI evaluation agree.
-  OPA_VERSION: "1.18.2"
+  OPA_VERSION: "1.19.0"
 
 jobs:
   opa:

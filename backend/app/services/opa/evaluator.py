@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import httpx
 
 from app.core.config import settings
+from app.services.workflow_enrichment import attach_action_metadata
 
 # Re-exported: parsing moved out so scripts/validate_examples.py can share it
 # without pulling in httpx, but evaluate_workflow's callers still import it here.
@@ -266,10 +268,23 @@ async def _evaluate(
     return [_violation(cls, v, default_category) for v in raw]
 
 
-async def evaluate_workflow(raw_content: str) -> list[OpaViolation]:
+async def evaluate_workflow(
+    raw_content: str,
+    *,
+    action_metadata: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[OpaViolation]:
+    """Evaluate one workflow, optionally enriched with GitHub action facts.
+
+    ``action_metadata`` carries what the API knows about each ``uses:`` — see
+    ``services/github/action_metadata.py``. It is an optional keyword so this
+    function stays pure and offline-testable: omitted, the ``__actions__`` key
+    is absent, and the four rules that read it are silent by construction. The
+    collection itself is async and cached, and belongs to the caller.
+    """
     parsed = parse_workflow_yaml(raw_content)
     if parsed is None:
         raise WorkflowParseError("Workflow file is not a valid YAML mapping")
+    attach_action_metadata(parsed, action_metadata)
 
     violations = await _evaluate(parsed, POLICY_PACKAGES, OpaViolation, "reliability")
     # Attribution lives here, where the parsed document already is, rather

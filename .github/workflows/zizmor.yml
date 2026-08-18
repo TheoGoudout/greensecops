@@ -1,6 +1,38 @@
 name: Zizmor
 
+# Static analysis of this repository's own GitHub Actions workflows, at full
+# coverage — this repository sells workflow analysis, so its own workflows are
+# the one corpus that has to be clean.
+#
+# The trap this file exists to avoid: `zizmor-action` defaults to
+# `advanced-security: true`, which runs zizmor with `--format=sarif`, and zizmor
+# deliberately exits 0 under SARIF — the consumer is expected to decide what
+# blocks. So the job uploaded findings to the Security tab and went green, every
+# time, for 105 consecutive runs, while holding a real impostor-commit on the
+# workflow that mints our AWS deploy credentials. Only `--format=github`
+# (selected by `annotations: true`) exits non-zero on a finding.
+#
+# Hence two jobs, because one job cannot both upload SARIF and fail:
+#
+#   report  every audit zizmor has, at the widest persona, uploaded to code
+#           scanning. Never fails. This is the full ruleset — 40 audits,
+#           including the pedantic and auditor-only ones — so nothing is
+#           invisible.
+#
+#   gate    the subset worth blocking a merge on, annotated on the offending
+#           line. Fails the build.
+#
+# What the gate blocks on is `min-confidence: medium`, not severity. Severity is
+# how bad a finding would be if real; confidence is whether it *is* real. Only
+# the second should ever spend a red check. The report job still records
+# everything the gate lets through, so strictness here costs no visibility.
+#
+# Which audits run, and which publishers we are willing to run at all, live in
+# .github/zizmor.yml — zizmor discovers that file itself, so neither job passes
+# a `config:` input.
+
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -8,11 +40,15 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  zizmor:
-    name: Run zizmor
+  report:
+    name: Report to code scanning
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       security-events: write # Required for upload-sarif (used by zizmor-action) to upload SARIF files.
     steps:
@@ -22,3 +58,38 @@ jobs:
           persist-credentials: false
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          # The widest persona: every pedantic and auditor-only audit on top of
+          # the regular set. No severity or confidence floor — this job is the
+          # record, not the gate, so nothing is filtered out of it.
+          persona: auditor
+          # `all` ignores .gitignore and picks up composite actions, the
+          # Dependabot config and pre-commit configs alongside the workflows.
+          collect: all
+          online-audits: true
+          advanced-security: true
+
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          # Mutually exclusive with advanced-security, which is why this cannot
+          # be the same job as the upload. `annotations` selects
+          # `--format=github`, and with it a non-zero exit on findings.
+          advanced-security: false
+          annotations: true
+          collect: all
+          # Online audits are the reason this job is worth having. Every offline
+          # audit is reproducible from the pre-commit hook; only these can tell
+          # that a pinned SHA is not in the repository it claims to come from,
+          # or that a version comment no longer matches its pin.
+          online-audits: true
+          min-confidence: medium

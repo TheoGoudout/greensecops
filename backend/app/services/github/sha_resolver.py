@@ -1,11 +1,16 @@
 import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable
 
 import redis.asyncio as aioredis
 from github import Github
 from github.GithubException import GithubException, UnknownObjectException
+
+from app.services.github._ref_cache import (
+    cached_fetch,
+    close_cache,
+    open_cache,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +27,14 @@ WELL_KNOWN_ACTIONS: list[str] = [
     "actions/download-artifact",
 ]
 
-# GitHub tags and release history are effectively immutable; a day-long cache
-# keeps API usage far below rate limits.
-_CACHE_TTL = 24 * 60 * 60
+# GitHub tags and release history are effectively immutable, so these take the
+# shared cache's day-long default TTL (see ``_ref_cache``).
 _SHA_CACHE_PREFIX = "action_sha:"
 _VERSION_CACHE_PREFIX = "action_version:latest:"
 
 
 def _parse_action_refs(workflow_content: str) -> set[tuple[str, str]]:
+    """Refs that still need resolving — i.e. everything not already a SHA."""
     refs: set[tuple[str, str]] = set()
     for match in _ACTION_USE_RE.finditer(workflow_content):
         repo, ref = match.group(1), match.group(2)
@@ -39,24 +44,17 @@ def _parse_action_refs(workflow_content: str) -> set[tuple[str, str]]:
     return refs
 
 
-async def _cache_get(cache: aioredis.Redis | None, key: str) -> str | None:
-    if cache is None:
-        return None
-    try:
-        value = await cache.get(key)
-        return value.decode() if isinstance(value, bytes) else value
-    except Exception:
-        logger.warning("Redis cache read failed for %s", key, exc_info=True)
-        return None
+def _referenced_repos(workflow_content: str) -> set[str]:
+    """Every repository the workflow uses, however it is pinned.
 
-
-async def _cache_set(cache: aioredis.Redis | None, key: str, value: str) -> None:
-    if cache is None:
-        return
-    try:
-        await cache.setex(key, _CACHE_TTL, value)
-    except Exception:
-        logger.warning("Redis cache write failed for %s", key, exc_info=True)
+    Deliberately not derived from ``_parse_action_refs``: that drops refs which
+    are already SHA-pinned, so in a fully pinned workflow it returns nothing and
+    every well-known action looks absent. The "latest version" defaults below
+    were then offered to the LLM for actions the workflow was already using, and
+    it swapped the existing pins for them — which is how a fix PR moved
+    actions/checkout from v7.0.1 back to v7.0.0, and three others with it.
+    """
+    return {match.group(1) for match in _ACTION_USE_RE.finditer(workflow_content)}
 
 
 def _resolve_ref_to_sha_sync(gh: Github, repo_name: str, ref: str) -> str | None:
@@ -101,42 +99,10 @@ def _get_latest_version_sync(gh: Github, repo_name: str) -> str | None:
     return None
 
 
-async def _cached_fetch(
-    cache: aioredis.Redis | None,
-    cache_key: str,
-    fetch_fn: Callable[[], Awaitable[str | None]],
-) -> str | None:
-    """Get from cache, or fetch with a Redis lock to prevent cache stampede.
-
-    The double-check-lock pattern (check → lock → recheck → fetch) ensures that
-    when multiple workers miss the cache simultaneously, only the first one calls
-    the GitHub API; the rest read the value populated under the lock.
-    """
-    value = await _cache_get(cache, cache_key)
-    if value:
-        return value
-    if cache is not None:
-        try:
-            async with cache.lock(f"lock:{cache_key}", timeout=30, blocking_timeout=35):
-                value = await _cache_get(cache, cache_key)
-                if value:
-                    return value
-                value = await fetch_fn()
-                if value:
-                    await _cache_set(cache, cache_key, value)
-                return value
-        except Exception:
-            logger.warning("Redis lock failed for %s", cache_key, exc_info=True)
-    value = await fetch_fn()
-    if value:
-        await _cache_set(cache, cache_key, value)
-    return value
-
-
 async def _cached_resolve_ref_to_sha(
     gh: Github, cache: aioredis.Redis | None, repo: str, ref: str
 ) -> str | None:
-    return await _cached_fetch(
+    return await cached_fetch(
         cache,
         f"{_SHA_CACHE_PREFIX}{repo}@{ref}",
         lambda: asyncio.to_thread(_resolve_ref_to_sha_sync, gh, repo, ref),
@@ -146,30 +112,11 @@ async def _cached_resolve_ref_to_sha(
 async def _cached_get_latest_version(
     gh: Github, cache: aioredis.Redis | None, repo: str
 ) -> str | None:
-    return await _cached_fetch(
+    return await cached_fetch(
         cache,
         f"{_VERSION_CACHE_PREFIX}{repo}",
         lambda: asyncio.to_thread(_get_latest_version_sync, gh, repo),
     )
-
-
-def _open_cache() -> aioredis.Redis | None:
-    try:
-        from app.core.config import settings
-
-        return aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call,no-any-return]
-    except Exception:
-        logger.warning("Redis unavailable for action SHA cache", exc_info=True)
-        return None
-
-
-async def _close_cache(cache: aioredis.Redis | None) -> None:
-    if cache is None:
-        return
-    try:
-        await cache.aclose()
-    except Exception:
-        pass
 
 
 async def resolve_action_shas(
@@ -191,10 +138,9 @@ async def resolve_action_shas(
     client is created as a fallback.
     """
     refs = _parse_action_refs(workflow_content)
-    referenced_repos = {repo for repo, _ in refs}
-    new_well_known_repos = set(WELL_KNOWN_ACTIONS) - referenced_repos
+    new_well_known_repos = set(WELL_KNOWN_ACTIONS) - _referenced_repos(workflow_content)
 
-    cache = _open_cache()
+    cache = open_cache()
     if gh is None:
         gh = Github()
 
@@ -209,7 +155,7 @@ async def resolve_action_shas(
             if sha:
                 sha_map[f"{repo}@{ref}"] = sha
     finally:
-        await _close_cache(cache)
+        await close_cache(cache)
 
     return sha_map
 
@@ -229,7 +175,7 @@ async def resolve_and_pin_refs(content: str, gh: Github | None = None) -> str:
     if not refs:
         return content
 
-    cache = _open_cache()
+    cache = open_cache()
     if gh is None:
         gh = Github()
 
@@ -244,7 +190,7 @@ async def resolve_and_pin_refs(content: str, gh: Github | None = None) -> str:
             )
             pinned = pattern.sub(rf"uses:\g<1>{repo}@{sha} # {ref}", pinned)
     finally:
-        await _close_cache(cache)
+        await close_cache(cache)
 
     return pinned
 
@@ -263,12 +209,12 @@ async def resolve_pinned_ref(ref: str, gh: Github | None = None) -> str:
     if re.fullmatch(r"[0-9a-f]{40}", tag):
         return ref
 
-    cache = _open_cache()
+    cache = open_cache()
     if gh is None:
         gh = Github()
     try:
         sha = await _cached_resolve_ref_to_sha(gh, cache, repo, tag)
     finally:
-        await _close_cache(cache)
+        await close_cache(cache)
 
     return f"{repo}@{sha} # {tag}" if sha else ref

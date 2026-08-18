@@ -1,61 +1,91 @@
 # METADATA
 # title: No retry on flaky network step
-# description: Steps that download external dependencies or call external APIs have no retry logic, making the pipeline fragile to transient network failures.
+# description: "A step fetches a file with curl or wget and no retry, so a transient DNS or connection failure fails the whole run. Package managers are out of scope — npm, pip and apt-get already retry internally, so wrapping them adds nothing. Detection ignores shell comments and recognises the retry mechanisms that already exist: curl's own --retry, wget's --tries, a retry action, or a hand-rolled loop."
 # custom:
-#   severity: medium
+#   severity: low
+#   severity_weight: 0.6
 #   detection: pattern_matching
 #   examples:
 #     bad: |
 #       jobs:
 #         build:
 #           steps:
-#             - run: npm install
-#             - run: curl -fsSL https://example.com/tool | bash
+#             - run: curl -fsSL -o tool https://example.com/tool
 #     good: |
 #       jobs:
 #         build:
 #           steps:
-#             - uses: nick-fields/retry@7152eba30c6575329ac0576536151aca5a72780e # v3.0.0
-#               with:
-#                 timeout_minutes: 5
-#                 max_attempts: 3
-#                 command: npm install
-#             - run: curl -fsSL https://example.com/tool | bash
+#             - run: curl -fsSL --retry 3 --retry-connrefused -o tool https://example.com/tool
 #     fix: |
-#       Wrap flaky network steps (curl, npm install, pip install, apt-get) with a retry action such as nick-fields/retry or add shell-level retry loops for critical downloads.
+#       Add the downloader's own retry flag — curl --retry 3 --retry-connrefused, wget --tries=3 — or wrap the step in a retry action. A hand-rolled loop works too, but make sure it still fails the step when every attempt fails; `for i in 1 2 3; do cmd && break; sleep 5; done` exits 0 whether or not the command ever succeeded.
 package greensecops.ci_workflow.reliability.missing_retry
 
 import rego.v1
 
-# Detects jobs that run network-dependent commands (curl, wget, pip install,
-# npm install, apt-get) without any retry action, making them fragile against
-# transient network failures.
+# Shell comments are not commands. The previous version tested the raw `run:`
+# block with `contains()`, so `# curl the API later` and `echo "run curl ..."`
+# both counted as network steps.
+_code(run) := regex.replace(run, `#[^\n]*`, "")
 
-_network_commands := ["curl", "wget", "pip install", "npm install", "apt-get"]
+# Only raw downloaders. Package managers are deliberately absent: npm, pip,
+# apt-get, cargo and go all retry internally by default (npm's fetch-retries is
+# 2, pip's --retries is 5), so demanding a retry wrapper around `npm ci` asks
+# the author to duplicate something the tool already does. What does not retry
+# unless told to is a bare `curl` or `wget` pulling an installer, which is the
+# case worth reporting and the case with a one-flag fix.
+#
+# Word-boundary matched, so `apt-get-wrapper.sh` is not `apt-get`.
+_network_patterns := [
+	`\bcurl\b`,
+	`\bwget\b`,
+]
 
-_has_network_step(steps) if {
-	some step in steps
+_is_network_step(step) if {
 	run := step.run
-	some cmd in _network_commands
-	contains(run, cmd)
+	is_string(run)
+	some pattern in _network_patterns
+	regex.match(pattern, _code(run))
 }
 
-_has_retry_action(steps) if {
+# Retry mechanisms already present, in any of the forms people actually write.
+_retry_patterns := [
+	`--retry[\s=]`,
+	`--retry-connrefused`,
+	`--retry-all-errors`,
+	`--tries[\s=]`,
+	`\buntil\s`,
+	`\bfor\s+\w+\s+in\b[\s\S]*\bdo\b`,
+	`\bwhile\s`,
+]
+
+_step_has_retry(step) if {
+	run := step.run
+	is_string(run)
+	some pattern in _retry_patterns
+	regex.match(pattern, _code(run))
+}
+
+_job_has_retry_action(steps) if {
 	some step in steps
-	uses := step.uses
-	contains(uses, "retry")
+	contains(step.uses, "retry")
 }
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	_has_network_step(job.steps)
-	not _has_retry_action(job.steps)
+	not _job_has_retry_action(job.steps)
+
+	some step_index, step in job.steps
+	_is_network_step(step)
+	not _step_has_retry(step)
+
+	step_label := object.get(step, "name", "unnamed step")
 	violation := {
 		"rule": "missing_retry",
-		"severity": "medium",
+		"severity": "low",
 		"category": "reliability",
 		"job": job_name,
-		"message": sprintf("Job '%v' runs network-dependent commands (curl/wget/pip/npm/apt-get) without a retry action. Consider adding a retry mechanism for transient failures.", [job_name]),
+		"step_index": step_index,
+		"message": sprintf("Step '%v' in job '%v' downloads from the network with no retry. A transient failure fails the run. Add the downloader's own retry flag, or wrap the step in a retry action.", [step_label, job_name]),
 		"context": null,
 	}
 }
