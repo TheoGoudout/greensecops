@@ -8,6 +8,7 @@
 
 ### Internal
 
+* Revert the multi-ecosystem group; guard the Playwright split instead. PR [#233](https://github.com/TheoGoudout/greensecops/pull/233) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump alembic from 1.19.0 to 1.19.1 in the python-packages group across 1 directory. PR [#224](https://github.com/TheoGoudout/greensecops/pull/224) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the pre-commit group across 2 directories with 1 update. PR [#222](https://github.com/TheoGoudout/greensecops/pull/222) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * feat(ci): fail the commit when a base image pins a prerelease. PR [#225](https://github.com/TheoGoudout/greensecops/pull/225) by [@TheoGoudout](https://github.com/TheoGoudout).
