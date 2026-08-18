@@ -2,6 +2,10 @@
 
 ## Latest Changes
 
+### Security Fixes
+
+* Run zizmor at full coverage, and make the Rego catalog earn its findings. PR [#223](https://github.com/TheoGoudout/greensecops/pull/223) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ### Internal
 
 * ⬆ bump alembic from 1.19.0 to 1.19.1 in the python-packages group across 1 directory. PR [#224](https://github.com/TheoGoudout/greensecops/pull/224) by [@dependabot[bot]](https://github.com/apps/dependabot).
