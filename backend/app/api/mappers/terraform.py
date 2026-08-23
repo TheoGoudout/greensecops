@@ -8,6 +8,7 @@ from app.models import (
     TerraformScan,
     TerraformScanPublic,
 )
+from app.services.badge_signing import sign_badge
 
 from .base import latest_completed_scan, to_public
 
@@ -18,7 +19,6 @@ def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
     if root.repository and root.repository.is_private:
         # Function-local import: badge_signing pulls in settings, and with it a
         # chunk of the app at module scope.
-        from app.services.badge_signing import sign_badge
 
         badge_sig = sign_badge(str(root.id))
     return to_public(

@@ -171,7 +171,7 @@ def test_list_terraform_roots_includes_latest_grade(
     superuser_token_headers: dict[str, str],
     repo: Repository,
     terraform_root: TerraformRoot,
-    completed_scan: TerraformScan,  # noqa: ARG001
+    completed_scan: TerraformScan,
 ) -> None:
     response = client.get(
         f"{settings.API_V1_STR}/terraform-roots/",

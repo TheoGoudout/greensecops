@@ -31,7 +31,7 @@ from app.services.cloud.aws_collector import (
     collect_account_resources,
 )
 from app.services.deduplication import compute_fingerprint
-from app.services.opa.evaluator import OpaUnavailableError
+from app.services.opa.evaluator import OpaUnavailableError, evaluate_cloud
 from app.services.scan_support import (
     CLOUD_SCAN_LOCK_TTL_SECONDS,
     load_enabled_rules,
@@ -249,6 +249,5 @@ def run_cloud_scan(
 
 
 async def _evaluate(resources: dict[str, Any]) -> Any:
-    from app.services.opa.evaluator import evaluate_cloud
 
     return await evaluate_cloud(resources)

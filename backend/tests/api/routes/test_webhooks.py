@@ -1981,7 +1981,7 @@ def test_push_with_deleted_flag_is_ignored(
 
 def test_forced_push_without_workflow_commits_triggers_analysis(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     """A rebase can drop workflow changes without listing workflow paths in
@@ -2008,7 +2008,7 @@ def test_forced_push_without_workflow_commits_triggers_analysis(
 
 def test_unforced_push_without_workflow_commits_still_ignored(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     payload = {
@@ -2238,7 +2238,7 @@ def test_bot_push_to_fix_branch_does_not_set_externally_modified(
 
 def test_push_to_fix_branch_never_enqueues_analysis(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     with patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue:
@@ -2317,7 +2317,7 @@ def test_non_default_branch_push_no_mergeable_refresh(
 
 def test_default_branch_push_without_open_pr_no_refresh(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     payload = {
@@ -2356,7 +2356,7 @@ def enabled_terraform_root(db: Session, enabled_repo: Repository) -> TerraformRo
 
 def test_push_to_default_branch_touching_root_path_triggers_scan(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
     enabled_terraform_root: TerraformRoot,
 ) -> None:
@@ -2392,9 +2392,9 @@ def test_push_to_default_branch_touching_root_path_triggers_scan(
 
 def test_push_to_default_branch_not_touching_root_path_skips_scan(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
-    enabled_terraform_root: TerraformRoot,  # noqa: ARG001
+    enabled_terraform_root: TerraformRoot,
 ) -> None:
     payload = {
         "ref": f"refs/heads/{enabled_repo.default_branch}",
@@ -2419,7 +2419,7 @@ def test_push_to_default_branch_not_touching_root_path_skips_scan(
 
 def test_push_to_feature_branch_never_triggers_terraform_scan(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
     enabled_terraform_root: TerraformRoot,
 ) -> None:
@@ -2451,7 +2451,7 @@ def test_push_to_feature_branch_never_triggers_terraform_scan(
 
 def test_forced_push_to_default_branch_triggers_scan_unconditionally(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
     enabled_terraform_root: TerraformRoot,
 ) -> None:

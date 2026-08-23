@@ -24,6 +24,7 @@ from app.models import (
     DockerTargetPublic,
     Rule,
 )
+from app.services.badge_signing import sign_badge
 
 from .base import latest_completed_scan, to_public
 
@@ -35,7 +36,6 @@ def to_docker_target_public(target: DockerTarget) -> DockerTargetPublic:
         # Function-local import: badge_signing imports settings, which pulls in
         # a chunk of the app at module scope — the same dodge
         # mappers/terraform.py uses to avoid a cycle.
-        from app.services.badge_signing import sign_badge
 
         badge_sig = sign_badge(str(target.id))
     return to_public(

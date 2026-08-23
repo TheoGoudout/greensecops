@@ -15,7 +15,11 @@ from app.models import (
     Repository,
     TerraformRoot,
 )
-from app.services.badge_renderer import render_badge, render_unknown_badge
+from app.services.badge_renderer import (
+    _GRADE_COLORS,
+    render_badge,
+    render_unknown_badge,
+)
 from app.services.badge_signing import (
     repo_badge_message,
     verify_badge,
@@ -135,8 +139,6 @@ def get_badge_json(
             "color": "lightgrey",
         }
 
-    from app.services.badge_renderer import _GRADE_COLORS
-
     color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {
         "schemaVersion": 1,
@@ -214,8 +216,6 @@ def get_terraform_root_badge_json(
             "message": "pending",
             "color": "lightgrey",
         }
-
-    from app.services.badge_renderer import _GRADE_COLORS
 
     color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {
@@ -295,8 +295,6 @@ def get_docker_target_badge_json(
             "message": "pending",
             "color": "lightgrey",
         }
-
-    from app.services.badge_renderer import _GRADE_COLORS
 
     color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {

@@ -107,6 +107,7 @@ select = [
     "ARG001", # unused arguments in functions
     "T201",   # print statements are not allowed
     "RUF100", # noqa directives that suppress nothing
+    "PLC0415", # imports inside functions
 ]
 ignore = [
     "E501",  # line too long, handled by black
@@ -116,7 +117,38 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ARG001"]
+"tests/**" = ["ARG001", "PLC0415"]
+
+# ── PLC0415: imports inside functions ────────────────────────────────────────
+#
+# Deferring an import is usually habit, and 53 of the 125 sites here were: they
+# are now at module scope, where the dependency graph is visible. What is left
+# is load-bearing, in one of three ways, and each file is listed under the
+# reason that applies to it.
+#
+# 1. The deferral IS the test seam. A name imported inside a function is looked
+#    up at call time, so `patch("app.workers.tasks.static_analysis.run_static_analysis")`
+#    reaches the caller. Hoisting binds it at import and the patch stops landing
+#    — the suite catches this immediately, which is how these were identified.
+"app/api/routes/repositories.py" = ["PLC0415"]
+"app/api/routes/webhooks.py" = ["PLC0415"]
+"app/services/github/event_handlers.py" = ["PLC0415"]
+"app/workers/tasks/static_analysis.py" = ["PLC0415"]
+"app/workers/tasks/fix_generation.py" = ["PLC0415"]
+
+# 2. A genuine import cycle. Workers build on services, and these reach back the
+#    other way at call time to dispatch or to read a sibling engine's helper.
+"app/services/github/app_client.py" = ["PLC0415"]
+"app/services/file_fix_generation.py" = ["PLC0415"]
+"app/workers/tasks/docker_fix_generation.py" = ["PLC0415"]
+"app/workers/tasks/terraform_fix_generation.py" = ["PLC0415"]
+
+# 3. Optional or heavy dependencies. Each LLM provider module imports its own
+#    langchain integration package; importing all four eagerly would make every
+#    one of them a hard requirement to start the app, so a deployment using only
+#    OpenAI would need langchain-anthropic, -google-genai and -ollama installed.
+"app/services/llm/catalog.py" = ["PLC0415"]
+"app/services/llm/base.py" = ["PLC0415"]
 # SQLModel needs quoted, bracket-wrapped forward refs (Optional["X"], list["X"])
 # for cross-module Relationship() targets — a real typing.ForwardRef it can
 # introspect structurally without importing the target class. UP037/UP045

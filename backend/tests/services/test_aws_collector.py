@@ -359,7 +359,7 @@ class TestCollectIam:
             }
         ]
 
-        def _list_mfa_devices(UserName: str) -> dict:  # noqa: N803 - boto3 kwarg name
+        def _list_mfa_devices(UserName: str) -> dict:
             return {"MFADevices": [{}]} if UserName == "alice" else {"MFADevices": []}
 
         client.list_mfa_devices.side_effect = _list_mfa_devices
@@ -883,7 +883,7 @@ class TestCollectKmsKeys:
             session,
             [{"Keys": [{"KeyId": "cmk"}, {"KeyId": "aws-managed"}, {"KeyId": "gone"}]}],
         )
-        client.describe_key.side_effect = lambda KeyId: {  # noqa: N803
+        client.describe_key.side_effect = lambda KeyId: {
             "cmk": {"KeyMetadata": {"KeyManager": "CUSTOMER", "KeyState": "Enabled"}},
             "aws-managed": {
                 "KeyMetadata": {"KeyManager": "AWS", "KeyState": "Enabled"}

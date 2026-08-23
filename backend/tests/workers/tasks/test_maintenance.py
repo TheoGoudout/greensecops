@@ -194,7 +194,7 @@ def test_sweeper_leaves_recent_telemetry_runs_alone(db: Session) -> None:
     assert run.dynamic_status == DynamicAnalysisStatus.running
 
 
-def test_sweeper_task_wrapper_runs(db: Session) -> None:  # noqa: ARG001
+def test_sweeper_task_wrapper_runs(db: Session) -> None:
     from app.workers.tasks.maintenance import sweep_stuck_states
 
     result = sweep_stuck_states.apply()

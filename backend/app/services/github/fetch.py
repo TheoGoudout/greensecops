@@ -26,7 +26,10 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from typing import TYPE_CHECKING, TypeVar
 
+import redis.asyncio as aioredis
+
 from app.core.config import settings
+from app.services.github.app_client import GitHubAppClient
 
 if TYPE_CHECKING:
     from app.models import Repository
@@ -45,9 +48,6 @@ def with_client(call: Callable[[GitHubAppClient], Awaitable[Iterable[T]]]) -> li
     The redis client is closed on every path, including when ``call`` raises — a
     leaked connection per failed scan is how a worker runs out of them.
     """
-    import redis.asyncio as aioredis
-
-    from app.services.github.app_client import GitHubAppClient
 
     async def _run() -> list[T]:
         redis_client = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]

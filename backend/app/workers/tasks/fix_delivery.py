@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import redis.asyncio as aioredis
 from sqlmodel import Session, select
 
 from app.core.config import settings
@@ -20,12 +21,14 @@ from app.models import (
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github.app_client import GitHubAppClient
 from app.services.github.fix_delivery import (
     STALE_CONTENT_ERROR_CODE,
     FixDeliveryResult,
     FixDeliveryService,
 )
 from app.workers.celery_app import celery_app
+from app.workers.tasks.static_analysis import run_static_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -244,8 +247,6 @@ def deliver_fixes_batch(
                 )
             )
             if result.error_code == STALE_CONTENT_ERROR_CODE:
-                from app.workers.tasks.static_analysis import run_static_analysis
-
                 run_static_analysis.delay(
                     repo_id=repo_id_str,
                     branch=base_branch,
@@ -270,10 +271,6 @@ def deliver_fixes_batch(
 
 @asynccontextmanager
 async def _delivery_service() -> AsyncGenerator[FixDeliveryService, None]:
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
 
     r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:
@@ -325,7 +322,6 @@ async def _deliver_batch(
 
 def _build_comment_body(fixes: list[Fix]) -> str:
     """Markdown body for a comment-mode delivery: issues + proposed content."""
-    from app.core.config import settings
 
     lines = [f"## {settings.PROJECT_NAME} suggested workflow fixes", ""]
     for fix in fixes:

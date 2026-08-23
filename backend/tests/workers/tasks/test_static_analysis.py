@@ -103,7 +103,7 @@ def seeded_rule(db: Session) -> Rule:
 # ─── Tests ───────────────────────────────────────────────────────────────────
 
 
-def test_repo_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_repo_not_found_returns_error(db: Session) -> None:
     # Arrange — UUID that doesn't correspond to any repo
     missing_id = str(uuid.uuid4())
 
@@ -1161,7 +1161,7 @@ def test_batch_mode_opa_failure_sets_batch_any_failed(
 
 
 def test_run_static_analysis_task_acquires_and_releases_lock(
-    db: Session,  # noqa: ARG001
+    db: Session,
     repo: Repository,
 ) -> None:
     from unittest.mock import MagicMock
@@ -1189,7 +1189,7 @@ def test_run_static_analysis_task_acquires_and_releases_lock(
 
 
 def test_run_static_analysis_task_retries_while_locked(
-    db: Session,  # noqa: ARG001
+    db: Session,
     repo: Repository,
 ) -> None:
     from unittest.mock import MagicMock
@@ -1216,7 +1216,7 @@ def test_run_static_analysis_task_retries_while_locked(
 
 
 def test_run_static_analysis_task_retries_on_fetch_error(
-    db: Session,  # noqa: ARG001
+    db: Session,
     repo: Repository,
 ) -> None:
     from unittest.mock import MagicMock
@@ -1646,7 +1646,7 @@ def test_same_path_on_two_branches_gets_separate_rows(
     db: Session,
     repo: Repository,
     workflow_file: WorkflowFile,
-    seeded_rule: Rule,  # noqa: ARG001
+    seeded_rule: Rule,
 ) -> None:
     fixed = _fetched(workflow_file.path, "on: push\njobs: {}\n")
     with (
@@ -1671,7 +1671,7 @@ def test_same_path_on_two_branches_gets_separate_rows(
 def test_content_dedup_is_branch_scoped(
     db: Session,
     repo: Repository,
-    seeded_rule: Rule,  # noqa: ARG001
+    seeded_rule: Rule,
 ) -> None:
     """Identical content on two branches must not dedup-skip across branches —
     a skip would leave the second branch's row and reconciliation stale."""

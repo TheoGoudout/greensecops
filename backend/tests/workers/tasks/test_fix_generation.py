@@ -23,15 +23,17 @@ from app.models import (
     UserTier,
     WorkflowFile,
 )
+from app.services.llm.response import (
+    parse_full_content,
+    parse_unfixed_issues,
+    restore_trailing_whitespace,
+)
 from app.workers.tasks.fix_generation import (
     _is_valid_workflow_yaml,
     _maybe_auto_deliver,
-    _parse_llm_response,
-    _parse_unfixed_issues,
     _record_batch_result,
     init_fix_batch,
     resolve_llm_provider,
-    restore_trailing_whitespace,
 )
 
 _FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
@@ -47,16 +49,16 @@ _WORKFLOW = (
 )
 
 
-# ─── _parse_llm_response ─────────────────────────────────────────────────────
+# ─── parse_full_content ─────────────────────────────────────────────────────
 
 
 def test_parse_llm_response_extracts_full_content() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>"
-    assert _parse_llm_response(response) == _WORKFLOW
+    assert parse_full_content(response) == _WORKFLOW
 
 
 def test_parse_llm_response_missing_block_returns_empty() -> None:
-    assert _parse_llm_response("no delimiters here") == ""
+    assert parse_full_content("no delimiters here") == ""
 
 
 def test_parse_llm_response_ignores_surrounding_prose() -> None:
@@ -65,10 +67,10 @@ def test_parse_llm_response_ignores_surrounding_prose() -> None:
         "<full_content>\nname: CI\non: push\n</full_content>\n"
         "All issues addressed."
     )
-    assert _parse_llm_response(response) == "name: CI\non: push\n"
+    assert parse_full_content(response) == "name: CI\non: push\n"
 
 
-# ─── _parse_unfixed_issues ───────────────────────────────────────────────────
+# ─── parse_unfixed_issues ───────────────────────────────────────────────────
 
 
 def test_parse_unfixed_issues_extracts_index_and_reason() -> None:
@@ -76,7 +78,7 @@ def test_parse_unfixed_issues_extracts_index_and_reason() -> None:
         f"<full_content>\n{_WORKFLOW}</full_content>\n"
         "<unfixed>\n2: requires manual OIDC trust setup in AWS IAM\n</unfixed>"
     )
-    assert _parse_unfixed_issues(response) == {
+    assert parse_unfixed_issues(response) == {
         2: "requires manual OIDC trust setup in AWS IAM"
     }
 
@@ -85,7 +87,7 @@ def test_parse_unfixed_issues_multiple_entries() -> None:
     response = (
         "<unfixed>\n1: needs a repo secret\n3: cross-file refactor needed\n</unfixed>"
     )
-    assert _parse_unfixed_issues(response) == {
+    assert parse_unfixed_issues(response) == {
         1: "needs a repo secret",
         3: "cross-file refactor needed",
     }
@@ -93,12 +95,12 @@ def test_parse_unfixed_issues_multiple_entries() -> None:
 
 def test_parse_unfixed_issues_missing_block_returns_empty() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>"
-    assert _parse_unfixed_issues(response) == {}
+    assert parse_unfixed_issues(response) == {}
 
 
 def test_parse_unfixed_issues_empty_block_returns_empty() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>\n<unfixed>\n</unfixed>"
-    assert _parse_unfixed_issues(response) == {}
+    assert parse_unfixed_issues(response) == {}
 
 
 # ─── _is_valid_workflow_yaml ─────────────────────────────────────────────────

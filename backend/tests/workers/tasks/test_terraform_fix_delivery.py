@@ -89,7 +89,7 @@ def _patch_fetch(files: list[FakeFile]) -> Any:
     )
 
 
-def test_root_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_root_not_found_returns_error(db: Session) -> None:
     result = deliver_terraform_fixes(terraform_root_id=str(uuid.uuid4()))
     assert result["status"] == "error"
     assert result["detail"] == "terraform_root_not_found"

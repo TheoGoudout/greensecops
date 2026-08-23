@@ -149,7 +149,7 @@ def test_run_dynamic_analysis_marks_failed_on_error(
     assert run.dynamic_status == DynamicAnalysisStatus.failed
 
 
-def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:
     # Arrange — a UUID that doesn't exist
     missing_id = str(uuid.uuid4())
 

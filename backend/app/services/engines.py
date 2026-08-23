@@ -71,6 +71,7 @@ from app.models import (
     WorkflowFile,
 )
 from app.services.delivery_pr import docker_fix_branch, tf_fix_branch
+from app.services.terraform.hcl_parser import derive_module_path
 
 
 @dataclass(frozen=True)
@@ -126,7 +127,6 @@ class EngineSpec:
 
 def _terraform_finding_columns(v: Any, root: Any) -> dict[str, Any]:
     """Terraform's locator columns: where in the module tree the resource sits."""
-    from app.services.terraform.hcl_parser import derive_module_path
 
     module_path = derive_module_path(v.file_path, root.root_path)
     return {

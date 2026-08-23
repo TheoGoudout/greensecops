@@ -21,6 +21,7 @@ from app.services.billing import quota as billing_quota
 from app.services.billing import usage as billing_usage
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.opa.evaluator import evaluate_ci_telemetry
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -173,6 +174,5 @@ def run_dynamic_analysis(
 
 
 async def _evaluate(telemetry: dict[str, Any]) -> Any:
-    from app.services.opa.evaluator import evaluate_ci_telemetry
 
     return await evaluate_ci_telemetry(telemetry)

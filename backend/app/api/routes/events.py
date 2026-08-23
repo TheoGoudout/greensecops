@@ -18,7 +18,7 @@ from app.api.deps import (
 from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_STREAM
-from app.models import OrgMember, SSESignal
+from app.models import OrgMember, SSEEventPublic, SSESignal
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,18 @@ async def _stream_events(
 async def get_sse_signals() -> list[SSESignal]:
     """Return all valid SSE signal types. Exposes SSESignal enum in OpenAPI for frontend codegen."""
     return list(SSESignal)
+
+
+@router.get("/schema", role=Role.guest, response_model=SSEEventPublic)
+async def get_sse_event_schema() -> SSEEventPublic:
+    """The wire shape of a streamed event, for frontend codegen.
+
+    Nothing calls this at runtime — like ``/signals`` above, it exists so the
+    type reaches the generated client. Events themselves arrive over
+    ``/stream``, which is a ``text/event-stream`` and so carries no response
+    model OpenAPI could describe.
+    """
+    return SSEEventPublic(event=SSESignal.analysis_queued)
 
 
 @router.post("/ticket", role=Role.user)

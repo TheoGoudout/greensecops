@@ -1,13 +1,18 @@
 import { useEffect, useRef } from "react"
 import { SSESignalSchema } from "../client/schemas.gen"
-import type { SSESignal } from "../client/types.gen"
+import type { SSEEventPublic, SSESignal } from "../client/types.gen"
 
 export type { SSESignal }
 
-export type SSEEventData = {
-  event: SSESignal
-  [key: string]: unknown
-}
+/**
+ * One streamed event, as the backend declares it.
+ *
+ * Generated from `SSEEventPublic` (`backend/app/models/schemas.py`) rather than
+ * written here, so a field renamed on the backend is a TypeScript error rather
+ * than an `undefined` that surfaces as a stale panel in someone's browser. Every
+ * field but `event` is optional — see that model for why.
+ */
+export type SSEEventData = SSEEventPublic
 
 type SSEHandler = (data: SSEEventData) => void
 

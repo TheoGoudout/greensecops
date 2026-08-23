@@ -162,7 +162,7 @@ def test_head_advance_enqueues_polled_analysis(db: Session) -> None:
     # detached once _poll_repository_impl returns).
     calls: list[tuple] = []
 
-    def _record(repo_arg, branch, sha, trigger, force=False):  # noqa: ANN001
+    def _record(repo_arg, branch, sha, trigger, force=False):
         calls.append((str(repo_arg.id), branch, sha, trigger, force))
 
     with (

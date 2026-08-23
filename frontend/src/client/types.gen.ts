@@ -834,6 +834,56 @@ export type SeverityStat = {
     resolved: number;
 };
 
+/**
+ * The wire shape of one server-sent event.
+ *
+ * Every event is a flat JSON object: an ``event`` discriminant plus whatever
+ * the emitting factory in ``services/events/schemas.py`` put beside it. That
+ * payload was a bare ``dict[str, Any]`` and never reached OpenAPI, so the
+ * frontend read it by hand — ``data.grade as string | undefined``, forty times
+ * over in ``hooks/useRepoEvents.ts``. A renamed field broke silently at
+ * runtime, in a browser, with nothing to catch it.
+ *
+ * Declaring it here puts the field names in the generated client, which turns
+ * that class of break into a TypeScript error.
+ *
+ * Every field but ``event`` is optional, and deliberately so: this is a union
+ * of what ~30 distinct signals carry, not a claim that any one of them carries
+ * all of it. Which fields a given signal actually populates is documented on
+ * its factory function. The alternative — a discriminated union with one model
+ * per signal — buys per-signal precision at the cost of thirty-odd models to
+ * keep in step with their factories, and the consumer switches on ``event``
+ * anyway.
+ */
+export type SSEEventPublic = {
+    event: SSESignal;
+    org_id?: (string | null);
+    repo_id?: (string | null);
+    repo_ids?: (Array<(string)> | null);
+    analysis_id?: (string | null);
+    fix_id?: (string | null);
+    fix_ids?: (Array<(string)> | null);
+    issue_ids?: (Array<(string)> | null);
+    telemetry_run_id?: (string | null);
+    installation_id?: (number | null);
+    branch?: (string | null);
+    trigger?: (string | null);
+    score?: (number | null);
+    grade?: (string | null);
+    issues_count?: (number | null);
+    error?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    org_name?: (string | null);
+    repo_count?: (number | null);
+    repos_disabled?: (number | null);
+    enabled?: (boolean | null);
+    tier?: (string | null);
+    status?: (string | null);
+    meter?: (string | null);
+    message?: (string | null);
+};
+
 export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed' | 'analysis.quota_exceeded' | 'subscription.activated' | 'subscription.past_due' | 'subscription.unpaid' | 'subscription.canceled' | 'subscription.updated';
 
 /**
@@ -1437,6 +1487,8 @@ export type DockerTriggerDockerDeliveryResponse = ({
 });
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
+
+export type EventsGetSseEventSchemaResponse = (SSEEventPublic);
 
 export type EventsCreateSseTicketResponse = ({
     [key: string]: (string | number);

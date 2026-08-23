@@ -112,7 +112,7 @@ def _patch_evaluate(violations: list[TerraformOpaViolation]) -> Any:
     )
 
 
-def test_terraform_root_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_terraform_root_not_found_returns_error(db: Session) -> None:
     result = _run_terraform_scan_impl(str(uuid.uuid4()))
     assert result["status"] == "error"
     assert result["detail"] == "terraform_root_not_found"
@@ -132,7 +132,7 @@ def test_no_files_returns_no_targets(
 
 def test_fetch_error_raises_terraform_fetch_error(
     db: Session,
-    terraform_root: TerraformRoot,  # noqa: ARG001
+    terraform_root: TerraformRoot,
 ) -> None:
     with (
         patch(

@@ -156,7 +156,7 @@ def _org(db: Session) -> Organization:
 
 def test_init_enqueues_reanalysis_when_new_rules_and_repos_exist(
     db: Session,
-    _org: Organization,  # noqa: ARG001
+    _org: Organization,
 ) -> None:
     from app import initial_data
 
@@ -181,7 +181,7 @@ def test_init_enqueues_reanalysis_when_new_rules_and_repos_exist(
     mock_delay.assert_called_once()
 
 
-def test_init_does_not_enqueue_when_no_new_rules(db: Session) -> None:  # noqa: ARG001
+def test_init_does_not_enqueue_when_no_new_rules(db: Session) -> None:
     from app import initial_data
 
     with (

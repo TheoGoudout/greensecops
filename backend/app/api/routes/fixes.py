@@ -40,6 +40,7 @@ from app.models import (
 )
 from app.services import state_machines as sm
 from app.services.billing import usage as billing_usage
+from app.services.billing.quota import enforce_quota
 from app.services.delivery_pr import (
     WF_FIX_BRANCH_RE,
     build_delivery_pr_body,
@@ -469,7 +470,6 @@ def trigger_fix_generation_for_repo(
     Only issues from the latest analysis per workflow file are targeted.
     """
     repo = authorize_repo(session, current_user, repo_id)
-    from app.services.billing.quota import enforce_quota
 
     by_wf_file = _latest_unresolved_issues(
         session,
@@ -654,7 +654,6 @@ def regenerate_fixes_for_repo(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.services.billing.quota import enforce_quota
 
     # pr_state is nullable, and NULL != 'merged' is NULL in SQL — the IS NULL
     # arms keep fixes on stateless PR records eligible.
@@ -719,7 +718,6 @@ def regenerate_fixes_for_workflow(
     """
     fix = get_or_404(session, Fix, fix_id)
     _authorize_fix(session, current_user, fix)
-    from app.services.billing.quota import enforce_quota
 
     if fix.status in IN_FLIGHT_STATUSES:
         raise HTTPException(

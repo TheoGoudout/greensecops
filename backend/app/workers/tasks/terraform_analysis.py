@@ -5,7 +5,9 @@ from typing import Any
 
 from app.services.engines import TERRAFORM_ENGINE
 from app.services.github.fetch import fetch_terraform_files as _fetch_terraform_files
+from app.services.opa.evaluator import evaluate_terraform
 from app.services.scan_runner import ScanFetchError, run_file_scan
+from app.services.scan_support import scan_lock
 from app.services.terraform.hcl_parser import merge_terraform_configs
 from app.workers.celery_app import celery_app
 
@@ -22,7 +24,6 @@ def _analyse(fetched: Any) -> Any:
 
 
 async def _evaluate(parsed_config: dict[str, Any]) -> Any:
-    from app.services.opa.evaluator import evaluate_terraform
 
     return await evaluate_terraform(parsed_config)
 
@@ -57,7 +58,6 @@ def run_terraform_scan(
     trigger: str = "manual",
     billable: bool = True,
 ) -> dict[str, str | int | float]:
-    from app.services.scan_support import scan_lock
 
     # Per-root lock: concurrent scans of the same root race on TerraformFinding
     # upserts and duplicate TerraformScan rows.

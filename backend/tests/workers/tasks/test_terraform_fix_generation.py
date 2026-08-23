@@ -164,7 +164,7 @@ def _patch_llm(content: str) -> Any:
     )
 
 
-def test_no_findings_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_no_findings_returns_error(db: Session) -> None:
     result = run_terraform_fix_generation([str(uuid.uuid4())])
     assert result["status"] == "error"
     assert result["detail"] == "no_findings_found"

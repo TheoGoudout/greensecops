@@ -25,9 +25,9 @@ from app.models import Repository
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
 from app.services.engines import EngineSpec
-from app.workers.tasks.fix_generation import (
-    _parse_llm_response,
-    _parse_unfixed_issues,
+from app.services.llm.response import (
+    parse_full_content,
+    parse_unfixed_issues,
     restore_trailing_whitespace,
 )
 
@@ -118,7 +118,7 @@ def generate_file_fix(
             )
             return _fail(session, fix, str(exc))
 
-        full_content = _parse_llm_response(result.content)
+        full_content = parse_full_content(result.content)
         generation_error: str | None = None
         if not full_content:
             generation_error = MISSING_CONTENT_ERROR
@@ -141,7 +141,7 @@ def generate_file_fix(
             sm.advance(fix, sm.FixMachine, "generation_succeeded")
             # Parsed for parity with the workflow flow; neither engine's
             # findings carry a manual-work flag yet, so it's informational.
-            _parse_unfixed_issues(result.content)
+            parse_unfixed_issues(result.content)
         session.add(fix)
         session.commit()
 

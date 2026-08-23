@@ -150,7 +150,7 @@ def test_list_cloud_accounts_includes_latest_grade(
     superuser_token_headers: dict[str, str],
     org: Organization,
     cloud_account: CloudAccount,
-    completed_scan: CloudScan,  # noqa: ARG001
+    completed_scan: CloudScan,
 ) -> None:
     response = client.get(
         f"{settings.API_V1_STR}/cloud-accounts/",

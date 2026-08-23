@@ -49,26 +49,33 @@ def _compute_penalty(
 
 
 def compute_score(
-    workflow_violations: list[tuple[str, float]],
-    job_violations: dict[str, list[tuple[str, float]]],
+    target_violations: list[tuple[str, float]],
+    group_violations: dict[str, list[tuple[str, float]]],
 ) -> float:
-    """Compute 0-100 score normalised by number of jobs.
+    """Compute a 0-100 score, normalised across whatever the groups are.
 
-    Each job is scored independently (100 minus its penalties, clamped to 0).
-    The workflow score is the mean of all job scores, minus workflow-level
-    penalties.
+    Each group is scored independently (100 minus its penalties, clamped to 0)
+    and the result is their mean, minus any penalties that apply to the target
+    as a whole rather than to one group.
+
+    The parameters used to be named ``workflow_violations`` and
+    ``job_violations``, after the first engine to use this. Every engine scores
+    through it now, and the names stopped describing what callers pass: the
+    Docker engine groups by *file*, and needed a paragraph of comment at its own
+    call site explaining that files take the place jobs occupy here. A group is
+    a job for the CI engine, a file for Docker; Terraform has no groups and
+    passes ``{}``, which scores the target's violations against a clean 100.
     """
-    if job_violations:
-        job_scores = [
+    if group_violations:
+        group_scores = [
             max(0.0, 100.0 - _compute_penalty(viols))
-            for viols in job_violations.values()
+            for viols in group_violations.values()
         ]
-        avg_job_score = sum(job_scores) / len(job_scores)
+        avg_group_score = sum(group_scores) / len(group_scores)
     else:
-        avg_job_score = 100.0
+        avg_group_score = 100.0
 
-    wf_penalty = _compute_penalty(workflow_violations)
-    return max(0.0, avg_job_score - wf_penalty)
+    return max(0.0, avg_group_score - _compute_penalty(target_violations))
 
 
 def score_to_grade(score: float) -> str:

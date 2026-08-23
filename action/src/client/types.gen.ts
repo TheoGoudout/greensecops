@@ -1985,6 +1985,132 @@ export type RulePublic = {
 };
 
 /**
+ * SSEEventPublic
+ * The wire shape of one server-sent event.
+ *
+ * Every event is a flat JSON object: an ``event`` discriminant plus whatever
+ * the emitting factory in ``services/events/schemas.py`` put beside it. That
+ * payload was a bare ``dict[str, Any]`` and never reached OpenAPI, so the
+ * frontend read it by hand — ``data.grade as string | undefined``, forty times
+ * over in ``hooks/useRepoEvents.ts``. A renamed field broke silently at
+ * runtime, in a browser, with nothing to catch it.
+ *
+ * Declaring it here puts the field names in the generated client, which turns
+ * that class of break into a TypeScript error.
+ *
+ * Every field but ``event`` is optional, and deliberately so: this is a union
+ * of what ~30 distinct signals carry, not a claim that any one of them carries
+ * all of it. Which fields a given signal actually populates is documented on
+ * its factory function. The alternative — a discriminated union with one model
+ * per signal — buys per-signal precision at the cost of thirty-odd models to
+ * keep in step with their factories, and the consumer switches on ``event``
+ * anyway.
+ */
+export type SseEventPublic = {
+    event: SseSignal;
+    /**
+     * Org Id
+     */
+    org_id?: string | null;
+    /**
+     * Repo Id
+     */
+    repo_id?: string | null;
+    /**
+     * Repo Ids
+     */
+    repo_ids?: Array<string> | null;
+    /**
+     * Analysis Id
+     */
+    analysis_id?: string | null;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    /**
+     * Fix Ids
+     */
+    fix_ids?: Array<string> | null;
+    /**
+     * Issue Ids
+     */
+    issue_ids?: Array<string> | null;
+    /**
+     * Telemetry Run Id
+     */
+    telemetry_run_id?: string | null;
+    /**
+     * Installation Id
+     */
+    installation_id?: number | null;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Trigger
+     */
+    trigger?: string | null;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Issues Count
+     */
+    issues_count?: number | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    /**
+     * Org Name
+     */
+    org_name?: string | null;
+    /**
+     * Repo Count
+     */
+    repo_count?: number | null;
+    /**
+     * Repos Disabled
+     */
+    repos_disabled?: number | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Tier
+     */
+    tier?: string | null;
+    /**
+     * Status
+     */
+    status?: string | null;
+    /**
+     * Meter
+     */
+    meter?: string | null;
+    /**
+     * Message
+     */
+    message?: string | null;
+};
+
+/**
  * SSESignal
  */
 export type SseSignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed' | 'analysis.quota_exceeded' | 'subscription.activated' | 'subscription.past_due' | 'subscription.unpaid' | 'subscription.canceled' | 'subscription.updated';
@@ -3715,6 +3841,22 @@ export type EventsGetSseSignalsResponses = {
 };
 
 export type EventsGetSseSignalsResponse = EventsGetSseSignalsResponses[keyof EventsGetSseSignalsResponses];
+
+export type EventsGetSseEventSchemaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/events/schema';
+};
+
+export type EventsGetSseEventSchemaResponses = {
+    /**
+     * Successful Response
+     */
+    200: SseEventPublic;
+};
+
+export type EventsGetSseEventSchemaResponse = EventsGetSseEventSchemaResponses[keyof EventsGetSseEventSchemaResponses];
 
 export type EventsCreateSseTicketData = {
     body?: never;

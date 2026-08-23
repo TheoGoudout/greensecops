@@ -1,9 +1,13 @@
 import asyncio
 import logging
+import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 
+import redis as redis_sync
+import redis.asyncio as aioredis
 from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
@@ -24,7 +28,9 @@ from app.models import (
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github.app_client import GitHubAppClient, parse_pr_url
 from app.workers.celery_app import celery_app
+from app.workers.tasks.static_analysis import run_static_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +156,6 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
     reconcile poller. Attribute-only: no lifecycle transition, and explicitly
     no auto-rebase/redeliver (that would overwrite or spam the PR).
     """
-    import uuid as _uuid
 
     with Session(engine) as session:
         repo = session.get(Repository, _uuid.UUID(repo_id))
@@ -170,8 +175,6 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
         )
         if not rows:
             return {"checked": 0, "updated": 0}
-
-        from app.services.github.app_client import parse_pr_url
 
         checked = 0
         updated = 0
@@ -219,10 +222,6 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
 async def _fetch_pr_mergeable_state(
     installation_id: int, full_name: str, pr_number: int
 ) -> str | None:
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
 
     r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:
@@ -292,7 +291,6 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
             seen_targets.add(target)
             if not _try_acquire_auto_retry_slot(str(repo.id), branch):
                 continue
-            from app.workers.tasks.static_analysis import run_static_analysis
 
             # force=True: a stale *completed* analysis for the same hash would
             # otherwise dedup-skip the retry.
@@ -318,9 +316,6 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
 
 def _try_acquire_auto_retry_slot(repo_id: str, branch: str) -> bool:
     """Redis dedup so hourly beats don't stack retries. Fails open."""
-    import redis as redis_sync
-
-    from app.core.config import settings
 
     try:
         r = redis_sync.Redis.from_url(settings.REDIS_URL)

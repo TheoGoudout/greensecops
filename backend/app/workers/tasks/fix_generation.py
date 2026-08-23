@@ -11,6 +11,11 @@ from app.models import Fix, FixStatus, Issue, Repository, WorkflowFile
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.llm.response import (
+    parse_full_content,
+    parse_unfixed_issues,
+    restore_trailing_whitespace,
+)
 from app.workers.celery_app import celery_app
 
 if TYPE_CHECKING:
@@ -30,28 +35,6 @@ def _is_valid_workflow_yaml(content: str) -> bool:
         return isinstance(yaml.safe_load(content), dict)
     except yaml.YAMLError:
         return False
-
-
-def restore_trailing_whitespace(original: str, patched: str) -> str:
-    """Restore original trailing whitespace on lines that only differ in trailing whitespace.
-
-    LLMs routinely strip trailing whitespace when regenerating file content.
-    For lines where the stripped versions are identical, keep the original so
-    the delivered diff contains only meaningful changes.
-    """
-    orig_lines = original.split("\n")
-    new_lines = patched.split("\n")
-    result = []
-    for i, new_line in enumerate(new_lines):
-        if (
-            i < len(orig_lines)
-            and new_line.rstrip() == orig_lines[i].rstrip()
-            and new_line != orig_lines[i]
-        ):
-            result.append(orig_lines[i])
-        else:
-            result.append(new_line)
-    return "\n".join(result)
 
 
 # ─── Batch coordination ──────────────────────────────────────────────────────
@@ -360,7 +343,7 @@ def run_fix_generation(
             _emit_failure(batch_id, org_id, repo_id_str, str(fix.id), str(exc)[:200])
             return {"status": "failed", "issue_ids": issue_ids}
 
-        full_content = _parse_llm_response(result.content)
+        full_content = parse_full_content(result.content)
         generation_error: str | None = None
 
         if not full_content:
@@ -390,7 +373,7 @@ def run_fix_generation(
             # The LLM's own report of which issues it couldn't resolve in this
             # diff. Re-evaluated on every attempt so a retry that succeeds
             # clears a manual-work flag left over from an earlier attempt.
-            unfixed = _parse_unfixed_issues(result.content)
+            unfixed = parse_unfixed_issues(result.content)
             for i, issue in enumerate(issues, start=1):
                 issue.needs_manual_work = i in unfixed
                 issue.manual_work_note = unfixed.get(i)
@@ -435,43 +418,6 @@ def _emit_failure(
         events_pub.publish_event(
             ev.fix_generation_failed(org_id, repo_id, fix_id, error)
         )
-
-
-def _parse_llm_response(content: str) -> str:
-    """Extract the full regenerated workflow from the LLM's XML-delimited response."""
-    import re
-
-    full_content_match = re.search(
-        r"<full_content>\n?(.*?)</full_content>", content, re.DOTALL
-    )
-    full_content = full_content_match.group(1) if full_content_match else ""
-
-    if not full_content:
-        logger.warning(
-            "LLM response missing <full_content> block. First 500 chars: %r",
-            content[:500],
-        )
-    logger.info("Parsed LLM response: full_content=%d chars", len(full_content))
-    return full_content
-
-
-def _parse_unfixed_issues(content: str) -> dict[int, str]:
-    """Extract the ``<unfixed>`` block: 1-based prompt issue index -> reason.
-
-    Absent or empty block (every issue was fixed) returns ``{}``.
-    """
-    import re
-
-    match = re.search(r"<unfixed>\n?(.*?)</unfixed>", content, re.DOTALL)
-    if not match:
-        return {}
-    line_re = re.compile(r"^\s*(\d+)\s*:\s*(.+?)\s*$")
-    unfixed: dict[int, str] = {}
-    for line in match.group(1).splitlines():
-        line_match = line_re.match(line)
-        if line_match:
-            unfixed[int(line_match.group(1))] = line_match.group(2)[:1024]
-    return unfixed
 
 
 def _configure_langchain() -> None:

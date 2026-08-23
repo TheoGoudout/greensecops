@@ -20,6 +20,7 @@ from app.models import (
     Repository,
     WorkflowFile,
 )
+from app.services.billing.quota import enforce_quota
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.tasks.static_analysis import (
@@ -89,7 +90,6 @@ def trigger_analysis(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.services.billing.quota import enforce_quota
 
     effective_branch = branch or repo.default_branch
     # One trigger fans out to one analysis *per workflow file*, so checking for
@@ -146,7 +146,6 @@ def reanalyze_for_workflow(
     repo = authorize_repo(session, current_user, wf_file.repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.services.billing.quota import enforce_quota
 
     enforce_quota(session, current_user, repo.org_id, "analyses")
     effective_branch = wf_file.branch or repo.default_branch

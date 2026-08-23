@@ -7,6 +7,8 @@ import redis.asyncio as aioredis
 from github import Github
 from github.GithubException import GithubException, UnknownObjectException
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 _ACTION_USE_RE = re.compile(r"uses:\s+([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)@([^\s#]+)")
@@ -155,8 +157,6 @@ async def _cached_get_latest_version(
 
 def _open_cache() -> aioredis.Redis | None:
     try:
-        from app.core.config import settings
-
         return aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call,no-any-return]
     except Exception:
         logger.warning("Redis unavailable for action SHA cache", exc_info=True)

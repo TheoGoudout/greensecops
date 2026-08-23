@@ -368,7 +368,7 @@ def test_terragoat_scan_persists_real_addresses_and_files(
 
 
 def test_terragoat_scan_degrades_the_score(
-    db: Session,  # noqa: ARG001
+    db: Session,
     terraform_root: TerraformRoot,
 ) -> None:
     """A real insecure estate cannot come out clean."""
@@ -511,11 +511,7 @@ def test_case_scans_to_its_recorded_findings(
         result = _run_terraform_scan_impl(str(terraform_root.id))
 
     assert result["status"] == "done"
-    findings = [
-        f
-        for f in _findings(db, terraform_root)
-        if f.resolved_at is None  # noqa: PD011 — SQLModel column value, not pandas
-    ]
+    findings = [f for f in _findings(db, terraform_root) if f.resolved_at is None]
     assert len(findings) == expected["expected_finding_count"], (
         f"{case}: expected {expected['expected_finding_count']} findings, "
         f"got {sorted(f.resource_address or '' for f in findings)}"

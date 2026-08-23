@@ -6,6 +6,9 @@ workers and FastAPI route handlers.
 
 import logging
 
+import redis
+
+from app.core.config import settings
 from app.services.events.schemas import SSEEvent
 
 logger = logging.getLogger(__name__)
@@ -20,10 +23,6 @@ def _channel(org_id: str) -> str:
 def publish_event(event: SSEEvent) -> None:
     """Publish an event. Fire-and-forget — never raises."""
     try:
-        import redis
-
-        from app.core.config import settings
-
         client = redis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client.publish(_channel(event.org_id), event.to_wire())

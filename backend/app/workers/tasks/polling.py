@@ -19,8 +19,10 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import redis.asyncio as aioredis
 from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     AnalysisTrigger,
@@ -29,7 +31,7 @@ from app.models import (
     Repository,
 )
 from app.services.github import event_handlers as eh
-from app.services.github.app_client import PRSnapshot, parse_pr_url
+from app.services.github.app_client import GitHubAppClient, PRSnapshot, parse_pr_url
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -60,10 +62,6 @@ async def _fetch_repo_poll_data(
     Per-item failures are swallowed (logged) so one unreachable PR or a repo we
     lack credentials for never sinks the whole poll.
     """
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
 
     r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     data = _RepoPollData(branch=None, head_sha=None, prs={})

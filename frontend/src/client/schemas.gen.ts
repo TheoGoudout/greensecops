@@ -3585,6 +3585,320 @@ export const RulePublicSchema = {
     title: 'RulePublic'
 } as const;
 
+export const SSEEventPublicSchema = {
+    properties: {
+        event: {
+            '$ref': '#/components/schemas/SSESignal'
+        },
+        org_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Org Id'
+        },
+        repo_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Id'
+        },
+        repo_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Ids'
+        },
+        analysis_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Analysis Id'
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Ids'
+        },
+        issue_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Issue Ids'
+        },
+        telemetry_run_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telemetry Run Id'
+        },
+        installation_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Installation Id'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        trigger: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Trigger'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        issues_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Issues Count'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        org_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Org Name'
+        },
+        repo_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Count'
+        },
+        repos_disabled: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repos Disabled'
+        },
+        enabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enabled'
+        },
+        tier: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tier'
+        },
+        status: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Status'
+        },
+        meter: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Meter'
+        },
+        message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Message'
+        }
+    },
+    type: 'object',
+    required: ['event'],
+    title: 'SSEEventPublic',
+    description: `The wire shape of one server-sent event.
+
+Every event is a flat JSON object: an \`\`event\`\` discriminant plus whatever
+the emitting factory in \`\`services/events/schemas.py\`\` put beside it. That
+payload was a bare \`\`dict[str, Any]\`\` and never reached OpenAPI, so the
+frontend read it by hand — \`\`data.grade as string | undefined\`\`, forty times
+over in \`\`hooks/useRepoEvents.ts\`\`. A renamed field broke silently at
+runtime, in a browser, with nothing to catch it.
+
+Declaring it here puts the field names in the generated client, which turns
+that class of break into a TypeScript error.
+
+Every field but \`\`event\`\` is optional, and deliberately so: this is a union
+of what ~30 distinct signals carry, not a claim that any one of them carries
+all of it. Which fields a given signal actually populates is documented on
+its factory function. The alternative — a discriminated union with one model
+per signal — buys per-signal precision at the cost of thirty-odd models to
+keep in step with their factories, and the consumer switches on \`\`event\`\`
+anyway.`
+} as const;
+
 export const SSESignalSchema = {
     type: 'string',
     enum: ['analysis.queued', 'analysis.started', 'analysis.completed', 'analysis.failed', 'analysis.skipped', 'analysis.no_workflows', 'fix.skipped', 'fix.pending', 'fix.generating', 'fix.ready', 'fix.delivering', 'fix.delivered', 'fix.failed', 'fix.rejected', 'fix.landed', 'pr.opened', 'pr.updated', 'pr.closed', 'pr.merged', 'installation.syncing', 'installation.synced', 'installation.created', 'installation.deleted', 'installation.suspended', 'installation.unsuspended', 'installation.updated', 'repository.added', 'repository.disabled', 'repository.toggled', 'repository.action_pr_opened', 'repository.suspended', 'repository.archived', 'repository.inaccessible', 'repository.restored', 'dynamic.queued', 'dynamic.running', 'dynamic.enriched', 'dynamic.failed', 'analysis.quota_exceeded', 'subscription.activated', 'subscription.past_due', 'subscription.unpaid', 'subscription.canceled', 'subscription.updated'],

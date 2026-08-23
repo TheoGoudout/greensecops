@@ -78,7 +78,7 @@ def _patch_evaluate(violations: list[CloudOpaViolation]) -> Any:
     )
 
 
-def test_cloud_account_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_cloud_account_not_found_returns_error(db: Session) -> None:
     result = _run_cloud_scan_impl(str(uuid.uuid4()))
     assert result["status"] == "error"
     assert result["detail"] == "cloud_account_not_found"

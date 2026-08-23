@@ -6,7 +6,9 @@ from typing import Any
 from app.services.docker.merge import merge_docker_files
 from app.services.engines import DOCKER_ENGINE
 from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
+from app.services.opa.evaluator import evaluate_docker
 from app.services.scan_runner import ScanFetchError, run_file_scan
+from app.services.scan_support import scan_lock
 from app.workers.celery_app import celery_app
 
 # Kept as this module's own name so the retry below and any caller catching it
@@ -22,7 +24,6 @@ def _analyse(fetched: Any) -> Any:
 
 
 async def _evaluate(merged_document: dict[str, Any]) -> Any:
-    from app.services.opa.evaluator import evaluate_docker
 
     return await evaluate_docker(merged_document)
 
@@ -57,7 +58,6 @@ def run_docker_scan(
     trigger: str = "manual",
     billable: bool = True,
 ) -> dict[str, str | int | float]:
-    from app.services.scan_support import scan_lock
 
     # Per-target lock: concurrent scans of the same target race on DockerFinding
     # upserts and duplicate DockerScan rows.

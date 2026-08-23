@@ -24,6 +24,8 @@ already pasted into READMEs, so changing one silently breaks those badges.
 import hashlib
 import hmac
 
+from app.core.config import settings
+
 # Length of the hex digest we keep. A truncated SHA-256 HMAC still leaves an
 # infeasible search space while keeping the URL short.
 _SIG_LEN = 32
@@ -36,7 +38,6 @@ def repo_badge_message(owner: str, repo: str, branch: str) -> str:
 
 def sign_badge(message: str) -> str:
     """Return the badge signature for ``message``."""
-    from app.core.config import settings
 
     digest = hmac.new(
         settings.SECRET_KEY.encode(), message.encode(), hashlib.sha256
@@ -57,7 +58,6 @@ def build_badge_svg_url(owner: str, repo: str, branch: str, *, private: bool) ->
     Private repos get a signed URL (``?sig=``); public repos get a plain URL so
     the usual shields-style snippet keeps working.
     """
-    from app.core.config import settings
 
     badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
     base = (
