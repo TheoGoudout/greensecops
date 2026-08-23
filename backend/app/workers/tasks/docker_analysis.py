@@ -281,7 +281,7 @@ def _run_docker_scan_impl(
 
 @celery_app.task(name="docker_analysis.run", bind=True, max_retries=3)
 def run_docker_scan(
-    self: Any,  # noqa: ANN401 — celery bound task instance
+    self: Any,  # celery bound task instance
     docker_target_id: str,
     branch: str = "",
     commit_sha: str = "",

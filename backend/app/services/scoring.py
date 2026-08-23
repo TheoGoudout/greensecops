@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Any
 
 from sqlalchemy import Case, case
+from sqlalchemy.orm import Mapped
 from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, select
 
@@ -141,11 +142,15 @@ def compute_avg_scores_batch(
     return result
 
 
-def severity_penalty_case(severity_col: ColumnElement[Any]) -> Case[Any]:
+def severity_penalty_case(severity_col: ColumnElement[Any] | Mapped[Any]) -> Case[Any]:
     """SQL ``CASE`` mapping a severity column to its penalty weight.
 
     Mirrors ``_SEVERITY_PENALTY`` for use inside aggregate queries (e.g.
     summing weighted issue penalty per category without fetching rows).
+
+    ``Mapped`` is in the union because callers reach the column through
+    SQLModel's ``col()``, which is typed to return it — a model attribute is a
+    column expression at runtime, but only ``col()`` says so to the checker.
     """
     return case(
         *[(severity_col == sev, penalty) for sev, penalty in _SEVERITY_PENALTY.items()],

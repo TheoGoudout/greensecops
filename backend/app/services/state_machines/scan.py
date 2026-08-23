@@ -1,14 +1,15 @@
 """Terraform/cloud scan lifecycle state machine (``python-statemachine``).
 
-States mirror ``ScanStatus``. Shared by ``TerraformScan.status`` and
-``CloudScan.status`` — the two lifecycles are identical (fetch/collect,
-evaluate, persist findings, grade), only the source of the input differs
-(fetched .tf files vs. a live AWS API sweep). Mirrors ``AnalysisMachine``,
-the equivalent lifecycle for the CI-workflow engine.
+States mirror ``ScanStatus``. Shared by ``TerraformScan.status``,
+``DockerScan.status`` and ``CloudScan.status`` — the lifecycles are identical
+(fetch/collect, evaluate, persist findings, grade), only the source of the
+input differs (fetched .tf files, Dockerfiles, or a live AWS API sweep).
+Mirrors ``AnalysisMachine``, the equivalent lifecycle for the CI-workflow
+engine.
 
-Behaviour lands with the terraform_analysis.py and cloud_analysis.py worker
-tasks (a later phase); this machine is the declared, testable graph they
-advance against.
+Behaviour lives in ``workers/tasks/terraform_analysis.py``,
+``docker_analysis.py`` and ``cloud_scan.py``, plus the stuck-row sweeper in
+``maintenance.py``; this machine is the graph they advance against.
 """
 
 from __future__ import annotations

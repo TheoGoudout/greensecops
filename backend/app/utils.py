@@ -37,10 +37,15 @@ def send_email(
     html_content: str = "",
 ) -> None:
     assert settings.emails_enabled, "no provided configuration for email variables"
+    # emails_enabled is exactly `SMTP_HOST and EMAILS_FROM_EMAIL`, so the assert
+    # above already rules this out; naming it separately is what narrows the
+    # Optional for the type checker.
+    from_email = settings.EMAILS_FROM_EMAIL
+    assert from_email is not None
     message = emails.Message(
         subject=subject,
         html=html_content,
-        mail_from=(settings.EMAILS_FROM_NAME, settings.EMAILS_FROM_EMAIL),
+        mail_from=(settings.EMAILS_FROM_NAME, from_email),
     )
     smtp_options = {"host": settings.SMTP_HOST, "port": settings.SMTP_PORT}
     if settings.SMTP_TLS:

@@ -782,7 +782,7 @@ def _run_static_analysis_impl(
                     )
                 )
             else:
-                from app.services.scoring import score_to_grade  # noqa: PLC0415
+                from app.services.scoring import score_to_grade
 
                 avg_score = (
                     sum(batch_scores) / len(batch_scores) if batch_scores else 100.0
@@ -851,7 +851,7 @@ def _run_static_analysis_impl(
 
 @celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
 def run_static_analysis(
-    self: Any,  # noqa: ANN401 — celery bound task instance
+    self: Any,  # celery bound task instance
     repo_id: str,
     branch: str = "",
     commit_sha: str = "",

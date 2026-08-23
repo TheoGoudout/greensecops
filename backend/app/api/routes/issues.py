@@ -229,7 +229,7 @@ def get_issue_stats(
         )
         repo_query = repo_query.join(Rule, Issue.rule_id == Rule.id)  # type: ignore[arg-type]
         repo_grouped = repo_query.with_only_columns(  # type: ignore[call-overload]
-            Analysis.repo_id,  # type: ignore[attr-defined]
+            Analysis.repo_id,
             Issue.category,
             func.sum(case((is_open, 1), else_=0)).label("open"),
             func.sum(case((is_open & is_critical, 1), else_=0)).label("critical_open"),
@@ -237,12 +237,13 @@ def get_issue_stats(
                 case(
                     (
                         is_open,
-                        severity_penalty_case(Issue.severity) * Rule.severity_weight,
+                        severity_penalty_case(col(Issue.severity))
+                        * Rule.severity_weight,
                     ),
                     else_=0.0,
                 )
             ).label("weighted_penalty"),
-        ).group_by(Analysis.repo_id, Issue.category)  # type: ignore[attr-defined]
+        ).group_by(Analysis.repo_id, Issue.category)
         rows = session.execute(repo_grouped).all()
 
         counts_by_repo: dict[uuid.UUID, dict[IssueCategory, tuple[int, int]]] = (

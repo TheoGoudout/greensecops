@@ -229,7 +229,7 @@ def _run_cloud_scan_impl(
 
 @celery_app.task(name="cloud_scan.run", bind=True, max_retries=3)
 def run_cloud_scan(
-    self: Any,  # noqa: ANN401 — celery bound task instance
+    self: Any,  # celery bound task instance
     cloud_account_id: str,
     trigger: str = "manual",
     billable: bool = True,

@@ -8,7 +8,7 @@ from app.workers.tasks.docker_analysis import _fetch_docker_files
 
 @celery_app.task(name="docker_fix_delivery.deliver", bind=True, max_retries=3)
 def deliver_docker_fixes(
-    self: Any,  # noqa: ANN401 — celery bound task instance
+    self: Any,  # celery bound task instance
     docker_target_id: str,
     force: bool = False,
 ) -> dict[str, str]:

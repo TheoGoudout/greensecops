@@ -19,7 +19,6 @@ upgrade:
         - '**/package.json'
         - '**/pyproject.toml'
         - bun.lock
-        - package-lock.json
         - uv.lock
     - changed-files:
       - all-globs-to-all-files:
@@ -71,7 +70,6 @@ internal:
         - '!**/package.json'
         - '!**/pyproject.toml'
         - '!bun.lock'
-        - '!package-lock.json'
         - '!uv.lock'
         - '!**/*.md'
         - '!**/*.rst'

@@ -2,7 +2,7 @@ import logging
 import uuid
 from collections import defaultdict
 
-from fastapi import HTTPException, Query
+from fastapi import Body, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import col, delete, or_, select
 
@@ -20,6 +20,7 @@ from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
     AnalysisStatus,
+    DockerFix,
     Fix,
     FixIssueSummary,
     FixPublic,
@@ -31,6 +32,7 @@ from app.models import (
     PullRequestState,
     Repository,
     Rule,
+    TerraformFix,
     UsageEngine,
     UsageMeter,
     User,
@@ -252,12 +254,32 @@ def _delete_orphaned_closed_prs(session: SessionDep, repo_id: uuid.UUID) -> None
     fresh record — and reuses the GitHub PR itself if the user reopened it in
     the meantime.
     """
-    referenced = select(Fix.pr_id).where(col(Fix.pr_id).is_not(None))
+    # Every engine's fixes share the one `pull_request` table, so a record is
+    # orphaned only when *no* engine still points at it. Checking Fix alone used
+    # to delete a Terraform or Docker PR record out from under its own fix,
+    # clearing that fix's pr_id through the very ON DELETE SET NULL this
+    # docstring warns about.
     stale_prs = session.exec(
         select(PullRequest)
         .where(PullRequest.repo_id == repo_id)
         .where(PullRequest.pr_state == PullRequestState.closed)
-        .where(~col(PullRequest.id).in_(referenced))
+        .where(
+            ~col(PullRequest.id).in_(
+                select(col(Fix.pr_id)).where(col(Fix.pr_id).is_not(None))
+            )
+        )
+        .where(
+            ~col(PullRequest.id).in_(
+                select(col(TerraformFix.pr_id)).where(
+                    col(TerraformFix.pr_id).is_not(None)
+                )
+            )
+        )
+        .where(
+            ~col(PullRequest.id).in_(
+                select(col(DockerFix.pr_id)).where(col(DockerFix.pr_id).is_not(None))
+            )
+        )
     ).all()
     for pr in stale_prs:
         session.delete(pr)
@@ -435,7 +457,9 @@ def trigger_fix_generation_for_repo(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-    body: BatchFixRequest = BatchFixRequest(),
+    # default_factory, not a literal `BatchFixRequest()`: a bare instance in the
+    # signature is evaluated once at import and then shared by every request.
+    body: BatchFixRequest = Body(default_factory=BatchFixRequest),
     force: bool = False,
 ) -> dict[str, int]:
     """Queue one whole-file fix generation per workflow file for issues in a repo.

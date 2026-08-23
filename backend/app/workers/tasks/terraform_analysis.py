@@ -55,11 +55,12 @@ def _terraform_address(
     """Full Terraform address for a finding, module prefix included.
 
     Prefixes the resource address (``aws_s3_bucket.logs``) with a single
-    ``module.`` segment carrying the directory-derived module path
-    (``module.modules.storage.aws_s3_bucket.logs`` for path ``modules/storage``,
-    matching the spec's ``module.storage.aws_s3_bucket.logs`` shape). A single
-    prefix — not one per path segment — because the path is a directory locator,
-    not a resolved ``module {}`` invocation chain (see ``derive_module_path``).
+    ``module.`` segment carrying the directory-derived module path, with ``/``
+    rewritten to ``.``: path ``modules/storage`` yields
+    ``module.modules.storage.aws_s3_bucket.logs``. A single prefix — not one per
+    path segment — because the path is a directory locator, not a resolved
+    ``module {}`` invocation chain (see ``derive_module_path``), so the segments
+    after ``module.`` are a path, not a nesting chain.
     Root-module resources (no ``module_path``) get the bare resource address;
     returns ``None`` only when the rule emitted no resource address at all.
     """
@@ -287,7 +288,7 @@ def _run_terraform_scan_impl(
 
 @celery_app.task(name="terraform_analysis.run", bind=True, max_retries=3)
 def run_terraform_scan(
-    self: Any,  # noqa: ANN401 — celery bound task instance
+    self: Any,  # celery bound task instance
     terraform_root_id: str,
     branch: str = "",
     commit_sha: str = "",

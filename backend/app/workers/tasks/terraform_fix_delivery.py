@@ -8,7 +8,7 @@ from app.workers.tasks.terraform_analysis import _fetch_terraform_files
 
 @celery_app.task(name="terraform_fix_delivery.deliver", bind=True, max_retries=3)
 def deliver_terraform_fixes(
-    self: Any,  # noqa: ANN401 — celery bound task instance
+    self: Any,  # celery bound task instance
     terraform_root_id: str,
     force: bool = False,
 ) -> dict[str, str]:

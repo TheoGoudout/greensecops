@@ -1,4 +1,3 @@
-import { AxiosError } from "axios"
 import { toast } from "sonner"
 import { ApiError } from "./client"
 
@@ -9,7 +8,7 @@ import { ApiError } from "./client"
  * so a caller that only knows how to print a string still shows something
  * useful.
  */
-export type BillingErrorDetail = {
+type BillingErrorDetail = {
   code: string
   message: string
   meter?: string
@@ -34,28 +33,10 @@ function isBillingErrorDetail(value: unknown): value is BillingErrorDetail {
   )
 }
 
-/**
- * The structured billing detail behind an error, if it is one.
- *
- * Lets a caller render an Upgrade button pointed at the right plan instead of
- * pattern-matching prose out of a string.
- */
-export function billingErrorDetail(
-  error: unknown,
-): BillingErrorDetail | undefined {
-  if (!(error instanceof ApiError)) return undefined
-  const detail = (error.body as { detail?: unknown })?.detail
-  return isBillingErrorDetail(detail) ? detail : undefined
-}
-
 function extractErrorMessage(err: ApiError): string {
-  if (err instanceof AxiosError) {
-    return err.message
-  }
-
-  const errDetail = (err.body as any)?.detail
+  const errDetail = (err.body as { detail?: unknown })?.detail
   if (Array.isArray(errDetail) && errDetail.length > 0) {
-    return errDetail[0].msg
+    return String((errDetail[0] as { msg?: unknown })?.msg ?? "")
   }
   // Billing refusals send an object, not a string. Without this branch they
   // rendered as "[object Object]" — the least useful possible version of a
@@ -63,7 +44,9 @@ function extractErrorMessage(err: ApiError): string {
   if (isBillingErrorDetail(errDetail)) {
     return errDetail.message
   }
-  return errDetail || "Something went wrong."
+  return typeof errDetail === "string" && errDetail
+    ? errDetail
+    : "Something went wrong."
 }
 
 export function showSuccessToast(description: string) {

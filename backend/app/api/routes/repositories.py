@@ -241,7 +241,7 @@ def get_repository(
 def list_workflow_files(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     branch: str | None = None,
 ) -> list[WorkflowFilePublic]:
     repo = _get_repo_for_user(repo_id, session, current_user)

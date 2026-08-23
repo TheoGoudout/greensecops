@@ -42,20 +42,6 @@ export const ENGINE_META: Record<
   },
 }
 
-/**
- * The three collapsible sections, in pipeline order: build, package, then run.
- * Matches how the sidebar groups the same engines — Terraform and cloud
- * posture share the Infrastructure section, as they already share a page.
- */
-export const SECTION_META: Record<
-  OverviewSection,
-  { title: string; engines: OverviewEngineKey[] }
-> = {
-  ci: { title: "CI workflows", engines: ["ci"] },
-  docker: { title: "Docker", engines: ["docker"] },
-  infra: { title: "Infrastructure", engines: ["terraform", "cloud"] },
-}
-
 export const SECTION_ORDER: OverviewSection[] = ["ci", "docker", "infra"]
 
 /**

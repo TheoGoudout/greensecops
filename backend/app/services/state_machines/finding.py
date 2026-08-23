@@ -1,15 +1,25 @@
-"""Terraform/cloud finding lifecycle state machine (``python-statemachine``).
+"""Terraform/Docker/cloud finding lifecycle state machine (``python-statemachine``).
 
-States mirror ``FindingStatus``. Shared by ``TerraformFinding.status`` and
-``CloudFinding.status``. Unlike ``Issue.status`` (a DB-trigger-derived column
-reacting to ``fix_id``/``resolved_at``/``ignored_at``, with ``IssueMachine``
-only documenting the graph), findings in this delivery have no fix/PR concept
-yet (see the IaC/cloud plan's Phase 7), so this machine directly drives writes
-via ``sm.advance`` the way ``AnalysisMachine`` does — there is no trigger to
-keep in sync.
+States mirror ``FindingStatus``. Shared by ``TerraformFinding.status``,
+``DockerFinding.status`` and ``CloudFinding.status``. Unlike ``Issue.status``
+— a DB-trigger-derived column reacting to ``fix_id``/``resolved_at``/
+``ignored_at``, with ``IssueMachine`` only documenting the graph — this
+``status`` is written directly by the application via ``sm.advance``, the way
+``AnalysisMachine`` does, because there is no trigger to keep in sync.
 
-Behaviour lands with the terraform_analysis.py/cloud_analysis.py worker tasks
-and the finding ignore/unignore API routes (later phases).
+Note that Terraform and Docker findings *do* now have fixes
+(``TerraformFix``/``DockerFix``), but a fix keys on a ``(target, file_path)``
+pair rather than on the finding, so it never reaches back into this graph.
+
+Only ``resolve`` is currently fired, by
+``services/scan_support.resolve_stale_findings`` on behalf of the Terraform,
+Docker and cloud workers. ``recur`` is bypassed: those workers reopen a finding
+by setting ``resolved_at = NULL`` inside the ``ON CONFLICT DO UPDATE`` of their
+upsert, which never passes through this machine. ``ignore``/``unignore`` have
+no caller at all — no route exposes ``ignored_at`` for these engines, unlike
+``Issue`` (``api/routes/issues.py``, plus the PR-comment commands in
+``services/github/event_handlers.py``). Both are declared, tested edges waiting
+on the routes that will fire them.
 """
 
 from __future__ import annotations

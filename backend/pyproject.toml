@@ -71,8 +71,11 @@ module = "app.models.db.*"
 disable_error_code = ["call-overload"]
 
 # boto3/botocore ship no py.typed marker or bundled stubs (unlike PyGithub).
+# Celery is the same: no stubs, and celery-types is not a dependency here.
+# Without this `scripts/lint.sh` (strict mypy, no --ignore-missing-imports)
+# fails on every worker module before it checks anything of ours.
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*"]
+module = ["boto3.*", "botocore.*", "celery.*"]
 ignore_missing_imports = true
 
 # python-hcl2 ships py.typed but re-exports loads/load/etc from .api without
@@ -80,6 +83,12 @@ ignore_missing_imports = true
 # public despite being genuinely part of the package's documented API.
 [[tool.mypy.overrides]]
 module = "hcl2"
+implicit_reexport = true
+
+# Same shape as hcl2 above: `emails` re-exports Message from its .message
+# submodule without `as`-syntax, so strict mode does not count it as public.
+[[tool.mypy.overrides]]
+module = "emails"
 implicit_reexport = true
 
 [tool.ruff]
@@ -97,6 +106,7 @@ select = [
     "UP",  # pyupgrade
     "ARG001", # unused arguments in functions
     "T201",   # print statements are not allowed
+    "RUF100", # noqa directives that suppress nothing
 ]
 ignore = [
     "E501",  # line too long, handled by black

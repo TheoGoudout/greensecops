@@ -13,6 +13,8 @@ from app.models import (
     Analysis,
     AnalysisStatus,
     AnalysisTrigger,
+    DockerFix,
+    DockerTarget,
     Fix,
     FixStatus,
     Issue,
@@ -25,6 +27,8 @@ from app.models import (
     PullRequest,
     Repository,
     Rule,
+    TerraformFix,
+    TerraformRoot,
     UserTier,
     WorkflowFile,
 )
@@ -1780,6 +1784,74 @@ def test_regenerate_for_repo_keeps_closed_pr_referenced_by_surviving_fix(
     surviving_fix = db.get(Fix, surviving_fix_id)
     assert surviving_fix is not None
     assert surviving_fix.pr_id == pr_id
+
+
+@pytest.mark.parametrize("engine", ["terraform", "docker"])
+def test_regenerate_for_repo_keeps_closed_pr_referenced_by_other_engine(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    workflow_file: WorkflowFile,
+    issue: Issue,
+    engine: str,
+) -> None:
+    """Regenerating CI fixes must not orphan another engine's PR record.
+
+    Every engine's fixes share the one ``pull_request`` table, and ``pr_id`` is
+    ``ON DELETE SET NULL`` — so sweeping a closed record that only ``Fix`` was
+    checked against silently unlinked the Terraform or Docker fix still using it.
+    """
+    # Arrange — a closed PR that a CI fix and one other engine's fix both point at
+    pr = _make_pr(db, repo, "closed", f"greensecops/regen-shared-{engine}")
+    _make_fix(db, workflow_file.id, FixStatus.delivered, pr_id=pr.id)
+
+    if engine == "terraform":
+        target = TerraformRoot(repo_id=repo.id, root_path="infra")
+        db.add(target)
+        db.commit()
+        db.refresh(target)
+        other_fix = TerraformFix(
+            terraform_root_id=target.id,
+            file_path="main.tf",
+            llm_provider=LLMProvider.openai,
+            llm_model="gpt-4o-mini",
+            status=FixStatus.delivered,
+            pr_id=pr.id,
+        )
+    else:
+        target = DockerTarget(repo_id=repo.id, root_path="")
+        db.add(target)
+        db.commit()
+        db.refresh(target)
+        other_fix = DockerFix(
+            docker_target_id=target.id,
+            file_path="Dockerfile",
+            llm_provider=LLMProvider.openai,
+            llm_model="gpt-4o-mini",
+            status=FixStatus.delivered,
+            pr_id=pr.id,
+        )
+    db.add(other_fix)
+    db.commit()
+    db.refresh(other_fix)
+    other_fix_id, pr_id = other_fix.id, pr.id
+
+    # Act
+    with patch("app.api.routes.fixes.run_fix_generation.delay"):
+        response = client.post(
+            f"{settings.API_V1_STR}/fixes/regenerate-for-repo/{repo.id}",
+            headers=superuser_token_headers,
+        )
+
+    # Assert — the record survives, and the other engine keeps its PR link
+    assert response.status_code == 202
+    db.expire_all()
+    assert db.get(PullRequest, pr_id) is not None
+    model = TerraformFix if engine == "terraform" else DockerFix
+    surviving = db.get(model, other_fix_id)
+    assert surviving is not None
+    assert surviving.pr_id == pr_id
 
 
 def test_regenerate_for_repo_regenerates_guard_rejected_fix(
