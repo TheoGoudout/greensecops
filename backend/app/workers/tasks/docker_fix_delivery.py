@@ -2,8 +2,8 @@ from typing import Any
 
 from app.services.engines import DOCKER_ENGINE
 from app.services.file_fix_delivery import FixFetchError, deliver_file_fixes
+from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
 from app.workers.celery_app import celery_app
-from app.workers.tasks.docker_analysis import _fetch_docker_files
 
 
 @celery_app.task(name="docker_fix_delivery.deliver", bind=True, max_retries=3)

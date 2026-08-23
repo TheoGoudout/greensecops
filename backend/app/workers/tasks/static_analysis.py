@@ -273,7 +273,9 @@ def _register_rule_from_violation(
     )
     session.execute(stmt)
     rule = session.exec(
-        select(Rule).where(Rule.slug == slug).where(Rule.domain == RuleDomain.ci_workflow)
+        select(Rule)
+        .where(Rule.slug == slug)
+        .where(Rule.domain == RuleDomain.ci_workflow)
     ).first()
     if rule is not None:
         logger.info("Auto-registered new rule '%s' from OPA violation", slug)

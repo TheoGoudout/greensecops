@@ -12,8 +12,8 @@ from app.services.file_fix_generation import (
     MISSING_CONTENT_ERROR as MISSING_CONTENT_ERROR,  # re-exported for callers/tests
 )
 from app.services.file_fix_generation import generate_file_fix
+from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
 from app.workers.celery_app import celery_app
-from app.workers.tasks.docker_analysis import _fetch_docker_files
 
 INVALID_DOCKERFILE_ERROR = "LLM returned an unparseable Dockerfile"
 INVALID_COMPOSE_ERROR = "LLM returned invalid Compose YAML"

@@ -46,7 +46,8 @@ from app.services.billing.quota import enforce_quota
 from app.services.delivery_pr import docker_fix_branch
 from app.services.docker.merge import classify_docker_file
 from app.services.engines import DOCKER_ENGINE
-from app.workers.tasks.docker_analysis import _fetch_docker_files, run_docker_scan
+from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
+from app.workers.tasks.docker_analysis import run_docker_scan
 from app.workers.tasks.docker_fix_delivery import deliver_docker_fixes
 from app.workers.tasks.docker_fix_generation import run_docker_fix_generation
 from app.workers.tasks.fix_generation import resolve_llm_provider

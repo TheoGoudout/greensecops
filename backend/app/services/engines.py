@@ -62,6 +62,7 @@ from app.models import (
     Issue,
     OverviewSection,
     Repository,
+    RuleDomain,
     ScanStatus,
     TerraformFinding,
     TerraformFix,
@@ -89,11 +90,28 @@ class EngineSpec:
     target_id_field: str
     finding_model: type[Any]
     fix_model: type[Any]
+    scan_model: type[Any]
+    # Which rules apply. Many-to-one with Engine in general (see
+    # ENGINE_OF_DOMAIN), but each *file* engine scans exactly one domain.
+    rule_domain: RuleDomain
+    # The unique constraint the finding upsert conflicts on.
+    finding_constraint: str
+    # What a finding's identity is keyed on, beyond target and rule: the thing
+    # that stays the same across scans so a dismissal survives a re-run.
+    fingerprint_locator: Callable[[Any], str | None]
+    # Locator columns only this engine's findings carry, from the violation and
+    # its target.
+    finding_columns: Callable[[Any, Any], dict[str, Any]]
     # Deterministic PR branch for a target's fixes; the distinct prefixes are
     # what let the frontend tell one engine's PR from another's.
     fix_branch: Callable[[uuid.UUID], str]
     # Names the files this engine rewrites, for the PR body's opening line.
     files_description: str
+    # Whether the grade averages per file rather than pooling across the target,
+    # and whether the scan row counts the files it saw. Both are Docker's, and
+    # `services/scan_runner._score` explains why.
+    scores_per_file: bool = False
+    tracks_file_count: bool = False
 
     @property
     def name(self) -> str:
@@ -106,6 +124,41 @@ class EngineSpec:
         return f"{self.target_model.__tablename__}_not_found"
 
 
+def _terraform_finding_columns(v: Any, root: Any) -> dict[str, Any]:
+    """Terraform's locator columns: where in the module tree the resource sits."""
+    from app.services.terraform.hcl_parser import derive_module_path
+
+    module_path = derive_module_path(v.file_path, root.root_path)
+    return {
+        "resource_address": v.resource_address,
+        "module_path": module_path,
+        "terraform_address": terraform_address(module_path, v.resource_address),
+    }
+
+
+def terraform_address(
+    module_path: str | None, resource_address: str | None
+) -> str | None:
+    """Full Terraform address for a finding, module prefix included.
+
+    Prefixes the resource address (``aws_s3_bucket.logs``) with a single
+    ``module.`` segment carrying the directory-derived module path, with ``/``
+    rewritten to ``.``: path ``modules/storage`` yields
+    ``module.modules.storage.aws_s3_bucket.logs``. A single prefix — not one per
+    path segment — because the path is a directory locator, not a resolved
+    ``module {}`` invocation chain (see ``derive_module_path``), so the segments
+    after ``module.`` are a path, not a nesting chain.
+
+    Root-module resources (no ``module_path``) get the bare resource address;
+    returns ``None`` only when the rule emitted no resource address at all.
+    """
+    if resource_address is None:
+        return None
+    if not module_path:
+        return resource_address
+    return f"module.{module_path.replace('/', '.')}.{resource_address}"
+
+
 TERRAFORM_ENGINE = EngineSpec(
     engine=Engine.terraform,
     label="Terraform",
@@ -114,6 +167,12 @@ TERRAFORM_ENGINE = EngineSpec(
     target_id_field="terraform_root_id",
     finding_model=TerraformFinding,
     fix_model=TerraformFix,
+    scan_model=TerraformScan,
+    rule_domain=RuleDomain.iac_terraform,
+    finding_constraint="uq_terraform_finding_root_fingerprint",
+    # A resource keeps its address across scans even when its file moves.
+    fingerprint_locator=lambda v: v.resource_address,
+    finding_columns=_terraform_finding_columns,
     fix_branch=tf_fix_branch,
     files_description="Terraform files",
 )
@@ -126,8 +185,20 @@ DOCKER_ENGINE = EngineSpec(
     target_id_field="docker_target_id",
     finding_model=DockerFinding,
     fix_model=DockerFix,
+    scan_model=DockerScan,
+    rule_domain=RuleDomain.container_docker,
+    finding_constraint="uq_docker_finding_target_fingerprint",
+    # No resource addresses here — a Docker rule fires on a file, and the
+    # service or stage within it is carried as a column rather than as identity.
+    fingerprint_locator=lambda v: v.file_path,
+    finding_columns=lambda v, _target: {
+        "service_name": v.service_name,
+        "stage_name": v.stage_name,
+    },
     fix_branch=docker_fix_branch,
     files_description="Dockerfiles and Compose files",
+    scores_per_file=True,
+    tracks_file_count=True,
 )
 
 

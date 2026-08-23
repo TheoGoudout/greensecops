@@ -38,11 +38,11 @@ from app.models import (
 from app.services.billing.quota import enforce_quota
 from app.services.delivery_pr import tf_fix_branch
 from app.services.engines import TERRAFORM_ENGINE
-from app.workers.tasks.fix_generation import resolve_llm_provider
-from app.workers.tasks.terraform_analysis import (
-    _fetch_terraform_files,
-    run_terraform_scan,
+from app.services.github.fetch import (
+    fetch_terraform_files as _fetch_terraform_files,
 )
+from app.workers.tasks.fix_generation import resolve_llm_provider
+from app.workers.tasks.terraform_analysis import run_terraform_scan
 from app.workers.tasks.terraform_fix_delivery import deliver_terraform_fixes
 from app.workers.tasks.terraform_fix_generation import run_terraform_fix_generation
 
