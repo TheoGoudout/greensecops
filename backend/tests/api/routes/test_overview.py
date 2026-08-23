@@ -113,7 +113,7 @@ def docker_rule(db: Session) -> Rule:
 
 @pytest.fixture()
 def workflow_rule(db: Session) -> Rule:
-    rule = db.exec(select(Rule).where(Rule.domain == RuleDomain.workflow)).first()
+    rule = db.exec(select(Rule).where(Rule.domain == RuleDomain.ci_workflow)).first()
     assert rule is not None
     return rule
 
@@ -220,7 +220,7 @@ def test_overview_reports_every_engine_under_its_section(
 
     sections = {e["engine"]: e["section"] for e in body["engines"]}
     assert sections == {
-        "ci": "ci",
+        "workflow": "ci",
         "docker": "docker",
         # Terraform and cloud posture share the Infrastructure section, the way
         # the Infrastructure page already shows them as sibling tabs.
@@ -501,7 +501,7 @@ def test_engines_do_not_leak_into_each_other(
 
     assert _engine(body, "docker")["findings"]["open"] == 1
     assert _engine(body, "terraform")["findings"]["open"] == 1
-    assert _engine(body, "ci")["findings"]["open"] == 0
+    assert _engine(body, "workflow")["findings"]["open"] == 0
     assert _engine(body, "cloud")["findings"]["open"] == 0
     assert body["totals"]["open_findings"] == 2
 
@@ -515,7 +515,7 @@ def test_cloud_has_no_fix_pipeline(client: TestClient, member: dict[str, str]) -
     # Not an all-zero object: CloudFinding carries no fix_id, so "0 ready to
     # deliver" would read as "nothing left to fix" rather than "not a thing".
     assert _engine(body, "cloud")["fixes"] is None
-    for key in ("ci", "docker", "terraform"):
+    for key in ("workflow", "docker", "terraform"):
         assert _engine(body, key)["fixes"] is not None
 
 
@@ -622,7 +622,7 @@ def test_ci_targets_are_scoped_to_the_default_branch(
     _workflow_file(db, repo, "main")
     _workflow_file(db, repo, "feature/x")
 
-    ci = _engine(_fetch(client, member), "ci")
+    ci = _engine(_fetch(client, member), "workflow")
 
     assert ci["coverage"]["total"] == 1
     # A workflow file has no enable switch, so enabled tracks total.
@@ -637,7 +637,7 @@ def test_soft_deleted_workflow_files_are_excluded(
     db.add(workflow)
     db.commit()
 
-    ci = _engine(_fetch(client, member), "ci")
+    ci = _engine(_fetch(client, member), "workflow")
 
     assert ci["coverage"]["total"] == 0
 
@@ -679,7 +679,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
         )
     db.commit()
 
-    overview_ci = _engine(_fetch(client, member), "ci")
+    overview_ci = _engine(_fetch(client, member), "workflow")
     stats = client.get(f"{settings.API_V1_STR}/issues/stats", headers=member).json()
 
     assert overview_ci["findings"]["open"] == 2

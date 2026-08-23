@@ -346,6 +346,20 @@ export type DynamicEnrichmentPublic = {
 };
 
 /**
+ * Which analysis engine produced something.
+ *
+ * The one name for an engine across the whole system: usage records tag
+ * themselves with it, the dashboard overview keys its stat blocks by it, and
+ * ``services/engines.EngineSpec`` is looked up by it. There used to be three
+ * of these enums disagreeing about whether the first one is called ``ci`` or
+ * ``workflow``; it is ``workflow``, after the ``WorkflowFile`` rows it scans.
+ *
+ * Not the same axis as :class:`RuleDomain`, which names a Rego package — the
+ * mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
+ */
+export type Engine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry';
+
+/**
  * How much of what could be scanned actually has been.
  *
  * ``enabled`` means different things per engine — a bool column for Docker
@@ -391,7 +405,7 @@ export type EngineFreshnessStat = {
 };
 
 export type EngineOverview = {
-    engine: OverviewEngineKey;
+    engine: Engine;
     section: OverviewSection;
     label: string;
     coverage: EngineCoverageStat;
@@ -637,16 +651,6 @@ export type OssApplicationReview = {
  * Review state of a request for the granted open-source plan.
  */
 export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
-
-/**
- * Which analysis engine a block of dashboard overview stats describes.
- *
- * A presentation-layer key, not a persisted column — ``Rule.domain`` stays
- * the DB-level discriminator. The two exist because they don't line up:
- * ``container_docker`` and ``container_runtime`` rules both produce findings
- * on the Docker engine, so one key covers two domains.
- */
-export type OverviewEngineKey = 'ci' | 'docker' | 'terraform' | 'cloud';
 
 export type OverviewPublic = {
     generated_at: string;
@@ -1023,11 +1027,15 @@ export type UsageBreakdownPublic = {
 };
 
 /**
- * Which engine produced a usage record.
+ * Which engine produced a usage record, plus one non-engine sentinel.
  *
  * Every one of these debits the same shared pool; the tag exists so a user
  * can see *where* their allowance went, and so tests can assert that each
  * engine is actually metered.
+ *
+ * Its engine members are :class:`Engine`'s, spelled out rather than generated
+ * so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
+ * fails at import if the two ever drift.
  */
 export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
 

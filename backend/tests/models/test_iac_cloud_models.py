@@ -95,7 +95,7 @@ def test_rule_domain_defaults_to_workflow(db: Session) -> None:
     db.commit()
     db.refresh(rule)
 
-    assert rule.domain == RuleDomain.workflow
+    assert rule.domain == RuleDomain.ci_workflow
 
 
 def test_terraform_root_scan_finding_round_trip(

@@ -268,19 +268,62 @@ class SSESignal(str, enum.Enum):
 
 
 class RuleDomain(str, enum.Enum):
-    """Which analysis engine a Rule belongs to.
+    """Which Rego package a rule lives in, and therefore which document it sees.
 
-    Lets the single ``rule`` table and its admin UI serve the CI-workflow
-    engine and the new IaC/cloud engines without three parallel Rule tables.
-    Existing rows default to ``workflow`` (see migration 0042).
+    Lets the single ``rule`` table and its admin UI serve every engine without
+    one Rule table each.
+
+    **Every member is exactly a directory name under ``app/rules/``**, which is
+    what lets ``core/rule_registry`` derive the domain with ``RuleDomain(dir)``.
+    That invariant is the whole point: ``workflow`` used to be the odd one out
+    against a ``ci_workflow/`` directory, and bridging the two took a
+    hand-maintained lookup table that only a comment kept honest.
+
+    Distinct from :class:`Engine`, and deliberately not one-to-one with it:
+    ``container_docker`` and ``container_runtime`` rules both produce findings
+    on the Docker engine, and ``ci_workflow``/``ci_telemetry`` likewise split
+    across the workflow and telemetry engines. See :data:`ENGINE_OF_DOMAIN`.
     """
 
-    workflow = "workflow"
+    ci_workflow = "ci_workflow"
     iac_terraform = "iac_terraform"
     cloud_aws = "cloud_aws"
     ci_telemetry = "ci_telemetry"
     container_docker = "container_docker"
     container_runtime = "container_runtime"
+
+
+class Engine(str, enum.Enum):
+    """Which analysis engine produced something.
+
+    The one name for an engine across the whole system: usage records tag
+    themselves with it, the dashboard overview keys its stat blocks by it, and
+    ``services/engines.EngineSpec`` is looked up by it. There used to be three
+    of these enums disagreeing about whether the first one is called ``ci`` or
+    ``workflow``; it is ``workflow``, after the ``WorkflowFile`` rows it scans.
+
+    Not the same axis as :class:`RuleDomain`, which names a Rego package — the
+    mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
+    """
+
+    workflow = "workflow"
+    terraform = "terraform"
+    docker = "docker"
+    cloud = "cloud"
+    telemetry = "telemetry"
+
+
+ENGINE_OF_DOMAIN: dict[RuleDomain, Engine] = {
+    RuleDomain.ci_workflow: Engine.workflow,
+    RuleDomain.ci_telemetry: Engine.telemetry,
+    RuleDomain.iac_terraform: Engine.terraform,
+    RuleDomain.cloud_aws: Engine.cloud,
+    RuleDomain.container_docker: Engine.docker,
+    # Runtime container rules grade the Docker engine too: a measured OOM kill
+    # and a missing memory limit in the Compose file are the same engine's
+    # findings, arrived at from different evidence.
+    RuleDomain.container_runtime: Engine.docker,
+}
 
 
 class ScanStatus(str, enum.Enum):
@@ -372,11 +415,15 @@ class UsageMeter(str, enum.Enum):
 
 
 class UsageEngine(str, enum.Enum):
-    """Which engine produced a usage record.
+    """Which engine produced a usage record, plus one non-engine sentinel.
 
     Every one of these debits the same shared pool; the tag exists so a user
     can see *where* their allowance went, and so tests can assert that each
     engine is actually metered.
+
+    Its engine members are :class:`Engine`'s, spelled out rather than generated
+    so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
+    fails at import if the two ever drift.
     """
 
     workflow = "workflow"
@@ -387,6 +434,20 @@ class UsageEngine(str, enum.Enum):
     # Not produced by an engine: the one-off record the ledger migration writes
     # to carry a subscription's pre-ledger fix usage into its current period.
     carryover = "carryover"
+
+    @classmethod
+    def of(cls, engine: Engine) -> "UsageEngine":
+        """The usage tag for an engine. Total, given the check below."""
+        return cls(engine.value)
+
+
+# A usage record tagged with an engine the rest of the system does not know
+# about is unattributable, and the reverse is a meter that silently bills
+# nothing. Catch either at import rather than in a billing report.
+_ENGINE_MEMBERS_MATCH = {e.value for e in Engine} == {u.value for u in UsageEngine} - {
+    UsageEngine.carryover.value
+}
+assert _ENGINE_MEMBERS_MATCH, "UsageEngine and Engine have drifted apart"
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -406,21 +467,6 @@ class OssApplicationStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     withdrawn = "withdrawn"
-
-
-class OverviewEngineKey(str, enum.Enum):
-    """Which analysis engine a block of dashboard overview stats describes.
-
-    A presentation-layer key, not a persisted column — ``Rule.domain`` stays
-    the DB-level discriminator. The two exist because they don't line up:
-    ``container_docker`` and ``container_runtime`` rules both produce findings
-    on the Docker engine, so one key covers two domains.
-    """
-
-    ci = "ci"
-    docker = "docker"
-    terraform = "terraform"
-    cloud = "cloud"
 
 
 class OverviewSection(str, enum.Enum):

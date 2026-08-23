@@ -257,7 +257,7 @@ def _register_rule_from_violation(
         .values(
             id=uuid.uuid4(),
             slug=slug,
-            domain=RuleDomain.workflow,
+            domain=RuleDomain.ci_workflow,
             category=category,
             severity=severity,
             title=slug.replace("_", " ").capitalize(),
@@ -273,7 +273,7 @@ def _register_rule_from_violation(
     )
     session.execute(stmt)
     rule = session.exec(
-        select(Rule).where(Rule.slug == slug).where(Rule.domain == RuleDomain.workflow)
+        select(Rule).where(Rule.slug == slug).where(Rule.domain == RuleDomain.ci_workflow)
     ).first()
     if rule is not None:
         logger.info("Auto-registered new rule '%s' from OPA violation", slug)
@@ -655,7 +655,7 @@ def _run_static_analysis_impl(
                 for r in session.exec(
                     select(Rule)
                     .where(Rule.enabled == True)  # noqa: E712
-                    .where(Rule.domain == RuleDomain.workflow)
+                    .where(Rule.domain == RuleDomain.ci_workflow)
                 ).all()
             }
 

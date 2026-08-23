@@ -76,7 +76,7 @@ def test_rule_from_path_reads_every_field(tmp_path: Path) -> None:
     rule = rule_from_path(_write(tmp_path, _VALID_METADATA), tmp_path)
     assert rule == {
         "slug": "example",
-        "domain": RuleDomain.workflow,
+        "domain": RuleDomain.ci_workflow,
         "category": IssueCategory.security,
         "severity": IssueSeverity.high,
         # No custom.severity_weight, so the default for `high` applies.

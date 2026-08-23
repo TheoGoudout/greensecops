@@ -23,7 +23,7 @@ from .enums import (
     IssueStatus,
     LLMProvider,
     OssApplicationStatus,
-    OverviewEngineKey,
+    Engine,
     OverviewSection,
     PullRequestState,
     ReviewDecision,
@@ -609,7 +609,7 @@ class EngineFixPipelineStat(SQLModel):
 
 
 class EngineOverview(SQLModel):
-    engine: OverviewEngineKey
+    engine: Engine
     section: OverviewSection
     label: str
     coverage: EngineCoverageStat

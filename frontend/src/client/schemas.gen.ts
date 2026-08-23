@@ -1760,6 +1760,22 @@ presented as their own "Runtime findings" class rather than merged into the
 static issue list.`
 } as const;
 
+export const EngineSchema = {
+    type: 'string',
+    enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry'],
+    title: 'Engine',
+    description: `Which analysis engine produced something.
+
+The one name for an engine across the whole system: usage records tag
+themselves with it, the dashboard overview keys its stat blocks by it, and
+\`\`services/engines.EngineSpec\`\` is looked up by it. There used to be three
+of these enums disagreeing about whether the first one is called \`\`ci\`\` or
+\`\`workflow\`\`; it is \`\`workflow\`\`, after the \`\`WorkflowFile\`\` rows it scans.
+
+Not the same axis as :class:\`RuleDomain\`, which names a Rego package — the
+mapping is many-to-one and lives in :data:\`ENGINE_OF_DOMAIN\`.`
+} as const;
+
 export const EngineCoverageStatSchema = {
     properties: {
         total: {
@@ -1900,7 +1916,7 @@ export const EngineFreshnessStatSchema = {
 export const EngineOverviewSchema = {
     properties: {
         engine: {
-            '$ref': '#/components/schemas/OverviewEngineKey'
+            '$ref': '#/components/schemas/Engine'
         },
         section: {
             '$ref': '#/components/schemas/OverviewSection'
@@ -2974,18 +2990,6 @@ export const OssApplicationStatusSchema = {
     enum: ['pending', 'approved', 'rejected', 'withdrawn'],
     title: 'OssApplicationStatus',
     description: 'Review state of a request for the granted open-source plan.'
-} as const;
-
-export const OverviewEngineKeySchema = {
-    type: 'string',
-    enum: ['ci', 'docker', 'terraform', 'cloud'],
-    title: 'OverviewEngineKey',
-    description: `Which analysis engine a block of dashboard overview stats describes.
-
-A presentation-layer key, not a persisted column — \`\`Rule.domain\`\` stays
-the DB-level discriminator. The two exist because they don't line up:
-\`\`container_docker\`\` and \`\`container_runtime\`\` rules both produce findings
-on the Docker engine, so one key covers two domains.`
 } as const;
 
 export const OverviewPublicSchema = {
@@ -4599,11 +4603,15 @@ export const UsageEngineSchema = {
     type: 'string',
     enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry', 'carryover'],
     title: 'UsageEngine',
-    description: `Which engine produced a usage record.
+    description: `Which engine produced a usage record, plus one non-engine sentinel.
 
 Every one of these debits the same shared pool; the tag exists so a user
 can see *where* their allowance went, and so tests can assert that each
-engine is actually metered.`
+engine is actually metered.
+
+Its engine members are :class:\`Engine\`'s, spelled out rather than generated
+so the persisted values stay greppable — \`\`_ENGINE_MEMBERS_MATCH\`\` below
+fails at import if the two ever drift.`
 } as const;
 
 export const UsageMeterSchema = {

@@ -75,7 +75,7 @@ def test_seed_rules_returns_newly_inserted_slug(db: Session) -> None:
     new_slug = f"throwaway-rule-{uuid.uuid4().hex[:8]}"
     extra = {
         "slug": new_slug,
-        "domain": RuleDomain.workflow,
+        "domain": RuleDomain.ci_workflow,
         "category": IssueCategory.energy,
         "severity": IssueSeverity.low,
         "severity_weight": 0.5,

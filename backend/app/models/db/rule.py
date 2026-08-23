@@ -26,8 +26,8 @@ class Rule(SQLModel, table=True):
     # to ``workflow`` (migration 0042); lets one Rule table and admin UI serve
     # the CI-workflow, Terraform and cloud engines.
     domain: RuleDomain = Field(
-        default=RuleDomain.workflow,
-        sa_column_kwargs={"server_default": RuleDomain.workflow.value},
+        default=RuleDomain.ci_workflow,
+        sa_column_kwargs={"server_default": RuleDomain.ci_workflow.value},
     )
     category: IssueCategory
     severity: IssueSeverity

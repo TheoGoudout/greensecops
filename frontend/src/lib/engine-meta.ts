@@ -1,10 +1,6 @@
 import type { LucideIcon } from "lucide-react"
-import { Boxes, Cloud, Container, Workflow } from "lucide-react"
-import type {
-  IssueSeverity,
-  OverviewEngineKey,
-  OverviewSection,
-} from "@/client"
+import { Activity, Boxes, Cloud, Container, Workflow } from "lucide-react"
+import type { Engine, IssueSeverity, OverviewSection } from "@/client"
 
 /**
  * How each analysis engine presents itself on the dashboard.
@@ -13,10 +9,10 @@ import type {
  * row on the dashboard and the Docker nav entry read as the same thing.
  */
 export const ENGINE_META: Record<
-  OverviewEngineKey,
+  Engine,
   { icon: LucideIcon; label: string; blurb: string; to: string }
 > = {
-  ci: {
+  workflow: {
     icon: Workflow,
     label: "CI workflows",
     blurb: "GitHub Actions workflow files, per repository",
@@ -39,6 +35,15 @@ export const ENGINE_META: Record<
     label: "Cloud posture",
     blurb: "Live AWS account posture, per connected account",
     to: "/infrastructure",
+  },
+  // No dashboard block of its own yet — the overview reports the four engines
+  // that grade a target. Listed so this record stays total over `Engine`, and
+  // so the telemetry tab has a label to share when it grows one.
+  telemetry: {
+    icon: Activity,
+    label: "Telemetry",
+    blurb: "Measured runtime data from completed workflow runs",
+    to: "/repositories",
   },
 }
 

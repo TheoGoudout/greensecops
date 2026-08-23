@@ -41,6 +41,7 @@ from .db import (
     get_datetime_utc,
 )
 from .enums import (
+    ENGINE_OF_DOMAIN,
     AnalysisFailureKind,
     AnalysisStatus,
     AnalysisTrigger,
@@ -48,6 +49,7 @@ from .enums import (
     CloudAccountStatus,
     CloudProvider,
     DynamicAnalysisStatus,
+    Engine,
     FindingResolutionReason,
     FindingStatus,
     FixDeliveryMode,
@@ -60,7 +62,6 @@ from .enums import (
     LLMProvider,
     OrgRole,
     OssApplicationStatus,
-    OverviewEngineKey,
     OverviewSection,
     PullRequestState,
     RepositoryStatus,
@@ -217,7 +218,8 @@ __all__ = [
     "FindingResolutionReason",
     "CloudProvider",
     "CloudAccountStatus",
-    "OverviewEngineKey",
+    "ENGINE_OF_DOMAIN",
+    "Engine",
     "OverviewSection",
     # schemas
     "UserPublic",

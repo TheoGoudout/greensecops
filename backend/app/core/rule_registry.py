@@ -27,17 +27,6 @@ import yaml
 from app.core.rego_metadata import RULES_DIR, iter_rule_files, read_metadata_block
 from app.models import IssueCategory, IssueSeverity, RuleDomain
 
-# The rules directory is named for the analysis engine; RuleDomain predates it
-# and calls the CI-workflow engine `workflow`. Every other name lines up.
-_RULES_DIR_TO_DOMAIN: dict[str, RuleDomain] = {
-    "ci_workflow": RuleDomain.workflow,
-    "ci_telemetry": RuleDomain.ci_telemetry,
-    "iac_terraform": RuleDomain.iac_terraform,
-    "cloud_aws": RuleDomain.cloud_aws,
-    "container_docker": RuleDomain.container_docker,
-    "container_runtime": RuleDomain.container_runtime,
-}
-
 # What `severity_weight` a rule gets when its METADATA does not name one. These
 # are the modal weights of the old hand-maintained lists, so the default is
 # what most rules of that severity already scored at. A rule that genuinely
@@ -108,13 +97,15 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
         )
     domain_dir, category_dir, _ = parts
 
-    domain = _RULES_DIR_TO_DOMAIN.get(domain_dir)
-    if domain is None:
+    # RuleDomain's members *are* the directory names, so no lookup table stands
+    # between the two to be kept in step.
+    try:
+        domain = RuleDomain(domain_dir)
+    except ValueError as exc:
         raise _fail(
             path,
-            f"unknown engine directory '{domain_dir}' — add it to "
-            "_RULES_DIR_TO_DOMAIN and to RuleDomain",
-        )
+            f"unknown engine directory '{domain_dir}' — add it to RuleDomain",
+        ) from exc
     try:
         category = IssueCategory(category_dir)
     except ValueError as exc:
