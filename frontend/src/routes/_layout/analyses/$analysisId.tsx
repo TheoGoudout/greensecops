@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft, ExternalLink, Wand2 } from "lucide-react"
 import { toast } from "sonner"
-import type { IssueCategory, IssuePublic } from "@/client"
+import type { Category, IssuePublic } from "@/client"
 import {
   AnalysesService,
   FixesService,
@@ -27,10 +27,10 @@ export const Route = createFileRoute("/_layout/analyses/$analysisId")({
 
 function groupByCategory(
   issues: IssuePublic[],
-): Record<IssueCategory, IssuePublic[]> {
+): Record<Category, IssuePublic[]> {
   const groups = Object.fromEntries(
     ISSUE_CATEGORIES.map((c) => [c, [] as IssuePublic[]]),
-  ) as Record<IssueCategory, IssuePublic[]>
+  ) as Record<Category, IssuePublic[]>
   for (const issue of issues) {
     groups[issue.category].push(issue)
   }

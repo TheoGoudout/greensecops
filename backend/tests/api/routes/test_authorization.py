@@ -17,18 +17,18 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
     Rule,
+    ScanTrigger,
+    Severity,
     UserTier,
     UserUpdate,
     WorkflowFile,
@@ -50,8 +50,8 @@ class _Tenant:
 def rule(db: Session) -> Rule:
     r = Rule(
         slug=f"authz-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="Authz Rule",
         description="rule for authz tests",
     )
@@ -94,7 +94,7 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
         status=AnalysisStatus.completed,
         score=80.0,
         grade="B",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -106,8 +106,8 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="secret tenant issue",
     )
     db.add(issue)

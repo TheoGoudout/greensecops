@@ -7,20 +7,20 @@ from sqlmodel import Session
 
 from app.models import (
     Analysis,
-    AnalysisFailureKind,
     AnalysisStatus,
+    Category,
     DynamicAnalysisStatus,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
     PullRequestState,
     Repository,
     Rule,
+    ScanFailureKind,
+    Severity,
     TelemetryRun,
     UserTier,
     WorkflowFile,
@@ -103,8 +103,8 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
 
     rule = Rule(
         slug=f"maint_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.energy,
-        severity=IssueSeverity.low,
+        category=Category.energy,
+        severity=Severity.low,
         title="t",
         description="d",
     )
@@ -117,8 +117,8 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.low,
-        category=IssueCategory.energy,
+        severity=Severity.low,
+        category=Category.energy,
         message="m",
     )
     db.add(issue)
@@ -299,7 +299,7 @@ def _failed_analysis(
     db: Session,
     repo: Repository,
     wf: WorkflowFile,
-    kind: AnalysisFailureKind,
+    kind: ScanFailureKind,
     completed_at: datetime | None = None,
 ) -> Analysis:
     a = Analysis(
@@ -330,7 +330,7 @@ def test_retry_transient_analyses_schedules_rerun(db: Session) -> None:
     db.commit()
     wf = db.get(WorkflowFile, analysis.workflow_file_id)
     assert wf is not None
-    _failed_analysis(db, repo, wf, AnalysisFailureKind.transient)
+    _failed_analysis(db, repo, wf, ScanFailureKind.transient)
 
     with (
         patch(
@@ -375,13 +375,13 @@ def test_retry_transient_analyses_skips_permanent_old_and_exhausted(
     assert wf is not None
 
     # Permanent failure: never retried.
-    _failed_analysis(db, repo, wf, AnalysisFailureKind.permanent)
+    _failed_analysis(db, repo, wf, ScanFailureKind.permanent)
     # Transient but too old: outside the window.
     _failed_analysis(
         db,
         repo,
         wf,
-        AnalysisFailureKind.transient,
+        ScanFailureKind.transient,
         completed_at=datetime.now(timezone.utc) - timedelta(hours=48),
     )
 
@@ -402,7 +402,7 @@ def test_retry_transient_analyses_skips_permanent_old_and_exhausted(
     # Exhausted: MAX_AUTO_RETRY_ATTEMPTS recent transient failures for the
     # same content hash stop further retries.
     for _ in range(MAX_AUTO_RETRY_ATTEMPTS):
-        _failed_analysis(db, repo, wf, AnalysisFailureKind.transient)
+        _failed_analysis(db, repo, wf, ScanFailureKind.transient)
     with (
         patch(
             "app.workers.tasks.static_analysis.run_static_analysis.delay"

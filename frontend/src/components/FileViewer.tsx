@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import type { IssueSeverity } from "@/client"
+import type { Severity } from "@/client"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import {
@@ -18,7 +18,7 @@ import {
  */
 export interface Annotation {
   id: string
-  severity: IssueSeverity
+  severity: Severity
   rule_slug: string
   message: string
   line_start?: number | null

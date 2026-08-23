@@ -10,7 +10,6 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_WEBHOOK
 from app.models import (
-    AnalysisTrigger,
     Fix,
     Issue,
     IssueResolutionReason,
@@ -18,6 +17,7 @@ from app.models import (
     PullRequest,
     PullRequestState,
     Repository,
+    ScanTrigger,
     WorkflowFile,
 )
 from app.services import state_machines as sm
@@ -194,9 +194,7 @@ def _handle_push_event(
 
     commit_sha = payload.get("after", "")
     if touches_workflows or is_new_branch or forced:
-        eh.enqueue_workflow_analysis(
-            repo, branch, commit_sha, AnalysisTrigger.webhook_push
-        )
+        eh.enqueue_workflow_analysis(repo, branch, commit_sha, ScanTrigger.webhook_push)
     # Independent of the workflow-analysis gate above: a push that only
     # touches Terraform files (no .github/workflows/ change) must still
     # trigger a scan.
@@ -205,7 +203,7 @@ def _handle_push_event(
         repo,
         branch,
         commit_sha,
-        AnalysisTrigger.webhook_push,
+        ScanTrigger.webhook_push,
         changed_paths=None if (is_new_branch or forced) else changed_paths,
     )
     eh.enqueue_docker_scans(
@@ -213,7 +211,7 @@ def _handle_push_event(
         repo,
         branch,
         commit_sha,
-        AnalysisTrigger.webhook_push,
+        ScanTrigger.webhook_push,
         changed_paths=None if (is_new_branch or forced) else changed_paths,
     )
 
@@ -370,7 +368,7 @@ def _handle_workflow_run_event(
     branch = workflow_run.get("head_branch", "")
     commit_sha = workflow_run.get("head_sha", "")
     eh.enqueue_workflow_analysis(
-        repo, branch, commit_sha, AnalysisTrigger.webhook_workflow_run
+        repo, branch, commit_sha, ScanTrigger.webhook_workflow_run
     )
 
 
@@ -483,7 +481,7 @@ def _handle_repository_event(
             # WorkflowFile rows exist. Old-branch fixes/PRs retire naturally
             # via the default-branch gates.
             eh.enqueue_workflow_analysis(
-                repo, repo.default_branch, "", AnalysisTrigger.manual
+                repo, repo.default_branch, "", ScanTrigger.manual
             )
 
 

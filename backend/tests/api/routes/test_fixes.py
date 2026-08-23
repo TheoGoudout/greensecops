@@ -12,14 +12,12 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     DockerFix,
     DockerTarget,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     OrgMember,
@@ -27,6 +25,8 @@ from app.models import (
     PullRequest,
     Repository,
     Rule,
+    ScanTrigger,
+    Severity,
     TerraformFix,
     TerraformRoot,
     UserTier,
@@ -87,7 +87,7 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
         status=AnalysisStatus.completed,
         score=80.0,
         grade="B",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(a)
@@ -100,8 +100,8 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
 def rule(db: Session) -> Rule:
     r = Rule(
         slug=f"test-fixes-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.medium,
+        category=Category.reliability,
+        severity=Severity.medium,
         title="Test Fixes Rule",
         description="A test rule for fixes tests",
         enabled=True,
@@ -119,8 +119,8 @@ def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
         analysis_id=analysis.id,
         workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.medium,
-        category=IssueCategory.reliability,
+        severity=Severity.medium,
+        category=Category.reliability,
         line_start=5,
         line_end=7,
         message="Test reliability issue",
@@ -197,7 +197,7 @@ def _make_wf_with_issue(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(a)
@@ -208,8 +208,8 @@ def _make_wf_with_issue(
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.medium,
-        category=IssueCategory.reliability,
+        severity=Severity.medium,
+        category=Category.reliability,
         message=f"quota issue {n}",
     )
     db.add(i)
@@ -1041,7 +1041,7 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
         status=AnalysisStatus.completed,
         score=50.0,
         grade="D",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
     )
@@ -1058,8 +1058,8 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
         analysis_id=old_analysis.id,
         workflow_file_id=old_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.medium,
-        category=IssueCategory.reliability,
+        severity=Severity.medium,
+        category=Category.reliability,
         line_start=20,
         line_end=22,
         message="Old analysis issue — should not be targeted",

@@ -18,15 +18,15 @@ import pytest
 from sqlmodel import Session
 
 from app.models import (
+    Category,
     FixStatus,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     Repository,
     Rule,
     RuleDomain,
     ScanStatus,
+    Severity,
     TerraformFinding,
     TerraformFix,
     TerraformRoot,
@@ -126,8 +126,8 @@ def _finding(
         rule_id=rule.id,
         file_path="s3.tf",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="S3 bucket 'data' has no versioning configured.",
     )
     db.add(f)

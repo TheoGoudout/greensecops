@@ -11,16 +11,16 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
+    Category,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
     IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Organization,
     Repository,
     Rule,
+    Severity,
     UserTier,
     WorkflowFile,
 )
@@ -523,8 +523,8 @@ def test_violation_with_unknown_rule_slug_auto_registers_rule(
     new_slug = f"brand_new_rule_{uuid.uuid4().hex[:8]}"
     violation = FakeViolation(
         rule_slug=new_slug,
-        severity=IssueSeverity.low.value,
-        category=IssueCategory.energy.value,
+        severity=Severity.low.value,
+        category=Category.energy.value,
         line_start=1,
         line_end=1,
         message="fresh violation",
@@ -590,8 +590,8 @@ def test_disabled_rule_violations_are_ignored(
     # Arrange — a disabled rule
     disabled_rule = Rule(
         slug=f"disabled_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.energy,
-        severity=IssueSeverity.low,
+        category=Category.energy,
+        severity=Severity.low,
         title="Disabled rule",
         description="d",
         enabled=False,
@@ -602,8 +602,8 @@ def test_disabled_rule_violations_are_ignored(
 
     violation = FakeViolation(
         rule_slug=disabled_rule.slug,
-        severity=IssueSeverity.low.value,
-        category=IssueCategory.energy.value,
+        severity=Severity.low.value,
+        category=Category.energy.value,
         line_start=1,
         line_end=1,
         message="should be ignored",
@@ -1335,8 +1335,8 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
         analysis_id=analysis.id,
         workflow_file_id=workflow_file.id,
         rule_id=seeded_rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue",
         line_start=1,
     )
@@ -1371,8 +1371,8 @@ def _open_issue(db: Session, analysis: Analysis, wf: WorkflowFile, rule: Rule) -
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue",
         line_start=1,
     )

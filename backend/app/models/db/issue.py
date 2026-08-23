@@ -7,10 +7,10 @@ from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..enums import (
-    IssueCategory,
+    Category,
     IssueResolutionReason,
-    IssueSeverity,
     IssueStatus,
+    Severity,
 )
 from .base import get_datetime_utc
 
@@ -44,8 +44,8 @@ class Issue(SQLModel, table=True):
     step: str | None = Field(default=None, max_length=255)
     step_index: int | None = Field(default=None)
     fingerprint: str | None = Field(default=None, max_length=16, index=True)
-    severity: IssueSeverity
-    category: IssueCategory
+    severity: Severity
+    category: Category
     # Derived from ignored_at + resolved_at + fix_id, but persisted and kept
     # authoritative by a DB trigger (see migrations 0022/0026) so it survives
     # the fix_id ON DELETE SET NULL cascade. Applications never set it directly;

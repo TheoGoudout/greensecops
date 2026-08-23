@@ -73,7 +73,7 @@ export type AnalysisPublic = {
      * Grade
      */
     grade?: string | null;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Branch
      */
@@ -96,11 +96,6 @@ export type AnalysisPublic = {
  * AnalysisStatus
  */
 export type AnalysisStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_workflows';
-
-/**
- * AnalysisTrigger
- */
-export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
 
 /**
  * BatchFixRequest
@@ -230,6 +225,12 @@ export type BodyLoginLoginAccessToken = {
 export type CiStatus = 'pending' | 'success' | 'failure' | 'none';
 
 /**
+ * Category
+ * Which axis a rule grades on. Also the directory a .rego file lives in.
+ */
+export type Category = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
+
+/**
  * CheckoutRequest
  */
 export type CheckoutRequest = {
@@ -342,8 +343,8 @@ export type CloudFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Message
      */
@@ -394,7 +395,7 @@ export type CloudScanPublic = {
      */
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Score
      */
@@ -586,8 +587,8 @@ export type DockerFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Message
      */
@@ -727,8 +728,8 @@ export type DockerRuntimeFindingPublic = {
      * Rule Title
      */
     rule_title?: string | null;
-    severity?: IssueSeverity | null;
-    category?: IssueCategory | null;
+    severity?: Severity | null;
+    category?: Category | null;
     /**
      * Evidence
      */
@@ -762,7 +763,7 @@ export type DockerScanPublic = {
      */
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Score
      */
@@ -1130,8 +1131,8 @@ export type FixIssueSummary = {
      * Rule Slug
      */
     rule_slug?: string | null;
-    severity?: IssueSeverity | null;
-    category?: IssueCategory | null;
+    severity?: Severity | null;
+    category?: Category | null;
     /**
      * Message
      */
@@ -1326,15 +1327,10 @@ export type InvoicePublic = {
 export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 
 /**
- * IssueCategory
- */
-export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
-
-/**
  * IssueCategoryStat
  */
 export type IssueCategoryStat = {
-    category: IssueCategory;
+    category: Category;
     /**
      * Open
      */
@@ -1369,8 +1365,8 @@ export type IssuePublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Line Start
      */
@@ -1432,11 +1428,6 @@ export type IssuePublic = {
  * deleted; the violation no longer exists anywhere to fix.
  */
 export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged' | 'branch_deleted';
-
-/**
- * IssueSeverity
- */
-export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * IssueStatsPublic
@@ -1840,7 +1831,7 @@ export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
  * are grouped per repo.
  */
 export type RepoCategoryStat = {
-    category: IssueCategory;
+    category: Category;
     /**
      * Open
      */
@@ -1868,7 +1859,7 @@ export type RepoCategoryStat = {
  * ``score``/``grade`` here are the repo's own overall grade (same values as
  * ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
  * doesn't need a second lookup to size the radar's "no issues" fallback.
- * Each entry in ``categories`` covers every ``IssueCategory``, including
+ * Each entry in ``categories`` covers every ``Category``, including
  * categories with zero open issues, so their scores average out to exactly
  * the repo's overall score (see ``compute_category_scores``).
  */
@@ -1968,8 +1959,8 @@ export type RulePublic = {
      * Slug
      */
     slug: string;
-    category: IssueCategory;
-    severity: IssueSeverity;
+    category: Category;
+    severity: Severity;
     /**
      * Title
      */
@@ -2163,14 +2154,25 @@ export type SamplePayload = {
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
 
 /**
+ * ScanTrigger
+ */
+export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
+
+/**
+ * Severity
+ * How bad a rule violation is. Shared by every engine's findings.
+ */
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+/**
  * SeverityStat
  * Open/resolved finding counts for one severity.
  *
- * Emitted for every ``IssueSeverity`` including zeros, so the frontend can
+ * Emitted for every ``Severity`` including zeros, so the frontend can
  * render a fixed-segment severity bar without gap logic.
  */
 export type SeverityStat = {
-    severity: IssueSeverity;
+    severity: Severity;
     /**
      * Open
      */
@@ -2370,8 +2372,8 @@ export type TerraformFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Message
      */
@@ -2557,7 +2559,7 @@ export type TerraformScanPublic = {
      */
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Score
      */
@@ -2623,8 +2625,8 @@ export type TopRuleStat = {
      * Title
      */
     title: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Open
      */
@@ -4104,11 +4106,11 @@ export type IssuesListIssuesData = {
         /**
          * Category
          */
-        category?: IssueCategory | null;
+        category?: Category | null;
         /**
          * Severity
          */
-        severity?: IssueSeverity | null;
+        severity?: Severity | null;
         /**
          * Unfixed
          */
@@ -4670,7 +4672,7 @@ export type RulesListRulesData = {
         /**
          * Category
          */
-        category?: IssueCategory | null;
+        category?: Category | null;
         /**
          * Enabled
          */

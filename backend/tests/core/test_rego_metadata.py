@@ -17,7 +17,7 @@ from pathlib import Path
 
 from app.core import rego_metadata
 from app.core.rego_metadata import SEVERITY_ORDER, iter_rule_files
-from app.models.enums import IssueSeverity
+from app.models.enums import Severity
 
 _MODULE_PATH = Path(rego_metadata.__file__)
 
@@ -62,8 +62,8 @@ def test_severity_order_matches_the_issue_severity_enum() -> None:
     """``SEVERITY_ORDER`` is a hand-written copy of the enum's declaration
     order, because the docs and CI environments cannot import the models. If
     the enum ever gains or reorders a severity, this catches the drift."""
-    assert list(SEVERITY_ORDER) == [s.value for s in IssueSeverity]
-    assert list(SEVERITY_ORDER.values()) == list(range(len(IssueSeverity)))
+    assert list(SEVERITY_ORDER) == [s.value for s in Severity]
+    assert list(SEVERITY_ORDER.values()) == list(range(len(Severity)))
 
 
 def test_finds_every_shipped_rule_excluding_tests() -> None:

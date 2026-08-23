@@ -11,9 +11,9 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
     Organization,
     Repository,
+    ScanTrigger,
     UserTier,
     WorkflowFile,
 )
@@ -71,7 +71,7 @@ def completed_analysis(
         status=AnalysisStatus.completed,
         score=85.0,
         grade="B",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)

@@ -14,14 +14,12 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
     IssueResolutionReason,
-    IssueSeverity,
     IssueStatus,
     LLMProvider,
     Organization,
@@ -31,6 +29,8 @@ from app.models import (
     RepositoryStatus,
     ReviewDecision,
     Rule,
+    ScanTrigger,
+    Severity,
     TerraformRoot,
     UserTier,
     WorkflowFile,
@@ -712,7 +712,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -723,8 +723,8 @@ def test_github_webhook_pull_request_merged_updates_fix(
     if not rule:
         rule = Rule(
             slug=f"test-rule-{uuid.uuid4().hex[:6]}",
-            category=IssueCategory.security,
-            severity=IssueSeverity.high,
+            category=Category.security,
+            severity=Severity.high,
             title="Test Rule",
             description="A test rule",
         )
@@ -735,8 +735,8 @@ def test_github_webhook_pull_request_merged_updates_fix(
     issue = Issue(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue",
     )
     db.add(issue)
@@ -823,7 +823,7 @@ def test_github_webhook_pull_request_closed_not_merged(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -836,8 +836,8 @@ def test_github_webhook_pull_request_closed_not_merged(
     issue = Issue(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue closed",
     )
     db.add(issue)
@@ -917,7 +917,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -930,8 +930,8 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     issue = Issue(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue reopened",
     )
     db.add(issue)
@@ -1289,7 +1289,7 @@ def test_enqueue_static_analysis_calls_celery_task() -> None:
             repo,
             branch="main",
             commit_sha="deadbeef",
-            trigger=AnalysisTrigger.webhook_push,
+            trigger=ScanTrigger.webhook_push,
         )
     mock_task.delay.assert_called_once()
 
@@ -1496,7 +1496,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
         repo_id=enabled_repo.id,
         content_hash=uuid.uuid4().hex,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
@@ -1507,8 +1507,8 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     issue = Issue(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="mute me",
         fingerprint=fingerprint,
     )
@@ -1822,7 +1822,7 @@ def _seed_branch_issue(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch=branch,
     )
     db.add(analysis)
@@ -1834,8 +1834,8 @@ def _seed_branch_issue(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message=f"issue on {branch}",
         fingerprint=uuid.uuid4().hex[:16],
     )

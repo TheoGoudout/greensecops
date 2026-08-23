@@ -22,7 +22,6 @@ from sqlmodel import Session, col, select
 
 from app.models import (
     Analysis,
-    AnalysisTrigger,
     CIStatus,
     Fix,
     FixStatus,
@@ -31,6 +30,7 @@ from app.models import (
     PullRequest,
     Repository,
     ReviewDecision,
+    ScanTrigger,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -77,7 +77,7 @@ def enqueue_workflow_analysis(
     repo: Repository,
     branch: str,
     commit_sha: str,
-    trigger: AnalysisTrigger,
+    trigger: ScanTrigger,
     force: bool = False,
 ) -> None:
     """Enqueue a static analysis for ``branch`` and announce it over SSE.
@@ -107,7 +107,7 @@ def enqueue_terraform_scans(
     repo: Repository,
     branch: str,
     commit_sha: str,
-    trigger: AnalysisTrigger,
+    trigger: ScanTrigger,
     changed_paths: set[str] | None,
 ) -> None:
     """Enqueue a scan for every enabled TerraformRoot a push touched.
@@ -152,7 +152,7 @@ def enqueue_docker_scans(
     repo: Repository,
     branch: str,
     commit_sha: str,
-    trigger: AnalysisTrigger,
+    trigger: ScanTrigger,
     changed_paths: set[str] | None,
 ) -> None:
     """Enqueue a scan for every enabled DockerTarget a push touched.
@@ -450,7 +450,7 @@ def handle_issue_command(
             repo,
             branch=repo.default_branch,
             commit_sha="",
-            trigger=AnalysisTrigger.manual,
+            trigger=ScanTrigger.manual,
             force=True,
         )
     else:

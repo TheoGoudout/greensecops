@@ -10,12 +10,12 @@ from app.core import db as db_module
 from app.core.db import _seed_rules
 from app.core.rule_registry import discover_rules
 from app.models import (
-    IssueCategory,
-    IssueSeverity,
+    Category,
     Organization,
     Repository,
     Rule,
     RuleDomain,
+    Severity,
     UserTier,
 )
 
@@ -76,8 +76,8 @@ def test_seed_rules_returns_newly_inserted_slug(db: Session) -> None:
     extra = {
         "slug": new_slug,
         "domain": RuleDomain.ci_workflow,
-        "category": IssueCategory.energy,
-        "severity": IssueSeverity.low,
+        "category": Category.energy,
+        "severity": Severity.low,
         "severity_weight": 0.5,
         "title": "Throwaway test rule",
         "description": "Temporary rule used only to exercise _seed_rules.",

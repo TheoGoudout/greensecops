@@ -29,7 +29,7 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
-    IssueCategory,
+    Category,
     Organization,
     Repository,
     Rule,
@@ -426,7 +426,7 @@ def test_celery_analysis_creates_four_issues_across_categories(
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
     issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
-    assert all(i.category == IssueCategory.reliability for i in issues)
+    assert all(i.category == Category.reliability for i in issues)
     assert analysis.grade != "A+++"
 
 

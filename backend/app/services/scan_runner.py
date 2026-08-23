@@ -37,12 +37,12 @@ from sqlmodel import Session
 
 from app.core.db import engine as db_engine
 from app.models import (
-    AnalysisFailureKind,
-    AnalysisTrigger,
-    IssueCategory,
-    IssueSeverity,
+    Category,
     Repository,
+    ScanFailureKind,
     ScanStatus,
+    ScanTrigger,
+    Severity,
     UsageEngine,
     UsageMeter,
 )
@@ -116,7 +116,7 @@ def run_file_scan(
         scan = spec.scan_model(
             **{id_key: target.id},
             status=ScanStatus.queued,
-            triggered_by=AnalysisTrigger(trigger),
+            triggered_by=ScanTrigger(trigger),
             branch=effective_branch,
             commit_sha=commit_sha or None,
         )
@@ -161,9 +161,9 @@ def run_file_scan(
             sm.advance(scan, sm.ScanMachine, "scan_failed")
             scan.error_message = str(exc)[:2000]
             scan.failure_kind = (
-                AnalysisFailureKind.transient
+                ScanFailureKind.transient
                 if isinstance(exc, OpaUnavailableError)
-                else AnalysisFailureKind.permanent
+                else ScanFailureKind.permanent
             )
             scan.completed_at = datetime.now(timezone.utc)
             session.add(scan)
@@ -262,7 +262,7 @@ def _persist_findings(
         # resource address and module path, a Docker one a service or stage.
         extra = spec.finding_columns(v, target)
         shared = {
-            "severity": IssueSeverity(v.severity),
+            "severity": Severity(v.severity),
             "file_path": v.file_path,
             "line_start": v.line_start,
             "line_end": v.line_end,
@@ -277,7 +277,7 @@ def _persist_findings(
                 **{spec.target_id_field: target.id},
                 rule_id=rule.id,
                 fingerprint=fingerprint,
-                category=IssueCategory(v.category),
+                category=Category(v.category),
                 created_at=datetime.now(timezone.utc),
                 **shared,
                 **extra,

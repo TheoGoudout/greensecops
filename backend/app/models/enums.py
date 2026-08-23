@@ -42,7 +42,7 @@ class AnalysisStatus(str, enum.Enum):
     no_workflows = "no_workflows"
 
 
-class AnalysisFailureKind(str, enum.Enum):
+class ScanFailureKind(str, enum.Enum):
     """Why an analysis ``failed`` — orthogonal to the state itself.
 
     ``transient`` failures (sweep timeout, OPA/network hiccup) are safe to
@@ -54,7 +54,7 @@ class AnalysisFailureKind(str, enum.Enum):
     permanent = "permanent"
 
 
-class AnalysisTrigger(str, enum.Enum):
+class ScanTrigger(str, enum.Enum):
     webhook_push = "webhook_push"
     webhook_workflow_run = "webhook_workflow_run"
     # A push detected by polling an external repo's default-branch head (external
@@ -65,7 +65,9 @@ class AnalysisTrigger(str, enum.Enum):
     release = "release"
 
 
-class IssueSeverity(str, enum.Enum):
+class Severity(str, enum.Enum):
+    """How bad a rule violation is. Shared by every engine's findings."""
+
     critical = "critical"
     high = "high"
     medium = "medium"
@@ -73,7 +75,9 @@ class IssueSeverity(str, enum.Enum):
     info = "info"
 
 
-class IssueCategory(str, enum.Enum):
+class Category(str, enum.Enum):
+    """Which axis a rule grades on. Also the directory a .rego file lives in."""
+
     energy = "energy"
     reliability = "reliability"
     security = "security"
@@ -81,7 +85,7 @@ class IssueCategory(str, enum.Enum):
     maintainability = "maintainability"
     # NOTE: a "cost" category for IaC/cloud rules is deliberately not added
     # yet. services/scoring.py:compute_category_scores iterates every
-    # IssueCategory member against a penalties dict that workflow analysis
+    # Category member against a penalties dict that workflow analysis
     # builds with exactly the 5 categories above — adding a 6th here without
     # also updating that function (and deciding whether the *workflow*
     # per-category radar should even show a "Cost" spoke) breaks every

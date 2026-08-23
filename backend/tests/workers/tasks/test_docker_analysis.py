@@ -9,17 +9,17 @@ import pytest
 from sqlmodel import Session, col, select
 
 from app.models import (
+    Category,
     DockerFinding,
     DockerScan,
     DockerTarget,
     FindingStatus,
-    IssueCategory,
-    IssueSeverity,
     Organization,
     Repository,
     Rule,
     RuleDomain,
     ScanStatus,
+    Severity,
     UserTier,
 )
 from app.services.opa.evaluator import DockerOpaViolation, OpaUnavailableError
@@ -82,8 +82,8 @@ def rule(db: Session) -> Rule:
     item = Rule(
         slug="container_runs_as_root",
         domain=RuleDomain.container_docker,
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         severity_weight=1.8,
         title="Container image runs as root",
         description="test",
@@ -144,7 +144,7 @@ def test_scan_persists_findings(db: Session, target: DockerTarget, rule: Rule) -
     assert len(findings) == 1
     assert findings[0].file_path == "Dockerfile"
     assert findings[0].stage_name == "runtime"
-    assert findings[0].severity == IssueSeverity.high
+    assert findings[0].severity == Severity.high
 
 
 def test_scan_reports_no_targets_when_no_docker_files(

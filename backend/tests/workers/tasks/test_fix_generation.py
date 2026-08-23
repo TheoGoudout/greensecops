@@ -9,17 +9,17 @@ from sqlmodel import Session
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
     Repository,
     Rule,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
 )
@@ -298,7 +298,7 @@ def _make_wf_fix_issue(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -309,8 +309,8 @@ def _make_wf_fix_issue(
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.medium,
-        category=IssueCategory.reliability,
+        severity=Severity.medium,
+        category=Category.reliability,
         message=f"auto-deliver issue {n}",
         fix_id=fix.id,
     )
@@ -344,8 +344,8 @@ def test_maybe_auto_deliver_body_keeps_previously_delivered_fixes(
     db.refresh(repo)
     rule = Rule(
         slug=f"auto-deliver-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.medium,
+        category=Category.reliability,
+        severity=Severity.medium,
         title="Auto Deliver Rule",
         description="A test rule",
         enabled=True,
@@ -409,8 +409,8 @@ def test_maybe_auto_deliver_skips_externally_modified_pr(db: Session) -> None:
     db.refresh(repo)
     rule = Rule(
         slug=f"auto-deliver-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.medium,
+        category=Category.reliability,
+        severity=Severity.medium,
         title="Auto Deliver Rule",
         description="A test rule",
         enabled=True,

@@ -11,7 +11,6 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
-    AnalysisFailureKind,
     AnalysisStatus,
     CloudScan,
     DockerScan,
@@ -21,6 +20,7 @@ from app.models import (
     PullRequest,
     PullRequestState,
     Repository,
+    ScanFailureKind,
     ScanStatus,
     TelemetryRun,
     TerraformScan,
@@ -64,7 +64,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             )
             # A sweep is a transient failure (worker/broker interruption) — safe
             # to retry once the pipeline is healthy again.
-            analysis.failure_kind = AnalysisFailureKind.transient
+            analysis.failure_kind = ScanFailureKind.transient
             analysis.completed_at = now
             session.add(analysis)
             swept_analyses += 1
@@ -120,7 +120,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
                 scan.error_message = (
                     "Timed out: the scan worker was interrupted before completion"
                 )
-                scan.failure_kind = AnalysisFailureKind.transient
+                scan.failure_kind = ScanFailureKind.transient
                 session.add(scan)
                 swept_scans += 1
 
@@ -263,7 +263,7 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
             select(Analysis, Repository)
             .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
             .where(Analysis.status == AnalysisStatus.failed)
-            .where(Analysis.failure_kind == AnalysisFailureKind.transient)
+            .where(Analysis.failure_kind == ScanFailureKind.transient)
             .where(col(Analysis.completed_at).is_not(None))
             .where(Analysis.completed_at >= cutoff)  # type: ignore[operator]
             .where(Repository.enabled)
@@ -278,7 +278,7 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
                     .where(Analysis.workflow_file_id == analysis.workflow_file_id)
                     .where(Analysis.content_hash == analysis.content_hash)
                     .where(Analysis.status == AnalysisStatus.failed)
-                    .where(Analysis.failure_kind == AnalysisFailureKind.transient)
+                    .where(Analysis.failure_kind == ScanFailureKind.transient)
                 ).all()
             )
             if attempts >= MAX_AUTO_RETRY_ATTEMPTS:

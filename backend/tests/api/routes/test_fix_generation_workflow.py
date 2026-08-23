@@ -20,17 +20,17 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
     Repository,
     Rule,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
 )
@@ -91,8 +91,8 @@ def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
 def rule(db: Session) -> Rule:
     r = Rule(
         slug=f"fgw-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.high,
+        category=Category.reliability,
+        severity=Severity.high,
         title="Unpinned Action (test)",
         description="Rule for fix generation workflow tests",
         enabled=True,
@@ -113,7 +113,7 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
         status=AnalysisStatus.completed,
         score=60.0,
         grade="C",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(a)
@@ -130,8 +130,8 @@ def issue(
         analysis_id=analysis.id,
         workflow_file_id=workflow_file.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.reliability,
+        severity=Severity.high,
+        category=Category.reliability,
         line_start=19,
         line_end=19,
         message="actions/checkout@v4 uses a mutable ref",
@@ -268,8 +268,8 @@ def test_full_fix_generation_flags_llm_reported_unfixed_issue(
         analysis_id=analysis.id,
         workflow_file_id=workflow_file.id,
         rule_id=rule.id,
-        severity=IssueSeverity.medium,
-        category=IssueCategory.security,
+        severity=Severity.medium,
+        category=Category.security,
         message="Long-lived cloud credentials instead of OIDC",
         fingerprint="deadbeef12345678",
     )

@@ -7,7 +7,7 @@ from sqlmodel import Field, SQLModel
 from .db import UserBase
 from .enums import (
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
     CloudAccountStatus,
     CloudProvider,
@@ -18,9 +18,7 @@ from .enums import (
     FixDeliveryMode,
     FixStatus,
     InvoiceStatus,
-    IssueCategory,
     IssueResolutionReason,
-    IssueSeverity,
     IssueStatus,
     LLMProvider,
     OssApplicationStatus,
@@ -28,6 +26,8 @@ from .enums import (
     PullRequestState,
     ReviewDecision,
     ScanStatus,
+    ScanTrigger,
+    Severity,
     SSESignal,
     SubscriptionStatus,
     TelemetryPhase,
@@ -113,7 +113,7 @@ class AnalysisPublic(SQLModel):
     status: AnalysisStatus
     score: float | None = None
     grade: str | None = None
-    triggered_by: AnalysisTrigger
+    triggered_by: ScanTrigger
     branch: str | None = None
     commit_sha: str | None = None
     created_at: datetime | None = None
@@ -125,8 +125,8 @@ class IssuePublic(SQLModel):
     analysis_id: uuid.UUID
     rule_id: uuid.UUID
     rule_slug: str
-    severity: IssueSeverity
-    category: IssueCategory
+    severity: Severity
+    category: Category
     line_start: int | None = None
     line_end: int | None = None
     message: str
@@ -143,7 +143,7 @@ class IssuePublic(SQLModel):
 
 
 class IssueCategoryStat(SQLModel):
-    category: IssueCategory
+    category: Category
     open: int
     resolved: int
     critical_open: int
@@ -157,7 +157,7 @@ class RepoCategoryStat(SQLModel):
     are grouped per repo.
     """
 
-    category: IssueCategory
+    category: Category
     open: int
     critical_open: int
     score: float | None = None
@@ -172,7 +172,7 @@ class RepoIssueStats(SQLModel):
     ``score``/``grade`` here are the repo's own overall grade (same values as
     ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
     doesn't need a second lookup to size the radar's "no issues" fallback.
-    Each entry in ``categories`` covers every ``IssueCategory``, including
+    Each entry in ``categories`` covers every ``Category``, including
     categories with zero open issues, so their scores average out to exactly
     the repo's overall score (see ``compute_category_scores``).
     """
@@ -197,8 +197,8 @@ class IssueStatsPublic(SQLModel):
 class FixIssueSummary(SQLModel):
     id: uuid.UUID
     rule_slug: str | None = None
-    severity: IssueSeverity | None = None
-    category: IssueCategory | None = None
+    severity: Severity | None = None
+    category: Category | None = None
     message: str | None = None
     line_start: int | None = None
     line_end: int | None = None
@@ -247,7 +247,7 @@ class ScanPublicBase(SQLModel):
 
     id: uuid.UUID
     status: ScanStatus
-    triggered_by: AnalysisTrigger
+    triggered_by: ScanTrigger
     score: float | None = None
     grade: str | None = None
     error_message: str | None = None
@@ -269,8 +269,8 @@ class FindingPublicBase(SQLModel):
     scan_id: uuid.UUID
     rule_id: uuid.UUID
     rule_slug: str
-    severity: IssueSeverity
-    category: IssueCategory
+    severity: Severity
+    category: Category
     message: str
     context: str | None = None
     status: FindingStatus
@@ -388,8 +388,8 @@ class DockerRuntimeFindingPublic(SQLModel):
     telemetry_id: uuid.UUID
     rule_slug: str
     rule_title: str | None = None
-    severity: IssueSeverity | None = None
-    category: IssueCategory | None = None
+    severity: Severity | None = None
+    category: Category | None = None
     evidence: str
     recommendation: str
     created_at: datetime | None = None
@@ -513,11 +513,11 @@ class CloudFindingPublic(FindingPublicBase):
 class SeverityStat(SQLModel):
     """Open/resolved finding counts for one severity.
 
-    Emitted for every ``IssueSeverity`` including zeros, so the frontend can
+    Emitted for every ``Severity`` including zeros, so the frontend can
     render a fixed-segment severity bar without gap logic.
     """
 
-    severity: IssueSeverity
+    severity: Severity
     open: int
     resolved: int
 
@@ -541,8 +541,8 @@ class TopRuleStat(SQLModel):
     rule_id: uuid.UUID
     slug: str
     title: str
-    severity: IssueSeverity
-    category: IssueCategory
+    severity: Severity
+    category: Category
     open: int
 
 
@@ -672,8 +672,8 @@ class PullRequestPublic(SQLModel):
 class RulePublic(SQLModel):
     id: uuid.UUID
     slug: str
-    category: IssueCategory
-    severity: IssueSeverity
+    category: Category
+    severity: Severity
     title: str
     description: str
     enabled: bool

@@ -15,14 +15,12 @@ from sqlmodel import Session
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
     IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
@@ -30,6 +28,8 @@ from app.models import (
     Repository,
     ReviewDecision,
     Rule,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
 )
@@ -91,15 +91,15 @@ def _delivered_fix_with_issue(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
     rule = Rule(
         slug=f"poll_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="t",
         description="d",
     )
@@ -121,8 +121,8 @@ def _delivered_fix_with_issue(
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="m",
         fix_id=fix.id,
     )
@@ -174,9 +174,7 @@ def test_head_advance_enqueues_polled_analysis(db: Session) -> None:
     ):
         result = polling._poll_repository_impl(str(repo.id))
 
-    assert calls == [
-        (str(repo.id), "main", "new-sha", AnalysisTrigger.polled_push, False)
-    ]
+    assert calls == [(str(repo.id), "main", "new-sha", ScanTrigger.polled_push, False)]
     assert result["analyses_enqueued"] == 1
     db.refresh(repo)
     assert repo.last_polled_head_sha == "new-sha"

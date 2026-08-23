@@ -12,11 +12,11 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
+    ScanTrigger,
     User,
     UserTier,
     WorkflowFile,
@@ -571,7 +571,7 @@ def _make_completed_analysis(
         status=AnalysisStatus.completed,
         score=score,
         grade=grade,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(a)
@@ -1181,7 +1181,7 @@ def test_grade_ignores_feature_branch_analyses(
         status=AnalysisStatus.completed,
         score=10.0,
         grade="F",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="feature",
     )
     db.add(bad)

@@ -12,17 +12,17 @@ from app.api.router import Role, RoleRouter
 from app.models import (
     Analysis,
     AnalysisStatus,
+    Category,
     Fix,
     Issue,
-    IssueCategory,
     IssueCategoryStat,
     IssuePublic,
-    IssueSeverity,
     IssueStatsPublic,
     RepoCategoryStat,
     RepoIssueStats,
     Repository,
     Rule,
+    Severity,
     WorkflowFile,
 )
 from app.services.scoring import (
@@ -55,8 +55,8 @@ def list_issues(
     analysis_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
-    category: IssueCategory | None = None,
-    severity: IssueSeverity | None = None,
+    category: Category | None = None,
+    severity: Severity | None = None,
     unfixed: bool = False,
     latest_only: bool = True,
     include_resolved: bool = False,
@@ -124,11 +124,11 @@ def list_issues(
     if severity:
         query = query.where(Issue.severity == severity)
     severity_rank = case(
-        (col(Issue.severity) == IssueSeverity.critical, 0),
-        (col(Issue.severity) == IssueSeverity.high, 1),
-        (col(Issue.severity) == IssueSeverity.medium, 2),
-        (col(Issue.severity) == IssueSeverity.low, 3),
-        (col(Issue.severity) == IssueSeverity.info, 4),
+        (col(Issue.severity) == Severity.critical, 0),
+        (col(Issue.severity) == Severity.high, 1),
+        (col(Issue.severity) == Severity.medium, 2),
+        (col(Issue.severity) == Severity.low, 3),
+        (col(Issue.severity) == Severity.info, 4),
         else_=99,
     )
     query = (
@@ -194,7 +194,7 @@ def get_issue_stats(
         query = query.where(Issue.analysis_id == latest_subq)
 
     is_open = col(Issue.resolved_at).is_(None)
-    is_critical = Issue.severity == IssueSeverity.critical
+    is_critical = Issue.severity == Severity.critical
     grouped = query.with_only_columns(  # type: ignore[call-overload]
         Issue.category,
         func.sum(case((is_open, 1), else_=0)).label("open"),
@@ -246,11 +246,11 @@ def get_issue_stats(
         ).group_by(Analysis.repo_id, Issue.category)
         rows = session.execute(repo_grouped).all()
 
-        counts_by_repo: dict[uuid.UUID, dict[IssueCategory, tuple[int, int]]] = (
-            defaultdict(dict)
+        counts_by_repo: dict[uuid.UUID, dict[Category, tuple[int, int]]] = defaultdict(
+            dict
         )
-        penalties_by_repo: dict[uuid.UUID, dict[IssueCategory, float]] = defaultdict(
-            lambda: dict.fromkeys(IssueCategory, 0.0)
+        penalties_by_repo: dict[uuid.UUID, dict[Category, float]] = defaultdict(
+            lambda: dict.fromkeys(Category, 0.0)
         )
         for row in rows:
             counts_by_repo[row.repo_id][row.category] = (
@@ -280,7 +280,7 @@ def get_issue_stats(
                     score=category_scores.get(category, (None, None))[0],
                     grade=category_scores.get(category, (None, None))[1],
                 )
-                for category in IssueCategory
+                for category in Category
             ]
             by_repo.append(
                 RepoIssueStats(

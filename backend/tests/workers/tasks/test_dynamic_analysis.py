@@ -11,11 +11,11 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
     DynamicAnalysisStatus,
     DynamicEnrichment,
     Organization,
     Repository,
+    ScanTrigger,
     TelemetryRun,
     UserTier,
     WorkflowFile,
@@ -108,7 +108,7 @@ def _make_completed_analysis(db: Session, repo: Repository) -> Analysis:
         status=AnalysisStatus.completed,
         score=85.0,
         grade="B",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()

@@ -26,7 +26,7 @@ from app.core.rule_registry import (
     discover_rules,
     rule_from_path,
 )
-from app.models import IssueCategory, IssueSeverity, RuleDomain
+from app.models import Category, RuleDomain, Severity
 
 _VALID_METADATA = """\
 # METADATA
@@ -77,8 +77,8 @@ def test_rule_from_path_reads_every_field(tmp_path: Path) -> None:
     assert rule == {
         "slug": "example",
         "domain": RuleDomain.ci_workflow,
-        "category": IssueCategory.security,
-        "severity": IssueSeverity.high,
+        "category": Category.security,
+        "severity": Severity.high,
         # No custom.severity_weight, so the default for `high` applies.
         "severity_weight": 1.8,
         "title": "Example rule",
@@ -108,7 +108,7 @@ def test_rule_from_path_honours_an_explicit_weight(tmp_path: Path) -> None:
         ),
         pytest.param(
             lambda body: body.replace("severity: high", "severity: catastrophic"),
-            "not an IssueSeverity",
+            "not an Severity",
             id="bad-severity",
         ),
         pytest.param(
@@ -170,7 +170,7 @@ def test_rule_from_path_rejects_an_unknown_engine_directory(tmp_path: Path) -> N
 
 def test_rule_from_path_rejects_an_unknown_category_directory(tmp_path: Path) -> None:
     path = _write(tmp_path, _VALID_METADATA, "ci_workflow/cost/example.rego")
-    with pytest.raises(RuleMetadataError, match="not an IssueCategory"):
+    with pytest.raises(RuleMetadataError, match="not an Category"):
         rule_from_path(path, tmp_path)
 
 

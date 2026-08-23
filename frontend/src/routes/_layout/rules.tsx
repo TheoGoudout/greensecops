@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
-import type { IssueCategory, RulePublic } from "@/client"
+import type { Category, RulePublic } from "@/client"
 import { RulesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
@@ -72,7 +72,7 @@ function RuleRow({
 
 function Rules() {
   const { user } = useAuth()
-  const [category, setCategory] = useState<IssueCategory | "all">("all")
+  const [category, setCategory] = useState<Category | "all">("all")
 
   const {
     data: rules,
@@ -103,7 +103,7 @@ function Rules() {
       <div className="flex gap-3">
         <Select
           value={category}
-          onValueChange={(v) => setCategory(v as IssueCategory | "all")}
+          onValueChange={(v) => setCategory(v as Category | "all")}
         >
           <SelectTrigger className="w-48">
             <SelectValue />

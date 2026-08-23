@@ -3,7 +3,7 @@ import Prism from "prismjs"
 import "prismjs/components/prism-yaml"
 import "prismjs/components/prism-hcl"
 import "prismjs/components/prism-docker"
-import type { FixPublic, IssueSeverity } from "@/client"
+import type { FixPublic, Severity } from "@/client"
 
 /**
  * The mechanics behind {@link FileViewer}: turning a file (optionally with a
@@ -16,7 +16,7 @@ import type { FixPublic, IssueSeverity } from "@/client"
 /** How many unchanged lines to keep either side of an annotated one. */
 export const CONTEXT_LINES = 5
 
-export const SEVERITY_BORDER: Record<IssueSeverity, string> = {
+export const SEVERITY_BORDER: Record<Severity, string> = {
   critical: "border-l-red-500",
   high: "border-l-orange-500",
   medium: "border-l-yellow-500",

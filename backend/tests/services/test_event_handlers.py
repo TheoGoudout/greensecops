@@ -14,14 +14,12 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
     IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
@@ -29,6 +27,8 @@ from app.models import (
     Repository,
     ReviewDecision,
     Rule,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
 )
@@ -73,7 +73,7 @@ def _build_pr_with_delivered_fix(
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
@@ -81,8 +81,8 @@ def _build_pr_with_delivered_fix(
 
     rule = Rule(
         slug=f"eh_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="t",
         description="d",
     )
@@ -116,8 +116,8 @@ def _build_pr_with_delivered_fix(
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="m",
         fix_id=fix.id,
     )

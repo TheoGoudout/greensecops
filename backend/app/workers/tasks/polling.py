@@ -25,10 +25,10 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
-    AnalysisTrigger,
     PullRequest,
     PullRequestState,
     Repository,
+    ScanTrigger,
 )
 from app.services.github import event_handlers as eh
 from app.services.github.app_client import GitHubAppClient, PRSnapshot, parse_pr_url
@@ -140,7 +140,7 @@ def _apply_push(
         pass  # baseline
     elif data.head_sha != repo.last_polled_head_sha:
         eh.enqueue_workflow_analysis(
-            repo, data.branch, data.head_sha, AnalysisTrigger.polled_push
+            repo, data.branch, data.head_sha, ScanTrigger.polled_push
         )
         # External repos receive no webhooks, so this is their only path to an
         # IaC/Docker scan. Without these two calls a polled repo's Terraform
@@ -153,7 +153,7 @@ def _apply_push(
             repo,
             data.branch,
             data.head_sha,
-            AnalysisTrigger.polled_push,
+            ScanTrigger.polled_push,
             changed_paths=None,
         )
         eh.enqueue_docker_scans(
@@ -161,7 +161,7 @@ def _apply_push(
             repo,
             data.branch,
             data.head_sha,
-            AnalysisTrigger.polled_push,
+            ScanTrigger.polled_push,
             changed_paths=None,
         )
         enqueued = True

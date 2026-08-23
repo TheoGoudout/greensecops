@@ -11,15 +11,15 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.models import (
-    AnalysisFailureKind,
-    AnalysisTrigger,
+    Category,
     CloudAccount,
     CloudFinding,
     CloudScan,
-    IssueCategory,
-    IssueSeverity,
     RuleDomain,
+    ScanFailureKind,
     ScanStatus,
+    ScanTrigger,
+    Severity,
     UsageEngine,
     UsageMeter,
 )
@@ -78,7 +78,7 @@ def _run_cloud_scan_impl(
         scan = CloudScan(
             cloud_account_id=account.id,
             status=ScanStatus.queued,
-            triggered_by=AnalysisTrigger(trigger),
+            triggered_by=ScanTrigger(trigger),
         )
         session.add(scan)
         session.flush()
@@ -112,9 +112,9 @@ def _run_cloud_scan_impl(
             sm.advance(scan, sm.ScanMachine, "scan_failed")
             scan.error_message = str(exc)[:2000]
             scan.failure_kind = (
-                AnalysisFailureKind.transient
+                ScanFailureKind.transient
                 if isinstance(exc, OpaUnavailableError)
-                else AnalysisFailureKind.permanent
+                else ScanFailureKind.permanent
             )
             scan.completed_at = datetime.now(timezone.utc)
             session.add(scan)
@@ -163,8 +163,8 @@ def _run_cloud_scan_impl(
                     resource_id=v.resource_id,
                     region=v.region,
                     fingerprint=fingerprint,
-                    severity=IssueSeverity(v.severity),
-                    category=IssueCategory(v.category),
+                    severity=Severity(v.severity),
+                    category=Category(v.category),
                     message=v.message,
                     context=v.context,
                     created_at=datetime.now(timezone.utc),
@@ -173,7 +173,7 @@ def _run_cloud_scan_impl(
                     constraint="uq_cloud_finding_account_fingerprint",
                     set_={
                         "scan_id": scan.id,
-                        "severity": IssueSeverity(v.severity),
+                        "severity": Severity(v.severity),
                         "region": v.region,
                         "message": v.message,
                         "context": v.context,

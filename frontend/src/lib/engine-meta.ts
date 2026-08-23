@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import { Activity, Boxes, Cloud, Container, Workflow } from "lucide-react"
-import type { Engine, IssueSeverity, OverviewSection } from "@/client"
+import type { Engine, OverviewSection, Severity } from "@/client"
 
 /**
  * How each analysis engine presents itself on the dashboard.
@@ -60,7 +60,7 @@ export const SECTION_ORDER: OverviewSection[] = ["ci", "docker", "infra"]
  * visible count legend beside it, so the color is a second channel, never the
  * only one.
  */
-export const SEVERITY_FILL: Record<IssueSeverity, string> = {
+export const SEVERITY_FILL: Record<Severity, string> = {
   critical: "bg-red-600 dark:bg-red-500",
   high: "bg-orange-500 dark:bg-orange-400",
   medium: "bg-yellow-500 dark:bg-yellow-400",

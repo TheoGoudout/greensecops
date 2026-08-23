@@ -17,14 +17,14 @@ import pytest
 from sqlmodel import Session, col, select
 
 from app.models import (
+    Category,
     FindingStatus,
-    IssueCategory,
-    IssueSeverity,
     Organization,
     Repository,
     Rule,
     RuleDomain,
     ScanStatus,
+    Severity,
     TerraformFinding,
     TerraformRoot,
     TerraformScan,
@@ -161,9 +161,9 @@ def test_opa_unavailable_marks_scan_failed_transient(
     scan = db.get(TerraformScan, uuid.UUID(str(result["scan_id"])))
     assert scan is not None
     assert scan.status == ScanStatus.failed
-    from app.models import AnalysisFailureKind
+    from app.models import ScanFailureKind
 
-    assert scan.failure_kind == AnalysisFailureKind.transient
+    assert scan.failure_kind == ScanFailureKind.transient
 
 
 def test_creates_finding_and_computes_score(
@@ -266,8 +266,8 @@ def test_unknown_rule_slug_is_skipped_not_persisted(
     files = [FakeTerraformFile(path="s3.tf", content=_S3_TF)]
     violation = TerraformOpaViolation(
         rule_slug=f"nonexistent-{uuid.uuid4().hex[:8]}",
-        severity=IssueSeverity.high.value,
-        category=IssueCategory.security.value,
+        severity=Severity.high.value,
+        category=Category.security.value,
         message="orphan violation",
         resource_address="aws_s3_bucket.data",
         file_path="s3.tf",

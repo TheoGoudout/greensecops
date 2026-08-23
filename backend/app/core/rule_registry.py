@@ -25,19 +25,19 @@ from typing import Any
 import yaml
 
 from app.core.rego_metadata import RULES_DIR, iter_rule_files, read_metadata_block
-from app.models import IssueCategory, IssueSeverity, RuleDomain
+from app.models import Category, RuleDomain, Severity
 
 # What `severity_weight` a rule gets when its METADATA does not name one. These
 # are the modal weights of the old hand-maintained lists, so the default is
 # what most rules of that severity already scored at. A rule that genuinely
 # deserves more or less weight within its band overrides it with
 # `custom.severity_weight`; twelve rules do.
-_DEFAULT_SEVERITY_WEIGHTS: dict[IssueSeverity, float] = {
-    IssueSeverity.critical: 3.5,
-    IssueSeverity.high: 1.8,
-    IssueSeverity.medium: 1.0,
-    IssueSeverity.low: 0.5,
-    IssueSeverity.info: 0.2,
+_DEFAULT_SEVERITY_WEIGHTS: dict[Severity, float] = {
+    Severity.critical: 3.5,
+    Severity.high: 1.8,
+    Severity.medium: 1.0,
+    Severity.low: 0.5,
+    Severity.info: 0.2,
 }
 
 # Mirrors docs/ext/rego_autodoc.py's _DETECTION_LABELS. Validated here so a typo
@@ -107,9 +107,9 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
             f"unknown engine directory '{domain_dir}' — add it to RuleDomain",
         ) from exc
     try:
-        category = IssueCategory(category_dir)
+        category = Category(category_dir)
     except ValueError as exc:
-        raise _fail(path, f"'{category_dir}' is not an IssueCategory") from exc
+        raise _fail(path, f"'{category_dir}' is not an Category") from exc
 
     meta = _parse_metadata(path)
     custom = meta.get("custom") or {}
@@ -134,9 +134,9 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
     if raw_severity is None:
         raise _fail(path, "METADATA has no 'custom.severity'")
     try:
-        severity = IssueSeverity(str(raw_severity))
+        severity = Severity(str(raw_severity))
     except ValueError as exc:
-        raise _fail(path, f"'{raw_severity}' is not an IssueSeverity") from exc
+        raise _fail(path, f"'{raw_severity}' is not an Severity") from exc
 
     detection = custom.get("detection")
     if detection not in VALID_DETECTION_METHODS:

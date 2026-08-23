@@ -122,7 +122,7 @@ export const AnalysisPublicSchema = {
             title: 'Grade'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         branch: {
             anyOf: [
@@ -180,12 +180,6 @@ export const AnalysisStatusSchema = {
     type: 'string',
     enum: ['queued', 'running', 'completed', 'failed', 'no_workflows'],
     title: 'AnalysisStatus'
-} as const;
-
-export const AnalysisTriggerSchema = {
-    type: 'string',
-    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release'],
-    title: 'AnalysisTrigger'
 } as const;
 
 export const BatchFixRequestSchema = {
@@ -433,6 +427,13 @@ export const CIStatusSchema = {
     description: 'Aggregate CI outcome for a PR, from ``check_suite`` webhooks.'
 } as const;
 
+export const CategorySchema = {
+    type: 'string',
+    enum: ['energy', 'reliability', 'security', 'performance', 'maintainability'],
+    title: 'Category',
+    description: 'Which axis a rule grades on. Also the directory a .rego file lives in.'
+} as const;
+
 export const CheckoutRequestSchema = {
     properties: {
         tier: {
@@ -612,10 +613,10 @@ export const CloudFindingPublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         message: {
             type: 'string',
@@ -716,7 +717,7 @@ export const CloudScanPublicSchema = {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         score: {
             anyOf: [
@@ -1085,10 +1086,10 @@ export const DockerFindingPublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         message: {
             type: 'string',
@@ -1397,7 +1398,7 @@ export const DockerRuntimeFindingPublicSchema = {
         severity: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueSeverity'
+                    '$ref': '#/components/schemas/Severity'
                 },
                 {
                     type: 'null'
@@ -1407,7 +1408,7 @@ export const DockerRuntimeFindingPublicSchema = {
         category: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueCategory'
+                    '$ref': '#/components/schemas/Category'
                 },
                 {
                     type: 'null'
@@ -1474,7 +1475,7 @@ export const DockerScanPublicSchema = {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         score: {
             anyOf: [
@@ -2076,7 +2077,7 @@ export const FixIssueSummarySchema = {
         severity: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueSeverity'
+                    '$ref': '#/components/schemas/Severity'
                 },
                 {
                     type: 'null'
@@ -2086,7 +2087,7 @@ export const FixIssueSummarySchema = {
         category: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueCategory'
+                    '$ref': '#/components/schemas/Category'
                 },
                 {
                     type: 'null'
@@ -2488,16 +2489,10 @@ export const InvoiceStatusSchema = {
     description: "Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only)."
 } as const;
 
-export const IssueCategorySchema = {
-    type: 'string',
-    enum: ['energy', 'reliability', 'security', 'performance', 'maintainability'],
-    title: 'IssueCategory'
-} as const;
-
 export const IssueCategoryStatSchema = {
     properties: {
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         open: {
             type: 'integer',
@@ -2539,10 +2534,10 @@ export const IssuePublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         line_start: {
             anyOf: [
@@ -2689,12 +2684,6 @@ a resolved violation recurs.
 - \`\`merged\`\`: the fix PR was merged, applying the change to the branch.
 - \`\`branch_deleted\`\`: the branch carrying the issue's workflow file was
   deleted; the violation no longer exists anywhere to fix.`
-} as const;
-
-export const IssueSeveritySchema = {
-    type: 'string',
-    enum: ['critical', 'high', 'medium', 'low', 'info'],
-    title: 'IssueSeverity'
 } as const;
 
 export const IssueStatsPublicSchema = {
@@ -3342,7 +3331,7 @@ export const PullRequestStateSchema = {
 export const RepoCategoryStatSchema = {
     properties: {
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         open: {
             type: 'integer',
@@ -3433,7 +3422,7 @@ meaningless once already filtered to a single \`\`repo_id\`\`.
 \`\`score\`\`/\`\`grade\`\` here are the repo's own overall grade (same values as
 \`\`RepositoryPublic.avg_score\`\`/\`\`grade\`\`), repeated so the frontend
 doesn't need a second lookup to size the radar's "no issues" fallback.
-Each entry in \`\`categories\`\` covers every \`\`IssueCategory\`\`, including
+Each entry in \`\`categories\`\` covers every \`\`Category\`\`, including
 categories with zero open issues, so their scores average out to exactly
 the repo's overall score (see \`\`compute_category_scores\`\`).`
 } as const;
@@ -3562,10 +3551,10 @@ export const RulePublicSchema = {
             title: 'Slug'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         title: {
             type: 'string',
@@ -3999,10 +3988,23 @@ files under this root" and "no resources of the scanned types in this
 account/region".`
 } as const;
 
+export const ScanTriggerSchema = {
+    type: 'string',
+    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release'],
+    title: 'ScanTrigger'
+} as const;
+
+export const SeveritySchema = {
+    type: 'string',
+    enum: ['critical', 'high', 'medium', 'low', 'info'],
+    title: 'Severity',
+    description: "How bad a rule violation is. Shared by every engine's findings."
+} as const;
+
 export const SeverityStatSchema = {
     properties: {
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         open: {
             type: 'integer',
@@ -4018,7 +4020,7 @@ export const SeverityStatSchema = {
     title: 'SeverityStat',
     description: `Open/resolved finding counts for one severity.
 
-Emitted for every \`\`IssueSeverity\`\` including zeros, so the frontend can
+Emitted for every \`\`Severity\`\` including zeros, so the frontend can
 render a fixed-segment severity bar without gap logic.`
 } as const;
 
@@ -4318,10 +4320,10 @@ export const TerraformFindingPublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         message: {
             type: 'string',
@@ -4733,7 +4735,7 @@ export const TerraformScanPublicSchema = {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         score: {
             anyOf: [
@@ -4858,10 +4860,10 @@ export const TopRuleStatSchema = {
             title: 'Title'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         open: {
             type: 'integer',

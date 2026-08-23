@@ -6,19 +6,19 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
+    Category,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
     CloudProvider,
     CloudScan,
     FindingStatus,
-    IssueCategory,
-    IssueSeverity,
     Organization,
     Repository,
     Rule,
     RuleDomain,
     ScanStatus,
+    Severity,
     TerraformFinding,
     TerraformRoot,
     TerraformScan,
@@ -56,8 +56,8 @@ def terraform_rule(db: Session) -> Rule:
     rule = Rule(
         slug=f"tf_public_s3_bucket_{uuid.uuid4().hex[:8]}",
         domain=RuleDomain.iac_terraform,
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="Public S3 bucket",
         description="An aws_s3_bucket resource has no access-block configured.",
     )
@@ -72,8 +72,8 @@ def cloud_rule(db: Session) -> Rule:
     rule = Rule(
         slug=f"cloud_open_ingress_{uuid.uuid4().hex[:8]}",
         domain=RuleDomain.cloud_aws,
-        category=IssueCategory.security,
-        severity=IssueSeverity.critical,
+        category=Category.security,
+        severity=Severity.critical,
         title="Security group open to the world",
         description="A security group allows ingress from 0.0.0.0/0.",
     )
@@ -86,8 +86,8 @@ def cloud_rule(db: Session) -> Rule:
 def test_rule_domain_defaults_to_workflow(db: Session) -> None:
     rule = Rule(
         slug=f"workflow_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.medium,
+        category=Category.reliability,
+        severity=Severity.medium,
         title="Some workflow rule",
         description="Existing-style rule created without an explicit domain.",
     )
@@ -125,8 +125,8 @@ def test_terraform_root_scan_finding_round_trip(
         line_start=12,
         line_end=12,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="Bucket has no access-block configured.",
     )
     db.add(finding)
@@ -173,8 +173,8 @@ def test_terraform_finding_fingerprint_unique_per_root(
             rule_id=terraform_rule.id,
             file_path="main.tf",
             fingerprint=fingerprint,
-            severity=IssueSeverity.medium,
-            category=IssueCategory.security,
+            severity=Severity.medium,
+            category=Category.security,
             message="first",
         )
     )
@@ -187,8 +187,8 @@ def test_terraform_finding_fingerprint_unique_per_root(
             rule_id=terraform_rule.id,
             file_path="main.tf",
             fingerprint=fingerprint,
-            severity=IssueSeverity.medium,
-            category=IssueCategory.security,
+            severity=Severity.medium,
+            category=Category.security,
             message="duplicate fingerprint on the same root",
         )
     )
@@ -233,8 +233,8 @@ def test_cloud_account_scan_finding_round_trip(
         resource_id="sg-0123456789abcdef0",
         region="us-east-1",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.critical,
-        category=IssueCategory.security,
+        severity=Severity.critical,
+        category=Category.security,
         message="Ingress rule allows 0.0.0.0/0 on port 22.",
     )
     db.add(finding)

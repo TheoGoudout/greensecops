@@ -31,6 +31,7 @@ from app.api.deps import CurrentUser, SessionDep, authorize_org, user_org_ids
 from app.api.router import Role, RoleRouter
 from app.models import (
     Analysis,
+    Category,
     CloudAccount,
     CloudFinding,
     Engine,
@@ -43,13 +44,12 @@ from app.models import (
     FixStatus,
     GradeStat,
     Issue,
-    IssueCategory,
     IssueCategoryStat,
-    IssueSeverity,
     OverviewPublic,
     OverviewTotals,
     Repository,
     Rule,
+    Severity,
     SeverityStat,
     TopRuleStat,
 )
@@ -293,7 +293,7 @@ def _findings(
     """
     finding = spec.finding_model
     is_open = col(finding.resolved_at).is_(None)
-    is_critical = finding.severity == IssueSeverity.critical
+    is_critical = finding.severity == Severity.critical
 
     query = (
         select(  # type: ignore[call-overload]
@@ -310,11 +310,9 @@ def _findings(
     if org_ids is not None:
         query = query.where(_finding_org_filter(spec, org_ids))
 
-    by_severity: dict[IssueSeverity, list[int]] = {
-        severity: [0, 0] for severity in IssueSeverity
-    }
-    by_category: dict[IssueCategory, list[int]] = {
-        category: [0, 0, 0] for category in IssueCategory
+    by_severity: dict[Severity, list[int]] = {severity: [0, 0] for severity in Severity}
+    by_category: dict[Category, list[int]] = {
+        category: [0, 0, 0] for category in Category
     }
     total_open = total_resolved = total_critical = 0
 
@@ -454,11 +452,9 @@ def _top_rules(
 
 def _totals(engines: list[EngineOverview]) -> OverviewTotals:
     """All-engine roll-up. Pure Python fold — no extra SQL."""
-    by_severity: dict[IssueSeverity, list[int]] = {
-        severity: [0, 0] for severity in IssueSeverity
-    }
-    by_category: dict[IssueCategory, list[int]] = {
-        category: [0, 0, 0] for category in IssueCategory
+    by_severity: dict[Severity, list[int]] = {severity: [0, 0] for severity in Severity}
+    by_category: dict[Category, list[int]] = {
+        category: [0, 0, 0] for category in Category
     }
     for engine in engines:
         for stat in engine.findings.by_severity:

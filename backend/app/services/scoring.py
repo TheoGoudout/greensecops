@@ -10,18 +10,18 @@ from sqlmodel import Session, col, select
 from app.models import (
     Analysis,
     AnalysisStatus,
-    IssueCategory,
-    IssueSeverity,
+    Category,
     Repository,
+    Severity,
     WorkflowFile,
 )
 
 _SEVERITY_PENALTY: dict[str, float] = {
-    IssueSeverity.critical: 20.0,
-    IssueSeverity.high: 10.0,
-    IssueSeverity.medium: 5.0,
-    IssueSeverity.low: 2.0,
-    IssueSeverity.info: 0.5,
+    Severity.critical: 20.0,
+    Severity.high: 10.0,
+    Severity.medium: 5.0,
+    Severity.low: 2.0,
+    Severity.info: 0.5,
 }
 
 _GRADE_THRESHOLDS: list[tuple[float, str]] = [
@@ -166,8 +166,8 @@ def severity_penalty_case(severity_col: ColumnElement[Any] | Mapped[Any]) -> Cas
 
 
 def compute_category_scores(
-    repo_avg_score: float, penalties: dict[IssueCategory, float]
-) -> dict[IssueCategory, tuple[float, str]]:
+    repo_avg_score: float, penalties: dict[Category, float]
+) -> dict[Category, tuple[float, str]]:
     """Split a repo's overall score into per-category scores/grades.
 
     Each category's score deviates from ``repo_avg_score`` by how far its
@@ -177,13 +177,13 @@ def compute_category_scores(
     share can still clamp at 0, which then breaks the exact-average
     property, but only for pathologically skewed repos).
 
-    ``penalties`` must have an entry for every ``IssueCategory`` (0.0 where
+    ``penalties`` must have an entry for every ``Category`` (0.0 where
     there are no open issues) so the mean is computed over all axes, not just
     the categories that happen to have issues.
     """
-    mean_penalty = sum(penalties.values()) / len(IssueCategory)
-    result: dict[IssueCategory, tuple[float, str]] = {}
-    for category in IssueCategory:
+    mean_penalty = sum(penalties.values()) / len(Category)
+    result: dict[Category, tuple[float, str]] = {}
+    for category in Category:
         deviation = penalties[category] - mean_penalty
         score = max(0.0, min(100.0, repo_avg_score - deviation))
         result[category] = (score, score_to_grade(score))

@@ -19,7 +19,6 @@ from app.core.security import get_password_hash
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -40,6 +39,7 @@ from app.models import (
     Rule,
     RuleDomain,
     ScanStatus,
+    ScanTrigger,
     TerraformFinding,
     TerraformRoot,
     TerraformScan,
@@ -133,7 +133,7 @@ def _docker_scan(
     scan = DockerScan(
         docker_target_id=target.id,
         status=status,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=score,
         grade=grade,
         file_count=1,
@@ -474,7 +474,7 @@ def test_engines_do_not_leak_into_each_other(
     tf_scan = TerraformScan(
         terraform_root_id=root.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=50.0,
         grade="C",
     )
@@ -657,7 +657,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
         workflow_file_id=workflow.id,
         content_hash=uuid.uuid4().hex,
         status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=80.0,
         grade="B",
         completed_at=datetime.now(timezone.utc),
@@ -736,7 +736,7 @@ def test_cloud_findings_are_counted(
     scan = CloudScan(
         cloud_account_id=account.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=60.0,
         grade="C",
     )
@@ -817,7 +817,7 @@ def test_totals_average_engines_not_targets(
         TerraformScan(
             terraform_root_id=root.id,
             status=ScanStatus.completed,
-            triggered_by=AnalysisTrigger.manual,
+            triggered_by=ScanTrigger.manual,
             score=90.0,
             grade="A+",
         )

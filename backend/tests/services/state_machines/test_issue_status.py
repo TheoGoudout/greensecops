@@ -9,16 +9,16 @@ from sqlmodel import Session, select
 from app.models import (
     Analysis,
     AnalysisStatus,
+    Category,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     IssueStatus,
     LLMProvider,
     Organization,
     Repository,
     Rule,
+    Severity,
     WorkflowFile,
 )
 
@@ -57,8 +57,8 @@ def issue_ctx(db: Session):
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="m",
         fingerprint=uuid.uuid4().hex[:16],
     )

@@ -10,14 +10,12 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    AnalysisTrigger,
+    Category,
     DockerBuildEnrichment,
     DockerBuildTelemetry,
     DockerFinding,
     DockerScan,
     DockerTarget,
-    IssueCategory,
-    IssueSeverity,
     Organization,
     OrgMember,
     OrgRole,
@@ -25,6 +23,8 @@ from app.models import (
     Rule,
     RuleDomain,
     ScanStatus,
+    ScanTrigger,
+    Severity,
     UserTier,
 )
 
@@ -79,7 +79,7 @@ def completed_scan(db: Session, target: DockerTarget) -> DockerScan:
     scan = DockerScan(
         docker_target_id=target.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=72.0,
         grade="B",
         file_count=3,
@@ -206,7 +206,7 @@ def test_a_failed_scan_does_not_define_the_grade(
         DockerScan(
             docker_target_id=target.id,
             status=ScanStatus.failed,
-            triggered_by=AnalysisTrigger.manual,
+            triggered_by=ScanTrigger.manual,
         )
     )
     db.commit()
@@ -336,8 +336,8 @@ def _add_finding(
         "rule_id": rule.id,
         "file_path": "Dockerfile",
         "fingerprint": uuid.uuid4().hex[:16],
-        "severity": IssueSeverity.high,
-        "category": IssueCategory.security,
+        "severity": Severity.high,
+        "category": Category.security,
         "message": "runs as root",
     }
     values.update(overrides)
@@ -870,8 +870,8 @@ def test_runtime_fix_folds_in_open_static_findings_for_the_same_file(
         rule_id=seeded_docker_rule.id,
         file_path=file_path,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="runs as root",
     )
     db.add(finding)

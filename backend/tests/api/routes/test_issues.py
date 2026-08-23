@@ -10,14 +10,14 @@ from app.core.config import settings
 from app.models import (
     Analysis,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     Issue,
-    IssueCategory,
-    IssueSeverity,
     IssueStatus,
     Organization,
     Repository,
     Rule,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
 )
@@ -75,7 +75,7 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
         status=AnalysisStatus.completed,
         score=75.0,
         grade="C",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -89,8 +89,8 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
 def rule(db: Session) -> Rule:
     r = Rule(
         slug=f"test-issues-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="Test Issues Rule",
         description="A test rule for issues tests",
         enabled=True,
@@ -108,8 +108,8 @@ def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
         analysis_id=analysis.id,
         workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=10,
         line_end=12,
         message="Test security issue",
@@ -164,7 +164,7 @@ def test_list_issues_empty(
         status=AnalysisStatus.completed,
         score=100.0,
         grade="A+++",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(fresh_analysis)
     db.commit()
@@ -339,8 +339,8 @@ def test_issue_stats_counts_critical_separately(
         analysis_id=analysis.id,
         workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.critical,
-        category=IssueCategory.security,
+        severity=Severity.critical,
+        category=Category.security,
         message="Critical test issue",
     )
     db.add(critical_issue)
@@ -427,8 +427,8 @@ def test_issue_stats_not_capped_by_pagination(
                 analysis_id=analysis.id,
                 workflow_file_id=analysis.workflow_file_id,
                 rule_id=rule.id,
-                severity=IssueSeverity.low,
-                category=IssueCategory.maintainability,
+                severity=Severity.low,
+                category=Category.maintainability,
                 message="Bulk stats test issue",
             )
         )
@@ -483,7 +483,7 @@ def test_issue_stats_by_repo_breakdown(
         status=AnalysisStatus.completed,
         score=60.0,
         grade="D",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(other_analysis)
@@ -495,8 +495,8 @@ def test_issue_stats_by_repo_breakdown(
             analysis_id=other_analysis.id,
             workflow_file_id=other_wf.id,
             rule_id=rule.id,
-            severity=IssueSeverity.medium,
-            category=IssueCategory.energy,
+            severity=Severity.medium,
+            category=Category.energy,
             message="Other repo energy issue",
         )
     )
@@ -612,7 +612,7 @@ def test_list_issues_latest_only_excludes_old_analysis(
         status=AnalysisStatus.completed,
         score=90.0,
         grade="A",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -624,8 +624,8 @@ def test_list_issues_latest_only_excludes_old_analysis(
         analysis_id=new_analysis.id,
         workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=5,
         line_end=7,
         message="New analysis issue",
@@ -667,7 +667,7 @@ def test_list_issues_latest_only_false_includes_all(
         status=AnalysisStatus.completed,
         score=90.0,
         grade="A",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -679,8 +679,8 @@ def test_list_issues_latest_only_false_includes_all(
         analysis_id=new_analysis.id,
         workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=5,
         line_end=7,
         message="New analysis issue",
@@ -725,7 +725,7 @@ def test_list_issues_latest_only_applies_without_repo_id(
         status=AnalysisStatus.completed,
         score=90.0,
         grade="A",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -737,8 +737,8 @@ def test_list_issues_latest_only_applies_without_repo_id(
         analysis_id=new_analysis.id,
         workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=5,
         line_end=7,
         message="New analysis issue",
@@ -858,7 +858,7 @@ def test_repo_issue_listing_defaults_to_default_branch(
             workflow_file_id=wf.id,
             content_hash=wf.content_hash,
             status=AnalysisStatus.completed,
-            triggered_by=AnalysisTrigger.manual,
+            triggered_by=ScanTrigger.manual,
             branch=branch,
         )
         db.add(analysis)

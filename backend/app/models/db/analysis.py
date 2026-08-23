@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..enums import AnalysisFailureKind, AnalysisStatus, AnalysisTrigger
+from ..enums import AnalysisStatus, ScanFailureKind, ScanTrigger
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
@@ -29,13 +29,13 @@ class Analysis(SQLModel, table=True):
     )
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)
-    triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
+    triggered_by: ScanTrigger = Field(default=ScanTrigger.manual)
     branch: str | None = Field(default=None, max_length=255)
     commit_sha: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=2048)
     # Set when status is ``failed`` to say whether a ``retry`` is worthwhile
     # (transient) or futile until the input changes (permanent).
-    failure_kind: AnalysisFailureKind | None = Field(default=None)
+    failure_kind: ScanFailureKind | None = Field(default=None)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )

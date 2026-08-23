@@ -14,19 +14,19 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
-    AnalysisFailureKind,
     AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     Fix,
     FixStatus,
     Issue,
-    IssueCategory,
     IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Repository,
     Rule,
     RuleDomain,
+    ScanFailureKind,
+    ScanTrigger,
+    Severity,
     UsageEngine,
     UsageMeter,
     WorkflowFile,
@@ -212,19 +212,19 @@ def _auto_queue_fix_generation(
     )
 
 
-def _classify_failure(exc: BaseException) -> AnalysisFailureKind:
+def _classify_failure(exc: BaseException) -> ScanFailureKind:
     """Transient (retry-worthy) vs permanent (input must change) OPA failure.
 
     Timeouts and network/IO errors are transient; parse/value errors (invalid
     workflow YAML, a malformed policy result) will fail identically on re-run.
     """
     if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
-        return AnalysisFailureKind.transient
+        return ScanFailureKind.transient
     if isinstance(exc, (ValueError, KeyError, TypeError)):
-        return AnalysisFailureKind.permanent
+        return ScanFailureKind.permanent
     # Unknown failures default to permanent so a genuinely broken input is not
     # retried forever; an operator can still retry explicitly.
-    return AnalysisFailureKind.permanent
+    return ScanFailureKind.permanent
 
 
 class WorkflowFetchError(Exception):
@@ -241,8 +241,8 @@ def _register_rule_from_violation(
     """
     slug = violation.rule_slug
     try:
-        category = IssueCategory(violation.category)
-        severity = IssueSeverity(violation.severity)
+        category = Category(violation.category)
+        severity = Severity(violation.severity)
     except ValueError:
         logger.warning(
             "Cannot auto-register rule %s: invalid category/severity (%s/%s)",
@@ -467,7 +467,7 @@ def _run_static_analysis_impl(
                 workflow_file_id=None,
                 content_hash="",
                 status=AnalysisStatus.no_workflows,
-                triggered_by=AnalysisTrigger(trigger),
+                triggered_by=ScanTrigger(trigger),
                 branch=effective_branch,
                 commit_sha=commit_sha or None,
                 completed_at=now,
@@ -591,7 +591,7 @@ def _run_static_analysis_impl(
                 workflow_file_id=wf_record.id,
                 content_hash=content_hash,
                 status=AnalysisStatus.queued,
-                triggered_by=AnalysisTrigger(trigger),
+                triggered_by=ScanTrigger(trigger),
                 branch=effective_branch,
                 commit_sha=commit_sha or None,
             )
@@ -698,8 +698,8 @@ def _run_static_analysis_impl(
                         step=v.step,
                         step_index=v.step_index,
                         fingerprint=fingerprint,
-                        severity=IssueSeverity(v.severity),
-                        category=IssueCategory(v.category),
+                        severity=Severity(v.severity),
+                        category=Category(v.category),
                         line_start=v.line_start,
                         line_end=v.line_end,
                         message=v.message,
@@ -710,7 +710,7 @@ def _run_static_analysis_impl(
                         constraint="uq_issue_wf_fingerprint",
                         set_={
                             "analysis_id": analysis.id,
-                            "severity": IssueSeverity(v.severity),
+                            "severity": Severity(v.severity),
                             "line_start": v.line_start,
                             "line_end": v.line_end,
                             "message": v.message,
@@ -913,7 +913,7 @@ def _reanalyze_all_repositories_impl(force: bool = True) -> dict[str, str | int]
             select(Repository).where(Repository.enabled == True)  # noqa: E712
         ).all()
 
-    trigger = AnalysisTrigger.release if force else AnalysisTrigger.scheduled
+    trigger = ScanTrigger.release if force else ScanTrigger.scheduled
     for i, repo in enumerate(repos):
         run_static_analysis.apply_async(
             kwargs={

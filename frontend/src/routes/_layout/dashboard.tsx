@@ -13,7 +13,7 @@ import {
   Wrench,
 } from "lucide-react"
 import { useMemo, useState } from "react"
-import type { EngineOverview, IssueCategory, OverviewSection } from "@/client"
+import type { Category, EngineOverview, OverviewSection } from "@/client"
 import {
   AnalysesService,
   BillingService,
@@ -182,7 +182,7 @@ function Dashboard() {
               categoryStat?.score ?? repoStats?.score ?? repo.avg_score ?? 100
             return [category, score]
           }),
-        ) as Record<IssueCategory, number>
+        ) as Record<Category, number>
         return {
           id: repo.id,
           name: repo.full_name,
