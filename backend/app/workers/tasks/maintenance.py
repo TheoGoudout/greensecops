@@ -11,7 +11,6 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
-    AnalysisStatus,
     CloudScan,
     DockerScan,
     DynamicAnalysisStatus,
@@ -50,15 +49,11 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     with Session(engine) as session:
         stuck_analyses = session.exec(
             select(Analysis)
-            .where(
-                col(Analysis.status).in_(
-                    [AnalysisStatus.queued, AnalysisStatus.running]
-                )
-            )
+            .where(col(Analysis.status).in_([ScanStatus.queued, ScanStatus.running]))
             .where(Analysis.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for analysis in stuck_analyses:
-            sm.advance(analysis, sm.AnalysisMachine, "swept")
+            sm.advance(analysis, sm.ScanMachine, "swept")
             analysis.error_message = (
                 "Timed out: the analysis worker was interrupted before completion"
             )
@@ -262,7 +257,7 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
         candidates = session.exec(
             select(Analysis, Repository)
             .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-            .where(Analysis.status == AnalysisStatus.failed)
+            .where(Analysis.status == ScanStatus.failed)
             .where(Analysis.failure_kind == ScanFailureKind.transient)
             .where(col(Analysis.completed_at).is_not(None))
             .where(Analysis.completed_at >= cutoff)  # type: ignore[operator]
@@ -277,7 +272,7 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
                     .where(Analysis.repo_id == analysis.repo_id)
                     .where(Analysis.workflow_file_id == analysis.workflow_file_id)
                     .where(Analysis.content_hash == analysis.content_hash)
-                    .where(Analysis.status == AnalysisStatus.failed)
+                    .where(Analysis.status == ScanStatus.failed)
                     .where(Analysis.failure_kind == ScanFailureKind.transient)
                 ).all()
             )

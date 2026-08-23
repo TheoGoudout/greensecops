@@ -10,9 +10,9 @@ from app.core.config import settings
 from app.core.rate_limit import LIMIT_PUBLIC
 from app.models import (
     Analysis,
-    AnalysisStatus,
     DockerTarget,
     Repository,
+    ScanStatus,
     TerraformRoot,
 )
 from app.services.badge_renderer import (
@@ -47,7 +47,7 @@ def _avg_grade_for_branch(
         select(Analysis)
         .where(Analysis.repo_id == repo_id)
         .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
     ).all()
@@ -60,7 +60,7 @@ def _avg_grade_for_branch(
         select(Analysis)
         .where(Analysis.repo_id == repo_id)
         .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.no_workflows)
+        .where(Analysis.status == ScanStatus.no_targets)
         .limit(1)
     ).first()
 

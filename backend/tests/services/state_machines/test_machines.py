@@ -4,12 +4,10 @@ import pytest
 from statemachine import StateMachine
 
 from app.models.enums import (
-    AnalysisStatus,
     CloudAccountStatus,
     DynamicAnalysisStatus,
     FindingStatus,
     FixStatus,
-    IssueStatus,
     PullRequestState,
     RepositoryStatus,
     ScanStatus,
@@ -18,12 +16,12 @@ from app.models.enums import (
 from app.services import state_machines as sm
 
 ALL_MACHINES = [
-    sm.AnalysisMachine,
+    sm.ScanMachine,
     sm.CloudAccountMachine,
     sm.FindingMachine,
     sm.FixMachine,
     sm.PullRequestMachine,
-    sm.IssueMachine,
+    sm.FindingMachine,
     sm.RepositoryMachine,
     sm.ScanMachine,
     sm.TelemetryMachine,
@@ -70,44 +68,39 @@ def test_declared_outputs_reference_known_events(
 
 
 def test_analysis_happy_path() -> None:
-    a = _Model(sm.AnalysisMachine, AnalysisStatus.queued)
-    assert sm.advance(a, sm.AnalysisMachine, "started") is AnalysisStatus.running
-    assert (
-        sm.advance(a, sm.AnalysisMachine, "opa_succeeded") is AnalysisStatus.completed
-    )
+    a = _Model(sm.ScanMachine, ScanStatus.queued)
+    assert sm.advance(a, sm.ScanMachine, "started") is ScanStatus.running
+    assert sm.advance(a, sm.ScanMachine, "succeeded") is ScanStatus.completed
 
 
 def test_analysis_queued_is_initial() -> None:
-    assert sm.AnalysisMachine.initial_state.value is AnalysisStatus.queued
+    assert sm.ScanMachine.initial_state.value is ScanStatus.queued
 
 
 def test_analysis_no_workflows_edge() -> None:
-    a = _Model(sm.AnalysisMachine, AnalysisStatus.running)
-    assert (
-        sm.advance(a, sm.AnalysisMachine, "no_workflows_found")
-        is AnalysisStatus.no_workflows
-    )
+    a = _Model(sm.ScanMachine, ScanStatus.running)
+    assert sm.advance(a, sm.ScanMachine, "no_targets_found") is ScanStatus.no_targets
 
 
 def test_analysis_sweep_from_queued_or_running() -> None:
-    for src in (AnalysisStatus.queued, AnalysisStatus.running):
-        a = _Model(sm.AnalysisMachine, src)
-        assert sm.advance(a, sm.AnalysisMachine, "swept") is AnalysisStatus.failed
+    for src in (ScanStatus.queued, ScanStatus.running):
+        a = _Model(sm.ScanMachine, src)
+        assert sm.advance(a, sm.ScanMachine, "swept") is ScanStatus.failed
 
 
 def test_analysis_cannot_advance_from_terminal() -> None:
-    a = _Model(sm.AnalysisMachine, AnalysisStatus.completed)
+    a = _Model(sm.ScanMachine, ScanStatus.completed)
     with pytest.raises(sm.IllegalTransition):
-        sm.advance(a, sm.AnalysisMachine, "opa_succeeded")
+        sm.advance(a, sm.ScanMachine, "succeeded")
 
 
 def test_analysis_retry_requeues_a_failed_row() -> None:
-    a = _Model(sm.AnalysisMachine, AnalysisStatus.failed)
-    assert sm.advance(a, sm.AnalysisMachine, "retry") is AnalysisStatus.queued
+    a = _Model(sm.ScanMachine, ScanStatus.failed)
+    assert sm.advance(a, sm.ScanMachine, "retry") is ScanStatus.queued
     # A completed analysis has no retry edge.
-    a2 = _Model(sm.AnalysisMachine, AnalysisStatus.completed)
+    a2 = _Model(sm.ScanMachine, ScanStatus.completed)
     with pytest.raises(sm.IllegalTransition):
-        sm.advance(a2, sm.AnalysisMachine, "retry")
+        sm.advance(a2, sm.ScanMachine, "retry")
 
 
 # ── Fix ──────────────────────────────────────────────────────────────────────
@@ -350,29 +343,29 @@ def test_telemetry_sweep_from_queued_or_running() -> None:
 
 
 def test_issue_transitions() -> None:
-    i = _Model(sm.IssueMachine, IssueStatus.open)
-    assert sm.advance(i, sm.IssueMachine, "link_fix") is IssueStatus.fix_in_progress
-    assert sm.advance(i, sm.IssueMachine, "resolve") is IssueStatus.resolved
-    assert sm.advance(i, sm.IssueMachine, "recur") is IssueStatus.open
+    i = _Model(sm.FindingMachine, FindingStatus.open)
+    assert sm.advance(i, sm.FindingMachine, "link_fix") is FindingStatus.fix_in_progress
+    assert sm.advance(i, sm.FindingMachine, "resolve") is FindingStatus.resolved
+    assert sm.advance(i, sm.FindingMachine, "recur") is FindingStatus.open
 
 
 def test_issue_cannot_link_fix_when_resolved() -> None:
-    i = _Model(sm.IssueMachine, IssueStatus.resolved)
+    i = _Model(sm.FindingMachine, FindingStatus.resolved)
     with pytest.raises(sm.IllegalTransition):
-        sm.advance(i, sm.IssueMachine, "link_fix")
+        sm.advance(i, sm.FindingMachine, "link_fix")
 
 
 def test_issue_ignore_and_unignore() -> None:
-    for src in (IssueStatus.open, IssueStatus.fix_in_progress):
-        i = _Model(sm.IssueMachine, src)
-        assert sm.advance(i, sm.IssueMachine, "ignore") is IssueStatus.ignored
-        assert sm.advance(i, sm.IssueMachine, "unignore") is IssueStatus.open
+    for src in (FindingStatus.open, FindingStatus.fix_in_progress):
+        i = _Model(sm.FindingMachine, src)
+        assert sm.advance(i, sm.FindingMachine, "ignore") is FindingStatus.ignored
+        assert sm.advance(i, sm.FindingMachine, "unignore") is FindingStatus.open
 
 
 def test_issue_cannot_ignore_when_resolved() -> None:
-    i = _Model(sm.IssueMachine, IssueStatus.resolved)
+    i = _Model(sm.FindingMachine, FindingStatus.resolved)
     with pytest.raises(sm.IllegalTransition):
-        sm.advance(i, sm.IssueMachine, "ignore")
+        sm.advance(i, sm.FindingMachine, "ignore")
 
 
 # ── Scan (Terraform / cloud) ─────────────────────────────────────────────────

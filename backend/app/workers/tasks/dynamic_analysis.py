@@ -9,9 +9,9 @@ from sqlmodel import Session, col, delete, select
 from app.core.db import engine
 from app.models import (
     Analysis,
-    AnalysisStatus,
     DynamicEnrichment,
     Repository,
+    ScanStatus,
     TelemetryRun,
     UsageEngine,
     UsageMeter,
@@ -130,7 +130,7 @@ def _enrich(session: Session, run: TelemetryRun) -> int:
     latest_analysis = session.exec(
         select(Analysis)
         .where(Analysis.repo_id == run.repo_id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(col(Analysis.created_at).desc())
     ).first()
 

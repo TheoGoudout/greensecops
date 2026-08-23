@@ -10,16 +10,16 @@ from sqlmodel import Session, select
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
+    FindingResolutionReason,
     Fix,
     FixStatus,
     Issue,
-    IssueResolutionReason,
     LLMProvider,
     Organization,
     Repository,
     Rule,
+    ScanStatus,
     Severity,
     UserTier,
     WorkflowFile,
@@ -255,7 +255,7 @@ def test_with_violations_sets_issue_fields(
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
     ).first()
     assert analysis is not None
 
@@ -314,7 +314,7 @@ def test_same_action_twice_creates_two_issues(
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
     ).first()
     assert analysis is not None
 
@@ -412,7 +412,7 @@ def test_opa_failure_marks_analysis_failed(
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.failed)
+        .where(Analysis.status == ScanStatus.failed)
     ).first()
     assert analysis is not None
     assert "OPA unavailable" in (analysis.error_message or "")
@@ -461,7 +461,7 @@ def test_duplicate_detection_skips_second_run(
     rows = db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
     assert len(rows) == 1
     completed = rows[0]
-    assert completed.status == AnalysisStatus.completed
+    assert completed.status == ScanStatus.completed
     assert str(completed.id) in second_results_str
 
 
@@ -673,7 +673,7 @@ def test_stale_issue_is_resolved_when_violation_disappears(
 
     db.refresh(issue)
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.no_longer_detected
+    assert issue.resolution_reason == FindingResolutionReason.no_longer_detected
 
     # Third run — the violation reappears: the issue is reopened
     with (
@@ -736,7 +736,7 @@ def test_issues_of_deleted_workflow_files_are_resolved(
     assert result["status"] == "no_workflow_files"
     db.refresh(issue)
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.file_removed
+    assert issue.resolution_reason == FindingResolutionReason.file_removed
     # The row is soft-deleted so it drops out of the static-analysis view.
     db.refresh(workflow_file)
     assert workflow_file.deleted_at is not None
@@ -831,7 +831,7 @@ def test_single_file_reanalysis_of_deleted_file_does_not_regenerate_issues(
     # The issue stays resolved (file_removed), not reopened.
     db.refresh(issue)
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.file_removed
+    assert issue.resolution_reason == FindingResolutionReason.file_removed
     db.refresh(workflow_file)
     assert workflow_file.deleted_at is not None
 
@@ -908,7 +908,7 @@ def test_completed_analysis_is_queryable_as_latest(
     used by the issues API (ordering by completed_at DESC, created_at DESC)."""
     from sqlmodel import select
 
-    from app.models import Analysis, AnalysisStatus
+    from app.models import Analysis, ScanStatus
 
     # Arrange — first run
     with (
@@ -923,7 +923,7 @@ def test_completed_analysis_is_queryable_as_latest(
     first_analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
     ).first()
     assert first_analysis is not None
 
@@ -947,7 +947,7 @@ def test_completed_analysis_is_queryable_as_latest(
     analyses = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[union-attr]
     ).all()
     assert len(analyses) >= 2
@@ -1292,7 +1292,7 @@ def _completed_analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         branch="main",
     )
     db.add(analysis)

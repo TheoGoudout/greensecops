@@ -7,7 +7,6 @@ from sqlmodel import Session
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     DynamicAnalysisStatus,
     Fix,
@@ -20,6 +19,7 @@ from app.models import (
     Repository,
     Rule,
     ScanFailureKind,
+    ScanStatus,
     Severity,
     TelemetryRun,
     UserTier,
@@ -94,7 +94,7 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.running,
+        status=ScanStatus.running,
         created_at=old,
     )
     db.add(analysis)
@@ -148,7 +148,7 @@ def test_sweeper_fails_stuck_analysis_and_fix(db: Session) -> None:
     assert result["swept_fixes"] >= 1
     db.refresh(analysis)
     db.refresh(fix)
-    assert analysis.status == AnalysisStatus.failed
+    assert analysis.status == ScanStatus.failed
     assert "Timed out" in (analysis.error_message or "")
     assert analysis.completed_at is not None
     assert fix.status == FixStatus.failed
@@ -168,7 +168,7 @@ def test_sweeper_leaves_recent_records_alone(db: Session) -> None:
 
     db.refresh(analysis)
     db.refresh(fix)
-    assert analysis.status == AnalysisStatus.running
+    assert analysis.status == ScanStatus.running
     assert fix.status == FixStatus.generating
 
 
@@ -306,7 +306,7 @@ def _failed_analysis(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.failed,
+        status=ScanStatus.failed,
         failure_kind=kind,
         branch="main",
         completed_at=completed_at or datetime.now(timezone.utc),

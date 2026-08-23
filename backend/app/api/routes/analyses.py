@@ -16,8 +16,8 @@ from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
     AnalysisPublic,
-    AnalysisStatus,
     Repository,
+    ScanStatus,
     WorkflowFile,
 )
 from app.services.billing.quota import enforce_quota
@@ -38,7 +38,7 @@ def list_analyses(
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
     grade: str | None = None,
-    status: AnalysisStatus | None = None,
+    status: ScanStatus | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
 ) -> list[AnalysisPublic]:

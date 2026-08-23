@@ -28,11 +28,11 @@ from sqlmodel import Session, select
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     Organization,
     Repository,
     Rule,
+    ScanStatus,
     UserTier,
     WorkflowFile,
 )
@@ -313,7 +313,7 @@ def test_httpx_analysis_creates_three_issues(db: Session, repo: Repository) -> N
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
@@ -354,7 +354,7 @@ def test_httpx_analysis_issues_have_positive_line_numbers(
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
@@ -422,7 +422,7 @@ def test_celery_analysis_creates_four_issues_across_categories(
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
     issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
@@ -478,7 +478,7 @@ def test_redis_py_analysis_creates_issues_per_job(
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
@@ -583,7 +583,7 @@ def test_workflow_scenario(db: Session, repo: Repository, scenario: str) -> None
     analysis = db.exec(
         select(Analysis)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None

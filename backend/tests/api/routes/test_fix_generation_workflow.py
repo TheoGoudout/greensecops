@@ -19,7 +19,6 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     Fix,
     FixStatus,
@@ -29,6 +28,7 @@ from app.models import (
     PullRequest,
     Repository,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UserTier,
@@ -110,7 +110,7 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=60.0,
         grade="C",
         triggered_by=ScanTrigger.manual,

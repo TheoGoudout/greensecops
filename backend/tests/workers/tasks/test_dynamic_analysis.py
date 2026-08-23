@@ -10,11 +10,11 @@ from sqlmodel import Session, select
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     DynamicAnalysisStatus,
     DynamicEnrichment,
     Organization,
     Repository,
+    ScanStatus,
     ScanTrigger,
     TelemetryRun,
     UserTier,
@@ -105,7 +105,7 @@ def _make_completed_analysis(db: Session, repo: Repository) -> Analysis:
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=85.0,
         grade="B",
         triggered_by=ScanTrigger.manual,

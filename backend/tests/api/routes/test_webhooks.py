@@ -13,14 +13,13 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     CIStatus,
+    FindingResolutionReason,
+    FindingStatus,
     Fix,
     FixStatus,
     Issue,
-    IssueResolutionReason,
-    IssueStatus,
     LLMProvider,
     Organization,
     PullRequest,
@@ -29,6 +28,7 @@ from app.models import (
     RepositoryStatus,
     ReviewDecision,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     TerraformRoot,
@@ -711,7 +711,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
         branch="main",
     )
@@ -788,8 +788,8 @@ def test_github_webhook_pull_request_merged_updates_fix(
     assert fix.status == FixStatus.landed
     db.refresh(issue)
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.merged
-    assert issue.status == IssueStatus.resolved
+    assert issue.resolution_reason == FindingResolutionReason.merged
+    assert issue.status == FindingStatus.resolved
 
 
 def test_github_webhook_pull_request_closed_not_merged(
@@ -822,7 +822,7 @@ def test_github_webhook_pull_request_closed_not_merged(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
         branch="main",
     )
@@ -916,7 +916,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
         branch="main",
     )
@@ -1495,7 +1495,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     analysis = Analysis(
         repo_id=enabled_repo.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
@@ -1515,7 +1515,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status == IssueStatus.open
+    assert issue.status == FindingStatus.open
 
     payload = {
         "action": "created",
@@ -1529,7 +1529,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     assert response.status_code == 200
     db.refresh(issue)
     assert issue.ignored_at is not None
-    assert issue.status == IssueStatus.ignored
+    assert issue.status == FindingStatus.ignored
 
     # `unignore` reverses it.
     payload["comment"]["body"] = f"/greensecops unignore {fingerprint}"
@@ -1540,7 +1540,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     assert response.status_code == 200
     db.refresh(issue)
     assert issue.ignored_at is None
-    assert issue.status == IssueStatus.open
+    assert issue.status == FindingStatus.open
 
 
 def test_github_webhook_unknown_command_is_ignored(
@@ -1821,7 +1821,7 @@ def _seed_branch_issue(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
         branch=branch,
     )
@@ -1874,8 +1874,8 @@ def test_delete_branch_resolves_only_that_branchs_issues(
     assert response.status_code == 200
     db.refresh(feat_issue)
     assert feat_issue.resolved_at is not None
-    assert feat_issue.resolution_reason == IssueResolutionReason.branch_deleted
-    assert feat_issue.status == IssueStatus.resolved
+    assert feat_issue.resolution_reason == FindingResolutionReason.branch_deleted
+    assert feat_issue.status == FindingStatus.resolved
     # Default-branch issues untouched.
     db.refresh(main_issue)
     assert main_issue.resolved_at is None

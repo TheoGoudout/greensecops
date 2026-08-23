@@ -28,20 +28,6 @@ class LLMProvider(str, enum.Enum):
     ollama = "ollama"
 
 
-class AnalysisStatus(str, enum.Enum):
-    # An analysis row is created as ``queued`` (or directly ``no_workflows``)
-    # and advances to ``running`` when the worker begins OPA evaluation. The
-    # broker-queue phase before the worker picks the task up is still signalled
-    # over SSE without a row. Content-hash duplicates reference the prior
-    # analysis and emit ``analysis.skipped`` without writing a row. A
-    # ``skipped`` row is never persisted, so that value is not a machine state.
-    queued = "queued"
-    running = "running"
-    completed = "completed"
-    failed = "failed"
-    no_workflows = "no_workflows"
-
-
 class ScanFailureKind(str, enum.Enum):
     """Why an analysis ``failed`` — orthogonal to the state itself.
 
@@ -91,43 +77,6 @@ class Category(str, enum.Enum):
     # per-category radar should even show a "Cost" spoke) breaks every
     # repo's grade computation. Add it in the phase that ships a rule
     # actually using it, alongside that fix.
-
-
-class IssueStatus(str, enum.Enum):
-    """Derived lifecycle of an issue.
-
-    This value is a persisted column computed by a database trigger from
-    ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
-    migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
-    states so a user-dismissed violation stays muted regardless of fix/resolve
-    activity.
-    """
-
-    open = "open"
-    fix_in_progress = "fix_in_progress"
-    resolved = "resolved"
-    ignored = "ignored"
-
-
-class IssueResolutionReason(str, enum.Enum):
-    """Why an issue was resolved — an attribute of the ``resolved`` state.
-
-    Kept as a column rather than splitting ``resolved`` into several states so
-    the issue graph stays small. Set alongside ``resolved_at`` and cleared when
-    a resolved violation recurs.
-
-    - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
-      disabled/removed rule — the two cannot be told apart after the fact).
-    - ``file_removed``: the workflow file was deleted or renamed.
-    - ``merged``: the fix PR was merged, applying the change to the branch.
-    - ``branch_deleted``: the branch carrying the issue's workflow file was
-      deleted; the violation no longer exists anywhere to fix.
-    """
-
-    no_longer_detected = "no_longer_detected"
-    file_removed = "file_removed"
-    merged = "merged"
-    branch_deleted = "branch_deleted"
 
 
 class FixStatus(str, enum.Enum):
@@ -331,12 +280,15 @@ ENGINE_OF_DOMAIN: dict[RuleDomain, Engine] = {
 
 
 class ScanStatus(str, enum.Enum):
-    """Lifecycle of a TerraformScan or CloudScan.
+    """Lifecycle of one engine's run over one target.
 
-    Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
-    value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
-    files under this root" and "no resources of the scanned types in this
-    account/region".
+    Shared by every scan table. There used to be a second, identical enum called
+    ``ScanStatus`` for the CI engine alone, differing in exactly one member:
+    it spelled the empty case ``no_workflows`` where this one says
+    ``no_targets``. That is workflow-specific vocabulary for a case every engine
+    has — no ``.tf`` files under this root, no resources of the scanned types in
+    this account, no workflow files in this repository — so the general name
+    won and migration 0053 rewrote the rows.
     """
 
     queued = "queued"
@@ -347,24 +299,48 @@ class ScanStatus(str, enum.Enum):
 
 
 class FindingStatus(str, enum.Enum):
-    """Lifecycle of a TerraformFinding or CloudFinding.
+    """Derived lifecycle of a rule violation, on any engine.
 
-    Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
-    findings in this delivery have no fix/PR concept yet (see plan Phase 7),
-    so the application sets this column directly alongside resolved_at/
-    ignored_at rather than needing trigger-derived state.
+    For CI-workflow findings this column is computed by a database trigger from
+    ``ignored_at``, ``resolved_at`` and ``fix_id`` (migrations ``0022``/``0026``,
+    renamed in ``0053``); ``ignored`` takes precedence, so a user-dismissed
+    violation stays muted regardless of fix or resolve activity. The other
+    engines set it directly through ``FindingMachine``.
+
+    ``fix_in_progress`` arrived with the merge of the old ``FindingStatus``: only
+    the CI engine reaches it today, because only its findings carry a ``fix_id``
+    — the other engines key a fix on ``(target, file_path)`` instead. It is
+    declared here rather than in a CI-only enum because the state is about the
+    finding, not about which engine found it.
     """
 
     open = "open"
+    fix_in_progress = "fix_in_progress"
     resolved = "resolved"
     ignored = "ignored"
 
 
 class FindingResolutionReason(str, enum.Enum):
+    """Why a finding stopped being open.
+
+    An attribute of the ``resolved`` state, not a state of its own. The union of
+    what the engines can observe: the first two are available to all of them,
+    the rest need a file or a pull request and so only arise on engines that
+    have one.
+    """
+
+    # The violation is simply no longer reported — the user fixed it, or its
+    # rule was disabled or withdrawn. Indistinguishable from here, and both
+    # mean the same thing to a reader of the finding.
     no_longer_detected = "no_longer_detected"
-    # The Terraform file/resource block was removed, or the cloud resource no
-    # longer exists on the provider side.
+    # The whole target went away (root deleted, account disconnected).
     target_removed = "target_removed"
+    # The file the violation was in no longer exists.
+    file_removed = "file_removed"
+    # A fix PR carrying this finding was merged.
+    merged = "merged"
+    # The branch the finding was observed on was deleted.
+    branch_deleted = "branch_deleted"
 
 
 class CloudProvider(str, enum.Enum):

@@ -18,7 +18,6 @@ from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models import (
     Analysis,
-    AnalysisStatus,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -656,7 +655,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
         repo_id=repo.id,
         workflow_file_id=workflow.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
         score=80.0,
         grade="B",

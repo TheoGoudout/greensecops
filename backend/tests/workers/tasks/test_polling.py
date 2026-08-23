@@ -14,13 +14,12 @@ from sqlmodel import Session
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     CIStatus,
+    FindingResolutionReason,
     Fix,
     FixStatus,
     Issue,
-    IssueResolutionReason,
     LLMProvider,
     Organization,
     PullRequest,
@@ -28,6 +27,7 @@ from app.models import (
     Repository,
     ReviewDecision,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UserTier,
@@ -90,7 +90,7 @@ def _delivered_fix_with_issue(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
@@ -220,7 +220,7 @@ def test_merged_snapshot_lands_fix_and_resolves_issue(db: Session) -> None:
     db.refresh(issue)
     assert pr.pr_state == PullRequestState.merged
     assert fix.status == FixStatus.landed
-    assert issue.resolution_reason == IssueResolutionReason.merged
+    assert issue.resolution_reason == FindingResolutionReason.merged
 
 
 def test_ci_and_review_snapshot_updates_columns(db: Session) -> None:

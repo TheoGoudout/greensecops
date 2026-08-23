@@ -10,9 +10,9 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_WEBHOOK
 from app.models import (
+    FindingResolutionReason,
     Fix,
     Issue,
-    IssueResolutionReason,
     Organization,
     PullRequest,
     PullRequestState,
@@ -332,7 +332,7 @@ def _handle_delete_event(
         ).all()
         for issue in open_issues:
             issue.resolved_at = now
-            issue.resolution_reason = IssueResolutionReason.branch_deleted
+            issue.resolution_reason = FindingResolutionReason.branch_deleted
             session.add(issue)
             resolved += 1
         # Fixes are default-branch-only, but a legacy feature-branch fix (from

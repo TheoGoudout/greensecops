@@ -8,8 +8,8 @@ from sqlmodel import Field, Relationship, SQLModel
 
 from ..enums import (
     Category,
-    IssueResolutionReason,
-    IssueStatus,
+    FindingResolutionReason,
+    FindingStatus,
     Severity,
 )
 from .base import get_datetime_utc
@@ -50,9 +50,9 @@ class Issue(SQLModel, table=True):
     # authoritative by a DB trigger (see migrations 0022/0026) so it survives
     # the fix_id ON DELETE SET NULL cascade. Applications never set it directly;
     # the trigger owns writes. To mute/unmute an issue, set/clear ignored_at.
-    status: IssueStatus = Field(
-        default=IssueStatus.open,
-        sa_column_kwargs={"server_default": IssueStatus.open.value},
+    status: FindingStatus = Field(
+        default=FindingStatus.open,
+        sa_column_kwargs={"server_default": FindingStatus.open.value},
         index=True,
     )
     line_start: int | None = Field(default=None)
@@ -65,7 +65,7 @@ class Issue(SQLModel, table=True):
     resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # Why the issue resolved (set with resolved_at, cleared on recur). An
     # attribute of the ``resolved`` state, not a separate state.
-    resolution_reason: IssueResolutionReason | None = Field(default=None)
+    resolution_reason: FindingResolutionReason | None = Field(default=None)
     # Set when a user dismisses the violation (false positive / accepted risk);
     # takes precedence in the status trigger so the issue reads ``ignored``.
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))

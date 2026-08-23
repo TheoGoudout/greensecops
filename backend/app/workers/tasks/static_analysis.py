@@ -14,17 +14,17 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
+    FindingResolutionReason,
     Fix,
     FixStatus,
     Issue,
-    IssueResolutionReason,
     LLMProvider,
     Repository,
     Rule,
     RuleDomain,
     ScanFailureKind,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UsageEngine,
@@ -87,7 +87,7 @@ def _auto_queue_fix_generation(
         select(Analysis.id)
         .where(Analysis.workflow_file_id == Issue.workflow_file_id)
         .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
         .limit(1)
         .correlate(Issue)
@@ -301,7 +301,7 @@ def _resolve_stale_issues(
     stale = [i for i in open_issues if i.fingerprint not in seen_fingerprints]
     for issue in stale:
         issue.resolved_at = now
-        issue.resolution_reason = IssueResolutionReason.no_longer_detected
+        issue.resolution_reason = FindingResolutionReason.no_longer_detected
         session.add(issue)
     if stale:
         session.commit()
@@ -352,7 +352,7 @@ def _resolve_issues_for_missing_files(
         ).all()
         for issue in open_issues:
             issue.resolved_at = now
-            issue.resolution_reason = IssueResolutionReason.file_removed
+            issue.resolution_reason = FindingResolutionReason.file_removed
             session.add(issue)
             resolved += 1
         if wf.fix is not None and sm.try_advance(
@@ -466,7 +466,7 @@ def _run_static_analysis_impl(
                 repo_id=repo.id,
                 workflow_file_id=None,
                 content_hash="",
-                status=AnalysisStatus.no_workflows,
+                status=ScanStatus.no_targets,
                 triggered_by=ScanTrigger(trigger),
                 branch=effective_branch,
                 commit_sha=commit_sha or None,
@@ -590,7 +590,7 @@ def _run_static_analysis_impl(
                 repo_id=repo.id,
                 workflow_file_id=wf_record.id,
                 content_hash=content_hash,
-                status=AnalysisStatus.queued,
+                status=ScanStatus.queued,
                 triggered_by=ScanTrigger(trigger),
                 branch=effective_branch,
                 commit_sha=commit_sha or None,
@@ -619,7 +619,7 @@ def _run_static_analysis_impl(
             # Advance queued -> running as the worker begins OPA evaluation, so
             # a row that dies before this point is distinguishable (still
             # ``queued``) from one that hangs mid-eval (``running``).
-            sm.advance(analysis, sm.AnalysisMachine, "started")
+            sm.advance(analysis, sm.ScanMachine, "started")
             if not is_batch:
                 events_pub.publish_event(
                     ev.analysis_started(
@@ -631,7 +631,7 @@ def _run_static_analysis_impl(
                 violations = asyncio.run(_evaluate(content))
             except Exception as exc:
                 logger.exception("OPA evaluation failed for %s: %s", path, exc)
-                sm.advance(analysis, sm.AnalysisMachine, "opa_failed")
+                sm.advance(analysis, sm.ScanMachine, "scan_failed")
                 analysis.error_message = str(exc)[:2000]
                 analysis.failure_kind = _classify_failure(exc)
                 analysis.completed_at = datetime.now(timezone.utc)
@@ -733,7 +733,7 @@ def _run_static_analysis_impl(
             score = compute_score(workflow_score_inputs, job_score_inputs)
             grade = score_to_grade(score)
 
-            sm.advance(analysis, sm.AnalysisMachine, "opa_succeeded")
+            sm.advance(analysis, sm.ScanMachine, "succeeded")
             analysis.score = score
             analysis.grade = grade
             analysis.completed_at = datetime.now(timezone.utc)

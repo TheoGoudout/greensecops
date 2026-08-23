@@ -8,16 +8,16 @@ from sqlmodel import Session, select
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
+    FindingStatus,
     Fix,
     FixStatus,
     Issue,
-    IssueStatus,
     LLMProvider,
     Organization,
     Repository,
     Rule,
+    ScanStatus,
     Severity,
     WorkflowFile,
 )
@@ -47,7 +47,7 @@ def issue_ctx(db: Session):
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash="h",
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
     )
     db.add(analysis)
     db.flush()
@@ -70,7 +70,7 @@ def issue_ctx(db: Session):
 
 def test_new_issue_is_open(issue_ctx) -> None:
     _, _, issue = issue_ctx
-    assert issue.status is IssueStatus.open
+    assert issue.status is FindingStatus.open
 
 
 def test_linking_a_fix_sets_fix_in_progress(issue_ctx) -> None:
@@ -87,7 +87,7 @@ def test_linking_a_fix_sets_fix_in_progress(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.fix_in_progress
+    assert issue.status is FindingStatus.fix_in_progress
 
 
 def test_deleting_the_fix_reverts_to_open_via_cascade(issue_ctx) -> None:
@@ -110,7 +110,7 @@ def test_deleting_the_fix_reverts_to_open_via_cascade(issue_ctx) -> None:
     db.commit()
     db.refresh(issue)
     assert issue.fix_id is None
-    assert issue.status is IssueStatus.open
+    assert issue.status is FindingStatus.open
 
 
 def test_resolving_wins_over_fix_link(issue_ctx) -> None:
@@ -128,7 +128,7 @@ def test_resolving_wins_over_fix_link(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.resolved
+    assert issue.status is FindingStatus.resolved
 
 
 def test_ignoring_sets_ignored(issue_ctx) -> None:
@@ -137,7 +137,7 @@ def test_ignoring_sets_ignored(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
 
 
 def test_ignored_wins_over_resolved_and_fix(issue_ctx) -> None:
@@ -157,7 +157,7 @@ def test_ignored_wins_over_resolved_and_fix(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
 
 
 def test_unignoring_falls_back_to_underlying_state(issue_ctx) -> None:
@@ -166,10 +166,10 @@ def test_unignoring_falls_back_to_underlying_state(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
     # Clearing ignored_at reverts to the resolved_at/fix_id-derived state.
     issue.ignored_at = None
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.open
+    assert issue.status is FindingStatus.open

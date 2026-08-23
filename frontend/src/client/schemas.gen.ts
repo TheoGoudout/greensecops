@@ -97,7 +97,7 @@ export const AnalysisPublicSchema = {
             title: 'Content Hash'
         },
         status: {
-            '$ref': '#/components/schemas/AnalysisStatus'
+            '$ref': '#/components/schemas/ScanStatus'
         },
         score: {
             anyOf: [
@@ -174,12 +174,6 @@ export const AnalysisPublicSchema = {
     type: 'object',
     required: ['id', 'repo_id', 'content_hash', 'status', 'triggered_by'],
     title: 'AnalysisPublic'
-} as const;
-
-export const AnalysisStatusSchema = {
-    type: 'string',
-    enum: ['queued', 'running', 'completed', 'failed', 'no_workflows'],
-    title: 'AnalysisStatus'
 } as const;
 
 export const BatchFixRequestSchema = {
@@ -2034,20 +2028,33 @@ export const ExternalRepositoryCreateSchema = {
 
 export const FindingResolutionReasonSchema = {
     type: 'string',
-    enum: ['no_longer_detected', 'target_removed'],
-    title: 'FindingResolutionReason'
+    enum: ['no_longer_detected', 'target_removed', 'file_removed', 'merged', 'branch_deleted'],
+    title: 'FindingResolutionReason',
+    description: `Why a finding stopped being open.
+
+An attribute of the \`\`resolved\`\` state, not a state of its own. The union of
+what the engines can observe: the first two are available to all of them,
+the rest need a file or a pull request and so only arise on engines that
+have one.`
 } as const;
 
 export const FindingStatusSchema = {
     type: 'string',
-    enum: ['open', 'resolved', 'ignored'],
+    enum: ['open', 'fix_in_progress', 'resolved', 'ignored'],
     title: 'FindingStatus',
-    description: `Lifecycle of a TerraformFinding or CloudFinding.
+    description: `Derived lifecycle of a rule violation, on any engine.
 
-Unlike \`\`Issue.status\`\` (owned by a DB trigger reacting to \`\`fix_id\`\`),
-findings in this delivery have no fix/PR concept yet (see plan Phase 7),
-so the application sets this column directly alongside resolved_at/
-ignored_at rather than needing trigger-derived state.`
+For CI-workflow findings this column is computed by a database trigger from
+\`\`ignored_at\`\`, \`\`resolved_at\`\` and \`\`fix_id\`\` (migrations \`\`0022\`\`/\`\`0026\`\`,
+renamed in \`\`0053\`\`); \`\`ignored\`\` takes precedence, so a user-dismissed
+violation stays muted regardless of fix or resolve activity. The other
+engines set it directly through \`\`FindingMachine\`\`.
+
+\`\`fix_in_progress\`\` arrived with the merge of the old \`\`FindingStatus\`\`: only
+the CI engine reaches it today, because only its findings carry a \`\`fix_id\`\`
+— the other engines key a fix on \`\`(target, file_path)\`\` instead. It is
+declared here rather than in a CI-only enum because the state is about the
+finding, not about which engine found it.`
 } as const;
 
 export const FixDeliveryModeSchema = {
@@ -2577,7 +2584,7 @@ export const IssuePublicSchema = {
             title: 'Context'
         },
         status: {
-            '$ref': '#/components/schemas/IssueStatus'
+            '$ref': '#/components/schemas/FindingStatus'
         },
         created_at: {
             anyOf: [
@@ -2606,7 +2613,7 @@ export const IssuePublicSchema = {
         resolution_reason: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueResolutionReason'
+                    '$ref': '#/components/schemas/FindingResolutionReason'
                 },
                 {
                     type: 'null'
@@ -2668,24 +2675,6 @@ export const IssuePublicSchema = {
     title: 'IssuePublic'
 } as const;
 
-export const IssueResolutionReasonSchema = {
-    type: 'string',
-    enum: ['no_longer_detected', 'file_removed', 'merged', 'branch_deleted'],
-    title: 'IssueResolutionReason',
-    description: `Why an issue was resolved — an attribute of the \`\`resolved\`\` state.
-
-Kept as a column rather than splitting \`\`resolved\`\` into several states so
-the issue graph stays small. Set alongside \`\`resolved_at\`\` and cleared when
-a resolved violation recurs.
-
-- \`\`no_longer_detected\`\`: absent from the latest analysis (a manual fix or a
-  disabled/removed rule — the two cannot be told apart after the fact).
-- \`\`file_removed\`\`: the workflow file was deleted or renamed.
-- \`\`merged\`\`: the fix PR was merged, applying the change to the branch.
-- \`\`branch_deleted\`\`: the branch carrying the issue's workflow file was
-  deleted; the violation no longer exists anywhere to fix.`
-} as const;
-
 export const IssueStatsPublicSchema = {
     properties: {
         total_open: {
@@ -2721,19 +2710,6 @@ export const IssueStatsPublicSchema = {
     title: 'IssueStatsPublic',
     description: `Exact issue counts, computed by SQL aggregation rather than fetched and
 counted client-side — unaffected by any page's \`\`skip\`\`/\`\`limit\`\`.`
-} as const;
-
-export const IssueStatusSchema = {
-    type: 'string',
-    enum: ['open', 'fix_in_progress', 'resolved', 'ignored'],
-    title: 'IssueStatus',
-    description: `Derived lifecycle of an issue.
-
-This value is a persisted column computed by a database trigger from
-\`\`ignored_at\`\`, \`\`resolved_at\`\` and \`\`fix_id\`\` (see \`\`Issue.status\`\` and
-migrations \`\`0022\`\`/\`\`0026\`\`). \`\`ignored\`\` takes precedence over the other
-states so a user-dismissed violation stays muted regardless of fix/resolve
-activity.`
 } as const;
 
 export const LLMProviderSchema = {
@@ -3980,12 +3956,15 @@ export const ScanStatusSchema = {
     type: 'string',
     enum: ['queued', 'running', 'completed', 'failed', 'no_targets'],
     title: 'ScanStatus',
-    description: `Lifecycle of a TerraformScan or CloudScan.
+    description: `Lifecycle of one engine's run over one target.
 
-Deliberately separate from \`\`AnalysisStatus\`\`: that enum's \`\`no_workflows\`\`
-value is workflow-specific vocabulary. \`\`no_targets\`\` covers both "no .tf
-files under this root" and "no resources of the scanned types in this
-account/region".`
+Shared by every scan table. There used to be a second, identical enum called
+\`\`ScanStatus\`\` for the CI engine alone, differing in exactly one member:
+it spelled the empty case \`\`no_workflows\`\` where this one says
+\`\`no_targets\`\`. That is workflow-specific vocabulary for a case every engine
+has — no \`\`.tf\`\` files under this root, no resources of the scanned types in
+this account, no workflow files in this repository — so the general name
+won and migration 0053 rewrote the rows.`
 } as const;
 
 export const ScanTriggerSchema = {

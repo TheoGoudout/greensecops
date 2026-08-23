@@ -8,7 +8,6 @@ from sqlmodel import Session
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     Fix,
     FixStatus,
@@ -18,6 +17,7 @@ from app.models import (
     PullRequest,
     Repository,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UserTier,
@@ -297,7 +297,7 @@ def _make_wf_fix_issue(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
         branch="main",
     )

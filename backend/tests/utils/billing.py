@@ -15,7 +15,6 @@ from sqlmodel import Session
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     BillingSubscription,
     BillingUsageRecord,
     CloudAccount,
@@ -127,7 +126,7 @@ def make_analysis(
     repo: Repository,
     wf: WorkflowFile,
     *,
-    status: AnalysisStatus = AnalysisStatus.completed,
+    status: ScanStatus = ScanStatus.completed,
 ) -> Analysis:
     analysis = Analysis(
         repo_id=repo.id,

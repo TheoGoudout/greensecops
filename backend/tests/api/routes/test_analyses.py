@@ -10,9 +10,9 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Organization,
     Repository,
+    ScanStatus,
     ScanTrigger,
     UserTier,
     WorkflowFile,
@@ -68,7 +68,7 @@ def completed_analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=85.0,
         grade="B",
         triggered_by=ScanTrigger.manual,

@@ -48,7 +48,6 @@ from sqlmodel import col
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -251,8 +250,8 @@ OVERVIEW_SPECS: list[OverviewSpec] = [
         finding_model=Issue,
         fix_model=Fix,
         scan_target_fk=Analysis.workflow_file_id,
-        scan_completed=AnalysisStatus.completed,
-        scan_failed=AnalysisStatus.failed,
+        scan_completed=ScanStatus.completed,
+        scan_failed=ScanStatus.failed,
         scan_orders_by_completed_at=True,
         finding_target_fk=Issue.workflow_file_id,
         finding_scan_fk=Issue.analysis_id,

@@ -6,7 +6,6 @@ from sqlmodel import Field, SQLModel
 
 from .db import UserBase
 from .enums import (
-    AnalysisStatus,
     Category,
     CIStatus,
     CloudAccountStatus,
@@ -18,8 +17,6 @@ from .enums import (
     FixDeliveryMode,
     FixStatus,
     InvoiceStatus,
-    IssueResolutionReason,
-    IssueStatus,
     LLMProvider,
     OssApplicationStatus,
     OverviewSection,
@@ -110,7 +107,7 @@ class AnalysisPublic(SQLModel):
     workflow_file_path: str | None = None
     repo_full_name: str | None = None
     content_hash: str
-    status: AnalysisStatus
+    status: ScanStatus
     score: float | None = None
     grade: str | None = None
     triggered_by: ScanTrigger
@@ -131,10 +128,10 @@ class IssuePublic(SQLModel):
     line_end: int | None = None
     message: str
     context: str | None = None
-    status: IssueStatus
+    status: FindingStatus
     created_at: datetime | None = None
     resolved_at: datetime | None = None
-    resolution_reason: IssueResolutionReason | None = None
+    resolution_reason: FindingResolutionReason | None = None
     needs_manual_work: bool = False
     manual_work_note: str | None = None
     fix_id: uuid.UUID | None = None

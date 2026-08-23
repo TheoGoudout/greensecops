@@ -16,7 +16,6 @@ from app import crud
 from app.core.config import settings
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     Fix,
     FixStatus,
@@ -27,6 +26,7 @@ from app.models import (
     OrgRole,
     Repository,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UserTier,
@@ -91,7 +91,7 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=80.0,
         grade="B",
         triggered_by=ScanTrigger.manual,

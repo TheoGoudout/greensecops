@@ -36,9 +36,9 @@ import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { severityRank } from "@/lib/severity"
 import {
-  analysisStatusColor,
-  analysisStatusLabel,
   fixStatusColor,
+  scanStatusColor,
+  scanStatusLabel,
 } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
 import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
@@ -550,10 +550,8 @@ function StaticAnalysisPage() {
                           {a.triggered_by.replace(/_/g, " ")}
                         </span>
                         <div className="flex justify-center">
-                          <StatusPill
-                            colorClass={analysisStatusColor(a.status)}
-                          >
-                            {analysisStatusLabel(a.status)}
+                          <StatusPill colorClass={scanStatusColor(a.status)}>
+                            {scanStatusLabel(a.status)}
                           </StatusPill>
                         </div>
                         <div className="flex justify-center">
@@ -680,10 +678,10 @@ function StaticAnalysisPage() {
                     )}
                     {latest && (
                       <StatusPill
-                        colorClass={analysisStatusColor(latest.status)}
+                        colorClass={scanStatusColor(latest.status)}
                         className="shrink-0 font-sans"
                       >
-                        {analysisStatusLabel(latest.status)}
+                        {scanStatusLabel(latest.status)}
                       </StatusPill>
                     )}
                     <GradeBadge

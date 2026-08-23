@@ -11,11 +11,11 @@ from app.api.routes.repositories import _inject_action_into_workflow
 from app.core.config import settings
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
+    ScanStatus,
     ScanTrigger,
     User,
     UserTier,
@@ -568,7 +568,7 @@ def _make_completed_analysis(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=score,
         grade=grade,
         triggered_by=ScanTrigger.manual,
@@ -1115,7 +1115,7 @@ def test_list_repository_branches(
     repo: Repository,
     db: Session,
 ) -> None:
-    from app.models import Analysis, AnalysisStatus, WorkflowFile
+    from app.models import Analysis, ScanStatus, WorkflowFile
 
     wf = WorkflowFile(
         repo_id=repo.id,
@@ -1127,10 +1127,10 @@ def test_list_repository_branches(
     db.commit()
     db.refresh(wf)
     for branch, status in [
-        ("main", AnalysisStatus.completed),
-        ("dev", AnalysisStatus.completed),
-        ("main", AnalysisStatus.completed),
-        ("wip", AnalysisStatus.running),
+        ("main", ScanStatus.completed),
+        ("dev", ScanStatus.completed),
+        ("main", ScanStatus.completed),
+        ("wip", ScanStatus.running),
     ]:
         db.add(
             Analysis(
@@ -1178,7 +1178,7 @@ def test_grade_ignores_feature_branch_analyses(
         repo_id=repo.id,
         workflow_file_id=feature_wf.id,
         content_hash=feature_wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=10.0,
         grade="F",
         triggered_by=ScanTrigger.manual,

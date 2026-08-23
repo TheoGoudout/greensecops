@@ -23,10 +23,10 @@ from sqlmodel import Session, col, select
 from app.models import (
     Analysis,
     CIStatus,
+    FindingResolutionReason,
     Fix,
     FixStatus,
     Issue,
-    IssueResolutionReason,
     PullRequest,
     Repository,
     ReviewDecision,
@@ -322,7 +322,7 @@ def _resolve_issues_for_landed_fixes(
     ).all()
     for issue in issues:
         issue.resolved_at = now
-        issue.resolution_reason = IssueResolutionReason.merged
+        issue.resolution_reason = FindingResolutionReason.merged
         session.add(issue)
 
 

@@ -19,11 +19,11 @@ from app.core.config import settings
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
-    AnalysisStatus,
     ExternalRepositoryCreate,
     OrgMember,
     Repository,
     RepositoryPublic,
+    ScanStatus,
     User,
     WorkflowFile,
     WorkflowFilePublic,
@@ -66,7 +66,7 @@ def _compute_repo_grade(
         # Exclude workflow files deleted from the repo: their stale analysis
         # must not skew the grade.
         .where(col(WorkflowFile.deleted_at).is_(None))
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
     ).all()
@@ -76,7 +76,7 @@ def _compute_repo_grade(
         has_no_workflows = session.exec(
             select(Analysis)
             .where(Analysis.repo_id == repo_id)
-            .where(Analysis.status == AnalysisStatus.no_workflows)
+            .where(Analysis.status == ScanStatus.no_targets)
             .limit(1)
         ).first()
         grade = "N/A" if has_no_workflows else "-"
@@ -99,7 +99,7 @@ def _compute_grades_batch(
         rows = session.exec(
             select(Analysis.repo_id)
             .where(Analysis.repo_id.in_(repos_without_grades))  # type: ignore[attr-defined]
-            .where(Analysis.status == AnalysisStatus.no_workflows)
+            .where(Analysis.status == ScanStatus.no_targets)
             .distinct()
         ).all()
         no_workflows_repo_ids = set(rows)
@@ -311,13 +311,13 @@ def list_repository_branches(
 ) -> list[str]:
     from sqlmodel import col
 
-    from app.models import Analysis, AnalysisStatus
+    from app.models import Analysis, ScanStatus
 
     _get_repo_for_user(repo_id, session, current_user)
     branches = session.exec(
         select(col(Analysis.branch))
         .where(Analysis.repo_id == repo_id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .where(col(Analysis.branch).isnot(None))
         .distinct()
         .order_by(col(Analysis.branch))

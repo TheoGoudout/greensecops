@@ -3,7 +3,7 @@ import uuid
 
 from sqlmodel import Session, col, select
 
-from app.models import Analysis, AnalysisStatus
+from app.models import Analysis, ScanStatus
 
 
 def compute_content_hash(content: str) -> str:
@@ -73,7 +73,7 @@ def find_completed_analysis(
         .where(Analysis.content_hash == content_hash)
         .where(Analysis.repo_id == repo_id)
         .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(col(Analysis.created_at).desc())
     ).first()
 

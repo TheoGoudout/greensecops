@@ -11,7 +11,6 @@ from app.api.mappers import to_issue_public
 from app.api.router import Role, RoleRouter
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     Fix,
     Issue,
@@ -22,6 +21,7 @@ from app.models import (
     RepoIssueStats,
     Repository,
     Rule,
+    ScanStatus,
     Severity,
     WorkflowFile,
 )
@@ -104,7 +104,7 @@ def list_issues(
         latest_subq = (
             select(Analysis.id)
             .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-            .where(Analysis.status == AnalysisStatus.completed)
+            .where(Analysis.status == ScanStatus.completed)
             .order_by(
                 col(Analysis.completed_at).desc().nulls_last(),
                 col(Analysis.created_at).desc(),
@@ -182,7 +182,7 @@ def get_issue_stats(
         latest_subq = (
             select(Analysis.id)
             .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-            .where(Analysis.status == AnalysisStatus.completed)
+            .where(Analysis.status == ScanStatus.completed)
             .order_by(
                 col(Analysis.completed_at).desc().nulls_last(),
                 col(Analysis.created_at).desc(),

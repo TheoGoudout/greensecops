@@ -19,7 +19,6 @@ from app.core.config import settings
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Analysis,
-    AnalysisStatus,
     DockerFix,
     Fix,
     FixIssueSummary,
@@ -32,6 +31,7 @@ from app.models import (
     PullRequestState,
     Repository,
     Rule,
+    ScanStatus,
     TerraformFix,
     UsageEngine,
     UsageMeter,
@@ -178,7 +178,7 @@ def _latest_unresolved_issues(
     latest_analysis_subq = (
         select(Analysis.id)
         .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
         .limit(1)
         .correlate(Issue)

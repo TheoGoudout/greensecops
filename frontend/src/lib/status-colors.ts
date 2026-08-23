@@ -2,8 +2,8 @@ import type {
   CIStatus,
   CloudAccountStatus,
   DynamicAnalysisStatus,
+  FindingStatus,
   FixStatus,
-  IssueStatus,
   ReviewDecision,
   ScanStatus,
 } from "@/client"
@@ -19,30 +19,6 @@ const STATUS_CLASSES = {
   muted: "bg-muted text-muted-foreground",
   mutedStruck: "bg-muted text-muted-foreground line-through",
 } as const
-
-export function analysisStatusColor(status: string): string {
-  switch (status) {
-    case "completed":
-      return STATUS_CLASSES.success
-    case "running":
-      return STATUS_CLASSES.running
-    case "failed":
-      return STATUS_CLASSES.failed
-    case "pending":
-      return STATUS_CLASSES.pending
-    default:
-      return STATUS_CLASSES.muted
-  }
-}
-
-export function analysisStatusLabel(status: string): string {
-  switch (status) {
-    case "no_workflows":
-      return "No workflows"
-    default:
-      return status.replace(/_/g, " ")
-  }
-}
 
 export function fixStatusColor(status: FixStatus): string {
   switch (status) {
@@ -63,7 +39,7 @@ export function fixStatusColor(status: FixStatus): string {
   }
 }
 
-export function issueStatusColor(status: IssueStatus): string {
+export function issueStatusColor(status: FindingStatus): string {
   switch (status) {
     case "resolved":
       return STATUS_CLASSES.success
@@ -76,7 +52,7 @@ export function issueStatusColor(status: IssueStatus): string {
   }
 }
 
-export function issueStatusLabel(status: IssueStatus): string {
+export function issueStatusLabel(status: FindingStatus): string {
   switch (status) {
     case "fix_in_progress":
       return "Fix in progress"

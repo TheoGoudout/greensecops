@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..enums import AnalysisStatus, ScanFailureKind, ScanTrigger
+from ..enums import ScanFailureKind, ScanStatus, ScanTrigger
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
@@ -23,9 +23,9 @@ class Analysis(SQLModel, table=True):
         default=None, foreign_key="workflow_file.id", nullable=True, ondelete="CASCADE"
     )
     content_hash: str = Field(max_length=64, index=True)
-    status: AnalysisStatus = Field(
-        default=AnalysisStatus.running,
-        sa_column_kwargs={"server_default": AnalysisStatus.running.value},
+    status: ScanStatus = Field(
+        default=ScanStatus.running,
+        sa_column_kwargs={"server_default": ScanStatus.running.value},
     )
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)

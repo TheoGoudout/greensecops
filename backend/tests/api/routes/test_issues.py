@@ -9,13 +9,13 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
+    FindingStatus,
     Issue,
-    IssueStatus,
     Organization,
     Repository,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UserTier,
@@ -72,7 +72,7 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=75.0,
         grade="C",
         triggered_by=ScanTrigger.manual,
@@ -161,7 +161,7 @@ def test_list_issues_empty(
         repo_id=fresh_repo.id,
         workflow_file_id=fresh_wf.id,
         content_hash=fresh_wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=100.0,
         grade="A+++",
         triggered_by=ScanTrigger.manual,
@@ -480,7 +480,7 @@ def test_issue_stats_by_repo_breakdown(
         repo_id=other_repo.id,
         workflow_file_id=other_wf.id,
         content_hash=other_wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=60.0,
         grade="D",
         triggered_by=ScanTrigger.manual,
@@ -609,7 +609,7 @@ def test_list_issues_latest_only_excludes_old_analysis(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=90.0,
         grade="A",
         triggered_by=ScanTrigger.manual,
@@ -664,7 +664,7 @@ def test_list_issues_latest_only_false_includes_all(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=90.0,
         grade="A",
         triggered_by=ScanTrigger.manual,
@@ -722,7 +722,7 @@ def test_list_issues_latest_only_applies_without_repo_id(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=90.0,
         grade="A",
         triggered_by=ScanTrigger.manual,
@@ -777,7 +777,7 @@ def test_ignore_and_unignore_issue(
     assert resp.json()["status"] == "ignored"
     db.refresh(issue)
     assert issue.ignored_at is not None
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
 
     # Ignore again is idempotent.
     resp = client.post(
@@ -857,7 +857,7 @@ def test_repo_issue_listing_defaults_to_default_branch(
             repo_id=repo.id,
             workflow_file_id=wf.id,
             content_hash=wf.content_hash,
-            status=AnalysisStatus.completed,
+            status=ScanStatus.completed,
             triggered_by=ScanTrigger.manual,
             branch=branch,
         )

@@ -13,13 +13,12 @@ from sqlmodel import Session, select
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     CIStatus,
+    FindingResolutionReason,
     Fix,
     FixStatus,
     Issue,
-    IssueResolutionReason,
     LLMProvider,
     Organization,
     PullRequest,
@@ -27,6 +26,7 @@ from app.models import (
     Repository,
     ReviewDecision,
     Rule,
+    ScanStatus,
     ScanTrigger,
     Severity,
     UserTier,
@@ -72,7 +72,7 @@ def _build_pr_with_delivered_fix(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
@@ -139,7 +139,7 @@ def test_merge_lands_fixes_and_resolves_issues(db: Session) -> None:
     assert pr.pr_state == PullRequestState.merged
     assert fix.status == FixStatus.landed
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.merged
+    assert issue.resolution_reason == FindingResolutionReason.merged
 
 
 def test_close_supersedes_delivered_fix(db: Session) -> None:

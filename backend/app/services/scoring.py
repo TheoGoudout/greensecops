@@ -9,9 +9,9 @@ from sqlmodel import Session, col, select
 
 from app.models import (
     Analysis,
-    AnalysisStatus,
     Category,
     Repository,
+    ScanStatus,
     Severity,
     WorkflowFile,
 )
@@ -129,7 +129,7 @@ def compute_avg_scores_batch(
         .where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
         .where(WorkflowFile.branch == Repository.default_branch)
         .where(col(WorkflowFile.deleted_at).is_(None))
-        .where(Analysis.status == AnalysisStatus.completed)
+        .where(Analysis.status == ScanStatus.completed)
         .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
         .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
     ).all()
