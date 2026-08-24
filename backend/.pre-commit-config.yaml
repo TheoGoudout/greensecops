@@ -11,16 +11,8 @@ repos:
       - id: ruff-format
         files: ^app/
 
-  # Python: mypy type checking
-  - repo: local
-    hooks:
-      - id: mypy-backend
-        name: mypy (backend)
-        entry: uv run mypy app/ --ignore-missing-imports
-        language: system
-        files: ^app/.*\.py$
-        pass_filenames: false
-        stages: [pre-push]
+  # mypy lives in the repository-root .pre-commit-config.yaml now. It was here,
+  # at the pre-push stage, where CI's `prek run` never reached it.
 
   # OPA: format and validate rego policies (via Docker)
   - repo: local

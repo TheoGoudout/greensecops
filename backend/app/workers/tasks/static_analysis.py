@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -387,6 +388,306 @@ def _count_open_issues(session: Session, workflow_file_id: uuid.UUID | None) -> 
     )
 
 
+@dataclass(frozen=True)
+class _RunContext:
+    """What every workflow file in one run sees, and none of them changes."""
+
+    repo: Repository
+    repo_id: str
+    org_id: str
+    effective_branch: str
+    trigger: str
+    commit_sha: str
+    force: bool
+    is_batch: bool
+    billable: bool
+
+
+@dataclass
+class _Tally:
+    """What accumulates across a run's workflow files.
+
+    These were seven locals mutated inside a 265-line loop body. Naming them as
+    one object is most of why that body could be lifted out at all: the contract
+    between the loop and each file is now a signature rather than a closure.
+    """
+
+    results: list[dict[str, str | int | float]] = field(default_factory=list)
+    batch_scores: list[float] = field(default_factory=list)
+    changed_wf_ids: set[uuid.UUID] = field(default_factory=set)
+    batch_total_issues: int = 0
+    batch_any_failed: bool = False
+    # Remaining `analyses` allowance, or None when the run is not billable.
+    budget: int | None = None
+    # Path the run stopped at when the allowance ran out mid-batch.
+    quota_stopped_at: str | None = None
+
+
+def _analyse_one_workflow_file(
+    session: Session,
+    ctx: _RunContext,
+    wf_src: Any,
+    tally: _Tally,
+) -> None:
+    """Analyse one workflow file, recording its outcome on ``tally``.
+
+    Was the body of the loop in ``_run_static_analysis_impl``, which ran to 464
+    lines. Everything it needs from the run is on ``ctx``; everything it
+    contributes goes on ``tally``.
+    """
+    content = wf_src.raw_content if isinstance(wf_src, WorkflowFile) else wf_src.content
+    path = wf_src.path
+    content_hash = compute_content_hash(content)
+
+    duplicate, existing = is_duplicate(
+        session, content_hash, ctx.repo.id, ctx.effective_branch
+    )
+    if not ctx.force and duplicate and existing:
+        logger.info("Skipping duplicate for %s (hash=%s)", path, content_hash[:8])
+        # Reference the prior analysis instead of inserting a new
+        # `skipped` row: webhook-heavy repos (e.g. workflow_run events)
+        # would otherwise accumulate one row per CI run.
+        if not ctx.is_batch:
+            events_pub.publish_event(
+                ev.analysis_skipped(ctx.org_id, ctx.repo_id, str(existing.id))
+            )
+        else:
+            if existing.score is not None:
+                tally.batch_scores.append(existing.score)
+            tally.batch_total_issues += _count_open_issues(
+                session, existing.workflow_file_id
+            )
+        tally.results.append(
+            {
+                "path": path,
+                "status": "skipped_duplicate",
+                "analysis_id": str(existing.id),
+            }
+        )
+        return
+
+    wf_record: WorkflowFile | None
+    if isinstance(wf_src, WorkflowFile):
+        wf_record = wf_src
+    else:
+        wf_record = session.exec(
+            select(WorkflowFile)
+            .where(WorkflowFile.repo_id == ctx.repo.id)
+            .where(WorkflowFile.branch == ctx.effective_branch)
+            .where(WorkflowFile.path == path)
+        ).first()
+        if wf_record is None:
+            wf_record = WorkflowFile(
+                repo_id=ctx.repo.id,
+                branch=ctx.effective_branch,
+                path=path,
+                content_hash=content_hash,
+                raw_content=content,
+            )
+            session.add(wf_record)
+        else:
+            wf_record.content_hash = content_hash
+            wf_record.raw_content = content
+            # The path reappeared on its branch: clear the soft-delete
+            # marker so it shows in the static-analysis view again.
+            wf_record.deleted_at = None
+            session.add(wf_record)
+            # The path reappeared: give a fix withdrawn for its
+            # deletion a path back to `ready` instead of leaving it
+            # stranded (mirrors PR-reopen restoring a closed-PR fix).
+            if wf_record.fix is not None:
+                sm.try_advance(wf_record.fix, sm.FixMachine, "restore")
+                session.add(wf_record.fix)
+        session.flush()
+
+    analysis = WorkflowScan(
+        repo_id=ctx.repo.id,
+        workflow_file_id=wf_record.id,
+        content_hash=content_hash,
+        status=ScanStatus.queued,
+        triggered_by=ScanTrigger(ctx.trigger),
+        branch=ctx.effective_branch,
+        commit_sha=ctx.commit_sha or None,
+    )
+    session.add(analysis)
+    session.flush()
+    # Charged on creation, not completion. An in-flight analysis is
+    # invisible to a concurrent quota check otherwise, so two triggers
+    # arriving together would both read the old total and both pass.
+    # Charged in this transaction too, so an analysis that never
+    # commits leaves no phantom charge. A ``failed`` analysis still
+    # counts — the compute was spent, and refunding it would make
+    # failure an unlimited free retry loop.
+    if ctx.billable:
+        billing_usage.record_for_repo(
+            session,
+            repo=ctx.repo,
+            meter=UsageMeter.analyses,
+            engine=UsageEngine.workflow,
+            source_type="analysis",
+            source_id=analysis.id,
+            commit=False,
+        )
+        if tally.budget is not None:
+            tally.budget -= 1
+    # Advance queued -> running as the worker begins OPA evaluation, so
+    # a row that dies before this point is distinguishable (still
+    # ``queued``) from one that hangs mid-eval (``running``).
+    sm.advance(analysis, sm.ScanMachine, "started")
+    if not ctx.is_batch:
+        events_pub.publish_event(
+            ev.analysis_started(
+                ctx.org_id, ctx.repo_id, str(analysis.id), ctx.effective_branch
+            )
+        )
+
+    try:
+        violations = asyncio.run(_evaluate(content))
+    except Exception as exc:
+        logger.exception("OPA evaluation failed for %s: %s", path, exc)
+        sm.advance(analysis, sm.ScanMachine, "scan_failed")
+        analysis.error_message = str(exc)[:2000]
+        analysis.failure_kind = _classify_failure(exc)
+        analysis.completed_at = datetime.now(timezone.utc)
+        session.add(analysis)
+        session.commit()
+        if not ctx.is_batch:
+            events_pub.publish_event(
+                ev.analysis_failed(
+                    ctx.org_id, ctx.repo_id, str(analysis.id), str(exc)[:200]
+                )
+            )
+        else:
+            tally.batch_any_failed = True
+        tally.results.append({"path": path, "status": "failed"})
+        return
+
+    # Scoped to this engine, like cloud_scan/terraform_analysis/
+    # docker_analysis already do. Unscoped, a workflow violation whose
+    # slug is also a Terraform or cloud rule name bound to that other
+    # engine's Rule row, taking its severity and weight into the score.
+    rule_map: dict[str, Rule] = {
+        r.slug: r
+        for r in session.exec(
+            select(Rule)
+            .where(Rule.enabled == True)  # noqa: E712
+            .where(Rule.domain == RuleDomain.ci_workflow)
+        ).all()
+    }
+
+    seen_fingerprints: set[str] = set()
+    issue_count = 0
+    workflow_score_inputs: list[tuple[str, float]] = []
+    job_score_inputs: dict[str, list[tuple[str, float]]] = {}
+    for v in violations:
+        rule = rule_map.get(v.rule_slug)
+        if rule is None:
+            rule = _register_rule_from_violation(session, v)
+            if rule is None:
+                continue
+            if not rule.enabled:
+                continue
+            rule_map[v.rule_slug] = rule
+        # Only the rule's own discriminator. Falling back to the line
+        # number made an issue's identity move whenever its line did —
+        # so inserting a blank line at the top of a workflow resolved
+        # every issue in it and created replacements, losing any
+        # `ignored` state and re-triggering fix generation. The other
+        # three engines never key on a line for exactly this reason
+        # (see compute_fingerprint); a rule that can fire twice at one
+        # (job, step_index) sets a discriminator.
+        fingerprint = compute_fingerprint(
+            wf_record.id, rule.id, v.job, v.step_index, v.discriminator
+        )
+        seen_fingerprints.add(fingerprint)
+        issue_count += 1
+        stmt = (
+            pg_insert(WorkflowFinding)
+            .values(
+                id=uuid.uuid4(),
+                analysis_id=analysis.id,
+                workflow_file_id=wf_record.id,
+                rule_id=rule.id,
+                job=v.job,
+                step=v.step,
+                step_index=v.step_index,
+                fingerprint=fingerprint,
+                severity=Severity(v.severity),
+                category=Category(v.category),
+                line_start=v.line_start,
+                line_end=v.line_end,
+                message=v.message,
+                context=v.context,
+                created_at=datetime.now(timezone.utc),
+            )
+            .on_conflict_do_update(
+                constraint="uq_workflow_finding_wf_fingerprint",
+                set_={
+                    "analysis_id": analysis.id,
+                    "severity": Severity(v.severity),
+                    "line_start": v.line_start,
+                    "line_end": v.line_end,
+                    "message": v.message,
+                    "context": v.context,
+                    # A recurring violation reopens a resolved issue.
+                    "resolved_at": None,
+                    "resolution_reason": None,
+                },
+            )
+        )
+        session.execute(stmt)
+        pair = (v.severity, rule.severity_weight)
+        if v.job is None:
+            workflow_score_inputs.append(pair)
+        else:
+            job_score_inputs.setdefault(v.job, []).append(pair)
+
+    from app.services.scoring import compute_score, score_to_grade
+
+    score = compute_score(workflow_score_inputs, job_score_inputs)
+    grade = score_to_grade(score)
+
+    sm.advance(analysis, sm.ScanMachine, "succeeded")
+    analysis.score = score
+    analysis.grade = grade
+    analysis.completed_at = datetime.now(timezone.utc)
+    session.add(analysis)
+    session.commit()
+
+    tally.changed_wf_ids.add(wf_record.id)
+
+    _resolve_stale_issues(session, wf_record.id, seen_fingerprints)
+
+    if not ctx.is_batch:
+        events_pub.publish_event(
+            ev.analysis_completed(
+                ctx.org_id, ctx.repo_id, str(analysis.id), score, grade, issue_count
+            )
+        )
+    else:
+        tally.batch_total_issues += issue_count
+        tally.batch_scores.append(score)
+
+    tally.results.append(
+        {
+            "path": path,
+            "status": "completed",
+            "analysis_id": str(analysis.id),
+            "score": round(score, 1),
+            "grade": grade,
+            "issues": issue_count,
+        }
+    )
+    logger.info(
+        "Scan complete: repo=%s path=%s score=%.1f grade=%s issues=%d",
+        ctx.repo_id,
+        path,
+        score,
+        grade,
+        issue_count,
+    )
+
+
 def _run_static_analysis_impl(
     repo_id: str,
     branch: str = "",
@@ -489,296 +790,43 @@ def _run_static_analysis_impl(
                 ev.analysis_started(org_id, repo_id, "", effective_branch)
             )
 
-        results: list[dict[str, str | int | float]] = []
-        batch_total_issues = 0
-        batch_scores: list[float] = []
-        batch_any_failed = False
-        # Workflow files whose content was freshly analysed this run (a
-        # duplicate-skipped file is absent): the "necessary" set to regenerate.
-        changed_wf_ids: set[uuid.UUID] = set()
-
+        ctx = _RunContext(
+            repo=repo,
+            repo_id=repo_id,
+            org_id=org_id,
+            effective_branch=effective_branch,
+            trigger=trigger,
+            commit_sha=commit_sha,
+            force=force,
+            is_batch=is_batch,
+            billable=billable,
+        )
         # The real quota gate. The API pre-check cannot hold on its own — one
         # trigger fans out to one analysis per workflow file, and most analyses
         # arrive here from a push webhook, the polling sweep or installation
         # sync, none of which pass through an API route at all. Counting down a
         # locally-tracked budget (rather than re-querying) keeps the check off
         # the hot path while still stopping the batch at exactly the cap.
-        budget = (
-            billing_quota.remaining(session, None, repo.org_id, "analyses")
-            if billable
-            else None
+        tally = _Tally(
+            budget=(
+                billing_quota.remaining(session, None, repo.org_id, "analyses")
+                if billable
+                else None
+            )
         )
-        quota_stopped_at: str | None = None
 
         for wf_src in workflow_files_to_analyse:
-            if budget is not None and budget <= 0:
+            if tally.budget is not None and tally.budget <= 0:
                 # Out of allowance mid-batch: stop rather than silently
                 # over-serving, and remember where so the caller can say which
                 # files went unanalysed instead of reporting a clean run.
-                quota_stopped_at = wf_src.path
+                tally.quota_stopped_at = wf_src.path
                 break
-
-            content = (
-                wf_src.raw_content
-                if isinstance(wf_src, WorkflowFile)
-                else wf_src.content
-            )
-            path = wf_src.path
-            content_hash = compute_content_hash(content)
-
-            duplicate, existing = is_duplicate(
-                session, content_hash, repo.id, effective_branch
-            )
-            if not force and duplicate and existing:
-                logger.info(
-                    "Skipping duplicate for %s (hash=%s)", path, content_hash[:8]
-                )
-                # Reference the prior analysis instead of inserting a new
-                # `skipped` row: webhook-heavy repos (e.g. workflow_run events)
-                # would otherwise accumulate one row per CI run.
-                if not is_batch:
-                    events_pub.publish_event(
-                        ev.analysis_skipped(org_id, repo_id, str(existing.id))
-                    )
-                else:
-                    if existing.score is not None:
-                        batch_scores.append(existing.score)
-                    batch_total_issues += _count_open_issues(
-                        session, existing.workflow_file_id
-                    )
-                results.append(
-                    {
-                        "path": path,
-                        "status": "skipped_duplicate",
-                        "analysis_id": str(existing.id),
-                    }
-                )
-                continue
-
-            wf_record: WorkflowFile | None
-            if isinstance(wf_src, WorkflowFile):
-                wf_record = wf_src
-            else:
-                wf_record = session.exec(
-                    select(WorkflowFile)
-                    .where(WorkflowFile.repo_id == repo.id)
-                    .where(WorkflowFile.branch == effective_branch)
-                    .where(WorkflowFile.path == path)
-                ).first()
-                if wf_record is None:
-                    wf_record = WorkflowFile(
-                        repo_id=repo.id,
-                        branch=effective_branch,
-                        path=path,
-                        content_hash=content_hash,
-                        raw_content=content,
-                    )
-                    session.add(wf_record)
-                else:
-                    wf_record.content_hash = content_hash
-                    wf_record.raw_content = content
-                    # The path reappeared on its branch: clear the soft-delete
-                    # marker so it shows in the static-analysis view again.
-                    wf_record.deleted_at = None
-                    session.add(wf_record)
-                    # The path reappeared: give a fix withdrawn for its
-                    # deletion a path back to `ready` instead of leaving it
-                    # stranded (mirrors PR-reopen restoring a closed-PR fix).
-                    if wf_record.fix is not None:
-                        sm.try_advance(wf_record.fix, sm.FixMachine, "restore")
-                        session.add(wf_record.fix)
-                session.flush()
-
-            analysis = WorkflowScan(
-                repo_id=repo.id,
-                workflow_file_id=wf_record.id,
-                content_hash=content_hash,
-                status=ScanStatus.queued,
-                triggered_by=ScanTrigger(trigger),
-                branch=effective_branch,
-                commit_sha=commit_sha or None,
-            )
-            session.add(analysis)
-            session.flush()
-            # Charged on creation, not completion. An in-flight analysis is
-            # invisible to a concurrent quota check otherwise, so two triggers
-            # arriving together would both read the old total and both pass.
-            # Charged in this transaction too, so an analysis that never
-            # commits leaves no phantom charge. A ``failed`` analysis still
-            # counts — the compute was spent, and refunding it would make
-            # failure an unlimited free retry loop.
-            if billable:
-                billing_usage.record_for_repo(
-                    session,
-                    repo=repo,
-                    meter=UsageMeter.analyses,
-                    engine=UsageEngine.workflow,
-                    source_type="analysis",
-                    source_id=analysis.id,
-                    commit=False,
-                )
-                if budget is not None:
-                    budget -= 1
-            # Advance queued -> running as the worker begins OPA evaluation, so
-            # a row that dies before this point is distinguishable (still
-            # ``queued``) from one that hangs mid-eval (``running``).
-            sm.advance(analysis, sm.ScanMachine, "started")
-            if not is_batch:
-                events_pub.publish_event(
-                    ev.analysis_started(
-                        org_id, repo_id, str(analysis.id), effective_branch
-                    )
-                )
-
-            try:
-                violations = asyncio.run(_evaluate(content))
-            except Exception as exc:
-                logger.exception("OPA evaluation failed for %s: %s", path, exc)
-                sm.advance(analysis, sm.ScanMachine, "scan_failed")
-                analysis.error_message = str(exc)[:2000]
-                analysis.failure_kind = _classify_failure(exc)
-                analysis.completed_at = datetime.now(timezone.utc)
-                session.add(analysis)
-                session.commit()
-                if not is_batch:
-                    events_pub.publish_event(
-                        ev.analysis_failed(
-                            org_id, repo_id, str(analysis.id), str(exc)[:200]
-                        )
-                    )
-                else:
-                    batch_any_failed = True
-                results.append({"path": path, "status": "failed"})
-                continue
-
-            # Scoped to this engine, like cloud_scan/terraform_analysis/
-            # docker_analysis already do. Unscoped, a workflow violation whose
-            # slug is also a Terraform or cloud rule name bound to that other
-            # engine's Rule row, taking its severity and weight into the score.
-            rule_map: dict[str, Rule] = {
-                r.slug: r
-                for r in session.exec(
-                    select(Rule)
-                    .where(Rule.enabled == True)  # noqa: E712
-                    .where(Rule.domain == RuleDomain.ci_workflow)
-                ).all()
-            }
-
-            seen_fingerprints: set[str] = set()
-            issue_count = 0
-            workflow_score_inputs: list[tuple[str, float]] = []
-            job_score_inputs: dict[str, list[tuple[str, float]]] = {}
-            for v in violations:
-                rule = rule_map.get(v.rule_slug)
-                if rule is None:
-                    rule = _register_rule_from_violation(session, v)
-                    if rule is None:
-                        continue
-                    if not rule.enabled:
-                        continue
-                    rule_map[v.rule_slug] = rule
-                # Only the rule's own discriminator. Falling back to the line
-                # number made an issue's identity move whenever its line did —
-                # so inserting a blank line at the top of a workflow resolved
-                # every issue in it and created replacements, losing any
-                # `ignored` state and re-triggering fix generation. The other
-                # three engines never key on a line for exactly this reason
-                # (see compute_fingerprint); a rule that can fire twice at one
-                # (job, step_index) sets a discriminator.
-                fingerprint = compute_fingerprint(
-                    wf_record.id, rule.id, v.job, v.step_index, v.discriminator
-                )
-                seen_fingerprints.add(fingerprint)
-                issue_count += 1
-                stmt = (
-                    pg_insert(WorkflowFinding)
-                    .values(
-                        id=uuid.uuid4(),
-                        analysis_id=analysis.id,
-                        workflow_file_id=wf_record.id,
-                        rule_id=rule.id,
-                        job=v.job,
-                        step=v.step,
-                        step_index=v.step_index,
-                        fingerprint=fingerprint,
-                        severity=Severity(v.severity),
-                        category=Category(v.category),
-                        line_start=v.line_start,
-                        line_end=v.line_end,
-                        message=v.message,
-                        context=v.context,
-                        created_at=datetime.now(timezone.utc),
-                    )
-                    .on_conflict_do_update(
-                        constraint="uq_workflow_finding_wf_fingerprint",
-                        set_={
-                            "analysis_id": analysis.id,
-                            "severity": Severity(v.severity),
-                            "line_start": v.line_start,
-                            "line_end": v.line_end,
-                            "message": v.message,
-                            "context": v.context,
-                            # A recurring violation reopens a resolved issue.
-                            "resolved_at": None,
-                            "resolution_reason": None,
-                        },
-                    )
-                )
-                session.execute(stmt)
-                pair = (v.severity, rule.severity_weight)
-                if v.job is None:
-                    workflow_score_inputs.append(pair)
-                else:
-                    job_score_inputs.setdefault(v.job, []).append(pair)
-
-            from app.services.scoring import compute_score, score_to_grade
-
-            score = compute_score(workflow_score_inputs, job_score_inputs)
-            grade = score_to_grade(score)
-
-            sm.advance(analysis, sm.ScanMachine, "succeeded")
-            analysis.score = score
-            analysis.grade = grade
-            analysis.completed_at = datetime.now(timezone.utc)
-            session.add(analysis)
-            session.commit()
-
-            changed_wf_ids.add(wf_record.id)
-
-            _resolve_stale_issues(session, wf_record.id, seen_fingerprints)
-
-            if not is_batch:
-                events_pub.publish_event(
-                    ev.analysis_completed(
-                        org_id, repo_id, str(analysis.id), score, grade, issue_count
-                    )
-                )
-            else:
-                batch_total_issues += issue_count
-                batch_scores.append(score)
-
-            results.append(
-                {
-                    "path": path,
-                    "status": "completed",
-                    "analysis_id": str(analysis.id),
-                    "score": round(score, 1),
-                    "grade": grade,
-                    "issues": issue_count,
-                }
-            )
-            logger.info(
-                "Scan complete: repo=%s path=%s score=%.1f grade=%s issues=%d",
-                repo_id,
-                path,
-                score,
-                grade,
-                issue_count,
-            )
+            _analyse_one_workflow_file(session, ctx, wf_src, tally)
 
         if is_batch:
-            all_failed = batch_any_failed and not any(
-                r.get("status") == "completed" for r in results
+            all_failed = tally.batch_any_failed and not any(
+                r.get("status") == "completed" for r in tally.results
             )
             if all_failed:
                 events_pub.publish_event(
@@ -790,7 +838,9 @@ def _run_static_analysis_impl(
                 from app.services.scoring import score_to_grade
 
                 avg_score = (
-                    sum(batch_scores) / len(batch_scores) if batch_scores else 100.0
+                    sum(tally.batch_scores) / len(tally.batch_scores)
+                    if tally.batch_scores
+                    else 100.0
                 )
                 avg_grade = score_to_grade(avg_score)
                 events_pub.publish_event(
@@ -800,7 +850,7 @@ def _run_static_analysis_impl(
                         "",
                         avg_score,
                         avg_grade,
-                        batch_total_issues,
+                        tally.batch_total_issues,
                     )
                 )
 
@@ -811,12 +861,12 @@ def _run_static_analysis_impl(
         # generation (the query inside is branch-gated too).
         if (
             repo.auto_fix_enabled
-            and changed_wf_ids
+            and tally.changed_wf_ids
             and effective_branch == repo.default_branch
         ):
             try:
                 _auto_queue_fix_generation(
-                    session, repo, org_id, changed_wf_ids=changed_wf_ids
+                    session, repo, org_id, changed_wf_ids=tally.changed_wf_ids
                 )
             except Exception:
                 logger.exception(
@@ -824,18 +874,18 @@ def _run_static_analysis_impl(
                     repo_id,
                 )
 
-        if quota_stopped_at is not None:
+        if tally.quota_stopped_at is not None:
             # Say so loudly. A run that quietly analysed four of twelve files
             # and reported "done" is worse than one that failed: the grade it
             # produces looks authoritative while covering a fraction of the
             # repo. The SSE signal is distinct from ``analysis.failed`` because
             # nothing broke and retrying will not help — only upgrading will.
-            skipped = len(workflow_files_to_analyse) - len(results)
+            skipped = len(workflow_files_to_analyse) - len(tally.results)
             message = (
-                f"Scan stopped after {len(results)} of "
+                f"Scan stopped after {len(tally.results)} of "
                 f"{len(workflow_files_to_analyse)} workflow files: the monthly "
                 f"analysis allowance is exhausted. {skipped} file(s) were not "
-                f"analysed, starting with {quota_stopped_at}."
+                f"analysed, starting with {tally.quota_stopped_at}."
             )
             logger.warning(
                 "Quota exhausted mid-batch for repo=%s: %s", repo_id, message
@@ -846,12 +896,16 @@ def _run_static_analysis_impl(
             return {
                 "status": "quota_exceeded",
                 "repo_id": repo_id,
-                "analysed": len(results),
+                "analysed": len(tally.results),
                 "skipped": skipped,
-                "results": str(results),
+                "results": str(tally.results),
             }
 
-        return {"status": "done", "repo_id": repo_id, "results": str(results)}
+        return {
+            "status": "done",
+            "repo_id": repo_id,
+            "results": str(tally.results),
+        }
 
 
 @celery_app.task(name="static_analysis.run", bind=True, max_retries=3)

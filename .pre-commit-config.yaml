@@ -30,6 +30,28 @@ repos:
         args: [--fix=lf]
         exclude: ^backend/tests/fixtures/terraform/.*\.tf$
 
+  # Type checking. Both of these were effectively unenforced: the backend hook
+  # lived in backend/.pre-commit-config.yaml at the `pre-push` stage, which the
+  # CI workflow (`prek run` against *this* file) never loads, and the frontend
+  # was only type-checked as a side effect of `bun run build`, which uses
+  # tsconfig.build.json and so skips the test files entirely. Seven mypy errors
+  # had accumulated on main by the time anyone looked.
+  - repo: local
+    hooks:
+      - id: mypy-backend
+        name: mypy (backend)
+        entry: bash -c 'cd backend && uv run mypy app/ --ignore-missing-imports'
+        language: system
+        files: ^backend/app/.*\.py$
+        pass_filenames: false
+
+      - id: typecheck-frontend
+        name: tsc (frontend)
+        entry: bun run --filter frontend typecheck
+        language: system
+        files: ^frontend/(src|tests)/.*\.tsx?$
+        pass_filenames: false
+
   # OpenAPI client generation
   - repo: local
     hooks:

@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/analyses/ endpoints."""
+"""Tests for the /api/v1/workflow-scans/ endpoints."""
 
 import uuid
 from unittest.mock import patch
@@ -12,75 +12,46 @@ from app.models import (
     Organization,
     Repository,
     ScanStatus,
-    ScanTrigger,
-    UserTier,
     WorkflowFile,
     WorkflowScan,
 )
+from tests.fixtures import factories as f
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture()
 def org(db: Session) -> Organization:
-    organization = Organization(
-        name=f"analyses-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
-    )
-    db.add(organization)
-    db.commit()
-    db.refresh(organization)
-    return organization
+    return f.make_org(db)
 
 
 @pytest.fixture()
 def repo(db: Session, org: Organization) -> Repository:
-    repository = Repository(
-        org_id=org.id,
-        github_repo_id=int(uuid.uuid4().int % 10**9),
-        full_name=f"analysesowner/repo-{uuid.uuid4().hex[:8]}",
-        installation_id=55555,
-    )
-    db.add(repository)
-    db.commit()
-    db.refresh(repository)
-    return repository
+    return f.make_repo(db, org, installation_id=55555)
 
 
 @pytest.fixture()
 def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
-    wf = WorkflowFile(
-        repo_id=repo.id,
-        path=".github/workflows/ci.yml",
-        content_hash=uuid.uuid4().hex,
-        raw_content="on: push\njobs: {}",
-    )
-    db.add(wf)
-    db.commit()
-    db.refresh(wf)
-    return wf
+    return f.make_workflow_file(db, repo, raw_content="on: push\njobs: {}")
 
 
 @pytest.fixture()
 def completed_analysis(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> WorkflowScan:
-    analysis = WorkflowScan(
-        repo_id=repo.id,
-        workflow_file_id=workflow_file.id,
-        content_hash=workflow_file.content_hash,
+    return f.make_scan(
+        db,
+        repo,
+        workflow_file,
         status=ScanStatus.completed,
         score=85.0,
         grade="B",
-        triggered_by=ScanTrigger.manual,
         branch="main",
+        content_hash=workflow_file.content_hash,
     )
-    db.add(analysis)
-    db.commit()
-    db.refresh(analysis)
-    return analysis
 
 
-# ─── GET /analyses/ ───────────────────────────────────────────────────────────
+# ─── GET /workflow-scans/ ───────────────────────────────────────────────────────────
 
 
 def test_list_analyses_empty(
@@ -89,22 +60,7 @@ def test_list_analyses_empty(
     db: Session,
 ) -> None:
     # Arrange — fresh repo with no analyses
-    fresh_org = Organization(
-        name=f"no-analyses-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
-    )
-    db.add(fresh_org)
-    db.commit()
-    db.refresh(fresh_org)
-
-    fresh_repo = Repository(
-        org_id=fresh_org.id,
-        github_repo_id=int(uuid.uuid4().int % 10**9),
-        full_name=f"empty-analyses/repo-{uuid.uuid4().hex[:8]}",
-        installation_id=66666,
-    )
-    db.add(fresh_repo)
-    db.commit()
-    db.refresh(fresh_repo)
+    fresh_repo = f.make_repo(db, f.make_org(db), installation_id=66666)
 
     # Act
     response = client.get(

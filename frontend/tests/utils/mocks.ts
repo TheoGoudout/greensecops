@@ -1,5 +1,12 @@
 import type { Page } from "@playwright/test"
-import type { RepositoryPublic, UserPublic } from "@/client"
+import type {
+  BillingSubscriptionPublic,
+  DockerBuildTelemetryPublic,
+  PlanLimitsPublic,
+  RepositoryPublic,
+  UsagePublic,
+  UserPublic,
+} from "@/client"
 import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
 
 // Mirrors the backend's severity-penalty weighting (app/services/scoring.py
@@ -318,7 +325,7 @@ export const MOCK_DOCKER_RUNTIME_FINDING = {
   created_at: "2024-01-02T10:05:00Z",
 }
 
-export const MOCK_DOCKER_RUNTIME_BUILD = {
+export const MOCK_DOCKER_RUNTIME_BUILD: DockerBuildTelemetryPublic = {
   id: ID.dockerTelemetry,
   workflow_run_id: 12345678901,
   image_ref: "sha256:abc",
@@ -350,18 +357,19 @@ export const MOCK_DOCKER_RUNTIME_BUILD = {
 
 // A build reported without the action's dockerfile_path input: its findings
 // are real but cannot drive a fix, because nothing names a file to rewrite.
-export const MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED = {
-  ...MOCK_DOCKER_RUNTIME_BUILD,
-  id: ID.dockerTelemetryUnattributed,
-  dockerfile_path: null,
-  findings: [
-    {
-      ...MOCK_DOCKER_RUNTIME_FINDING,
-      id: ID.dockerRuntimeFindingUnattributed,
-      telemetry_id: ID.dockerTelemetryUnattributed,
-    },
-  ],
-}
+export const MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED: DockerBuildTelemetryPublic =
+  {
+    ...MOCK_DOCKER_RUNTIME_BUILD,
+    id: ID.dockerTelemetryUnattributed,
+    dockerfile_path: null,
+    findings: [
+      {
+        ...MOCK_DOCKER_RUNTIME_FINDING,
+        id: ID.dockerRuntimeFindingUnattributed,
+        telemetry_id: ID.dockerTelemetryUnattributed,
+      },
+    ],
+  }
 
 // Branch mirrors dockerFixBranch(ID.dockerTargetRoot) in src/lib/delivery.ts,
 // which is what the Docker PRs tab filters and maps on.
@@ -846,7 +854,7 @@ export const MOCK_PLANS = [
   },
 ]
 
-export const MOCK_SUBSCRIPTION = {
+export const MOCK_SUBSCRIPTION: BillingSubscriptionPublic = {
   id: ID.subscription,
   tier: "free" as const,
   effective_tier: "free" as const,
@@ -862,7 +870,7 @@ export const MOCK_SUBSCRIPTION = {
   billing_enabled: true,
 }
 
-export const MOCK_USAGE = {
+export const MOCK_USAGE: UsagePublic = {
   period_start: "2026-08-01T00:00:00Z",
   period_end: "2026-09-01T00:00:00Z",
   analyses_used: 12,
@@ -876,12 +884,12 @@ export const MOCK_USAGE = {
   ],
 }
 
-export const MOCK_TIER_LIMITS = {
+export const MOCK_TIER_LIMITS: { tier: string; limits: PlanLimitsPublic } = {
   tier: "free",
   limits: { analyses: 100, fixes: 10, repos: 3 },
 }
 
-export const MOCK_SUBSCRIPTION_PRO = {
+export const MOCK_SUBSCRIPTION_PRO: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION,
   id: ID.subscriptionPro,
   tier: "pro" as const,
@@ -891,7 +899,7 @@ export const MOCK_SUBSCRIPTION_PRO = {
   repos_used: 2,
 }
 
-export const MOCK_USAGE_PRO = {
+export const MOCK_USAGE_PRO: UsagePublic = {
   ...MOCK_USAGE,
   analyses_used: 5,
   fixes_used: 10,
@@ -899,19 +907,20 @@ export const MOCK_USAGE_PRO = {
   limits: { analyses: 10000, fixes: 1000, repos: 100 },
 }
 
-export const MOCK_TIER_LIMITS_PRO = {
-  tier: "pro",
-  limits: { analyses: 10000, fixes: 1000, repos: 100 },
-}
+export const MOCK_TIER_LIMITS_PRO: { tier: string; limits: PlanLimitsPublic } =
+  {
+    tier: "pro",
+    limits: { analyses: 10000, fixes: 1000, repos: 100 },
+  }
 
-export const MOCK_SUBSCRIPTION_AT_LIMIT = {
+export const MOCK_SUBSCRIPTION_AT_LIMIT: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION,
   analyses_used: 100,
   fixes_used: 10,
   repos_used: 3,
 }
 
-export const MOCK_USAGE_AT_LIMIT = {
+export const MOCK_USAGE_AT_LIMIT: UsagePublic = {
   ...MOCK_USAGE,
   analyses_used: 100,
   fixes_used: 10,
@@ -920,14 +929,14 @@ export const MOCK_USAGE_AT_LIMIT = {
 
 // A Pro subscription whose payment failed. Still fully entitled — the grace
 // window is the whole point — but the UI must say so.
-export const MOCK_SUBSCRIPTION_PAST_DUE = {
+export const MOCK_SUBSCRIPTION_PAST_DUE: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION_PRO,
   status: "past_due" as const,
   grace_expires_at: "2099-01-10T00:00:00Z",
 }
 
 // Grace expired: still a Pro subscription, but metered at Free.
-export const MOCK_SUBSCRIPTION_UNPAID = {
+export const MOCK_SUBSCRIPTION_UNPAID: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION_PRO,
   status: "unpaid" as const,
   effective_tier: "free" as const,

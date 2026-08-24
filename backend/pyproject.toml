@@ -108,6 +108,9 @@ select = [
     "T201",   # print statements are not allowed
     "RUF100", # noqa directives that suppress nothing
     "PLC0415", # imports inside functions
+    "C901",    # cyclomatic complexity
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
 ]
 ignore = [
     "E501",  # line too long, handled by black
@@ -119,42 +122,52 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ARG001", "PLC0415"]
 
-# ── PLC0415: imports inside functions ────────────────────────────────────────
+# Two rules are suppressed per file below, for unrelated reasons. TOML allows
+# one key per file, so a file needing both carries both in one list; the
+# trailing comment says which reason applies to which.
 #
-# Deferring an import is usually habit, and 53 of the 125 sites here were: they
-# are now at module scope, where the dependency graph is visible. What is left
-# is load-bearing, in one of three ways, and each file is listed under the
-# reason that applies to it.
+# PLC0415 (imports inside functions). Deferring an import is usually habit,
+# and 53 of the 125 sites here were — they are now at module scope. What is
+# left is load-bearing in one of three ways:
+#   test seam           the deferral IS the seam. A name imported inside a
+#                       function is looked up at call time, so patching the
+#                       source module reaches the caller; hoisting binds it
+#                       at import and the patch silently stops landing.
+#   import cycle        workers build on services, and these reach back the
+#                       other way at call time to dispatch.
+#   optional dependency each LLM provider imports its own langchain package;
+#                       importing all four eagerly would make every one a
+#                       hard requirement to start the app.
 #
-# 1. The deferral IS the test seam. A name imported inside a function is looked
-#    up at call time, so `patch("app.workers.tasks.static_analysis.run_static_analysis")`
-#    reaches the caller. Hoisting binds it at import and the patch stops landing
-#    — the suite catches this immediately, which is how these were identified.
-"app/api/routes/repositories.py" = ["PLC0415"]
-"app/api/routes/webhooks.py" = ["PLC0415"]
-"app/services/github/event_handlers.py" = ["PLC0415"]
-"app/workers/tasks/static_analysis.py" = ["PLC0415"]
-"app/workers/tasks/fix_generation.py" = ["PLC0415"]
+# C901 / PLR0912 / PLR0915 (size and complexity) are enabled at ruff defaults
+# (10 / 12 / 50) so no *new* module may grow a function like these, and
+# exempted for the ones that already have. A ratchet, not an amnesty: the
+# measurements are recorded so the list can only shrink, and each is a
+# candidate for the treatment `_run_static_analysis_impl` just had — 464 lines
+# before `_analyse_one_workflow_file` and `_Tally` were lifted out of it.
+#
+# complexity / branches / statements, worst function in the file:
 
-# 2. A genuine import cycle. Workers build on services, and these reach back the
-#    other way at call time to dispatch or to read a sibling engine's helper.
-"app/services/github/app_client.py" = ["PLC0415"]
-"app/services/file_fix_generation.py" = ["PLC0415"]
-"app/workers/tasks/docker_fix_generation.py" = ["PLC0415"]
-"app/workers/tasks/terraform_fix_generation.py" = ["PLC0415"]
-
-# 3. Optional or heavy dependencies. Each LLM provider module imports its own
-#    langchain integration package; importing all four eagerly would make every
-#    one of them a hard requirement to start the app, so a deployment using only
-#    OpenAI would need langchain-anthropic, -google-genai and -ollama installed.
-"app/services/llm/catalog.py" = ["PLC0415"]
-"app/services/llm/base.py" = ["PLC0415"]
-# SQLModel needs quoted, bracket-wrapped forward refs (Optional["X"], list["X"])
-# for cross-module Relationship() targets — a real typing.ForwardRef it can
-# introspect structurally without importing the target class. UP037/UP045
-# "helpfully" collapse those into a bare `X | None` union string that
-# SQLAlchemy's registry resolver cannot parse, breaking mapper configuration.
-"app/models/db/**" = ["UP037", "UP045"]
+"app/api/routes/billing.py" = ["C901", "PLR0912", "PLR0915"]  # 16/16/-
+"app/api/routes/events.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/-
+"app/api/routes/repositories.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 16/15/58
+"app/api/routes/webhooks.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 16/16/-
+"app/api/routes/workflow_findings.py" = ["C901", "PLR0912", "PLR0915"]  # 13/-/-
+"app/core/rule_registry.py" = ["C901", "PLR0912", "PLR0915"]  # 14/13/-
+"app/services/cloud/aws_collector.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/-
+"app/services/file_fix_delivery.py" = ["C901", "PLR0912", "PLR0915"]  # 15/17/62
+"app/services/file_fix_generation.py" = ["PLC0415"]  # import cycle
+"app/services/github/app_client.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # import cycle, 13/-/-
+"app/services/github/event_handlers.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 19/19/-
+"app/services/llm/base.py" = ["PLC0415"]  # optional dependency
+"app/services/llm/catalog.py" = ["PLC0415"]  # optional dependency
+"app/services/scan_runner.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/58
+"app/workers/tasks/cloud_scan.py" = ["C901", "PLR0912", "PLR0915"]  # -/-/55
+"app/workers/tasks/docker_fix_generation.py" = ["PLC0415"]  # import cycle
+"app/workers/tasks/fix_delivery.py" = ["C901", "PLR0912", "PLR0915"]  # 26/30/97
+"app/workers/tasks/fix_generation.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 12/15/60
+"app/workers/tasks/static_analysis.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 18/23/97
+"app/workers/tasks/terraform_fix_generation.py" = ["PLC0415"]  # import cycle
 
 [tool.ruff.lint.pyupgrade]
 # Preserve types, even if a file imports `from __future__ import annotations`.
