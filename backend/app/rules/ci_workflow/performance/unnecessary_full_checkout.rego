@@ -25,11 +25,56 @@ package greensecops.ci_workflow.performance.unnecessary_full_checkout
 
 import rego.v1
 
+_history_commands := [
+	"git log",
+	"git describe",
+	"git tag",
+	"git blame",
+	"git shortlog",
+	"git diff",
+	"git merge-base",
+	"git rev-list",
+	"git rev-parse",
+	"git bisect",
+	"CHANGELOG",
+	"gitversion",
+	"semantic-release",
+	"standard-version",
+	"--from-ref",
+	"prek",
+]
+
 _uses_git_history(steps) if {
 	some step in steps
 	run := step.run
-	some cmd in ["git log", "git describe", "git tag", "git blame", "git shortlog", "CHANGELOG", "gitversion", "semantic-release", "standard-version", "--from-ref", "prek"]
+	some cmd in _history_commands
 	contains(run, cmd)
+}
+
+# Actions that read history themselves. This rule only looked at `run:`
+# scripts, so a job whose whole reason for `fetch-depth: 0` was a coverage
+# uploader or a release tool was reported as fetching history for nothing.
+_history_actions := [
+	"codecov/codecov-action",
+	"sonarsource/",
+	"googleapis/release-please-action",
+	"google-github-actions/release-please-action",
+	"tj-actions/changed-files",
+	"dorny/paths-filter",
+	"gittools/actions",
+	"paulhatch/semantic-version",
+	"cycjimmy/semantic-release-action",
+	"mikepenz/release-changelog-builder-action",
+	"orhun/git-cliff-action",
+	"crazy-max/ghaction-import-gpg",
+	"softprops/action-gh-release",
+]
+
+_uses_git_history(steps) if {
+	some step in steps
+	uses := lower(object.get(step, "uses", ""))
+	some action in _history_actions
+	startswith(uses, action)
 }
 
 violations contains violation if {

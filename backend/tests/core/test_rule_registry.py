@@ -239,14 +239,6 @@ def test_package_declaration_matches_the_file_path() -> None:
         assert declared.group(1) == expected
 
 
-# `excessive_token_permissions` emits three severities from three independent
-# clauses (a `write-all` token is critical, a narrower over-grant is not) and
-# its METADATA declares the worst case. It is the only rule that legitimately
-# disagrees with itself, so it is named rather than pattern-matched — a second
-# entry here should have to be argued for.
-_MULTI_SEVERITY_RULES = {"excessive_token_permissions"}
-
-
 def test_metadata_severity_matches_the_severity_the_rule_emits() -> None:
     """The catalog's severity and the finding's severity must be the same value.
 
@@ -255,8 +247,6 @@ def test_metadata_severity_matches_the_severity_the_rule_emits() -> None:
     them in step.
     """
     for path in iter_rule_files():
-        if path.stem in _MULTI_SEVERITY_RULES:
-            continue
         declared = rule_from_path(path)["severity"]
         emitted = set(
             re.findall(r'"severity":\s*"(\w+)"', path.read_text(encoding="utf-8"))

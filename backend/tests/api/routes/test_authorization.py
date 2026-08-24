@@ -178,7 +178,8 @@ def test_outsider_cannot_get_issue(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/{victim.issue.id}", headers=outsider_headers
+        f"{settings.API_V1_STR}/workflow-findings/{victim.issue.id}",
+        headers=outsider_headers,
     )
     assert resp.status_code == 404
 
@@ -221,7 +222,8 @@ def test_outsider_cannot_get_fix(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/{victim.fix.id}", headers=outsider_headers
+        f"{settings.API_V1_STR}/workflow-fixes/{victim.fix.id}",
+        headers=outsider_headers,
     )
     assert resp.status_code == 404
 
@@ -278,7 +280,8 @@ def test_member_can_get_issue(
     client: TestClient, member_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/{victim.issue.id}", headers=member_headers
+        f"{settings.API_V1_STR}/workflow-findings/{victim.issue.id}",
+        headers=member_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["id"] == str(victim.issue.id)

@@ -84,3 +84,19 @@ test_each_upload_is_its_own_finding if {
 	count(violations) == 2
 	count({v.discriminator | some v in violations}) == 2
 }
+
+# The guard is on the job, so the upload already runs on a failed run.
+test_no_violation_when_the_job_carries_the_guard if {
+	violations := no_always.violations with input as {"jobs": {"report": {
+		"if": "${{ !cancelled() }}",
+		"steps": [{"uses": "actions/upload-artifact@v4", "with": {"name": "html-report", "path": "out"}}],
+	}}}
+	count(violations) == 0
+}
+
+test_violation_when_neither_job_nor_step_is_guarded if {
+	violations := no_always.violations with input as {"jobs": {"report": {
+		"steps": [{"uses": "actions/upload-artifact@v4", "with": {"name": "html-report", "path": "out"}}],
+	}}}
+	count(violations) == 1
+}

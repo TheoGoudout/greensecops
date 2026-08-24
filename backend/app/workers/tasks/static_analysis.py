@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -401,6 +401,8 @@ class _RunContext:
     force: bool
     is_batch: bool
     billable: bool
+    # Collected once per run rather than per file — see _collect_action_metadata.
+    action_metadata: Mapping[str, Mapping[str, Any]]
 
 
 @dataclass
@@ -435,7 +437,7 @@ def _analyse_one_workflow_file(
     lines. Everything it needs from the run is on ``ctx``; everything it
     contributes goes on ``tally``.
     """
-    content = wf_src.raw_content if isinstance(wf_src, WorkflowFile) else wf_src.content
+    content = _content_of(wf_src)
     path = wf_src.path
     content_hash = compute_content_hash(content)
 
@@ -542,7 +544,7 @@ def _analyse_one_workflow_file(
         )
 
     try:
-        violations = asyncio.run(_evaluate(content))
+        violations = asyncio.run(_evaluate(content, ctx.action_metadata))
     except Exception as exc:
         logger.exception("OPA evaluation failed for %s: %s", path, exc)
         sm.advance(analysis, sm.ScanMachine, "scan_failed")
@@ -790,6 +792,11 @@ def _run_static_analysis_impl(
                 ev.analysis_started(org_id, repo_id, "", effective_branch)
             )
 
+        # Hoisted above the loop deliberately — see _collect_action_metadata.
+        action_metadata = _collect_action_metadata(
+            repo, [_content_of(f) for f in workflow_files_to_analyse]
+        )
+
         ctx = _RunContext(
             repo=repo,
             repo_id=repo_id,
@@ -800,6 +807,7 @@ def _run_static_analysis_impl(
             force=force,
             is_batch=is_batch,
             billable=billable,
+            action_metadata=action_metadata,
         )
         # The real quota gate. The API pre-check cannot hold on its own — one
         # trigger fans out to one analysis per workflow file, and most analyses
@@ -1017,7 +1025,55 @@ def _fetch_workflow_files(
     return asyncio.run(_fetch())
 
 
-async def _evaluate(content: str) -> list[OpaViolation]:
+def _content_of(wf_src: WorkflowFile | WorkflowFileContent) -> str:
+    """The raw YAML, whichever of the two sources it came from."""
+    return wf_src.raw_content if isinstance(wf_src, WorkflowFile) else wf_src.content
+
+
+async def _evaluate(
+    content: str, action_metadata: Mapping[str, Mapping[str, Any]] | None = None
+) -> list[OpaViolation]:
     from app.services.opa.evaluator import evaluate_workflow
 
-    return await evaluate_workflow(content)
+    return await evaluate_workflow(content, action_metadata=action_metadata)
+
+
+def _collect_action_metadata(
+    repo: Repository, contents: Sequence[str]
+) -> dict[str, dict[str, Any]]:
+    """What GitHub knows about every action these workflows pin. Never raises.
+
+    Collected once for the whole repository rather than per file: each
+    ``_evaluate`` call builds its own event loop and Redis connection, so a
+    per-file collector would rebuild both for the same handful of actions. The
+    result is a superset for any single workflow, which is harmless —
+    ``attach_action_metadata`` filters to the document's own references.
+
+    Any failure yields an empty map, which leaves ``__actions__`` absent and the
+    four rules that read it silent. Enrichment must never be the reason a scan
+    fails or the reason a finding appears.
+    """
+    import redis.asyncio as aioredis
+
+    from app.services.github.action_metadata import collect_action_metadata
+    from app.services.github.app_client import GitHubAppClient
+
+    async def _collect() -> dict[str, dict[str, Any]]:
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
+        try:
+            client = GitHubAppClient(redis_client=r)
+            gh = await client.github_for_installation(repo.installation_id)
+            return await collect_action_metadata(contents, gh)
+        finally:
+            await r.aclose()
+
+    try:
+        return asyncio.run(_collect())
+    except Exception:
+        logger.warning(
+            "Action metadata collection failed for %s; the rules that need it "
+            "will be silent for this scan",
+            repo.full_name,
+            exc_info=True,
+        )
+        return {}

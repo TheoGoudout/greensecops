@@ -21,6 +21,7 @@
 #       Move to a supported image. Prefer a pinned version (ubuntu-24.04) over the moving ubuntu-latest where the build depends on what is installed, since -latest changes underneath you on GitHub's own schedule.
 package greensecops.ci_workflow.maintainability.deprecated_runner_image
 
+import data.greensecops.lib.workflow as wf
 import rego.v1
 
 # Images GitHub has retired or announced for retirement. Bare labels only:
@@ -30,6 +31,7 @@ _retired_images := {
 	"macos-10.15",
 	"macos-11",
 	"macos-12",
+	"macos-13",
 	"ubuntu-16.04",
 	"ubuntu-18.04",
 	"ubuntu-20.04",
@@ -37,19 +39,9 @@ _retired_images := {
 	"windows-2019",
 }
 
-_labels(job) := {lower(job["runs-on"])} if is_string(job["runs-on"])
-
-_labels(job) := {lower(label) | some label in job["runs-on"]; is_string(label)} if {
-	is_array(job["runs-on"])
-}
-
-_labels(job) := {lower(label) | some label in job["runs-on"].labels} if {
-	is_object(job["runs-on"])
-}
-
 violations contains violation if {
 	some job_name, job in input.jobs
-	some label in _labels(job)
+	some label in wf.runs_on_labels(job)
 	label in _retired_images
 
 	violation := {

@@ -1,6 +1,6 @@
 # METADATA
-# title: Missing name on jobs or steps
-# description: Jobs or steps are missing a name field, making CI logs harder to read and debug.
+# title: Workflow has no name
+# description: "The workflow has no top-level name, so the Actions sidebar and the checks list identify it by file path. A name is the one place a reader learns what the file is for before opening it. Jobs and steps are deliberately out of scope: GitHub falls back to the job key, which is the identifier people already write needs: edges against and is usually a better name than a prose one, and an unnamed step shows its run command, which is clearer still."
 # custom:
 #   severity: info
 #   detection: static_analysis
@@ -38,20 +38,14 @@ violations contains violation if {
 		"severity": "info",
 		"category": "maintainability",
 		"job": null,
-		"message": "Workflow has no top-level 'name' field. Add a descriptive name to improve CI log readability.",
+		"message": "Workflow has no top-level 'name' field, so runs are listed by file path. Add a descriptive name.",
 		"context": null,
+		"discriminator": "workflow",
 	}
 }
 
-violations contains violation if {
-	some job_name, job in input.jobs
-	not job.name
-	violation := {
-		"rule": "missing_workflow_description",
-		"severity": "info",
-		"category": "maintainability",
-		"job": job_name,
-		"message": sprintf("Job '%v' has no 'name' field. Add a human-readable name to improve CI readability.", [job_name]),
-		"context": null,
-	}
-}
+# The second clause reported every job without a `name:`, which is most jobs in
+# most repositories — GitHub falls back to the job key, which is usually a fine
+# name and is the one people write the `needs:` edges against. One `info`
+# finding per job for a convention nobody follows is noise, and it was filed
+# under a slug about the *workflow* having no description.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -34,7 +35,11 @@ from app.models import (
     WorkflowFix,
     WorkflowScan,
 )
-from app.workers.tasks.fix_generation import INVALID_YAML_ERROR, run_fix_generation
+from app.workers.tasks.fix_generation import (
+    INVALID_YAML_ERROR,
+    run_fix_generation,
+    unrequested_pin_changes,
+)
 
 _FIXTURES = Path(__file__).parent.parent.parent / "fixtures" / "workflows"
 _HTTPX_WORKFLOW = (_FIXTURES / "httpx_test_suite.yml").read_text()
@@ -431,3 +436,79 @@ def test_pr_sync_marks_merged_for_realistic_workflow_fix(
 
     db.refresh(pr)
     assert pr.pr_state == "merged"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# The post-generation pin guard
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SHA_A = "3d3c42e5aac5ba805825da76410c181273ba90b1"  # actions/checkout v7.0.1
+_SHA_B = "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # actions/checkout v7.0.0
+
+
+class _StubIssue:
+    """Just enough of an Issue for the guard, which only reads ``rule.slug``."""
+
+    def __init__(self, slug: str) -> None:
+        self.rule = SimpleNamespace(slug=slug)
+
+
+def test_guard_flags_a_pin_moved_between_commits() -> None:
+    """The PR #220 shape: an exact pin replaced by a different exact pin."""
+    moved = unrequested_pin_changes(
+        f"      - uses: actions/checkout@{_SHA_A} # v7.0.1\n",
+        f"      - uses: actions/checkout@{_SHA_B} # v7.0.0\n",
+        [_StubIssue("missing_timeout")],
+    )
+    assert moved == {"actions/checkout"}
+
+
+def test_guard_flags_a_tag_moved_to_another_tag() -> None:
+    moved = unrequested_pin_changes(
+        "      - uses: actions/checkout@v4\n",
+        "      - uses: actions/checkout@v3\n",
+        [_StubIssue("missing_timeout")],
+    )
+    assert moved == {"actions/checkout"}
+
+
+def test_guard_allows_tightening_a_tag_into_a_sha() -> None:
+    """Pinning is the fix, not the damage.
+
+    ``sha_resolver.resolve_and_pin_refs`` performs this transition itself for any
+    ref the model left symbolic, whatever the issues were — so flagging it would
+    reject the tool's own correct output.
+    """
+    moved = unrequested_pin_changes(
+        "      - uses: actions/checkout@v4\n",
+        f"      - uses: actions/checkout@{_SHA_A} # v4\n",
+        [_StubIssue("missing_timeout")],
+    )
+    assert moved == set()
+
+
+def test_guard_ignores_yaml_quoting_around_the_reference() -> None:
+    """`uses: "owner/action@v4"` is valid YAML; the quotes are not the ref."""
+    moved = unrequested_pin_changes(
+        '      - uses: "actions/checkout@v4"\n',
+        f'      - uses: "actions/checkout@{_SHA_A}"  # v4\n',
+        [_StubIssue("missing_timeout")],
+    )
+    assert moved == set()
+
+
+def test_guard_stands_down_when_pinning_was_requested() -> None:
+    moved = unrequested_pin_changes(
+        f"      - uses: actions/checkout@{_SHA_A}\n",
+        f"      - uses: actions/checkout@{_SHA_B}\n",
+        [_StubIssue("unpinned_actions")],
+    )
+    assert moved == set()
+
+
+def test_guard_is_silent_on_an_unchanged_file() -> None:
+    content = f"      - uses: actions/checkout@{_SHA_A} # v7.0.1\n"
+    assert (
+        unrequested_pin_changes(content, content, [_StubIssue("missing_timeout")])
+        == set()
+    )

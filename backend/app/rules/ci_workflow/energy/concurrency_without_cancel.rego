@@ -32,6 +32,16 @@ _cancels(concurrency) if {
 	concurrency["cancel-in-progress"] == true
 }
 
+# An explicit `false` is the same kind of deliberate answer as an expression,
+# and on a deploy, release or rollback group it is the *correct* one —
+# cancelling a half-finished deployment is worse than paying for it. This rule
+# fired six times on this repository, every time on a documented choice to
+# queue rather than cancel. Only the absence of the key is unconsidered.
+_cancels(concurrency) if {
+	is_object(concurrency)
+	concurrency["cancel-in-progress"] == false
+}
+
 # The value is often an expression rather than a literal, which is still a
 # deliberate decision the rule should not second-guess.
 _cancels(concurrency) if {

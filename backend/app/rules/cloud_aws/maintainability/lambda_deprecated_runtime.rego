@@ -18,8 +18,11 @@ package greensecops.cloud_aws.maintainability.lambda_deprecated_runtime
 import rego.v1
 
 _deprecated_runtimes := {
-	"python2.7", "python3.6", "python3.7", "python3.8",
-	"nodejs10.x", "nodejs12.x", "nodejs14.x", "nodejs16.x",
+	# Reviewed against the AWS Lambda runtime deprecation schedule. A runtime
+	# missing from this list is silently treated as supported, and nothing but
+	# a re-read catches that — see the note in the description.
+	"python2.7", "python3.6", "python3.7", "python3.8", "python3.9",
+	"nodejs10.x", "nodejs12.x", "nodejs14.x", "nodejs16.x", "nodejs18.x",
 	"dotnetcore2.1", "dotnetcore3.1", "dotnet6",
 	"ruby2.5", "ruby2.7",
 	"go1.x",

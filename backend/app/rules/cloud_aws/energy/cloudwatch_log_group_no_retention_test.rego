@@ -15,8 +15,9 @@ test_violation_when_retention_is_unset if {
 	violations := no_retention.violations with input as _group(null, 5368709120)
 	count(violations) == 1
 	some v in violations
-	v.resource_id == "/aws/lambda/checkout"
+	v.resource_id == "account"
 	v.category == "energy"
+	contains(v.message, "/aws/lambda/checkout")
 }
 
 test_no_violation_when_retention_is_set if {
@@ -43,12 +44,26 @@ test_no_violation_for_an_empty_account if {
 	count(violations) == 0
 }
 
-test_each_group_is_its_own_finding if {
+# Every Lambda creates a log group, so one finding per group buried the signal.
+# The count is the finding; the sample makes it actionable.
+test_one_account_level_finding_however_many_groups if {
 	violations := no_retention.violations with input as {"cloudwatch_log_groups": [
-		{"name": "/aws/lambda/a", "region": "eu-west-1", "retention_days": null, "stored_bytes": 0},
-		{"name": "/aws/lambda/b", "region": "eu-west-1", "retention_days": null, "stored_bytes": 0},
+		{"name": "/aws/lambda/a", "region": "eu-west-1", "retention_days": null, "stored_bytes": 1073741824},
+		{"name": "/aws/lambda/b", "region": "eu-west-1", "retention_days": null, "stored_bytes": 1073741824},
 		{"name": "/aws/lambda/c", "region": "eu-west-1", "retention_days": 7, "stored_bytes": 0},
 	]}
-	count(violations) == 2
-	count({v.resource_id | some v in violations}) == 2
+	count(violations) == 1
+	some v in violations
+	contains(v.message, "2 log group(s)")
+	contains(v.message, "2 GB")
+}
+
+test_the_sample_is_capped_and_the_remainder_counted if {
+	groups := [{"name": sprintf("/aws/lambda/%02d", [i]), "region": "eu-west-1", "retention_days": null, "stored_bytes": 0} |
+		some i in numbers.range(1, 8)
+	]
+	violations := no_retention.violations with input as {"cloudwatch_log_groups": groups}
+	some v in violations
+	contains(v.message, "8 log group(s)")
+	contains(v.message, "and 3 more")
 }

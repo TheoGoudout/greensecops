@@ -3,14 +3,14 @@
 # they sit on disk and their merge — reading the override alone cannot tell
 # that anything was undone, and reading the merge alone cannot tell where.
 #
-# compose_missing_read_only_filesystem also fires: `api` ends up writable in
-# the merged configuration, which is the same weakening seen from the other
-# side. The two are not redundant — one says the setting was removed, the other
-# says the running configuration lacks it, and a target with only the second
-# has no override at all.
+# compose_service_not_hardened also fires: `api` ends up writable in the merged
+# configuration, which is the same weakening seen from the other side. The two
+# are not redundant — one says the setting was removed, the other says the
+# running configuration lacks it, and a target with only the second has no
+# override at all.
 violations:
   - compose_override_weakens_user
   - compose_override_disables_read_only
   - compose_override_adds_capabilities
   - compose_override_exposes_bound_port
-  - compose_missing_read_only_filesystem
+  - compose_service_not_hardened

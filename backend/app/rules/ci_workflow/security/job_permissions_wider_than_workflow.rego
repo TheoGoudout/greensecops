@@ -1,6 +1,6 @@
 # METADATA
 # title: Job grants itself more token scopes than the workflow default
-# description: A job declares a permissions block granting write on a scope the workflow-level default does not. A job-level block replaces the default outright rather than intersecting with it, so this is how a workflow that looks least-privilege at the top ends up running a job with more authority than the file appears to grant. The workflow default is what a reviewer reads and remembers; the job block is forty lines further down. Widening in a job is legitimate — a release job genuinely needs contents write — but it should be visible, which is what this rule makes it.
+# description: "A job grants itself write on a scope the workflow-level default declares differently. A job block replaces the default outright rather than intersecting with it, so a workflow that reads as least-privilege at the top can run a job with more authority than the file appears to grant — and the default is what a reviewer remembers, forty lines above the job. A workflow whose default is the empty deny-all block is not this: from there a job block is the only thing granting anything, which is the tightest layout available and the one GitHub documents."
 # custom:
 #   severity: medium
 #   detection: static_analysis
@@ -34,15 +34,30 @@ package greensecops.ci_workflow.security.job_permissions_wider_than_workflow
 
 import rego.v1
 
-_workflow_grants_write(scope) if input.permissions == "write-all"
+_workflow_grants_write(_) if input.permissions == "write-all"
 
 _workflow_grants_write(scope) if {
 	is_object(input.permissions)
 	input.permissions[scope] == "write"
 }
 
+# `permissions: {}` is the deny-all baseline GitHub documents and this
+# repository uses everywhere. From that starting point a job block is the only
+# thing that grants anything, and granting one scope to one job is the tightest
+# configuration available — every other job still has nothing. Reporting it
+# inverted the advice: the rule fired thirteen times on the best-practice
+# layout while a workflow with no `permissions:` at all, where the token keeps
+# whatever the repository default is, went unreported. That case belongs to
+# `missing_top_level_permissions`, which already owns it.
+_workflow_denies_by_default if {
+	is_object(input.permissions)
+	count(input.permissions) == 0
+}
+
 violations contains violation if {
 	some job_name, job in input.jobs
+
+	not _workflow_denies_by_default
 
 	perms := job.permissions
 	is_object(perms)

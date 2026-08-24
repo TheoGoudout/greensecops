@@ -679,7 +679,9 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
     db.commit()
 
     overview_ci = _engine(_fetch(client, member), "workflow")
-    stats = client.get(f"{settings.API_V1_STR}/workflow-findings/stats", headers=member).json()
+    stats = client.get(
+        f"{settings.API_V1_STR}/workflow-findings/stats", headers=member
+    ).json()
 
     assert overview_ci["findings"]["open"] == 2
     assert overview_ci["findings"]["open"] == stats["total_open"]

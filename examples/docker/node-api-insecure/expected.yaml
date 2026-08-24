@@ -10,11 +10,10 @@ violations:
   - compose_dependency_without_healthcheck
   - compose_depends_on_without_condition
   - compose_hardcoded_secret
-  - compose_missing_no_new_privileges
-  - compose_missing_resource_limits
+  - compose_service_not_hardened
+  - compose_service_unbounded
   - compose_missing_restart_policy
   - compose_port_bound_to_all_interfaces
-  - compose_unbounded_log_files
   - compose_unpinned_image_tag
   - container_runs_as_root
   - copy_before_dependency_install
@@ -26,4 +25,3 @@ violations:
   - secret_file_copied
   - shell_form_entrypoint
   - unpinned_base_image
-  - compose_missing_read_only_filesystem

@@ -1,6 +1,6 @@
 # METADATA
 # title: Potential hardcoded secret
-# description: An environment variable name matches common secret patterns (API_KEY, TOKEN, PASSWORD, SECRET) and its value appears to be a literal string rather than a secret reference.
+# description: "An environment variable holds what looks like a real credential rather than a reference to one. A secret written into the workflow is readable by anyone who can read the repository, is copied into every fork and every clone, and survives in git history after it is removed — so it has to be rotated, not just deleted. Detection needs both halves of the evidence — a name suggesting a secret, and a value that actually looks like one. A recognised credential format is reported whatever the variable is called."
 # custom:
 #   severity: critical
 #   severity_weight: 4.0
@@ -11,7 +11,6 @@
 #         deploy:
 #           env:
 #             API_KEY: "sk-prod-abc123def456"
-#             DB_PASSWORD: "MyP@ssw0rd!"
 #           steps:
 #             - run: ./deploy.sh
 #     good: |
@@ -19,40 +18,71 @@
 #         deploy:
 #           env:
 #             API_KEY: ${{ secrets.API_KEY }}
-#             DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 #           steps:
 #             - run: ./deploy.sh
 #     fix: |
-#       Store secrets in GitHub repository or environment secrets and reference them with ${{ secrets.SECRET_NAME }}. Rotate any secrets that were previously hardcoded.
+#       Store the value in GitHub repository or environment secrets and reference it with ${{ secrets.NAME }}. Rotate it as well — a secret that has been committed is compromised from the moment it was pushed, and removing the line does not remove it from history.
 package greensecops.ci_workflow.security.hardcoded_secrets
 
+import data.greensecops.lib.secrets
+import data.greensecops.lib.workflow as wf
 import rego.v1
 
-# Detects env vars whose names suggest secrets (API_KEY, TOKEN, PASSWORD, etc.)
-# but whose values are plain string literals instead of secret/var references.
+# The name half of the evidence. Case-insensitive with optional separators,
+# lifted from container_docker/security/compose_hardcoded_secret.rego, which had
+# the better version of this pattern all along.
+_secret_name_pattern := `(?i)(api_?key|access_?key|secret|password|passwd|credential|private_?key|token|auth)`
 
-_secret_name_pattern := `(API_KEY|TOKEN|PASSWORD|SECRET|CREDENTIAL|PRIVATE_KEY)`
+# A name match alone is not evidence. This rule used to fire on any non-empty
+# string under a matching name, which made `SERVICE_PASSWORD_POSTGRES:
+# testpassword` — a throwaway fixture for a Postgres container that lives for
+# the length of one job — indistinguishable from a production credential, and
+# reported it at critical. The generated fix then replaced it with an undefined
+# `${{ secrets.* }}`, which is an empty string at runtime, which breaks the job.
+# So the value has to carry evidence too.
+_value_looks_secret(value) if secrets.looks_high_entropy(value)
 
-_is_secret_ref(value) if {
-	startswith(value, "${{ secrets.")
+_is_candidate(value) if {
+	is_string(value)
+	value != ""
+	not wf.is_expression(value)
+	not secrets.is_placeholder(value)
 }
 
-_is_secret_ref(value) if {
-	startswith(value, "${{ vars.")
+# Two independent grounds to report. A recognised credential format needs no
+# help from the variable name — an AWS access key ID under a variable called
+# `FOO` is still an AWS access key ID.
+_finding(_, value) := "format" if {
+	_is_candidate(value)
+	secrets.known_credential(value)
 }
+
+_finding(key, value) := "entropy" if {
+	_is_candidate(value)
+	not secrets.known_credential(value)
+	regex.match(_secret_name_pattern, key)
+	_value_looks_secret(value)
+}
+
+_message(key, context_label, "format") := sprintf(
+	"Env var '%v' in %v holds a value matching a known credential format. Move it to ${{ secrets.NAME }} and rotate it — it is in git history from the commit that added it.",
+	[key, context_label],
+)
+
+_message(key, context_label, "entropy") := sprintf(
+	"Env var '%v' in %v is named like a secret and holds a high-entropy literal rather than a reference. Use ${{ secrets.NAME }} instead, and rotate the value.",
+	[key, context_label],
+)
 
 _check_env(env, job_name, context_label) := {violation |
 	some key, value in env
-	is_string(value)
-	value != ""
-	regex.match(_secret_name_pattern, key)
-	not _is_secret_ref(value)
+	ground := _finding(key, value)
 	violation := {
 		"rule": "hardcoded_secrets",
 		"severity": "critical",
 		"category": "security",
 		"job": job_name,
-		"message": sprintf("Env var '%v' in %v appears to contain a hardcoded secret. Use ${{ secrets.NAME }} instead.", [key, context_label]),
+		"message": _message(key, context_label, ground),
 		"context": key,
 		"discriminator": key,
 	}

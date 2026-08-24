@@ -40,3 +40,58 @@ test_no_violation_for_ordinary_values if {
 	violations := hardcoded_credentials.violations with input as _res("aws_instance", {"instance_type": "t3.micro", "ami": "ami-0123456789abcdef0"})
 	count(violations) == 0
 }
+
+# The textbook version of this mistake is not in a resource at all. The rule
+# walked `input.resource` only, so this was never scanned.
+test_violation_for_a_provider_block if {
+	violations := hardcoded_credentials.violations with input as {"provider": [{"aws": {
+		"region": "eu-west-1",
+		"access_key": "AKIAIOSFODNN7EXAMPLE",
+		"__tf_file": "providers.tf",
+	}}]}
+	count(violations) == 1
+	some v in violations
+	v.resource_address == "provider.aws"
+}
+
+test_violation_for_a_variable_default if {
+	violations := hardcoded_credentials.violations with input as {"variable": [{"gh_token": {
+		"default": "ghp_16C7e42F292c6912E7710c838347Ae178B4a",
+		"__tf_file": "variables.tf",
+	}}]}
+	count(violations) == 1
+	some v in violations
+	v.resource_address == "variable.gh_token"
+}
+
+test_violation_for_a_local if {
+	violations := hardcoded_credentials.violations with input as {"locals": [{"bootstrap": {
+		"key": "AKIAIOSFODNN7EXAMPLE",
+		"__tf_file": "locals.tf",
+	}}]}
+	count(violations) == 1
+}
+
+# Nine formats rather than one — the same set the workflow engine recognises.
+test_violation_for_a_non_aws_credential_format if {
+	violations := hardcoded_credentials.violations with input as _res("aws_ssm_parameter", {"value": "ghp_16C7e42F292c6912E7710c838347Ae178B4a"})
+	count(violations) == 1
+}
+
+test_violation_for_a_data_source if {
+	violations := hardcoded_credentials.violations with input as {"data": [{"external": {"creds": {
+		"query": {"token": "AKIAIOSFODNN7EXAMPLE"},
+		"__tf_file": "main.tf",
+	}}}]}
+	count(violations) == 1
+	some v in violations
+	v.resource_address == "external.creds"
+}
+
+# The finding must never carry the credential in its identity.
+test_the_discriminator_is_not_the_secret if {
+	violations := hardcoded_credentials.violations with input as _res("aws_instance", {"user_data": "AKIAIOSFODNN7EXAMPLE"})
+	some v in violations
+	not contains(v.discriminator, "AKIA")
+	not contains(sprintf("%v", [v]), "AKIAIOSFODNN7EXAMPLE")
+}

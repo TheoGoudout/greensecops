@@ -1,6 +1,6 @@
 # METADATA
-# title: Excessive GITHUB_TOKEN permissions
-# description: "Workflow uses permissions: write-all (critical), grants write access to more than 3 scopes at the workflow level (high), or a job uses GitHub Actions without declaring any explicit permissions block (medium). The GITHUB_TOKEN should follow least privilege — declare only the permissions actually needed."
+# title: Workflow token granted write-all
+# description: "The workflow sets permissions: write-all, so every job runs with a GITHUB_TOKEN that can write to every scope the repository has — contents, packages, deployments, actions, issues, pull requests, security events. Any step in any job, including every third-party action, runs with all of it. This is the widest grant the token can carry and there is no repository for which it is the minimum."
 # custom:
 #   severity: critical
 #   severity_weight: 3.0
@@ -10,8 +10,8 @@
 #       permissions: write-all
 #       jobs:
 #         build:
+#           runs-on: ubuntu-latest
 #           steps:
-#             - uses: actions/checkout@v4
 #             - run: npm run build
 #     good: |
 #       permissions: {}
@@ -19,56 +19,58 @@
 #         build:
 #           permissions:
 #             contents: read
+#           runs-on: ubuntu-latest
 #           steps:
-#             - uses: actions/checkout@v4
 #             - run: npm run build
 #     fix: |
-#       Replace write-all with a minimal permissions block declaring only the scopes the workflow actually needs. Set permissions: {} at the workflow level and add per-job overrides.
+#       Set permissions: {} at the workflow level and grant scopes on the individual jobs that need them. A job block replaces the default rather than adding to it, so each job states its whole grant and a reader can see it in one place.
 package greensecops.ci_workflow.security.excessive_token_permissions
 
 import rego.v1
 
+# This rule used to carry three clauses at three severities — write-all
+# (critical), more than three write scopes (high), and a job with no
+# permissions block (medium) — while its METADATA declared only the worst.
+# Everything downstream of the catalog therefore recorded a medium finding as
+# critical: the docs page, the Rule row, and the severity weight the score is
+# computed from. `tests/core/test_rule_registry.py` had to carve this rule out
+# of the check that METADATA and body agree.
+#
+# The three are now separate: this one keeps `write-all`,
+# `token_permissions_too_broad` takes the over-grant, and the third clause is
+# gone — a job with no permissions block in a workflow with no top-level block
+# is exactly what `missing_top_level_permissions` already reports, and
+# reporting it twice at two severities helped nobody.
+
 violations contains violation if {
-	perms := input.permissions
-	perms == "write-all"
+	input.permissions == "write-all"
+
 	violation := {
 		"rule": "excessive_token_permissions",
 		"severity": "critical",
 		"category": "security",
 		"job": null,
-		"message": "Workflow uses permissions: write-all. Declare only the minimum required scopes.",
+		"message": "Workflow sets permissions: write-all, so every step of every job — including every third-party action — runs with a token that can write to every scope. Declare only the scopes each job needs.",
 		"context": "permissions: write-all",
+		"discriminator": "workflow",
 	}
 }
 
+# A job block replaces the workflow default rather than narrowing it, so
+# `write-all` on a job is the same grant with the same reach.
 violations contains violation if {
-	perms := input.permissions
-	is_object(perms)
-	perms[_] == "write"
-	count([p | perms[p] == "write"]) > 3
-	violation := {
-		"rule": "excessive_token_permissions",
-		"severity": "high",
-		"category": "security",
-		"job": null,
-		"message": "Workflow grants write permission to more than 3 scopes. Review and restrict to minimum required.",
-		"context": null,
-	}
-}
-
-violations contains violation if {
-	not input.permissions
 	some job_name, job in input.jobs
-	not job.permissions
-	some step in job.steps
-	uses := step.uses
-	startswith(uses, "actions/")
+	job.permissions == "write-all"
+
 	violation := {
 		"rule": "excessive_token_permissions",
-		"severity": "medium",
+		"severity": "critical",
 		"category": "security",
 		"job": job_name,
-		"message": sprintf("Job '%v' uses GitHub Actions without declaring explicit permissions. Add `permissions:` to restrict the GITHUB_TOKEN scope.", [job_name]),
-		"context": null,
+		"line_start": object.get(job, "__start_line__", null),
+		"line_end": object.get(job, "__end_line__", null),
+		"message": sprintf("Job '%v' sets permissions: write-all, which replaces the workflow default with a token that can write to every scope.", [job_name]),
+		"context": "permissions: write-all",
+		"discriminator": job_name,
 	}
 }

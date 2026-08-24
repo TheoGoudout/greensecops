@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 import uuid
 from typing import TYPE_CHECKING
 
@@ -19,12 +20,113 @@ from app.services.llm.response import (
 from app.workers.celery_app import celery_app
 
 if TYPE_CHECKING:
+    from app.models import WorkflowFinding
     from app.services.llm.base import LLMResponse
 
 logger = logging.getLogger(__name__)
 
 INVALID_YAML_ERROR = "LLM returned invalid YAML"
 MISSING_CONTENT_ERROR = "LLM response missing workflow content"
+
+
+def _remote_workflow_content(
+    installation_id: int | None, full_name: str, ref: str, path: str
+) -> tuple[str | None, bool]:
+    """The file as it is on the remote right now.
+
+    Returns ``(content, reachable)``. ``reachable`` is False when the remote
+    could not be read at all, which is different from the file being gone: the
+    first is a reason to fall back to the stored copy, the second is a reason
+    not to generate anything.
+
+    The stored ``raw_content`` is a snapshot from whenever the file was last
+    scanned, and the fix rewrites the whole file — so generating against a stale
+    snapshot silently reverts every change made since. PR #220 did exactly that
+    twice: it re-added docs.yml, deleted three weeks earlier, and put
+    latest-changes.yml back on the `master` branch it had been moved off.
+    """
+    import redis.asyncio as aioredis
+
+    from app.core.config import settings
+    from app.services.github.app_client import GitHubAppClient
+
+    async def _fetch() -> tuple[str | None, bool]:
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
+        try:
+            client = GitHubAppClient(redis_client=r)
+            files = await client.fetch_workflow_files(
+                installation_id, full_name, ref=ref
+            )
+        finally:
+            await r.aclose()
+        match = next((f for f in files if f.path == path), None)
+        return (match.content if match else None), True
+
+    try:
+        return asyncio.run(_fetch())
+    except Exception:
+        logger.warning(
+            "Could not re-read %s from %s; generating against the stored copy",
+            path,
+            full_name,
+            exc_info=True,
+        )
+        return None, False
+
+
+_USES_PIN_RE = re.compile(r"uses:\s*([^\s#]+)")
+_SHA_REF_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def unrequested_pin_changes(
+    original: str, patched: str, issues: list["WorkflowFinding"]
+) -> set[str]:
+    """Pins the rewrite moved backwards or sideways rather than tightening them.
+
+    The prompt already forbids this in capitals and the model did it anyway,
+    moving four actions across releases in PR #220. A deterministic check
+    afterwards costs nothing and does not rely on the model's cooperation.
+
+    Tightening is not moving. ``@v4`` becoming ``@<sha> # v4`` is the whole point
+    of a pinning fix, and ``sha_resolver.resolve_and_pin_refs`` performs exactly
+    that transition on its own afterwards, for any ref the model left symbolic —
+    so it happens whether or not a pinning rule was among the issues, and
+    flagging it would reject the tool's own correct output. What is reported is a
+    pin that was already exact and became a *different* exact pin, or a tag that
+    became a different tag: the shape of PR #220's
+    ``3d3c42e5 (v7.0.1) -> 9c091bb2 (v7.0.0)``.
+    """
+    pinning_rules = {
+        "unpinned_actions",
+        "impostor_commit",
+        "stale_action_ref",
+    }
+    for issue in issues:
+        slug = getattr(getattr(issue, "rule", None), "slug", None)
+        if slug in pinning_rules:
+            return set()
+
+    def pins(text: str) -> dict[str, str]:
+        found: dict[str, str] = {}
+        for ref in _USES_PIN_RE.findall(text):
+            # `uses: "owner/action@v4"` is valid YAML, and the quotes are not
+            # part of the reference.
+            action, _, version = ref.strip("\"'").partition("@")
+            if version:
+                found[action] = version
+        return found
+
+    def tightened(before: str, after: str) -> bool:
+        return not _SHA_REF_RE.match(before) and bool(_SHA_REF_RE.match(after))
+
+    before, after = pins(original), pins(patched)
+    return {
+        action
+        for action, version in before.items()
+        if action in after
+        and after[action] != version
+        and not tightened(version, after[action])
+    }
 
 
 def _is_valid_workflow_yaml(content: str) -> bool:
@@ -324,14 +426,38 @@ def run_fix_generation(
                 )
             )
 
+        # Generate against what is on the remote now, not the snapshot from the
+        # last scan — the fix rewrites the whole file, so a stale base silently
+        # reverts everything committed since.
+        remote_content, reachable = _remote_workflow_content(
+            repo.installation_id, repo.full_name, repo.default_branch, wf_file.path
+        )
+        if reachable and remote_content is None:
+            logger.info(
+                "%s is no longer on %s; skipping fix generation",
+                wf_file.path,
+                repo.default_branch,
+            )
+            sm.advance(fix, sm.FixMachine, "generation_failed")
+            fix.error_message = "Workflow file no longer exists on the default branch"
+            session.add(fix)
+            session.commit()
+            _emit_failure(
+                batch_id, org_id, repo_id_str, str(fix.id), "workflow_file_removed"
+            )
+            return {"status": "skipped", "detail": "workflow_file_removed"}
+
+        base_content = remote_content or wf_file.raw_content
+
         try:
             result = asyncio.run(
                 _generate_fixes(
-                    workflow_content=wf_file.raw_content,
+                    workflow_content=base_content,
                     issues=issues,
                     provider_str=provider_str,
                     model_str=model_str,
                     installation_id=repo.installation_id,
+                    default_branch=repo.default_branch,
                 )
             )
         except Exception as exc:
@@ -343,18 +469,32 @@ def run_fix_generation(
             _emit_failure(batch_id, org_id, repo_id_str, str(fix.id), str(exc)[:200])
             return {"status": "failed", "issue_ids": issue_ids}
 
-        full_content = parse_full_content(result.content)
+        full_content: str | None = parse_full_content(result.content)
         generation_error: str | None = None
 
         if not full_content:
             generation_error = MISSING_CONTENT_ERROR
         else:
-            full_content = restore_trailing_whitespace(
-                wf_file.raw_content, full_content
-            )
+            full_content = restore_trailing_whitespace(base_content, full_content)
+            moved = unrequested_pin_changes(base_content, full_content, issues)
+            if moved:
+                # Not a judgement call: no issue in this batch asked for a pin
+                # to move, so a moved pin is the model editing something it was
+                # not asked to. PR #220 shipped four of these, all backwards.
+                logger.warning(
+                    "Rejecting fix for %s: it moved pins nothing asked it to (%s)",
+                    wf_file.path,
+                    ", ".join(sorted(moved)),
+                )
+                generation_error = (
+                    "LLM changed action pins that no issue requested: "
+                    + ", ".join(sorted(moved))
+                )
+                full_content = None
             # Only trust the LLM's rewrite if it is still valid workflow YAML;
-            # otherwise delivery would push a corrupt file.
-            if not _is_valid_workflow_yaml(full_content):
+            # otherwise delivery would push a corrupt file. `elif`, so a rewrite
+            # already rejected above keeps the more specific reason.
+            elif not _is_valid_workflow_yaml(full_content):
                 logger.warning(
                     "LLM full_content for wf %s is not valid YAML; discarding",
                     wf_file.id,
@@ -436,6 +576,7 @@ async def _generate_fixes(
     provider_str: str,
     model_str: str,
     installation_id: int | None = None,
+    default_branch: str = "main",
 ) -> "LLMResponse":
     _configure_langchain()
 
@@ -445,33 +586,25 @@ async def _generate_fixes(
 
     gh = None
     if installation_id is not None:
+        import redis.asyncio as aioredis
+
+        from app.core.config import settings
+        from app.services.github.app_client import GitHubAppClient
+
+        redis_client = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
-            import redis.asyncio as aioredis
-            from github import Auth, Github
-
-            from app.core.config import settings
-            from app.services.github.app_client import GitHubAppClient
-
-            redis_client = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
-            try:
-                token = await GitHubAppClient(redis_client).get_installation_token(
-                    installation_id
-                )
-                gh = Github(auth=Auth.Token(token))
-            finally:
-                await redis_client.aclose()
-        except Exception:
-            logger.warning(
-                "Failed to build authenticated GitHub client for SHA resolution, "
-                "falling back to unauthenticated",
-                exc_info=True,
+            gh = await GitHubAppClient(redis_client).github_for_installation(
+                installation_id
             )
+        finally:
+            await redis_client.aclose()
 
     action_sha_map = await resolve_action_shas(workflow_content, gh=gh)
     provider = get_provider(provider=provider_str, model=model_str)
     system_prompt, user_prompt = build_fix_prompt(
         workflow_content=workflow_content,
         issues=issues,
+        default_branch=default_branch,
         action_sha_map=action_sha_map or None,
     )
     return await provider.generate(system_prompt, user_prompt)
