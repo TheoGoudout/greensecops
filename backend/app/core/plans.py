@@ -116,7 +116,7 @@ PLANS: dict[UserTier, Plan] = {
         auto_fix=False,
         features=(
             "Full five-pillar grading",
-            "Finding breakdown & detail",
+            "Issue breakdown & detail",
             "Dashboard & history",
         ),
     ),
