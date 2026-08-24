@@ -183,3 +183,43 @@ test_job_outputs_not_consumed_when_needs_only_orders if {
 	}}
 	not wf.job_outputs_consumed("lint") with input as ordered
 }
+
+# ─── strings_within / expression_bodies ──────────────────────────────────────
+
+test_strings_within_collects_at_every_depth if {
+	step := {
+		"name": "Deploy",
+		"run": "./deploy.sh",
+		"with": {"args": ["--fast", "--yes"], "nested": {"key": "value"}},
+	}
+	wf.strings_within(step) == {"Deploy", "./deploy.sh", "--fast", "--yes", "value"}
+}
+
+test_strings_within_skips_non_strings if {
+	wf.strings_within({"a": 1, "b": true, "c": null, "d": "keep"}) == {"keep"}
+}
+
+# The reason this helper exists rather than json.marshal: Go's marshaller
+# HTML-escapes `&`, so a pattern containing `&&` never matches a marshalled
+# document.
+test_strings_within_preserves_ampersands if {
+	value := "${{ a && '' || 'b' }}"
+	some found in wf.strings_within({"env": {"X": value}})
+	contains(found, "&&")
+}
+
+test_expression_bodies_extracts_only_expressions if {
+	step := {"run": "test -f x && false || echo no", "env": {"V": "${{ inputs.a && '' || 'b' }}"}}
+	bodies := wf.expression_bodies(step)
+	count(bodies) == 1
+	some body in bodies
+	contains(body, "inputs.a")
+}
+
+test_expression_bodies_empty_when_no_expression if {
+	wf.expression_bodies({"run": "make all"}) == set()
+}
+
+test_expression_bodies_finds_several_in_one_string if {
+	count(wf.expression_bodies({"if": "${{ a }} && ${{ b }}"})) == 2
+}
