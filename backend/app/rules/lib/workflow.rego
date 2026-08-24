@@ -41,6 +41,26 @@ references_var(value) if {
 	regex.match(`\$\{\{\s*vars\.[A-Za-z0-9_-]+\s*\}\}`, value)
 }
 
+# Every string anywhere inside `node`, at any depth. Rules that ask "does this
+# step mention X anywhere" reached for `json.marshal` before this existed, which
+# is wrong twice over: Go's marshaller HTML-escapes `&`, `<` and `>`, so a
+# pattern containing `&&` silently never matched a marshalled document, and the
+# JSON punctuation between values can let a pattern span two unrelated fields.
+# `walk` has neither problem — it yields the values themselves.
+strings_within(node) := {value |
+	walk(node, [_, value])
+	is_string(value)
+}
+
+# The bodies of every `${{ ... }}` in `node`, as written. Checking these rather
+# than the raw text is what keeps expression rules off shell syntax that merely
+# looks similar — `test -f x && false || echo` in a `run:` script is control
+# flow, not a GitHub expression.
+expression_bodies(node) := {body |
+	some text in strings_within(node)
+	some body in regex.find_n(`\$\{\{[^}]*\}\}`, text, -1)
+}
+
 # ─── Value shape ─────────────────────────────────────────────────────────────
 
 # Obvious non-secrets that happen to sit under a secret-shaped name. CI fixtures
