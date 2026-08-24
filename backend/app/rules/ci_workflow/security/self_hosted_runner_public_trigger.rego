@@ -25,40 +25,20 @@
 #       Run pull request builds on GitHub-hosted runners, which are destroyed after each job. If a self-hosted runner is unavoidable, require approval for outside contributors and use ephemeral runners so no state survives a job.
 package greensecops.ci_workflow.security.self_hosted_runner_public_trigger
 
+import data.greensecops.lib.workflow as wf
 import rego.v1
 
 _pr_triggers := {"pull_request", "pull_request_target"}
 
 _has_pr_trigger if {
 	some trigger in _pr_triggers
-	input.on[trigger]
+	wf.has_trigger(trigger)
 }
 
-# `on: [push, pull_request]` is a list of names rather than a mapping.
-_has_pr_trigger if {
-	some trigger in input.on
-	trigger in _pr_triggers
-}
-
-_is_self_hosted(label) if {
-	is_string(label)
-	lower(label) == "self-hosted"
-}
-
-# `runs-on` is either a single label or a list of them, and a self-hosted
-# runner is normally selected by combining `self-hosted` with more labels.
-_runs_self_hosted(job) if _is_self_hosted(job["runs-on"])
-
-_runs_self_hosted(job) if {
-	some label in job["runs-on"]
-	_is_self_hosted(label)
-}
-
-# The object form: `runs-on: {group: ..., labels: [...]}`.
-_runs_self_hosted(job) if {
-	some label in job["runs-on"].labels
-	_is_self_hosted(label)
-}
+# `runs-on` takes three shapes and a self-hosted runner is normally selected by
+# combining `self-hosted` with more labels; `wf.runs_on_labels` normalises all
+# three so this only has to ask about the one label that matters.
+_runs_self_hosted(job) if "self-hosted" in wf.runs_on_labels(job)
 
 violations contains violation if {
 	_has_pr_trigger

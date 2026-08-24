@@ -79,8 +79,12 @@ jobs:
         # HCL parse+merge path (backend/app/services/terraform/hcl_parser.py).
         run: pip install "ruamel.yaml>=0.18,<0.19" "python-hcl2>=6.1,<7.0"
 
+      # --strict additionally rejects unused arguments and unused assignments,
+      # which are how a rule body silently stops testing what it reads. Kept as
+      # the compile gate rather than a lint job: a rule that fails it is wrong,
+      # not untidy.
       - name: Check Rego policies compile
-        run: opa check backend/app/rules
+        run: opa check --strict backend/app/rules
 
       - name: Run Rego unit tests
         run: opa test backend/app/rules -v

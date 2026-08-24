@@ -31,10 +31,36 @@ _declares_a_command(df) if {
 	inst.stage == df.final_stage
 }
 
+# Bare operating systems and language runtimes. `FROM python:3.13-slim` with no
+# CMD really does start a REPL and exit; `FROM nginx` does not — nginx, redis,
+# postgres and every other application image ship a working ENTRYPOINT, and
+# restating it in the derived Dockerfile is not an improvement.
+#
+# Scoped this way round on purpose: the list names the images where inheriting
+# the command is a mistake, so an image nobody here has heard of is left alone.
+# Reporting the other way round fired on four of the six Dockerfiles in this
+# repository, every one of them correct.
+_bare_bases := {
+	"scratch",
+	"alpine", "debian", "ubuntu", "busybox", "fedora", "rockylinux", "almalinux",
+	"amazonlinux", "oraclelinux", "archlinux", "opensuse",
+	"python", "node", "golang", "rust", "ruby", "php", "openjdk", "eclipse-temurin",
+	"amazoncorretto", "dotnet", "perl", "elixir", "erlang",
+}
+
+# `docker.io/library/python` and `python` are the same image.
+_bare_name(image) := parts[count(parts) - 1] if parts := split(image, "/")
+
+_inherits_a_command(df) if {
+	stage := _final_stage(df)
+	not _bare_name(stage.image) in _bare_bases
+}
+
 violations contains violation if {
 	some df in input.dockerfiles
 	stage := _final_stage(df)
 	not _declares_a_command(df)
+	not _inherits_a_command(df)
 
 	violation := {
 		"rule": "missing_cmd_or_entrypoint",

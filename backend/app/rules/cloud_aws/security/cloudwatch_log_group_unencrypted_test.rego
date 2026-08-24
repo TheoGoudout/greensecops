@@ -15,8 +15,8 @@ test_violation_when_no_key_is_associated if {
 	violations := unencrypted.violations with input as _group(null)
 	count(violations) == 1
 	some v in violations
-	v.resource_id == "/aws/lambda/checkout"
-	v.region == "eu-west-1"
+	v.resource_id == "account"
+	contains(v.message, "/aws/lambda/checkout")
 }
 
 test_no_violation_when_a_key_is_associated if {
@@ -29,12 +29,14 @@ test_no_violation_for_an_empty_account if {
 	count(violations) == 0
 }
 
-test_each_group_is_its_own_finding if {
+test_one_account_level_finding_however_many_groups if {
 	violations := unencrypted.violations with input as {"cloudwatch_log_groups": [
 		{"name": "/aws/lambda/a", "region": "eu-west-1", "kms_key_id": null},
 		{"name": "/aws/lambda/b", "region": "eu-west-1", "kms_key_id": null},
 		{"name": "/aws/lambda/c", "region": "eu-west-1", "kms_key_id": "arn:...key/x"},
 	]}
-	count(violations) == 2
-	count({v.resource_id | some v in violations}) == 2
+	count(violations) == 1
+	some v in violations
+	contains(v.message, "2 log group(s)")
+	v.discriminator == "account"
 }

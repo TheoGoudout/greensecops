@@ -112,3 +112,20 @@ test_no_violation_fetch_depth_zero_with_precommit_from_ref if {
 	}
 	count(violations) == 0
 }
+
+# History is read by actions as well as by scripts.
+test_no_violation_when_an_action_consumes_history if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"b": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"uses": "codecov/codecov-action@v5"},
+	]}}}
+	count(violations) == 0
+}
+
+test_no_violation_when_a_run_step_diffs_against_the_base if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"b": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"run": "git diff --name-only origin/main"},
+	]}}}
+	count(violations) == 0
+}

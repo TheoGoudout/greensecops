@@ -10,12 +10,33 @@
 #       services:
 #         api:
 #           user: root
+#     bad_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             user: "10001:10001"
+#       compose.override.yml: |
+#         services:
+#           api:
+#             user: root
 #     good: |
 #       # compose.override.yml — keeps the base's user, adds only what differs
 #       services:
 #         api:
 #           volumes:
 #             - ./src:/app/src
+#     good_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             user: "10001:10001"
+#       compose.override.yml: |
+#         services:
+#           api:
+#             volumes:
+#               - ./src:/app/src
 #     fix: |
 #       Drop the user override. If it exists because a mounted host directory is owned by your uid, set the uid explicitly rather than reaching for root — `user: "1000:1000"` solves the ownership problem without giving the container the rest of root's authority.
 package greensecops.container_docker.security.compose_override_weakens_user

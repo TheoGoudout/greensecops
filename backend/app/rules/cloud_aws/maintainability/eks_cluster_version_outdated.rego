@@ -1,6 +1,6 @@
 # METADATA
 # title: EKS cluster runs an unsupported Kubernetes version
-# description: An EKS cluster runs a Kubernetes version past the end of its standard support window. AWS keeps such a cluster running on extended support at roughly six times the control-plane cost, and eventually upgrades it for you on a schedule you did not pick. Upgrades are also strictly sequential — one minor version at a time, each with its own deprecated-API check — so falling behind compounds, because the work to catch up grows faster than the time spent behind, which is what turns a deferred upgrade into a project.
+# description: An EKS cluster runs a Kubernetes version below 1.32, the floor of AWS's standard support window at the time of writing. AWS keeps such a cluster running on extended support at roughly six times the control-plane cost, and eventually upgrades it for you on a schedule you did not pick. Upgrades are also strictly sequential — one minor version at a time, each with its own deprecated-API check — so falling behind compounds, because the work to catch up grows faster than the time spent behind, which is what turns a deferred upgrade into a project.
 # custom:
 #   severity: medium
 #   detection: cloud_posture
@@ -18,7 +18,11 @@ import rego.v1
 
 # The oldest version still in AWS's standard support window. Bump this as the
 # window moves — the same maintenance the lambda_deprecated_runtime list needs.
-_minimum_supported_minor := 30
+# The floor of EKS standard support. This is a moving number — AWS retires a
+# minor version roughly every three months — so it is stated once here rather
+# than spread through the rule, and the METADATA description names it so a
+# reader can tell at a glance whether the catalog has fallen behind.
+_minimum_supported_minor := 32
 
 _minor_version(version) := minor if {
 	parts := split(version, ".")

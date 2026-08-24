@@ -167,7 +167,7 @@ async def resolve_and_pin_refs(content: str, gh: Github | None = None) -> str:
     This is the deterministic backstop for actions the fix-generation LLM adds
     that aren't in ``WELL_KNOWN_ACTIONS`` or the workflow's own pre-existing
     refs (so the LLM had no SHA to pin to and left it as a mutable tag,
-    tripping ``unpinned_actions``/``untrusted_actions`` right back). A ref that
+    tripping ``unpinned_actions`` right back). A ref that
     doesn't resolve (private repo, unknown tag, network failure) is left
     untouched — this never invents a SHA.
     """

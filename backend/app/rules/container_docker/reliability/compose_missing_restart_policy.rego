@@ -37,6 +37,17 @@ _has_restart_policy(service) if service.restart == "no"
 
 _has_restart_policy(service) if service.deploy.restart_policy
 
+# A service other services wait to *complete* is a one-shot job — a migration,
+# a seed, a fixture loader. Restarting it on exit is the wrong behaviour, so
+# the absence of a restart policy is the right configuration and reporting it
+# asked for a regression.
+_is_one_shot(cf, name) if {
+	some _, other in cf.services
+	is_object(other)
+	is_object(other.depends_on)
+	other.depends_on[name].condition == "service_completed_successfully"
+}
+
 # `effective_compose_files` is one document per configuration, with a base and
 # its override already merged — absence is only meaningful about a complete
 # configuration, so that is what this rule reads. The per-service
@@ -48,6 +59,7 @@ violations contains violation if {
 	is_object(service)
 	_is_runnable(service)
 	not _has_restart_policy(service)
+	not _is_one_shot(cf, name)
 	violation := {
 		"rule": "compose_missing_restart_policy",
 		"severity": "medium",

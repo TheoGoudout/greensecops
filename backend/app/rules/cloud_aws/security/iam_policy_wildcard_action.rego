@@ -29,6 +29,9 @@ violations contains violation if {
 		"resource_type": "aws_iam_policy",
 		"resource_id": policy.arn,
 		"message": sprintf("IAM policy '%v' grants wildcard action '%v'.", [policy.name, action]),
+		# A policy granting `s3:*` and `ec2:*` produced two violations at one
+		# policy ARN; without this the second was dropped on the dedup key.
+		"discriminator": action,
 	}
 }
 

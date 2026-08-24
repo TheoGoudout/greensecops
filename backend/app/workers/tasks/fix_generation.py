@@ -92,7 +92,6 @@ def unrequested_pin_changes(
     """
     pinning_rules = {
         "unpinned_actions",
-        "untrusted_actions",
         "impostor_commit",
         "stale_action_ref",
     }

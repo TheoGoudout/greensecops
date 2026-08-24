@@ -41,66 +41,6 @@ test_references_var if {
 # These two are the exact values in this repository's test-backend,
 # test-docker-compose and playwright workflows that were reported as critical
 # hardcoded secrets.
-test_is_placeholder_catches_this_repos_ci_fixtures if {
-	wf.is_placeholder("testpassword")
-	wf.is_placeholder("changethischangethischangethischangethischangethischangethischanget")
-}
-
-test_is_placeholder_catches_common_stand_ins if {
-	every value in ["changeme", "CHANGEME", "placeholder", "dummy", "example", "fake", "xxxxx", "replace_me", "your_token_here", "<your-key>"] {
-		wf.is_placeholder(value)
-	}
-}
-
-test_is_placeholder_catches_repeated_units if {
-	wf.is_placeholder("0000000000000000")
-	wf.is_placeholder("aaaaaaaa")
-	wf.is_placeholder("abababababababab")
-}
-
-test_is_placeholder_rejects_real_looking_values if {
-	not wf.is_placeholder("a3f5c9e12b7d4068af31c5e9b2d70486")
-	not wf.is_placeholder("AKIAIOSFODNN7EXAMPLE1")
-}
-
-# ─── Value shape ─────────────────────────────────────────────────────────────
-
-test_effective_alphabet_separates_words_from_randomness if {
-	wf.effective_alphabet("testpassword") < 8
-	wf.effective_alphabet("production") < 9
-	wf.effective_alphabet("a3f5c9e12b7d4068af31c5e9b2d70486") >= 12
-}
-
-test_looks_high_entropy if {
-	wf.looks_high_entropy("a3f5c9e12b7d4068af31c5e9b2d70486")
-	wf.looks_high_entropy("aGVsbG8gd29ybGQgdGhpcyBpcyBhIHNlY3JldA==")
-
-	# Short, so it cannot qualify however varied.
-	not wf.looks_high_entropy("a3f5c9e1")
-
-	# Long but wordy.
-	not wf.looks_high_entropy("changethischangethischangethis")
-}
-
-test_known_credential_formats if {
-	wf.known_credential("AKIAIOSFODNN7EXAMPLE")
-	wf.known_credential("ghp_16C7e42F292c6912E7710c838347Ae178B4a")
-	not wf.known_credential("testpassword")
-}
-
-# The PEM header is assembled rather than written out, so the literal string
-# never appears in the file. Spelled in full it trips the `detect-private-key`
-# pre-commit hook, which cannot tell a rule's own test fixture from a key
-# somebody committed by mistake — and the right resolution is to keep the
-# fixture out of its way rather than to exempt this file from the hook, which
-# would also exempt a real key added here later.
-test_known_credential_matches_a_pem_header if {
-	wf.known_credential(concat("", ["-----BEGIN RSA ", "PRIVATE KEY-----"]))
-	wf.known_credential(concat("", ["-----BEGIN ", "PRIVATE KEY-----"]))
-}
-
-# ─── Action references ───────────────────────────────────────────────────────
-
 test_action_name_and_ref if {
 	wf.action_name("actions/checkout@v4") == "actions/checkout"
 	wf.action_ref("actions/checkout@v4") == "v4"

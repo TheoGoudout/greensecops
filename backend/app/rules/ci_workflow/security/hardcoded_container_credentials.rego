@@ -44,7 +44,7 @@ _literal_password(credentials) := password if {
 
 violations contains violation if {
 	some job_name, job in input.jobs
-	password := _literal_password(job.container.credentials)
+	_literal_password(job.container.credentials)
 
 	violation := {
 		"rule": "hardcoded_container_credentials",
@@ -60,7 +60,7 @@ violations contains violation if {
 violations contains violation if {
 	some job_name, job in input.jobs
 	some service_name, service in job.services
-	password := _literal_password(service.credentials)
+	_literal_password(service.credentials)
 
 	violation := {
 		"rule": "hardcoded_container_credentials",
