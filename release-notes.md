@@ -4,6 +4,7 @@
 
 ### Security Fixes
 
+* Import the remaining importable zizmor audits. PR [#238](https://github.com/TheoGoudout/greensecops/pull/238) by [@TheoGoudout](https://github.com/TheoGoudout).
 * Run zizmor at full coverage, and make the Rego catalog earn its findings. PR [#223](https://github.com/TheoGoudout/greensecops/pull/223) by [@TheoGoudout](https://github.com/TheoGoudout).
 
 ### Internal

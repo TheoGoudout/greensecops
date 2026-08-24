@@ -1,10 +1,11 @@
 """Resolve what GitHub knows about each action a workflow pins.
 
-Four rules need facts no workflow file contains: whether a pinned SHA is a
+Five rules need facts no workflow file contains: whether a pinned SHA is a
 commit of the repository it names, whether it is still reachable, whether the
-version comment beside it is true, and whether the action is archived. This
-module answers those questions and nothing else; the rules read the answers out
-of ``input.__actions__``.
+version comment beside it is true, whether the action is archived, and whether a
+symbolic ref names both a branch and a tag at once. This module answers those
+questions and nothing else; the rules read the answers out of
+``input.__actions__``.
 
 The governing invariant is that **an unanswered question must never become a
 finding**. Every entry carries a ``lookup`` status, and every rule requires it to
@@ -68,6 +69,10 @@ class ActionMetadata:
     tags_at_sha: list[str] = field(default_factory=list)
     tag_lookup: str = "partial"  # complete | partial
     default_branch: str | None = None
+    # For a symbolic ref only: which kinds of ref actually carry that name
+    # upstream. Empty when the question was not asked or could not be answered,
+    # which is what keeps `ref_confusion` silent rather than guessing.
+    symbolic_ref_kinds: list[str] = field(default_factory=list)  # branch | tag
 
 
 def parse_uses(uses: str) -> tuple[str, str] | None:
@@ -103,12 +108,15 @@ def _describe_sync(gh: Github, repo_name: str, ref: str) -> ActionMetadata:
 
     if not is_sha:
         # A symbolic ref moves by definition; the pinning rules own that, and
-        # reachability is not a question worth asking about it.
+        # reachability is not a question worth asking about it. What *is* worth
+        # asking is whether the name is unambiguous upstream — see
+        # `_symbolic_ref_kinds`.
         return ActionMetadata(
             lookup="ok",
             ref_kind=ref_kind,
             archived=archived,
             default_branch=default_branch,
+            symbolic_ref_kinds=_symbolic_ref_kinds(repo, ref),
         )
 
     try:
@@ -135,6 +143,40 @@ def _describe_sync(gh: Github, repo_name: str, ref: str) -> ActionMetadata:
         tag_lookup=tag_lookup,
         default_branch=default_branch,
     )
+
+
+def _symbolic_ref_kinds(repo: Any, ref: str) -> list[str]:
+    """Which kinds of ref carry the name ``ref`` in ``repo``: branch, tag, both.
+
+    Git resolves an ambiguous name by a precedence rule rather than by asking,
+    so an action pinned to a name that is both a branch and a tag runs whichever
+    one that rule picks — not necessarily the one the author meant. Answering
+    this costs two cheap ref lookups and only for symbolic refs, which are a
+    minority of `uses:` in any repository that pins.
+
+    Returns ``[]`` on any error rather than a partial answer. `ref_confusion`
+    requires *both* kinds to be present before it reports, so an empty or
+    one-element list is silent — the same present-and-wrong discipline the rest
+    of this module keeps.
+    """
+    kinds: list[str] = []
+    try:
+        repo.get_branch(ref)
+        kinds.append("branch")
+    except (UnknownObjectException, GithubException):
+        pass
+    except Exception:  # noqa: BLE001 - a lookup must never fail a scan
+        return []
+
+    try:
+        repo.get_git_ref(f"tags/{ref}")
+        kinds.append("tag")
+    except (UnknownObjectException, GithubException):
+        pass
+    except Exception:  # noqa: BLE001 - a lookup must never fail a scan
+        return []
+
+    return kinds
 
 
 def _reachability(

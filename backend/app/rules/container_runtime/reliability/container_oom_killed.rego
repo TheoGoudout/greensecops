@@ -1,6 +1,6 @@
 # METADATA
 # title: Container was OOM-killed
-# description: Measured runtime state shows the kernel terminated the container for exceeding its memory limit. The static compose_missing_resource_limits check flags the absence of a limit; this one observes a limit that exists and is too low, or a workload that genuinely needs more than it was given.
+# description: Measured runtime state shows the kernel terminated the container for exceeding its memory limit. The static compose_service_unbounded check flags the absence of a limit; this one observes a limit that exists and is too low, or a workload that genuinely needs more than it was given.
 # custom:
 #   severity: high
 #   detection: dynamic_analysis
