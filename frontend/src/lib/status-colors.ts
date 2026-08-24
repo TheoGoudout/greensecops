@@ -20,148 +20,122 @@ const STATUS_CLASSES = {
   mutedStruck: "bg-muted text-muted-foreground line-through",
 } as const
 
-export function fixStatusColor(status: FixStatus): string {
-  switch (status) {
-    case "landed":
-      return STATUS_CLASSES.landed
-    case "delivered":
-      return STATUS_CLASSES.success
-    case "ready":
-      return STATUS_CLASSES.running
-    case "failed":
-      return STATUS_CLASSES.failed
-    case "rejected_by_user":
-    case "superseded_by_closed_pr":
-    case "superseded_by_deleted_file":
-      return STATUS_CLASSES.mutedStruck
-    default:
-      return STATUS_CLASSES.pending
-  }
+type Tone = keyof typeof STATUS_CLASSES
+
+/**
+ * Build a status→class lookup from a partial map plus a fallback.
+ *
+ * Each of these used to be a `switch` returning `STATUS_CLASSES.x` per arm —
+ * eight of them, ~15 lines each, all saying "this value looks like that tone".
+ * A table says the same thing in one line per value, and the shape is uniform
+ * enough that a reader can check a whole domain at a glance.
+ */
+function toneMap<T extends string>(
+  tones: Partial<Record<T, Tone>>,
+  fallback: Tone,
+): (status: T) => string {
+  return (status) => STATUS_CLASSES[tones[status] ?? fallback]
 }
 
-export function issueStatusColor(status: FindingStatus): string {
-  switch (status) {
-    case "resolved":
-      return STATUS_CLASSES.success
-    case "fix_in_progress":
-      return STATUS_CLASSES.running
-    case "ignored":
-      return STATUS_CLASSES.muted
-    default:
-      return STATUS_CLASSES.pending
-  }
+/**
+ * Humanise a status value, with overrides for the ones that need more than
+ * underscore-to-space.
+ */
+function labeller<T extends string>(
+  overrides: Partial<Record<T, string>> = {},
+): (status: T) => string {
+  return (status) => overrides[status] ?? status.replace(/_/g, " ")
 }
 
-export function issueStatusLabel(status: FindingStatus): string {
-  switch (status) {
-    case "fix_in_progress":
-      return "Fix in progress"
-    default:
-      return status.replace(/_/g, " ")
-  }
-}
+export const scanStatusColor = toneMap<ScanStatus>(
+  {
+    completed: "success",
+    running: "running",
+    failed: "failed",
+    queued: "pending",
+  },
+  "muted",
+)
 
-export function ciStatusColor(status: CIStatus): string {
-  switch (status) {
-    case "success":
-      return STATUS_CLASSES.success
-    case "failure":
-      return STATUS_CLASSES.failed
-    case "pending":
-      return STATUS_CLASSES.pending
-    default:
-      return STATUS_CLASSES.muted
-  }
-}
+export const scanStatusLabel = labeller<ScanStatus>({
+  no_targets: "No targets",
+})
 
-export function ciStatusLabel(status: CIStatus): string {
-  switch (status) {
-    case "success":
-      return "CI passing"
-    case "failure":
-      return "CI failing"
-    case "pending":
-      return "CI running"
-    default:
-      return "No CI"
-  }
-}
+export const fixStatusColor = toneMap<FixStatus>(
+  {
+    landed: "landed",
+    delivered: "success",
+    ready: "running",
+    failed: "failed",
+    rejected_by_user: "mutedStruck",
+    superseded_by_closed_pr: "mutedStruck",
+    superseded_by_deleted_file: "mutedStruck",
+  },
+  "pending",
+)
 
-export function reviewDecisionColor(decision: ReviewDecision): string {
-  switch (decision) {
-    case "approved":
-      return STATUS_CLASSES.success
-    case "changes_requested":
-      return STATUS_CLASSES.failed
-    default:
-      return STATUS_CLASSES.pending
-  }
-}
+export const findingStatusColor = toneMap<FindingStatus>(
+  {
+    resolved: "success",
+    fix_in_progress: "running",
+    ignored: "muted",
+  },
+  "pending",
+)
 
-export function reviewDecisionLabel(decision: ReviewDecision): string {
-  switch (decision) {
-    case "approved":
-      return "Approved"
-    case "changes_requested":
-      return "Changes requested"
-    default:
-      return "Review required"
-  }
-}
+export const findingStatusLabel = labeller<FindingStatus>({
+  fix_in_progress: "Fix in progress",
+})
 
-export function scanStatusColor(status: ScanStatus): string {
-  switch (status) {
-    case "completed":
-      return STATUS_CLASSES.success
-    case "running":
-      return STATUS_CLASSES.running
-    case "failed":
-      return STATUS_CLASSES.failed
-    case "queued":
-      return STATUS_CLASSES.pending
-    default:
-      return STATUS_CLASSES.muted
-  }
-}
+export const ciStatusColor = toneMap<CIStatus>(
+  {
+    success: "success",
+    failure: "failed",
+    pending: "pending",
+  },
+  "muted",
+)
 
-export function scanStatusLabel(status: ScanStatus): string {
-  switch (status) {
-    case "no_targets":
-      return "No targets"
-    default:
-      return status.replace(/_/g, " ")
-  }
-}
+export const ciStatusLabel = labeller<CIStatus>({
+  success: "CI passing",
+  failure: "CI failing",
+  pending: "CI running",
+  none: "No CI",
+})
 
-export function dynamicStatusColor(status: DynamicAnalysisStatus): string {
-  switch (status) {
-    case "enriched":
-      return STATUS_CLASSES.success
-    case "running":
-      return STATUS_CLASSES.running
-    case "failed":
-      return STATUS_CLASSES.failed
-    default:
-      return STATUS_CLASSES.pending
-  }
-}
+export const reviewDecisionColor = toneMap<ReviewDecision>(
+  {
+    approved: "success",
+    changes_requested: "failed",
+  },
+  "pending",
+)
 
-export function cloudAccountStatusColor(status: CloudAccountStatus): string {
-  switch (status) {
-    case "connected":
-      return STATUS_CLASSES.success
-    case "error":
-      return STATUS_CLASSES.failed
-    case "disabled":
-      return STATUS_CLASSES.mutedStruck
-    default:
-      return STATUS_CLASSES.pending
-  }
-}
+export const reviewDecisionLabel = labeller<ReviewDecision>({
+  approved: "Approved",
+  changes_requested: "Changes requested",
+  review_required: "Review required",
+})
 
-export function cloudAccountStatusLabel(status: CloudAccountStatus): string {
-  return status.replace(/_/g, " ")
-}
+export const dynamicStatusColor = toneMap<DynamicAnalysisStatus>(
+  {
+    enriched: "success",
+    running: "running",
+    failed: "failed",
+  },
+  "pending",
+)
+
+export const cloudAccountStatusColor = toneMap<CloudAccountStatus>(
+  {
+    connected: "success",
+    error: "failed",
+    disabled: "mutedStruck",
+  },
+  "pending",
+)
+
+export const cloudAccountStatusLabel = labeller<CloudAccountStatus>()
 
 /**
  * GitHub's `mergeable_state` as a compact, human indicator.
@@ -169,21 +143,17 @@ export function cloudAccountStatusLabel(status: CloudAccountStatus): string {
  * Only surfaced when it carries a signal worth acting on: "clean" and unknown
  * states return null rather than adding a pill that says nothing.
  */
+const MERGEABLE: Record<string, { label: string; cls: Tone }> = {
+  dirty: { label: "conflicts", cls: "failed" },
+  behind: { label: "behind base", cls: "pending" },
+  blocked: { label: "blocked", cls: "pending" },
+  unstable: { label: "checks pending", cls: "pending" },
+  clean: { label: "mergeable", cls: "success" },
+}
+
 export function mergeableIndicator(
   state: string | null | undefined,
 ): { label: string; cls: string } | null {
-  switch (state) {
-    case "dirty":
-      return { label: "conflicts", cls: STATUS_CLASSES.failed }
-    case "behind":
-      return { label: "behind base", cls: STATUS_CLASSES.pending }
-    case "blocked":
-      return { label: "blocked", cls: STATUS_CLASSES.pending }
-    case "unstable":
-      return { label: "checks pending", cls: STATUS_CLASSES.pending }
-    case "clean":
-      return { label: "mergeable", cls: STATUS_CLASSES.success }
-    default:
-      return null
-  }
+  const hit = state ? MERGEABLE[state] : undefined
+  return hit ? { label: hit.label, cls: STATUS_CLASSES[hit.cls] } : null
 }

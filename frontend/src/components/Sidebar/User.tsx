@@ -17,7 +17,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
-import { getInitials } from "@/utils"
 
 interface UserInfoProps {
   fullName?: string
@@ -38,6 +37,16 @@ function UserInfo({ fullName, email }: UserInfoProps) {
       </div>
     </div>
   )
+}
+
+/** "Ada Lovelace" -> "AL", for the avatar fallback. */
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase()
 }
 
 export function User({ user }: { user: any }) {

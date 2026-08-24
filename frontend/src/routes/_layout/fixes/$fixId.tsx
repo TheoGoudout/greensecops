@@ -12,8 +12,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiErrorDetail } from "@/lib/api-error"
+import { formatDateTime } from "@/lib/format"
 import { fixStatusColor } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
 
 type FixDetailSearch = { repoId?: string }
 
@@ -256,15 +257,7 @@ function FixDetail() {
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>Model: {fix.llm_model}</span>
           {fix.created_at && (
-            <span>
-              Created:{" "}
-              {new Date(fix.created_at).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
+            <span>Created: {formatDateTime(fix.created_at)}</span>
           )}
         </div>
       )}

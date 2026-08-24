@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
+import { apiErrorDetail } from "@/lib/api-error"
 import {
   INTEGRATE_ACTION_BRANCH,
   repoFixBranch,
@@ -33,7 +34,6 @@ import {
   reviewDecisionLabel,
 } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute(
   "/_layout/repositories/$repoId/pull-requests",

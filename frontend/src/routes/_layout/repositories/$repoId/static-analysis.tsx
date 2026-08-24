@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
+import { apiErrorDetail } from "@/lib/api-error"
 import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { severityRank } from "@/lib/severity"
@@ -42,7 +43,6 @@ import {
 } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
 import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute(
   "/_layout/repositories/$repoId/static-analysis",

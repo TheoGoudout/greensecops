@@ -8,8 +8,8 @@ import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { issueStatusColor, issueStatusLabel } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
+import { apiErrorDetail } from "@/lib/api-error"
+import { findingStatusColor, findingStatusLabel } from "@/lib/status-colors"
 
 interface IssueRowProps {
   issue: IssuePublic
@@ -71,10 +71,10 @@ export function IssueRow({
           <RuleSlugChip>{issue.rule_slug}</RuleSlugChip>
           {issue.status && issue.status !== "open" && (
             <StatusPill
-              colorClass={issueStatusColor(issue.status)}
+              colorClass={findingStatusColor(issue.status)}
               className="inline-flex items-center capitalize"
             >
-              {issueStatusLabel(issue.status)}
+              {findingStatusLabel(issue.status)}
             </StatusPill>
           )}
           {issue.needs_manual_work && (

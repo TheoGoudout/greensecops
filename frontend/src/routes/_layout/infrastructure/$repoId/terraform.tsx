@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import {
   ChevronDown,
@@ -11,9 +11,9 @@ import {
   Zap,
 } from "lucide-react"
 import { useMemo, useState } from "react"
-import { toast } from "sonner"
 import type {
   PullRequestPublic,
+  TerraformFilePublic,
   TerraformFindingPublic,
   TerraformFixPublic,
   TerraformRootPublic,
@@ -26,13 +26,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { useEngineTarget } from "@/hooks/useEngineTarget"
 import { tfFixBranch } from "@/lib/delivery"
+import { formatDateTime } from "@/lib/format"
 import {
   fixStatusColor,
   scanStatusColor,
   scanStatusLabel,
 } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute(
   "/_layout/infrastructure/$repoId/terraform",
@@ -118,108 +119,48 @@ interface RootCardProps {
 }
 
 function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
-  const queryClient = useQueryClient()
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["terraform-roots", "repo"] })
-    queryClient.invalidateQueries({ queryKey: ["terraform-fixes", root.id] })
-    queryClient.invalidateQueries({ queryKey: ["terraform-findings", root.id] })
-  }
-
-  const { data: files, isLoading: filesLoading } = useQuery({
-    queryKey: ["terraform-files", root.id],
-    queryFn: () => TerraformService.listTerraformFiles({ rootId: root.id }),
-    enabled: isOpen,
+  const {
+    files,
+    filesLoading,
+    findings,
+    fixes,
+    toggleMutation,
+    scanMutation,
+    deleteMutation,
+    generateMutation,
+    deliverMutation,
+  } = useEngineTarget<
+    TerraformFilePublic,
+    TerraformFindingPublic,
+    TerraformFixPublic
+  >(root.id, isOpen, {
+    keyPrefix: "terraform",
+    targetLabel: "Terraform root",
+    listFiles: () => TerraformService.listTerraformFiles({ rootId: root.id }),
+    listFindings: () =>
+      TerraformService.listTerraformFindings({ rootId: root.id }),
+    listFixes: () => TerraformService.listTerraformFixes({ rootId: root.id }),
+    toggle: (enabled) =>
+      TerraformService.toggleTerraformRoot({ rootId: root.id, enabled }),
+    scan: () => TerraformService.triggerTerraformScan({ rootId: root.id }),
+    remove: () => TerraformService.deleteTerraformRoot({ rootId: root.id }),
+    generate: (findingIds) =>
+      TerraformService.triggerTerraformFixGeneration({
+        rootId: root.id,
+        requestBody: findingIds.length ? { finding_ids: findingIds } : {},
+      }),
+    deliver: (force) =>
+      TerraformService.triggerTerraformDelivery({ rootId: root.id, force }),
   })
 
-  const { data: findings } = useQuery({
-    queryKey: ["terraform-findings", root.id],
-    queryFn: () => TerraformService.listTerraformFindings({ rootId: root.id }),
-    enabled: isOpen,
-  })
-
-  const { data: fixes } = useQuery({
-    queryKey: ["terraform-fixes", root.id],
-    queryFn: () => TerraformService.listTerraformFixes({ rootId: root.id }),
-    enabled: isOpen,
-  })
-
+  // Scan history is Terraform-only and loads on its own disclosure, so it stays
+  // here rather than in the shared hook.
   const { data: scans } = useQuery({
     queryKey: ["terraform-scans", root.id],
     queryFn: () => TerraformService.listTerraformScans({ rootId: root.id }),
     enabled: isOpen && historyOpen,
-  })
-
-  const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) =>
-      TerraformService.toggleTerraformRoot({ rootId: root.id, enabled }),
-    onSuccess: invalidate,
-    onError: (e) =>
-      toast.error("Failed to update root", { description: apiErrorDetail(e) }),
-  })
-
-  const scanMutation = useMutation({
-    mutationFn: () =>
-      TerraformService.triggerTerraformScan({ rootId: root.id }),
-    onSuccess: () => {
-      toast.success("Scan queued")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Failed to queue scan", { description: apiErrorDetail(e) }),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => TerraformService.deleteTerraformRoot({ rootId: root.id }),
-    onSuccess: () => {
-      toast.success("Terraform root removed")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Failed to remove root", { description: apiErrorDetail(e) }),
-  })
-
-  const genFileMutation = useMutation({
-    mutationFn: (findingIds: string[]) =>
-      TerraformService.triggerTerraformFixGeneration({
-        rootId: root.id,
-        requestBody: { finding_ids: findingIds },
-      }),
-    onSuccess: () => {
-      toast.success("Fix generation queued")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Failed to queue fix", { description: apiErrorDetail(e) }),
-  })
-
-  const genAllMutation = useMutation({
-    mutationFn: () =>
-      TerraformService.triggerTerraformFixGeneration({
-        rootId: root.id,
-        requestBody: {},
-      }),
-    onSuccess: () => {
-      toast.success("Fix generation queued")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Failed to queue fixes", { description: apiErrorDetail(e) }),
-  })
-
-  const deliverMutation = useMutation({
-    mutationFn: (force: boolean) =>
-      TerraformService.triggerTerraformDelivery({ rootId: root.id, force }),
-    onSuccess: () => {
-      toast.success("Terraform PR queued")
-      queryClient.invalidateQueries({
-        queryKey: ["pull-requests", "repo"],
-      })
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Failed to queue PR", { description: apiErrorDetail(e) }),
   })
 
   const findingsByFile = useMemo(() => {
@@ -324,13 +265,7 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
         </div>
         {root.last_scanned_at && (
           <p className="text-xs text-muted-foreground">
-            Last scanned{" "}
-            {new Date(root.last_scanned_at).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            Last scanned {formatDateTime(root.last_scanned_at)}
           </p>
         )}
       </CardHeader>
@@ -343,10 +278,10 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs gap-1.5"
-                onClick={() => genAllMutation.mutate()}
-                disabled={!root.enabled || genAllMutation.isPending}
+                onClick={() => generateMutation.mutate([])}
+                disabled={!root.enabled || generateMutation.isPending}
               >
-                {genAllMutation.isPending ? (
+                {generateMutation.isPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <Zap className="h-3 w-3" />
@@ -422,11 +357,11 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs gap-1.5"
-                        onClick={() => genFileMutation.mutate(openIds)}
+                        onClick={() => generateMutation.mutate(openIds)}
                         disabled={
                           !root.enabled ||
                           fixInFlight ||
-                          genFileMutation.isPending
+                          generateMutation.isPending
                         }
                       >
                         {fixInFlight ? (

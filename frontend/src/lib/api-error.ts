@@ -1,5 +1,4 @@
-import { toast } from "sonner"
-import { ApiError } from "./client"
+import { ApiError } from "@/client"
 
 /**
  * A structured billing refusal (HTTP 402/503), as raised by
@@ -33,7 +32,8 @@ function isBillingErrorDetail(value: unknown): value is BillingErrorDetail {
   )
 }
 
-function extractErrorMessage(err: ApiError): string {
+/** The best human-readable message an ApiError carries. */
+export function extractErrorMessage(err: ApiError): string {
   const errDetail = (err.body as { detail?: unknown })?.detail
   if (Array.isArray(errDetail) && errDetail.length > 0) {
     return String((errDetail[0] as { msg?: unknown })?.msg ?? "")
@@ -49,32 +49,11 @@ function extractErrorMessage(err: ApiError): string {
     : "Something went wrong."
 }
 
-export function showSuccessToast(description: string) {
-  toast.success("Success!", { description })
-}
-
-export function showErrorToast(description: string) {
-  toast.error("Something went wrong!", { description })
-}
-
-/** Show the standard error toast with the message extracted from an ApiError. */
-export function handleApiError(err: ApiError) {
-  showErrorToast(extractErrorMessage(err))
-}
-
+/** The `detail` string of an error, when it is a plain string. */
 export function apiErrorDetail(error: unknown): string | undefined {
   if (error instanceof ApiError) {
     const detail = (error.body as { detail?: unknown })?.detail
     if (typeof detail === "string") return detail
   }
   return undefined
-}
-
-export const getInitials = (name: string): string => {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase()
 }

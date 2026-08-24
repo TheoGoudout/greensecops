@@ -6,7 +6,8 @@ import { StatCard } from "@/components/Dashboard/StatCard"
 import { TopRulesList } from "@/components/Dashboard/TopRulesList"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ENGINE_META, relativeTime } from "@/lib/engine-meta"
+import { ENGINE_META } from "@/lib/engine-meta"
+import { relativeTime } from "@/lib/format"
 
 /**
  * The widget set every engine section shows, driven entirely by props.

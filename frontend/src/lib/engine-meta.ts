@@ -67,19 +67,3 @@ export const SEVERITY_FILL: Record<Severity, string> = {
   low: "bg-blue-500 dark:bg-blue-400",
   info: "bg-slate-400 dark:bg-slate-500",
 }
-
-/** A short relative-time string ("3h ago"), or "never" for a missing date. */
-export function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "never"
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return "never"
-  const minutes = Math.round((Date.now() - then) / 60000)
-  if (minutes < 1) return "just now"
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.round(hours / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.round(days / 30)
-  return months < 12 ? `${months}mo ago` : `${Math.round(months / 12)}y ago`
-}

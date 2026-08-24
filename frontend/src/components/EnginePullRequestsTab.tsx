@@ -7,13 +7,13 @@ import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiErrorDetail } from "@/lib/api-error"
 import {
   ciStatusColor,
   ciStatusLabel,
   reviewDecisionColor,
   reviewDecisionLabel,
 } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
 
 const STATE_CLASSES: Record<string, string> = {
   merged: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
