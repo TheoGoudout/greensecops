@@ -64,7 +64,7 @@ def test_declared_outputs_reference_known_events(
         assert signal is None or isinstance(signal, SSESignal)
 
 
-# ── Analysis ─────────────────────────────────────────────────────────────────
+# ── WorkflowScan ─────────────────────────────────────────────────────────────────
 
 
 def test_analysis_happy_path() -> None:
@@ -103,7 +103,7 @@ def test_analysis_retry_requeues_a_failed_row() -> None:
         sm.advance(a2, sm.ScanMachine, "retry")
 
 
-# ── Fix ──────────────────────────────────────────────────────────────────────
+# ── WorkflowFix ──────────────────────────────────────────────────────────────────────
 
 
 def test_fix_generation_and_delivery_path() -> None:
@@ -339,7 +339,7 @@ def test_telemetry_sweep_from_queued_or_running() -> None:
         sm.advance(e, sm.TelemetryMachine, "swept")
 
 
-# ── Issue ────────────────────────────────────────────────────────────────────
+# ── WorkflowFinding ────────────────────────────────────────────────────────────────────
 
 
 def test_issue_transitions() -> None:

@@ -12,14 +12,11 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    Analysis,
     Category,
     CIStatus,
     FindingResolutionReason,
     FindingStatus,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     PullRequest,
@@ -34,6 +31,9 @@ from app.models import (
     TerraformRoot,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 
 WEBHOOK_URL = f"{settings.API_V1_STR}/webhooks/github"
@@ -403,7 +403,7 @@ def test_github_webhook_workflow_run_enabled_repo_enqueues(
     assert response.json()["status"] == "accepted"
 
 
-# ─── Issue comment event ──────────────────────────────────────────────────────
+# ─── WorkflowFinding comment event ──────────────────────────────────────────────────────
 
 
 def test_github_webhook_issue_comment_non_created_skipped(
@@ -707,7 +707,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -732,7 +732,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
         db.commit()
         db.refresh(rule)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
         severity=Severity.high,
@@ -753,7 +753,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -818,7 +818,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -833,7 +833,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
         severity=Severity.high,
@@ -854,7 +854,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -912,7 +912,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -927,7 +927,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
         severity=Severity.high,
@@ -948,7 +948,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -1017,7 +1017,7 @@ def test_github_webhook_pull_request_reopened_restores_guard_rejected_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -1492,7 +1492,7 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
 def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     client: TestClient, db: Session, enabled_repo: Repository
 ) -> None:
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=enabled_repo.id,
         content_hash=uuid.uuid4().hex,
         status=ScanStatus.completed,
@@ -1504,7 +1504,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
     fingerprint = uuid.uuid4().hex[:16]
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
         severity=Severity.high,
@@ -1806,7 +1806,7 @@ def test_github_webhook_installation_suspend_unsuspend(
 
 def _seed_branch_issue(
     db: Session, repo: Repository, branch: str, path: str = ".github/workflows/ci.yml"
-) -> tuple[WorkflowFile, Issue]:
+) -> tuple[WorkflowFile, WorkflowFinding]:
     wf = WorkflowFile(
         repo_id=repo.id,
         branch=branch,
@@ -1817,7 +1817,7 @@ def _seed_branch_issue(
     db.add(wf)
     db.commit()
     db.refresh(wf)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -1830,7 +1830,7 @@ def _seed_branch_issue(
     db.refresh(analysis)
     rule = db.exec(select(Rule)).first()
     assert rule is not None
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
@@ -1924,7 +1924,7 @@ def test_delete_greensecops_branch_closes_pr_and_supersedes_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",

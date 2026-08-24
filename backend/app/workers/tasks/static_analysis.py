@@ -13,12 +13,9 @@ from sqlmodel import Session, col, delete, select
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
-    Analysis,
     Category,
     FindingResolutionReason,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Repository,
     Rule,
@@ -30,6 +27,9 @@ from app.models import (
     UsageEngine,
     UsageMeter,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services import state_machines as sm
 from app.services.billing import quota as billing_quota
@@ -84,32 +84,35 @@ def _auto_queue_fix_generation(
     changed_wf_ids = changed_wf_ids or set()
 
     latest_analysis_subq = (
-        select(Analysis.id)
-        .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.completed_at.desc().nulls_last(), Analysis.created_at.desc())  # type: ignore[union-attr]
+        select(WorkflowScan.id)
+        .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(
+            col(WorkflowScan.completed_at).desc().nulls_last(),
+            col(WorkflowScan.created_at).desc(),
+        )
         .limit(1)
-        .correlate(Issue)
+        .correlate(WorkflowFinding)
         .scalar_subquery()
     )
     issues = session.exec(
-        select(Issue)
-        .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-        .join(WorkflowFile, Issue.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo.id)
+        select(WorkflowFinding)
+        .join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
+        .join(WorkflowFile, WorkflowFinding.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .where(WorkflowScan.repo_id == repo.id)
         # Fixes and PRs only ever target the default branch; feature-branch
         # issues are tracked but never auto-fixed.
         .where(WorkflowFile.branch == repo.default_branch)
-        .where(Issue.analysis_id == latest_analysis_subq)
-        .where(col(Issue.resolved_at).is_(None))
-        .where(col(Issue.ignored_at).is_(None))
+        .where(WorkflowFinding.analysis_id == latest_analysis_subq)
+        .where(col(WorkflowFinding.resolved_at).is_(None))
+        .where(col(WorkflowFinding.ignored_at).is_(None))
     ).all()
 
     if not issues:
         return
 
-    by_wf_file: dict[uuid.UUID, list[Issue]] = defaultdict(list)
+    by_wf_file: dict[uuid.UUID, list[WorkflowFinding]] = defaultdict(list)
     for issue in issues:
         by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
 
@@ -117,11 +120,11 @@ def _auto_queue_fix_generation(
 
     # Existing fix (at most one per workflow file) and the state of its PR.
     existing_rows = session.exec(
-        select(Fix, PullRequest.pr_state)
-        .join(PullRequest, Fix.pr_id == PullRequest.id, isouter=True)  # type: ignore[arg-type]
-        .where(col(Fix.workflow_file_id).in_(wf_file_ids))
+        select(WorkflowFix, PullRequest.pr_state)
+        .join(PullRequest, WorkflowFix.pr_id == PullRequest.id, isouter=True)  # type: ignore[arg-type]
+        .where(col(WorkflowFix.workflow_file_id).in_(wf_file_ids))
     ).all()
-    fix_by_wf: dict[uuid.UUID, Fix] = {}
+    fix_by_wf: dict[uuid.UUID, WorkflowFix] = {}
     prstate_by_wf: dict[uuid.UUID, object] = {}
     for row_fix, pr_state in existing_rows:
         fix_by_wf[row_fix.workflow_file_id] = row_fix
@@ -129,7 +132,7 @@ def _auto_queue_fix_generation(
 
     # Split target workflow files into ones whose current fix can be reused as-is
     # and ones that must be (re)generated.
-    to_keep: list[Fix] = []
+    to_keep: list[WorkflowFix] = []
     to_generate: list[uuid.UUID] = []
     delete_ids: list[uuid.UUID] = []
     for wf_id in wf_file_ids:
@@ -155,7 +158,7 @@ def _auto_queue_fix_generation(
         return
 
     if delete_ids:
-        session.exec(delete(Fix).where(col(Fix.id).in_(delete_ids)))
+        session.exec(delete(WorkflowFix).where(col(WorkflowFix.id).in_(delete_ids)))
     # Re-include reused fixes in the delivery set. Delivery hard-resets the PR
     # branch to base and re-applies only the fixes it is handed, so an unchanged
     # file must ride along or it would be dropped from the PR.
@@ -166,9 +169,9 @@ def _auto_queue_fix_generation(
     session.commit()
 
     provider_str, model_str = resolve_llm_provider(repo)
-    pending_fixes: list[Fix] = []
+    pending_fixes: list[WorkflowFix] = []
     for wf_id in to_generate:
-        fix = Fix(
+        fix = WorkflowFix(
             workflow_file_id=wf_id,
             llm_provider=LLMProvider(provider_str),
             llm_model=model_str,
@@ -294,9 +297,9 @@ def _resolve_stale_issues(
     """
     now = datetime.now(timezone.utc)
     open_issues = session.exec(
-        select(Issue)
-        .where(Issue.workflow_file_id == workflow_file_id)
-        .where(col(Issue.resolved_at).is_(None))
+        select(WorkflowFinding)
+        .where(WorkflowFinding.workflow_file_id == workflow_file_id)
+        .where(col(WorkflowFinding.resolved_at).is_(None))
     ).all()
     stale = [i for i in open_issues if i.fingerprint not in seen_fingerprints]
     for issue in stale:
@@ -346,9 +349,9 @@ def _resolve_issues_for_missing_files(
             session.add(wf)
             deleted += 1
         open_issues = session.exec(
-            select(Issue)
-            .where(Issue.workflow_file_id == wf.id)
-            .where(col(Issue.resolved_at).is_(None))
+            select(WorkflowFinding)
+            .where(WorkflowFinding.workflow_file_id == wf.id)
+            .where(col(WorkflowFinding.resolved_at).is_(None))
         ).all()
         for issue in open_issues:
             issue.resolved_at = now
@@ -377,9 +380,9 @@ def _count_open_issues(session: Session, workflow_file_id: uuid.UUID | None) -> 
         return 0
     return len(
         session.exec(
-            select(Issue)
-            .where(Issue.workflow_file_id == workflow_file_id)
-            .where(col(Issue.resolved_at).is_(None))
+            select(WorkflowFinding)
+            .where(WorkflowFinding.workflow_file_id == workflow_file_id)
+            .where(col(WorkflowFinding.resolved_at).is_(None))
         ).all()
     )
 
@@ -462,7 +465,7 @@ def _run_static_analysis_impl(
 
         if not workflow_files_to_analyse:
             now = datetime.now(timezone.utc)
-            no_wf_analysis = Analysis(
+            no_wf_analysis = WorkflowScan(
                 repo_id=repo.id,
                 workflow_file_id=None,
                 content_hash="",
@@ -586,7 +589,7 @@ def _run_static_analysis_impl(
                         session.add(wf_record.fix)
                 session.flush()
 
-            analysis = Analysis(
+            analysis = WorkflowScan(
                 repo_id=repo.id,
                 workflow_file_id=wf_record.id,
                 content_hash=content_hash,
@@ -688,7 +691,7 @@ def _run_static_analysis_impl(
                 seen_fingerprints.add(fingerprint)
                 issue_count += 1
                 stmt = (
-                    pg_insert(Issue)
+                    pg_insert(WorkflowFinding)
                     .values(
                         id=uuid.uuid4(),
                         analysis_id=analysis.id,
@@ -707,7 +710,7 @@ def _run_static_analysis_impl(
                         created_at=datetime.now(timezone.utc),
                     )
                     .on_conflict_do_update(
-                        constraint="uq_issue_wf_fingerprint",
+                        constraint="uq_workflow_finding_wf_fingerprint",
                         set_={
                             "analysis_id": analysis.id,
                             "severity": Severity(v.severity),
@@ -765,7 +768,7 @@ def _run_static_analysis_impl(
                 }
             )
             logger.info(
-                "Analysis complete: repo=%s path=%s score=%.1f grade=%s issues=%d",
+                "Scan complete: repo=%s path=%s score=%.1f grade=%s issues=%d",
                 repo_id,
                 path,
                 score,
@@ -829,7 +832,7 @@ def _run_static_analysis_impl(
             # nothing broke and retrying will not help — only upgrading will.
             skipped = len(workflow_files_to_analyse) - len(results)
             message = (
-                f"Analysis stopped after {len(results)} of "
+                f"Scan stopped after {len(results)} of "
                 f"{len(workflow_files_to_analyse)} workflow files: the monthly "
                 f"analysis allowance is exhausted. {skipped} file(s) were not "
                 f"analysed, starting with {quota_stopped_at}."
@@ -870,7 +873,7 @@ def run_static_analysis(
     also let a repeatedly-crashing worker eat a user's whole allowance.
     """
     # Per-repo lock: concurrent analyses of the same repo race on
-    # WorkflowFile.raw_content updates and duplicate Analysis rows.
+    # WorkflowFile.raw_content updates and duplicate WorkflowScan rows.
     with scan_lock(f"static_analysis:{repo_id}") as acquired:
         if not acquired:
             # Another analysis for this repo is already running.  Layers upstream

@@ -11,7 +11,7 @@ analysis pipeline against it. No test code changes needed.
 Workflows are fetched from public repos (encode/httpx, celery/celery, redis/redis-py)
 and stored in tests/fixtures/workflows/. OPA calls are mocked at _evaluate with
 violations that accurately reflect what each rule would detect, so the tests validate
-the full pipeline: line-number enrichment, Issue creation, score degradation, and
+the full pipeline: line-number enrichment, WorkflowFinding creation, score degradation, and
 content-hash deduplication.
 """
 
@@ -27,7 +27,6 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
     Category,
     Organization,
     Repository,
@@ -35,6 +34,7 @@ from app.models import (
     ScanStatus,
     UserTier,
     WorkflowFile,
+    WorkflowScan,
 )
 from app.services.opa.evaluator import _attach_positions
 from app.services.workflow_parser import parse_workflow_yaml
@@ -311,10 +311,10 @@ def test_httpx_analysis_creates_three_issues(db: Session, repo: Repository) -> N
     assert "'issues': 3" in results_str or '"issues": 3' in results_str
 
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(WorkflowScan.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
     assert analysis.grade != "A+++"
@@ -324,7 +324,7 @@ def test_httpx_analysis_issues_have_positive_line_numbers(
     db: Session, repo: Repository
 ) -> None:
     """All issues created from the httpx workflow have line_start > 0."""
-    from app.models import Issue
+    from app.models import WorkflowFinding
 
     unique = uuid.uuid4().hex
     content = f"# test-{unique}\n" + _load("httpx_test_suite.yml")
@@ -352,14 +352,16 @@ def test_httpx_analysis_issues_have_positive_line_numbers(
         _run_static_analysis_impl(str(repo.id))
 
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(WorkflowScan.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
 
-    issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
+    issues = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.analysis_id == analysis.id)
+    ).all()
     assert len(issues) == 2
     assert all(i.line_start is not None and i.line_start > 0 for i in issues)
 
@@ -368,7 +370,7 @@ def test_celery_analysis_creates_four_issues_across_categories(
     db: Session, repo: Repository
 ) -> None:
     """celery CI: 3 unpinned + 1 missing timeout → 4 issues, all reliability category."""
-    from app.models import Issue
+    from app.models import WorkflowFinding
 
     unique = uuid.uuid4().hex
     content = f"# test-{unique}\n" + _load("celery_ci.yml")
@@ -420,12 +422,14 @@ def test_celery_analysis_creates_four_issues_across_categories(
     assert "'issues': 4" in results_str or '"issues": 4' in results_str
 
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(WorkflowScan.created_at.desc())  # type: ignore[arg-type]
     ).first()
-    issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
+    issues = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.analysis_id == analysis.id)
+    ).all()
     assert all(i.category == Category.reliability for i in issues)
     assert analysis.grade != "A+++"
 
@@ -434,7 +438,7 @@ def test_redis_py_analysis_creates_issues_per_job(
     db: Session, repo: Repository
 ) -> None:
     """redis-py: 4 jobs missing timeout + 1 unpinned → 5 issues; timeout issues on correct jobs."""
-    from app.models import Issue
+    from app.models import WorkflowFinding
 
     unique = uuid.uuid4().hex
     content = f"# test-{unique}\n" + _load("redis_py_integration.yml")
@@ -476,14 +480,16 @@ def test_redis_py_analysis_creates_issues_per_job(
         _run_static_analysis_impl(str(repo.id))
 
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(WorkflowScan.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
 
-    issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
+    issues = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.analysis_id == analysis.id)
+    ).all()
     assert len(issues) == 5
 
     timeout_issues = [
@@ -558,7 +564,7 @@ def _load_scenario(name: str) -> tuple[str, list[_Violation], dict]:
 @pytest.mark.parametrize("scenario", _SCENARIOS)
 def test_workflow_scenario(db: Session, repo: Repository, scenario: str) -> None:
     """Auto-discovered workflow scenario: full pipeline smoke test."""
-    from app.models import Issue
+    from app.models import WorkflowFinding
 
     content, violations, meta = _load_scenario(scenario)
     unique = uuid.uuid4().hex
@@ -581,14 +587,16 @@ def test_workflow_scenario(db: Session, repo: Repository, scenario: str) -> None
     assert "completed" in result["results"]
 
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[arg-type]
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(WorkflowScan.created_at.desc())  # type: ignore[arg-type]
     ).first()
     assert analysis is not None
 
-    issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
+    issues = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.analysis_id == analysis.id)
+    ).all()
     assert len(issues) == meta["expected_issue_count"], (
         f"{scenario}: expected {meta['expected_issue_count']} issues, got {len(issues)}"
     )

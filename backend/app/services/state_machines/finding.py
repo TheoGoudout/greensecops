@@ -1,7 +1,7 @@
 """Terraform/Docker/cloud finding lifecycle state machine (``python-statemachine``).
 
 States mirror ``FindingStatus``. Shared by ``TerraformFinding.status``,
-``DockerFinding.status`` and ``CloudFinding.status``. Unlike ``Issue.status``
+``DockerFinding.status`` and ``CloudFinding.status``. Unlike ``WorkflowFinding.status``
 — a DB-trigger-derived column reacting to ``fix_id``/``resolved_at``/
 ``ignored_at``, with ``FindingMachine`` only documenting the graph — this
 ``status`` is written directly by the application via ``sm.advance``, the way
@@ -17,7 +17,7 @@ Docker and cloud workers. ``recur`` is bypassed: those workers reopen a finding
 by setting ``resolved_at = NULL`` inside the ``ON CONFLICT DO UPDATE`` of their
 upsert, which never passes through this machine. ``ignore``/``unignore`` have
 no caller at all — no route exposes ``ignored_at`` for these engines, unlike
-``Issue`` (``api/routes/issues.py``, plus the PR-comment commands in
+``WorkflowFinding`` (``api/routes/issues.py``, plus the PR-comment commands in
 ``services/github/event_handlers.py``). Both are declared, tested edges waiting
 on the routes that will fire them.
 """

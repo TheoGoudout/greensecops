@@ -8,12 +8,12 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, select
 
 from app.models import (
-    Analysis,
     Category,
     Repository,
     ScanStatus,
     Severity,
     WorkflowFile,
+    WorkflowScan,
 )
 
 _SEVERITY_PENALTY: dict[str, float] = {
@@ -123,15 +123,17 @@ def compute_avg_scores_batch(
         return {}
 
     analyses = session.exec(
-        select(Analysis)
-        .join(WorkflowFile, Analysis.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
+        select(WorkflowScan)
+        .join(WorkflowFile, WorkflowScan.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(Repository, WorkflowScan.repo_id == Repository.id)  # type: ignore[arg-type]
+        .where(WorkflowScan.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
         .where(WorkflowFile.branch == Repository.default_branch)
         .where(col(WorkflowFile.deleted_at).is_(None))
-        .where(Analysis.status == ScanStatus.completed)
-        .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .where(WorkflowScan.score.isnot(None))  # type: ignore[union-attr]
+        .order_by(
+            col(WorkflowScan.workflow_file_id), col(WorkflowScan.created_at).desc()
+        )
     ).all()
 
     seen: set[uuid.UUID] = set()

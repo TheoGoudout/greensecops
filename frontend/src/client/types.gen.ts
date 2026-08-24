@@ -1189,46 +1189,6 @@ export type WorkflowFilePublic = {
     raw_content?: (string | null);
 };
 
-export type AnalysesListAnalysesData = {
-    branch?: (string | null);
-    grade?: (string | null);
-    limit?: number;
-    repoId?: (string | null);
-    skip?: number;
-    status?: (ScanStatus | null);
-};
-
-export type AnalysesListAnalysesResponse = (Array<AnalysisPublic>);
-
-export type AnalysesGetAnalysisData = {
-    analysisId: string;
-};
-
-export type AnalysesGetAnalysisResponse = (AnalysisPublic);
-
-export type AnalysesTriggerAnalysisData = {
-    branch?: (string | null);
-    force?: boolean;
-    repoId: string;
-};
-
-export type AnalysesTriggerAnalysisResponse = ({
-    [key: string]: (string);
-});
-
-export type AnalysesReanalyzeForWorkflowData = {
-    force?: boolean;
-    workflowFileId: string;
-};
-
-export type AnalysesReanalyzeForWorkflowResponse = ({
-    [key: string]: (string);
-});
-
-export type AnalysesReanalyzeAllResponse = ({
-    [key: string]: (string);
-});
-
 export type AuthGithubCallbackData = {
     formData: Body_auth_github_callback;
 };
@@ -1495,94 +1455,6 @@ export type EventsStreamEventsData = {
 
 export type EventsStreamEventsResponse = (unknown);
 
-export type FixesListFixesData = {
-    branch?: (string | null);
-    limit?: number;
-    repoId?: (string | null);
-    skip?: number;
-    status?: (FixStatus | null);
-};
-
-export type FixesListFixesResponse = (Array<FixPublic>);
-
-export type FixesListPullRequestsData = {
-    repoId: string;
-};
-
-export type FixesListPullRequestsResponse = (Array<PullRequestPublic>);
-
-export type FixesGetFixData = {
-    fixId: string;
-};
-
-export type FixesGetFixResponse = (FixPublic);
-
-export type FixesRejectFixData = {
-    fixId: string;
-};
-
-export type FixesRejectFixResponse = (void);
-
-export type FixesTriggerFixGenerationForRepoData = {
-    force?: boolean;
-    repoId: string;
-    requestBody?: BatchFixRequest;
-};
-
-export type FixesTriggerFixGenerationForRepoResponse = ({
-    [key: string]: (number);
-});
-
-export type FixesTriggerWorkflowDeliveryData = {
-    force?: boolean;
-    requestBody: WorkflowDeliverRequest;
-};
-
-export type FixesTriggerWorkflowDeliveryResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesTriggerRepoDeliveryData = {
-    force?: boolean;
-    repoId: string;
-};
-
-export type FixesTriggerRepoDeliveryResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesRegenerateFixesForRepoData = {
-    repoId: string;
-};
-
-export type FixesRegenerateFixesForRepoResponse = ({
-    [key: string]: (number);
-});
-
-export type FixesRegenerateFixesForWorkflowData = {
-    fixId: string;
-};
-
-export type FixesRegenerateFixesForWorkflowResponse = ({
-    [key: string]: (number);
-});
-
-export type FixesRegenerateFailedFixData = {
-    fixId: string;
-};
-
-export type FixesRegenerateFailedFixResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesSyncPrStatusesData = {
-    repoId: string;
-};
-
-export type FixesSyncPrStatusesResponse = ({
-    [key: string]: (number);
-});
-
 export type InstallationsListInstallationsResponse = (Array<OrganizationPublic>);
 
 export type InstallationsSyncInstallationsData = {
@@ -1590,48 +1462,6 @@ export type InstallationsSyncInstallationsData = {
 };
 
 export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>);
-
-export type IssuesListIssuesData = {
-    analysisId?: (string | null);
-    branch?: (string | null);
-    category?: (Category | null);
-    includeIgnored?: boolean;
-    includeResolved?: boolean;
-    latestOnly?: boolean;
-    limit?: number;
-    repoId?: (string | null);
-    severity?: (Severity | null);
-    skip?: number;
-    unfixed?: boolean;
-};
-
-export type IssuesListIssuesResponse = (Array<IssuePublic>);
-
-export type IssuesGetIssueStatsData = {
-    branch?: (string | null);
-    latestOnly?: boolean;
-    repoId?: (string | null);
-};
-
-export type IssuesGetIssueStatsResponse = (IssueStatsPublic);
-
-export type IssuesGetIssueData = {
-    issueId: string;
-};
-
-export type IssuesGetIssueResponse = (IssuePublic);
-
-export type IssuesIgnoreIssueData = {
-    issueId: string;
-};
-
-export type IssuesIgnoreIssueResponse = (IssuePublic);
-
-export type IssuesUnignoreIssueData = {
-    issueId: string;
-};
-
-export type IssuesUnignoreIssueResponse = (IssuePublic);
 
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;
@@ -1967,5 +1797,175 @@ export type WebhooksGithubWebhookData = {
 };
 
 export type WebhooksGithubWebhookResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFindingsListIssuesData = {
+    analysisId?: (string | null);
+    branch?: (string | null);
+    category?: (Category | null);
+    includeIgnored?: boolean;
+    includeResolved?: boolean;
+    latestOnly?: boolean;
+    limit?: number;
+    repoId?: (string | null);
+    severity?: (Severity | null);
+    skip?: number;
+    unfixed?: boolean;
+};
+
+export type WorkflowFindingsListIssuesResponse = (Array<IssuePublic>);
+
+export type WorkflowFindingsGetIssueStatsData = {
+    branch?: (string | null);
+    latestOnly?: boolean;
+    repoId?: (string | null);
+};
+
+export type WorkflowFindingsGetIssueStatsResponse = (IssueStatsPublic);
+
+export type WorkflowFindingsGetIssueData = {
+    issueId: string;
+};
+
+export type WorkflowFindingsGetIssueResponse = (IssuePublic);
+
+export type WorkflowFindingsIgnoreIssueData = {
+    issueId: string;
+};
+
+export type WorkflowFindingsIgnoreIssueResponse = (IssuePublic);
+
+export type WorkflowFindingsUnignoreIssueData = {
+    issueId: string;
+};
+
+export type WorkflowFindingsUnignoreIssueResponse = (IssuePublic);
+
+export type WorkflowFixesListFixesData = {
+    branch?: (string | null);
+    limit?: number;
+    repoId?: (string | null);
+    skip?: number;
+    status?: (FixStatus | null);
+};
+
+export type WorkflowFixesListFixesResponse = (Array<FixPublic>);
+
+export type WorkflowFixesListPullRequestsData = {
+    repoId: string;
+};
+
+export type WorkflowFixesListPullRequestsResponse = (Array<PullRequestPublic>);
+
+export type WorkflowFixesGetFixData = {
+    fixId: string;
+};
+
+export type WorkflowFixesGetFixResponse = (FixPublic);
+
+export type WorkflowFixesRejectFixData = {
+    fixId: string;
+};
+
+export type WorkflowFixesRejectFixResponse = (void);
+
+export type WorkflowFixesTriggerFixGenerationForRepoData = {
+    force?: boolean;
+    repoId: string;
+    requestBody?: BatchFixRequest;
+};
+
+export type WorkflowFixesTriggerFixGenerationForRepoResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowFixesTriggerWorkflowDeliveryData = {
+    force?: boolean;
+    requestBody: WorkflowDeliverRequest;
+};
+
+export type WorkflowFixesTriggerWorkflowDeliveryResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFixesTriggerRepoDeliveryData = {
+    force?: boolean;
+    repoId: string;
+};
+
+export type WorkflowFixesTriggerRepoDeliveryResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFixesRegenerateFixesForRepoData = {
+    repoId: string;
+};
+
+export type WorkflowFixesRegenerateFixesForRepoResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowFixesRegenerateFixesForWorkflowData = {
+    fixId: string;
+};
+
+export type WorkflowFixesRegenerateFixesForWorkflowResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowFixesRegenerateFailedFixData = {
+    fixId: string;
+};
+
+export type WorkflowFixesRegenerateFailedFixResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFixesSyncPrStatusesData = {
+    repoId: string;
+};
+
+export type WorkflowFixesSyncPrStatusesResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowScansListAnalysesData = {
+    branch?: (string | null);
+    grade?: (string | null);
+    limit?: number;
+    repoId?: (string | null);
+    skip?: number;
+    status?: (ScanStatus | null);
+};
+
+export type WorkflowScansListAnalysesResponse = (Array<AnalysisPublic>);
+
+export type WorkflowScansGetAnalysisData = {
+    analysisId: string;
+};
+
+export type WorkflowScansGetAnalysisResponse = (AnalysisPublic);
+
+export type WorkflowScansTriggerAnalysisData = {
+    branch?: (string | null);
+    force?: boolean;
+    repoId: string;
+};
+
+export type WorkflowScansTriggerAnalysisResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowScansReanalyzeForWorkflowData = {
+    force?: boolean;
+    workflowFileId: string;
+};
+
+export type WorkflowScansReanalyzeForWorkflowResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowScansReanalyzeAllResponse = ({
     [key: string]: (string);
 });

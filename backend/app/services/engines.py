@@ -47,7 +47,6 @@ from sqlalchemy import and_
 from sqlmodel import col
 
 from app.models import (
-    Analysis,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -57,8 +56,6 @@ from app.models import (
     DockerScan,
     DockerTarget,
     Engine,
-    Fix,
-    Issue,
     OverviewSection,
     Repository,
     RuleDomain,
@@ -68,6 +65,9 @@ from app.models import (
     TerraformRoot,
     TerraformScan,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.delivery_pr import docker_fix_branch, tf_fix_branch
 from app.services.terraform.hcl_parser import derive_module_path
@@ -246,15 +246,15 @@ OVERVIEW_SPECS: list[OverviewSpec] = [
         section=OverviewSection.ci,
         label="CI workflows",
         target_model=WorkflowFile,
-        scan_model=Analysis,
-        finding_model=Issue,
-        fix_model=Fix,
-        scan_target_fk=Analysis.workflow_file_id,
+        scan_model=WorkflowScan,
+        finding_model=WorkflowFinding,
+        fix_model=WorkflowFix,
+        scan_target_fk=WorkflowScan.workflow_file_id,
         scan_completed=ScanStatus.completed,
         scan_failed=ScanStatus.failed,
         scan_orders_by_completed_at=True,
-        finding_target_fk=Issue.workflow_file_id,
-        finding_scan_fk=Issue.analysis_id,
+        finding_target_fk=WorkflowFinding.workflow_file_id,
+        finding_scan_fk=WorkflowFinding.analysis_id,
         # A workflow file has no enable switch; `enabled` falls back to
         # `total` for this engine.
         target_enabled=None,

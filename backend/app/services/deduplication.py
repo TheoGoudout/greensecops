@@ -3,7 +3,7 @@ import uuid
 
 from sqlmodel import Session, col, select
 
-from app.models import Analysis, ScanStatus
+from app.models import ScanStatus, WorkflowScan
 
 
 def compute_content_hash(content: str) -> str:
@@ -59,7 +59,7 @@ def find_completed_analysis(
     content_hash: str,
     repo_id: uuid.UUID,
     branch: str,
-) -> Analysis | None:
+) -> WorkflowScan | None:
     """Return the branch's most recent completed analysis for this content hash.
 
     Scoped to the repository *and* branch: identical workflow content in two
@@ -69,17 +69,17 @@ def find_completed_analysis(
     WorkflowFile row and issue reconciliation stale (e.g. right after a merge).
     """
     return session.exec(
-        select(Analysis)
-        .where(Analysis.content_hash == content_hash)
-        .where(Analysis.repo_id == repo_id)
-        .where(Analysis.branch == branch)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(col(Analysis.created_at).desc())
+        select(WorkflowScan)
+        .where(WorkflowScan.content_hash == content_hash)
+        .where(WorkflowScan.repo_id == repo_id)
+        .where(WorkflowScan.branch == branch)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(col(WorkflowScan.created_at).desc())
     ).first()
 
 
 def is_duplicate(
     session: Session, content_hash: str, repo_id: uuid.UUID, branch: str
-) -> tuple[bool, Analysis | None]:
+) -> tuple[bool, WorkflowScan | None]:
     existing = find_completed_analysis(session, content_hash, repo_id, branch)
     return (existing is not None, existing)

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft, GitPullRequest, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
-import { FixesService } from "@/client"
+import { WorkflowFixesService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { FileViewer } from "@/components/FileViewer"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
@@ -38,12 +38,12 @@ function FixDetail() {
     isError: fixError,
   } = useQuery({
     queryKey: ["fix", fixId],
-    queryFn: () => FixesService.getFix({ fixId }),
+    queryFn: () => WorkflowFixesService.getFix({ fixId }),
   })
 
   const deliverMutation = useMutation({
     mutationFn: () =>
-      FixesService.triggerWorkflowDelivery({
+      WorkflowFixesService.triggerWorkflowDelivery({
         requestBody: { fix_id: fixId },
       }),
     onSuccess: () => {
@@ -57,7 +57,7 @@ function FixDetail() {
   })
 
   const rejectMutation = useMutation({
-    mutationFn: () => FixesService.rejectFix({ fixId }),
+    mutationFn: () => WorkflowFixesService.rejectFix({ fixId }),
     onSuccess: () => {
       toast.success("Fix rejected")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
@@ -66,7 +66,7 @@ function FixDetail() {
   })
 
   const retryMutation = useMutation({
-    mutationFn: () => FixesService.regenerateFailedFix({ fixId }),
+    mutationFn: () => WorkflowFixesService.regenerateFailedFix({ fixId }),
     onSuccess: () => {
       toast.success("Retrying fix")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })

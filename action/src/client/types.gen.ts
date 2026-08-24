@@ -3889,7 +3889,7 @@ export type EventsStreamEventsResponses = {
     200: unknown;
 };
 
-export type AnalysesListAnalysesData = {
+export type WorkflowScansListAnalysesData = {
     body?: never;
     path?: never;
     query?: {
@@ -3918,29 +3918,29 @@ export type AnalysesListAnalysesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/analyses/';
+    url: '/api/v1/workflow-scans/';
 };
 
-export type AnalysesListAnalysesErrors = {
+export type WorkflowScansListAnalysesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesListAnalysesError = AnalysesListAnalysesErrors[keyof AnalysesListAnalysesErrors];
+export type WorkflowScansListAnalysesError = WorkflowScansListAnalysesErrors[keyof WorkflowScansListAnalysesErrors];
 
-export type AnalysesListAnalysesResponses = {
+export type WorkflowScansListAnalysesResponses = {
     /**
-     * Response Analyses-List Analyses
+     * Response Workflow-Scans-List Analyses
      * Successful Response
      */
     200: Array<AnalysisPublic>;
 };
 
-export type AnalysesListAnalysesResponse = AnalysesListAnalysesResponses[keyof AnalysesListAnalysesResponses];
+export type WorkflowScansListAnalysesResponse = WorkflowScansListAnalysesResponses[keyof WorkflowScansListAnalysesResponses];
 
-export type AnalysesGetAnalysisData = {
+export type WorkflowScansGetAnalysisData = {
     body?: never;
     path: {
         /**
@@ -3949,28 +3949,28 @@ export type AnalysesGetAnalysisData = {
         analysis_id: string;
     };
     query?: never;
-    url: '/api/v1/analyses/{analysis_id}';
+    url: '/api/v1/workflow-scans/{analysis_id}';
 };
 
-export type AnalysesGetAnalysisErrors = {
+export type WorkflowScansGetAnalysisErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesGetAnalysisError = AnalysesGetAnalysisErrors[keyof AnalysesGetAnalysisErrors];
+export type WorkflowScansGetAnalysisError = WorkflowScansGetAnalysisErrors[keyof WorkflowScansGetAnalysisErrors];
 
-export type AnalysesGetAnalysisResponses = {
+export type WorkflowScansGetAnalysisResponses = {
     /**
      * Successful Response
      */
     200: AnalysisPublic;
 };
 
-export type AnalysesGetAnalysisResponse = AnalysesGetAnalysisResponses[keyof AnalysesGetAnalysisResponses];
+export type WorkflowScansGetAnalysisResponse = WorkflowScansGetAnalysisResponses[keyof WorkflowScansGetAnalysisResponses];
 
-export type AnalysesTriggerAnalysisData = {
+export type WorkflowScansTriggerAnalysisData = {
     body?: never;
     path: {
         /**
@@ -3988,21 +3988,21 @@ export type AnalysesTriggerAnalysisData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/analyses/trigger/{repo_id}';
+    url: '/api/v1/workflow-scans/trigger/{repo_id}';
 };
 
-export type AnalysesTriggerAnalysisErrors = {
+export type WorkflowScansTriggerAnalysisErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesTriggerAnalysisError = AnalysesTriggerAnalysisErrors[keyof AnalysesTriggerAnalysisErrors];
+export type WorkflowScansTriggerAnalysisError = WorkflowScansTriggerAnalysisErrors[keyof WorkflowScansTriggerAnalysisErrors];
 
-export type AnalysesTriggerAnalysisResponses = {
+export type WorkflowScansTriggerAnalysisResponses = {
     /**
-     * Response Analyses-Trigger Analysis
+     * Response Workflow-Scans-Trigger Analysis
      * Successful Response
      */
     202: {
@@ -4010,9 +4010,9 @@ export type AnalysesTriggerAnalysisResponses = {
     };
 };
 
-export type AnalysesTriggerAnalysisResponse = AnalysesTriggerAnalysisResponses[keyof AnalysesTriggerAnalysisResponses];
+export type WorkflowScansTriggerAnalysisResponse = WorkflowScansTriggerAnalysisResponses[keyof WorkflowScansTriggerAnalysisResponses];
 
-export type AnalysesReanalyzeForWorkflowData = {
+export type WorkflowScansReanalyzeForWorkflowData = {
     body?: never;
     path: {
         /**
@@ -4026,21 +4026,21 @@ export type AnalysesReanalyzeForWorkflowData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/analyses/reanalyze-for-workflow/{workflow_file_id}';
+    url: '/api/v1/workflow-scans/reanalyze-for-workflow/{workflow_file_id}';
 };
 
-export type AnalysesReanalyzeForWorkflowErrors = {
+export type WorkflowScansReanalyzeForWorkflowErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesReanalyzeForWorkflowError = AnalysesReanalyzeForWorkflowErrors[keyof AnalysesReanalyzeForWorkflowErrors];
+export type WorkflowScansReanalyzeForWorkflowError = WorkflowScansReanalyzeForWorkflowErrors[keyof WorkflowScansReanalyzeForWorkflowErrors];
 
-export type AnalysesReanalyzeForWorkflowResponses = {
+export type WorkflowScansReanalyzeForWorkflowResponses = {
     /**
-     * Response Analyses-Reanalyze For Workflow
+     * Response Workflow-Scans-Reanalyze For Workflow
      * Successful Response
      */
     202: {
@@ -4048,18 +4048,18 @@ export type AnalysesReanalyzeForWorkflowResponses = {
     };
 };
 
-export type AnalysesReanalyzeForWorkflowResponse = AnalysesReanalyzeForWorkflowResponses[keyof AnalysesReanalyzeForWorkflowResponses];
+export type WorkflowScansReanalyzeForWorkflowResponse = WorkflowScansReanalyzeForWorkflowResponses[keyof WorkflowScansReanalyzeForWorkflowResponses];
 
-export type AnalysesReanalyzeAllData = {
+export type WorkflowScansReanalyzeAllData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/analyses/reanalyze-all';
+    url: '/api/v1/workflow-scans/reanalyze-all';
 };
 
-export type AnalysesReanalyzeAllResponses = {
+export type WorkflowScansReanalyzeAllResponses = {
     /**
-     * Response Analyses-Reanalyze All
+     * Response Workflow-Scans-Reanalyze All
      * Successful Response
      */
     202: {
@@ -4067,9 +4067,9 @@ export type AnalysesReanalyzeAllResponses = {
     };
 };
 
-export type AnalysesReanalyzeAllResponse = AnalysesReanalyzeAllResponses[keyof AnalysesReanalyzeAllResponses];
+export type WorkflowScansReanalyzeAllResponse = WorkflowScansReanalyzeAllResponses[keyof WorkflowScansReanalyzeAllResponses];
 
-export type IssuesListIssuesData = {
+export type WorkflowFindingsListIssuesData = {
     body?: never;
     path?: never;
     query?: {
@@ -4118,29 +4118,29 @@ export type IssuesListIssuesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/issues/';
+    url: '/api/v1/workflow-findings/';
 };
 
-export type IssuesListIssuesErrors = {
+export type WorkflowFindingsListIssuesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesListIssuesError = IssuesListIssuesErrors[keyof IssuesListIssuesErrors];
+export type WorkflowFindingsListIssuesError = WorkflowFindingsListIssuesErrors[keyof WorkflowFindingsListIssuesErrors];
 
-export type IssuesListIssuesResponses = {
+export type WorkflowFindingsListIssuesResponses = {
     /**
-     * Response Issues-List Issues
+     * Response Workflow-Findings-List Issues
      * Successful Response
      */
     200: Array<IssuePublic>;
 };
 
-export type IssuesListIssuesResponse = IssuesListIssuesResponses[keyof IssuesListIssuesResponses];
+export type WorkflowFindingsListIssuesResponse = WorkflowFindingsListIssuesResponses[keyof WorkflowFindingsListIssuesResponses];
 
-export type IssuesGetIssueStatsData = {
+export type WorkflowFindingsGetIssueStatsData = {
     body?: never;
     path?: never;
     query?: {
@@ -4157,28 +4157,28 @@ export type IssuesGetIssueStatsData = {
          */
         latest_only?: boolean;
     };
-    url: '/api/v1/issues/stats';
+    url: '/api/v1/workflow-findings/stats';
 };
 
-export type IssuesGetIssueStatsErrors = {
+export type WorkflowFindingsGetIssueStatsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesGetIssueStatsError = IssuesGetIssueStatsErrors[keyof IssuesGetIssueStatsErrors];
+export type WorkflowFindingsGetIssueStatsError = WorkflowFindingsGetIssueStatsErrors[keyof WorkflowFindingsGetIssueStatsErrors];
 
-export type IssuesGetIssueStatsResponses = {
+export type WorkflowFindingsGetIssueStatsResponses = {
     /**
      * Successful Response
      */
     200: IssueStatsPublic;
 };
 
-export type IssuesGetIssueStatsResponse = IssuesGetIssueStatsResponses[keyof IssuesGetIssueStatsResponses];
+export type WorkflowFindingsGetIssueStatsResponse = WorkflowFindingsGetIssueStatsResponses[keyof WorkflowFindingsGetIssueStatsResponses];
 
-export type IssuesGetIssueData = {
+export type WorkflowFindingsGetIssueData = {
     body?: never;
     path: {
         /**
@@ -4187,28 +4187,28 @@ export type IssuesGetIssueData = {
         issue_id: string;
     };
     query?: never;
-    url: '/api/v1/issues/{issue_id}';
+    url: '/api/v1/workflow-findings/{issue_id}';
 };
 
-export type IssuesGetIssueErrors = {
+export type WorkflowFindingsGetIssueErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesGetIssueError = IssuesGetIssueErrors[keyof IssuesGetIssueErrors];
+export type WorkflowFindingsGetIssueError = WorkflowFindingsGetIssueErrors[keyof WorkflowFindingsGetIssueErrors];
 
-export type IssuesGetIssueResponses = {
+export type WorkflowFindingsGetIssueResponses = {
     /**
      * Successful Response
      */
     200: IssuePublic;
 };
 
-export type IssuesGetIssueResponse = IssuesGetIssueResponses[keyof IssuesGetIssueResponses];
+export type WorkflowFindingsGetIssueResponse = WorkflowFindingsGetIssueResponses[keyof WorkflowFindingsGetIssueResponses];
 
-export type IssuesIgnoreIssueData = {
+export type WorkflowFindingsIgnoreIssueData = {
     body?: never;
     path: {
         /**
@@ -4217,28 +4217,28 @@ export type IssuesIgnoreIssueData = {
         issue_id: string;
     };
     query?: never;
-    url: '/api/v1/issues/{issue_id}/ignore';
+    url: '/api/v1/workflow-findings/{issue_id}/ignore';
 };
 
-export type IssuesIgnoreIssueErrors = {
+export type WorkflowFindingsIgnoreIssueErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesIgnoreIssueError = IssuesIgnoreIssueErrors[keyof IssuesIgnoreIssueErrors];
+export type WorkflowFindingsIgnoreIssueError = WorkflowFindingsIgnoreIssueErrors[keyof WorkflowFindingsIgnoreIssueErrors];
 
-export type IssuesIgnoreIssueResponses = {
+export type WorkflowFindingsIgnoreIssueResponses = {
     /**
      * Successful Response
      */
     200: IssuePublic;
 };
 
-export type IssuesIgnoreIssueResponse = IssuesIgnoreIssueResponses[keyof IssuesIgnoreIssueResponses];
+export type WorkflowFindingsIgnoreIssueResponse = WorkflowFindingsIgnoreIssueResponses[keyof WorkflowFindingsIgnoreIssueResponses];
 
-export type IssuesUnignoreIssueData = {
+export type WorkflowFindingsUnignoreIssueData = {
     body?: never;
     path: {
         /**
@@ -4247,28 +4247,28 @@ export type IssuesUnignoreIssueData = {
         issue_id: string;
     };
     query?: never;
-    url: '/api/v1/issues/{issue_id}/unignore';
+    url: '/api/v1/workflow-findings/{issue_id}/unignore';
 };
 
-export type IssuesUnignoreIssueErrors = {
+export type WorkflowFindingsUnignoreIssueErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesUnignoreIssueError = IssuesUnignoreIssueErrors[keyof IssuesUnignoreIssueErrors];
+export type WorkflowFindingsUnignoreIssueError = WorkflowFindingsUnignoreIssueErrors[keyof WorkflowFindingsUnignoreIssueErrors];
 
-export type IssuesUnignoreIssueResponses = {
+export type WorkflowFindingsUnignoreIssueResponses = {
     /**
      * Successful Response
      */
     200: IssuePublic;
 };
 
-export type IssuesUnignoreIssueResponse = IssuesUnignoreIssueResponses[keyof IssuesUnignoreIssueResponses];
+export type WorkflowFindingsUnignoreIssueResponse = WorkflowFindingsUnignoreIssueResponses[keyof WorkflowFindingsUnignoreIssueResponses];
 
-export type FixesListFixesData = {
+export type WorkflowFixesListFixesData = {
     body?: never;
     path?: never;
     query?: {
@@ -4293,29 +4293,29 @@ export type FixesListFixesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/fixes/';
+    url: '/api/v1/workflow-fixes/';
 };
 
-export type FixesListFixesErrors = {
+export type WorkflowFixesListFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesListFixesError = FixesListFixesErrors[keyof FixesListFixesErrors];
+export type WorkflowFixesListFixesError = WorkflowFixesListFixesErrors[keyof WorkflowFixesListFixesErrors];
 
-export type FixesListFixesResponses = {
+export type WorkflowFixesListFixesResponses = {
     /**
-     * Response Fixes-List Fixes
+     * Response Workflow-Fixes-List Fixes
      * Successful Response
      */
     200: Array<FixPublic>;
 };
 
-export type FixesListFixesResponse = FixesListFixesResponses[keyof FixesListFixesResponses];
+export type WorkflowFixesListFixesResponse = WorkflowFixesListFixesResponses[keyof WorkflowFixesListFixesResponses];
 
-export type FixesListPullRequestsData = {
+export type WorkflowFixesListPullRequestsData = {
     body?: never;
     path: {
         /**
@@ -4324,29 +4324,29 @@ export type FixesListPullRequestsData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/pull-requests/{repo_id}';
+    url: '/api/v1/workflow-fixes/pull-requests/{repo_id}';
 };
 
-export type FixesListPullRequestsErrors = {
+export type WorkflowFixesListPullRequestsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesListPullRequestsError = FixesListPullRequestsErrors[keyof FixesListPullRequestsErrors];
+export type WorkflowFixesListPullRequestsError = WorkflowFixesListPullRequestsErrors[keyof WorkflowFixesListPullRequestsErrors];
 
-export type FixesListPullRequestsResponses = {
+export type WorkflowFixesListPullRequestsResponses = {
     /**
-     * Response Fixes-List Pull Requests
+     * Response Workflow-Fixes-List Pull Requests
      * Successful Response
      */
     200: Array<PullRequestPublic>;
 };
 
-export type FixesListPullRequestsResponse = FixesListPullRequestsResponses[keyof FixesListPullRequestsResponses];
+export type WorkflowFixesListPullRequestsResponse = WorkflowFixesListPullRequestsResponses[keyof WorkflowFixesListPullRequestsResponses];
 
-export type FixesRejectFixData = {
+export type WorkflowFixesRejectFixData = {
     body?: never;
     path: {
         /**
@@ -4355,28 +4355,28 @@ export type FixesRejectFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/{fix_id}';
+    url: '/api/v1/workflow-fixes/{fix_id}';
 };
 
-export type FixesRejectFixErrors = {
+export type WorkflowFixesRejectFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRejectFixError = FixesRejectFixErrors[keyof FixesRejectFixErrors];
+export type WorkflowFixesRejectFixError = WorkflowFixesRejectFixErrors[keyof WorkflowFixesRejectFixErrors];
 
-export type FixesRejectFixResponses = {
+export type WorkflowFixesRejectFixResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type FixesRejectFixResponse = FixesRejectFixResponses[keyof FixesRejectFixResponses];
+export type WorkflowFixesRejectFixResponse = WorkflowFixesRejectFixResponses[keyof WorkflowFixesRejectFixResponses];
 
-export type FixesGetFixData = {
+export type WorkflowFixesGetFixData = {
     body?: never;
     path: {
         /**
@@ -4385,28 +4385,28 @@ export type FixesGetFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/{fix_id}';
+    url: '/api/v1/workflow-fixes/{fix_id}';
 };
 
-export type FixesGetFixErrors = {
+export type WorkflowFixesGetFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesGetFixError = FixesGetFixErrors[keyof FixesGetFixErrors];
+export type WorkflowFixesGetFixError = WorkflowFixesGetFixErrors[keyof WorkflowFixesGetFixErrors];
 
-export type FixesGetFixResponses = {
+export type WorkflowFixesGetFixResponses = {
     /**
      * Successful Response
      */
     200: FixPublic;
 };
 
-export type FixesGetFixResponse = FixesGetFixResponses[keyof FixesGetFixResponses];
+export type WorkflowFixesGetFixResponse = WorkflowFixesGetFixResponses[keyof WorkflowFixesGetFixResponses];
 
-export type FixesTriggerFixGenerationForRepoData = {
+export type WorkflowFixesTriggerFixGenerationForRepoData = {
     body?: BatchFixRequest;
     path: {
         /**
@@ -4420,21 +4420,21 @@ export type FixesTriggerFixGenerationForRepoData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/fixes/generate-for-repo/{repo_id}';
+    url: '/api/v1/workflow-fixes/generate-for-repo/{repo_id}';
 };
 
-export type FixesTriggerFixGenerationForRepoErrors = {
+export type WorkflowFixesTriggerFixGenerationForRepoErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesTriggerFixGenerationForRepoError = FixesTriggerFixGenerationForRepoErrors[keyof FixesTriggerFixGenerationForRepoErrors];
+export type WorkflowFixesTriggerFixGenerationForRepoError = WorkflowFixesTriggerFixGenerationForRepoErrors[keyof WorkflowFixesTriggerFixGenerationForRepoErrors];
 
-export type FixesTriggerFixGenerationForRepoResponses = {
+export type WorkflowFixesTriggerFixGenerationForRepoResponses = {
     /**
-     * Response Fixes-Trigger Fix Generation For Repo
+     * Response Workflow-Fixes-Trigger Fix Generation For Repo
      * Successful Response
      */
     202: {
@@ -4442,9 +4442,9 @@ export type FixesTriggerFixGenerationForRepoResponses = {
     };
 };
 
-export type FixesTriggerFixGenerationForRepoResponse = FixesTriggerFixGenerationForRepoResponses[keyof FixesTriggerFixGenerationForRepoResponses];
+export type WorkflowFixesTriggerFixGenerationForRepoResponse = WorkflowFixesTriggerFixGenerationForRepoResponses[keyof WorkflowFixesTriggerFixGenerationForRepoResponses];
 
-export type FixesTriggerWorkflowDeliveryData = {
+export type WorkflowFixesTriggerWorkflowDeliveryData = {
     body: WorkflowDeliverRequest;
     path?: never;
     query?: {
@@ -4453,21 +4453,21 @@ export type FixesTriggerWorkflowDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/fixes/deliver-for-workflow';
+    url: '/api/v1/workflow-fixes/deliver-for-workflow';
 };
 
-export type FixesTriggerWorkflowDeliveryErrors = {
+export type WorkflowFixesTriggerWorkflowDeliveryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesTriggerWorkflowDeliveryError = FixesTriggerWorkflowDeliveryErrors[keyof FixesTriggerWorkflowDeliveryErrors];
+export type WorkflowFixesTriggerWorkflowDeliveryError = WorkflowFixesTriggerWorkflowDeliveryErrors[keyof WorkflowFixesTriggerWorkflowDeliveryErrors];
 
-export type FixesTriggerWorkflowDeliveryResponses = {
+export type WorkflowFixesTriggerWorkflowDeliveryResponses = {
     /**
-     * Response Fixes-Trigger Workflow Delivery
+     * Response Workflow-Fixes-Trigger Workflow Delivery
      * Successful Response
      */
     202: {
@@ -4475,9 +4475,9 @@ export type FixesTriggerWorkflowDeliveryResponses = {
     };
 };
 
-export type FixesTriggerWorkflowDeliveryResponse = FixesTriggerWorkflowDeliveryResponses[keyof FixesTriggerWorkflowDeliveryResponses];
+export type WorkflowFixesTriggerWorkflowDeliveryResponse = WorkflowFixesTriggerWorkflowDeliveryResponses[keyof WorkflowFixesTriggerWorkflowDeliveryResponses];
 
-export type FixesTriggerRepoDeliveryData = {
+export type WorkflowFixesTriggerRepoDeliveryData = {
     body?: never;
     path: {
         /**
@@ -4491,21 +4491,21 @@ export type FixesTriggerRepoDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/fixes/deliver-for-repo/{repo_id}';
+    url: '/api/v1/workflow-fixes/deliver-for-repo/{repo_id}';
 };
 
-export type FixesTriggerRepoDeliveryErrors = {
+export type WorkflowFixesTriggerRepoDeliveryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesTriggerRepoDeliveryError = FixesTriggerRepoDeliveryErrors[keyof FixesTriggerRepoDeliveryErrors];
+export type WorkflowFixesTriggerRepoDeliveryError = WorkflowFixesTriggerRepoDeliveryErrors[keyof WorkflowFixesTriggerRepoDeliveryErrors];
 
-export type FixesTriggerRepoDeliveryResponses = {
+export type WorkflowFixesTriggerRepoDeliveryResponses = {
     /**
-     * Response Fixes-Trigger Repo Delivery
+     * Response Workflow-Fixes-Trigger Repo Delivery
      * Successful Response
      */
     202: {
@@ -4513,9 +4513,9 @@ export type FixesTriggerRepoDeliveryResponses = {
     };
 };
 
-export type FixesTriggerRepoDeliveryResponse = FixesTriggerRepoDeliveryResponses[keyof FixesTriggerRepoDeliveryResponses];
+export type WorkflowFixesTriggerRepoDeliveryResponse = WorkflowFixesTriggerRepoDeliveryResponses[keyof WorkflowFixesTriggerRepoDeliveryResponses];
 
-export type FixesRegenerateFixesForRepoData = {
+export type WorkflowFixesRegenerateFixesForRepoData = {
     body?: never;
     path: {
         /**
@@ -4524,21 +4524,21 @@ export type FixesRegenerateFixesForRepoData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/regenerate-for-repo/{repo_id}';
+    url: '/api/v1/workflow-fixes/regenerate-for-repo/{repo_id}';
 };
 
-export type FixesRegenerateFixesForRepoErrors = {
+export type WorkflowFixesRegenerateFixesForRepoErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRegenerateFixesForRepoError = FixesRegenerateFixesForRepoErrors[keyof FixesRegenerateFixesForRepoErrors];
+export type WorkflowFixesRegenerateFixesForRepoError = WorkflowFixesRegenerateFixesForRepoErrors[keyof WorkflowFixesRegenerateFixesForRepoErrors];
 
-export type FixesRegenerateFixesForRepoResponses = {
+export type WorkflowFixesRegenerateFixesForRepoResponses = {
     /**
-     * Response Fixes-Regenerate Fixes For Repo
+     * Response Workflow-Fixes-Regenerate Fixes For Repo
      * Successful Response
      */
     202: {
@@ -4546,9 +4546,9 @@ export type FixesRegenerateFixesForRepoResponses = {
     };
 };
 
-export type FixesRegenerateFixesForRepoResponse = FixesRegenerateFixesForRepoResponses[keyof FixesRegenerateFixesForRepoResponses];
+export type WorkflowFixesRegenerateFixesForRepoResponse = WorkflowFixesRegenerateFixesForRepoResponses[keyof WorkflowFixesRegenerateFixesForRepoResponses];
 
-export type FixesRegenerateFixesForWorkflowData = {
+export type WorkflowFixesRegenerateFixesForWorkflowData = {
     body?: never;
     path: {
         /**
@@ -4557,21 +4557,21 @@ export type FixesRegenerateFixesForWorkflowData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/regenerate-for-workflow/{fix_id}';
+    url: '/api/v1/workflow-fixes/regenerate-for-workflow/{fix_id}';
 };
 
-export type FixesRegenerateFixesForWorkflowErrors = {
+export type WorkflowFixesRegenerateFixesForWorkflowErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRegenerateFixesForWorkflowError = FixesRegenerateFixesForWorkflowErrors[keyof FixesRegenerateFixesForWorkflowErrors];
+export type WorkflowFixesRegenerateFixesForWorkflowError = WorkflowFixesRegenerateFixesForWorkflowErrors[keyof WorkflowFixesRegenerateFixesForWorkflowErrors];
 
-export type FixesRegenerateFixesForWorkflowResponses = {
+export type WorkflowFixesRegenerateFixesForWorkflowResponses = {
     /**
-     * Response Fixes-Regenerate Fixes For Workflow
+     * Response Workflow-Fixes-Regenerate Fixes For Workflow
      * Successful Response
      */
     202: {
@@ -4579,9 +4579,9 @@ export type FixesRegenerateFixesForWorkflowResponses = {
     };
 };
 
-export type FixesRegenerateFixesForWorkflowResponse = FixesRegenerateFixesForWorkflowResponses[keyof FixesRegenerateFixesForWorkflowResponses];
+export type WorkflowFixesRegenerateFixesForWorkflowResponse = WorkflowFixesRegenerateFixesForWorkflowResponses[keyof WorkflowFixesRegenerateFixesForWorkflowResponses];
 
-export type FixesRegenerateFailedFixData = {
+export type WorkflowFixesRegenerateFailedFixData = {
     body?: never;
     path: {
         /**
@@ -4590,21 +4590,21 @@ export type FixesRegenerateFailedFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/{fix_id}/regenerate';
+    url: '/api/v1/workflow-fixes/{fix_id}/regenerate';
 };
 
-export type FixesRegenerateFailedFixErrors = {
+export type WorkflowFixesRegenerateFailedFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRegenerateFailedFixError = FixesRegenerateFailedFixErrors[keyof FixesRegenerateFailedFixErrors];
+export type WorkflowFixesRegenerateFailedFixError = WorkflowFixesRegenerateFailedFixErrors[keyof WorkflowFixesRegenerateFailedFixErrors];
 
-export type FixesRegenerateFailedFixResponses = {
+export type WorkflowFixesRegenerateFailedFixResponses = {
     /**
-     * Response Fixes-Regenerate Failed Fix
+     * Response Workflow-Fixes-Regenerate Failed Fix
      * Successful Response
      */
     202: {
@@ -4612,9 +4612,9 @@ export type FixesRegenerateFailedFixResponses = {
     };
 };
 
-export type FixesRegenerateFailedFixResponse = FixesRegenerateFailedFixResponses[keyof FixesRegenerateFailedFixResponses];
+export type WorkflowFixesRegenerateFailedFixResponse = WorkflowFixesRegenerateFailedFixResponses[keyof WorkflowFixesRegenerateFailedFixResponses];
 
-export type FixesSyncPrStatusesData = {
+export type WorkflowFixesSyncPrStatusesData = {
     body?: never;
     path: {
         /**
@@ -4623,21 +4623,21 @@ export type FixesSyncPrStatusesData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/sync-pr-status/{repo_id}';
+    url: '/api/v1/workflow-fixes/sync-pr-status/{repo_id}';
 };
 
-export type FixesSyncPrStatusesErrors = {
+export type WorkflowFixesSyncPrStatusesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesSyncPrStatusesError = FixesSyncPrStatusesErrors[keyof FixesSyncPrStatusesErrors];
+export type WorkflowFixesSyncPrStatusesError = WorkflowFixesSyncPrStatusesErrors[keyof WorkflowFixesSyncPrStatusesErrors];
 
-export type FixesSyncPrStatusesResponses = {
+export type WorkflowFixesSyncPrStatusesResponses = {
     /**
-     * Response Fixes-Sync Pr Statuses
+     * Response Workflow-Fixes-Sync Pr Statuses
      * Successful Response
      */
     200: {
@@ -4645,7 +4645,7 @@ export type FixesSyncPrStatusesResponses = {
     };
 };
 
-export type FixesSyncPrStatusesResponse = FixesSyncPrStatusesResponses[keyof FixesSyncPrStatusesResponses];
+export type WorkflowFixesSyncPrStatusesResponse = WorkflowFixesSyncPrStatusesResponses[keyof WorkflowFixesSyncPrStatusesResponses];
 
 export type RulesListRulesData = {
     body?: never;

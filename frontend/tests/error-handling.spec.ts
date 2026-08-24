@@ -9,10 +9,10 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/repositories/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/rules/**", (route) => {
@@ -34,13 +34,13 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/rules/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ status: 404, json: { detail: "Not found" } })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -58,10 +58,10 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/repositories/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/rules/**", (route) => {
@@ -109,16 +109,16 @@ test.describe("Error Handling", () => {
         route.fulfill({ json: [] })
       }
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/rules/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       route.fulfill({ json: [] })
     })
 

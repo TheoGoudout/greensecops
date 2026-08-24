@@ -11,14 +11,14 @@ from app.core.config import settings
 from app.core.rate_limit import LIMIT_WEBHOOK
 from app.models import (
     FindingResolutionReason,
-    Fix,
-    Issue,
     Organization,
     PullRequest,
     PullRequestState,
     Repository,
     ScanTrigger,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -255,7 +255,9 @@ def _flag_externally_modified_fix_branch(
         sender_login,
     )
     if pr_record.pr_url:
-        fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+        fix = session.exec(
+            select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)
+        ).first()
         if fix:
             events_pub.publish_event(
                 ev.pr_updated(
@@ -326,9 +328,9 @@ def _handle_delete_event(
     superseded = 0
     for wf in wf_rows:
         open_issues = session.exec(
-            select(Issue)
-            .where(Issue.workflow_file_id == wf.id)
-            .where(col(Issue.resolved_at).is_(None))
+            select(WorkflowFinding)
+            .where(WorkflowFinding.workflow_file_id == wf.id)
+            .where(col(WorkflowFinding.resolved_at).is_(None))
         ).all()
         for issue in open_issues:
             issue.resolved_at = now

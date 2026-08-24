@@ -12,13 +12,10 @@ import uuid
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
     Category,
     CIStatus,
     FindingResolutionReason,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     PullRequest,
@@ -31,6 +28,9 @@ from app.models import (
     Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.github import event_handlers as eh
 
@@ -39,7 +39,7 @@ def _build_pr_with_delivered_fix(
     db: Session,
     *,
     is_external: bool = True,
-) -> tuple[Repository, PullRequest, Fix, Issue]:
+) -> tuple[Repository, PullRequest, WorkflowFix, WorkflowFinding]:
     org = Organization(name=f"eh-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
     db.add(org)
     db.commit()
@@ -68,7 +68,7 @@ def _build_pr_with_delivered_fix(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -100,7 +100,7 @@ def _build_pr_with_delivered_fix(
     db.commit()
     db.refresh(pr)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         pr_id=pr.id,
         llm_provider=LLMProvider.openai,
@@ -111,7 +111,7 @@ def _build_pr_with_delivered_fix(
     db.commit()
     db.refresh(fix)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
@@ -271,4 +271,6 @@ def test_unmatched_pr_lifecycle_still_publishes_when_no_fix(db: Session) -> None
     eh.handle_pull_request_lifecycle(db, pr, "merge")
     db.refresh(pr)
     assert pr.pr_state == PullRequestState.merged
-    assert not list(db.exec(select(Fix).where(Fix.pr_id == pr.id)).all())
+    assert not list(
+        db.exec(select(WorkflowFix).where(WorkflowFix.pr_id == pr.id)).all()
+    )

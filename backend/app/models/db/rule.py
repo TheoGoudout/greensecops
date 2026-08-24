@@ -6,7 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 from ..enums import Category, RuleDomain, Severity
 
 if TYPE_CHECKING:
-    from .issue import Issue
+    from .workflow_finding import WorkflowFinding
 
 
 class Rule(SQLModel, table=True):
@@ -35,4 +35,4 @@ class Rule(SQLModel, table=True):
     description: str = Field(max_length=2048)
     enabled: bool = Field(default=True)
     severity_weight: float = Field(default=1.0)
-    issues: list["Issue"] = Relationship(back_populates="rule")
+    findings: list["WorkflowFinding"] = Relationship(back_populates="rule")

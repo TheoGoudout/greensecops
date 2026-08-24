@@ -8,13 +8,13 @@ from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
 from app.models import (
-    Analysis,
     DynamicEnrichment,
     Repository,
     ScanStatus,
     TelemetryRun,
     UsageEngine,
     UsageMeter,
+    WorkflowScan,
 )
 from app.services import state_machines as sm
 from app.services.billing import quota as billing_quota
@@ -128,10 +128,10 @@ def _enrich(session: Session, run: TelemetryRun) -> int:
     ]
 
     latest_analysis = session.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == run.repo_id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(col(Analysis.created_at).desc())
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == run.repo_id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(col(WorkflowScan.created_at).desc())
     ).first()
 
     # Persist this run's enrichments, replacing any from a prior run of the

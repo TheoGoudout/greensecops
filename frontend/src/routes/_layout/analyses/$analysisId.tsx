@@ -4,10 +4,10 @@ import { AlertCircle, ArrowLeft, ExternalLink, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import type { Category, IssuePublic } from "@/client"
 import {
-  AnalysesService,
-  FixesService,
-  IssuesService,
   RepositoriesService,
+  WorkflowFindingsService,
+  WorkflowFixesService,
+  WorkflowScansService,
 } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -46,12 +46,13 @@ function AnalysisDetail() {
     isError: analysisError,
   } = useQuery({
     queryKey: ["analysis", analysisId],
-    queryFn: () => AnalysesService.getAnalysis({ analysisId }),
+    queryFn: () => WorkflowScansService.getAnalysis({ analysisId }),
   })
 
   const { data: issues, isLoading: issuesLoading } = useQuery({
     queryKey: ["issues", analysisId],
-    queryFn: () => IssuesService.listIssues({ analysisId, limit: 500 }),
+    queryFn: () =>
+      WorkflowFindingsService.listIssues({ analysisId, limit: 500 }),
     enabled: !!analysisId,
   })
 
@@ -65,7 +66,7 @@ function AnalysisDetail() {
 
   const fixMutation = useMutation({
     mutationFn: () =>
-      FixesService.triggerFixGenerationForRepo({
+      WorkflowFixesService.triggerFixGenerationForRepo({
         repoId: analysis!.repo_id,
         force: true,
         requestBody: issues?.length

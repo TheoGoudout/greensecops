@@ -11,9 +11,9 @@ from .base import get_datetime_utc
 
 if TYPE_CHECKING:
     from .docker import DockerFix
-    from .fix import Fix
     from .repository import Repository
     from .terraform import TerraformFix
+    from .workflow_fix import WorkflowFix
 
 
 class PullRequest(SQLModel, table=True):
@@ -60,6 +60,6 @@ class PullRequest(SQLModel, table=True):
     )
     updated_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     repository: Optional["Repository"] = Relationship(back_populates="pull_requests")
-    fixes: list["Fix"] = Relationship(back_populates="pull_request")
+    fixes: list["WorkflowFix"] = Relationship(back_populates="pull_request")
     terraform_fixes: list["TerraformFix"] = Relationship(back_populates="pull_request")
     docker_fixes: list["DockerFix"] = Relationship(back_populates="pull_request")

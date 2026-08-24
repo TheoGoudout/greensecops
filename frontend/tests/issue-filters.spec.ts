@@ -25,13 +25,13 @@ test.describe("Issue Filters and Display", () => {
     await mockRules(page)
     await mockRepositories(page)
     await mockFixes(page, [])
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
   })
 
   test("all issues shown when no filter applied", async ({ page }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       })
@@ -53,7 +53,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("issues display severity labels", async ({ page }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       })
@@ -67,7 +67,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("issues display category icons", async ({ page }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       })
@@ -81,7 +81,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("issue with code context shows snippet", async ({ page }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_CONTEXT] })
     })
 
@@ -96,7 +96,7 @@ test.describe("Issue Filters and Display", () => {
   test("issue with pending fix renders without per-issue fix status", async ({
     page,
   }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_PENDING_FIX] })
     })
 
@@ -112,7 +112,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("issue with failed fix shows generate fix button", async ({ page }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FAILED_FIX] })
     })
 
@@ -129,7 +129,7 @@ test.describe("Issue Filters and Display", () => {
   test("issue with delivered fix renders without per-issue fix status", async ({
     page,
   }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_DELIVERED_FIX] })
     })
 
@@ -143,7 +143,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("mix of issue fix statuses all rendered correctly", async ({ page }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [
           MOCK_ISSUE_SECURITY,
@@ -171,7 +171,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("analysis detail shows issues grouped by workflow", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
@@ -179,7 +179,7 @@ test.describe("Issue Filters and Display", () => {
         route.fulfill({ json: [MOCK_ANALYSIS] })
       }
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY],
       })
@@ -199,7 +199,7 @@ test.describe("Issue Filters and Display", () => {
   test("workflow card renders with no issues when all resolved", async ({
     page,
   }) => {
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [] })
     })
 

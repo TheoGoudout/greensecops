@@ -8,9 +8,9 @@ from sqlmodel import Field, Relationship, SQLModel
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
-    from .analysis import Analysis
-    from .fix import Fix
     from .repository import Repository
+    from .workflow_fix import WorkflowFix
+    from .workflow_scan import WorkflowScan
 
 
 class WorkflowFile(SQLModel, table=True):
@@ -39,11 +39,11 @@ class WorkflowFile(SQLModel, table=True):
     # static-analysis view and repo grade. Cleared when the same path reappears.
     deleted_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # Cumulative count of AI fix generations (initial + regenerate) billed
-    # against this workflow file. Survives the Fix row being deleted and
+    # against this workflow file. Survives the WorkflowFix row being deleted and
     # recreated on regenerate, unlike a live-row count.
     fix_generation_count: int = Field(default=0)
     repository: Optional["Repository"] = Relationship(back_populates="workflow_files")
-    analyses: list["Analysis"] = Relationship(
+    scans: list["WorkflowScan"] = Relationship(
         back_populates="workflow_file",
     )
-    fix: Optional["Fix"] = Relationship(back_populates="workflow_file")
+    fix: Optional["WorkflowFix"] = Relationship(back_populates="workflow_file")

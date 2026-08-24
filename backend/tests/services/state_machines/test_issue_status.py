@@ -1,4 +1,4 @@
-"""DB-backed tests for the trigger-maintained Issue.status column (migration 0022)."""
+"""DB-backed tests for the trigger-maintained WorkflowFinding.status column (migration 0022)."""
 
 import uuid
 from datetime import datetime, timezone
@@ -7,12 +7,9 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
     Category,
     FindingStatus,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     Repository,
@@ -20,6 +17,9 @@ from app.models import (
     ScanStatus,
     Severity,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 
 
@@ -43,7 +43,7 @@ def issue_ctx(db: Session):
     )
     db.add(wf)
     db.flush()
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash="h",
@@ -53,7 +53,7 @@ def issue_ctx(db: Session):
     db.flush()
     rule = db.exec(select(Rule)).first()
     assert rule is not None
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
@@ -75,7 +75,7 @@ def test_new_issue_is_open(issue_ctx) -> None:
 
 def test_linking_a_fix_sets_fix_in_progress(issue_ctx) -> None:
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -92,7 +92,7 @@ def test_linking_a_fix_sets_fix_in_progress(issue_ctx) -> None:
 
 def test_deleting_the_fix_reverts_to_open_via_cascade(issue_ctx) -> None:
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -115,7 +115,7 @@ def test_deleting_the_fix_reverts_to_open_via_cascade(issue_ctx) -> None:
 
 def test_resolving_wins_over_fix_link(issue_ctx) -> None:
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -143,7 +143,7 @@ def test_ignoring_sets_ignored(issue_ctx) -> None:
 def test_ignored_wins_over_resolved_and_fix(issue_ctx) -> None:
     # ``ignored_at`` takes precedence over both resolved_at and a fix link.
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",

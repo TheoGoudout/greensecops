@@ -10,7 +10,6 @@ from sqlmodel import Session, select
 from app.api.routes.repositories import _inject_action_into_workflow
 from app.core.config import settings
 from app.models import (
-    Analysis,
     Organization,
     OrgMember,
     OrgRole,
@@ -20,6 +19,7 @@ from app.models import (
     User,
     UserTier,
     WorkflowFile,
+    WorkflowScan,
 )
 from tests.utils.user import authentication_token_from_email, create_random_user
 
@@ -563,8 +563,8 @@ def _make_workflow_file(
 
 def _make_completed_analysis(
     db: Session, repo: Repository, wf: WorkflowFile, score: float, grade: str
-) -> Analysis:
-    a = Analysis(
+) -> WorkflowScan:
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -1115,7 +1115,7 @@ def test_list_repository_branches(
     repo: Repository,
     db: Session,
 ) -> None:
-    from app.models import Analysis, ScanStatus, WorkflowFile
+    from app.models import ScanStatus, WorkflowFile, WorkflowScan
 
     wf = WorkflowFile(
         repo_id=repo.id,
@@ -1133,7 +1133,7 @@ def test_list_repository_branches(
         ("wip", ScanStatus.running),
     ]:
         db.add(
-            Analysis(
+            WorkflowScan(
                 repo_id=repo.id,
                 workflow_file_id=wf.id,
                 content_hash=uuid.uuid4().hex,
@@ -1174,7 +1174,7 @@ def test_grade_ignores_feature_branch_analyses(
     db.add(feature_wf)
     db.commit()
     db.refresh(feature_wf)
-    bad = Analysis(
+    bad = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=feature_wf.id,
         content_hash=feature_wf.content_hash,

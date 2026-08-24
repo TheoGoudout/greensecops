@@ -7,11 +7,8 @@ from unittest.mock import patch
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
     Category,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     PullRequest,
@@ -22,6 +19,9 @@ from app.models import (
     Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.llm.response import (
     parse_full_content,
@@ -273,7 +273,7 @@ def test_batch_fails_open_when_redis_unavailable() -> None:
 
 def _make_wf_fix_issue(
     db: Session, repo: Repository, rule: Rule, status: FixStatus, n: int
-) -> tuple[WorkflowFile, Fix, Issue]:
+) -> tuple[WorkflowFile, WorkflowFix, WorkflowFinding]:
     wf = WorkflowFile(
         repo_id=repo.id,
         path=f".github/workflows/auto-deliver-{n}-{uuid.uuid4().hex[:6]}.yml",
@@ -283,7 +283,7 @@ def _make_wf_fix_issue(
     db.add(wf)
     db.commit()
     db.refresh(wf)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -293,7 +293,7 @@ def _make_wf_fix_issue(
     db.add(fix)
     db.commit()
     db.refresh(fix)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -304,7 +304,7 @@ def _make_wf_fix_issue(
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,

@@ -12,7 +12,7 @@ import uuid
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.models import Fix, PullRequest, WorkflowFile
+from app.models import PullRequest, WorkflowFile, WorkflowFix
 from app.services.pr_body import IssueInfo, build_pr_body
 from app.services.state_machines import DELIVERED_FIX_STATUSES
 
@@ -55,7 +55,7 @@ def docker_fix_branch(docker_target_id: uuid.UUID) -> str:
     return f"greensecops/docker-{str(docker_target_id)[:8]}"
 
 
-def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
+def issues_info_for_fixes(fixes: list[WorkflowFix]) -> list[IssueInfo]:
     """Build PR-body issue summaries from the issues each fix actually resolved.
 
     An issue the LLM flagged as ``needs_manual_work`` was never fixed in this
@@ -72,7 +72,7 @@ def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
             line_start=issue.line_start,
         )
         for fix in fixes
-        for issue in fix.issues
+        for issue in fix.findings
         if not issue.needs_manual_work
     ]
 
@@ -80,7 +80,7 @@ def issues_info_for_fixes(fixes: list[Fix]) -> list[IssueInfo]:
 def build_delivery_pr_body(
     session: Session,
     repo_id: uuid.UUID,
-    fixes: list[Fix],
+    fixes: list[WorkflowFix],
     existing_pr: PullRequest | None,
 ) -> str:
     """Render the PR body for delivering ``fixes`` onto ``existing_pr``.
@@ -94,12 +94,12 @@ def build_delivery_pr_body(
     if existing_pr:
         current_ids = {f.id for f in fixes}
         prior_fixes = session.exec(
-            select(Fix)
-            .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+            select(WorkflowFix)
+            .join(WorkflowFile, WorkflowFix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
             .where(
                 WorkflowFile.repo_id == repo_id,
-                Fix.pr_id == existing_pr.id,
-                col(Fix.status).in_(DELIVERED_FIX_STATUSES),
+                WorkflowFix.pr_id == existing_pr.id,
+                col(WorkflowFix.status).in_(DELIVERED_FIX_STATUSES),
             )
         ).all()
         body_fixes.extend(f for f in prior_fixes if f.id not in current_ids)

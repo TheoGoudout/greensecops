@@ -18,11 +18,8 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    Analysis,
     Category,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     PullRequest,
@@ -33,6 +30,9 @@ from app.models import (
     Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.workers.tasks.fix_generation import INVALID_YAML_ERROR, run_fix_generation
 
@@ -105,8 +105,10 @@ def rule(db: Session) -> Rule:
 
 
 @pytest.fixture()
-def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Analysis:
-    a = Analysis(
+def analysis(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> WorkflowScan:
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
@@ -124,9 +126,9 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
 
 @pytest.fixture()
 def issue(
-    db: Session, analysis: Analysis, rule: Rule, workflow_file: WorkflowFile
-) -> Issue:
-    i = Issue(
+    db: Session, analysis: WorkflowScan, rule: Rule, workflow_file: WorkflowFile
+) -> WorkflowFinding:
+    i = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=workflow_file.id,
         rule_id=rule.id,
@@ -144,9 +146,11 @@ def issue(
     return i
 
 
-def _seed_pending_fix(db: Session, workflow_file: WorkflowFile, issue: Issue) -> Fix:
-    """Mimic the trigger routes: create a pending Fix and link its issue."""
-    fix = Fix(
+def _seed_pending_fix(
+    db: Session, workflow_file: WorkflowFile, issue: WorkflowFinding
+) -> WorkflowFix:
+    """Mimic the trigger routes: create a pending WorkflowFix and link its issue."""
+    fix = WorkflowFix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -167,7 +171,7 @@ def _seed_pending_fix(db: Session, workflow_file: WorkflowFile, issue: Issue) ->
 
 
 def test_full_fix_generation_stores_full_content(
-    db: Session, issue: Issue, workflow_file: WorkflowFile
+    db: Session, issue: WorkflowFinding, workflow_file: WorkflowFile
 ) -> None:
     """run_fix_generation consumes the pending fix and stores the whole-file rewrite."""
     _seed_pending_fix(db, workflow_file, issue)
@@ -190,7 +194,9 @@ def test_full_fix_generation_stores_full_content(
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
     db.expire_all()
-    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
+    fix = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).first()
     assert fix is not None
     assert fix.status == FixStatus.ready
     assert fix.full_content is not None
@@ -204,7 +210,7 @@ def test_full_fix_generation_stores_full_content(
 
 
 def test_full_fix_generation_invalid_yaml_marks_failed(
-    db: Session, issue: Issue, workflow_file: WorkflowFile
+    db: Session, issue: WorkflowFinding, workflow_file: WorkflowFile
 ) -> None:
     """A full_content response that is not valid YAML must not be stored as ready."""
     _seed_pending_fix(db, workflow_file, issue)
@@ -228,7 +234,9 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
         run_fix_generation.apply(kwargs={"issue_ids": [str(issue.id)]})
 
     db.expire_all()
-    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).first()
+    fix = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).first()
     assert fix is not None
     assert fix.status == FixStatus.failed
     assert fix.error_message == INVALID_YAML_ERROR
@@ -244,7 +252,7 @@ def test_full_fix_generation_invalid_yaml_marks_failed(
 
 
 def test_fix_generation_skips_workflow_without_pending_fix(
-    db: Session, issue: Issue
+    db: Session, issue: WorkflowFinding
 ) -> None:
     """Without a route-created pending fix the worker generates nothing."""
     with patch(
@@ -258,13 +266,13 @@ def test_fix_generation_skips_workflow_without_pending_fix(
 
 def test_full_fix_generation_flags_llm_reported_unfixed_issue(
     db: Session,
-    analysis: Analysis,
+    analysis: WorkflowScan,
     rule: Rule,
     workflow_file: WorkflowFile,
-    issue: Issue,
+    issue: WorkflowFinding,
 ) -> None:
     """An issue the LLM lists in <unfixed> is flagged, not silently treated as resolved."""
-    unfixed_issue = Issue(
+    unfixed_issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=workflow_file.id,
         rule_id=rule.id,
@@ -277,7 +285,7 @@ def test_full_fix_generation_flags_llm_reported_unfixed_issue(
     db.commit()
     db.refresh(unfixed_issue)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -320,7 +328,7 @@ def test_full_fix_generation_flags_llm_reported_unfixed_issue(
     )
 
     stored_fix = db.exec(
-        select(Fix).where(Fix.workflow_file_id == workflow_file.id)
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
     ).first()
     assert stored_fix is not None
     assert stored_fix.status == FixStatus.ready
@@ -341,13 +349,13 @@ def test_generate_fix_queued_for_realistic_workflow_issue(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
-    issue: Issue,
+    issue: WorkflowFinding,
     repo: Repository,
 ) -> None:
     """generate-for-repo with a single issue id queues one whole-file fix task."""
-    with patch("app.api.routes.fixes.run_fix_generation.delay") as mock_delay:
+    with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
             headers=superuser_token_headers,
             json={"issue_ids": [str(issue.id)]},
         )
@@ -361,7 +369,9 @@ def test_generate_fix_queued_for_realistic_workflow_issue(
 
     # A pending fix is created so the UI shows a queued state immediately.
     fix = db.exec(
-        select(Fix).where(Fix.workflow_file_id == issue.workflow_file_id)
+        select(WorkflowFix).where(
+            WorkflowFix.workflow_file_id == issue.workflow_file_id
+        )
     ).first()
     assert fix is not None
     assert fix.status == FixStatus.pending
@@ -391,7 +401,7 @@ def test_pr_sync_marks_merged_for_realistic_workflow_fix(
     db.commit()
     db.refresh(pr)
 
-    delivered_fix = Fix(
+    delivered_fix = WorkflowFix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -409,7 +419,7 @@ def test_pr_sync_marks_merged_for_realistic_workflow_fix(
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_gh
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/fixes/sync-pr-status/{repo.id}",
+            f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
             headers=superuser_token_headers,
         )
     finally:

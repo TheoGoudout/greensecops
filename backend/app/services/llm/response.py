@@ -24,7 +24,7 @@ _UNFIXED_RE = re.compile(r"<unfixed>\n?(.*?)</unfixed>", re.DOTALL)
 _UNFIXED_LINE_RE = re.compile(r"^\s*(\d+)\s*:\s*(.+?)\s*$")
 
 # A reason longer than this is the model rambling, not explaining; the column it
-# lands in (`Issue.manual_work_note`) is 1024 anyway.
+# lands in (`WorkflowFinding.manual_work_note`) is 1024 anyway.
 _MAX_REASON = 1024
 
 

@@ -15,21 +15,23 @@ from ..enums import (
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
-    from .analysis import Analysis
-    from .fix import Fix
     from .rule import Rule
+    from .workflow_fix import WorkflowFix
+    from .workflow_scan import WorkflowScan
 
 
-class Issue(SQLModel, table=True):
+class WorkflowFinding(SQLModel, table=True):
+    __tablename__ = "workflow_finding"
+
     __table_args__ = (
         UniqueConstraint(
-            "workflow_file_id", "fingerprint", name="uq_issue_wf_fingerprint"
+            "workflow_file_id", "fingerprint", name="uq_workflow_finding_wf_fingerprint"
         ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     analysis_id: uuid.UUID = Field(
-        foreign_key="analysis.id", nullable=False, ondelete="CASCADE"
+        foreign_key="workflow_scan.id", nullable=False, ondelete="CASCADE"
     )
     workflow_file_id: uuid.UUID | None = Field(
         default=None,
@@ -80,10 +82,10 @@ class Issue(SQLModel, table=True):
         default=None,
         sa_column=sa.Column(
             sa.UUID,
-            sa.ForeignKey("fix.id", ondelete="SET NULL"),
+            sa.ForeignKey("workflow_fix.id", ondelete="SET NULL"),
             nullable=True,
         ),
     )
-    analysis: Optional["Analysis"] = Relationship(back_populates="issues")
-    rule: Optional["Rule"] = Relationship(back_populates="issues")
-    fix: Optional["Fix"] = Relationship(back_populates="issues")
+    scan: Optional["WorkflowScan"] = Relationship(back_populates="findings")
+    rule: Optional["Rule"] = Relationship(back_populates="findings")
+    fix: Optional["WorkflowFix"] = Relationship(back_populates="findings")

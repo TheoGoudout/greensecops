@@ -18,7 +18,7 @@ import type {
   TerraformFixPublic,
   TerraformRootPublic,
 } from "@/client"
-import { FixesService, TerraformService } from "@/client"
+import { TerraformService, WorkflowFixesService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -57,7 +57,7 @@ function TerraformTab() {
 
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => FixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {

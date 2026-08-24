@@ -1,7 +1,6 @@
 from sqlmodel import SQLModel
 
 from .db import (
-    Analysis,
     BillingSubscription,
     BillingUsageRecord,
     BillingWebhookEvent,
@@ -15,9 +14,7 @@ from .db import (
     DockerScan,
     DockerTarget,
     DynamicEnrichment,
-    Fix,
     Invoice,
-    Issue,
     Organization,
     OrgMember,
     OssApplication,
@@ -38,6 +35,9 @@ from .db import (
     UserUpdate,
     UserUpdateMe,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
     get_datetime_utc,
 )
 from .enums import (
@@ -160,10 +160,10 @@ __all__ = [
     "Repository",
     "WorkflowFile",
     "Rule",
-    "Analysis",
-    "Issue",
+    "WorkflowScan",
+    "WorkflowFinding",
     "PullRequest",
-    "Fix",
+    "WorkflowFix",
     "TelemetryRun",
     "TelemetryMetricSample",
     "DynamicEnrichment",

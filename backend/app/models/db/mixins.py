@@ -108,7 +108,7 @@ class FindingMixin(SQLModel):
     ``resolved_at``/``ignored_at`` mean anything: without it every scan would
     insert fresh rows and drop the user's dismissals.
 
-    Unlike ``Issue.status`` — owned by a DB trigger reacting to ``fix_id`` —
+    Unlike ``WorkflowFinding.status`` — owned by a DB trigger reacting to ``fix_id`` —
     this ``status`` is set directly by the application alongside the two
     timestamps.
     """

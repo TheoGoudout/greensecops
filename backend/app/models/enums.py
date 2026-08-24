@@ -163,14 +163,14 @@ class RepositoryStatus(str, enum.Enum):
 
 
 class SSESignal(str, enum.Enum):
-    # Analysis
+    # WorkflowScan
     analysis_queued = "analysis.queued"
     analysis_started = "analysis.started"
     analysis_completed = "analysis.completed"
     analysis_failed = "analysis.failed"
     analysis_skipped = "analysis.skipped"
     analysis_no_workflows = "analysis.no_workflows"
-    # Fix generation & delivery
+    # WorkflowFix generation & delivery
     fix_skipped = "fix.skipped"
     fix_pending = "fix.pending"
     fix_generating = "fix.generating"
@@ -207,7 +207,7 @@ class SSESignal(str, enum.Enum):
     dynamic_running = "dynamic.running"
     dynamic_enriched = "dynamic.enriched"
     dynamic_failed = "dynamic.failed"
-    # Analysis refused before any work was dispatched because the org's
+    # WorkflowScan refused before any work was dispatched because the org's
     # billing owner has no metered allowance left. Distinct from
     # ``analysis_failed``: nothing broke, and a retry will not help.
     analysis_quota_exceeded = "analysis.quota_exceeded"

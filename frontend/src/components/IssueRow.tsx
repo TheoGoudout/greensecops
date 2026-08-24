@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Bell, BellOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { type IssuePublic, IssuesService } from "@/client"
+import { type IssuePublic, WorkflowFindingsService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
@@ -34,8 +34,8 @@ export function IssueRow({
   const muteMutation = useMutation({
     mutationFn: () =>
       ignored
-        ? IssuesService.unignoreIssue({ issueId: issue.id })
-        : IssuesService.ignoreIssue({ issueId: issue.id }),
+        ? WorkflowFindingsService.unignoreIssue({ issueId: issue.id })
+        : WorkflowFindingsService.ignoreIssue({ issueId: issue.id }),
     onSuccess: () => {
       toast.success(ignored ? "Issue unignored" : "Issue ignored")
       queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })

@@ -30,7 +30,6 @@ from sqlmodel import Session, col, select
 from app.api.deps import CurrentUser, SessionDep, authorize_org, user_org_ids
 from app.api.router import Role, RoleRouter
 from app.models import (
-    Analysis,
     Category,
     CloudAccount,
     CloudFinding,
@@ -43,7 +42,6 @@ from app.models import (
     EngineScoreStat,
     FixStatus,
     GradeStat,
-    Issue,
     IssueCategoryStat,
     OverviewPublic,
     OverviewTotals,
@@ -52,6 +50,8 @@ from app.models import (
     Severity,
     SeverityStat,
     TopRuleStat,
+    WorkflowFinding,
+    WorkflowScan,
 )
 from app.services.engines import OVERVIEW_SPECS, OverviewSpec
 from app.services.scoring import GRADE_LADDER, score_to_grade
@@ -85,10 +85,12 @@ def _finding_org_filter(spec: OverviewSpec, org_ids: set[uuid.UUID]) -> Any:
             select(CloudAccount.id).where(col(CloudAccount.org_id).in_(org_ids))
         )
     if spec.key is Engine.workflow:
-        # Issue has no repo column of its own; it reaches one through Analysis,
-        # which is why get_issue_stats joins Analysis to scope at all.
-        return col(Issue.analysis_id).in_(
-            select(Analysis.id).where(col(Analysis.repo_id).in_(_repo_scope(org_ids)))
+        # WorkflowFinding has no repo column of its own; it reaches one through WorkflowScan,
+        # which is why get_issue_stats joins WorkflowScan to scope at all.
+        return col(WorkflowFinding.analysis_id).in_(
+            select(WorkflowScan.id).where(
+                col(WorkflowScan.repo_id).in_(_repo_scope(org_ids))
+            )
         )
     return col(spec.finding_target_fk).in_(
         select(spec.target_model.id).where(
@@ -289,7 +291,7 @@ def _findings(
 
     ``open`` is ``resolved_at IS NULL`` over non-ignored rows — the framing
     ``get_issue_stats`` uses, and the reason CI needs no special case here:
-    ``Issue.status`` is owned by a Postgres trigger and is never read.
+    ``WorkflowFinding.status`` is owned by a Postgres trigger and is never read.
     """
     finding = spec.finding_model
     is_open = col(finding.resolved_at).is_(None)

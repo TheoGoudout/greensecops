@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app import crud
 from app.core.config import settings
 from app.core.db import engine
-from app.models import Analysis, DockerTarget
+from app.models import DockerTarget, WorkflowScan
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import GitHubAppClient, InstallationRepo
@@ -40,7 +40,9 @@ def _sync_installation_repositories_impl(
                 is_private=repo.private,
             )
             has_analysis = session.exec(
-                select(Analysis.id).where(Analysis.repo_id == db_repo.id).limit(1)
+                select(WorkflowScan.id)
+                .where(WorkflowScan.repo_id == db_repo.id)
+                .limit(1)
             ).first()
             if has_analysis is None:
                 never_analyzed.append(str(db_repo.id))
@@ -70,7 +72,7 @@ def _sync_installation_repositories_impl(
 
             if already_queued:
                 logger.info(
-                    "Analysis already queued for repo %s, skipping duplicate enqueue",
+                    "Scan already queued for repo %s, skipping duplicate enqueue",
                     repo_id,
                 )
                 continue

@@ -15,11 +15,8 @@ from sqlmodel import Session
 from app import crud
 from app.core.config import settings
 from app.models import (
-    Analysis,
     Category,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     OrgMember,
@@ -32,6 +29,9 @@ from app.models import (
     UserTier,
     UserUpdate,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.utils import random_lower_string
@@ -87,7 +87,7 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -102,7 +102,7 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
     db.commit()
     db.refresh(analysis)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
@@ -114,7 +114,7 @@ def _make_tenant(db: Session, rule: Rule) -> _Tenant:
     db.commit()
     db.refresh(issue)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -166,7 +166,7 @@ def test_outsider_cannot_list_issues(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"repo_id": str(victim.repo.id)},
         headers=outsider_headers,
     )
@@ -178,7 +178,7 @@ def test_outsider_cannot_get_issue(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/issues/{victim.issue.id}", headers=outsider_headers
+        f"{settings.API_V1_STR}/workflow-findings/{victim.issue.id}", headers=outsider_headers
     )
     assert resp.status_code == 404
 
@@ -187,7 +187,7 @@ def test_outsider_cannot_list_analyses(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/analyses/",
+        f"{settings.API_V1_STR}/workflow-scans/",
         params={"repo_id": str(victim.repo.id)},
         headers=outsider_headers,
     )
@@ -199,7 +199,7 @@ def test_outsider_cannot_get_analysis(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/analyses/{victim.analysis.id}",
+        f"{settings.API_V1_STR}/workflow-scans/{victim.analysis.id}",
         headers=outsider_headers,
     )
     assert resp.status_code == 404
@@ -209,7 +209,7 @@ def test_outsider_cannot_list_fixes(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/fixes/",
+        f"{settings.API_V1_STR}/workflow-fixes/",
         params={"repo_id": str(victim.repo.id)},
         headers=outsider_headers,
     )
@@ -221,7 +221,7 @@ def test_outsider_cannot_get_fix(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/fixes/{victim.fix.id}", headers=outsider_headers
+        f"{settings.API_V1_STR}/workflow-fixes/{victim.fix.id}", headers=outsider_headers
     )
     assert resp.status_code == 404
 
@@ -233,7 +233,7 @@ def test_outsider_cannot_trigger_analysis(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.post(
-        f"{settings.API_V1_STR}/analyses/trigger/{victim.repo.id}",
+        f"{settings.API_V1_STR}/workflow-scans/trigger/{victim.repo.id}",
         headers=outsider_headers,
     )
     assert resp.status_code == 404
@@ -243,7 +243,7 @@ def test_outsider_cannot_deliver_fixes_for_repo(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.post(
-        f"{settings.API_V1_STR}/fixes/deliver-for-repo/{victim.repo.id}",
+        f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{victim.repo.id}",
         headers=outsider_headers,
     )
     assert resp.status_code == 404
@@ -253,7 +253,7 @@ def test_outsider_cannot_generate_fixes_for_repo(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.post(
-        f"{settings.API_V1_STR}/fixes/generate-for-repo/{victim.repo.id}",
+        f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{victim.repo.id}",
         headers=outsider_headers,
         json={"issue_ids": [str(victim.issue.id)]},
     )
@@ -264,7 +264,7 @@ def test_outsider_cannot_deliver_fix_for_workflow(
     client: TestClient, outsider_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.post(
-        f"{settings.API_V1_STR}/fixes/deliver-for-workflow",
+        f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
         headers=outsider_headers,
         json={"fix_id": str(victim.fix.id)},
     )
@@ -278,7 +278,7 @@ def test_member_can_get_issue(
     client: TestClient, member_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/issues/{victim.issue.id}", headers=member_headers
+        f"{settings.API_V1_STR}/workflow-findings/{victim.issue.id}", headers=member_headers
     )
     assert resp.status_code == 200
     assert resp.json()["id"] == str(victim.issue.id)
@@ -288,7 +288,7 @@ def test_member_can_list_fixes(
     client: TestClient, member_headers: dict[str, str], victim: _Tenant
 ) -> None:
     resp = client.get(
-        f"{settings.API_V1_STR}/fixes/",
+        f"{settings.API_V1_STR}/workflow-fixes/",
         params={"repo_id": str(victim.repo.id)},
         headers=member_headers,
     )

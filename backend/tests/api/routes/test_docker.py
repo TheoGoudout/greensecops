@@ -529,7 +529,7 @@ def test_findings_for_a_missing_target_are_404(
     assert response.status_code == 404
 
 
-# ─── Fix generation and delivery ──────────────────────────────────────────────
+# ─── WorkflowFix generation and delivery ──────────────────────────────────────────────
 
 
 def test_generate_fixes_groups_findings_by_file(

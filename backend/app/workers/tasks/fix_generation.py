@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models import Fix, FixStatus, Issue, Repository, WorkflowFile
+from app.models import FixStatus, Repository, WorkflowFile, WorkflowFinding, WorkflowFix
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
@@ -91,13 +91,13 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
 
             fixes = list(
                 session.exec(
-                    _select(Fix)
-                    .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+                    _select(WorkflowFix)
+                    .join(WorkflowFile, WorkflowFix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
                     .where(WorkflowFile.repo_id == repo.id)
                     # Fixes are default-branch-only; never deliver a legacy
                     # feature-branch fix.
                     .where(WorkflowFile.branch == repo.default_branch)
-                    .where(Fix.status == FixStatus.ready)
+                    .where(WorkflowFix.status == FixStatus.ready)
                     .order_by(col(WorkflowFile.path).asc())
                 ).all()
             )
@@ -249,22 +249,22 @@ def resolve_llm_provider(repo: Repository) -> tuple[str, str]:
 def _load_generation_context(
     session: Session,
     issue_ids: list[str],
-) -> tuple[list[Issue], WorkflowFile, Repository] | dict[str, object]:
+) -> tuple[list[WorkflowFinding], WorkflowFile, Repository] | dict[str, object]:
     """Load and validate issues, workflow file, and repo. Returns error dict on failure."""
-    loaded = [session.get(Issue, uuid.UUID(iid)) for iid in issue_ids]
+    loaded = [session.get(WorkflowFinding, uuid.UUID(iid)) for iid in issue_ids]
     issues = [i for i in loaded if i is not None]
     if not issues:
         return {"status": "error", "detail": "no_issues_found"}
 
-    analysis = issues[0].analysis
-    if not analysis:
-        return {"status": "error", "detail": "analysis_not_found"}
+    scan = issues[0].scan
+    if not scan:
+        return {"status": "error", "detail": "scan_not_found"}
 
-    wf_file = session.get(WorkflowFile, analysis.workflow_file_id)
+    wf_file = session.get(WorkflowFile, scan.workflow_file_id)
     if not wf_file:
         return {"status": "error", "detail": "workflow_file_not_found"}
 
-    repo = session.get(Repository, analysis.repo_id)
+    repo = session.get(Repository, scan.repo_id)
     if not repo:
         return {"status": "error", "detail": "repository_not_found"}
 
@@ -279,7 +279,7 @@ def run_fix_generation(
 ) -> dict[str, object]:
     """Single LLM call regenerating one workflow file to fix the given issues.
 
-    The API routes create a pending Fix row per workflow file before queuing
+    The API routes create a pending WorkflowFix row per workflow file before queuing
     this task; it consumes that row. When ``batch_id`` is set the task is part
     of a repo-wide run and its completion events are aggregated via Redis.
     """
@@ -292,13 +292,13 @@ def run_fix_generation(
         org_id = str(repo.org_id)
         repo_id_str = str(repo.id)
 
-        # The route creates one pending Fix per workflow file being (re)generated.
+        # The route creates one pending fix per workflow file being (re)generated.
         # A workflow file whose fix is in any other state (e.g. a delivered fix
         # kept when force=False) has no pending row and is skipped here.
         fix = session.exec(
-            select(Fix)
-            .where(Fix.workflow_file_id == wf_file.id)
-            .where(Fix.status == FixStatus.pending)
+            select(WorkflowFix)
+            .where(WorkflowFix.workflow_file_id == wf_file.id)
+            .where(WorkflowFix.status == FixStatus.pending)
         ).first()
         if fix is None:
             if batch_id:
@@ -432,7 +432,7 @@ def _configure_langchain() -> None:
 
 async def _generate_fixes(
     workflow_content: str,
-    issues: list[Issue],
+    issues: list[WorkflowFinding],
     provider_str: str,
     model_str: str,
     installation_id: int | None = None,

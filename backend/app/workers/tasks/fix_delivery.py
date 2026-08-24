@@ -11,12 +11,12 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
-    Fix,
     FixDeliveryMode,
     FixStatus,
     PullRequest,
     PullRequestState,
     Repository,
+    WorkflowFix,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -49,7 +49,7 @@ def deliver_fixes_batch(
         if not repo:
             return {"status": "error", "detail": "repository_not_found"}
 
-        loaded = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
+        loaded = [session.get(WorkflowFix, uuid.UUID(fid)) for fid in fix_ids]
         fixes = [f for f in loaded if f and (force or f.status == FixStatus.ready)]
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
@@ -127,7 +127,7 @@ def deliver_fixes_batch(
         expected_base_contents: dict[str, str] = {}
         commit_messages: dict[str, str] = {}
         base_branch = repo.default_branch or "main"
-        deliverable: list[Fix] = []
+        deliverable: list[WorkflowFix] = []
         for fix in fixes:
             wf = fix.workflow_file
             if not wf or wf.path in seen:
@@ -148,7 +148,7 @@ def deliver_fixes_batch(
                 continue
             seen[wf.path] = (wf.path, fix.full_content)
             expected_base_contents[wf.path] = wf.raw_content
-            n_issues = len(fix.issues)
+            n_issues = len(fix.findings)
             commit_messages[wf.path] = (
                 f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {wf.path}"
             )
@@ -320,7 +320,7 @@ async def _deliver_batch(
         )
 
 
-def _build_comment_body(fixes: list[Fix]) -> str:
+def _build_comment_body(fixes: list[WorkflowFix]) -> str:
     """Markdown body for a comment-mode delivery: issues + proposed content."""
 
     lines = [f"## {settings.PROJECT_NAME} suggested workflow fixes", ""]
@@ -328,10 +328,10 @@ def _build_comment_body(fixes: list[Fix]) -> str:
         wf = fix.workflow_file
         path = wf.path if wf else "workflow"
         lines.append(f"### `{path}`")
-        if fix.issues:
+        if fix.findings:
             lines.append("")
             lines.append("Issues addressed:")
-            for issue in fix.issues:
+            for issue in fix.findings:
                 slug = issue.rule.slug if issue.rule else "issue"
                 lines.append(f"- **{slug}** ({issue.severity.value}): {issue.message}")
         lines += [
@@ -363,12 +363,12 @@ async def _post_comment(
 def _deliver_batch_as_comment(
     session: Session,
     repo: Repository,
-    fixes: list[Fix],
+    fixes: list[WorkflowFix],
     org_id: str,
     repo_id_str: str,
 ) -> dict[str, str]:
     """Deliver ready fixes as a single commit comment on the base branch HEAD."""
-    deliverable: list[Fix] = []
+    deliverable: list[WorkflowFix] = []
     seen: set[str] = set()
     for fix in fixes:
         wf = fix.workflow_file

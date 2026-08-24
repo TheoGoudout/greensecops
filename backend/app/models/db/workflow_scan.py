@@ -9,12 +9,14 @@ from ..enums import ScanFailureKind, ScanStatus, ScanTrigger
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
-    from .issue import Issue
     from .repository import Repository
     from .workflow_file import WorkflowFile
+    from .workflow_finding import WorkflowFinding
 
 
-class Analysis(SQLModel, table=True):
+class WorkflowScan(SQLModel, table=True):
+    __tablename__ = "workflow_scan"
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     repo_id: uuid.UUID = Field(
         foreign_key="repository.id", nullable=False, ondelete="CASCADE"
@@ -40,8 +42,10 @@ class Analysis(SQLModel, table=True):
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
     completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
-    repository: Optional["Repository"] = Relationship(back_populates="analyses")
+    repository: Optional["Repository"] = Relationship(back_populates="scans")
     workflow_file: Optional["WorkflowFile"] = Relationship(
-        back_populates="analyses",
+        back_populates="scans",
     )
-    issues: list["Issue"] = Relationship(back_populates="analysis", cascade_delete=True)
+    findings: list["WorkflowFinding"] = Relationship(
+        back_populates="scan", cascade_delete=True
+    )

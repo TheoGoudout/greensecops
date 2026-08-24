@@ -6,12 +6,9 @@ from datetime import datetime, timedelta, timezone
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
     Category,
     DynamicAnalysisStatus,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     PullRequest,
@@ -24,6 +21,9 @@ from app.models import (
     TelemetryRun,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.workers.tasks.maintenance import _sweep_stuck_states_impl
 
@@ -62,7 +62,7 @@ def _build_telemetry_run(
     return run
 
 
-def _build_chain(db: Session) -> tuple[Analysis, Fix]:
+def _build_chain(db: Session) -> tuple[WorkflowScan, WorkflowFix]:
     org = Organization(name=f"maint-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
     db.add(org)
     db.commit()
@@ -90,7 +90,7 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
     db.refresh(wf)
 
     old = datetime.now(timezone.utc) - timedelta(hours=2)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -112,7 +112,7 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
     db.commit()
     db.refresh(rule)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
@@ -125,7 +125,7 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
     db.commit()
     db.refresh(issue)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -301,8 +301,8 @@ def _failed_analysis(
     wf: WorkflowFile,
     kind: ScanFailureKind,
     completed_at: datetime | None = None,
-) -> Analysis:
-    a = Analysis(
+) -> WorkflowScan:
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,

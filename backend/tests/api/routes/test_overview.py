@@ -17,7 +17,6 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models import (
-    Analysis,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -29,7 +28,6 @@ from app.models import (
     DockerTarget,
     FindingStatus,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     OrgMember,
@@ -45,6 +43,8 @@ from app.models import (
     User,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowScan,
 )
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.utils import random_lower_string
@@ -505,7 +505,7 @@ def test_engines_do_not_leak_into_each_other(
     assert body["totals"]["open_findings"] == 2
 
 
-# ─── Fix pipeline ────────────────────────────────────────────────────────────
+# ─── WorkflowFix pipeline ────────────────────────────────────────────────────────────
 
 
 def test_cloud_has_no_fix_pipeline(client: TestClient, member: dict[str, str]) -> None:
@@ -651,7 +651,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
     """The dashboard shows both numbers on one page — if the overview's CI
     counts ever stop matching /issues/stats, the page contradicts itself."""
     workflow = _workflow_file(db, repo, "main")
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow.id,
         content_hash=uuid.uuid4().hex,
@@ -666,7 +666,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
     db.refresh(analysis)
     for _ in range(2):
         db.add(
-            Issue(
+            WorkflowFinding(
                 analysis_id=analysis.id,
                 workflow_file_id=workflow.id,
                 rule_id=workflow_rule.id,
@@ -679,7 +679,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
     db.commit()
 
     overview_ci = _engine(_fetch(client, member), "workflow")
-    stats = client.get(f"{settings.API_V1_STR}/issues/stats", headers=member).json()
+    stats = client.get(f"{settings.API_V1_STR}/workflow-findings/stats", headers=member).json()
 
     assert overview_ci["findings"]["open"] == 2
     assert overview_ci["findings"]["open"] == stats["total_open"]

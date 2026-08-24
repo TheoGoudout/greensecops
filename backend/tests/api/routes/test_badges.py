@@ -8,13 +8,13 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.models import (
-    Analysis,
     Organization,
     Repository,
     ScanStatus,
     ScanTrigger,
     UserTier,
     WorkflowFile,
+    WorkflowScan,
 )
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ def _add_workflow_analysis(
     db.commit()
     db.refresh(wf)
     db.add(
-        Analysis(
+        WorkflowScan(
             repo_id=repo.id,
             workflow_file_id=wf.id,
             content_hash=wf.content_hash,
@@ -117,8 +117,8 @@ def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
 @pytest.fixture()
 def completed_analysis(
     db: Session, repo: Repository, workflow_file: WorkflowFile
-) -> Analysis:
-    a = Analysis(
+) -> WorkflowScan:
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
@@ -173,7 +173,7 @@ def test_svg_badge_known_repo_no_analysis(
 def test_svg_badge_known_repo_with_grade(
     client: TestClient,
     repo: Repository,
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
 ) -> None:
     # Arrange
     owner, repo_name = repo.full_name.split("/", 1)
@@ -227,7 +227,7 @@ def test_json_badge_pending(
 def test_json_badge_with_grade(
     client: TestClient,
     repo: Repository,
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
 ) -> None:
     # Arrange
     owner, repo_name = repo.full_name.split("/", 1)

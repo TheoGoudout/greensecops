@@ -3,7 +3,11 @@ import { createFileRoute } from "@tanstack/react-router"
 import { GitPullRequest, Loader2, RefreshCw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { FixesService, type FixPublic, type PullRequestPublic } from "@/client"
+import {
+  type FixPublic,
+  type PullRequestPublic,
+  WorkflowFixesService,
+} from "@/client"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -57,14 +61,14 @@ function PullRequestsPage() {
 
   const { data: pullRequests, isLoading } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => FixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
   })
 
   // The fix set lets us name the workflow behind each PR branch and drive the
   // per-PR Update/Reopen (redeliver) action.
   const { data: fixes } = useQuery({
     queryKey: ["fixes", "repo", repoId],
-    queryFn: () => FixesService.listFixes({ repoId, limit: 100 }),
+    queryFn: () => WorkflowFixesService.listFixes({ repoId, limit: 100 }),
   })
 
   const fixByBranch = useMemo(() => {
@@ -78,7 +82,7 @@ function PullRequestsPage() {
   const repoBranch = repoFixBranch(repoId)
 
   const syncMutation = useMutation({
-    mutationFn: () => FixesService.syncPrStatuses({ repoId }),
+    mutationFn: () => WorkflowFixesService.syncPrStatuses({ repoId }),
     onSuccess: (data: Record<string, number>) => {
       if (data.updated > 0 || data.relinked > 0) {
         queryClient.invalidateQueries({
@@ -90,7 +94,7 @@ function PullRequestsPage() {
 
   const deliverWorkflowMutation = useMutation({
     mutationFn: (vars: { fixId: string; force: boolean }) =>
-      FixesService.triggerWorkflowDelivery({
+      WorkflowFixesService.triggerWorkflowDelivery({
         force: vars.force,
         requestBody: { fix_id: vars.fixId },
       }),
@@ -109,7 +113,7 @@ function PullRequestsPage() {
 
   const deliverRepoMutation = useMutation({
     mutationFn: (vars: { force: boolean }) =>
-      FixesService.triggerRepoDelivery({ repoId, force: vars.force }),
+      WorkflowFixesService.triggerRepoDelivery({ repoId, force: vars.force }),
     onSuccess: () => {
       toast.success("Pull request update queued")
       queryClient.invalidateQueries({

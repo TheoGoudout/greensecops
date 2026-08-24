@@ -10,11 +10,9 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
-    Analysis,
     CloudScan,
     DockerScan,
     DynamicAnalysisStatus,
-    Fix,
     FixStatus,
     PullRequest,
     PullRequestState,
@@ -23,6 +21,8 @@ from app.models import (
     ScanStatus,
     TelemetryRun,
     TerraformScan,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -48,9 +48,11 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     swept_scans = 0
     with Session(engine) as session:
         stuck_analyses = session.exec(
-            select(Analysis)
-            .where(col(Analysis.status).in_([ScanStatus.queued, ScanStatus.running]))
-            .where(Analysis.created_at < cutoff)  # type: ignore[operator]
+            select(WorkflowScan)
+            .where(
+                col(WorkflowScan.status).in_([ScanStatus.queued, ScanStatus.running])
+            )
+            .where(WorkflowScan.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for analysis in stuck_analyses:
             sm.advance(analysis, sm.ScanMachine, "swept")
@@ -64,17 +66,17 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             session.add(analysis)
             swept_analyses += 1
 
-        # Fix rows have no updated_at; created_at is a conservative proxy. A
+        # WorkflowFix rows have no updated_at; created_at is a conservative proxy. A
         # genuinely in-flight task commits its final status afterwards and
         # wins the race, so a false sweep self-corrects.
         stuck_fixes = session.exec(
-            select(Fix)
+            select(WorkflowFix)
             .where(
-                col(Fix.status).in_(
+                col(WorkflowFix.status).in_(
                     [FixStatus.pending, FixStatus.generating, FixStatus.delivering]
                 )
             )
-            .where(Fix.created_at < cutoff)  # type: ignore[operator]
+            .where(WorkflowFix.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for fix in stuck_fixes:
             sm.advance(fix, sm.FixMachine, "swept")
@@ -85,7 +87,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             swept_fixes += 1
 
         # TelemetryRun has no created_at/updated_at; collected_at (set at
-        # ingest) is the same kind of conservative proxy used for Fix above.
+        # ingest) is the same kind of conservative proxy used for WorkflowFix above.
         stuck_telemetry = session.exec(
             select(TelemetryRun)
             .where(
@@ -200,7 +202,9 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
             session.add(pr_record)
             session.commit()
             updated += 1
-            fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+            fix = session.exec(
+                select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)
+            ).first()
             if fix and pr_record.pr_url:
                 events_pub.publish_event(
                     ev.pr_updated(
@@ -245,7 +249,7 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
     """Re-run recent transient analysis failures (OPA timeout, network error).
 
     Enqueues a fresh repo/branch analysis rather than firing the machine's
-    ``retry`` event on the old rows: the worker creates new Analysis rows, so
+    ``retry`` event on the old rows: the worker creates new WorkflowScan rows, so
     a re-queued old row would only be swept back to ``failed``. The in-place
     ``retry`` edge stays reserved for a future per-row worker (doc §1).
     """
@@ -255,12 +259,12 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
     skipped_exhausted = 0
     with Session(engine) as session:
         candidates = session.exec(
-            select(Analysis, Repository)
-            .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-            .where(Analysis.status == ScanStatus.failed)
-            .where(Analysis.failure_kind == ScanFailureKind.transient)
-            .where(col(Analysis.completed_at).is_not(None))
-            .where(Analysis.completed_at >= cutoff)  # type: ignore[operator]
+            select(WorkflowScan, Repository)
+            .join(Repository, WorkflowScan.repo_id == Repository.id)  # type: ignore[arg-type]
+            .where(WorkflowScan.status == ScanStatus.failed)
+            .where(WorkflowScan.failure_kind == ScanFailureKind.transient)
+            .where(col(WorkflowScan.completed_at).is_not(None))
+            .where(WorkflowScan.completed_at >= cutoff)  # type: ignore[operator]
             .where(Repository.enabled)
         ).all()
 
@@ -268,12 +272,12 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
         for analysis, repo in candidates:
             attempts = len(
                 session.exec(
-                    select(Analysis.id)
-                    .where(Analysis.repo_id == analysis.repo_id)
-                    .where(Analysis.workflow_file_id == analysis.workflow_file_id)
-                    .where(Analysis.content_hash == analysis.content_hash)
-                    .where(Analysis.status == ScanStatus.failed)
-                    .where(Analysis.failure_kind == ScanFailureKind.transient)
+                    select(WorkflowScan.id)
+                    .where(WorkflowScan.repo_id == analysis.repo_id)
+                    .where(WorkflowScan.workflow_file_id == analysis.workflow_file_id)
+                    .where(WorkflowScan.content_hash == analysis.content_hash)
+                    .where(WorkflowScan.status == ScanStatus.failed)
+                    .where(WorkflowScan.failure_kind == ScanFailureKind.transient)
                 ).all()
             )
             if attempts >= MAX_AUTO_RETRY_ATTEMPTS:

@@ -9,12 +9,9 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
     Category,
     FindingResolutionReason,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     Repository,
@@ -23,6 +20,9 @@ from app.models import (
     Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.github.app_client import WorkflowFileContent
 from app.workers.tasks.static_analysis import (
@@ -251,15 +251,17 @@ def test_with_violations_sets_issue_fields(
     ):
         _run_static_analysis_impl(str(repo.id))
 
-    # Assert — Issue has workflow_file_id, job, step, fingerprint set
+    # Assert — WorkflowFinding has workflow_file_id, job, step, fingerprint set
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
     ).first()
     assert analysis is not None
 
-    issue = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).first()
+    issue = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.analysis_id == analysis.id)
+    ).first()
     assert issue is not None
     assert issue.workflow_file_id == workflow_file.id
     assert issue.job == "build"
@@ -312,13 +314,15 @@ def test_same_action_twice_creates_two_issues(
         _run_static_analysis_impl(str(repo.id))
 
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
     ).first()
     assert analysis is not None
 
-    issues = db.exec(select(Issue).where(Issue.analysis_id == analysis.id)).all()
+    issues = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.analysis_id == analysis.id)
+    ).all()
     assert len(issues) == 2
     assert {i.step_index for i in issues} == {0, 2}
     assert len({i.fingerprint for i in issues}) == 2
@@ -368,7 +372,9 @@ def test_fingerprint_survives_the_finding_moving_to_another_line(
     original = workflow_file.raw_content
     _analyse(5, original)
     first = db.exec(
-        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+        select(WorkflowFinding).where(
+            WorkflowFinding.workflow_file_id == workflow_file.id
+        )
     ).all()
     assert len(first) == 1
     original_fingerprint = first[0].fingerprint
@@ -377,7 +383,9 @@ def test_fingerprint_survives_the_finding_moving_to_another_line(
     _analyse(8, "# an unrelated edit\n" + original)
     db.expire_all()
     after = db.exec(
-        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+        select(WorkflowFinding).where(
+            WorkflowFinding.workflow_file_id == workflow_file.id
+        )
     ).all()
 
     assert len(after) == 1, "the moved finding was recorded as a second issue"
@@ -410,9 +418,9 @@ def test_opa_failure_marks_analysis_failed(
 
     # The analysis record should be in failed state
     analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.failed)
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.failed)
     ).first()
     assert analysis is not None
     assert "OPA unavailable" in (analysis.error_message or "")
@@ -456,9 +464,9 @@ def test_duplicate_detection_skips_second_run(
     # _evaluate should NOT have been called for the duplicate
     mock_eval.assert_not_called()
 
-    # No new Analysis row accumulates for the duplicate: only the original
+    # No new WorkflowScan row accumulates for the duplicate: only the original
     # completed row exists, and the result references it instead.
-    rows = db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
+    rows = db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
     assert len(rows) == 1
     completed = rows[0]
     assert completed.status == ScanStatus.completed
@@ -541,7 +549,7 @@ def test_violation_with_unknown_rule_slug_auto_registers_rule(
     ):
         result = _run_static_analysis_impl(str(repo.id))
 
-    # Analysis completes and the rule is auto-registered with an issue attached
+    # WorkflowScan completes and the rule is auto-registered with an issue attached
     assert result["status"] == "done"
     results_str = str(result["results"])
     assert "completed" in results_str
@@ -550,7 +558,9 @@ def test_violation_with_unknown_rule_slug_auto_registers_rule(
     rule = db.exec(select(Rule).where(Rule.slug == new_slug)).first()
     assert rule is not None
     assert rule.enabled is True
-    issue = db.exec(select(Issue).where(Issue.rule_id == rule.id)).first()
+    issue = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.rule_id == rule.id)
+    ).first()
     assert issue is not None
 
 
@@ -577,7 +587,7 @@ def test_violation_with_invalid_category_is_skipped(
     ):
         result = _run_static_analysis_impl(str(repo.id))
 
-    # Analysis still completes — the malformed violation is logged and skipped
+    # WorkflowScan still completes — the malformed violation is logged and skipped
     assert result["status"] == "done"
     results_str = str(result["results"])
     assert "completed" in results_str
@@ -624,7 +634,9 @@ def test_disabled_rule_violations_are_ignored(
     results_str = str(result["results"])
     assert "completed" in results_str
     assert "'issues': 0" in results_str
-    issue = db.exec(select(Issue).where(Issue.rule_id == disabled_rule.id)).first()
+    issue = db.exec(
+        select(WorkflowFinding).where(WorkflowFinding.rule_id == disabled_rule.id)
+    ).first()
     assert issue is None
 
 
@@ -655,7 +667,9 @@ def test_stale_issue_is_resolved_when_violation_disappears(
         _run_static_analysis_impl(str(repo.id))
 
     issue = db.exec(
-        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+        select(WorkflowFinding).where(
+            WorkflowFinding.workflow_file_id == workflow_file.id
+        )
     ).first()
     assert issue is not None
     db.refresh(issue)
@@ -719,7 +733,9 @@ def test_issues_of_deleted_workflow_files_are_resolved(
         _run_static_analysis_impl(str(repo.id))
 
     issue = db.exec(
-        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+        select(WorkflowFinding).where(
+            WorkflowFinding.workflow_file_id == workflow_file.id
+        )
     ).first()
     assert issue is not None
 
@@ -797,11 +813,13 @@ def test_single_file_reanalysis_of_deleted_file_does_not_regenerate_issues(
         _run_static_analysis_impl(str(repo.id))
 
     issue = db.exec(
-        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+        select(WorkflowFinding).where(
+            WorkflowFinding.workflow_file_id == workflow_file.id
+        )
     ).first()
     assert issue is not None
     analyses_before = len(
-        db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
+        db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
     )
 
     # The file has since been deleted from the repo: fetch returns nothing.
@@ -825,7 +843,7 @@ def test_single_file_reanalysis_of_deleted_file_does_not_regenerate_issues(
     # OPA was never invoked and no new analysis row was created.
     evaluate_mock.assert_not_called()
     analyses_after = len(
-        db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all()
+        db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
     )
     assert analyses_after == analyses_before
     # The issue stays resolved (file_removed), not reopened.
@@ -839,7 +857,7 @@ def test_single_file_reanalysis_of_deleted_file_does_not_regenerate_issues(
 def test_fix_is_superseded_when_its_workflow_file_is_deleted(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -867,7 +885,7 @@ def test_fix_is_superseded_when_its_workflow_file_is_deleted(
 def test_fix_is_restored_when_deleted_workflow_file_reappears(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=workflow_file.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -908,7 +926,7 @@ def test_completed_analysis_is_queryable_as_latest(
     used by the issues API (ordering by completed_at DESC, created_at DESC)."""
     from sqlmodel import select
 
-    from app.models import Analysis, ScanStatus
+    from app.models import ScanStatus, WorkflowScan
 
     # Arrange — first run
     with (
@@ -921,9 +939,9 @@ def test_completed_analysis_is_queryable_as_latest(
         _run_static_analysis_impl(str(repo.id))
 
     first_analysis = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
     ).first()
     assert first_analysis is not None
 
@@ -945,10 +963,10 @@ def test_completed_analysis_is_queryable_as_latest(
 
     # Assert — two completed analyses now exist; the newer one has a later created_at
     analyses = db.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo.id)
-        .where(Analysis.status == ScanStatus.completed)
-        .order_by(Analysis.created_at.desc())  # type: ignore[union-attr]
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(WorkflowScan.created_at.desc())  # type: ignore[union-attr]
     ).all()
     assert len(analyses) >= 2
     assert analyses[0].id != first_analysis.id
@@ -1287,8 +1305,8 @@ def test_evaluate_delegates_to_opa_evaluator() -> None:
 
 def _completed_analysis(
     db: Session, repo: Repository, workflow_file: WorkflowFile
-) -> Analysis:
-    analysis = Analysis(
+) -> WorkflowScan:
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
@@ -1304,7 +1322,7 @@ def _completed_analysis(
 def test_auto_queue_fix_generation_no_open_issues_is_noop(
     db: Session, repo: Repository, workflow_file: WorkflowFile
 ) -> None:
-    from app.models import Fix
+    from app.models import WorkflowFix
     from app.workers.tasks.static_analysis import _auto_queue_fix_generation
 
     _completed_analysis(db, repo, workflow_file)
@@ -1313,7 +1331,9 @@ def test_auto_queue_fix_generation_no_open_issues_is_noop(
         _auto_queue_fix_generation(db, repo, str(repo.org_id))
 
     mock_task.delay.assert_not_called()
-    fixes = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).all()
+    fixes = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).all()
     assert fixes == []
 
 
@@ -1323,7 +1343,7 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
     workflow_file: WorkflowFile,
     seeded_rule: Rule,
 ) -> None:
-    from app.models import Fix, FixStatus, LLMProvider
+    from app.models import FixStatus, LLMProvider, WorkflowFix
     from app.workers.tasks.static_analysis import _auto_queue_fix_generation
 
     repo.llm_provider = LLMProvider.openai
@@ -1331,7 +1351,7 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
     db.add(repo)
 
     analysis = _completed_analysis(db, repo, workflow_file)
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=workflow_file.id,
         rule_id=seeded_rule.id,
@@ -1351,7 +1371,9 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
     ):
         _auto_queue_fix_generation(db, repo, str(repo.org_id))
 
-    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    fix = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).one()
     assert fix.status == FixStatus.pending
     assert fix.llm_provider == LLMProvider.openai
     assert fix.llm_model == "gpt-test"
@@ -1366,8 +1388,10 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
     )
 
 
-def _open_issue(db: Session, analysis: Analysis, wf: WorkflowFile, rule: Rule) -> Issue:
-    issue = Issue(
+def _open_issue(
+    db: Session, analysis: WorkflowScan, wf: WorkflowFile, rule: Rule
+) -> WorkflowFinding:
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
@@ -1388,8 +1412,8 @@ def _delivered_fix(
     wf: WorkflowFile,
     pr_state: str,
 ) -> tuple[object, object]:
-    """Create a delivered Fix on a PR in ``pr_state`` for workflow file ``wf``."""
-    from app.models import Fix, FixStatus, LLMProvider, PullRequest
+    """Create a delivered WorkflowFix on a PR in ``pr_state`` for workflow file ``wf``."""
+    from app.models import FixStatus, LLMProvider, PullRequest, WorkflowFix
 
     pr = PullRequest(
         repo_id=repo.id,
@@ -1400,7 +1424,7 @@ def _delivered_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         pr_id=pr.id,
         llm_provider=LLMProvider.openai,
@@ -1421,7 +1445,7 @@ def test_auto_queue_regenerates_delivered_fix_when_content_changed(
     seeded_rule: Rule,
 ) -> None:
     """A delivered fix on an open PR is regenerated when its workflow changed."""
-    from app.models import Fix, FixStatus, LLMProvider
+    from app.models import FixStatus, LLMProvider, WorkflowFix
     from app.workers.tasks.static_analysis import _auto_queue_fix_generation
 
     repo.llm_provider = LLMProvider.openai
@@ -1441,7 +1465,9 @@ def test_auto_queue_regenerates_delivered_fix_when_content_changed(
             db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
         )
 
-    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    fix = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).one()
     assert fix.id != old_fix_id  # the stale delivered fix was replaced
     assert fix.status == FixStatus.pending
     mock_task.delay.assert_called_once()
@@ -1454,7 +1480,7 @@ def test_auto_queue_reuses_unchanged_fix_and_regenerates_changed(
     seeded_rule: Rule,
 ) -> None:
     """Only the changed workflow file is regenerated; the unchanged one is reused."""
-    from app.models import Fix, FixStatus, LLMProvider
+    from app.models import FixStatus, LLMProvider, WorkflowFix
     from app.workers.tasks.static_analysis import _auto_queue_fix_generation
 
     repo.llm_provider = LLMProvider.openai
@@ -1489,10 +1515,14 @@ def test_auto_queue_reuses_unchanged_fix_and_regenerates_changed(
             db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
         )
 
-    changed = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    changed = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).one()
     assert changed.status == FixStatus.pending
 
-    kept = db.exec(select(Fix).where(Fix.workflow_file_id == wf2.id)).one()
+    kept = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == wf2.id)
+    ).one()
     assert kept.id == kept_fix_id  # not deleted
     assert kept.status == FixStatus.ready  # re-included in the delivery set
 
@@ -1507,7 +1537,7 @@ def test_auto_queue_skips_merged_fix(
     seeded_rule: Rule,
 ) -> None:
     """A merged fix is left untouched — its code is already on the default branch."""
-    from app.models import Fix, FixStatus, LLMProvider
+    from app.models import FixStatus, LLMProvider, WorkflowFix
     from app.workers.tasks.static_analysis import _auto_queue_fix_generation
 
     repo.llm_provider = LLMProvider.openai
@@ -1527,7 +1557,9 @@ def test_auto_queue_skips_merged_fix(
             db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
         )
 
-    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    fix = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).one()
     assert fix.id == merged_fix_id
     assert fix.status == FixStatus.delivered
     mock_task.delay.assert_not_called()
@@ -1540,7 +1572,7 @@ def test_auto_queue_is_noop_when_nothing_changed(
     seeded_rule: Rule,
 ) -> None:
     """No content changed: the delivered fix and its PR are left alone."""
-    from app.models import Fix, FixStatus, LLMProvider
+    from app.models import FixStatus, LLMProvider, WorkflowFix
     from app.workers.tasks.static_analysis import _auto_queue_fix_generation
 
     repo.llm_provider = LLMProvider.openai
@@ -1557,7 +1589,9 @@ def test_auto_queue_is_noop_when_nothing_changed(
     ):
         _auto_queue_fix_generation(db, repo, str(repo.org_id), changed_wf_ids=set())
 
-    fix = db.exec(select(Fix).where(Fix.workflow_file_id == workflow_file.id)).one()
+    fix = db.exec(
+        select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
+    ).one()
     assert fix.id == delivered_fix.id
     assert fix.status == FixStatus.delivered  # untouched
     mock_task.delay.assert_not_called()
@@ -1607,7 +1641,9 @@ def test_feature_branch_analysis_does_not_touch_default_branch_state(
         _run_static_analysis_impl(str(repo.id))
 
     issue = db.exec(
-        select(Issue).where(Issue.workflow_file_id == workflow_file.id)
+        select(WorkflowFinding).where(
+            WorkflowFinding.workflow_file_id == workflow_file.id
+        )
     ).one()
     main_content = workflow_file.raw_content
 

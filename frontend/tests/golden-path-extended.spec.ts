@@ -37,7 +37,7 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let analysisTriggered = false
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
       if (method === "POST" && url.includes("/trigger/")) {
@@ -54,12 +54,12 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let fixGenerated = false
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY],
       })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       const method = route.request().method()
       if (method === "POST") {
         fixGenerated = true
@@ -112,17 +112,17 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
 
     const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: issues })
     })
 
     let batchFixCalled = false
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
       if (method === "POST" && url.includes("generate-for-repo")) {
@@ -167,13 +167,13 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/telemetry/**", (route) => {

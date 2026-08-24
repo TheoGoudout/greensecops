@@ -13,13 +13,10 @@ from unittest.mock import patch
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
     Category,
     CIStatus,
     FindingResolutionReason,
-    Fix,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     PullRequest,
@@ -32,6 +29,9 @@ from app.models import (
     Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.github.app_client import PRSnapshot
 from app.workers.tasks import polling
@@ -76,7 +76,7 @@ def _open_pr(
 
 def _delivered_fix_with_issue(
     db: Session, repo: Repository, pr: PullRequest
-) -> tuple[Fix, Issue]:
+) -> tuple[WorkflowFix, WorkflowFinding]:
     wf = WorkflowFile(
         repo_id=repo.id,
         path=".github/workflows/ci.yml",
@@ -86,7 +86,7 @@ def _delivered_fix_with_issue(
     db.add(wf)
     db.commit()
     db.refresh(wf)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -106,7 +106,7 @@ def _delivered_fix_with_issue(
     db.add(rule)
     db.commit()
     db.refresh(rule)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         pr_id=pr.id,
         llm_provider=LLMProvider.openai,
@@ -116,7 +116,7 @@ def _delivered_fix_with_issue(
     db.add(fix)
     db.commit()
     db.refresh(fix)
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,

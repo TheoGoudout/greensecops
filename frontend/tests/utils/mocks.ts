@@ -1020,7 +1020,7 @@ export async function mockRepositories(
 }
 
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
-  await page.route("**/api/v1/analyses/**", (route) => {
+  await page.route("**/api/v1/workflow-scans/**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "POST" && url.includes("/trigger/")) {
@@ -1043,7 +1043,7 @@ export async function mockIssues(
   issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
   analyses: Array<{ id: string; repo_id: string }> = [MOCK_ANALYSIS],
 ) {
-  await page.route("**/api/v1/issues/**", (route) => {
+  await page.route("**/api/v1/workflow-findings/**", (route) => {
     const url = route.request().url()
     if (url.includes("/issues/stats")) {
       // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
@@ -1166,7 +1166,7 @@ export async function mockFixes(
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
   pullRequests: unknown[] = [],
 ) {
-  await page.route("**/api/v1/fixes/**", (route) => {
+  await page.route("**/api/v1/workflow-fixes/**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "POST" && url.includes("/sync-pr-status")) {

@@ -17,7 +17,7 @@ import type {
   DockerTargetPublic,
   PullRequestPublic,
 } from "@/client"
-import { DockerService, FixesService } from "@/client"
+import { DockerService, WorkflowFixesService } from "@/client"
 import { DockerFindingRow } from "@/components/DockerFindingRow"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -55,7 +55,7 @@ function DockerAnalysisTab() {
   // its deterministic branch has to come from the real PullRequest rows.
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => FixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {

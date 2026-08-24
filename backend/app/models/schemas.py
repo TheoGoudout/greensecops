@@ -918,7 +918,7 @@ class SSEEventPublic(SQLModel):
     telemetry_run_id: str | None = None
     installation_id: int | None = None
 
-    # Analysis outcome
+    # WorkflowScan outcome
     branch: str | None = None
     trigger: str | None = None
     score: float | None = None
