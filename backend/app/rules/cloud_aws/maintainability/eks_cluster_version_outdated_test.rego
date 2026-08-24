@@ -22,13 +22,22 @@ test_violation_for_a_version_past_standard_support if {
 }
 
 test_no_violation_for_a_supported_version if {
-	violations := outdated.violations with input as _cluster("1.31")
+	violations := outdated.violations with input as _cluster("1.33")
 	count(violations) == 0
 }
 
 test_no_violation_exactly_at_the_supported_floor if {
-	violations := outdated.violations with input as _cluster("1.30")
+	violations := outdated.violations with input as _cluster("1.32")
 	count(violations) == 0
+}
+
+# The floor moves roughly quarterly. This pins the value so bumping it is a
+# deliberate edit with a test beside it rather than a silent constant change.
+test_the_floor_is_the_documented_one if {
+	violations := outdated.violations with input as _cluster("1.31")
+	count(violations) == 1
+	some v in violations
+	contains(v.message, "1.32")
 }
 
 # Minor versions are compared numerically, not as strings — "1.9" must not sort

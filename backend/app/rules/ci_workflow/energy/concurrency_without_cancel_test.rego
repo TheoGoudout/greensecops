@@ -15,12 +15,13 @@ test_violation_for_the_bare_string_shorthand if {
 	count(violations) == 1
 }
 
-test_violation_when_cancel_is_explicitly_false if {
+# An explicit `false` is a deliberate choice — the right one on a deploy group.
+test_no_violation_when_cancel_is_explicitly_false if {
 	violations := without_cancel.violations with input as {"concurrency": {
-		"group": "ci-${{ github.ref }}",
+		"group": "deploy-production",
 		"cancel-in-progress": false,
 	}}
-	count(violations) == 1
+	count(violations) == 0
 }
 
 test_no_violation_when_cancel_is_true if {

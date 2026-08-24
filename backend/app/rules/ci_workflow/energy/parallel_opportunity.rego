@@ -56,7 +56,7 @@ _downloads_artifact(job) if {
 # A link carries data if the downstream job reads the upstream job's outputs, or
 # if the upstream uploads an artifact the downstream downloads. Either way the
 # ordering is load-bearing and dropping it would break the pipeline.
-_link_carries_data(upstream_name, upstream_job, downstream_job) if {
+_link_carries_data(upstream_name, _, downstream_job) if {
 	wf.job_outputs_consumed(upstream_name)
 	regex.match(
 		sprintf(`needs\.%v\.outputs\.`, [regex.replace(upstream_name, `[.*+?^${}()|\[\]\\]`, `\\$0`)]),
@@ -100,7 +100,7 @@ violations contains violation if {
 		"severity": "low",
 		"category": "energy",
 		"job": null,
-		"message": sprintf("Jobs are chained with needs: but pass nothing between them (%v). Each link makes a job wait for a runner it did not need to wait for. Drop the links and the jobs run in parallel.", [listed]),
+		"message": sprintf("Jobs are chained with needs: but pass no outputs or artifacts between them (%v). Check whether the ordering is required — a deploy that must precede a cache purge is a real dependency the file cannot express any other way. Where it is not, dropping the link lets the jobs start together.", [listed]),
 		"context": listed,
 		"discriminator": "needs-chain",
 	}

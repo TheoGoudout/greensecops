@@ -48,8 +48,25 @@ test_no_violation_for_workflow_dispatch if {
 
 # The list form cannot carry a filter at all, so reporting it would be asking
 # for something the syntax does not allow at that spelling.
-test_no_violation_for_the_list_form_of_on if {
+# The list form cannot carry a filter, so it has none — the rule used to treat
+# that as compliance.
+test_violation_for_the_list_form_of_on if {
 	violations := no_filter.violations with input as {"on": ["push", "pull_request"]}
+	count(violations) == 2
+}
+
+test_violation_for_a_bare_trigger_with_no_body if {
+	violations := no_filter.violations with input as {"on": {"push": null, "pull_request": null}}
+	count(violations) == 2
+}
+
+test_violation_for_the_bare_string_form if {
+	violations := no_filter.violations with input as {"on": "push"}
+	count(violations) == 1
+}
+
+test_no_violation_when_paths_ignore_is_set_on_the_bare_form if {
+	violations := no_filter.violations with input as {"on": {"push": {"paths-ignore": ["docs/**"]}}}
 	count(violations) == 0
 }
 

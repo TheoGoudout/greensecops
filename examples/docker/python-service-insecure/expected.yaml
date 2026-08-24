@@ -1,15 +1,18 @@
 # Every rule in the suite that this deliberately-bad pair should trip. The
 # validator asserts this set exactly, so a rule that stops firing here is a
 # regression and one that starts firing is a false positive.
+# `missing_workdir` is deliberately absent: every path in this Dockerfile is
+# absolute (`COPY . /app`, `CMD ["python", "/app/main.py"]`), so there is
+# nothing for a WORKDIR to resolve. `compose_hardcoded_secret` likewise —
+# `hunter2` is a placeholder, not a credential.
 violations:
   - add_remote_url
   - apt_cache_not_cleaned
   - compose_cap_add_sys_admin
   - compose_depends_on_without_condition
   - compose_docker_socket_mount
-  - compose_hardcoded_secret
   - compose_host_network_mode
-  - compose_missing_resource_limits
+  - compose_service_unbounded
   - compose_missing_restart_policy
   - compose_obsolete_version_key
   - compose_privileged_container
@@ -25,8 +28,5 @@ violations:
   - unpinned_base_image
   - apt_recommends_not_disabled
   - compose_dependency_without_healthcheck
-  - compose_missing_no_new_privileges
-  - compose_unbounded_log_files
-  - missing_workdir
+  - compose_service_not_hardened
   - pip_cache_not_disabled
-  - compose_missing_read_only_filesystem

@@ -42,11 +42,35 @@ _dependency_names(service) := {name | some name, _ in service.depends_on} if {
 	is_object(service.depends_on)
 }
 
-_depended_on(cf) := union({names |
+# Only the dependencies that are actually waited on for *readiness*. The long
+# form carries a condition, and `service_completed_successfully` is the correct
+# way to depend on a one-shot container — a migration job that runs and exits
+# cannot have a meaningful healthcheck, and asking for one on this
+# repository's own `prestart` service was asking for something wrong.
+_waits_for_readiness(service, name) if {
+	is_array(service.depends_on)
+	name in {n | some n in service.depends_on}
+}
+
+_waits_for_readiness(service, name) if {
+	is_object(service.depends_on)
+	entry := service.depends_on[name]
+	not is_object(entry)
+}
+
+_waits_for_readiness(service, name) if {
+	is_object(service.depends_on)
+	entry := service.depends_on[name]
+	is_object(entry)
+	object.get(entry, "condition", "service_started") != "service_completed_successfully"
+}
+
+_depended_on(cf) := {name |
 	some _, service in cf.services
 	is_object(service)
-	names := _dependency_names(service)
-})
+	some name in _dependency_names(service)
+	_waits_for_readiness(service, name)
+}
 
 # `effective_compose_files` is one document per configuration, with a base and
 # its override already merged — absence is only meaningful about a complete

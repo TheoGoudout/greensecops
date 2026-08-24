@@ -39,7 +39,31 @@ import rego.v1
 # `env:` — safe to *use* — being written somewhere it becomes unsafe again.
 _env_file_write_pattern := `\$\{?(GITHUB_ENV|GITHUB_PATH)\}?`
 
-_expands_a_variable(line) if regex.match(`\$\{?[A-Za-z_][A-Za-z0-9_]*\}?`, _before_redirect(line))
+# Variables the runner sets, not the event. `$GITHUB_SHA` is a commit id,
+# `$RUNNER_OS` is a platform name, and neither can contain a newline — so
+# `echo "SHA=$GITHUB_SHA" >> "$GITHUB_ENV"` is not an injection. Matching any
+# `$VAR` reported every one of those at high severity, which is most of the
+# legitimate writes to the environment file in existence.
+_trusted_prefixes := ["GITHUB_", "RUNNER_"]
+
+_trusted_names := {"HOME", "PWD", "CI", "USER", "SHELL", "PATH", "TMPDIR", "HOSTNAME", "OSTYPE"}
+
+_is_trusted(name) if {
+	some prefix in _trusted_prefixes
+	startswith(name, prefix)
+}
+
+_is_trusted(name) if name in _trusted_names
+
+_expanded_names(line) := {name |
+	some match in regex.find_all_string_submatch_n(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`, _before_redirect(line), -1)
+	name := match[1]
+}
+
+_expands_a_variable(line) if {
+	some name in _expanded_names(line)
+	not _is_trusted(name)
+}
 
 _before_redirect(line) := split(line, ">>")[0]
 

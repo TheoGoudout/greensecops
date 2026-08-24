@@ -69,8 +69,41 @@ violations contains violation if {
 		"category": "security",
 		"job": job_name,
 		"step_index": step_index,
+		"line_start": object.get(step, "__start_line__", null),
+		"line_end": object.get(step, "__end_line__", null),
 		"message": sprintf("Job '%v' interpolates %v straight into a run script. The value is substituted as script text before the shell runs, so anyone who can set it can execute commands on the runner.", [job_name, context]),
 		"context": context,
-		"discriminator": sprintf("%v:%v:%v", [job_name, step_index, context]),
+		"discriminator": sprintf("%v:%v:run:%v", [job_name, step_index, context]),
+	}
+}
+
+# `run:` is not the only place a substituted value becomes code.
+# `actions/github-script` executes its `script:` input as JavaScript, and a
+# handful of other actions take a shell script as an input the same way — the
+# interpolation happens before the action ever sees the value, so the sink is
+# identical. This rule read only `run:`, so the single most-cited injection
+# example in GitHub's own advisories was invisible to it.
+_script_valued_inputs := {"script", "command", "run", "args", "eval", "inline-script"}
+
+violations contains violation if {
+	some job_name, job in input.jobs
+	some step_index, step in job.steps
+	some input_name, value in step["with"]
+	input_name in _script_valued_inputs
+	is_string(value)
+	context := _interpolates_untrusted(value)
+
+	violation := {
+		"rule": "script_injection_expression",
+		"severity": "critical",
+		"category": "security",
+		"job": job_name,
+		"step": object.get(step, "uses", null),
+		"step_index": step_index,
+		"line_start": object.get(step, "__start_line__", null),
+		"line_end": object.get(step, "__end_line__", null),
+		"message": sprintf("Job '%v' interpolates %v into the '%v' input of %v, which the action executes. The value is substituted before the action runs, so anyone who can set it can execute code on the runner.", [job_name, context, input_name, object.get(step, "uses", "the step")]),
+		"context": context,
+		"discriminator": sprintf("%v:%v:%v:%v", [job_name, step_index, input_name, context]),
 	}
 }

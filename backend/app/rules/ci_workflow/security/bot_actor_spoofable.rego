@@ -42,9 +42,24 @@ _bot_names := [
 # `github.actor` is who triggered the run. On a bot-opened pull request anyone
 # who can re-run, label or comment becomes the actor while the branch contents
 # stay the contributor's, so the name proves nothing about the code.
+_actor := `github\.(actor|triggering_actor)`
+
+# The gate has to *admit* on the name. `if: github.actor != 'dependabot[bot]'`
+# is the opposite — a skip-guard that runs the job for everyone except the bot,
+# and the most common use of the field in the wild. Reporting it said the
+# workflow trusts a name it is in fact refusing to trust.
+_positive_gate(condition) if regex.match(sprintf(`%v\s*==`, [_actor]), condition)
+
+_positive_gate(condition) if regex.match(sprintf(`(contains|startsWith|endsWith)\(\s*%v`, [_actor]), condition)
+
+_negated_gate(condition) if regex.match(sprintf(`%v\s*!=`, [_actor]), condition)
+
+_negated_gate(condition) if regex.match(sprintf(`!\s*(contains|startsWith|endsWith)\(\s*%v`, [_actor]), condition)
+
 _spoofable_actor_check(condition) if {
 	is_string(condition)
-	regex.match(`github\.(actor|triggering_actor)`, condition)
+	_positive_gate(condition)
+	not _negated_gate(condition)
 	some bot in _bot_names
 	contains(lower(condition), bot)
 }

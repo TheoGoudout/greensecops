@@ -65,6 +65,71 @@ _is_deny_only(text) if {
 	not regex.match(`(?is)"?Effect"?\s*[:=]\s*"Allow"`, text)
 }
 
+# The overwhelmingly idiomatic way to write an IAM policy in Terraform is a
+# `data "aws_iam_policy_document"` block, which lands under `input.data` — a
+# key this rule never read. A root module written the recommended way was
+# scanned and reported nothing.
+_statements(attrs) := attrs.statement if is_array(attrs.statement)
+
+_statements(attrs) := [attrs.statement] if is_object(attrs.statement)
+
+_actions(stmt) := stmt.actions if is_array(stmt.actions)
+
+_actions(stmt) := [stmt.actions] if is_string(stmt.actions)
+
+_is_wildcard_action(action) if action == "*"
+
+_is_wildcard_action(action) if endswith(action, ":*")
+
+_principal_blocks(stmt) := stmt.principals if is_array(stmt.principals)
+
+_principal_blocks(stmt) := [stmt.principals] if is_object(stmt.principals)
+
+_identifiers(block) := block.identifiers if is_array(block.identifiers)
+
+_identifiers(block) := [block.identifiers] if is_string(block.identifiers)
+
+# A statement whose only principal is the account's own root ARN. This is the
+# key-policy escape hatch AWS documents and warns you not to remove: without
+# it a KMS key becomes unmanageable, because IAM policies cannot grant access
+# to a key whose policy does not delegate to IAM. Root already holds every
+# permission in the account, so `kms:*` to root grants nothing new — reporting
+# it as a wildcard privilege grant flagged the one statement in the policy that
+# must be there. Found by scanning this repository's own deployment Terraform.
+_only_account_root(stmt) if {
+	blocks := _principal_blocks(stmt)
+	count(blocks) > 0
+	every block in blocks {
+		every identifier in _identifiers(block) {
+			endswith(identifier, ":root")
+		}
+	}
+}
+
+violations contains violation if {
+	some block in input.data
+	some name, attrs in block.aws_iam_policy_document
+
+	some stmt in _statements(attrs)
+	lower(object.get(stmt, "effect", "Allow")) == "allow"
+	not _only_account_root(stmt)
+	some action in _actions(stmt)
+	_is_wildcard_action(action)
+
+	violation := {
+		"rule": "iam_policy_wildcard_action",
+		"severity": "critical",
+		"category": "security",
+		"resource_address": sprintf("data.aws_iam_policy_document.%v", [name]),
+		"file_path": object.get(attrs, "__tf_file", ""),
+		"line_start": object.get(attrs, "__start_line__", null),
+		"line_end": object.get(attrs, "__end_line__", null),
+		"message": sprintf("IAM policy document '%v' allows the wildcard action '%v', so whatever holds it can do anything that wildcard covers.", [name, action]),
+		"context": action,
+		"discriminator": action,
+	}
+}
+
 violations contains violation if {
 	some res in input.resource
 	some res_type, named in res

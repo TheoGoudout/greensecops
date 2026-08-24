@@ -13,4 +13,4 @@ violations:
   - compose_override_disables_read_only
   - compose_override_adds_capabilities
   - compose_override_exposes_bound_port
-  - compose_missing_read_only_filesystem
+  - compose_service_not_hardened

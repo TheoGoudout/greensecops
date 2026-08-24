@@ -49,9 +49,8 @@ def test_all_seeded_rules_are_evaluated() -> None:
     # The security rules that were previously unwired must now be evaluated.
     for slug in (
         "hardcoded_secrets",
-        "untrusted_actions",
         "oidc_not_used",
-        "public_artifact_exposure",
+        "script_injection_expression",
     ):
         assert f"greensecops/ci_workflow/security/{slug}" in packages
     assert set(POLICY_PACKAGES) == set(packages)
@@ -512,7 +511,7 @@ def test_all_seeded_docker_rules_are_evaluated() -> None:
         "apt_cache_not_cleaned",
         "no_multistage_build",
         "heavy_base_image",
-        "compose_missing_resource_limits",
+        "compose_service_unbounded",
     ):
         assert f"greensecops/container_docker/energy/{slug}" in packages
     for slug in (

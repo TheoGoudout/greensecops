@@ -37,7 +37,7 @@ _required_settings := {
 # A companion resource references its bucket by resource name
 # (aws_s3_bucket.data.id) or by the literal bucket name, exactly as
 # s3_bucket_missing_versioning has to handle.
-_references(block, bucket_name, bucket_attrs) if {
+_references(block, bucket_name, _) if {
 	contains(block.bucket, sprintf("aws_s3_bucket.%v.", [bucket_name]))
 }
 

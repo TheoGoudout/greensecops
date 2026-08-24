@@ -1,99 +1,42 @@
 package greensecops.ci_workflow.security.excessive_token_permissions_test
 
-import data.greensecops.ci_workflow.security.excessive_token_permissions as excessive_permissions
+import data.greensecops.ci_workflow.security.excessive_token_permissions as write_all
 import rego.v1
 
-# Three independent clauses at three severities. That is why this rule's
-# annotation block declares the worst case rather than matching the body
-# exactly — it is the one entry in the allow-list in
-# tests/core/test_rule_registry.py. Each clause is pinned separately here,
-# including the fact that they do not collapse into one.
-
-_checkout_job := {"runs-on": "ubuntu-latest", "steps": [{"uses": "actions/checkout@v5"}]}
-
-test_critical_violation_for_write_all if {
-	violations := excessive_permissions.violations with input as {
-		"permissions": "write-all",
-		"jobs": {"build": _checkout_job},
-	}
+test_violation_for_workflow_write_all if {
+	violations := write_all.violations with input as {"permissions": "write-all"}
 	count(violations) == 1
 	some v in violations
 	v.severity == "critical"
-	v.job == null
+	v.discriminator == "workflow"
 }
 
-test_high_violation_for_more_than_three_write_scopes if {
-	violations := excessive_permissions.violations with input as {
-		"permissions": {
-			"contents": "write",
-			"packages": "write",
-			"issues": "write",
-			"pull-requests": "write",
-		},
-		"jobs": {"build": _checkout_job},
-	}
+test_violation_for_job_write_all if {
+	violations := write_all.violations with input as {"jobs": {"build": {"permissions": "write-all"}}}
 	count(violations) == 1
 	some v in violations
-	v.severity == "high"
-}
-
-test_no_violation_at_exactly_three_write_scopes if {
-	violations := excessive_permissions.violations with input as {
-		"permissions": {"contents": "write", "packages": "write", "issues": "write"},
-		"jobs": {"build": _checkout_job},
-	}
-	count(violations) == 0
-}
-
-test_medium_violation_when_nothing_declares_permissions if {
-	violations := excessive_permissions.violations with input as {"jobs": {"build": _checkout_job}}
-	count(violations) == 1
-	some v in violations
-	v.severity == "medium"
 	v.job == "build"
 }
 
-# A job-level block satisfies the third clause on its own.
-test_no_violation_when_the_job_declares_its_own_permissions if {
-	violations := excessive_permissions.violations with input as {"jobs": {"build": {
-		"permissions": {"contents": "read"},
-		"steps": [{"uses": "actions/checkout@v5"}],
-	}}}
-	count(violations) == 0
-}
-
-# The third clause is scoped to jobs that actually use a first-party action,
-# since that is what consumes the token.
-test_no_violation_for_a_job_with_no_actions_steps if {
-	violations := excessive_permissions.violations with input as {"jobs": {"build": {
-		"runs-on": "ubuntu-latest",
-		"steps": [{"run": "make build"}],
-	}}}
-	count(violations) == 0
-}
-
-test_no_violation_for_a_least_privilege_workflow if {
-	violations := excessive_permissions.violations with input as {
-		"permissions": {"contents": "read"},
-		"jobs": {"build": _checkout_job},
+test_both_are_reported_separately if {
+	violations := write_all.violations with input as {
+		"permissions": "write-all",
+		"jobs": {"build": {"permissions": "write-all"}},
 	}
-	count(violations) == 0
-}
-
-# read-all is over-broad but grants no writes, so it is not this finding.
-test_no_violation_for_read_all if {
-	violations := excessive_permissions.violations with input as {
-		"permissions": "read-all",
-		"jobs": {"build": _checkout_job},
-	}
-	count(violations) == 0
-}
-
-test_each_undeclared_job_is_its_own_finding if {
-	violations := excessive_permissions.violations with input as {"jobs": {
-		"build": _checkout_job,
-		"test": _checkout_job,
-	}}
 	count(violations) == 2
-	{v.job | some v in violations} == {"build", "test"}
+	count({v.discriminator | some v in violations}) == 2
+}
+
+test_no_violation_for_the_deny_all_baseline if {
+	count(write_all.violations) == 0 with input as {"permissions": {}}
+}
+
+test_no_violation_for_an_explicit_scope_list if {
+	count(write_all.violations) == 0 with input as {"permissions": {"contents": "read"}}
+}
+
+# The clause that reported a job with no permissions block moved out entirely:
+# `missing_top_level_permissions` already reports that workflow.
+test_no_violation_for_a_job_without_permissions if {
+	count(write_all.violations) == 0 with input as {"jobs": {"build": {"steps": [{"uses": "actions/checkout@v4"}]}}}
 }

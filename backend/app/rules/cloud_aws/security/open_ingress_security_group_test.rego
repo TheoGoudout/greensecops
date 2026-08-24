@@ -30,8 +30,39 @@ test_violation_for_ipv4_open_to_the_world if {
 }
 
 test_violation_for_ipv6_open_to_the_world if {
-	violations := open_ingress.violations with input as _sg([_rule(443, 443, ["::/0"])])
+	violations := open_ingress.violations with input as _sg([_rule(3389, 3389, ["::/0"])])
 	count(violations) == 1
+}
+
+# A public service publishes 80 and 443 — that is what makes it public.
+test_no_violation_for_https_open_to_the_world if {
+	violations := open_ingress.violations with input as _sg([_rule(443, 443, ["0.0.0.0/0"])])
+	count(violations) == 0
+}
+
+test_no_violation_for_http_open_to_the_world if {
+	violations := open_ingress.violations with input as _sg([_rule(80, 80, ["0.0.0.0/0"])])
+	count(violations) == 0
+}
+
+# A range that merely contains 443 is not "port 443 is published".
+test_violation_for_a_range_containing_https if {
+	violations := open_ingress.violations with input as _sg([_rule(0, 65535, ["0.0.0.0/0"])])
+	count(violations) == 1
+	some v in violations
+	contains(v.message, "0-65535")
+}
+
+test_violation_for_all_protocols_with_no_port_range if {
+	violations := open_ingress.violations with input as {"security_groups": [{
+		"id": "sg-0123",
+		"name": "web",
+		"region": "eu-west-1",
+		"ingress_rules": [{"ip_protocol": "-1", "cidr_blocks": ["0.0.0.0/0"]}],
+	}]}
+	count(violations) == 1
+	some v in violations
+	contains(v.message, "every port")
 }
 
 test_violation_when_an_open_cidr_sits_alongside_a_scoped_one if {
@@ -69,8 +100,26 @@ test_message_names_the_port if {
 test_each_open_rule_is_its_own_finding if {
 	violations := open_ingress.violations with input as _sg([
 		_rule(22, 22, ["0.0.0.0/0"]),
-		_rule(443, 443, ["0.0.0.0/0"]),
+		_rule(3389, 3389, ["0.0.0.0/0"]),
 		_rule(5432, 5432, ["10.0.0.0/16"]),
 	])
 	count(violations) == 2
+}
+
+# Three open ports on one group used to collapse to a single issue row, because
+# the dedup key is (resource_id, discriminator) and there was no discriminator.
+test_each_open_rule_has_a_distinct_dedup_key if {
+	violations := open_ingress.violations with input as _sg([
+		_rule(22, 22, ["0.0.0.0/0"]),
+		_rule(3389, 3389, ["0.0.0.0/0"]),
+		_rule(5432, 5432, ["0.0.0.0/0"]),
+	])
+	count(violations) == 3
+	count({v.discriminator | some v in violations}) == 3
+}
+
+test_both_families_on_one_rule_are_distinct_findings if {
+	violations := open_ingress.violations with input as _sg([_rule(22, 22, ["0.0.0.0/0", "::/0"])])
+	count(violations) == 2
+	count({v.discriminator | some v in violations}) == 2
 }
