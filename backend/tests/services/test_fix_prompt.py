@@ -2,13 +2,13 @@
 
 from types import SimpleNamespace
 
-from app.models.enums import IssueSeverity
+from app.models.enums import Severity
 from app.services.llm.fix_prompt import build_fix_prompt
 
 
 def _issue(message: str = "Unpinned action", slug: str = "unpinned-actions") -> object:
     return SimpleNamespace(
-        severity=IssueSeverity.high,
+        severity=Severity.high,
         message=message,
         rule=SimpleNamespace(slug=slug),
         job="build",

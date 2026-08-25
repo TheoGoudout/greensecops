@@ -5,7 +5,6 @@ growing monolith). Every class is re-exported here so external imports
 how the definitions are organized internally.
 """
 
-from .analysis import Analysis
 from .base import get_datetime_utc
 from .billing import (
     BillingSubscription,
@@ -23,8 +22,6 @@ from .docker import (
     DockerScan,
     DockerTarget,
 )
-from .fix import Fix
-from .issue import Issue
 from .organization import Organization, OrgMember
 from .pull_request import PullRequest
 from .repository import Repository
@@ -46,6 +43,9 @@ from .user import (
     UserUpdateMe,
 )
 from .workflow_file import WorkflowFile
+from .workflow_finding import WorkflowFinding
+from .workflow_fix import WorkflowFix
+from .workflow_scan import WorkflowScan
 
 __all__ = [
     "get_datetime_utc",
@@ -61,10 +61,10 @@ __all__ = [
     "Repository",
     "WorkflowFile",
     "Rule",
-    "Analysis",
-    "Issue",
+    "WorkflowScan",
+    "WorkflowFinding",
     "PullRequest",
-    "Fix",
+    "WorkflowFix",
     "TelemetryRun",
     "TelemetryMetricSample",
     "DynamicEnrichment",

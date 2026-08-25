@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import {
   ChevronDown,
@@ -9,7 +9,6 @@ import {
   Wand2,
 } from "lucide-react"
 import { useMemo, useState } from "react"
-import { toast } from "sonner"
 import type {
   DockerFilePublic,
   DockerFindingPublic,
@@ -17,7 +16,7 @@ import type {
   DockerTargetPublic,
   PullRequestPublic,
 } from "@/client"
-import { DockerService, FixesService } from "@/client"
+import { DockerService, WorkflowFixesService } from "@/client"
 import { DockerFindingRow } from "@/components/DockerFindingRow"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -26,10 +25,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { useEngineTarget } from "@/hooks/useEngineTarget"
 import { dockerFixBranch } from "@/lib/delivery"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/docker/$repoId/analysis")({
   component: DockerAnalysisTab,
@@ -55,7 +54,7 @@ function DockerAnalysisTab() {
   // its deterministic branch has to come from the real PullRequest rows.
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => FixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
@@ -123,95 +122,41 @@ function TargetCard({
   onToggleOpen: () => void
   existingPr?: PullRequestPublic
 }) {
-  const queryClient = useQueryClient()
-
-  // Everything below the fold loads only once the card is expanded — a repo
-  // can hold many targets and each one costs a GitHub round-trip for files.
-  const { data: files } = useQuery({
-    queryKey: ["docker-files", target.id],
-    queryFn: () => DockerService.listDockerFiles({ targetId: target.id }),
-    enabled: isOpen,
-  })
-
-  const { data: findings } = useQuery({
-    queryKey: ["docker-findings", target.id],
-    queryFn: () => DockerService.listDockerFindings({ targetId: target.id }),
-    enabled: isOpen,
-  })
-
-  const { data: fixes } = useQuery({
-    queryKey: ["docker-fixes", target.id],
-    queryFn: () => DockerService.listDockerFixes({ targetId: target.id }),
-    enabled: isOpen,
-  })
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["docker-targets"] })
-    queryClient.invalidateQueries({ queryKey: ["docker-findings", target.id] })
-    queryClient.invalidateQueries({ queryKey: ["docker-scans", target.id] })
-    queryClient.invalidateQueries({ queryKey: ["docker-fixes", target.id] })
-    queryClient.invalidateQueries({ queryKey: ["pull-requests", "repo"] })
-  }
-
-  const toggleMutation = useMutation({
-    mutationFn: () => DockerService.toggleDockerTarget({ targetId: target.id }),
-    onSuccess: () => invalidate(),
-    onError: (e) =>
-      toast.error("Could not toggle target", {
-        description: apiErrorDetail(e),
-      }),
-  })
-
-  const scanMutation = useMutation({
-    mutationFn: () => DockerService.triggerDockerScan({ targetId: target.id }),
-    onSuccess: () => {
-      toast.success("Scan queued")
-      invalidate()
+  const {
+    files,
+    findings,
+    fixes,
+    toggleMutation,
+    scanMutation,
+    deleteMutation,
+    generateMutation,
+    deliverMutation,
+  } = useEngineTarget<DockerFilePublic, DockerFindingPublic, DockerFixPublic>(
+    target.id,
+    isOpen,
+    {
+      keyPrefix: "docker",
+      targetLabel: "Target",
+      listFiles: () => DockerService.listDockerFiles({ targetId: target.id }),
+      listFindings: () =>
+        DockerService.listDockerFindings({ targetId: target.id }),
+      listFixes: () => DockerService.listDockerFixes({ targetId: target.id }),
+      // The Docker endpoint flips server-side, so the desired state is
+      // passed for the shared signature's sake and ignored here.
+      toggle: () => DockerService.toggleDockerTarget({ targetId: target.id }),
+      scan: () => DockerService.triggerDockerScan({ targetId: target.id }),
+      remove: () => DockerService.deleteDockerTarget({ targetId: target.id }),
+      generate: (findingIds) =>
+        DockerService.triggerDockerFixGeneration({
+          targetId: target.id,
+          requestBody: findingIds.length
+            ? { finding_ids: findingIds }
+            : { finding_ids: null },
+        }),
+      deliver: (force) =>
+        DockerService.triggerDockerDelivery({ targetId: target.id, force }),
     },
-    onError: (e) =>
-      toast.error("Could not queue scan", { description: apiErrorDetail(e) }),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => DockerService.deleteDockerTarget({ targetId: target.id }),
-    onSuccess: () => {
-      toast.success("Target removed")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Could not remove target", {
-        description: apiErrorDetail(e),
-      }),
-  })
-
-  const generateMutation = useMutation({
-    mutationFn: (findingIds: string[]) =>
-      DockerService.triggerDockerFixGeneration({
-        targetId: target.id,
-        requestBody: findingIds.length
-          ? { finding_ids: findingIds }
-          : { finding_ids: null },
-      }),
-    onSuccess: () => {
-      toast.success("Fix generation queued")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Could not queue fixes", { description: apiErrorDetail(e) }),
-  })
-
-  const deliverMutation = useMutation({
-    mutationFn: (force: boolean) =>
-      DockerService.triggerDockerDelivery({ targetId: target.id, force }),
-    onSuccess: () => {
-      toast.success("Delivery queued")
-      invalidate()
-    },
-    onError: (e) =>
-      toast.error("Could not deliver fixes", {
-        description: apiErrorDetail(e),
-      }),
-  })
+  )
 
   const fixByFile = useMemo(() => {
     const map = new Map<string, DockerFixPublic>()
@@ -279,7 +224,7 @@ function TargetCard({
           <GradeBadge grade={target.latest_grade ?? null} />
           <Switch
             checked={target.enabled}
-            onCheckedChange={() => toggleMutation.mutate()}
+            onCheckedChange={() => toggleMutation.mutate(!target.enabled)}
             aria-label="Enable target"
           />
           <Button

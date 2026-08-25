@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { FaGithub } from "react-icons/fa"
 import { ApiError, AuthService } from "@/client"
 import { Button } from "@/components/ui/button"
-import { handleApiError, showErrorToast } from "@/utils"
+import { handleApiError, showErrorToast } from "@/lib/toast"
 
 export function GitHubOAuthButton() {
   const navigate = useNavigate()

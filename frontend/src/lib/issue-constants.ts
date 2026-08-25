@@ -1,11 +1,11 @@
-import type { IssueCategory } from "@/client"
-import { IssueCategorySchema } from "@/client/schemas.gen"
+import type { Category } from "@/client"
+import { CategorySchema } from "@/client/schemas.gen"
 import { CATEGORY_META } from "@/components/CategoryIcon"
 
-export const ISSUE_CATEGORIES: IssueCategory[] = [...IssueCategorySchema.enum]
+export const ISSUE_CATEGORIES: Category[] = [...CategorySchema.enum]
 
 export const CATEGORY_SELECT_OPTIONS: Array<{
-  value: IssueCategory | "all"
+  value: Category | "all"
   label: string
 }> = [
   { value: "all", label: "All categories" },

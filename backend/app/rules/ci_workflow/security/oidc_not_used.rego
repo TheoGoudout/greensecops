@@ -55,6 +55,40 @@ _check_env_for_static_creds(env, job_name) := {violation |
 	}
 }
 
+# The dominant form in the wild is not an env var at all — it is the cloud
+# login action taking the key as an input. This rule read only `env:`, so the
+# configuration it exists to replace was the one shape it could not see.
+_static_cred_inputs := {
+	"aws-access-key-id",
+	"aws-secret-access-key",
+	"creds",
+	"credentials",
+	"credentials_json",
+	"service_account_key",
+}
+
+violations contains violation if {
+	some job_name, job in input.jobs
+	some step_index, step in job.steps
+	some input_name, value in step["with"]
+	input_name in _static_cred_inputs
+	is_string(value)
+
+	violation := {
+		"rule": "oidc_not_used",
+		"severity": "high",
+		"category": "security",
+		"job": job_name,
+		"step": object.get(step, "uses", null),
+		"step_index": step_index,
+		"line_start": object.get(step, "__start_line__", null),
+		"line_end": object.get(step, "__end_line__", null),
+		"message": sprintf("Job '%v' passes a long-lived credential to %v through '%v'. Use OIDC instead — grant id-token: write and give the action a role to assume, so the run gets a short-lived token it cannot leak past its own duration.", [job_name, object.get(step, "uses", "an action"), input_name]),
+		"context": input_name,
+		"discriminator": sprintf("%v:%v:%v", [job_name, step_index, input_name]),
+	}
+}
+
 violations contains violation if {
 	some v in _check_env_for_static_creds(input.env, null)
 	violation := v

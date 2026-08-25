@@ -9,13 +9,17 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_PUBLIC
 from app.models import (
-    Analysis,
-    AnalysisStatus,
     DockerTarget,
     Repository,
+    ScanStatus,
     TerraformRoot,
+    WorkflowScan,
 )
-from app.services.badge_renderer import render_badge, render_unknown_badge
+from app.services.badge_renderer import (
+    _GRADE_COLORS,
+    render_badge,
+    render_unknown_badge,
+)
 from app.services.badge_signing import (
     repo_badge_message,
     verify_badge,
@@ -40,12 +44,14 @@ def _avg_grade_for_branch(
     None means analyses are pending or have not run yet.
     """
     analyses = session.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo_id)
-        .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.completed)
-        .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo_id)
+        .where(WorkflowScan.branch == branch)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .where(WorkflowScan.score.isnot(None))  # type: ignore[union-attr]
+        .order_by(
+            col(WorkflowScan.workflow_file_id), col(WorkflowScan.created_at).desc()
+        )
     ).all()
 
     avg, _ = average_latest_scores(list(analyses))
@@ -53,10 +59,10 @@ def _avg_grade_for_branch(
         return score_to_grade(avg)
 
     has_no_workflows = session.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == repo_id)
-        .where(Analysis.branch == branch)
-        .where(Analysis.status == AnalysisStatus.no_workflows)
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo_id)
+        .where(WorkflowScan.branch == branch)
+        .where(WorkflowScan.status == ScanStatus.no_targets)
         .limit(1)
     ).first()
 
@@ -134,8 +140,6 @@ def get_badge_json(
             "message": "pending",
             "color": "lightgrey",
         }
-
-    from app.services.badge_renderer import _GRADE_COLORS
 
     color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {
@@ -215,8 +219,6 @@ def get_terraform_root_badge_json(
             "color": "lightgrey",
         }
 
-    from app.services.badge_renderer import _GRADE_COLORS
-
     color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {
         "schemaVersion": 1,
@@ -295,8 +297,6 @@ def get_docker_target_badge_json(
             "message": "pending",
             "color": "lightgrey",
         }
-
-    from app.services.badge_renderer import _GRADE_COLORS
 
     color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
     return {

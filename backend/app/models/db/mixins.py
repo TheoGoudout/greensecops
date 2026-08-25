@@ -32,15 +32,15 @@ from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
 
 from ..enums import (
-    AnalysisFailureKind,
-    AnalysisTrigger,
+    Category,
     FindingResolutionReason,
     FindingStatus,
     FixStatus,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
+    ScanFailureKind,
     ScanStatus,
+    ScanTrigger,
+    Severity,
 )
 from .base import get_datetime_utc
 
@@ -81,11 +81,11 @@ class ScanMixin(SQLModel):
         default=ScanStatus.queued,
         sa_column_kwargs={"server_default": ScanStatus.queued.value},
     )
-    triggered_by: AnalysisTrigger = Field(default=AnalysisTrigger.manual)
+    triggered_by: ScanTrigger = Field(default=ScanTrigger.manual)
     score: float | None = Field(default=None)
     grade: str | None = Field(default=None, max_length=8)
     error_message: str | None = Field(default=None, max_length=2048)
-    failure_kind: AnalysisFailureKind | None = Field(default=None)
+    failure_kind: ScanFailureKind | None = Field(default=None)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
@@ -108,7 +108,7 @@ class FindingMixin(SQLModel):
     ``resolved_at``/``ignored_at`` mean anything: without it every scan would
     insert fresh rows and drop the user's dismissals.
 
-    Unlike ``Issue.status`` — owned by a DB trigger reacting to ``fix_id`` —
+    Unlike ``WorkflowFinding.status`` — owned by a DB trigger reacting to ``fix_id`` —
     this ``status`` is set directly by the application alongside the two
     timestamps.
     """
@@ -117,8 +117,8 @@ class FindingMixin(SQLModel):
         foreign_key="rule.id", nullable=False, ondelete="RESTRICT"
     )
     fingerprint: str = Field(max_length=16, index=True)
-    severity: IssueSeverity
-    category: IssueCategory
+    severity: Severity
+    category: Category
     status: FindingStatus = Field(
         default=FindingStatus.open,
         sa_column_kwargs={"server_default": FindingStatus.open.value},

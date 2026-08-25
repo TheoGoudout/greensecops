@@ -62,7 +62,7 @@ test.describe("Repository Detail", () => {
           route.fulfill({ json: [repo] })
         }
       }),
-      page.route("**/api/v1/analyses/**", (route) => {
+      page.route("**/api/v1/workflow-scans/**", (route) => {
         const url = route.request().url()
         const method = route.request().method()
         if (method === "POST" && url.includes("/trigger/")) {
@@ -76,10 +76,10 @@ test.describe("Repository Detail", () => {
           route.fulfill({ json: analyses })
         }
       }),
-      page.route("**/api/v1/issues/**", (route) => {
+      page.route("**/api/v1/workflow-findings/**", (route) => {
         route.fulfill({ json: issues })
       }),
-      page.route("**/api/v1/fixes/**", (route) => {
+      page.route("**/api/v1/workflow-fixes/**", (route) => {
         const url = route.request().url()
         const method = route.request().method()
         if (method === "POST" && url.includes("/sync-pr-status")) {
@@ -225,13 +225,13 @@ test.describe("Repository Detail", () => {
         route.fulfill({ json: MOCK_REPO })
       }
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FIX] })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (method === "POST" && url.includes("deliver-for-repo")) {

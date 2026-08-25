@@ -29,11 +29,22 @@ from pathlib import Path
 from opa_eval import ROOT, RULES_DIR, run_opa_eval, slugs
 from ruamel.yaml import YAML
 
-# Per-rule METADATA `good`/`bad` examples are only self-testable for the
-# ci_workflow domain, whose examples are literal GitHub Actions workflow YAML
-# that maps directly onto the OPA input schema. iac_terraform examples are
-# illustrative Terraform HCL and cloud_aws examples are illustrative CLI
-# output — neither parses as executable OPA input, so they are excluded here.
+# Per-rule METADATA `good`/`bad` examples are self-testable for every engine
+# whose examples are the language it actually analyses, and whose production
+# parser turns that language into the OPA input document. That is three of the
+# six: ci_workflow (workflow YAML), iac_terraform (HCL) and container_docker
+# (Dockerfiles and Compose files).
+#
+# It used to be one. The stated reason for excluding the other two was that
+# their examples "do not parse as executable OPA input" — true of cloud_aws,
+# whose examples are illustrative CLI output, and false of the other two, whose
+# examples go through `merge_terraform_configs` and `merge_docker_files`
+# unchanged. The gap was hiding two live defects: a `good` example that
+# violated its own rule, and a `bad` example that did not trigger it. Both are
+# exactly what this check exists to catch, and neither was catchable.
+#
+# ci_telemetry and container_runtime remain excluded: their examples are prose
+# sketches of a metrics payload rather than the payload itself.
 CI_WORKFLOW_RULES_DIR = RULES_DIR / "ci_workflow"
 EXAMPLES_DIR = ROOT / "examples"
 
@@ -48,6 +59,10 @@ INSECURE_EXPECTED = {"hardcoded_secrets", "unpinned_actions", "caching_missing"}
 # fail to fire here, passing CI while being broken in production.
 sys.path.insert(0, str(ROOT / "backend"))
 from app.core.rego_metadata import read_metadata_block  # noqa: E402
+from app.services.docker.merge import merge_docker_files  # noqa: E402
+from app.services.terraform.hcl_parser import (
+    merge_terraform_configs,  # noqa: E402
+)
 from app.services.workflow_enrichment import (
     attach_action_metadata,  # noqa: E402
 )
@@ -155,15 +170,91 @@ def check_rule_metadata_examples() -> list[str]:
     return errors
 
 
+def _terraform_document(files: dict[str, str]) -> dict:
+    return merge_terraform_configs(list(files.items()))
+
+
+def _docker_document(files: dict[str, str]) -> dict:
+    return merge_docker_files(list(files.items()))
+
+
+def _default_filename(domain: str, slug: str, snippet: str) -> str:
+    """The filename a single-snippet example is evaluated under.
+
+    It is load-bearing for Docker: ``merge.classify_docker_file`` decides
+    whether a snippet is a Dockerfile or a Compose file from its *name*, and a
+    Compose rule reading `input.compose_files` sees nothing if its example was
+    filed as a Dockerfile.
+    """
+    if domain == "iac_terraform":
+        return "main.tf"
+    if slug.startswith("compose") or snippet.lstrip().startswith(
+        ("services:", "version:", "name:")
+    ):
+        return "compose.yml"
+    return "Dockerfile"
+
+
+def _example_files(examples: dict, kind: str, domain: str, slug: str) -> dict[str, str]:
+    """The files one direction of an example is evaluated as.
+
+    ``bad_files``/``good_files`` map filename to content, for the rules whose
+    subject is a *relationship between* files — the four ``compose_override_*``
+    rules compare a base against its override, and a single snippet cannot
+    express that. Everything else uses the plain ``bad``/``good`` snippet the
+    docs render, under a derived filename.
+    """
+    multi = examples.get(f"{kind}_files")
+    if multi:
+        return dict(multi)
+    snippet = examples.get(kind)
+    if not snippet:
+        return {}
+    return {_default_filename(domain, slug, snippet): snippet}
+
+
+def check_parsed_domain_examples(domain: str, build) -> list[str]:
+    """``good`` must not fire, ``bad`` must, for one non-workflow engine."""
+    errors: list[str] = []
+    for rego in sorted((RULES_DIR / domain).glob("*/*.rego")):
+        if rego.name.endswith("_test.rego"):
+            continue
+        category, name = rego.parent.name, rego.stem
+        examples = (_parse_metadata(rego).get("custom") or {}).get("examples") or {}
+        query = f"data.greensecops.{domain}.{category}.{name}.violations"
+
+        for kind in ("good", "bad"):
+            files = _example_files(examples, kind, domain, name)
+            if not files:
+                continue
+            hits = run_opa_eval(build(files), query)
+            if kind == "good" and hits:
+                errors.append(
+                    f"{domain}/{category}/{name}: 'good' example violates its own rule "
+                    f"({len(hits)} violation(s)) — a compliant example must pass."
+                )
+            if kind == "bad" and not hits:
+                errors.append(
+                    f"{domain}/{category}/{name}: 'bad' example does not trigger its "
+                    "own rule — a non-compliant example must demonstrate the violation."
+                )
+    return errors
+
+
 def main() -> int:
-    errors = check_canonical_examples() + check_rule_metadata_examples()
+    errors = (
+        check_canonical_examples()
+        + check_rule_metadata_examples()
+        + check_parsed_domain_examples("iac_terraform", _terraform_document)
+        + check_parsed_domain_examples("container_docker", _docker_document)
+    )
     if errors:
         print("Example validation FAILED:\n", file=sys.stderr)
         for err in errors:
             print(f"  ✗ {err}", file=sys.stderr)
         print(f"\n{len(errors)} problem(s) found.", file=sys.stderr)
         return 1
-    print("All workflow examples validated against the OPA rule suite ✅")
+    print("All rule examples validated against the OPA rule suite ✅")
     return 0
 
 

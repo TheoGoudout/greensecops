@@ -14,14 +14,11 @@ from datetime import datetime, timezone
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
     BillingSubscription,
     BillingUsageRecord,
     CloudAccount,
     DockerScan,
     DockerTarget,
-    Fix,
     FixStatus,
     LLMProvider,
     Organization,
@@ -37,6 +34,8 @@ from app.models import (
     User,
     UserTier,
     WorkflowFile,
+    WorkflowFix,
+    WorkflowScan,
 )
 
 
@@ -127,9 +126,9 @@ def make_analysis(
     repo: Repository,
     wf: WorkflowFile,
     *,
-    status: AnalysisStatus = AnalysisStatus.completed,
-) -> Analysis:
-    analysis = Analysis(
+    status: ScanStatus = ScanStatus.completed,
+) -> WorkflowScan:
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
@@ -142,8 +141,8 @@ def make_analysis(
     return analysis
 
 
-def make_fix(db: Session, wf: WorkflowFile) -> Fix:
-    fix = Fix(
+def make_fix(db: Session, wf: WorkflowFile) -> WorkflowFix:
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o",

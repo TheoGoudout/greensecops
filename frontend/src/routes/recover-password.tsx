@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { isLoggedIn } from "@/hooks/useAuth"
-import { handleApiError, showSuccessToast } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 
 const formSchema = z.object({
   email: z.email(),

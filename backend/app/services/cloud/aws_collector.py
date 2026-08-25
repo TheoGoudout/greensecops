@@ -58,7 +58,7 @@ class CloudCollectionError(Exception):
     """Raised when assuming the customer's role fails outright."""
 
 
-def _base_sts_client() -> Any:  # noqa: ANN401 — boto3 client has no public stub type
+def _base_sts_client() -> Any:  # boto3 client has no public stub type
     """The STS client for GreenSecOps's own identity — the one customer IAM
     roles grant ``sts:AssumeRole`` trust to.
 

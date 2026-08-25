@@ -24,9 +24,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
+import { apiErrorDetail } from "@/lib/api-error"
 import { dynamicStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/repositories/$repoId/telemetry")(
   {

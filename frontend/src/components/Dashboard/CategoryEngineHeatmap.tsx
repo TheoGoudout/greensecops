@@ -1,4 +1,4 @@
-import type { EngineOverview, IssueCategory } from "@/client"
+import type { Category, EngineOverview } from "@/client"
 import { CATEGORY_META } from "@/components/CategoryIcon"
 import { ENGINE_META } from "@/lib/engine-meta"
 import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
@@ -60,7 +60,7 @@ export function CategoryEngineHeatmap({
 }: {
   engines: EngineOverview[]
 }) {
-  const openFor = (engine: EngineOverview, category: IssueCategory) =>
+  const openFor = (engine: EngineOverview, category: Category) =>
     engine.findings.by_category.find((c) => c.category === category)?.open ?? 0
 
   const cellValues = engines.flatMap((engine) =>

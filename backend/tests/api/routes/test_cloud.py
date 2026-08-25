@@ -9,21 +9,21 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    AnalysisTrigger,
+    Category,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
     CloudScan,
     FindingResolutionReason,
     FindingStatus,
-    IssueCategory,
-    IssueSeverity,
     Organization,
     OrgMember,
     OrgRole,
     Rule,
     RuleDomain,
     ScanStatus,
+    ScanTrigger,
+    Severity,
     User,
     UserTier,
 )
@@ -69,7 +69,7 @@ def completed_scan(db: Session, cloud_account: CloudAccount) -> CloudScan:
     scan = CloudScan(
         cloud_account_id=cloud_account.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         resource_count=5,
         score=72.0,
         grade="B",
@@ -150,7 +150,7 @@ def test_list_cloud_accounts_includes_latest_grade(
     superuser_token_headers: dict[str, str],
     org: Organization,
     cloud_account: CloudAccount,
-    completed_scan: CloudScan,  # noqa: ARG001
+    completed_scan: CloudScan,
 ) -> None:
     response = client.get(
         f"{settings.API_V1_STR}/cloud-accounts/",
@@ -364,8 +364,8 @@ def test_list_cloud_findings_excludes_resolved_by_default(
         resource_type="aws_s3_bucket",
         resource_id="my-bucket",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         status=FindingStatus.open,
         message="open finding",
     )
@@ -376,8 +376,8 @@ def test_list_cloud_findings_excludes_resolved_by_default(
         resource_type="aws_s3_bucket",
         resource_id="other-bucket",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         status=FindingStatus.resolved,
         message="resolved finding",
         resolved_at=datetime.now(timezone.utc),
@@ -415,8 +415,8 @@ def test_list_cloud_findings_include_resolved(
         resource_type="aws_s3_bucket",
         resource_id="other-bucket",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         status=FindingStatus.resolved,
         message="resolved finding",
         resolved_at=datetime.now(timezone.utc),

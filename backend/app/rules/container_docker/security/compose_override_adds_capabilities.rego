@@ -10,13 +10,37 @@
 #       services:
 #         api:
 #           cap_add:
-#             - SYS_ADMIN
+#             - SYS_PTRACE
+#     bad_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             cap_drop:
+#               - ALL
+#       compose.override.yml: |
+#         services:
+#           api:
+#             cap_add:
+#               - SYS_PTRACE
 #     good: |
 #       # compose.override.yml — grant only the specific capability needed
 #       services:
 #         api:
 #           cap_add:
 #             - NET_BIND_SERVICE
+#     good_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             cap_drop:
+#               - ALL
+#       compose.override.yml: |
+#         services:
+#           api:
+#             cap_add:
+#               - NET_BIND_SERVICE
 #     fix: |
 #       Work out which operation actually failed and grant the narrowest capability that permits it — SYS_ADMIN is almost never the right answer, it is the one that makes the error go away. Where a debugger needs SYS_PTRACE, put it in a separate profile rather than in the override every developer loads.
 package greensecops.container_docker.security.compose_override_adds_capabilities

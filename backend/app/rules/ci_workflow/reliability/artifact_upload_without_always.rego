@@ -32,9 +32,13 @@ import rego.v1
 
 _diagnostic_pattern := `(?i)(log|report|result|coverage|screenshot|trace|dump|junit|diagnos)`
 
-_runs_on_failure(step) if {
-	condition := lower(sprintf("%v", [object.get(step, "if", "")]))
-	some marker in ["always()", "failure()", "cancelled()", "!cancelled()"]
+# Reads the `if:` of whichever node it is given, so the job-level condition
+# counts as well as the step's. A job guarded `if: ${{ !cancelled() }}` already
+# runs its upload on a failed run; reporting the step inside it asked the author
+# to write the same guard twice.
+_runs_on_failure(node) if {
+	condition := lower(sprintf("%v", [object.get(node, "if", "")]))
+	some marker in ["always()", "failure()", "cancelled()"]
 	contains(condition, marker)
 }
 
@@ -49,6 +53,7 @@ violations contains violation if {
 	contains(object.get(step, "uses", ""), "actions/upload-artifact")
 	_is_diagnostic(step)
 	not _runs_on_failure(step)
+	not _runs_on_failure(job)
 
 	violation := {
 		"rule": "artifact_upload_without_always",

@@ -109,8 +109,6 @@ def _charge_fix(
 
     A regenerate reuses the fix row but is still a fresh LLM call, so it is
     charged again — usage counts generation events, not surviving rows.
-    ``spec.name`` already matches the ``UsageEngine`` values, so the mapping
-    needs no second table to keep in step.
     """
     if repo is None:
         return
@@ -119,7 +117,7 @@ def _charge_fix(
         org_id=repo.org_id,
         repo_id=repo.id,
         meter=UsageMeter.fixes,
-        engine=UsageEngine(spec.name),
+        engine=UsageEngine.of(spec.engine),
         source_type=f"{spec.name}_fix",
         source_id=fix_id,
         commit=False,

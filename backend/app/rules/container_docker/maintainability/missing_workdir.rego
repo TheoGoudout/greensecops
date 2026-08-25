@@ -31,13 +31,61 @@ _sets_workdir(df) if {
 	inst.stage == df.final_stage
 }
 
-# A stage that runs nothing of its own has no relative paths to resolve. This
-# is the scratch/distroless shape, where the image is a file tree plus an
-# absolute entrypoint.
+# The point of a WORKDIR is that something resolves a path against it. A stage
+# whose COPY destinations are all absolute and whose RUNs never `cd` has
+# nothing to resolve, which is the whole nginx/distroless shape — a file tree
+# plus an absolute entrypoint. Treating any COPY as "relative work" reported
+# `COPY --from=b /build/html /usr/share/nginx/html`, where both paths are
+# absolute.
+
+# The destination is the last token of a COPY/ADD in the shell form; the JSON
+# form is a list, and its last element is the destination just the same.
+_copy_destination(inst) := last if {
+	tokens := [t | some t in regex.split(`\s+`, trim_space(trim(inst.value, "[]"))); t != ""]
+	count(tokens) > 1
+	last := trim(tokens[count(tokens) - 1], `"',`)
+}
+
 _has_relative_work(df) if {
 	some inst in df.instructions
-	inst.instruction in {"RUN", "CMD", "ENTRYPOINT", "COPY", "ADD"}
+	inst.instruction in {"COPY", "ADD"}
 	inst.stage == df.final_stage
+	destination := _copy_destination(inst)
+	not startswith(destination, "/")
+}
+
+# A script that changes directory, or names a path relative to the cwd. Any
+# `cd` counts, absolute target included: `RUN cd /app && npm install` is
+# precisely the thing a WORKDIR replaces, and it is the shape this rule is most
+# useful on.
+_has_relative_work(df) if {
+	some inst in df.instructions
+	inst.instruction == "RUN"
+	inst.stage == df.final_stage
+	regex.match(`(^|[;&|]\s*)cd\s|\./`, inst.value)
+}
+
+# A command argument that names a file resolves against the working directory.
+# `["node", "server.js"]` does; `["nginx", "-g", "daemon off;"]` does not, and
+# neither does an absolute `["/docker-entrypoint.sh"]`. The test is "looks like
+# a path and is not absolute": a bare `/`, or a filename with an extension.
+_names_a_relative_path(token) if {
+	not startswith(token, "/")
+	contains(token, "/")
+}
+
+_names_a_relative_path(token) if {
+	not startswith(token, "/")
+	regex.match(`^[A-Za-z0-9_.-]+\.[A-Za-z0-9]+$`, token)
+}
+
+_has_relative_work(df) if {
+	some inst in df.instructions
+	inst.instruction in {"CMD", "ENTRYPOINT"}
+	inst.stage == df.final_stage
+	some token in regex.split(`[\s,\[\]"']+`, inst.value)
+	token != ""
+	_names_a_relative_path(token)
 }
 
 violations contains violation if {

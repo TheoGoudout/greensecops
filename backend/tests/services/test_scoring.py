@@ -1,6 +1,6 @@
 import pytest
 
-from app.models import IssueCategory
+from app.models import Category
 from app.services.scoring import compute_category_scores, compute_score, score_to_grade
 
 # ─── score_to_grade (unchanged) ────────────────────────────────────────────
@@ -96,37 +96,37 @@ def test_score_decreases_with_violations() -> None:
 
 
 def test_category_scores_average_back_to_repo_score_with_no_penalties() -> None:
-    scores = compute_category_scores(75.0, dict.fromkeys(IssueCategory, 0.0))
+    scores = compute_category_scores(75.0, dict.fromkeys(Category, 0.0))
     assert all(score == 75.0 for score, _grade in scores.values())
 
 
 def test_category_scores_average_exactly_matches_repo_score() -> None:
     penalties = {
-        IssueCategory.security: 10.0,
-        IssueCategory.energy: 0.0,
-        IssueCategory.reliability: 0.0,
-        IssueCategory.performance: 0.0,
-        IssueCategory.maintainability: 0.0,
+        Category.security: 10.0,
+        Category.energy: 0.0,
+        Category.reliability: 0.0,
+        Category.performance: 0.0,
+        Category.maintainability: 0.0,
     }
     scores = compute_category_scores(75.0, penalties)
     values = [score for score, _grade in scores.values()]
     assert sum(values) / len(values) == pytest.approx(75.0)
-    assert scores[IssueCategory.security][0] < scores[IssueCategory.energy][0]
+    assert scores[Category.security][0] < scores[Category.energy][0]
 
 
 def test_category_scores_include_grade_letters() -> None:
-    scores = compute_category_scores(100.0, dict.fromkeys(IssueCategory, 0.0))
-    assert scores[IssueCategory.security][1] == "A+++"
+    scores = compute_category_scores(100.0, dict.fromkeys(Category, 0.0))
+    assert scores[Category.security][1] == "A+++"
 
 
 def test_category_scores_clamp_at_bounds_on_skewed_penalty() -> None:
     penalties = {
-        IssueCategory.security: 1000.0,
-        IssueCategory.energy: 0.0,
-        IssueCategory.reliability: 0.0,
-        IssueCategory.performance: 0.0,
-        IssueCategory.maintainability: 0.0,
+        Category.security: 1000.0,
+        Category.energy: 0.0,
+        Category.reliability: 0.0,
+        Category.performance: 0.0,
+        Category.maintainability: 0.0,
     }
     scores = compute_category_scores(50.0, penalties)
-    assert scores[IssueCategory.security][0] == 0.0
-    assert scores[IssueCategory.energy][0] == 100.0
+    assert scores[Category.security][0] == 0.0
+    assert scores[Category.energy][0] == 100.0

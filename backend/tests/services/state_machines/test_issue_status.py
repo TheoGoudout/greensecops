@@ -1,4 +1,4 @@
-"""DB-backed tests for the trigger-maintained Issue.status column (migration 0022)."""
+"""DB-backed tests for the trigger-maintained WorkflowFinding.status column (migration 0022)."""
 
 import uuid
 from datetime import datetime, timezone
@@ -7,19 +7,19 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    Fix,
+    Category,
+    FindingStatus,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueSeverity,
-    IssueStatus,
     LLMProvider,
     Organization,
     Repository,
     Rule,
+    ScanStatus,
+    Severity,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 
 
@@ -43,22 +43,22 @@ def issue_ctx(db: Session):
     )
     db.add(wf)
     db.flush()
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash="h",
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
     )
     db.add(analysis)
     db.flush()
     rule = db.exec(select(Rule)).first()
     assert rule is not None
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="m",
         fingerprint=uuid.uuid4().hex[:16],
     )
@@ -70,12 +70,12 @@ def issue_ctx(db: Session):
 
 def test_new_issue_is_open(issue_ctx) -> None:
     _, _, issue = issue_ctx
-    assert issue.status is IssueStatus.open
+    assert issue.status is FindingStatus.open
 
 
 def test_linking_a_fix_sets_fix_in_progress(issue_ctx) -> None:
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -87,12 +87,12 @@ def test_linking_a_fix_sets_fix_in_progress(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.fix_in_progress
+    assert issue.status is FindingStatus.fix_in_progress
 
 
 def test_deleting_the_fix_reverts_to_open_via_cascade(issue_ctx) -> None:
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -110,12 +110,12 @@ def test_deleting_the_fix_reverts_to_open_via_cascade(issue_ctx) -> None:
     db.commit()
     db.refresh(issue)
     assert issue.fix_id is None
-    assert issue.status is IssueStatus.open
+    assert issue.status is FindingStatus.open
 
 
 def test_resolving_wins_over_fix_link(issue_ctx) -> None:
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -128,7 +128,7 @@ def test_resolving_wins_over_fix_link(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.resolved
+    assert issue.status is FindingStatus.resolved
 
 
 def test_ignoring_sets_ignored(issue_ctx) -> None:
@@ -137,13 +137,13 @@ def test_ignoring_sets_ignored(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
 
 
 def test_ignored_wins_over_resolved_and_fix(issue_ctx) -> None:
     # ``ignored_at`` takes precedence over both resolved_at and a fix link.
     db, wf, issue = issue_ctx
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="m",
@@ -157,7 +157,7 @@ def test_ignored_wins_over_resolved_and_fix(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
 
 
 def test_unignoring_falls_back_to_underlying_state(issue_ctx) -> None:
@@ -166,10 +166,10 @@ def test_unignoring_falls_back_to_underlying_state(issue_ctx) -> None:
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
     # Clearing ignored_at reverts to the resolved_at/fix_id-derived state.
     issue.ignored_at = None
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status is IssueStatus.open
+    assert issue.status is FindingStatus.open

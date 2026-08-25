@@ -57,8 +57,31 @@ test_violation_when_only_a_builder_stage_sets_workdir if {
 		[_stage(0, "builder", false), _stage(1, null, true)],
 		[
 			_inst("WORKDIR", "/build", 0),
-			_inst("COPY", "--from=builder /build/out /app", 1),
+			_inst("COPY", "--from=builder /build/out app/", 1),
 		],
+	)
+	count(violations) == 1
+}
+
+# The nginx/distroless shape: a file tree copied to an absolute destination and
+# a command the base image supplies. Nothing resolves against a working
+# directory, so there is nothing to state. This fired on four of this
+# repository's own Dockerfiles.
+test_no_violation_when_every_path_is_absolute if {
+	violations := missing_workdir.violations with input as _df(
+		[_stage(0, "builder", false), _stage(1, null, true)],
+		[
+			_inst("COPY", "--from=builder /build/html /usr/share/nginx/html", 1),
+			_inst("USER", "101", 1),
+		],
+	)
+	count(violations) == 0
+}
+
+test_violation_when_a_run_step_changes_directory if {
+	violations := missing_workdir.violations with input as _df(
+		[_stage(0, null, true)],
+		[_inst("RUN", "cd src && make", 0)],
 	)
 	count(violations) == 1
 }
@@ -79,7 +102,7 @@ test_no_violation_for_a_stage_with_no_work if {
 test_reports_the_final_stage_name if {
 	violations := missing_workdir.violations with input as _df(
 		[_stage(0, "runtime", true)],
-		[_inst("RUN", "true", 0)],
+		[_inst("RUN", "./configure", 0)],
 	)
 	count(violations) == 1
 	some v in violations

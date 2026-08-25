@@ -17,41 +17,45 @@
       "rule_slug": "hardcoded_credentials_in_tf",
       "severity": "critical",
       "category": "security",
-      "message": "Resource 'aws_instance.web_host' has a hardcoded AWS access key ID literal.",
+      "message": "'aws_instance.web_host' contains a literal matching a known credential format. Move it out of the configuration and rotate it \u2014 it is in git history from the commit that added it.",
       "resource_address": "aws_instance.web_host",
       "file_path": "ec2.tf",
       "line_start": 1,
-      "line_end": 32
+      "line_end": 32,
+      "discriminator": "aws_instance.web_host"
     },
     {
       "rule_slug": "hardcoded_credentials_in_tf",
       "severity": "critical",
       "category": "security",
-      "message": "Resource 'aws_lambda_function.analysis_lambda' has a hardcoded AWS access key ID literal.",
+      "message": "'aws_lambda_function.analysis_lambda' contains a literal matching a known credential format. Move it out of the configuration and rotate it \u2014 it is in git history from the commit that added it.",
       "resource_address": "aws_lambda_function.analysis_lambda",
       "file_path": "lambda.tf",
       "line_start": 32,
-      "line_end": 59
+      "line_end": 59,
+      "discriminator": "aws_lambda_function.analysis_lambda"
+    },
+    {
+      "rule_slug": "hardcoded_credentials_in_tf",
+      "severity": "critical",
+      "category": "security",
+      "message": "'provider.aws' contains a literal matching a known credential format. Move it out of the configuration and rotate it \u2014 it is in git history from the commit that added it.",
+      "resource_address": "provider.aws",
+      "file_path": "providers.tf",
+      "line_start": 7,
+      "line_end": 12,
+      "discriminator": "provider.aws"
     },
     {
       "rule_slug": "open_ingress_security_group",
       "severity": "critical",
       "category": "security",
-      "message": "Security group 'web-node' allows ingress from 0.0.0.0/0 on port 22.",
+      "message": "'aws_security_group.web-node' allows ingress from 0.0.0.0/0 on 22.",
       "resource_address": "aws_security_group.web-node",
       "file_path": "ec2.tf",
       "line_start": 77,
-      "line_end": 115
-    },
-    {
-      "rule_slug": "open_ingress_security_group",
-      "severity": "critical",
-      "category": "security",
-      "message": "Security group 'web-node' allows ingress from 0.0.0.0/0 on port 80.",
-      "resource_address": "aws_security_group.web-node",
-      "file_path": "ec2.tf",
-      "line_start": 77,
-      "line_end": 115
+      "line_end": 115,
+      "discriminator": "22:0.0.0.0/0"
     },
     {
       "rule_slug": "rds_no_backup_retention",
@@ -61,7 +65,8 @@
       "resource_address": "aws_db_instance.default",
       "file_path": "db-app.tf",
       "line_start": 1,
-      "line_end": 42
+      "line_end": 42,
+      "discriminator": null
     },
     {
       "rule_slug": "rds_no_deletion_protection",
@@ -71,7 +76,8 @@
       "resource_address": "aws_db_instance.default",
       "file_path": "db-app.tf",
       "line_start": 1,
-      "line_end": 42
+      "line_end": 42,
+      "discriminator": null
     },
     {
       "rule_slug": "rds_not_encrypted",
@@ -81,7 +87,8 @@
       "resource_address": "aws_db_instance.default",
       "file_path": "db-app.tf",
       "line_start": 1,
-      "line_end": 42
+      "line_end": 42,
+      "discriminator": null
     },
     {
       "rule_slug": "rds_publicly_accessible",
@@ -91,7 +98,8 @@
       "resource_address": "aws_db_instance.default",
       "file_path": "db-app.tf",
       "line_start": 1,
-      "line_end": 42
+      "line_end": 42,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_bucket_missing_versioning",
@@ -101,7 +109,8 @@
       "resource_address": "aws_s3_bucket.data",
       "file_path": "s3.tf",
       "line_start": 1,
-      "line_end": 21
+      "line_end": 21,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_bucket_missing_versioning",
@@ -111,7 +120,8 @@
       "resource_address": "aws_s3_bucket.financials",
       "file_path": "s3.tf",
       "line_start": 42,
-      "line_end": 63
+      "line_end": 63,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_bucket_missing_versioning",
@@ -121,7 +131,8 @@
       "resource_address": "aws_s3_bucket.flowbucket",
       "file_path": "ec2.tf",
       "line_start": 271,
-      "line_end": 288
+      "line_end": 288,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_public_access_block_disabled",
@@ -131,7 +142,8 @@
       "resource_address": "aws_s3_bucket.data",
       "file_path": "s3.tf",
       "line_start": 1,
-      "line_end": 21
+      "line_end": 21,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_public_access_block_disabled",
@@ -141,7 +153,8 @@
       "resource_address": "aws_s3_bucket.data_science",
       "file_path": "s3.tf",
       "line_start": 89,
-      "line_end": 111
+      "line_end": 111,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_public_access_block_disabled",
@@ -151,7 +164,8 @@
       "resource_address": "aws_s3_bucket.financials",
       "file_path": "s3.tf",
       "line_start": 42,
-      "line_end": 63
+      "line_end": 63,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_public_access_block_disabled",
@@ -161,7 +175,8 @@
       "resource_address": "aws_s3_bucket.flowbucket",
       "file_path": "ec2.tf",
       "line_start": 271,
-      "line_end": 288
+      "line_end": 288,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_public_access_block_disabled",
@@ -171,7 +186,8 @@
       "resource_address": "aws_s3_bucket.logs",
       "file_path": "s3.tf",
       "line_start": 113,
-      "line_end": 141
+      "line_end": 141,
+      "discriminator": null
     },
     {
       "rule_slug": "s3_public_access_block_disabled",
@@ -181,7 +197,8 @@
       "resource_address": "aws_s3_bucket.operations",
       "file_path": "s3.tf",
       "line_start": 65,
-      "line_end": 87
+      "line_end": 87,
+      "discriminator": null
     },
     {
       "rule_slug": "unencrypted_ebs_volume",
@@ -191,9 +208,10 @@
       "resource_address": "aws_ebs_volume.web_host_storage",
       "file_path": "ec2.tf",
       "line_start": 34,
-      "line_end": 51
+      "line_end": 51,
+      "discriminator": null
     }
   ],
-  "expected_finding_count": 17,
+  "expected_finding_count": 18,
   "expected_grade": null
 }

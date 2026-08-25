@@ -1,11 +1,21 @@
 """Tests for badge URL signing helpers."""
 
+import pytest
+
+from app.core.config import settings
 from app.services.badge_signing import (
     build_badge_svg_url,
     repo_badge_message,
     sign_badge,
     verify_badge,
 )
+
+# The signing key these digests were computed with. Pinned here rather than
+# inherited from the environment: `sign_badge` is an HMAC over
+# `settings.SECRET_KEY`, so with an ambient key these assertions fail on any
+# machine whose .env differs — and fail claiming the *message format* changed,
+# which is the one thing they are meant to detect.
+_PINNED_KEY = "changethischangethischangethischangethischangethischangethischanget"
 
 # Badge signatures are baked into URLs users paste into their READMEs, so a
 # change to how a message is built silently breaks every badge already out
@@ -17,7 +27,8 @@ _PINNED = {
 }
 
 
-def test_signatures_are_pinned() -> None:
+def test_signatures_are_pinned(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "SECRET_KEY", _PINNED_KEY)
     for message, expected in _PINNED.items():
         assert sign_badge(message) == expected
 

@@ -15,7 +15,6 @@ Typical use::
     sm.force_to(fix, sm.FixMachine, FixStatus.delivering)    # admin override
 """
 
-from .analysis import AnalysisMachine
 from .base import (
     IllegalTransition,
     advance,
@@ -35,7 +34,6 @@ from .fix import (
     REJECTED_STATUSES,
     FixMachine,
 )
-from .issue import IssueMachine
 from .pull_request import PullRequestMachine
 from .repository import RepositoryMachine, sync_access_flag
 from .scan import ScanMachine
@@ -50,12 +48,10 @@ __all__ = [
     "IllegalTransition",
     "sync_access_flag",
     # machines
-    "AnalysisMachine",
     "BillingSubscriptionMachine",
     "CloudAccountMachine",
     "FindingMachine",
     "FixMachine",
-    "IssueMachine",
     "PullRequestMachine",
     "RepositoryMachine",
     "ScanMachine",

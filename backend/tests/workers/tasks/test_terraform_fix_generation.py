@@ -18,15 +18,15 @@ import pytest
 from sqlmodel import Session
 
 from app.models import (
+    Category,
     FixStatus,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     Repository,
     Rule,
     RuleDomain,
     ScanStatus,
+    Severity,
     TerraformFinding,
     TerraformFix,
     TerraformRoot,
@@ -126,8 +126,8 @@ def _finding(
         rule_id=rule.id,
         file_path="s3.tf",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="S3 bucket 'data' has no versioning configured.",
     )
     db.add(f)
@@ -164,7 +164,7 @@ def _patch_llm(content: str) -> Any:
     )
 
 
-def test_no_findings_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_no_findings_returns_error(db: Session) -> None:
     result = run_terraform_fix_generation([str(uuid.uuid4())])
     assert result["status"] == "error"
     assert result["detail"] == "no_findings_found"

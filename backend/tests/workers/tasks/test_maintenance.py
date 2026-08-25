@@ -6,24 +6,24 @@ from datetime import datetime, timedelta, timezone
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
-    AnalysisFailureKind,
-    AnalysisStatus,
+    Category,
     DynamicAnalysisStatus,
-    Fix,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
     PullRequestState,
     Repository,
     Rule,
+    ScanFailureKind,
+    ScanStatus,
+    Severity,
     TelemetryRun,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.workers.tasks.maintenance import _sweep_stuck_states_impl
 
@@ -62,7 +62,7 @@ def _build_telemetry_run(
     return run
 
 
-def _build_chain(db: Session) -> tuple[Analysis, Fix]:
+def _build_chain(db: Session) -> tuple[WorkflowScan, WorkflowFix]:
     org = Organization(name=f"maint-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
     db.add(org)
     db.commit()
@@ -90,11 +90,11 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
     db.refresh(wf)
 
     old = datetime.now(timezone.utc) - timedelta(hours=2)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.running,
+        status=ScanStatus.running,
         created_at=old,
     )
     db.add(analysis)
@@ -103,8 +103,8 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
 
     rule = Rule(
         slug=f"maint_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.energy,
-        severity=IssueSeverity.low,
+        category=Category.energy,
+        severity=Severity.low,
         title="t",
         description="d",
     )
@@ -112,20 +112,20 @@ def _build_chain(db: Session) -> tuple[Analysis, Fix]:
     db.commit()
     db.refresh(rule)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.low,
-        category=IssueCategory.energy,
+        severity=Severity.low,
+        category=Category.energy,
         message="m",
     )
     db.add(issue)
     db.commit()
     db.refresh(issue)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -148,7 +148,7 @@ def test_sweeper_fails_stuck_analysis_and_fix(db: Session) -> None:
     assert result["swept_fixes"] >= 1
     db.refresh(analysis)
     db.refresh(fix)
-    assert analysis.status == AnalysisStatus.failed
+    assert analysis.status == ScanStatus.failed
     assert "Timed out" in (analysis.error_message or "")
     assert analysis.completed_at is not None
     assert fix.status == FixStatus.failed
@@ -168,7 +168,7 @@ def test_sweeper_leaves_recent_records_alone(db: Session) -> None:
 
     db.refresh(analysis)
     db.refresh(fix)
-    assert analysis.status == AnalysisStatus.running
+    assert analysis.status == ScanStatus.running
     assert fix.status == FixStatus.generating
 
 
@@ -194,7 +194,7 @@ def test_sweeper_leaves_recent_telemetry_runs_alone(db: Session) -> None:
     assert run.dynamic_status == DynamicAnalysisStatus.running
 
 
-def test_sweeper_task_wrapper_runs(db: Session) -> None:  # noqa: ARG001
+def test_sweeper_task_wrapper_runs(db: Session) -> None:
     from app.workers.tasks.maintenance import sweep_stuck_states
 
     result = sweep_stuck_states.apply()
@@ -299,14 +299,14 @@ def _failed_analysis(
     db: Session,
     repo: Repository,
     wf: WorkflowFile,
-    kind: AnalysisFailureKind,
+    kind: ScanFailureKind,
     completed_at: datetime | None = None,
-) -> Analysis:
-    a = Analysis(
+) -> WorkflowScan:
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.failed,
+        status=ScanStatus.failed,
         failure_kind=kind,
         branch="main",
         completed_at=completed_at or datetime.now(timezone.utc),
@@ -330,7 +330,7 @@ def test_retry_transient_analyses_schedules_rerun(db: Session) -> None:
     db.commit()
     wf = db.get(WorkflowFile, analysis.workflow_file_id)
     assert wf is not None
-    _failed_analysis(db, repo, wf, AnalysisFailureKind.transient)
+    _failed_analysis(db, repo, wf, ScanFailureKind.transient)
 
     with (
         patch(
@@ -375,13 +375,13 @@ def test_retry_transient_analyses_skips_permanent_old_and_exhausted(
     assert wf is not None
 
     # Permanent failure: never retried.
-    _failed_analysis(db, repo, wf, AnalysisFailureKind.permanent)
+    _failed_analysis(db, repo, wf, ScanFailureKind.permanent)
     # Transient but too old: outside the window.
     _failed_analysis(
         db,
         repo,
         wf,
-        AnalysisFailureKind.transient,
+        ScanFailureKind.transient,
         completed_at=datetime.now(timezone.utc) - timedelta(hours=48),
     )
 
@@ -402,7 +402,7 @@ def test_retry_transient_analyses_skips_permanent_old_and_exhausted(
     # Exhausted: MAX_AUTO_RETRY_ATTEMPTS recent transient failures for the
     # same content hash stop further retries.
     for _ in range(MAX_AUTO_RETRY_ATTEMPTS):
-        _failed_analysis(db, repo, wf, AnalysisFailureKind.transient)
+        _failed_analysis(db, repo, wf, ScanFailureKind.transient)
     with (
         patch(
             "app.workers.tasks.static_analysis.run_static_analysis.delay"

@@ -14,7 +14,7 @@ function invalidateRepoQueries(
 function invalidateAnalysisQueries(
   qc: ReturnType<typeof useQueryClient>,
   repoId: string,
-  analysisId?: string,
+  analysisId?: string | null,
 ) {
   qc.invalidateQueries({ queryKey: ["analyses", "recent"] })
   qc.invalidateQueries({ queryKey: ["analyses", repoId] })
@@ -26,7 +26,7 @@ function invalidateAnalysisQueries(
 function invalidateIssueQueries(
   qc: ReturnType<typeof useQueryClient>,
   repoId: string,
-  analysisId?: string,
+  analysisId?: string | null,
 ) {
   qc.invalidateQueries({ queryKey: ["issues", "open"] })
   qc.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
@@ -38,7 +38,7 @@ function invalidateIssueQueries(
 function invalidateFixQueries(
   qc: ReturnType<typeof useQueryClient>,
   repoId: string,
-  fixId?: string,
+  fixId?: string | null,
 ) {
   qc.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
   if (fixId) {
@@ -48,7 +48,7 @@ function invalidateFixQueries(
 
 function invalidateInstallationQueries(
   qc: ReturnType<typeof useQueryClient>,
-  orgId?: string,
+  orgId?: string | null,
 ) {
   qc.invalidateQueries({ queryKey: ["installations"] })
   qc.invalidateQueries({ queryKey: ["repositories"] })
@@ -76,12 +76,12 @@ export function useRepoEvents(): void {
 
   const handleEvent = useCallback(
     (data: SSEEventData) => {
-      const repoId = data.repo_id as string | undefined
-      const orgId = data.org_id as string | undefined
-      const analysisId = data.analysis_id as string | undefined
-      const fixId = data.fix_id as string | undefined
-      const fixIds = data.fix_ids as string[] | undefined
-      const repoIds = data.repo_ids as string[] | undefined
+      const repoId = data.repo_id
+      const orgId = data.org_id
+      const analysisId = data.analysis_id
+      const fixId = data.fix_id
+      const fixIds = data.fix_ids
+      const repoIds = data.repo_ids
 
       switch (data.event) {
         case "analysis.queued":
@@ -103,10 +103,13 @@ export function useRepoEvents(): void {
               queryKey: ["workflow-files", repoId],
             })
           }
-          const grade = data.grade as string | undefined
-          const score = data.score as number | undefined
-          const issuesCount = data.issues_count as number | undefined
-          if (grade !== undefined && score !== undefined) {
+          const grade = data.grade
+          const score = data.score
+          const issuesCount = data.issues_count
+          // `!= null` rather than `!== undefined`: the wire sends JSON null for
+          // an absent field, which the old `as number | undefined` cast hid —
+          // the guard passed and `Math.round(null)` rendered "Score 0".
+          if (grade != null && score != null) {
             toast.success("Analysis complete", {
               description: `Grade ${grade} · Score ${Math.round(score)} · ${issuesCount ?? 0} issue${issuesCount === 1 ? "" : "s"}`,
             })
@@ -119,7 +122,7 @@ export function useRepoEvents(): void {
             invalidateRepoQueries(queryClient, repoId)
             invalidateAnalysisQueries(queryClient, repoId, analysisId)
           }
-          const error = data.error as string | undefined
+          const error = data.error
           toast.error("Analysis failed", {
             description: error ?? "Unknown error",
           })
@@ -203,7 +206,7 @@ export function useRepoEvents(): void {
               }
             }
           }
-          const prUrl = data.pr_url as string | undefined
+          const prUrl = data.pr_url
           if (prUrl) {
             toast.success("Fix delivered", {
               description: "Pull request created",
@@ -229,7 +232,7 @@ export function useRepoEvents(): void {
             }
           }
           const failedCount = fixIds?.length ?? (fixId ? 1 : 0)
-          const failErr = data.error as string | undefined
+          const failErr = data.error
           toast.error(
             failedCount > 1 ? `${failedCount} fixes failed` : "Fix failed",
             {
@@ -266,7 +269,7 @@ export function useRepoEvents(): void {
           if (repoId) {
             invalidateFixQueries(queryClient, repoId)
           }
-          const openedUrl = data.pr_url as string | undefined
+          const openedUrl = data.pr_url
           if (openedUrl) {
             toast.info("Pull request opened", {
               action: {
@@ -290,7 +293,7 @@ export function useRepoEvents(): void {
             invalidateFixQueries(queryClient, repoId)
           }
           const merged = data.event === "pr.merged"
-          const closedUrl = data.pr_url as string | undefined
+          const closedUrl = data.pr_url
           toast.info(merged ? "Pull request merged" : "Pull request closed", {
             ...(closedUrl && {
               action: {
@@ -307,10 +310,10 @@ export function useRepoEvents(): void {
 
         case "installation.synced": {
           invalidateInstallationQueries(queryClient, orgId)
-          const repoCount = data.repo_count as number | undefined
+          const repoCount = data.repo_count
           toast.success("Installation synced", {
             description:
-              repoCount !== undefined
+              repoCount != null
                 ? `${repoCount} repositor${repoCount === 1 ? "y" : "ies"} synced`
                 : undefined,
           })
@@ -355,8 +358,8 @@ export function useRepoEvents(): void {
           if (repoId) {
             queryClient.invalidateQueries({ queryKey: ["repository", repoId] })
           }
-          const enabled = data.enabled as boolean | undefined
-          if (enabled !== undefined) {
+          const enabled = data.enabled
+          if (enabled != null) {
             toast.info(enabled ? "Repository enabled" : "Repository disabled")
           }
           break

@@ -39,7 +39,7 @@ LIB_DIR = "lib"
 
 # Worst first, for any report that lists rules or violations in the order a
 # reader should act on them. Declared here rather than derived from
-# ``models.enums.IssueSeverity`` for the same reason as everything else in this
+# ``models.enums.Severity`` for the same reason as everything else in this
 # module: the docs and CI environments cannot import the models. The two must
 # agree, and ``tests/core/test_rego_metadata.py`` asserts that they do.
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}

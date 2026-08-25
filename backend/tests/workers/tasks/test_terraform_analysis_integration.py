@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -113,6 +113,10 @@ def _rooted(
             file_path=f"{prefix}/{violation['file_path']}",
             line_start=violation["line_start"],
             line_end=violation["line_end"],
+            # Part of the fingerprint. Dropping it here replayed a different
+            # dedup key than production computes, which is how a rule that
+            # fires twice on one resource looked like one finding.
+            discriminator=violation.get("discriminator"),
         )
         for violation in _expected(case)["violations"]
     ]
@@ -348,6 +352,10 @@ def test_terragoat_scan_persists_real_addresses_and_files(
     assert result["status"] == "done"
     findings = _findings(db, terraform_root)
     assert {f.resource_address for f in findings} == {
+        # Not a resource: hardcoded_credentials_in_tf scans every block type,
+        # and terragoat's provider block carries a literal access key — the
+        # textbook form of the mistake, and one the rule used to miss.
+        "provider.aws",
         "aws_instance.web_host",
         "aws_lambda_function.analysis_lambda",
         "aws_security_group.web-node",
@@ -368,7 +376,7 @@ def test_terragoat_scan_persists_real_addresses_and_files(
 
 
 def test_terragoat_scan_degrades_the_score(
-    db: Session,  # noqa: ARG001
+    db: Session,
     terraform_root: TerraformRoot,
 ) -> None:
     """A real insecure estate cannot come out clean."""
@@ -382,20 +390,34 @@ def test_terragoat_scan_degrades_the_score(
     assert result["grade"] != "A+++"
 
 
-def test_one_security_group_open_on_two_ports_is_one_finding(
+def test_one_security_group_open_on_two_ports_is_two_findings(
     db: Session, terraform_root: TerraformRoot
 ) -> None:
-    """terragoat's ``web-node`` trips the ingress rule twice — 22 and 80 — but a
-    finding's fingerprint keys on (root, rule, resource_address), so the two
-    collapse into a single row. The task's returned ``findings`` count is a
-    violation count, so it stays at the higher number; the DB is the deduplicated
-    view. Real code is what surfaces the difference — invented one-violation
-    fixtures never do.
+    """A security group open on two ports is two problems, and has to persist as
+    two rows.
+
+    It used to persist as one. A finding's fingerprint keys on
+    ``(root, rule, resource_address, discriminator)`` and the ingress rule
+    supplied no discriminator, so every open port on a group collapsed onto one
+    key and which port the surviving row named was whichever violation the set
+    happened to keep. The rule now discriminates on the port range and CIDR.
+
+    terragoat's ``web-node`` is open on 22 and 80, and only 22 is reported —
+    publishing HTTP is what a public service does — so the second open port is
+    synthesised here exactly as the rule emits it. That keeps this test about
+    the fingerprint rather than about which ports the fixture happens to have.
     """
     files, violations = _rooted(_TERRAGOAT, terraform_root.root_path)
     ingress = [v for v in violations if v.rule_slug == "open_ingress_security_group"]
-    assert len(ingress) == 2, "fixture no longer has the two-port security group"
-    assert len({v.resource_address for v in ingress}) == 1
+    assert len(ingress) == 1, "fixture no longer has the open security group"
+    assert ingress[0].discriminator, "the ingress rule must supply a discriminator"
+
+    second_port = replace(
+        ingress[0],
+        message="'aws_security_group.web-node' allows ingress from 0.0.0.0/0 on 3389.",
+        discriminator="3389:0.0.0.0/0",
+    )
+    violations = [*violations, second_port]
 
     with _patch_fetch(files), _patch_evaluate(violations):
         result = _run_terraform_scan_impl(str(terraform_root.id))
@@ -406,8 +428,8 @@ def test_one_security_group_open_on_two_ports_is_one_finding(
         for f in _findings(db, terraform_root)
         if f.resource_address == ingress[0].resource_address
     ]
-    assert len(rows) == 1
-    assert _expected(_TERRAGOAT)["expected_finding_count"] == len(
+    assert len(rows) == 2, "the two open ports must not collapse onto one key"
+    assert _expected(_TERRAGOAT)["expected_finding_count"] + 1 == len(
         _findings(db, terraform_root)
     )
 
@@ -489,6 +511,18 @@ def test_recorded_violations_still_point_at_the_vendored_code(case: str) -> None
     # resource. Those are valid targets, and admitting them keeps this test
     # doing its actual job: catching a recording that drifted from the files.
     declared |= {key for key in merged if not key.startswith("__")}
+    # The singly-nested block types address their entries by name:
+    # `provider.aws`, `variable.region`, `module.vpc`. hardcoded_credentials_in_tf
+    # reports a provider block with a literal key that way, which is the
+    # textbook form of that mistake and not a resource.
+    declared |= {
+        f"{block_type}.{name}"
+        for block_type in ("provider", "variable", "output", "module", "locals")
+        for block in merged.get(block_type, [])
+        if isinstance(block, dict)
+        for name in block
+        if not name.startswith("__")
+    }
     for violation in expected["violations"]:
         assert violation["file_path"] in dict(files), (
             f"{case}: violation points at {violation['file_path']!r}, not in the case"
@@ -511,11 +545,7 @@ def test_case_scans_to_its_recorded_findings(
         result = _run_terraform_scan_impl(str(terraform_root.id))
 
     assert result["status"] == "done"
-    findings = [
-        f
-        for f in _findings(db, terraform_root)
-        if f.resolved_at is None  # noqa: PD011 — SQLModel column value, not pandas
-    ]
+    findings = [f for f in _findings(db, terraform_root) if f.resolved_at is None]
     assert len(findings) == expected["expected_finding_count"], (
         f"{case}: expected {expected['expected_finding_count']} findings, "
         f"got {sorted(f.resource_address or '' for f in findings)}"

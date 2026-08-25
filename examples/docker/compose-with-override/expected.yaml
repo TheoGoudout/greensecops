@@ -16,7 +16,6 @@
 # sit on disk and reports compose.override.yml — the file the flag is in.
 violations:
   - compose_privileged_container
-  - compose_missing_resource_limits
+  - compose_service_unbounded
   - compose_missing_restart_policy
-  - compose_unbounded_log_files
-  - compose_missing_read_only_filesystem
+  - compose_service_not_hardened

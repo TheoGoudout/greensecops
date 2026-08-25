@@ -59,5 +59,6 @@ violations contains violation if {
 		"line_start": object.get(cluster, "__start_line__", null),
 		"line_end": object.get(cluster, "__end_line__", null),
 		"message": sprintf("EKS cluster '%v' exposes its Kubernetes API endpoint to %v, so the control plane is reachable from the internet.", [name, cidr]),
+		"discriminator": cidr,
 	}
 }

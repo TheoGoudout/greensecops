@@ -13,16 +13,10 @@ from unittest.mock import patch
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
-    Fix,
+    FindingResolutionReason,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
@@ -30,8 +24,14 @@ from app.models import (
     Repository,
     ReviewDecision,
     Rule,
+    ScanStatus,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.github.app_client import PRSnapshot
 from app.workers.tasks import polling
@@ -76,7 +76,7 @@ def _open_pr(
 
 def _delivered_fix_with_issue(
     db: Session, repo: Repository, pr: PullRequest
-) -> tuple[Fix, Issue]:
+) -> tuple[WorkflowFix, WorkflowFinding]:
     wf = WorkflowFile(
         repo_id=repo.id,
         path=".github/workflows/ci.yml",
@@ -86,27 +86,27 @@ def _delivered_fix_with_issue(
     db.add(wf)
     db.commit()
     db.refresh(wf)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
     rule = Rule(
         slug=f"poll_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="t",
         description="d",
     )
     db.add(rule)
     db.commit()
     db.refresh(rule)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         pr_id=pr.id,
         llm_provider=LLMProvider.openai,
@@ -116,13 +116,13 @@ def _delivered_fix_with_issue(
     db.add(fix)
     db.commit()
     db.refresh(fix)
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="m",
         fix_id=fix.id,
     )
@@ -162,7 +162,7 @@ def test_head_advance_enqueues_polled_analysis(db: Session) -> None:
     # detached once _poll_repository_impl returns).
     calls: list[tuple] = []
 
-    def _record(repo_arg, branch, sha, trigger, force=False):  # noqa: ANN001
+    def _record(repo_arg, branch, sha, trigger, force=False):
         calls.append((str(repo_arg.id), branch, sha, trigger, force))
 
     with (
@@ -174,9 +174,7 @@ def test_head_advance_enqueues_polled_analysis(db: Session) -> None:
     ):
         result = polling._poll_repository_impl(str(repo.id))
 
-    assert calls == [
-        (str(repo.id), "main", "new-sha", AnalysisTrigger.polled_push, False)
-    ]
+    assert calls == [(str(repo.id), "main", "new-sha", ScanTrigger.polled_push, False)]
     assert result["analyses_enqueued"] == 1
     db.refresh(repo)
     assert repo.last_polled_head_sha == "new-sha"
@@ -222,7 +220,7 @@ def test_merged_snapshot_lands_fix_and_resolves_issue(db: Session) -> None:
     db.refresh(issue)
     assert pr.pr_state == PullRequestState.merged
     assert fix.status == FixStatus.landed
-    assert issue.resolution_reason == IssueResolutionReason.merged
+    assert issue.resolution_reason == FindingResolutionReason.merged
 
 
 def test_ci_and_review_snapshot_updates_columns(db: Session) -> None:

@@ -18,7 +18,8 @@
       "resource_address": "terraform",
       "file_path": "versions.tf",
       "line_start": 1,
-      "line_end": 10
+      "line_end": 10,
+      "discriminator": null
     }
   ],
   "expected_finding_count": 1,

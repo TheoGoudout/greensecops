@@ -69,7 +69,7 @@ def _read_directives(lines: list[str]) -> tuple[str, str | None, int]:
     escape_char = "\\"
     syntax: str | None = None
     index = 0
-    for index, raw in enumerate(lines):  # noqa: B007 — index is used after the loop
+    for index, raw in enumerate(lines):  # index is used after the loop
         line = raw.strip()
         if not line:
             continue

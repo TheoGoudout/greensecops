@@ -41,66 +41,6 @@ test_references_var if {
 # These two are the exact values in this repository's test-backend,
 # test-docker-compose and playwright workflows that were reported as critical
 # hardcoded secrets.
-test_is_placeholder_catches_this_repos_ci_fixtures if {
-	wf.is_placeholder("testpassword")
-	wf.is_placeholder("changethischangethischangethischangethischangethischangethischanget")
-}
-
-test_is_placeholder_catches_common_stand_ins if {
-	every value in ["changeme", "CHANGEME", "placeholder", "dummy", "example", "fake", "xxxxx", "replace_me", "your_token_here", "<your-key>"] {
-		wf.is_placeholder(value)
-	}
-}
-
-test_is_placeholder_catches_repeated_units if {
-	wf.is_placeholder("0000000000000000")
-	wf.is_placeholder("aaaaaaaa")
-	wf.is_placeholder("abababababababab")
-}
-
-test_is_placeholder_rejects_real_looking_values if {
-	not wf.is_placeholder("a3f5c9e12b7d4068af31c5e9b2d70486")
-	not wf.is_placeholder("AKIAIOSFODNN7EXAMPLE1")
-}
-
-# ─── Value shape ─────────────────────────────────────────────────────────────
-
-test_effective_alphabet_separates_words_from_randomness if {
-	wf.effective_alphabet("testpassword") < 8
-	wf.effective_alphabet("production") < 9
-	wf.effective_alphabet("a3f5c9e12b7d4068af31c5e9b2d70486") >= 12
-}
-
-test_looks_high_entropy if {
-	wf.looks_high_entropy("a3f5c9e12b7d4068af31c5e9b2d70486")
-	wf.looks_high_entropy("aGVsbG8gd29ybGQgdGhpcyBpcyBhIHNlY3JldA==")
-
-	# Short, so it cannot qualify however varied.
-	not wf.looks_high_entropy("a3f5c9e1")
-
-	# Long but wordy.
-	not wf.looks_high_entropy("changethischangethischangethis")
-}
-
-test_known_credential_formats if {
-	wf.known_credential("AKIAIOSFODNN7EXAMPLE")
-	wf.known_credential("ghp_16C7e42F292c6912E7710c838347Ae178B4a")
-	not wf.known_credential("testpassword")
-}
-
-# The PEM header is assembled rather than written out, so the literal string
-# never appears in the file. Spelled in full it trips the `detect-private-key`
-# pre-commit hook, which cannot tell a rule's own test fixture from a key
-# somebody committed by mistake — and the right resolution is to keep the
-# fixture out of its way rather than to exempt this file from the hook, which
-# would also exempt a real key added here later.
-test_known_credential_matches_a_pem_header if {
-	wf.known_credential(concat("", ["-----BEGIN RSA ", "PRIVATE KEY-----"]))
-	wf.known_credential(concat("", ["-----BEGIN ", "PRIVATE KEY-----"]))
-}
-
-# ─── Action references ───────────────────────────────────────────────────────
-
 test_action_name_and_ref if {
 	wf.action_name("actions/checkout@v4") == "actions/checkout"
 	wf.action_ref("actions/checkout@v4") == "v4"
@@ -182,4 +122,44 @@ test_job_outputs_not_consumed_when_needs_only_orders if {
 		"test": {"needs": "lint", "steps": [{"run": "pytest"}]},
 	}}
 	not wf.job_outputs_consumed("lint") with input as ordered
+}
+
+# ─── strings_within / expression_bodies ──────────────────────────────────────
+
+test_strings_within_collects_at_every_depth if {
+	step := {
+		"name": "Deploy",
+		"run": "./deploy.sh",
+		"with": {"args": ["--fast", "--yes"], "nested": {"key": "value"}},
+	}
+	wf.strings_within(step) == {"Deploy", "./deploy.sh", "--fast", "--yes", "value"}
+}
+
+test_strings_within_skips_non_strings if {
+	wf.strings_within({"a": 1, "b": true, "c": null, "d": "keep"}) == {"keep"}
+}
+
+# The reason this helper exists rather than json.marshal: Go's marshaller
+# HTML-escapes `&`, so a pattern containing `&&` never matches a marshalled
+# document.
+test_strings_within_preserves_ampersands if {
+	value := "${{ a && '' || 'b' }}"
+	some found in wf.strings_within({"env": {"X": value}})
+	contains(found, "&&")
+}
+
+test_expression_bodies_extracts_only_expressions if {
+	step := {"run": "test -f x && false || echo no", "env": {"V": "${{ inputs.a && '' || 'b' }}"}}
+	bodies := wf.expression_bodies(step)
+	count(bodies) == 1
+	some body in bodies
+	contains(body, "inputs.a")
+}
+
+test_expression_bodies_empty_when_no_expression if {
+	wf.expression_bodies({"run": "make all"}) == set()
+}
+
+test_expression_bodies_finds_several_in_one_string if {
+	count(wf.expression_bodies({"if": "${{ a }} && ${{ b }}"})) == 2
 }

@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
+import { apiErrorDetail } from "@/lib/api-error"
 import { worstGrade } from "@/lib/grades"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/infrastructure/")({
   component: InfrastructurePage,

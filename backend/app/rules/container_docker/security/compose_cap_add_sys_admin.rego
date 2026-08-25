@@ -18,11 +18,11 @@
 #           devices:
 #             - /dev/fuse
 #           cap_add:
-#             - SYS_ADMIN
+#             - MKNOD
 #           security_opt:
 #             - apparmor=docker-fuse
 #     fix: |
-#       Grant the narrowest capability that works — most workloads asking for SYS_ADMIN actually need a single device mapping or one of NET_ADMIN, SYS_PTRACE or MKNOD. Where SYS_ADMIN is unavoidable (FUSE mounts are the common case), pair it with a restrictive AppArmor or seccomp profile and record why.
+#       Grant the narrowest capability that works — most workloads asking for SYS_ADMIN actually need a single device mapping or one of NET_ADMIN, SYS_PTRACE or MKNOD. Where SYS_ADMIN is genuinely unavoidable, pair it with a restrictive AppArmor or seccomp profile, record why, and mark the finding accepted: the rule fires on the capability itself, because whether a profile is actually restrictive is not something a Compose file states.
 package greensecops.container_docker.security.compose_cap_add_sys_admin
 
 import rego.v1

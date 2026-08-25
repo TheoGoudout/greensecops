@@ -34,6 +34,10 @@ from app.models import (
     UsageEngine,
 )
 from app.services.billing.quota import enforce_quota
+from app.workers.tasks.docker_telemetry_analysis import (
+    run_docker_telemetry_analysis,
+)
+from app.workers.tasks.dynamic_analysis import run_dynamic_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -167,8 +171,6 @@ async def ingest_telemetry(
     # A completed run carries the full metrics needed for enrichment; queue the
     # dynamic analysis that turns them into persisted findings.
     if payload.phase == TelemetryPhase.completed:
-        from app.workers.tasks.dynamic_analysis import run_dynamic_analysis
-
         run_dynamic_analysis.delay(str(run.id))
 
     logger.info(
@@ -218,10 +220,6 @@ async def ingest_docker_build(
     session.add(telemetry)
     session.commit()
     session.refresh(telemetry)
-
-    from app.workers.tasks.docker_telemetry_analysis import (
-        run_docker_telemetry_analysis,
-    )
 
     run_docker_telemetry_analysis.delay(
         str(telemetry.id),
@@ -371,8 +369,6 @@ def analyze_telemetry(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-
-    from app.workers.tasks.dynamic_analysis import run_dynamic_analysis
 
     runs = session.exec(
         select(TelemetryRun)

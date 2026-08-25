@@ -78,13 +78,13 @@ class DockerFinding(FindingMixin, table=True):
         foreign_key="docker_scan.id", nullable=False, ondelete="CASCADE"
     )
     # Denormalized off the scan: a fingerprint's uniqueness/history scope is
-    # the target across scans, not one scan (mirrors Issue.workflow_file_id).
+    # the target across scans, not one scan (mirrors WorkflowFinding.workflow_file_id).
     docker_target_id: uuid.UUID = Field(
         foreign_key="docker_target.id", nullable=False, ondelete="CASCADE"
     )
     # The Docker fix that addresses this finding, if one has been generated.
     # SET NULL (not CASCADE): dropping a fix must not delete finding history —
-    # mirrors ``Issue.fix_id`` and ``TerraformFinding.fix_id``.
+    # mirrors ``WorkflowFinding.fix_id`` and ``TerraformFinding.fix_id``.
     fix_id: uuid.UUID | None = Field(
         default=None, foreign_key="docker_fix.id", ondelete="SET NULL"
     )
@@ -176,7 +176,7 @@ class DockerBuildEnrichment(EnrichmentMixin, table=True):
 
     A sibling of ``DynamicEnrichment`` rather than a generalisation of it —
     the same call the project made when ``TerraformFinding`` was added beside
-    ``Issue``.
+    ``WorkflowFinding``.
     """
 
     __tablename__ = "docker_build_enrichment"

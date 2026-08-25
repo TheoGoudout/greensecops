@@ -9,8 +9,8 @@ import { DockerRuntimeFindingRow } from "@/components/DockerRuntimeFindingRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiErrorDetail } from "@/lib/api-error"
 import { severityRank } from "@/lib/severity"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/docker/$repoId/runtime")({
   component: DockerRuntimeTab,

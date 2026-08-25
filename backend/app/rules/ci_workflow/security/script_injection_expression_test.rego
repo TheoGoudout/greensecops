@@ -82,3 +82,33 @@ test_each_offending_step_is_its_own_finding if {
 	count(violations) == 2
 	{v.step_index | some v in violations} == {0, 2}
 }
+
+# `actions/github-script` executes its `script:` input — the sink GitHub's own
+# advisories use as the canonical example, and the one this rule could not see.
+test_violation_for_an_interpolated_github_script_input if {
+	violations := script_injection.violations with input as {"jobs": {"label": {"steps": [{
+		"uses": "actions/github-script@v7",
+		"with": {"script": "console.log('${{ github.event.pull_request.title }}')"},
+	}]}}}
+	count(violations) == 1
+	some v in violations
+	v.severity == "critical"
+}
+
+test_no_violation_for_a_safe_github_script_input if {
+	violations := script_injection.violations with input as {"jobs": {"label": {"steps": [{
+		"uses": "actions/github-script@v7",
+		"with": {"script": "console.log(context.payload.pull_request.title)"},
+	}]}}}
+	count(violations) == 0
+}
+
+# An interpolation in an input the action does not execute is not this rule's
+# business.
+test_no_violation_for_a_non_script_input if {
+	violations := script_injection.violations with input as {"jobs": {"label": {"steps": [{
+		"uses": "some/action@v1",
+		"with": {"title": "${{ github.event.pull_request.title }}"},
+	}]}}}
+	count(violations) == 0
+}

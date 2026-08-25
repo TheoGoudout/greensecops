@@ -2,7 +2,8 @@ import { Link } from "@tanstack/react-router"
 import type { EngineOverview } from "@/client"
 import { SeverityBar } from "@/components/Dashboard/SeverityBar"
 import { GradeBadge } from "@/components/GradeBadge"
-import { ENGINE_META, relativeTime } from "@/lib/engine-meta"
+import { ENGINE_META } from "@/lib/engine-meta"
+import { relativeTime } from "@/lib/format"
 
 const COLUMNS =
   "grid-cols-[minmax(7rem,1.4fr)_4rem_3.5rem_4.5rem_5rem_minmax(5rem,1fr)_5rem]"

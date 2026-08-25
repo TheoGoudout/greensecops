@@ -9,8 +9,12 @@ function setupMinimalMocks(page: import("@playwright/test").Page) {
     page.route("**/api/v1/repositories/**", (route) =>
       route.fulfill({ json: [] }),
     ),
-    page.route("**/api/v1/analyses/**", (route) => route.fulfill({ json: [] })),
-    page.route("**/api/v1/issues/**", (route) => route.fulfill({ json: [] })),
+    page.route("**/api/v1/workflow-scans/**", (route) =>
+      route.fulfill({ json: [] }),
+    ),
+    page.route("**/api/v1/workflow-findings/**", (route) =>
+      route.fulfill({ json: [] }),
+    ),
     page.route("**/api/v1/rules/**", (route) => route.fulfill({ json: [] })),
   ])
 }

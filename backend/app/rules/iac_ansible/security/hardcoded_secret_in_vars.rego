@@ -14,17 +14,19 @@
 package greensecops.iac_ansible.security.hardcoded_secret_in_vars
 
 import data.greensecops.lib.ansible as ans
-import data.greensecops.lib.workflow as wf
+import data.greensecops.lib.secrets as secrets
 import rego.v1
 
 # Worth reporting on sight because the format identifies it, or long and varied
-# enough to be a real credential rather than a word. Both defer to the workflow
-# library, which is where the corpus's value-shape tests already live.
-_looks_secret(value) if wf.known_credential(value)
+# enough to be a real credential rather than a word. Both defer to
+# `lib/secrets.rego`, which is where the corpus's value-shape tests already
+# live — a variable holding a leaked token is the same judgement whether it
+# was written in a workflow or a playbook.
+_looks_secret(value) if secrets.known_credential(value)
 
 _looks_secret(value) if {
-	wf.looks_high_entropy(value)
-	not wf.is_placeholder(value)
+	secrets.looks_high_entropy(value)
+	not secrets.is_placeholder(value)
 }
 
 violations contains violation if {

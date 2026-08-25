@@ -24,13 +24,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
 import { useRepository } from "@/hooks/useRepository"
+import { apiErrorDetail } from "@/lib/api-error"
 import {
   cloudAccountStatusColor,
   cloudAccountStatusLabel,
   scanStatusColor,
   scanStatusLabel,
 } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute("/_layout/infrastructure/$repoId/cloud")({
   component: CloudTab,

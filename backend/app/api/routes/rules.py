@@ -5,7 +5,7 @@ from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.router import Role, RoleRouter
-from app.models import IssueCategory, Rule, RulePublic
+from app.models import Category, Rule, RulePublic
 
 router = RoleRouter(prefix="/rules", tags=["rules"])
 
@@ -14,7 +14,7 @@ router = RoleRouter(prefix="/rules", tags=["rules"])
 def list_rules(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
-    category: IssueCategory | None = None,
+    category: Category | None = None,
     enabled: bool | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=200),

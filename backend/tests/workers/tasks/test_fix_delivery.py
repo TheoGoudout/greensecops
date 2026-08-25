@@ -7,7 +7,6 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    Fix,
     FixDeliveryMode,
     FixStatus,
     LLMProvider,
@@ -17,6 +16,7 @@ from app.models import (
     Repository,
     UserTier,
     WorkflowFile,
+    WorkflowFix,
 )
 from app.services.github.fix_delivery import FixDeliveryResult
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
@@ -24,7 +24,7 @@ from app.workers.tasks.fix_delivery import deliver_fixes_batch
 _FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
 
 
-def _build_ready_fix(db: Session) -> tuple[Repository, Fix]:
+def _build_ready_fix(db: Session) -> tuple[Repository, WorkflowFix]:
     org = Organization(name=f"deliv-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
     db.add(org)
     db.commit()
@@ -51,7 +51,7 @@ def _build_ready_fix(db: Session) -> tuple[Repository, Fix]:
     db.commit()
     db.refresh(wf)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",

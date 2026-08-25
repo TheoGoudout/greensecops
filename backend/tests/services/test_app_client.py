@@ -373,7 +373,7 @@ def test_fetch_terraform_files_recurses_and_filters_by_extension() -> None:
         ],
     }
     repo = MagicMock()
-    repo.get_contents.side_effect = lambda path, ref=None: tree[path]  # noqa: ARG005
+    repo.get_contents.side_effect = lambda path, ref=None: tree[path]
     gh = MagicMock()
     gh.get_repo.return_value = repo
 
@@ -394,7 +394,7 @@ def test_fetch_terraform_files_skips_dotfiles_and_terraform_cache_dirs() -> None
         ],
     }
     repo = MagicMock()
-    repo.get_contents.side_effect = lambda path, ref=None: tree[path]  # noqa: ARG005
+    repo.get_contents.side_effect = lambda path, ref=None: tree[path]
     gh = MagicMock()
     gh.get_repo.return_value = repo
 
@@ -448,7 +448,7 @@ def test_fetch_terraform_files_stops_at_depth_cap() -> None:
     # for "infra/lvl0/.../lvlN" only happens if the walk actually reached it.
     calls: list[str] = []
 
-    def _get_contents(path: str, ref: str | None = None) -> list[MagicMock]:  # noqa: ARG001
+    def _get_contents(path: str, ref: str | None = None) -> list[MagicMock]:
         calls.append(path)
         depth = path.count("/")
         return [_content_file(f"{path}/lvl{depth}", is_dir=True)]

@@ -8,7 +8,7 @@ import {
   RadarChart,
   ResponsiveContainer,
 } from "recharts"
-import type { IssueCategory } from "@/client"
+import type { Category } from "@/client"
 import { CATEGORY_META } from "@/components/CategoryIcon"
 import { WidgetPagination } from "@/components/Common/WidgetPagination"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -22,11 +22,11 @@ import { cn } from "@/lib/utils"
 export interface CategoryHealthSeries {
   id: string
   name: string
-  values: Record<IssueCategory, number>
+  values: Record<Category, number>
 }
 
 interface CategoryHealthRadarProps {
-  categories: IssueCategory[]
+  categories: Category[]
   series: CategoryHealthSeries[]
   toggledIds: Set<string>
   onToggle: (id: string) => void

@@ -28,7 +28,7 @@ test.describe("Analysis States", () => {
   })
 
   test("pending analysis shows status badge and no score", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS_PENDING })
     })
 
@@ -40,7 +40,7 @@ test.describe("Analysis States", () => {
   })
 
   test("in_progress analysis shows status and no score", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS_IN_PROGRESS })
     })
 
@@ -54,7 +54,7 @@ test.describe("Analysis States", () => {
   test("failed analysis shows error message and failed status", async ({
     page,
   }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS_FAILED })
     })
 
@@ -65,7 +65,7 @@ test.describe("Analysis States", () => {
   })
 
   test("grade-A analysis shows 100/100 score and A badge", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS_GRADE_A })
     })
 
@@ -77,7 +77,7 @@ test.describe("Analysis States", () => {
   })
 
   test("grade-F analysis shows low score and F badge", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS_GRADE_F })
     })
 
@@ -89,7 +89,7 @@ test.describe("Analysis States", () => {
   })
 
   test("analysis detail shows workflow file path", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS })
     })
 
@@ -100,7 +100,7 @@ test.describe("Analysis States", () => {
   })
 
   test("analysis detail shows branch and commit info", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: MOCK_ANALYSIS })
     })
 
@@ -111,7 +111,7 @@ test.describe("Analysis States", () => {
   })
 
   test("repo analysis list shows multiple statuses", async ({ page }) => {
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
@@ -145,7 +145,7 @@ test.describe("Analysis States", () => {
       workflow_file_id: "00000000-0000-0000-0000-000000000031",
     }
 
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       const url = route.request().url()
       if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })

@@ -15,12 +15,17 @@ package greensecops.container_runtime.reliability.healthcheck_never_healthy
 
 import rego.v1
 
-_unhealthy_states := {"unhealthy", "starting", "none"}
+# `none` is deliberately absent. It was the default `object.get` fell back to,
+# so a container whose health was never *reported* — telemetry gap, collector
+# older than the field — was reported at high severity as having never become
+# healthy. Missing data is not a failed healthcheck.
+_unhealthy_states := {"unhealthy", "starting"}
 
 violations contains violation if {
 	some container in input.containers
 	container.has_healthcheck == true
-	status := lower(object.get(container, "health_status", "none"))
+	is_string(container.health_status)
+	status := lower(container.health_status)
 	status in _unhealthy_states
 	violation := {
 		"rule": "healthcheck_never_healthy",

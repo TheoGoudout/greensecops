@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
-from ..enums import IssueCategory, IssueSeverity, RuleDomain
+from ..enums import Category, RuleDomain, Severity
 
 if TYPE_CHECKING:
-    from .issue import Issue
+    from .workflow_finding import WorkflowFinding
 
 
 class Rule(SQLModel, table=True):
@@ -26,13 +26,13 @@ class Rule(SQLModel, table=True):
     # to ``workflow`` (migration 0042); lets one Rule table and admin UI serve
     # the CI-workflow, Terraform and cloud engines.
     domain: RuleDomain = Field(
-        default=RuleDomain.workflow,
-        sa_column_kwargs={"server_default": RuleDomain.workflow.value},
+        default=RuleDomain.ci_workflow,
+        sa_column_kwargs={"server_default": RuleDomain.ci_workflow.value},
     )
-    category: IssueCategory
-    severity: IssueSeverity
+    category: Category
+    severity: Severity
     title: str = Field(max_length=255)
     description: str = Field(max_length=2048)
     enabled: bool = Field(default=True)
     severity_weight: float = Field(default=1.0)
-    issues: list["Issue"] = Relationship(back_populates="rule")
+    findings: list["WorkflowFinding"] = Relationship(back_populates="rule")

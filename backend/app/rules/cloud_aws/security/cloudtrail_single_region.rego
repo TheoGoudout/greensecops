@@ -21,6 +21,14 @@ _has_multi_region_trail if {
 	trail.is_multi_region == true
 }
 
+# "No trail in this account is multi-region" is one fact about the account, not
+# one fact per trail. Emitting it per trail produced N findings for a single
+# gap, each naming a different trail as though each were separately at fault.
+_covered_regions := {trail.region |
+	some trail in input.cloudtrail_trails
+	is_string(trail.region)
+}
+
 violations contains violation if {
 	# Keyed on a trail being present and narrow, never on the list being empty
 	# — an empty list also means "no permission to read trails", and
@@ -28,15 +36,15 @@ violations contains violation if {
 	count(input.cloudtrail_trails) > 0
 	not _has_multi_region_trail
 
-	some trail in input.cloudtrail_trails
-
+	regions := concat(", ", sort(_covered_regions))
 	violation := {
 		"rule": "cloudtrail_single_region",
 		"severity": "high",
 		"category": "security",
 		"resource_type": "aws_cloudtrail",
-		"resource_id": trail.name,
-		"region": trail.region,
-		"message": sprintf("Trail '%v' records only %v, and no other trail in this account is multi-region — activity in every other region goes unrecorded.", [trail.name, trail.region]),
+		"resource_id": "account",
+		"message": sprintf("No trail in this account is multi-region. The %v trail(s) that exist record only %v, so API activity in every other region goes unrecorded — including a region chosen precisely because nothing is watching it.", [count(input.cloudtrail_trails), regions]),
+		"context": regions,
+		"discriminator": "account",
 	}
 }

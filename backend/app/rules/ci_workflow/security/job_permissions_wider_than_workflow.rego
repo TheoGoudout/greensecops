@@ -34,7 +34,7 @@ package greensecops.ci_workflow.security.job_permissions_wider_than_workflow
 
 import rego.v1
 
-_workflow_grants_write(scope) if input.permissions == "write-all"
+_workflow_grants_write(_) if input.permissions == "write-all"
 
 _workflow_grants_write(scope) if {
 	is_object(input.permissions)

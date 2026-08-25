@@ -22,7 +22,7 @@ import {
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
 import { isLoggedIn } from "@/hooks/useAuth"
-import { handleApiError, showSuccessToast } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 
 const searchSchema = z.object({
   token: z.string().catch(""),

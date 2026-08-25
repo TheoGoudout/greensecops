@@ -47,7 +47,7 @@ class DynamicEnrichment(EnrichmentMixin, table=True):
         foreign_key="telemetry_run.id", nullable=False, ondelete="CASCADE"
     )
     analysis_id: uuid.UUID | None = Field(
-        default=None, foreign_key="analysis.id", ondelete="SET NULL"
+        default=None, foreign_key="workflow_scan.id", ondelete="SET NULL"
     )
 
 

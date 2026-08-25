@@ -10,12 +10,33 @@
 #       services:
 #         api:
 #           read_only: false
+#     bad_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             read_only: true
+#       compose.override.yml: |
+#         services:
+#           api:
+#             read_only: false
 #     good: |
 #       # compose.override.yml — keep the read-only root, add a writable tmpfs
 #       services:
 #         api:
 #           tmpfs:
 #             - /tmp
+#     good_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             read_only: true
+#       compose.override.yml: |
+#         services:
+#           api:
+#             tmpfs:
+#               - /tmp
 #     fix: |
 #       Leave read_only alone and mount a tmpfs or a named volume at whichever paths the process genuinely writes to. That is nearly always /tmp and a cache directory, both of which are better as tmpfs anyway since their contents should not survive a restart.
 package greensecops.container_docker.security.compose_override_disables_read_only

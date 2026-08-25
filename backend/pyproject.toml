@@ -71,8 +71,11 @@ module = "app.models.db.*"
 disable_error_code = ["call-overload"]
 
 # boto3/botocore ship no py.typed marker or bundled stubs (unlike PyGithub).
+# Celery is the same: no stubs, and celery-types is not a dependency here.
+# Without this `scripts/lint.sh` (strict mypy, no --ignore-missing-imports)
+# fails on every worker module before it checks anything of ours.
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*"]
+module = ["boto3.*", "botocore.*", "celery.*"]
 ignore_missing_imports = true
 
 # python-hcl2 ships py.typed but re-exports loads/load/etc from .api without
@@ -80,6 +83,12 @@ ignore_missing_imports = true
 # public despite being genuinely part of the package's documented API.
 [[tool.mypy.overrides]]
 module = "hcl2"
+implicit_reexport = true
+
+# Same shape as hcl2 above: `emails` re-exports Message from its .message
+# submodule without `as`-syntax, so strict mode does not count it as public.
+[[tool.mypy.overrides]]
+module = "emails"
 implicit_reexport = true
 
 [tool.ruff]
@@ -97,6 +106,11 @@ select = [
     "UP",  # pyupgrade
     "ARG001", # unused arguments in functions
     "T201",   # print statements are not allowed
+    "RUF100", # noqa directives that suppress nothing
+    "PLC0415", # imports inside functions
+    "C901",    # cyclomatic complexity
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
 ]
 ignore = [
     "E501",  # line too long, handled by black
@@ -106,13 +120,54 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ARG001"]
-# SQLModel needs quoted, bracket-wrapped forward refs (Optional["X"], list["X"])
-# for cross-module Relationship() targets — a real typing.ForwardRef it can
-# introspect structurally without importing the target class. UP037/UP045
-# "helpfully" collapse those into a bare `X | None` union string that
-# SQLAlchemy's registry resolver cannot parse, breaking mapper configuration.
-"app/models/db/**" = ["UP037", "UP045"]
+"tests/**" = ["ARG001", "PLC0415"]
+
+# Two rules are suppressed per file below, for unrelated reasons. TOML allows
+# one key per file, so a file needing both carries both in one list; the
+# trailing comment says which reason applies to which.
+#
+# PLC0415 (imports inside functions). Deferring an import is usually habit,
+# and 53 of the 125 sites here were — they are now at module scope. What is
+# left is load-bearing in one of three ways:
+#   test seam           the deferral IS the seam. A name imported inside a
+#                       function is looked up at call time, so patching the
+#                       source module reaches the caller; hoisting binds it
+#                       at import and the patch silently stops landing.
+#   import cycle        workers build on services, and these reach back the
+#                       other way at call time to dispatch.
+#   optional dependency each LLM provider imports its own langchain package;
+#                       importing all four eagerly would make every one a
+#                       hard requirement to start the app.
+#
+# C901 / PLR0912 / PLR0915 (size and complexity) are enabled at ruff defaults
+# (10 / 12 / 50) so no *new* module may grow a function like these, and
+# exempted for the ones that already have. A ratchet, not an amnesty: the
+# measurements are recorded so the list can only shrink, and each is a
+# candidate for the treatment `_run_static_analysis_impl` just had — 464 lines
+# before `_analyse_one_workflow_file` and `_Tally` were lifted out of it.
+#
+# complexity / branches / statements, worst function in the file:
+
+"app/api/routes/billing.py" = ["C901", "PLR0912", "PLR0915"]  # 16/16/-
+"app/api/routes/events.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/-
+"app/api/routes/repositories.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 16/15/58
+"app/api/routes/webhooks.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 16/16/-
+"app/api/routes/workflow_findings.py" = ["C901", "PLR0912", "PLR0915"]  # 13/-/-
+"app/core/rule_registry.py" = ["C901", "PLR0912", "PLR0915"]  # 14/13/-
+"app/services/cloud/aws_collector.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/-
+"app/services/file_fix_delivery.py" = ["C901", "PLR0912", "PLR0915"]  # 15/17/62
+"app/services/file_fix_generation.py" = ["PLC0415"]  # import cycle
+"app/services/github/app_client.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # import cycle, 13/-/-
+"app/services/github/event_handlers.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 19/19/-
+"app/services/llm/base.py" = ["PLC0415"]  # optional dependency
+"app/services/llm/catalog.py" = ["PLC0415"]  # optional dependency
+"app/services/scan_runner.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/58
+"app/workers/tasks/cloud_scan.py" = ["C901", "PLR0912", "PLR0915"]  # -/-/55
+"app/workers/tasks/docker_fix_generation.py" = ["PLC0415"]  # import cycle
+"app/workers/tasks/fix_delivery.py" = ["C901", "PLR0912", "PLR0915"]  # 26/30/97
+"app/workers/tasks/fix_generation.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 12/15/60
+"app/workers/tasks/static_analysis.py" = ["PLC0415", "C901", "PLR0912", "PLR0915"]  # test seam, 18/23/97
+"app/workers/tasks/terraform_fix_generation.py" = ["PLC0415"]  # import cycle
 
 [tool.ruff.lint.pyupgrade]
 # Preserve types, even if a file imports `from __future__ import annotations`.

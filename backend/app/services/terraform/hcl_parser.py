@@ -97,7 +97,7 @@ def merge_terraform_configs(files: list[tuple[str, str]]) -> dict[str, list[Any]
     ``variable``, ``data``, ...) across every file into one merged document,
     which is what gets fed to OPA as a single input — one ``TerraformScan``
     per root, not per file (unlike the CI-workflow engine, which scans one
-    ``Analysis`` per workflow file).
+    ``WorkflowScan`` per workflow file).
 
     ``files`` is a list of ``(path, content)`` pairs, not a fetch-layer type,
     so this stays decoupled from ``GitHubAppClient``.

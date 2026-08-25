@@ -1,10 +1,11 @@
 """Resolve what GitHub knows about each action a workflow pins.
 
-Four rules need facts no workflow file contains: whether a pinned SHA is a
+Five rules need facts no workflow file contains: whether a pinned SHA is a
 commit of the repository it names, whether it is still reachable, whether the
-version comment beside it is true, and whether the action is archived. This
-module answers those questions and nothing else; the rules read the answers out
-of ``input.__actions__``.
+version comment beside it is true, whether the action is archived, and whether a
+symbolic ref names both a branch and a tag at once. This module answers those
+questions and nothing else; the rules read the answers out of
+``input.__actions__``.
 
 The governing invariant is that **an unanswered question must never become a
 finding**. Every entry carries a ``lookup`` status, and every rule requires it to
@@ -68,6 +69,10 @@ class ActionMetadata:
     tags_at_sha: list[str] = field(default_factory=list)
     tag_lookup: str = "partial"  # complete | partial
     default_branch: str | None = None
+    # For a symbolic ref only: which kinds of ref actually carry that name
+    # upstream. Empty when the question was not asked or could not be answered,
+    # which is what keeps `ref_confusion` silent rather than guessing.
+    symbolic_ref_kinds: list[str] = field(default_factory=list)  # branch | tag
 
 
 def parse_uses(uses: str) -> tuple[str, str] | None:
@@ -103,12 +108,15 @@ def _describe_sync(gh: Github, repo_name: str, ref: str) -> ActionMetadata:
 
     if not is_sha:
         # A symbolic ref moves by definition; the pinning rules own that, and
-        # reachability is not a question worth asking about it.
+        # reachability is not a question worth asking about it. What *is* worth
+        # asking is whether the name is unambiguous upstream — see
+        # `_symbolic_ref_kinds`.
         return ActionMetadata(
             lookup="ok",
             ref_kind=ref_kind,
             archived=archived,
             default_branch=default_branch,
+            symbolic_ref_kinds=_symbolic_ref_kinds(repo, ref),
         )
 
     try:
@@ -137,6 +145,62 @@ def _describe_sync(gh: Github, repo_name: str, ref: str) -> ActionMetadata:
     )
 
 
+def _symbolic_ref_kinds(repo: Any, ref: str) -> list[str]:
+    """Which kinds of ref carry the name ``ref`` in ``repo``: branch, tag, both.
+
+    Git resolves an ambiguous name by a precedence rule rather than by asking,
+    so an action pinned to a name that is both a branch and a tag runs whichever
+    one that rule picks — not necessarily the one the author meant. Answering
+    this costs two cheap ref lookups and only for symbolic refs, which are a
+    minority of `uses:` in any repository that pins.
+
+    Returns ``[]`` on any error rather than a partial answer. `ref_confusion`
+    requires *both* kinds to be present before it reports, so an empty or
+    one-element list is silent — the same present-and-wrong discipline the rest
+    of this module keeps.
+    """
+    kinds: list[str] = []
+    try:
+        repo.get_branch(ref)
+        kinds.append("branch")
+    except (UnknownObjectException, GithubException):
+        pass
+    except Exception:  # a lookup must never fail a scan
+        return []
+
+    try:
+        repo.get_git_ref(f"tags/{ref}")
+        kinds.append("tag")
+    except (UnknownObjectException, GithubException):
+        pass
+    except Exception:  # a lookup must never fail a scan
+        return []
+
+    return kinds
+
+
+def _tags_at_sha(repo: Any, sha: str) -> tuple[list[str], str]:
+    """Which of ``repo``'s tags point at ``sha``, and was the scan exhaustive?
+
+    Returns the lookup state alongside the tags: ``complete`` when every tag was
+    examined, ``partial`` when ``_MAX_TAGS`` cut the scan short, and ``failed``
+    when GitHub refused — which the caller must not read as "no tags", since an
+    unanswered question and a negative answer are different facts here.
+    """
+    tags_at_sha: list[str] = []
+    try:
+        seen = 0
+        for tag in repo.get_tags():
+            seen += 1
+            if seen > _MAX_TAGS:
+                return tags_at_sha, "partial"
+            if tag.commit.sha == sha:
+                tags_at_sha.append(tag.name)
+    except GithubException:
+        return tags_at_sha, "failed"
+    return tags_at_sha, "complete"
+
+
 def _reachability(
     repo: Any, sha: str, default_branch: str
 ) -> tuple[str, list[str], str]:
@@ -149,30 +213,18 @@ def _reachability(
     enumerated", so enumeration limits produce ``undetermined`` rather than a
     guess.
     """
-    tags_at_sha: list[str] = []
-    tag_lookup = "partial"
-
     try:
         comparison = repo.compare(default_branch, sha)
         if comparison.status in ("identical", "behind"):
-            return "reachable", tags_at_sha, tag_lookup
+            return "reachable", [], "partial"
     except GithubException:
         pass
 
-    try:
-        seen = 0
-        for tag in repo.get_tags():
-            seen += 1
-            if seen > _MAX_TAGS:
-                break
-            if tag.commit.sha == sha:
-                tags_at_sha.append(tag.name)
-        else:
-            tag_lookup = "complete"
-        if tags_at_sha:
-            return "reachable", tags_at_sha, tag_lookup
-    except GithubException:
-        return "undetermined", tags_at_sha, tag_lookup
+    tags_at_sha, tag_lookup = _tags_at_sha(repo, sha)
+    if tag_lookup == "failed":
+        return "undetermined", tags_at_sha, "partial"
+    if tags_at_sha:
+        return "reachable", tags_at_sha, tag_lookup
 
     try:
         branches = list(repo.get_branches()[:_MAX_BRANCHES])
@@ -191,7 +243,7 @@ def _reachability(
 def _budget_exhausted(gh: Github) -> bool:
     try:
         remaining, _ = gh.rate_limiting
-    except Exception:  # noqa: BLE001 - never let bookkeeping fail a scan
+    except Exception:  # never let bookkeeping fail a scan
         return False
     return bool(remaining) and remaining < _RATE_LIMIT_FLOOR
 
@@ -260,7 +312,7 @@ async def collect_action_metadata(
         await asyncio.wait_for(run(), timeout=budget_seconds)
     except TimeoutError:
         logger.warning("Action metadata budget exhausted after %ss", budget_seconds)
-    except Exception:  # noqa: BLE001 - enrichment is best-effort by contract
+    except Exception:  # enrichment is best-effort by contract
         logger.warning("Action metadata collection failed", exc_info=True)
     finally:
         await close_cache(cache)

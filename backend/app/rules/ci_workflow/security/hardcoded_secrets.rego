@@ -24,6 +24,7 @@
 #       Store the value in GitHub repository or environment secrets and reference it with ${{ secrets.NAME }}. Rotate it as well — a secret that has been committed is compromised from the moment it was pushed, and removing the line does not remove it from history.
 package greensecops.ci_workflow.security.hardcoded_secrets
 
+import data.greensecops.lib.secrets
 import data.greensecops.lib.workflow as wf
 import rego.v1
 
@@ -39,26 +40,26 @@ _secret_name_pattern := `(?i)(api_?key|access_?key|secret|password|passwd|creden
 # reported it at critical. The generated fix then replaced it with an undefined
 # `${{ secrets.* }}`, which is an empty string at runtime, which breaks the job.
 # So the value has to carry evidence too.
-_value_looks_secret(value) if wf.looks_high_entropy(value)
+_value_looks_secret(value) if secrets.looks_high_entropy(value)
 
 _is_candidate(value) if {
 	is_string(value)
 	value != ""
 	not wf.is_expression(value)
-	not wf.is_placeholder(value)
+	not secrets.is_placeholder(value)
 }
 
 # Two independent grounds to report. A recognised credential format needs no
 # help from the variable name — an AWS access key ID under a variable called
 # `FOO` is still an AWS access key ID.
-_finding(key, value) := "format" if {
+_finding(_, value) := "format" if {
 	_is_candidate(value)
-	wf.known_credential(value)
+	secrets.known_credential(value)
 }
 
 _finding(key, value) := "entropy" if {
 	_is_candidate(value)
-	not wf.known_credential(value)
+	not secrets.known_credential(value)
 	regex.match(_secret_name_pattern, key)
 	_value_looks_secret(value)
 }

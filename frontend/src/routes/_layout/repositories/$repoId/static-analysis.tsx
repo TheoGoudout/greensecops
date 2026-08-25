@@ -13,15 +13,15 @@ import {
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
-  AnalysesService,
   type AnalysisPublic,
-  FixesService,
   type FixPublic,
   type FixStatus,
   type IssuePublic,
-  IssuesService,
   type PullRequestPublic,
   RepositoriesService,
+  WorkflowFindingsService,
+  WorkflowFixesService,
+  WorkflowScansService,
 } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -32,17 +32,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
+import { apiErrorDetail } from "@/lib/api-error"
 import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { severityRank } from "@/lib/severity"
 import {
-  analysisStatusColor,
-  analysisStatusLabel,
   fixStatusColor,
+  scanStatusColor,
+  scanStatusLabel,
 } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
 import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
-import { apiErrorDetail } from "@/utils"
 
 export const Route = createFileRoute(
   "/_layout/repositories/$repoId/static-analysis",
@@ -106,7 +106,7 @@ function StaticAnalysisPage() {
   const { data: issues } = useQuery({
     queryKey: ["issues", "repo", repoId, { unfixed, branch, showIgnored }],
     queryFn: () =>
-      IssuesService.listIssues({
+      WorkflowFindingsService.listIssues({
         repoId,
         branch: branch || undefined,
         unfixed: unfixed || undefined,
@@ -118,7 +118,7 @@ function StaticAnalysisPage() {
   const { data: fixes } = useQuery({
     queryKey: ["fixes", "repo", repoId, branch],
     queryFn: () =>
-      FixesService.listFixes({
+      WorkflowFixesService.listFixes({
         repoId,
         branch: branch || undefined,
         limit: 100,
@@ -128,7 +128,7 @@ function StaticAnalysisPage() {
   const { data: analyses } = useQuery({
     queryKey: ["analyses", repoId, branch],
     queryFn: () =>
-      AnalysesService.listAnalyses({
+      WorkflowScansService.listAnalyses({
         repoId,
         branch: branch || undefined,
         limit: 100,
@@ -137,7 +137,7 @@ function StaticAnalysisPage() {
 
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => FixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
@@ -215,7 +215,7 @@ function StaticAnalysisPage() {
 
   const wfFixMutation = useMutation({
     mutationFn: (vars: { issueIds: string[] }) =>
-      FixesService.triggerFixGenerationForRepo({
+      WorkflowFixesService.triggerFixGenerationForRepo({
         repoId,
         force: true,
         requestBody: { issue_ids: vars.issueIds },
@@ -232,7 +232,7 @@ function StaticAnalysisPage() {
 
   const regenerateWorkflowMutation = useMutation({
     mutationFn: (fixId: string) =>
-      FixesService.regenerateFixesForWorkflow({ fixId }),
+      WorkflowFixesService.regenerateFixesForWorkflow({ fixId }),
     onSuccess: () => {
       toast.success("Fix queued for regeneration")
       invalidateStatic()
@@ -245,7 +245,7 @@ function StaticAnalysisPage() {
 
   const batchFixMutation = useMutation({
     mutationFn: () =>
-      FixesService.triggerFixGenerationForRepo({
+      WorkflowFixesService.triggerFixGenerationForRepo({
         repoId,
         force: true,
         requestBody:
@@ -264,7 +264,7 @@ function StaticAnalysisPage() {
   })
 
   const regenerateRepoMutation = useMutation({
-    mutationFn: () => FixesService.regenerateFixesForRepo({ repoId }),
+    mutationFn: () => WorkflowFixesService.regenerateFixesForRepo({ repoId }),
     onSuccess: () => {
       toast.success("All fixes queued for regeneration")
       invalidateStatic()
@@ -279,7 +279,10 @@ function StaticAnalysisPage() {
   // it lives on the tab it acts on.
   const triggerMutation = useMutation({
     mutationFn: () =>
-      AnalysesService.triggerAnalysis({ repoId, branch: branch || undefined }),
+      WorkflowScansService.triggerAnalysis({
+        repoId,
+        branch: branch || undefined,
+      }),
     onSuccess: () => {
       toast.success("Analysis queued")
       invalidateStatic()
@@ -292,7 +295,10 @@ function StaticAnalysisPage() {
 
   const analyzeWorkflowMutation = useMutation({
     mutationFn: (workflowFileId: string) =>
-      AnalysesService.reanalyzeForWorkflow({ workflowFileId, force: true }),
+      WorkflowScansService.reanalyzeForWorkflow({
+        workflowFileId,
+        force: true,
+      }),
     onSuccess: () => {
       toast.success("Analysis queued")
       invalidateStatic()
@@ -305,7 +311,7 @@ function StaticAnalysisPage() {
 
   const deliverWorkflowMutation = useMutation({
     mutationFn: (vars: { fixId: string; force: boolean }) =>
-      FixesService.triggerWorkflowDelivery({
+      WorkflowFixesService.triggerWorkflowDelivery({
         force: vars.force,
         requestBody: { fix_id: vars.fixId },
       }),
@@ -324,7 +330,7 @@ function StaticAnalysisPage() {
 
   const deliverRepoMutation = useMutation({
     mutationFn: (vars: { force: boolean }) =>
-      FixesService.triggerRepoDelivery({ repoId, force: vars.force }),
+      WorkflowFixesService.triggerRepoDelivery({ repoId, force: vars.force }),
     onSuccess: () => {
       toast.success("Repo-wide PR queued")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
@@ -550,10 +556,8 @@ function StaticAnalysisPage() {
                           {a.triggered_by.replace(/_/g, " ")}
                         </span>
                         <div className="flex justify-center">
-                          <StatusPill
-                            colorClass={analysisStatusColor(a.status)}
-                          >
-                            {analysisStatusLabel(a.status)}
+                          <StatusPill colorClass={scanStatusColor(a.status)}>
+                            {scanStatusLabel(a.status)}
                           </StatusPill>
                         </div>
                         <div className="flex justify-center">
@@ -680,10 +684,10 @@ function StaticAnalysisPage() {
                     )}
                     {latest && (
                       <StatusPill
-                        colorClass={analysisStatusColor(latest.status)}
+                        colorClass={scanStatusColor(latest.status)}
                         className="shrink-0 font-sans"
                       >
-                        {analysisStatusLabel(latest.status)}
+                        {scanStatusLabel(latest.status)}
                       </StatusPill>
                     )}
                     <GradeBadge

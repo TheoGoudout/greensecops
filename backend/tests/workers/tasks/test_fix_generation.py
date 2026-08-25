@@ -7,31 +7,33 @@ from unittest.mock import patch
 from sqlmodel import Session
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
-    Fix,
+    Category,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
     Repository,
     Rule,
+    ScanStatus,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
+)
+from app.services.llm.response import (
+    parse_full_content,
+    parse_unfixed_issues,
+    restore_trailing_whitespace,
 )
 from app.workers.tasks.fix_generation import (
     _is_valid_workflow_yaml,
     _maybe_auto_deliver,
-    _parse_llm_response,
-    _parse_unfixed_issues,
     _record_batch_result,
     init_fix_batch,
     resolve_llm_provider,
-    restore_trailing_whitespace,
 )
 
 _FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
@@ -47,16 +49,16 @@ _WORKFLOW = (
 )
 
 
-# ─── _parse_llm_response ─────────────────────────────────────────────────────
+# ─── parse_full_content ─────────────────────────────────────────────────────
 
 
 def test_parse_llm_response_extracts_full_content() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>"
-    assert _parse_llm_response(response) == _WORKFLOW
+    assert parse_full_content(response) == _WORKFLOW
 
 
 def test_parse_llm_response_missing_block_returns_empty() -> None:
-    assert _parse_llm_response("no delimiters here") == ""
+    assert parse_full_content("no delimiters here") == ""
 
 
 def test_parse_llm_response_ignores_surrounding_prose() -> None:
@@ -65,10 +67,10 @@ def test_parse_llm_response_ignores_surrounding_prose() -> None:
         "<full_content>\nname: CI\non: push\n</full_content>\n"
         "All issues addressed."
     )
-    assert _parse_llm_response(response) == "name: CI\non: push\n"
+    assert parse_full_content(response) == "name: CI\non: push\n"
 
 
-# ─── _parse_unfixed_issues ───────────────────────────────────────────────────
+# ─── parse_unfixed_issues ───────────────────────────────────────────────────
 
 
 def test_parse_unfixed_issues_extracts_index_and_reason() -> None:
@@ -76,7 +78,7 @@ def test_parse_unfixed_issues_extracts_index_and_reason() -> None:
         f"<full_content>\n{_WORKFLOW}</full_content>\n"
         "<unfixed>\n2: requires manual OIDC trust setup in AWS IAM\n</unfixed>"
     )
-    assert _parse_unfixed_issues(response) == {
+    assert parse_unfixed_issues(response) == {
         2: "requires manual OIDC trust setup in AWS IAM"
     }
 
@@ -85,7 +87,7 @@ def test_parse_unfixed_issues_multiple_entries() -> None:
     response = (
         "<unfixed>\n1: needs a repo secret\n3: cross-file refactor needed\n</unfixed>"
     )
-    assert _parse_unfixed_issues(response) == {
+    assert parse_unfixed_issues(response) == {
         1: "needs a repo secret",
         3: "cross-file refactor needed",
     }
@@ -93,12 +95,12 @@ def test_parse_unfixed_issues_multiple_entries() -> None:
 
 def test_parse_unfixed_issues_missing_block_returns_empty() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>"
-    assert _parse_unfixed_issues(response) == {}
+    assert parse_unfixed_issues(response) == {}
 
 
 def test_parse_unfixed_issues_empty_block_returns_empty() -> None:
     response = f"<full_content>\n{_WORKFLOW}</full_content>\n<unfixed>\n</unfixed>"
-    assert _parse_unfixed_issues(response) == {}
+    assert parse_unfixed_issues(response) == {}
 
 
 # ─── _is_valid_workflow_yaml ─────────────────────────────────────────────────
@@ -271,7 +273,7 @@ def test_batch_fails_open_when_redis_unavailable() -> None:
 
 def _make_wf_fix_issue(
     db: Session, repo: Repository, rule: Rule, status: FixStatus, n: int
-) -> tuple[WorkflowFile, Fix, Issue]:
+) -> tuple[WorkflowFile, WorkflowFix, WorkflowFinding]:
     wf = WorkflowFile(
         repo_id=repo.id,
         path=f".github/workflows/auto-deliver-{n}-{uuid.uuid4().hex[:6]}.yml",
@@ -281,7 +283,7 @@ def _make_wf_fix_issue(
     db.add(wf)
     db.commit()
     db.refresh(wf)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -291,24 +293,24 @@ def _make_wf_fix_issue(
     db.add(fix)
     db.commit()
     db.refresh(fix)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.medium,
-        category=IssueCategory.reliability,
+        severity=Severity.medium,
+        category=Category.reliability,
         message=f"auto-deliver issue {n}",
         fix_id=fix.id,
     )
@@ -342,8 +344,8 @@ def test_maybe_auto_deliver_body_keeps_previously_delivered_fixes(
     db.refresh(repo)
     rule = Rule(
         slug=f"auto-deliver-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.medium,
+        category=Category.reliability,
+        severity=Severity.medium,
         title="Auto Deliver Rule",
         description="A test rule",
         enabled=True,
@@ -407,8 +409,8 @@ def test_maybe_auto_deliver_skips_externally_modified_pr(db: Session) -> None:
     db.refresh(repo)
     rule = Rule(
         slug=f"auto-deliver-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.reliability,
-        severity=IssueSeverity.medium,
+        category=Category.reliability,
+        severity=Severity.medium,
         title="Auto Deliver Rule",
         description="A test rule",
         enabled=True,

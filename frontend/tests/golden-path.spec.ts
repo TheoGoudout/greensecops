@@ -88,25 +88,25 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/analyses\/[0-9a-f-]{36}/)) {
+      if (url.match(/\/workflow-scans\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS] })
       }
     })
 
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/issues\/[0-9a-f-]{36}/)) {
+      if (url.match(/\/workflow-findings\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ISSUE })
       } else {
         route.fulfill({ json: [MOCK_ISSUE] })
       }
     })
 
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       route.fulfill({ json: [MOCK_FIX] })
     })
 
@@ -136,7 +136,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
   test("dashboard summarises every analysis type", async ({ page }) => {
     await page.goto("/")
-    for (const engine of ["ci", "docker", "terraform", "cloud"]) {
+    for (const engine of ["workflow", "docker", "terraform", "cloud"]) {
       await expect(page.getByTestId(`engine-row-${engine}`)).toBeVisible()
     }
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -162,10 +162,13 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
   test("fix rejection updates status via API", async ({ page }) => {
     let rejectCalled = false
-    await page.route(`**/api/v1/fixes/${MOCK_FIX.id}/reject`, (route) => {
-      rejectCalled = true
-      route.fulfill({ json: { ...MOCK_FIX, status: "rejected" } })
-    })
+    await page.route(
+      `**/api/v1/workflow-fixes/${MOCK_FIX.id}/reject`,
+      (route) => {
+        rejectCalled = true
+        route.fulfill({ json: { ...MOCK_FIX, status: "rejected" } })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
     await expect(page.getByText("missing_timeout").first()).toBeVisible()
