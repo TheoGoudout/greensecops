@@ -7,6 +7,10 @@
 * Import the remaining importable zizmor audits. PR [#238](https://github.com/TheoGoudout/greensecops/pull/238) by [@TheoGoudout](https://github.com/TheoGoudout).
 * Run zizmor at full coverage, and make the Rego catalog earn its findings. PR [#223](https://github.com/TheoGoudout/greensecops/pull/223) by [@TheoGoudout](https://github.com/TheoGoudout).
 
+### Features
+
+* feat(rules): add the iac_ansible analysis engine's rule corpus. PR [#241](https://github.com/TheoGoudout/greensecops/pull/241) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ### Fixes
 
 * Fix the false positives, dedup bugs and coverage gaps found by the Rego rule audit. PR [#239](https://github.com/TheoGoudout/greensecops/pull/239) by [@TheoGoudout](https://github.com/TheoGoudout).
