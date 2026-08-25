@@ -42,6 +42,14 @@ from app.services.deduplication import (
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.scan_support import scan_lock
+from app.services.workflow_sync import (
+    # Re-exported: this module raised it before the sync step was extracted, and
+    # callers (including the task's own retry branch) still catch it here.
+    WorkflowFetchError,
+    fetch_workflow_files_for_repo,
+    resolve_branch_head,
+    sync_workflow_files,
+)
 from app.workers.celery_app import celery_app
 
 if TYPE_CHECKING:
@@ -227,10 +235,6 @@ def _classify_failure(exc: BaseException) -> AnalysisFailureKind:
     return AnalysisFailureKind.permanent
 
 
-class WorkflowFetchError(Exception):
-    """Raised when workflow files cannot be fetched from GitHub (transient)."""
-
-
 def _register_rule_from_violation(
     session: Session, violation: OpaViolation
 ) -> Rule | None:
@@ -310,66 +314,6 @@ def _resolve_stale_issues(
         )
 
 
-def _resolve_issues_for_missing_files(
-    session: Session,
-    repo: Repository,
-    fetched_paths: set[str],
-    branch: str,
-) -> None:
-    """Reconcile workflow files that no longer exist on the analysed branch.
-
-    Soft-deletes the row (``deleted_at``) so it drops out of the
-    static-analysis view and repo grade, resolves its open issues
-    (``file_removed``), and withdraws any non-terminal fix targeting it, so a
-    stale ``ready``/``delivered`` fix can't later resurrect content the user
-    deliberately deleted. The row itself is kept (not hard-deleted) so its
-    resolved issues and analysis history stay queryable, and so a re-added path
-    can be cleanly restored. Scoped to the branch that was fetched: a feature
-    branch missing a file says nothing about the default branch (and vice versa).
-    """
-    now = datetime.now(timezone.utc)
-    wf_rows = session.exec(
-        select(WorkflowFile)
-        .where(WorkflowFile.repo_id == repo.id)
-        .where(WorkflowFile.branch == branch)
-    ).all()
-    resolved = 0
-    superseded = 0
-    deleted = 0
-    for wf in wf_rows:
-        if wf.path in fetched_paths:
-            continue
-        if wf.deleted_at is None:
-            wf.deleted_at = now
-            session.add(wf)
-            deleted += 1
-        open_issues = session.exec(
-            select(Issue)
-            .where(Issue.workflow_file_id == wf.id)
-            .where(col(Issue.resolved_at).is_(None))
-        ).all()
-        for issue in open_issues:
-            issue.resolved_at = now
-            issue.resolution_reason = IssueResolutionReason.file_removed
-            session.add(issue)
-            resolved += 1
-        if wf.fix is not None and sm.try_advance(
-            wf.fix, sm.FixMachine, "supersede_deleted_file"
-        ):
-            session.add(wf.fix)
-            superseded += 1
-    if resolved or superseded or deleted:
-        session.commit()
-        logger.info(
-            "Soft-deleted %d workflow file(s), resolved %d issue(s) and "
-            "superseded %d fix(es) for deleted workflow files in repo %s",
-            deleted,
-            resolved,
-            superseded,
-            repo.full_name,
-        )
-
-
 def _count_open_issues(session: Session, workflow_file_id: uuid.UUID | None) -> int:
     if workflow_file_id is None:
         return 0
@@ -399,11 +343,12 @@ def _run_static_analysis_impl(
         org_id = str(repo.org_id)
         effective_branch = branch or repo.default_branch
 
-        # Both paths re-fetch the current workflow files from GitHub and
-        # reconcile deletions; a single-file run just narrows the analysed set
-        # to its own file afterwards. Re-fetching (rather than re-using the
+        # Both paths sync the whole branch from GitHub first — refreshing stored
+        # content and reconciling deletions — and a single-file run then narrows
+        # the analysed set to its own file. Syncing (rather than re-using the
         # stored ``raw_content``) is what keeps a deleted file from being
-        # re-analysed off stale content.
+        # re-analysed off stale content, and doing it *before* the dedup check is
+        # what keeps a dedup-skipped file's stored copy from going stale at all.
         single_path: str | None = None
         if workflow_file_id:
             wf = session.get(WorkflowFile, uuid.UUID(workflow_file_id))
@@ -413,13 +358,20 @@ def _run_static_analysis_impl(
             # the caller passed.
             effective_branch = wf.branch
             single_path = wf.path
-            fetch_ref = commit_sha or wf.branch or None
-        else:
-            fetch_ref = commit_sha or branch or None
 
+        # ``commit_sha`` from a webhook is a *trigger*, not a fetch pin. The
+        # sync resolves the branch head itself, so a task delayed behind the lock
+        # or a retry can no longer write the commit its event happened to carry
+        # over newer content that landed since.
         try:
-            fetched = _fetch_workflow_files(repo, ref=fetch_ref)
-        except Exception as exc:
+            sync = sync_workflow_files(
+                session,
+                repo,
+                effective_branch,
+                fetch=_fetch_workflow_files,
+                resolve_sha=_resolve_ref_sha,
+            )
+        except WorkflowFetchError as exc:
             logger.exception(
                 "Failed to fetch workflow files for %s: %s", repo.full_name, exc
             )
@@ -431,34 +383,49 @@ def _run_static_analysis_impl(
                     f"could not fetch workflow files: {exc}"[:200],
                 )
             )
-            raise WorkflowFetchError(str(exc)) from exc
+            raise
 
-        # Workflow files deleted/renamed since the last run: soft-delete them
-        # and resolve their open issues so they stop showing up as current
-        # findings.
-        fetched_paths = {f.path for f in fetched}
-        _resolve_issues_for_missing_files(
-            session, repo, fetched_paths, effective_branch
-        )
+        # The branch could not be read at all — the ref did not resolve and the
+        # listing came back empty, which GitHub reports identically to "this
+        # repo has no workflows". Recording a `no_workflows` analysis here would
+        # state as fact the one thing we just established we cannot tell, and it
+        # would show in the history as though the repo had been emptied. Say
+        # nothing and let the next push, poll or nightly run settle it.
+        if sync.ref_unresolved:
+            logger.warning(
+                "Skipping analysis for %s@%s: branch head could not be resolved",
+                repo.full_name,
+                effective_branch,
+            )
+            events_pub.publish_event(ev.analysis_skipped(org_id, repo_id, ""))
+            return {
+                "status": "ref_unresolved",
+                "repo_id": repo_id,
+                "results": "[]",
+            }
 
-        workflow_files_to_analyse: Sequence[WorkflowFile | WorkflowFileContent]
+        # The commit actually analysed, which is what belongs on the Analysis
+        # row. Falls back to the trigger's SHA only when the ref could not be
+        # resolved, so the column is populated for manual and scheduled runs too.
+        analysed_sha = sync.head_sha or commit_sha or None
+
+        analysed_paths: list[str]
         if single_path is not None:
             # Per-file re-analysis: only the target file, using its freshly
-            # fetched content. If the path is gone it was just reconciled above,
+            # synced content. If the path is gone it was just reconciled above,
             # so there is nothing to re-analyse and no issues to regenerate.
-            match = next((f for f in fetched if f.path == single_path), None)
-            if match is None:
+            if single_path not in sync.contents:
                 events_pub.publish_event(ev.analysis_skipped(org_id, repo_id, ""))
                 return {
                     "status": "workflow_file_removed",
                     "repo_id": repo_id,
                     "results": "[]",
                 }
-            workflow_files_to_analyse = [match]
+            analysed_paths = [single_path]
         else:
-            workflow_files_to_analyse = fetched
+            analysed_paths = sorted(sync.contents)
 
-        if not workflow_files_to_analyse:
+        if not analysed_paths:
             now = datetime.now(timezone.utc)
             no_wf_analysis = Analysis(
                 repo_id=repo.id,
@@ -467,7 +434,7 @@ def _run_static_analysis_impl(
                 status=AnalysisStatus.no_workflows,
                 triggered_by=AnalysisTrigger(trigger),
                 branch=effective_branch,
-                commit_sha=commit_sha or None,
+                commit_sha=analysed_sha,
                 completed_at=now,
             )
             session.add(no_wf_analysis)
@@ -477,7 +444,7 @@ def _run_static_analysis_impl(
             )
             return {"status": "no_workflow_files", "repo_id": repo_id, "results": "[]"}
 
-        is_batch = workflow_file_id is None and len(workflow_files_to_analyse) > 1
+        is_batch = workflow_file_id is None and len(analysed_paths) > 1
 
         if is_batch:
             events_pub.publish_event(
@@ -507,19 +474,21 @@ def _run_static_analysis_impl(
 
         # Hoisted above the loop deliberately — see _collect_action_metadata.
         action_metadata = _collect_action_metadata(
-            repo, [_content_of(f) for f in workflow_files_to_analyse]
+            repo, [sync.contents[p] for p in analysed_paths]
         )
 
-        for wf_src in workflow_files_to_analyse:
+        for path in analysed_paths:
             if budget is not None and budget <= 0:
                 # Out of allowance mid-batch: stop rather than silently
                 # over-serving, and remember where so the caller can say which
                 # files went unanalysed instead of reporting a clean run.
-                quota_stopped_at = wf_src.path
+                quota_stopped_at = path
                 break
 
-            content = _content_of(wf_src)
-            path = wf_src.path
+            # The content the sync just read at ``sync.head_sha``, never the
+            # row's ``raw_content``: the two are the same except when this run's
+            # write lost the ordering race, and there the row is the newer one.
+            content = sync.contents[path]
             content_hash = compute_content_hash(content)
 
             duplicate, existing = is_duplicate(
@@ -551,39 +520,11 @@ def _run_static_analysis_impl(
                 )
                 continue
 
-            wf_record: WorkflowFile | None
-            if isinstance(wf_src, WorkflowFile):
-                wf_record = wf_src
-            else:
-                wf_record = session.exec(
-                    select(WorkflowFile)
-                    .where(WorkflowFile.repo_id == repo.id)
-                    .where(WorkflowFile.branch == effective_branch)
-                    .where(WorkflowFile.path == path)
-                ).first()
-                if wf_record is None:
-                    wf_record = WorkflowFile(
-                        repo_id=repo.id,
-                        branch=effective_branch,
-                        path=path,
-                        content_hash=content_hash,
-                        raw_content=content,
-                    )
-                    session.add(wf_record)
-                else:
-                    wf_record.content_hash = content_hash
-                    wf_record.raw_content = content
-                    # The path reappeared on its branch: clear the soft-delete
-                    # marker so it shows in the static-analysis view again.
-                    wf_record.deleted_at = None
-                    session.add(wf_record)
-                    # The path reappeared: give a fix withdrawn for its
-                    # deletion a path back to `ready` instead of leaving it
-                    # stranded (mirrors PR-reopen restoring a closed-PR fix).
-                    if wf_record.fix is not None:
-                        sm.try_advance(wf_record.fix, sm.FixMachine, "restore")
-                        session.add(wf_record.fix)
-                session.flush()
+            # The row the sync created or refreshed for this path. Persisting
+            # content is the sync's job, not the analysis loop's — it used to
+            # happen here, below the dedup `continue` above, which is exactly
+            # why a dedup-skipped file's stored copy went stale.
+            wf_record = sync.rows[path]
 
             analysis = Analysis(
                 repo_id=repo.id,
@@ -592,7 +533,7 @@ def _run_static_analysis_impl(
                 status=AnalysisStatus.queued,
                 triggered_by=AnalysisTrigger(trigger),
                 branch=effective_branch,
-                commit_sha=commit_sha or None,
+                commit_sha=analysed_sha,
             )
             session.add(analysis)
             session.flush()
@@ -826,10 +767,10 @@ def _run_static_analysis_impl(
             # produces looks authoritative while covering a fraction of the
             # repo. The SSE signal is distinct from ``analysis.failed`` because
             # nothing broke and retrying will not help — only upgrading will.
-            skipped = len(workflow_files_to_analyse) - len(results)
+            skipped = len(analysed_paths) - len(results)
             message = (
                 f"Analysis stopped after {len(results)} of "
-                f"{len(workflow_files_to_analyse)} workflow files: the monthly "
+                f"{len(analysed_paths)} workflow files: the monthly "
                 f"analysis allowance is exhausted. {skipped} file(s) were not "
                 f"analysed, starting with {quota_stopped_at}."
             )
@@ -850,7 +791,13 @@ def _run_static_analysis_impl(
         return {"status": "done", "repo_id": repo_id, "results": str(results)}
 
 
-@celery_app.task(name="static_analysis.run", bind=True, max_retries=3)
+# Retry budget shared by both of ``run_static_analysis``'s retry reasons (lock
+# contention and a transient fetch failure), because Celery tracks retries with
+# one counter per task rather than one per reason.
+MAX_RETRIES = 10
+
+
+@celery_app.task(name="static_analysis.run", bind=True, max_retries=MAX_RETRIES)
 def run_static_analysis(
     self: Any,  # noqa: ANN401 — celery bound task instance
     repo_id: str,
@@ -876,7 +823,7 @@ def run_static_analysis(
             # (installation sync dedup) should prevent true duplicates; the retry
             # here covers legitimate concurrent webhook events.  10 × 30 s = 300 s
             # max wait — enough for any realistic analysis to complete.
-            raise self.retry(countdown=30, max_retries=10)
+            raise self.retry(countdown=30, max_retries=MAX_RETRIES)
         try:
             return _run_static_analysis_impl(
                 repo_id=repo_id,
@@ -889,7 +836,20 @@ def run_static_analysis(
             )
         except WorkflowFetchError as exc:
             # Transient GitHub failure (rate limit, network): back off and retry.
-            raise self.retry(exc=exc, countdown=30 * (2**self.request.retries))
+            #
+            # ``max_retries`` is passed explicitly and matches the lock branch's
+            # budget. Celery keeps a *single* ``request.retries`` counter for the
+            # whole task, so without it this fell back to the decorator's 3: on a
+            # busy repo that had already burned four lock-contention retries, the
+            # first transient GitHub blip exceeded the budget on its very first
+            # attempt and failed the analysis outright instead of backing off.
+            #
+            # The shift is capped so a late retry waits ~16 min, not ~9 h.
+            raise self.retry(
+                exc=exc,
+                countdown=30 * (2 ** min(self.request.retries, 5)),
+                max_retries=MAX_RETRIES,
+            )
 
 
 # Seconds to wait between successive per-repo analyses, to spread out the
@@ -939,29 +899,18 @@ def reanalyze_all_repositories(
 def _fetch_workflow_files(
     repo: Repository, ref: str | None = None
 ) -> list[WorkflowFileContent]:
-    """Synchronous wrapper for async GitHubAppClient.fetch_workflow_files."""
-    import redis.asyncio as aioredis
+    """This module's GitHub-listing seam, delegating to ``workflow_sync``.
 
-    from app.services.github.app_client import GitHubAppClient
-
-    async def _fetch() -> list[WorkflowFileContent]:
-        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
-        try:
-            client = GitHubAppClient(redis_client=r)
-            return list(
-                await client.fetch_workflow_files(
-                    repo.installation_id, repo.full_name, ref=ref
-                )
-            )
-        finally:
-            await r.aclose()
-
-    return asyncio.run(_fetch())
+    Kept as a module-level name rather than calling the service function
+    directly because it is the point every analysis test patches to stand in for
+    GitHub. Same for ``_resolve_ref_sha`` below.
+    """
+    return list(fetch_workflow_files_for_repo(repo, ref))
 
 
-def _content_of(wf_src: WorkflowFile | WorkflowFileContent) -> str:
-    """The raw YAML, whichever of the two sources it came from."""
-    return wf_src.raw_content if isinstance(wf_src, WorkflowFile) else wf_src.content
+def _resolve_ref_sha(repo: Repository, branch: str) -> str | None:
+    """This module's branch-head seam, delegating to ``workflow_sync``."""
+    return resolve_branch_head(repo, branch)
 
 
 async def _evaluate(

@@ -33,6 +33,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
 import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
+import { relativeTime } from "@/lib/engine-meta"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { severityRank } from "@/lib/severity"
 import {
@@ -92,6 +93,9 @@ function StaticAnalysisPage() {
     queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
     queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
     queryClient.invalidateQueries({ queryKey: ["analyses", repoId] })
+    // A sync adds, removes and rewrites workflow files, so the list itself is
+    // stale after one — not just the findings hanging off it.
+    queryClient.invalidateQueries({ queryKey: ["workflow-files", repoId] })
   }
 
   const { data: workflowFiles, isLoading: wfLoading } = useQuery({
@@ -290,6 +294,39 @@ function StaticAnalysisPage() {
       }),
   })
 
+  // Sync-only: re-read the workflow files from GitHub and reconcile the stored
+  // set, without running policy evaluation or an LLM. "Run analysis" does this
+  // first anyway; this is for when the list on screen looks wrong and the user
+  // wants it corrected without paying for a full re-analysis.
+  const syncMutation = useMutation({
+    mutationFn: () =>
+      RepositoriesService.syncRepositoryWorkflows({
+        repoId,
+        branch: branch || undefined,
+      }),
+    onSuccess: (data) => {
+      const changes = [
+        data.added && `${data.added} added`,
+        data.updated && `${data.updated} updated`,
+        data.deleted && `${data.deleted} removed`,
+        data.restored && `${data.restored} restored`,
+      ].filter(Boolean)
+      toast.success(
+        changes.length ? `Synced: ${changes.join(", ")}` : "Already up to date",
+        {
+          description: data.head_sha
+            ? `${data.branch} at ${data.head_sha.slice(0, 7)}`
+            : data.branch,
+        },
+      )
+      invalidateStatic()
+    },
+    onError: (error) =>
+      toast.error("Failed to sync workflow files", {
+        description: apiErrorDetail(error),
+      }),
+  })
+
   const analyzeWorkflowMutation = useMutation({
     mutationFn: (workflowFileId: string) =>
       AnalysesService.reanalyzeForWorkflow({ workflowFileId, force: true }),
@@ -411,6 +448,21 @@ function StaticAnalysisPage() {
         >
           <Play className="h-4 w-4" />
           {triggerMutation.isPending ? "Queuing…" : "Run analysis"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          title="Re-read the workflow files from GitHub without running an analysis"
+          onClick={() => syncMutation.mutate()}
+          disabled={!isAccessible || syncMutation.isPending}
+        >
+          {syncMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {syncMutation.isPending ? "Syncing…" : "Sync from GitHub"}
         </Button>
         <Button
           variant={unfixed ? "default" : "outline"}
@@ -783,6 +835,16 @@ function StaticAnalysisPage() {
               </CardHeader>
               {wfOpen && (
                 <CardContent className="flex flex-col gap-3">
+                  {/* Which commit this copy came from and when it was last
+                      verified, so the file on screen doesn't read as live. */}
+                  {(wf.source_commit_sha || wf.fetched_at) && (
+                    <p className="text-xs text-muted-foreground">
+                      {wf.source_commit_sha
+                        ? `Synced at ${wf.source_commit_sha.slice(0, 7)}`
+                        : "Synced"}
+                      {wf.fetched_at ? ` · ${relativeTime(wf.fetched_at)}` : ""}
+                    </p>
+                  )}
                   <FileViewer
                     path={wf.path}
                     rawContent={wf.raw_content ?? ""}

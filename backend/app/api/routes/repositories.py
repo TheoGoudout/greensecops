@@ -27,14 +27,20 @@ from app.models import (
     User,
     WorkflowFile,
     WorkflowFilePublic,
+    WorkflowSyncSummary,
 )
 from app.services.badge_signing import build_badge_svg_url
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.scan_support import scan_lock
 from app.services.scoring import (
     average_latest_scores,
     compute_avg_scores_batch,
     score_to_grade,
+)
+from app.services.workflow_sync import (
+    WorkflowFetchError,
+    sync_workflow_files,
 )
 
 SuperuserDep = Annotated[User, Depends(get_current_active_superuser)]
@@ -259,9 +265,61 @@ def list_workflow_files(
             path=wf.path,
             branch=wf.branch,
             raw_content=wf.raw_content,
+            source_commit_sha=wf.source_commit_sha,
+            fetched_at=wf.fetched_at,
         )
         for wf in wf_files
     ]
+
+
+@router.post(
+    "/{repo_id}/sync-workflows", role=Role.org_admin, limit=LIMIT_EXPENSIVE
+)
+def sync_repository_workflows(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    branch: str | None = None,
+) -> WorkflowSyncSummary:
+    """Re-read this repo's workflow files from GitHub and reconcile the stored set.
+
+    The read-only half of an analysis: it refreshes stored content, registers
+    files that appeared and soft-deletes ones that are gone, but runs no policy
+    evaluation and no LLM, so it costs nothing and is not billed. "Run analysis"
+    does this first anyway — this exists for when the stored view looks wrong and
+    a user wants it reconciled without paying for a full re-analysis.
+
+    Deliberately a plain ``def``: the GitHub calls below run through
+    ``asyncio.run``, which raises inside a running event loop, so this has to be
+    on FastAPI's threadpool rather than the event loop.
+    """
+    repo = _get_repo_for_user(repo_id, session, current_user)
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
+
+    # Same lock the analysis worker takes. Without it a manual sync can interleave
+    # with an in-flight analysis and the two race on the rows this writes.
+    with scan_lock(f"static_analysis:{repo_id}") as acquired:
+        if not acquired:
+            raise HTTPException(
+                status_code=409,
+                detail="An analysis is already running for this repository",
+            )
+        try:
+            result = sync_workflow_files(
+                session, repo, branch or repo.default_branch
+            )
+        except WorkflowFetchError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not read workflow files from GitHub: {exc}"[:200],
+            ) from exc
+
+    return WorkflowSyncSummary(
+        branch=result.branch,
+        head_sha=result.head_sha,
+        **result.counts,
+    )
 
 
 @router.patch("/{repo_id}/toggle", role=Role.org_admin)

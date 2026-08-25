@@ -1134,6 +1134,25 @@ export type WorkflowFilePublic = {
     path: string;
     branch?: (string | null);
     raw_content?: (string | null);
+    source_commit_sha?: (string | null);
+    fetched_at?: (string | null);
+};
+
+/**
+ * What a manual "sync from GitHub" run changed, for the toast in the UI.
+ *
+ * ``head_sha`` is None when the branch head could not be resolved, in which
+ * case the sync read a mutable ref and reconciled nothing it wasn't sure of.
+ */
+export type WorkflowSyncSummary = {
+    branch: string;
+    head_sha?: (string | null);
+    added?: number;
+    updated?: number;
+    unchanged?: number;
+    restored?: number;
+    deleted?: number;
+    skipped_stale?: number;
 };
 
 export type AnalysesListAnalysesData = {
@@ -1656,6 +1675,13 @@ export type RepositoriesListWorkflowFilesData = {
 };
 
 export type RepositoriesListWorkflowFilesResponse = (Array<WorkflowFilePublic>);
+
+export type RepositoriesSyncRepositoryWorkflowsData = {
+    branch?: (string | null);
+    repoId: string;
+};
+
+export type RepositoriesSyncRepositoryWorkflowsResponse = (WorkflowSyncSummary);
 
 export type RepositoriesToggleRepositoryData = {
     enabled: boolean;

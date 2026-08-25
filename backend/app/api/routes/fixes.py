@@ -419,9 +419,11 @@ def get_fix(
     _authorize_fix(session, current_user, fix)
     data = _fixes_to_public(session, [fix])[0]
 
+    # The content the rewrite was generated from, so the diff on screen is the
+    # diff delivery will push. Falls back to the stored snapshot for fixes
+    # generated before base_content was recorded.
     wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    if wf_file:
-        data.base_content = wf_file.raw_content
+    data.base_content = fix.base_content or (wf_file.raw_content if wf_file else None)
     return data
 
 

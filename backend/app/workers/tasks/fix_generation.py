@@ -24,7 +24,7 @@ MISSING_CONTENT_ERROR = "LLM response missing workflow content"
 
 
 def _remote_workflow_content(
-    installation_id: int | None, full_name: str, ref: str, path: str
+    repo: Repository, ref: str, path: str
 ) -> tuple[str | None, bool]:
     """The file as it is on the remote right now.
 
@@ -48,9 +48,7 @@ def _remote_workflow_content(
         r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
         try:
             client = GitHubAppClient(redis_client=r)
-            files = await client.fetch_workflow_files(
-                installation_id, full_name, ref=ref
-            )
+            files = await client.fetch_workflow_files(repo, ref=ref)
         finally:
             await r.aclose()
         match = next((f for f in files if f.path == path), None)
@@ -62,7 +60,7 @@ def _remote_workflow_content(
         logger.warning(
             "Could not re-read %s from %s; generating against the stored copy",
             path,
-            full_name,
+            repo.full_name,
             exc_info=True,
         )
         return None, False
@@ -447,7 +445,7 @@ def run_fix_generation(
         # last scan — the fix rewrites the whole file, so a stale base silently
         # reverts everything committed since.
         remote_content, reachable = _remote_workflow_content(
-            repo.installation_id, repo.full_name, repo.default_branch, wf_file.path
+            repo, repo.default_branch, wf_file.path
         )
         if reachable and remote_content is None:
             logger.info(
@@ -526,6 +524,13 @@ def run_fix_generation(
             fix.error_message = generation_error
         else:
             fix.full_content = full_content
+            # The base this rewrite replaces, recorded alongside it. A fix is a
+            # whole-file replacement, so it is only safe against the content it
+            # was built from — delivery's freshness check and the UI diff both
+            # used to reach for `WorkflowFile.raw_content` instead, which is a
+            # different snapshot whenever the remote moved between the scan and
+            # this call.
+            fix.base_content = base_content
             sm.advance(fix, sm.FixMachine, "generation_succeeded")
             # The LLM's own report of which issues it couldn't resolve in this
             # diff. Re-evaluated on every attempt so a retry that succeeds

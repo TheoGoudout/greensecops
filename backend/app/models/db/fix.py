@@ -35,6 +35,16 @@ class Fix(SQLModel, table=True):
     langsmith_run_id: str | None = Field(default=None, max_length=255)
     status: FixStatus = Field(default=FixStatus.pending)
     full_content: str | None = Field(default=None)
+    # The exact file content the rewrite was generated *from*. A fix replaces the
+    # whole file, so it is only meaningful against the base it was built on:
+    # delivery aborts when the remote no longer matches this, and the UI diffs
+    # ``full_content`` against it. Both used to read ``WorkflowFile.raw_content``
+    # instead — a different snapshot from the one generation actually used, which
+    # made delivery reject correct fixes and show the user a diff other than the
+    # one that would be pushed. NULL on fixes generated before this column
+    # existed; both readers fall back to ``raw_content``.
+    base_content: str | None = Field(default=None)
+    base_commit_sha: str | None = Field(default=None, max_length=40)
     error_message: str | None = Field(default=None, max_length=2048)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
