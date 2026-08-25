@@ -27,6 +27,77 @@ correctly identified `playbooks/*.yml` and `roles/*/tasks/main.yml` as Ansible w
 rejecting `compose.yml`, `.github/workflows/opa.yml`, `.pre-commit-config.yaml`,
 `inventory/aws_ec2.yml` and `group_vars/all.yml`.
 
+## Status — PR 1 has shipped
+
+Building it surfaced four corrections to this plan, all folded in below. What landed:
+
+- `RuleDomain.iac_ansible`, the `_RULES_DIR_TO_DOMAIN` entry and
+  `IAC_ANSIBLE_POLICY_PACKAGES` — wired.
+- `backend/app/services/ansible/{discovery,parser}.py` — written and verified against this
+  repository's own `deploy/ansible/` tree: 15 files classified correctly, module names
+  resolved to FQCN, arguments normalised, line spans matching the source.
+- `backend/app/rules/lib/ansible.rego` and **16** rules with 97 Rego tests.
+  `opa check` passes; `opa test backend/app/rules` reports **1327/1327**.
+- `scripts/opa_ansible_eval.py`.
+
+- `examples/ansible/` — three cases (insecure role, hardened role, project metadata) with a
+  README; all three match their `expected.yaml` exactly, and the hardened case trips nothing.
+- `scripts/validate_ansible_examples.py` and `scripts/validate_deploy_ansible.py`.
+- `backend/tests/services/test_ansible_{discovery,parser}.py` — 44 tests, passing.
+- Docs (`rego_autodoc` labels and prose, `index.rst`, `rule-authoring.rst` including the
+  new engine row and four Ansible-specific traps), the `deploy-ansible-opa` pre-commit hook,
+  and the `opa.yml` path filters and steps (both the `push` and `pull_request` blocks).
+- The `deploy/ansible/` fixes: `| quote` on both ECR-login shells, and the Compose version
+  and checksum (see below).
+
+Verified before merge: `opa test backend/app/rules` 1327/1327; all three example cases match
+exactly; `validate_deploy_ansible.py` clean over 15 files; `validate_examples.py` still green,
+proving no Ansible rule fires on the reference workflow; `ansible-lint` passes `deploy/ansible/`
+at the production profile; `pytest tests/` 1457 passed with total coverage 91% against the 90%
+gate (`discovery.py` 98%, `parser.py` 94%); ruff, format and mypy clean on the new modules.
+
+### Corrections to what follows
+
+1. **`services/ansible/{discovery,parser}.py` belong to PR 1, not PR 2.** Both the example
+   validator and the dogfood gate are PR 1 deliverables and both need a real parser to
+   build the document. `scripts/opa_terraform_eval.py` reuses production's
+   `merge_terraform_configs` for exactly this reason.
+2. **The corpus is 16 rules, not 15** — `world_writable_mode` was in the draft and was
+   dropped from the table below by mistake. It is implemented and produces no false
+   positive on our tree.
+3. **The dogfood prediction was confirmed exactly.** Running the suite over
+   `deploy/ansible/` produces three violations and nothing else:
+   `get_url_without_checksum` at `roles/docker/tasks/main.yml:8`, and
+   `shell_with_unquoted_variable` at `roles/docker/tasks/main.yml:47` and
+   `playbooks/build.yml:82`. No false positives anywhere in the tree.
+4. **Three gotchas worth recording**, all caught by tests rather than review:
+   `object.union` merges *recursively*, so a test helper that overrides `__args__` through
+   an `extra` mapping merges into the default instead of replacing it;
+   `not task.changed_when` treats `changed_when: false` as absent, which is why
+   `lib/ansible.rego` grew a `declares(task, key)` helper distinct from reading the value;
+   and a task written with the legacy free-form `action:`/`local_action:` has *no* non-keyword
+   key at all, so the classifier had to admit it explicitly or `_resolve_action` was dead code.
+
+5. **`no_log_missing_on_secret_task` walks nested arguments.** The realistic case is a
+   credential inside a `uri` body or a container's environment, not a top-level module
+   argument. It uses `walk`, guarding against the numeric path segments walk yields for
+   list entries — otherwise an `argv` list reads as a name.
+
+## The dogfood gate found a real bug beyond the two it was aimed at
+
+`deploy/ansible/roles/docker/defaults/main.yml` pinned `docker_compose_version: "2.40.4"`,
+**a release that does not exist** — the 2.x line ends at v2.40.3, and upstream is now on
+v5.5.0. That `get_url` would have 404'd at deploy time. It surfaced only because
+`get_url_without_checksum` sent me looking for a digest to pin.
+
+Resolved, at the user's direction, as a typo correction rather than an upgrade: the role
+now pins **v2.40.3** with a `docker_compose_sha256` map keyed by architecture, both digests
+taken from the release's own `checksums.txt`. Jumping to v5 would change every
+`docker compose` invocation in the deployment and belongs in its own change.
+
+All three findings are now fixed and `scripts/validate_deploy_ansible.py` reports the tree
+clean. `ansible-lint` still passes the tree at its `production` profile.
+
 ## Decisions taken
 
 | Decision | Choice |
@@ -180,6 +251,7 @@ zero-violation dogfood gate.
 | security | `validate_certs_disabled` | high | no |
 | security | `hardcoded_secret_in_vars` | critical | no — but see the trap below |
 | security | `no_log_missing_on_secret_task` | high | no |
+| security | `world_writable_mode` | high | no — modes here are 0750/0600/0640/0644/0755 |
 | security | `shell_with_unquoted_variable` | high | **YES** — two ECR-login shells |
 | maintainability | `task_missing_name` | low | no |
 
@@ -229,7 +301,8 @@ example validators use — but prefer the fixes.
 
 | File | Action |
 |---|---|
-| `backend/app/rules/iac_ansible/<category>/<slug>.rego` + `_test.rego` | CREATE (15 pairs) |
+| `backend/app/services/ansible/{discovery,parser}.py` | CREATE — moved here from PR 2; the validators below cannot run without them. Plus `backend/tests/services/test_ansible_{discovery,parser}.py`, which the 90% coverage gate requires. |
+| `backend/app/rules/iac_ansible/<category>/<slug>.rego` + `_test.rego` | CREATE (16 pairs) |
 | `backend/app/rules/lib/ansible.rego` + `_test.rego` | CREATE |
 | `backend/app/models/enums.py` | `RuleDomain.iac_ansible`. **No migration** — `rule.domain` is a plain `AutoString`, added by `0042`; `0045_docker_engine.py:8` says so explicitly. |
 | `backend/app/core/rule_registry.py:32` | `"iac_ansible": RuleDomain.iac_ansible` |
@@ -244,6 +317,7 @@ example validators use — but prefer the fixes.
 | `.pre-commit-config.yaml` | ADD a `deploy-ansible-opa` hook mirroring `deploy-terraform-opa` (:183-188) |
 | `docs/ext/rego_autodoc.py` | `_DOMAIN_LABELS["iac_ansible"] = "Ansible (IaC)"`; `_EXAMPLE_LANGUAGES["iac_ansible"] = "yaml"`; fix the stale "Four analysis engines" prose at :286 |
 | `docs/index.rst`, `docs/rule-authoring.rst` | UPDATE — engine count (currently "six"), the bullet list, the engine→input table, and the "six existing engines are the template" line |
+| `.claude/plans/ansible-engine.plan.md` | UPDATE — the feasibility note committed on this branch claims the migration must add a `rule.domain` enum value. It does not: `0042` added that column as a plain `AutoString`. Correct it or supersede the file with this plan. |
 
 ### Validation
 
@@ -269,8 +343,6 @@ failure becomes a build error. Every rule also needs `custom.examples.{bad,good,
 
 | File | Action |
 |---|---|
-| `backend/app/services/ansible/discovery.py` | CREATE — `classify_ansible_file(path, content) -> str \| None` returning `playbook`/`tasks`/`vars`/`requirements` |
-| `backend/app/services/ansible/parser.py` | CREATE — per-file parse, block flattening, span stamping via `yaml_positions`, FQCN normalisation; `merge_ansible_files(files) -> dict` builds the envelope |
 | `backend/app/models/db/ansible.py` | CREATE — the quartet over `ScanTargetMixin` / `RepoScanMixin` / `FindingMixin` / `FileFixMixin`. `root_path: str = Field(max_length=512)` with **no default** (manual registration). Unique constraints `uq_ansible_project_repo_path`, `uq_ansible_finding_project_fingerprint`, `uq_ansible_fix_project_file`. `rule_id` FK RESTRICT, `fix_id` FK SET NULL. |
 | `backend/app/models/db/{__init__,repository,pull_request}.py`, `models/__init__.py` | UPDATE — exports and `ansible_projects` / `ansible_fixes` back-populates |
 | `backend/app/models/schemas.py` | CREATE the five publics off the shared bases (`ScanTargetPublicBase`, `RepoScanPublicBase`, `FixablePublicBase`, `FilePublicBase`, `FileFixPublicBase`) |
