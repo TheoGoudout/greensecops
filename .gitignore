@@ -45,3 +45,4 @@ deploy/ansible/collections/
 # repository root, copied to frontend/ (where it is already ignored), then fed
 # to openapi-ts. The committed output is the generated client, not this.
 /openapi.json
+dump.rdb

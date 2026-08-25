@@ -46,7 +46,7 @@ test.describe("Golden Path — Extended", () => {
           status: 202,
           json: { status: "queued", repo_id: MOCK_REPO.id },
         })
-      } else if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+      } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS] })

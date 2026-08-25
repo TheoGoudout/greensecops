@@ -90,7 +90,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
     await page.route("**/api/v1/workflow-scans/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/analyses\/[0-9a-f-]{36}/)) {
+      if (url.match(/\/workflow-scans\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS] })
@@ -99,7 +99,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
     await page.route("**/api/v1/workflow-findings/**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/issues\/[0-9a-f-]{36}/)) {
+      if (url.match(/\/workflow-findings\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ISSUE })
       } else {
         route.fulfill({ json: [MOCK_ISSUE] })
@@ -136,7 +136,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
 
   test("dashboard summarises every analysis type", async ({ page }) => {
     await page.goto("/")
-    for (const engine of ["ci", "docker", "terraform", "cloud"]) {
+    for (const engine of ["workflow", "docker", "terraform", "cloud"]) {
       await expect(page.getByTestId(`engine-row-${engine}`)).toBeVisible()
     }
     await expect(page.locator("body")).not.toContainText("Something went wrong")

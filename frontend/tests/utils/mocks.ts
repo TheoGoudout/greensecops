@@ -2,6 +2,8 @@ import type { Page } from "@playwright/test"
 import type {
   BillingSubscriptionPublic,
   DockerBuildTelemetryPublic,
+  Engine,
+  OverviewSection,
   PlanLimitsPublic,
   RepositoryPublic,
   UsagePublic,
@@ -1037,7 +1039,7 @@ export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
         status: 202,
         json: { status: "queued", repo_id: MOCK_REPO.id },
       })
-    } else if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
       route.fulfill({ json: analysis })
@@ -1054,7 +1056,7 @@ export async function mockIssues(
 ) {
   await page.route("**/api/v1/workflow-findings/**", (route) => {
     const url = route.request().url()
-    if (url.includes("/issues/stats")) {
+    if (url.includes("/workflow-findings/stats")) {
       // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
       // per category, plus a nested per-repo breakdown for the dashboard's
       // star diagram), computed from the same fixture list the dashboard's
@@ -1160,7 +1162,7 @@ export async function mockIssues(
       })
       return
     }
-    if (url.match(/\/issues\/[0-9a-f-]{36}$/)) {
+    if (url.match(/\/workflow-findings\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const issue = issues.find((i) => i.id === id) ?? issues[0]
       route.fulfill({ json: issue })
@@ -1190,7 +1192,7 @@ export async function mockFixes(
       route.fulfill({ status: 204 })
     } else if (url.includes("/pull-requests/")) {
       route.fulfill({ json: pullRequests })
-    } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/workflow-fixes\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const fix = fixes.find((f) => f.id === id) ?? fixes[0]
       route.fulfill({ json: fix })
@@ -1373,8 +1375,8 @@ type EngineOverrides = {
  * let a component bug through.
  */
 function buildEngine(
-  engine: "ci" | "docker" | "terraform" | "cloud",
-  section: "ci" | "docker" | "infra",
+  engine: Engine,
+  section: OverviewSection,
   label: string,
   o: EngineOverrides = {},
 ) {
@@ -1475,11 +1477,11 @@ function buildEngine(
 
 export function buildOverview(
   overrides: Partial<
-    Record<"ci" | "docker" | "terraform" | "cloud", EngineOverrides>
+    Record<Exclude<Engine, "telemetry">, EngineOverrides>
   > = {},
 ) {
   const engines = [
-    buildEngine("ci", "ci", "CI workflows", overrides.ci),
+    buildEngine("workflow", "ci", "CI workflows", overrides.workflow),
     buildEngine("docker", "docker", "Docker", overrides.docker),
     buildEngine("terraform", "infra", "Terraform", overrides.terraform),
     // Cloud posture has no fix pipeline at all — `fixes` is null, never zeroes.
@@ -1550,7 +1552,14 @@ export function buildOverview(
 }
 
 export const MOCK_OVERVIEW = buildOverview({
-  ci: { open: 3, critical: 1, resolved: 2, total: 2, scanned: 2, topRules: 2 },
+  workflow: {
+    open: 3,
+    critical: 1,
+    resolved: 2,
+    total: 2,
+    scanned: 2,
+    topRules: 2,
+  },
   docker: { open: 2, critical: 0, total: 1, scanned: 1 },
   terraform: { open: 0, total: 1, scanned: 0, score: null, grade: null },
   cloud: { open: 1, critical: 1, total: 1, scanned: 1 },
