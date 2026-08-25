@@ -62,3 +62,29 @@ test_each_url_is_its_own_finding if {
 	]}}}
 	count(violations) == 2
 }
+
+# An XML namespace is not a download. This fired at high severity on a heredoc
+# writing a pom.xml.
+test_no_violation_for_xml_namespace_in_heredoc if {
+	violations := http_scheme.violations with input as {"jobs": {"b": {"steps": [{"run": concat("\n", [
+		"cat > pom.xml <<EOF",
+		"<project xmlns=\"http://maven.apache.org/POM/4.0.0\"/>",
+		"EOF",
+	])}]}}}
+	count(violations) == 0
+}
+
+test_no_violation_for_a_url_in_an_echoed_message if {
+	violations := http_scheme.violations with input as {"jobs": {"b": {"steps": [{"run": "echo \"docs at http://example.com/guide\""}]}}}
+	count(violations) == 0
+}
+
+test_violation_survives_a_backslash_continuation if {
+	violations := http_scheme.violations with input as {"jobs": {"b": {"steps": [{"run": "curl -fsSL \\\n  http://example.com/install.sh -o i.sh"}]}}}
+	count(violations) == 1
+}
+
+test_violation_for_a_plaintext_package_index if {
+	violations := http_scheme.violations with input as {"jobs": {"b": {"steps": [{"run": "pip install --index-url http://pypi.internal/simple pkg"}]}}}
+	count(violations) == 1
+}

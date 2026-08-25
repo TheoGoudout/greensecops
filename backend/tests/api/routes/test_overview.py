@@ -17,9 +17,6 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -31,7 +28,6 @@ from app.models import (
     DockerTarget,
     FindingStatus,
     FixStatus,
-    Issue,
     LLMProvider,
     Organization,
     OrgMember,
@@ -40,12 +36,15 @@ from app.models import (
     Rule,
     RuleDomain,
     ScanStatus,
+    ScanTrigger,
     TerraformFinding,
     TerraformRoot,
     TerraformScan,
     User,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowScan,
 )
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.utils import random_lower_string
@@ -113,7 +112,7 @@ def docker_rule(db: Session) -> Rule:
 
 @pytest.fixture()
 def workflow_rule(db: Session) -> Rule:
-    rule = db.exec(select(Rule).where(Rule.domain == RuleDomain.workflow)).first()
+    rule = db.exec(select(Rule).where(Rule.domain == RuleDomain.ci_workflow)).first()
     assert rule is not None
     return rule
 
@@ -133,7 +132,7 @@ def _docker_scan(
     scan = DockerScan(
         docker_target_id=target.id,
         status=status,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=score,
         grade=grade,
         file_count=1,
@@ -220,7 +219,7 @@ def test_overview_reports_every_engine_under_its_section(
 
     sections = {e["engine"]: e["section"] for e in body["engines"]}
     assert sections == {
-        "ci": "ci",
+        "workflow": "ci",
         "docker": "docker",
         # Terraform and cloud posture share the Infrastructure section, the way
         # the Infrastructure page already shows them as sibling tabs.
@@ -474,7 +473,7 @@ def test_engines_do_not_leak_into_each_other(
     tf_scan = TerraformScan(
         terraform_root_id=root.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=50.0,
         grade="C",
     )
@@ -501,12 +500,12 @@ def test_engines_do_not_leak_into_each_other(
 
     assert _engine(body, "docker")["findings"]["open"] == 1
     assert _engine(body, "terraform")["findings"]["open"] == 1
-    assert _engine(body, "ci")["findings"]["open"] == 0
+    assert _engine(body, "workflow")["findings"]["open"] == 0
     assert _engine(body, "cloud")["findings"]["open"] == 0
     assert body["totals"]["open_findings"] == 2
 
 
-# ─── Fix pipeline ────────────────────────────────────────────────────────────
+# ─── WorkflowFix pipeline ────────────────────────────────────────────────────────────
 
 
 def test_cloud_has_no_fix_pipeline(client: TestClient, member: dict[str, str]) -> None:
@@ -515,7 +514,7 @@ def test_cloud_has_no_fix_pipeline(client: TestClient, member: dict[str, str]) -
     # Not an all-zero object: CloudFinding carries no fix_id, so "0 ready to
     # deliver" would read as "nothing left to fix" rather than "not a thing".
     assert _engine(body, "cloud")["fixes"] is None
-    for key in ("ci", "docker", "terraform"):
+    for key in ("workflow", "docker", "terraform"):
         assert _engine(body, key)["fixes"] is not None
 
 
@@ -622,7 +621,7 @@ def test_ci_targets_are_scoped_to_the_default_branch(
     _workflow_file(db, repo, "main")
     _workflow_file(db, repo, "feature/x")
 
-    ci = _engine(_fetch(client, member), "ci")
+    ci = _engine(_fetch(client, member), "workflow")
 
     assert ci["coverage"]["total"] == 1
     # A workflow file has no enable switch, so enabled tracks total.
@@ -637,7 +636,7 @@ def test_soft_deleted_workflow_files_are_excluded(
     db.add(workflow)
     db.commit()
 
-    ci = _engine(_fetch(client, member), "ci")
+    ci = _engine(_fetch(client, member), "workflow")
 
     assert ci["coverage"]["total"] == 0
 
@@ -652,12 +651,12 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
     """The dashboard shows both numbers on one page — if the overview's CI
     counts ever stop matching /issues/stats, the page contradicts itself."""
     workflow = _workflow_file(db, repo, "main")
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         score=80.0,
         grade="B",
         completed_at=datetime.now(timezone.utc),
@@ -667,7 +666,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
     db.refresh(analysis)
     for _ in range(2):
         db.add(
-            Issue(
+            WorkflowFinding(
                 analysis_id=analysis.id,
                 workflow_file_id=workflow.id,
                 rule_id=workflow_rule.id,
@@ -679,8 +678,10 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
         )
     db.commit()
 
-    overview_ci = _engine(_fetch(client, member), "ci")
-    stats = client.get(f"{settings.API_V1_STR}/issues/stats", headers=member).json()
+    overview_ci = _engine(_fetch(client, member), "workflow")
+    stats = client.get(
+        f"{settings.API_V1_STR}/workflow-findings/stats", headers=member
+    ).json()
 
     assert overview_ci["findings"]["open"] == 2
     assert overview_ci["findings"]["open"] == stats["total_open"]
@@ -736,7 +737,7 @@ def test_cloud_findings_are_counted(
     scan = CloudScan(
         cloud_account_id=account.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=60.0,
         grade="C",
     )
@@ -817,7 +818,7 @@ def test_totals_average_engines_not_targets(
         TerraformScan(
             terraform_root_id=root.id,
             status=ScanStatus.completed,
-            triggered_by=AnalysisTrigger.manual,
+            triggered_by=ScanTrigger.manual,
             score=90.0,
             grade="A+",
         )

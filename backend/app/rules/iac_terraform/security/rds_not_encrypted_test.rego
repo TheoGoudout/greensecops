@@ -33,3 +33,21 @@ test_each_unencrypted_instance_is_its_own_finding if {
 	]}
 	count(violations) == 2
 }
+
+# hcl2 does not evaluate expressions, so a module taking the setting as an
+# input arrives as interpolation text. Reporting that as unencrypted reported
+# the module rather than the configuration.
+test_no_violation_when_encryption_is_a_variable if {
+	violations := rds_not_encrypted.violations with input as _db({"storage_encrypted": "${var.encrypt}"})
+	count(violations) == 0
+}
+
+test_no_violation_for_the_json_string_form if {
+	violations := rds_not_encrypted.violations with input as _db({"storage_encrypted": "true"})
+	count(violations) == 0
+}
+
+test_violation_for_the_json_string_false if {
+	violations := rds_not_encrypted.violations with input as _db({"storage_encrypted": "false"})
+	count(violations) == 1
+}

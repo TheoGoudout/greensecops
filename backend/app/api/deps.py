@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from typing import Annotated, Any, TypeVar
@@ -189,13 +190,26 @@ GitHubOidcClaims = Annotated[dict[str, Any], Depends(verify_github_oidc_token)]
 _T = TypeVar("_T")
 
 
+def _human_name(model: type[Any]) -> str:
+    """``WorkflowScan`` -> ``workflow scan``, for a 404 a person has to read.
+
+    Model names are compound now that every engine's tables are named after the
+    engine, and a bare ``model.__name__`` put "WorkflowScan not found" in front
+    of users. Splitting on the capitals keeps the default message readable
+    without every call site having to pass its own.
+    """
+    words = re.findall(r"[A-Z][a-z0-9]*", model.__name__) or [model.__name__]
+    return " ".join(words).lower()
+
+
 def get_or_404(
     session: "Session", model: type[_T], entity_id: Any, detail: str | None = None
 ) -> _T:
     obj = session.get(model, entity_id)
     if not obj:
         raise HTTPException(
-            status_code=404, detail=detail or f"{model.__name__} not found"
+            status_code=404,
+            detail=detail or f"{_human_name(model).capitalize()} not found",
         )
     return obj
 

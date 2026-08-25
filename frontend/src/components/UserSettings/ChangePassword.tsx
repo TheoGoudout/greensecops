@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/form"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
-import { handleApiError, showSuccessToast } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 
 const formSchema = z
   .object({

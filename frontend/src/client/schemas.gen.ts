@@ -97,7 +97,7 @@ export const AnalysisPublicSchema = {
             title: 'Content Hash'
         },
         status: {
-            '$ref': '#/components/schemas/AnalysisStatus'
+            '$ref': '#/components/schemas/ScanStatus'
         },
         score: {
             anyOf: [
@@ -122,7 +122,7 @@ export const AnalysisPublicSchema = {
             title: 'Grade'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         branch: {
             anyOf: [
@@ -174,18 +174,6 @@ export const AnalysisPublicSchema = {
     type: 'object',
     required: ['id', 'repo_id', 'content_hash', 'status', 'triggered_by'],
     title: 'AnalysisPublic'
-} as const;
-
-export const AnalysisStatusSchema = {
-    type: 'string',
-    enum: ['queued', 'running', 'completed', 'failed', 'no_workflows'],
-    title: 'AnalysisStatus'
-} as const;
-
-export const AnalysisTriggerSchema = {
-    type: 'string',
-    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release'],
-    title: 'AnalysisTrigger'
 } as const;
 
 export const BatchFixRequestSchema = {
@@ -433,6 +421,13 @@ export const CIStatusSchema = {
     description: 'Aggregate CI outcome for a PR, from ``check_suite`` webhooks.'
 } as const;
 
+export const CategorySchema = {
+    type: 'string',
+    enum: ['energy', 'reliability', 'security', 'performance', 'maintainability'],
+    title: 'Category',
+    description: 'Which axis a rule grades on. Also the directory a .rego file lives in.'
+} as const;
+
 export const CheckoutRequestSchema = {
     properties: {
         tier: {
@@ -612,10 +607,10 @@ export const CloudFindingPublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         message: {
             type: 'string',
@@ -716,7 +711,7 @@ export const CloudScanPublicSchema = {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         score: {
             anyOf: [
@@ -1085,10 +1080,10 @@ export const DockerFindingPublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         message: {
             type: 'string',
@@ -1397,7 +1392,7 @@ export const DockerRuntimeFindingPublicSchema = {
         severity: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueSeverity'
+                    '$ref': '#/components/schemas/Severity'
                 },
                 {
                     type: 'null'
@@ -1407,7 +1402,7 @@ export const DockerRuntimeFindingPublicSchema = {
         category: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueCategory'
+                    '$ref': '#/components/schemas/Category'
                 },
                 {
                     type: 'null'
@@ -1474,7 +1469,7 @@ export const DockerScanPublicSchema = {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         score: {
             anyOf: [
@@ -1760,6 +1755,22 @@ presented as their own "Runtime findings" class rather than merged into the
 static issue list.`
 } as const;
 
+export const EngineSchema = {
+    type: 'string',
+    enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry'],
+    title: 'Engine',
+    description: `Which analysis engine produced something.
+
+The one name for an engine across the whole system: usage records tag
+themselves with it, the dashboard overview keys its stat blocks by it, and
+\`\`services/engines.EngineSpec\`\` is looked up by it. There used to be three
+of these enums disagreeing about whether the first one is called \`\`ci\`\` or
+\`\`workflow\`\`; it is \`\`workflow\`\`, after the \`\`WorkflowFile\`\` rows it scans.
+
+Not the same axis as :class:\`RuleDomain\`, which names a Rego package — the
+mapping is many-to-one and lives in :data:\`ENGINE_OF_DOMAIN\`.`
+} as const;
+
 export const EngineCoverageStatSchema = {
     properties: {
         total: {
@@ -1900,7 +1911,7 @@ export const EngineFreshnessStatSchema = {
 export const EngineOverviewSchema = {
     properties: {
         engine: {
-            '$ref': '#/components/schemas/OverviewEngineKey'
+            '$ref': '#/components/schemas/Engine'
         },
         section: {
             '$ref': '#/components/schemas/OverviewSection'
@@ -2017,20 +2028,33 @@ export const ExternalRepositoryCreateSchema = {
 
 export const FindingResolutionReasonSchema = {
     type: 'string',
-    enum: ['no_longer_detected', 'target_removed'],
-    title: 'FindingResolutionReason'
+    enum: ['no_longer_detected', 'target_removed', 'file_removed', 'merged', 'branch_deleted'],
+    title: 'FindingResolutionReason',
+    description: `Why a finding stopped being open.
+
+An attribute of the \`\`resolved\`\` state, not a state of its own. The union of
+what the engines can observe: the first two are available to all of them,
+the rest need a file or a pull request and so only arise on engines that
+have one.`
 } as const;
 
 export const FindingStatusSchema = {
     type: 'string',
-    enum: ['open', 'resolved', 'ignored'],
+    enum: ['open', 'fix_in_progress', 'resolved', 'ignored'],
     title: 'FindingStatus',
-    description: `Lifecycle of a TerraformFinding or CloudFinding.
+    description: `Derived lifecycle of a rule violation, on any engine.
 
-Unlike \`\`Issue.status\`\` (owned by a DB trigger reacting to \`\`fix_id\`\`),
-findings in this delivery have no fix/PR concept yet (see plan Phase 7),
-so the application sets this column directly alongside resolved_at/
-ignored_at rather than needing trigger-derived state.`
+For CI-workflow findings this column is computed by a database trigger from
+\`\`ignored_at\`\`, \`\`resolved_at\`\` and \`\`fix_id\`\` (migrations \`\`0022\`\`/\`\`0026\`\`,
+renamed in \`\`0053\`\`); \`\`ignored\`\` takes precedence, so a user-dismissed
+violation stays muted regardless of fix or resolve activity. The other
+engines set it directly through \`\`FindingMachine\`\`.
+
+\`\`fix_in_progress\`\` arrived with the merge of the old \`\`FindingStatus\`\`: only
+the CI engine reaches it today, because only its findings carry a \`\`fix_id\`\`
+— the other engines key a fix on \`\`(target, file_path)\`\` instead. It is
+declared here rather than in a CI-only enum because the state is about the
+finding, not about which engine found it.`
 } as const;
 
 export const FixDeliveryModeSchema = {
@@ -2060,7 +2084,7 @@ export const FixIssueSummarySchema = {
         severity: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueSeverity'
+                    '$ref': '#/components/schemas/Severity'
                 },
                 {
                     type: 'null'
@@ -2070,7 +2094,7 @@ export const FixIssueSummarySchema = {
         category: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueCategory'
+                    '$ref': '#/components/schemas/Category'
                 },
                 {
                     type: 'null'
@@ -2472,16 +2496,10 @@ export const InvoiceStatusSchema = {
     description: "Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only)."
 } as const;
 
-export const IssueCategorySchema = {
-    type: 'string',
-    enum: ['energy', 'reliability', 'security', 'performance', 'maintainability'],
-    title: 'IssueCategory'
-} as const;
-
 export const IssueCategoryStatSchema = {
     properties: {
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         open: {
             type: 'integer',
@@ -2523,10 +2541,10 @@ export const IssuePublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         line_start: {
             anyOf: [
@@ -2566,7 +2584,7 @@ export const IssuePublicSchema = {
             title: 'Context'
         },
         status: {
-            '$ref': '#/components/schemas/IssueStatus'
+            '$ref': '#/components/schemas/FindingStatus'
         },
         created_at: {
             anyOf: [
@@ -2595,7 +2613,7 @@ export const IssuePublicSchema = {
         resolution_reason: {
             anyOf: [
                 {
-                    '$ref': '#/components/schemas/IssueResolutionReason'
+                    '$ref': '#/components/schemas/FindingResolutionReason'
                 },
                 {
                     type: 'null'
@@ -2657,30 +2675,6 @@ export const IssuePublicSchema = {
     title: 'IssuePublic'
 } as const;
 
-export const IssueResolutionReasonSchema = {
-    type: 'string',
-    enum: ['no_longer_detected', 'file_removed', 'merged', 'branch_deleted'],
-    title: 'IssueResolutionReason',
-    description: `Why an issue was resolved — an attribute of the \`\`resolved\`\` state.
-
-Kept as a column rather than splitting \`\`resolved\`\` into several states so
-the issue graph stays small. Set alongside \`\`resolved_at\`\` and cleared when
-a resolved violation recurs.
-
-- \`\`no_longer_detected\`\`: absent from the latest analysis (a manual fix or a
-  disabled/removed rule — the two cannot be told apart after the fact).
-- \`\`file_removed\`\`: the workflow file was deleted or renamed.
-- \`\`merged\`\`: the fix PR was merged, applying the change to the branch.
-- \`\`branch_deleted\`\`: the branch carrying the issue's workflow file was
-  deleted; the violation no longer exists anywhere to fix.`
-} as const;
-
-export const IssueSeveritySchema = {
-    type: 'string',
-    enum: ['critical', 'high', 'medium', 'low', 'info'],
-    title: 'IssueSeverity'
-} as const;
-
 export const IssueStatsPublicSchema = {
     properties: {
         total_open: {
@@ -2716,19 +2710,6 @@ export const IssueStatsPublicSchema = {
     title: 'IssueStatsPublic',
     description: `Exact issue counts, computed by SQL aggregation rather than fetched and
 counted client-side — unaffected by any page's \`\`skip\`\`/\`\`limit\`\`.`
-} as const;
-
-export const IssueStatusSchema = {
-    type: 'string',
-    enum: ['open', 'fix_in_progress', 'resolved', 'ignored'],
-    title: 'IssueStatus',
-    description: `Derived lifecycle of an issue.
-
-This value is a persisted column computed by a database trigger from
-\`\`ignored_at\`\`, \`\`resolved_at\`\` and \`\`fix_id\`\` (see \`\`Issue.status\`\` and
-migrations \`\`0022\`\`/\`\`0026\`\`). \`\`ignored\`\` takes precedence over the other
-states so a user-dismissed violation stays muted regardless of fix/resolve
-activity.`
 } as const;
 
 export const LLMProviderSchema = {
@@ -2974,18 +2955,6 @@ export const OssApplicationStatusSchema = {
     enum: ['pending', 'approved', 'rejected', 'withdrawn'],
     title: 'OssApplicationStatus',
     description: 'Review state of a request for the granted open-source plan.'
-} as const;
-
-export const OverviewEngineKeySchema = {
-    type: 'string',
-    enum: ['ci', 'docker', 'terraform', 'cloud'],
-    title: 'OverviewEngineKey',
-    description: `Which analysis engine a block of dashboard overview stats describes.
-
-A presentation-layer key, not a persisted column — \`\`Rule.domain\`\` stays
-the DB-level discriminator. The two exist because they don't line up:
-\`\`container_docker\`\` and \`\`container_runtime\`\` rules both produce findings
-on the Docker engine, so one key covers two domains.`
 } as const;
 
 export const OverviewPublicSchema = {
@@ -3338,7 +3307,7 @@ export const PullRequestStateSchema = {
 export const RepoCategoryStatSchema = {
     properties: {
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         open: {
             type: 'integer',
@@ -3429,7 +3398,7 @@ meaningless once already filtered to a single \`\`repo_id\`\`.
 \`\`score\`\`/\`\`grade\`\` here are the repo's own overall grade (same values as
 \`\`RepositoryPublic.avg_score\`\`/\`\`grade\`\`), repeated so the frontend
 doesn't need a second lookup to size the radar's "no issues" fallback.
-Each entry in \`\`categories\`\` covers every \`\`IssueCategory\`\`, including
+Each entry in \`\`categories\`\` covers every \`\`Category\`\`, including
 categories with zero open issues, so their scores average out to exactly
 the repo's overall score (see \`\`compute_category_scores\`\`).`
 } as const;
@@ -3558,10 +3527,10 @@ export const RulePublicSchema = {
             title: 'Slug'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         title: {
             type: 'string',
@@ -3579,6 +3548,320 @@ export const RulePublicSchema = {
     type: 'object',
     required: ['id', 'slug', 'category', 'severity', 'title', 'description', 'enabled'],
     title: 'RulePublic'
+} as const;
+
+export const SSEEventPublicSchema = {
+    properties: {
+        event: {
+            '$ref': '#/components/schemas/SSESignal'
+        },
+        org_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Org Id'
+        },
+        repo_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Id'
+        },
+        repo_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Ids'
+        },
+        analysis_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Analysis Id'
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Ids'
+        },
+        issue_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Issue Ids'
+        },
+        telemetry_run_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telemetry Run Id'
+        },
+        installation_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Installation Id'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        trigger: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Trigger'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        issues_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Issues Count'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        org_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Org Name'
+        },
+        repo_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Count'
+        },
+        repos_disabled: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repos Disabled'
+        },
+        enabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enabled'
+        },
+        tier: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tier'
+        },
+        status: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Status'
+        },
+        meter: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Meter'
+        },
+        message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Message'
+        }
+    },
+    type: 'object',
+    required: ['event'],
+    title: 'SSEEventPublic',
+    description: `The wire shape of one server-sent event.
+
+Every event is a flat JSON object: an \`\`event\`\` discriminant plus whatever
+the emitting factory in \`\`services/events/schemas.py\`\` put beside it. That
+payload was a bare \`\`dict[str, Any]\`\` and never reached OpenAPI, so the
+frontend read it by hand — \`\`data.grade as string | undefined\`\`, forty times
+over in \`\`hooks/useRepoEvents.ts\`\`. A renamed field broke silently at
+runtime, in a browser, with nothing to catch it.
+
+Declaring it here puts the field names in the generated client, which turns
+that class of break into a TypeScript error.
+
+Every field but \`\`event\`\` is optional, and deliberately so: this is a union
+of what ~30 distinct signals carry, not a claim that any one of them carries
+all of it. Which fields a given signal actually populates is documented on
+its factory function. The alternative — a discriminated union with one model
+per signal — buys per-signal precision at the cost of thirty-odd models to
+keep in step with their factories, and the consumer switches on \`\`event\`\`
+anyway.`
 } as const;
 
 export const SSESignalSchema = {
@@ -3673,18 +3956,34 @@ export const ScanStatusSchema = {
     type: 'string',
     enum: ['queued', 'running', 'completed', 'failed', 'no_targets'],
     title: 'ScanStatus',
-    description: `Lifecycle of a TerraformScan or CloudScan.
+    description: `Lifecycle of one engine's run over one target.
 
-Deliberately separate from \`\`AnalysisStatus\`\`: that enum's \`\`no_workflows\`\`
-value is workflow-specific vocabulary. \`\`no_targets\`\` covers both "no .tf
-files under this root" and "no resources of the scanned types in this
-account/region".`
+Shared by every scan table. There used to be a second, identical enum called
+\`\`ScanStatus\`\` for the CI engine alone, differing in exactly one member:
+it spelled the empty case \`\`no_workflows\`\` where this one says
+\`\`no_targets\`\`. That is workflow-specific vocabulary for a case every engine
+has — no \`\`.tf\`\` files under this root, no resources of the scanned types in
+this account, no workflow files in this repository — so the general name
+won and migration 0053 rewrote the rows.`
+} as const;
+
+export const ScanTriggerSchema = {
+    type: 'string',
+    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release'],
+    title: 'ScanTrigger'
+} as const;
+
+export const SeveritySchema = {
+    type: 'string',
+    enum: ['critical', 'high', 'medium', 'low', 'info'],
+    title: 'Severity',
+    description: "How bad a rule violation is. Shared by every engine's findings."
 } as const;
 
 export const SeverityStatSchema = {
     properties: {
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         open: {
             type: 'integer',
@@ -3700,7 +3999,7 @@ export const SeverityStatSchema = {
     title: 'SeverityStat',
     description: `Open/resolved finding counts for one severity.
 
-Emitted for every \`\`IssueSeverity\`\` including zeros, so the frontend can
+Emitted for every \`\`Severity\`\` including zeros, so the frontend can
 render a fixed-segment severity bar without gap logic.`
 } as const;
 
@@ -4000,10 +4299,10 @@ export const TerraformFindingPublicSchema = {
             title: 'Rule Slug'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         message: {
             type: 'string',
@@ -4415,7 +4714,7 @@ export const TerraformScanPublicSchema = {
             '$ref': '#/components/schemas/ScanStatus'
         },
         triggered_by: {
-            '$ref': '#/components/schemas/AnalysisTrigger'
+            '$ref': '#/components/schemas/ScanTrigger'
         },
         score: {
             anyOf: [
@@ -4540,10 +4839,10 @@ export const TopRuleStatSchema = {
             title: 'Title'
         },
         severity: {
-            '$ref': '#/components/schemas/IssueSeverity'
+            '$ref': '#/components/schemas/Severity'
         },
         category: {
-            '$ref': '#/components/schemas/IssueCategory'
+            '$ref': '#/components/schemas/Category'
         },
         open: {
             type: 'integer',
@@ -4599,11 +4898,15 @@ export const UsageEngineSchema = {
     type: 'string',
     enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry', 'carryover'],
     title: 'UsageEngine',
-    description: `Which engine produced a usage record.
+    description: `Which engine produced a usage record, plus one non-engine sentinel.
 
 Every one of these debits the same shared pool; the tag exists so a user
 can see *where* their allowance went, and so tests can assert that each
-engine is actually metered.`
+engine is actually metered.
+
+Its engine members are :class:\`Engine\`'s, spelled out rather than generated
+so the persisted values stay greppable — \`\`_ENGINE_MEMBERS_MATCH\`\` below
+fails at import if the two ever drift.`
 } as const;
 
 export const UsageMeterSchema = {

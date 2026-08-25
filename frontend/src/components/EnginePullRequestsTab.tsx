@@ -2,18 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { GitPullRequest, Loader2 } from "lucide-react"
 import { useMemo } from "react"
 import { toast } from "sonner"
-import { FixesService } from "@/client"
+import { WorkflowFixesService } from "@/client"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiErrorDetail } from "@/lib/api-error"
 import {
   ciStatusColor,
   ciStatusLabel,
   reviewDecisionColor,
   reviewDecisionLabel,
 } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
 
 const STATE_CLASSES: Record<string, string> = {
   merged: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
@@ -65,7 +65,7 @@ export function EnginePullRequestsTab({
 
   const { data: pullRequests, isLoading } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => FixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
   })
 
   // Map a PR branch back to the target that owns it, so "Update PR" can

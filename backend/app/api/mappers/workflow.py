@@ -1,32 +1,30 @@
-from app.models import Analysis, AnalysisPublic, Issue, IssuePublic
+from app.models import AnalysisPublic, IssuePublic, WorkflowFinding, WorkflowScan
 
 
-def to_analysis_public(analysis: Analysis) -> AnalysisPublic:
+def to_analysis_public(scan: WorkflowScan) -> AnalysisPublic:
     return AnalysisPublic(
-        id=analysis.id,
-        repo_id=analysis.repo_id,
-        workflow_file_id=analysis.workflow_file_id,
-        workflow_file_path=(
-            analysis.workflow_file.path if analysis.workflow_file else None
-        ),
-        repo_full_name=(analysis.repository.full_name if analysis.repository else None),
-        content_hash=analysis.content_hash,
-        status=analysis.status,
-        score=analysis.score,
-        grade=analysis.grade,
-        triggered_by=analysis.triggered_by,
-        branch=analysis.branch,
-        commit_sha=analysis.commit_sha,
-        created_at=analysis.created_at,
-        completed_at=analysis.completed_at,
+        id=scan.id,
+        repo_id=scan.repo_id,
+        workflow_file_id=scan.workflow_file_id,
+        workflow_file_path=(scan.workflow_file.path if scan.workflow_file else None),
+        repo_full_name=(scan.repository.full_name if scan.repository else None),
+        content_hash=scan.content_hash,
+        status=scan.status,
+        score=scan.score,
+        grade=scan.grade,
+        triggered_by=scan.triggered_by,
+        branch=scan.branch,
+        commit_sha=scan.commit_sha,
+        created_at=scan.created_at,
+        completed_at=scan.completed_at,
     )
 
 
-def to_issue_public(issue: Issue) -> IssuePublic:
+def to_issue_public(issue: WorkflowFinding) -> IssuePublic:
     fix = issue.fix
-    analysis = issue.analysis
+    scan = issue.scan
     workflow_file_path = (
-        analysis.workflow_file.path if analysis and analysis.workflow_file else None
+        scan.workflow_file.path if scan and scan.workflow_file else None
     )
     return IssuePublic(
         id=issue.id,

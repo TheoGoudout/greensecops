@@ -32,5 +32,8 @@ violations contains violation if {
 		"resource_id": cluster.name,
 		"region": cluster.region,
 		"message": sprintf("EKS cluster '%v' exposes its API server to %v, so control-plane authentication is the only barrier from the internet.", [cluster.name, cidr]),
+		# A cluster listing both `0.0.0.0/0` and `::/0` produced two violations
+		# at one resource id, and the dedup key kept one of them arbitrarily.
+		"discriminator": cidr,
 	}
 }

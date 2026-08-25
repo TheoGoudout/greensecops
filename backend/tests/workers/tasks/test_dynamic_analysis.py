@@ -9,16 +9,16 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
     DynamicAnalysisStatus,
     DynamicEnrichment,
     Organization,
     Repository,
+    ScanStatus,
+    ScanTrigger,
     TelemetryRun,
     UserTier,
     WorkflowFile,
+    WorkflowScan,
 )
 from app.services.opa.evaluator import CiTelemetryOpaViolation
 from app.workers.tasks.dynamic_analysis import _run_dynamic_analysis_impl
@@ -90,7 +90,7 @@ def _underutilized_violation(vcpus: int, cpu_percent: float, ram_percent: float)
     )
 
 
-def _make_completed_analysis(db: Session, repo: Repository) -> Analysis:
+def _make_completed_analysis(db: Session, repo: Repository) -> WorkflowScan:
     wf = WorkflowFile(
         repo_id=repo.id,
         path=".github/workflows/ci.yml",
@@ -101,14 +101,14 @@ def _make_completed_analysis(db: Session, repo: Repository) -> Analysis:
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=85.0,
         grade="B",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
@@ -149,7 +149,7 @@ def test_run_dynamic_analysis_marks_failed_on_error(
     assert run.dynamic_status == DynamicAnalysisStatus.failed
 
 
-def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_run_dynamic_analysis_not_found_returns_error(db: Session) -> None:
     # Arrange — a UUID that doesn't exist
     missing_id = str(uuid.uuid4())
 

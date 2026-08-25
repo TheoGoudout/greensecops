@@ -9,13 +9,13 @@ from ..enums import FixDeliveryMode, LLMProvider, RepositoryStatus
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
-    from .analysis import Analysis
     from .docker import DockerTarget
     from .organization import Organization
     from .pull_request import PullRequest
     from .telemetry import TelemetryRun
     from .terraform import TerraformRoot
     from .workflow_file import WorkflowFile
+    from .workflow_scan import WorkflowScan
 
 
 class Repository(SQLModel, table=True):
@@ -61,7 +61,7 @@ class Repository(SQLModel, table=True):
     workflow_files: list["WorkflowFile"] = Relationship(
         back_populates="repository", cascade_delete=True
     )
-    analyses: list["Analysis"] = Relationship(
+    scans: list["WorkflowScan"] = Relationship(
         back_populates="repository", cascade_delete=True
     )
     telemetry_runs: list["TelemetryRun"] = Relationship(

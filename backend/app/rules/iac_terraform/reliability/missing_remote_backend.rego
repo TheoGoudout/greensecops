@@ -9,6 +9,10 @@
 #       terraform {
 #         required_version = ">= 1.9"
 #       }
+#
+#       provider "aws" {
+#         region = "eu-west-1"
+#       }
 #     good: |
 #       terraform {
 #         required_version = ">= 1.9"
@@ -19,6 +23,10 @@
 #           region       = "eu-west-1"
 #           use_lockfile = true
 #         }
+#       }
+#
+#       provider "aws" {
+#         region = "eu-west-1"
 #       }
 #     fix: |
 #       Add a backend block — S3 with use_lockfile, or the equivalent for your provider — or a cloud block for HCP Terraform. Whichever you pick, make sure the state store is versioned and encrypted, because it holds resource attributes that are secrets.

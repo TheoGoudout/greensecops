@@ -18,12 +18,19 @@
 #       Add storage_encrypted = true. For an existing unencrypted instance this requires a snapshot-and-restore, not an in-place change — plan a migration window.
 package greensecops.iac_terraform.security.rds_not_encrypted
 
+import data.greensecops.lib.terraform as tf
 import rego.v1
 
 violations contains violation if {
 	some res in input.resource
 	some name, db in res.aws_db_instance
-	not db.storage_encrypted == true
+
+	# `not db.storage_encrypted == true` fired on every module that takes the
+	# setting as an input: hcl2 hands `storage_encrypted = var.encrypt` back as
+	# the string "${var.encrypt}", which is not `true`. Four sibling rules each
+	# carried a private "a reference is not false" helper for exactly this and
+	# this one carried none — see lib/terraform.rego.
+	not tf.is_enabled(object.get(db, "storage_encrypted", false))
 	violation := {
 		"rule": "rds_not_encrypted",
 		"severity": "high",

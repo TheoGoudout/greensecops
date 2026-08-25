@@ -8,10 +8,10 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.models import (
-    AnalysisTrigger,
     Organization,
     Repository,
     ScanStatus,
+    ScanTrigger,
     TerraformRoot,
     TerraformScan,
     UserTier,
@@ -87,7 +87,7 @@ def _add_completed_scan(db: Session, root: TerraformRoot, grade: str) -> None:
         TerraformScan(
             terraform_root_id=root.id,
             status=ScanStatus.completed,
-            triggered_by=AnalysisTrigger.manual,
+            triggered_by=ScanTrigger.manual,
             score=92.0,
             grade=grade,
         )

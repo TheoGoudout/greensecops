@@ -59,7 +59,7 @@ test.describe("Dashboard", () => {
     await page.goto("/dashboard")
 
     await expect(page.getByText("Analysis types")).toBeVisible()
-    for (const engine of ["ci", "docker", "terraform", "cloud"]) {
+    for (const engine of ["workflow", "docker", "terraform", "cloud"]) {
       await expect(page.getByTestId(`engine-row-${engine}`)).toBeVisible()
     }
   })
@@ -221,7 +221,7 @@ test.describe("Dashboard", () => {
   }) => {
     await mockOverview(
       page,
-      buildOverview({ ci: { open: 1, total: 1, scanned: 1 } }),
+      buildOverview({ workflow: { open: 1, total: 1, scanned: 1 } }),
     )
     await mockRepositories(page, [MOCK_REPO])
     await mockAnalyses(page, [MOCK_ANALYSIS])

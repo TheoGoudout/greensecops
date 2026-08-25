@@ -20,98 +20,44 @@ Two small descriptors beat one that is half-null for half its members.
 
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Query
-from sqlalchemy import and_, case, func, true
+from sqlalchemy import case, func, true
 from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser, SessionDep, authorize_org, user_org_ids
 from app.api.router import Role, RoleRouter
 from app.models import (
-    Analysis,
-    AnalysisStatus,
+    Category,
     CloudAccount,
-    CloudAccountStatus,
     CloudFinding,
-    CloudScan,
-    DockerFinding,
-    DockerFix,
-    DockerScan,
-    DockerTarget,
+    Engine,
     EngineCoverageStat,
     EngineFindingStat,
     EngineFixPipelineStat,
     EngineFreshnessStat,
     EngineOverview,
     EngineScoreStat,
-    Fix,
     FixStatus,
     GradeStat,
-    Issue,
-    IssueCategory,
     IssueCategoryStat,
-    IssueSeverity,
-    OverviewEngineKey,
     OverviewPublic,
-    OverviewSection,
     OverviewTotals,
     Repository,
     Rule,
-    ScanStatus,
+    Severity,
     SeverityStat,
-    TerraformFinding,
-    TerraformFix,
-    TerraformRoot,
-    TerraformScan,
     TopRuleStat,
-    WorkflowFile,
+    WorkflowFinding,
+    WorkflowScan,
 )
+from app.services.engines import OVERVIEW_SPECS, OverviewSpec
 from app.services.scoring import GRADE_LADDER, score_to_grade
 from app.services.state_machines import IN_FLIGHT_STATUSES
 
 router = RoleRouter(prefix="/overview", tags=["overview"])
-
-
-# ─── Engine descriptor ────────────────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class _OverviewEngine:
-    """The per-engine nouns the aggregation below needs, as column objects.
-
-    Column objects rather than attribute-name strings so mypy and SQLModel can
-    still see the types; the alternative degrades the whole module to
-    stringly-typed ``getattr`` access for the sake of four lines.
-    """
-
-    key: OverviewEngineKey
-    section: OverviewSection
-    label: str
-
-    target_model: type[Any]
-    scan_model: type[Any]
-    finding_model: type[Any]
-    # ``None`` for cloud: CloudFinding carries no fix_id, there is no pipeline.
-    fix_model: type[Any] | None
-
-    scan_target_fk: Any
-    scan_completed: Any
-    scan_failed: Any
-    # CI orders its "latest scan" by completed_at first, everyone else by
-    # created_at. Not a stylistic difference — see `_latest_scan_order`.
-    scan_orders_by_completed_at: bool
-
-    finding_target_fk: Any
-    finding_scan_fk: Any
-    # Predicate marking a target as "switched on". Not a plain column: Docker
-    # and Terraform have a bool, cloud has a status enum, CI has neither.
-    target_enabled: Any | None
-    # (model, onclause) the target query must join for `target_extra` to work.
-    target_join: tuple[type[Any], Any] | None
-    target_extra: Any | None
 
 
 def _repo_scope(org_ids: set[uuid.UUID]) -> Any:
@@ -119,115 +65,32 @@ def _repo_scope(org_ids: set[uuid.UUID]) -> Any:
     return select(Repository.id).where(col(Repository.org_id).in_(org_ids))
 
 
-def _engine_specs() -> list[_OverviewEngine]:
-    return [
-        _OverviewEngine(
-            key=OverviewEngineKey.ci,
-            section=OverviewSection.ci,
-            label="CI workflows",
-            target_model=WorkflowFile,
-            scan_model=Analysis,
-            finding_model=Issue,
-            fix_model=Fix,
-            scan_target_fk=Analysis.workflow_file_id,
-            scan_completed=AnalysisStatus.completed,
-            scan_failed=AnalysisStatus.failed,
-            scan_orders_by_completed_at=True,
-            finding_target_fk=Issue.workflow_file_id,
-            finding_scan_fk=Issue.analysis_id,
-            # A workflow file has no enable switch; `enabled` falls back to
-            # `total` for this engine.
-            target_enabled=None,
-            target_join=(Repository, WorkflowFile.repo_id == Repository.id),
-            # Same scoping compute_avg_scores_batch applies (scoring.py:113-118):
-            # without it, feature-branch and deleted workflow files inflate
-            # every CI count on the dashboard.
-            target_extra=and_(
-                col(WorkflowFile.branch) == Repository.default_branch,
-                col(WorkflowFile.deleted_at).is_(None),
-            ),
-        ),
-        _OverviewEngine(
-            key=OverviewEngineKey.docker,
-            section=OverviewSection.docker,
-            label="Docker",
-            target_model=DockerTarget,
-            scan_model=DockerScan,
-            finding_model=DockerFinding,
-            fix_model=DockerFix,
-            scan_target_fk=DockerScan.docker_target_id,
-            scan_completed=ScanStatus.completed,
-            scan_failed=ScanStatus.failed,
-            scan_orders_by_completed_at=False,
-            finding_target_fk=DockerFinding.docker_target_id,
-            finding_scan_fk=DockerFinding.scan_id,
-            target_enabled=col(DockerTarget.enabled).is_(True),
-            target_join=None,
-            target_extra=None,
-        ),
-        _OverviewEngine(
-            key=OverviewEngineKey.terraform,
-            section=OverviewSection.infra,
-            label="Terraform",
-            target_model=TerraformRoot,
-            scan_model=TerraformScan,
-            finding_model=TerraformFinding,
-            fix_model=TerraformFix,
-            scan_target_fk=TerraformScan.terraform_root_id,
-            scan_completed=ScanStatus.completed,
-            scan_failed=ScanStatus.failed,
-            scan_orders_by_completed_at=False,
-            finding_target_fk=TerraformFinding.terraform_root_id,
-            finding_scan_fk=TerraformFinding.scan_id,
-            target_enabled=col(TerraformRoot.enabled).is_(True),
-            target_join=None,
-            target_extra=None,
-        ),
-        _OverviewEngine(
-            key=OverviewEngineKey.cloud,
-            section=OverviewSection.infra,
-            label="Cloud posture",
-            target_model=CloudAccount,
-            scan_model=CloudScan,
-            finding_model=CloudFinding,
-            fix_model=None,
-            scan_target_fk=CloudScan.cloud_account_id,
-            scan_completed=ScanStatus.completed,
-            scan_failed=ScanStatus.failed,
-            scan_orders_by_completed_at=False,
-            finding_target_fk=CloudFinding.cloud_account_id,
-            finding_scan_fk=CloudFinding.scan_id,
-            target_enabled=CloudAccount.status == CloudAccountStatus.connected,
-            target_join=None,
-            target_extra=None,
-        ),
-    ]
-
-
-def _target_org_filter(spec: _OverviewEngine, org_ids: set[uuid.UUID]) -> Any:
+def _target_org_filter(spec: OverviewSpec, org_ids: set[uuid.UUID]) -> Any:
     """Restrict an engine's *targets* to the given orgs."""
-    if spec.key is OverviewEngineKey.cloud:
+    if spec.key is Engine.cloud:
         # The only org-scoped target: a cloud account hangs off an org, not
         # a repository.
         return col(CloudAccount.org_id).in_(org_ids)
     return col(spec.target_model.repo_id).in_(_repo_scope(org_ids))
 
 
-def _finding_org_filter(spec: _OverviewEngine, org_ids: set[uuid.UUID]) -> Any:
+def _finding_org_filter(spec: OverviewSpec, org_ids: set[uuid.UUID]) -> Any:
     """Restrict an engine's *findings* to the given orgs.
 
     A predicate rather than a join so it composes with ``group_by`` without
     fanning out rows — the same reasoning behind ``get_issue_stats``' scoping.
     """
-    if spec.key is OverviewEngineKey.cloud:
+    if spec.key is Engine.cloud:
         return col(CloudFinding.cloud_account_id).in_(
             select(CloudAccount.id).where(col(CloudAccount.org_id).in_(org_ids))
         )
-    if spec.key is OverviewEngineKey.ci:
-        # Issue has no repo column of its own; it reaches one through Analysis,
-        # which is why get_issue_stats joins Analysis to scope at all.
-        return col(Issue.analysis_id).in_(
-            select(Analysis.id).where(col(Analysis.repo_id).in_(_repo_scope(org_ids)))
+    if spec.key is Engine.workflow:
+        # WorkflowFinding has no repo column of its own; it reaches one through WorkflowScan,
+        # which is why get_issue_stats joins WorkflowScan to scope at all.
+        return col(WorkflowFinding.analysis_id).in_(
+            select(WorkflowScan.id).where(
+                col(WorkflowScan.repo_id).in_(_repo_scope(org_ids))
+            )
         )
     return col(spec.finding_target_fk).in_(
         select(spec.target_model.id).where(
@@ -236,7 +99,7 @@ def _finding_org_filter(spec: _OverviewEngine, org_ids: set[uuid.UUID]) -> Any:
     )
 
 
-def _latest_scan_order(spec: _OverviewEngine) -> list[Any]:
+def _latest_scan_order(spec: OverviewSpec) -> list[Any]:
     """How to pick a target's most recent scan.
 
     Two orderings already exist in this codebase and they disagree:
@@ -253,7 +116,7 @@ def _latest_scan_order(spec: _OverviewEngine) -> list[Any]:
     return order
 
 
-def _latest_only_predicate(spec: _OverviewEngine) -> Any:
+def _latest_only_predicate(spec: OverviewSpec) -> Any:
     """Pin a finding to the latest completed scan of its own target.
 
     The generic form of ``get_issue_stats``' subquery (issues.py:181-193), and
@@ -277,7 +140,7 @@ def _latest_only_predicate(spec: _OverviewEngine) -> Any:
     return spec.finding_scan_fk == latest
 
 
-def _latest_scan_subquery(spec: _OverviewEngine, *, completed_only: bool) -> Any:
+def _latest_scan_subquery(spec: OverviewSpec, *, completed_only: bool) -> Any:
     """One row per target: its most recent scan.
 
     A window function rather than a correlated subquery because the coverage
@@ -309,7 +172,7 @@ def _latest_scan_subquery(spec: _OverviewEngine, *, completed_only: bool) -> Any
 
 
 def _coverage_and_score(
-    session: Session, spec: _OverviewEngine, org_ids: set[uuid.UUID] | None
+    session: Session, spec: OverviewSpec, org_ids: set[uuid.UUID] | None
 ) -> tuple[EngineCoverageStat, EngineFreshnessStat, EngineScoreStat]:
     """Coverage, freshness and score in one grouped query.
 
@@ -422,17 +285,17 @@ def _grade_stats(counts: dict[str, int]) -> list[GradeStat]:
 
 
 def _findings(
-    session: Session, spec: _OverviewEngine, org_ids: set[uuid.UUID] | None
+    session: Session, spec: OverviewSpec, org_ids: set[uuid.UUID] | None
 ) -> EngineFindingStat:
     """Open/resolved counts, split by severity and category in one query.
 
     ``open`` is ``resolved_at IS NULL`` over non-ignored rows — the framing
     ``get_issue_stats`` uses, and the reason CI needs no special case here:
-    ``Issue.status`` is owned by a Postgres trigger and is never read.
+    ``WorkflowFinding.status`` is owned by a Postgres trigger and is never read.
     """
     finding = spec.finding_model
     is_open = col(finding.resolved_at).is_(None)
-    is_critical = finding.severity == IssueSeverity.critical
+    is_critical = finding.severity == Severity.critical
 
     query = (
         select(  # type: ignore[call-overload]
@@ -449,11 +312,9 @@ def _findings(
     if org_ids is not None:
         query = query.where(_finding_org_filter(spec, org_ids))
 
-    by_severity: dict[IssueSeverity, list[int]] = {
-        severity: [0, 0] for severity in IssueSeverity
-    }
-    by_category: dict[IssueCategory, list[int]] = {
-        category: [0, 0, 0] for category in IssueCategory
+    by_severity: dict[Severity, list[int]] = {severity: [0, 0] for severity in Severity}
+    by_category: dict[Category, list[int]] = {
+        category: [0, 0, 0] for category in Category
     }
     total_open = total_resolved = total_critical = 0
 
@@ -492,7 +353,7 @@ def _findings(
 
 def _fix_pipeline(
     session: Session,
-    spec: _OverviewEngine,
+    spec: OverviewSpec,
     org_ids: set[uuid.UUID] | None,
     open_findings: int,
 ) -> EngineFixPipelineStat | None:
@@ -542,7 +403,7 @@ def _fix_pipeline(
 
 def _top_rules(
     session: Session,
-    spec: _OverviewEngine,
+    spec: OverviewSpec,
     org_ids: set[uuid.UUID] | None,
     limit: int,
 ) -> list[TopRuleStat]:
@@ -593,11 +454,9 @@ def _top_rules(
 
 def _totals(engines: list[EngineOverview]) -> OverviewTotals:
     """All-engine roll-up. Pure Python fold — no extra SQL."""
-    by_severity: dict[IssueSeverity, list[int]] = {
-        severity: [0, 0] for severity in IssueSeverity
-    }
-    by_category: dict[IssueCategory, list[int]] = {
-        category: [0, 0, 0] for category in IssueCategory
+    by_severity: dict[Severity, list[int]] = {severity: [0, 0] for severity in Severity}
+    by_category: dict[Category, list[int]] = {
+        category: [0, 0, 0] for category in Category
     }
     for engine in engines:
         for stat in engine.findings.by_severity:
@@ -672,7 +531,7 @@ def get_overview(
         org_ids = user_org_ids(session, current_user)
 
     engines: list[EngineOverview] = []
-    for spec in _engine_specs():
+    for spec in OVERVIEW_SPECS:
         coverage, freshness, score = _coverage_and_score(session, spec, org_ids)
         findings = _findings(session, spec, org_ids)
         engines.append(

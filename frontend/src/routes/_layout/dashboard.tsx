@@ -13,13 +13,13 @@ import {
   Wrench,
 } from "lucide-react"
 import { useMemo, useState } from "react"
-import type { EngineOverview, IssueCategory, OverviewSection } from "@/client"
+import type { Category, EngineOverview, OverviewSection } from "@/client"
 import {
-  AnalysesService,
   BillingService,
-  IssuesService,
   OverviewService,
   RepositoriesService,
+  WorkflowFindingsService,
+  WorkflowScansService,
 } from "@/client"
 import { CategoryHealthRadar } from "@/components/CategoryHealthRadar"
 import { WidgetPagination } from "@/components/Common/WidgetPagination"
@@ -109,14 +109,14 @@ function Dashboard() {
 
   const { data: analyses, isLoading: analysesLoading } = useQuery({
     queryKey: ["analyses", "recent"],
-    queryFn: () => AnalysesService.listAnalyses({ limit: 200 }),
+    queryFn: () => WorkflowScansService.listAnalyses({ limit: 200 }),
   })
 
   // Per-repo category breakdown for the CI radar. /overview/ aggregates per
   // engine, not per repo, so this stays the source for that one widget.
   const { data: issueStats, isLoading: issueStatsLoading } = useQuery({
     queryKey: ["issues", "stats"],
-    queryFn: () => IssuesService.getIssueStats(),
+    queryFn: () => WorkflowFindingsService.getIssueStats(),
   })
 
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
@@ -182,7 +182,7 @@ function Dashboard() {
               categoryStat?.score ?? repoStats?.score ?? repo.avg_score ?? 100
             return [category, score]
           }),
-        ) as Record<IssueCategory, number>
+        ) as Record<Category, number>
         return {
           id: repo.id,
           name: repo.full_name,

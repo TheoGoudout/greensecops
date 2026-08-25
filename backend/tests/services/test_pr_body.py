@@ -178,8 +178,8 @@ def test_build_pr_body_unknown_severity_has_empty_emoji() -> None:
 
 # ─── Multi-category tests (redis-py / celery scenario) ───────────────────────
 # Issues reflect violations found in the real redis-py and celery workflows:
-# security (untrusted_actions not in current POLICY_PACKAGES, so using
-# excessive_token_permissions) and reliability (missing_timeout, unpinned_actions).
+# security (excessive_token_permissions) and reliability (missing_timeout,
+# unpinned_actions).
 
 
 @pytest.fixture()

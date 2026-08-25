@@ -6,9 +6,9 @@ from app.core.db import engine
 from app.models import TerraformFinding
 from app.services.engines import TERRAFORM_ENGINE
 from app.services.file_fix_generation import generate_file_fix
+from app.services.github.fetch import fetch_terraform_files as _fetch_terraform_files
 from app.services.terraform.hcl_parser import parse_terraform_content
 from app.workers.celery_app import celery_app
-from app.workers.tasks.terraform_analysis import _fetch_terraform_files
 
 INVALID_HCL_ERROR = "LLM returned invalid Terraform (HCL)"
 

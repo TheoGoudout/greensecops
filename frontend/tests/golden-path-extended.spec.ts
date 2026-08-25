@@ -37,7 +37,7 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let analysisTriggered = false
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
       if (method === "POST" && url.includes("/trigger/")) {
@@ -46,7 +46,7 @@ test.describe("Golden Path — Extended", () => {
           status: 202,
           json: { status: "queued", repo_id: MOCK_REPO.id },
         })
-      } else if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+      } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS] })
@@ -54,12 +54,12 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let fixGenerated = false
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY],
       })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       const method = route.request().method()
       if (method === "POST") {
         fixGenerated = true
@@ -90,8 +90,13 @@ test.describe("Golden Path — Extended", () => {
       .click()
     await expect(page).toHaveURL(new RegExp(`/analyses/${MOCK_ANALYSIS.id}`))
 
+    // `.first()` because the analysis page shows a finding's message twice —
+    // once in its row, once as the annotation beside the offending line in the
+    // file viewer. Same reason issue-filters.spec.ts does it.
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
 
     const fixBtn = page.getByRole("button", { name: /fix/i }).first()
@@ -112,17 +117,17 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
 
     const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: issues })
     })
 
     let batchFixCalled = false
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
       if (method === "POST" && url.includes("generate-for-repo")) {
@@ -167,13 +172,13 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/analyses/**", (route) => {
+    await page.route("**/api/v1/workflow-scans/**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
-    await page.route("**/api/v1/issues/**", (route) => {
+    await page.route("**/api/v1/workflow-findings/**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/fixes/**", (route) => {
+    await page.route("**/api/v1/workflow-fixes/**", (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/telemetry/**", (route) => {

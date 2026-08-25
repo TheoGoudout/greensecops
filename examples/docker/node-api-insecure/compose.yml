@@ -5,7 +5,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://postgres:hunter2@db:5432/app
+      DATABASE_URL: postgres://postgres:8Kf2mQx7Rv4Ld9Tn6Zb3Wc5Yh1Ap0Sj@db:5432/app
     depends_on:
       - db
 
@@ -14,4 +14,4 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_PASSWORD: hunter2
+      POSTGRES_PASSWORD: 8Kf2mQx7Rv4Ld9Tn6Zb3Wc5Yh1Ap0Sj

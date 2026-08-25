@@ -10,15 +10,15 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_WEBHOOK
 from app.models import (
-    AnalysisTrigger,
-    Fix,
-    Issue,
-    IssueResolutionReason,
+    FindingResolutionReason,
     Organization,
     PullRequest,
     PullRequestState,
     Repository,
+    ScanTrigger,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -194,9 +194,7 @@ def _handle_push_event(
 
     commit_sha = payload.get("after", "")
     if touches_workflows or is_new_branch or forced:
-        eh.enqueue_workflow_analysis(
-            repo, branch, commit_sha, AnalysisTrigger.webhook_push
-        )
+        eh.enqueue_workflow_analysis(repo, branch, commit_sha, ScanTrigger.webhook_push)
     # Independent of the workflow-analysis gate above: a push that only
     # touches Terraform files (no .github/workflows/ change) must still
     # trigger a scan.
@@ -205,7 +203,7 @@ def _handle_push_event(
         repo,
         branch,
         commit_sha,
-        AnalysisTrigger.webhook_push,
+        ScanTrigger.webhook_push,
         changed_paths=None if (is_new_branch or forced) else changed_paths,
     )
     eh.enqueue_docker_scans(
@@ -213,7 +211,7 @@ def _handle_push_event(
         repo,
         branch,
         commit_sha,
-        AnalysisTrigger.webhook_push,
+        ScanTrigger.webhook_push,
         changed_paths=None if (is_new_branch or forced) else changed_paths,
     )
 
@@ -257,7 +255,9 @@ def _flag_externally_modified_fix_branch(
         sender_login,
     )
     if pr_record.pr_url:
-        fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+        fix = session.exec(
+            select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)
+        ).first()
         if fix:
             events_pub.publish_event(
                 ev.pr_updated(
@@ -328,13 +328,13 @@ def _handle_delete_event(
     superseded = 0
     for wf in wf_rows:
         open_issues = session.exec(
-            select(Issue)
-            .where(Issue.workflow_file_id == wf.id)
-            .where(col(Issue.resolved_at).is_(None))
+            select(WorkflowFinding)
+            .where(WorkflowFinding.workflow_file_id == wf.id)
+            .where(col(WorkflowFinding.resolved_at).is_(None))
         ).all()
         for issue in open_issues:
             issue.resolved_at = now
-            issue.resolution_reason = IssueResolutionReason.branch_deleted
+            issue.resolution_reason = FindingResolutionReason.branch_deleted
             session.add(issue)
             resolved += 1
         # Fixes are default-branch-only, but a legacy feature-branch fix (from
@@ -370,7 +370,7 @@ def _handle_workflow_run_event(
     branch = workflow_run.get("head_branch", "")
     commit_sha = workflow_run.get("head_sha", "")
     eh.enqueue_workflow_analysis(
-        repo, branch, commit_sha, AnalysisTrigger.webhook_workflow_run
+        repo, branch, commit_sha, ScanTrigger.webhook_workflow_run
     )
 
 
@@ -483,7 +483,7 @@ def _handle_repository_event(
             # WorkflowFile rows exist. Old-branch fixes/PRs retire naturally
             # via the default-branch gates.
             eh.enqueue_workflow_analysis(
-                repo, repo.default_branch, "", AnalysisTrigger.manual
+                repo, repo.default_branch, "", ScanTrigger.manual
             )
 
 

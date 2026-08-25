@@ -13,22 +13,22 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
-    Fix,
+    Category,
+    FindingResolutionReason,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Organization,
     Repository,
     Rule,
     RuleDomain,
+    ScanStatus,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.github.app_client import WorkflowFileContent
 from app.services.workflow_sync import (
@@ -145,29 +145,29 @@ def test_a_missing_path_is_soft_deleted_and_its_issues_resolved(
     wf = db.exec(select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)).one()
 
     rule = db.exec(
-        select(Rule).where(Rule.domain == RuleDomain.workflow).limit(1)
+        select(Rule).where(Rule.domain == RuleDomain.ci_workflow).limit(1)
     ).first()
     assert rule is not None
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         branch=repo.default_branch,
     )
     db.add(analysis)
     db.flush()
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="something",
     )
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -186,7 +186,7 @@ def test_a_missing_path_is_soft_deleted_and_its_issues_resolved(
     db.refresh(fix)
     assert wf.deleted_at is not None
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.file_removed
+    assert issue.resolution_reason == FindingResolutionReason.file_removed
     assert fix.status == FixStatus.superseded_by_deleted_file
 
 

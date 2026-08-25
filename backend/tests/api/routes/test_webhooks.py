@@ -12,17 +12,11 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
-    Fix,
+    FindingResolutionReason,
+    FindingStatus,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueResolutionReason,
-    IssueSeverity,
-    IssueStatus,
     LLMProvider,
     Organization,
     PullRequest,
@@ -31,9 +25,15 @@ from app.models import (
     RepositoryStatus,
     ReviewDecision,
     Rule,
+    ScanStatus,
+    ScanTrigger,
+    Severity,
     TerraformRoot,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 
 WEBHOOK_URL = f"{settings.API_V1_STR}/webhooks/github"
@@ -403,7 +403,7 @@ def test_github_webhook_workflow_run_enabled_repo_enqueues(
     assert response.json()["status"] == "accepted"
 
 
-# ─── Issue comment event ──────────────────────────────────────────────────────
+# ─── WorkflowFinding comment event ──────────────────────────────────────────────────────
 
 
 def test_github_webhook_issue_comment_non_created_skipped(
@@ -707,12 +707,12 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -723,8 +723,8 @@ def test_github_webhook_pull_request_merged_updates_fix(
     if not rule:
         rule = Rule(
             slug=f"test-rule-{uuid.uuid4().hex[:6]}",
-            category=IssueCategory.security,
-            severity=IssueSeverity.high,
+            category=Category.security,
+            severity=Severity.high,
             title="Test Rule",
             description="A test rule",
         )
@@ -732,11 +732,11 @@ def test_github_webhook_pull_request_merged_updates_fix(
         db.commit()
         db.refresh(rule)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue",
     )
     db.add(issue)
@@ -753,7 +753,7 @@ def test_github_webhook_pull_request_merged_updates_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -788,8 +788,8 @@ def test_github_webhook_pull_request_merged_updates_fix(
     assert fix.status == FixStatus.landed
     db.refresh(issue)
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.merged
-    assert issue.status == IssueStatus.resolved
+    assert issue.resolution_reason == FindingResolutionReason.merged
+    assert issue.status == FindingStatus.resolved
 
 
 def test_github_webhook_pull_request_closed_not_merged(
@@ -818,12 +818,12 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -833,11 +833,11 @@ def test_github_webhook_pull_request_closed_not_merged(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue closed",
     )
     db.add(issue)
@@ -854,7 +854,7 @@ def test_github_webhook_pull_request_closed_not_merged(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -912,12 +912,12 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(analysis)
@@ -927,11 +927,11 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="test issue reopened",
     )
     db.add(issue)
@@ -948,7 +948,7 @@ def test_github_webhook_pull_request_reopened_updates_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -1017,7 +1017,7 @@ def test_github_webhook_pull_request_reopened_restores_guard_rejected_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -1289,7 +1289,7 @@ def test_enqueue_static_analysis_calls_celery_task() -> None:
             repo,
             branch="main",
             commit_sha="deadbeef",
-            trigger=AnalysisTrigger.webhook_push,
+            trigger=ScanTrigger.webhook_push,
         )
     mock_task.delay.assert_called_once()
 
@@ -1492,11 +1492,11 @@ def test_github_webhook_reanalyze_command_enqueues_forced_analysis(
 def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     client: TestClient, db: Session, enabled_repo: Repository
 ) -> None:
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=enabled_repo.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
@@ -1504,18 +1504,18 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
     fingerprint = uuid.uuid4().hex[:16]
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="mute me",
         fingerprint=fingerprint,
     )
     db.add(issue)
     db.commit()
     db.refresh(issue)
-    assert issue.status == IssueStatus.open
+    assert issue.status == FindingStatus.open
 
     payload = {
         "action": "created",
@@ -1529,7 +1529,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     assert response.status_code == 200
     db.refresh(issue)
     assert issue.ignored_at is not None
-    assert issue.status == IssueStatus.ignored
+    assert issue.status == FindingStatus.ignored
 
     # `unignore` reverses it.
     payload["comment"]["body"] = f"/greensecops unignore {fingerprint}"
@@ -1540,7 +1540,7 @@ def test_github_webhook_ignore_command_mutes_issue_by_fingerprint(
     assert response.status_code == 200
     db.refresh(issue)
     assert issue.ignored_at is None
-    assert issue.status == IssueStatus.open
+    assert issue.status == FindingStatus.open
 
 
 def test_github_webhook_unknown_command_is_ignored(
@@ -1806,7 +1806,7 @@ def test_github_webhook_installation_suspend_unsuspend(
 
 def _seed_branch_issue(
     db: Session, repo: Repository, branch: str, path: str = ".github/workflows/ci.yml"
-) -> tuple[WorkflowFile, Issue]:
+) -> tuple[WorkflowFile, WorkflowFinding]:
     wf = WorkflowFile(
         repo_id=repo.id,
         branch=branch,
@@ -1817,12 +1817,12 @@ def _seed_branch_issue(
     db.add(wf)
     db.commit()
     db.refresh(wf)
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
         branch=branch,
     )
     db.add(analysis)
@@ -1830,12 +1830,12 @@ def _seed_branch_issue(
     db.refresh(analysis)
     rule = db.exec(select(Rule)).first()
     assert rule is not None
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message=f"issue on {branch}",
         fingerprint=uuid.uuid4().hex[:16],
     )
@@ -1874,8 +1874,8 @@ def test_delete_branch_resolves_only_that_branchs_issues(
     assert response.status_code == 200
     db.refresh(feat_issue)
     assert feat_issue.resolved_at is not None
-    assert feat_issue.resolution_reason == IssueResolutionReason.branch_deleted
-    assert feat_issue.status == IssueStatus.resolved
+    assert feat_issue.resolution_reason == FindingResolutionReason.branch_deleted
+    assert feat_issue.status == FindingStatus.resolved
     # Default-branch issues untouched.
     db.refresh(main_issue)
     assert main_issue.resolved_at is None
@@ -1924,7 +1924,7 @@ def test_delete_greensecops_branch_closes_pr_and_supersedes_fix(
     db.add(pr)
     db.commit()
     db.refresh(pr)
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         llm_provider=LLMProvider.openai,
         llm_model="gpt-4o-mini",
@@ -1981,7 +1981,7 @@ def test_push_with_deleted_flag_is_ignored(
 
 def test_forced_push_without_workflow_commits_triggers_analysis(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     """A rebase can drop workflow changes without listing workflow paths in
@@ -2008,7 +2008,7 @@ def test_forced_push_without_workflow_commits_triggers_analysis(
 
 def test_unforced_push_without_workflow_commits_still_ignored(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     payload = {
@@ -2238,7 +2238,7 @@ def test_bot_push_to_fix_branch_does_not_set_externally_modified(
 
 def test_push_to_fix_branch_never_enqueues_analysis(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     with patch("app.api.routes.webhooks.eh.enqueue_workflow_analysis") as mock_enqueue:
@@ -2317,7 +2317,7 @@ def test_non_default_branch_push_no_mergeable_refresh(
 
 def test_default_branch_push_without_open_pr_no_refresh(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
 ) -> None:
     payload = {
@@ -2356,7 +2356,7 @@ def enabled_terraform_root(db: Session, enabled_repo: Repository) -> TerraformRo
 
 def test_push_to_default_branch_touching_root_path_triggers_scan(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
     enabled_terraform_root: TerraformRoot,
 ) -> None:
@@ -2392,9 +2392,9 @@ def test_push_to_default_branch_touching_root_path_triggers_scan(
 
 def test_push_to_default_branch_not_touching_root_path_skips_scan(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
-    enabled_terraform_root: TerraformRoot,  # noqa: ARG001
+    enabled_terraform_root: TerraformRoot,
 ) -> None:
     payload = {
         "ref": f"refs/heads/{enabled_repo.default_branch}",
@@ -2419,7 +2419,7 @@ def test_push_to_default_branch_not_touching_root_path_skips_scan(
 
 def test_push_to_feature_branch_never_triggers_terraform_scan(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
     enabled_terraform_root: TerraformRoot,
 ) -> None:
@@ -2451,7 +2451,7 @@ def test_push_to_feature_branch_never_triggers_terraform_scan(
 
 def test_forced_push_to_default_branch_triggers_scan_unconditionally(
     client: TestClient,
-    db: Session,  # noqa: ARG001
+    db: Session,
     enabled_repo: Repository,
     enabled_terraform_root: TerraformRoot,
 ) -> None:

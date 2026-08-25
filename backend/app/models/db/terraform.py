@@ -61,13 +61,13 @@ class TerraformFinding(FindingMixin, table=True):
         foreign_key="terraform_scan.id", nullable=False, ondelete="CASCADE"
     )
     # Denormalized off the scan: the fingerprint's uniqueness/history scope is
-    # the root across scans, not one scan (mirrors Issue.workflow_file_id).
+    # the root across scans, not one scan (mirrors WorkflowFinding.workflow_file_id).
     terraform_root_id: uuid.UUID = Field(
         foreign_key="terraform_root.id", nullable=False, ondelete="CASCADE"
     )
     # The Terraform fix that addresses this finding, if one has been generated.
     # SET NULL (not CASCADE): dropping a fix must not delete the finding history
-    # — mirrors ``Issue.fix_id``.
+    # — mirrors ``WorkflowFinding.fix_id``.
     fix_id: uuid.UUID | None = Field(
         default=None, foreign_key="terraform_fix.id", ondelete="SET NULL"
     )
@@ -92,7 +92,7 @@ class TerraformFinding(FindingMixin, table=True):
 class TerraformFix(FileFixMixin, table=True):
     """An LLM-generated fix for a single ``.tf`` file in a Terraform root.
 
-    Mirrors ``Fix`` (the CI-workflow fix), but keyed to a Terraform root +
+    Mirrors ``WorkflowFix`` (the CI-workflow fix), but keyed to a Terraform root +
     file path rather than a ``workflow_file_id`` — Terraform files aren't
     persisted as their own rows, so the unit a fix targets is the
     ``(terraform_root_id, file_path)`` pair. One fix per file per root; a

@@ -40,17 +40,19 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+import redis.asyncio as aioredis
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.models import (
-    Issue,
-    IssueResolutionReason,
+    FindingResolutionReason,
     Repository,
     WorkflowFile,
+    WorkflowFinding,
 )
 from app.services import state_machines as sm
 from app.services.deduplication import compute_content_hash
+from app.services.github.app_client import GitHubAppClient
 
 if TYPE_CHECKING:
     from app.services.github.app_client import WorkflowFileContent
@@ -105,9 +107,6 @@ def fetch_workflow_files_for_repo(
     repo: Repository, ref: str | None = None
 ) -> list[WorkflowFileContent]:
     """Synchronous wrapper for async ``GitHubAppClient.fetch_workflow_files``."""
-    import redis.asyncio as aioredis
-
-    from app.services.github.app_client import GitHubAppClient
 
     async def _fetch() -> list[WorkflowFileContent]:
         r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
@@ -129,9 +128,6 @@ def resolve_branch_head(repo: Repository, branch: str) -> str | None:
     ``None`` also covers the branch genuinely being gone, which the caller
     handles separately.
     """
-    import redis.asyncio as aioredis
-
-    from app.services.github.app_client import GitHubAppClient
 
     async def _resolve() -> str | None:
         r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
@@ -157,6 +153,80 @@ def resolve_branch_head(repo: Repository, branch: str) -> str | None:
 def content_of(wf_src: WorkflowFile | WorkflowFileContent) -> str:
     """The raw YAML, whichever of the two sources it came from."""
     return wf_src.raw_content if isinstance(wf_src, WorkflowFile) else wf_src.content
+
+
+def _upsert_one(
+    session: Session,
+    repo: Repository,
+    branch: str,
+    path: str,
+    wf: WorkflowFile | None,
+    head_sha: str | None,
+    result: WorkflowSyncResult,
+) -> WorkflowFile:
+    """Store one file's content and provenance, and classify what changed.
+
+    Lifted out of ``sync_workflow_files`` to keep that function within the
+    project's complexity ratchet, and because "what happens to one path" is a
+    contract worth naming: the caller decides *which* paths, this decides what
+    storing one of them means.
+
+    Reads its content from ``result.contents`` and may rewrite it there — see
+    the stale branch below.
+    """
+    content = result.contents[path]
+    content_hash = compute_content_hash(content)
+
+    if wf is None:
+        wf = WorkflowFile(
+            repo_id=repo.id,
+            branch=branch,
+            path=path,
+            content_hash=content_hash,
+            raw_content=content,
+            fetched_at=result.resolved_at,
+            source_commit_sha=head_sha,
+        )
+        session.add(wf)
+        result.added.append(path)
+        return wf
+
+    if wf.fetched_at is not None and wf.fetched_at > result.resolved_at:
+        # A sync that resolved a later commit already wrote this row. Ours is
+        # the stale one: leave it, and hand the caller the newer content rather
+        # than the older text we just read — analysing our own read would put
+        # the staleness straight back into the findings.
+        result.skipped_stale.append(path)
+        result.contents[path] = wf.raw_content
+        return wf
+
+    if wf.content_hash == content_hash:
+        result.unchanged.append(path)
+    else:
+        result.updated.append(path)
+        wf.content_hash = content_hash
+        wf.raw_content = content
+
+    if wf.deleted_at is not None:
+        # The path is back on its branch: clear the soft-delete marker so it
+        # shows in the static-analysis view again.
+        wf.deleted_at = None
+        result.restored.append(path)
+    # Attempted whenever the path is present, not only when this sync is the one
+    # that cleared `deleted_at`. A fix can be stranded in
+    # `superseded_by_deleted_file` while its row's marker has already been
+    # cleared by something else, and this is the only thing that walks it back
+    # to `ready` (mirrors PR-reopen restoring a closed-PR fix). `try_advance` is
+    # a no-op from any other state.
+    if wf.fix is not None and sm.try_advance(wf.fix, sm.FixMachine, "restore"):
+        session.add(wf.fix)
+
+    # Provenance is refreshed even when the content did not change — that is
+    # precisely what makes "unchanged" distinguishable from "never checked".
+    wf.fetched_at = result.resolved_at
+    wf.source_commit_sha = head_sha
+    session.add(wf)
+    return wf
 
 
 def sync_workflow_files(
@@ -232,62 +302,10 @@ def sync_workflow_files(
 
     for item in fetched:
         path = item.path
-        content = content_of(item)
-        content_hash = compute_content_hash(content)
-        # The analysis input is what we just read, independent of whether the
-        # row write below is allowed to land.
-        result.contents[path] = content
-
-        wf = existing.get(path)
-        if wf is not None:
-            if wf.fetched_at is not None and wf.fetched_at > resolved_at:
-                # A sync that resolved a later commit already wrote this row.
-                # Ours is the stale one: leave it, and hand the caller the newer
-                # content rather than the older text we just read — analysing our
-                # own read would put the staleness straight back into the issues.
-                result.skipped_stale.append(path)
-                result.contents[path] = wf.raw_content
-                result.rows[path] = wf
-                continue
-            if wf.content_hash == content_hash:
-                result.unchanged.append(path)
-            else:
-                result.updated.append(path)
-                wf.content_hash = content_hash
-                wf.raw_content = content
-            if wf.deleted_at is not None:
-                # The path is back on its branch: clear the soft-delete marker
-                # so it shows in the static-analysis view again.
-                wf.deleted_at = None
-                result.restored.append(path)
-            # Attempted whenever the path is present, not only when this sync is
-            # the one that cleared `deleted_at`. A fix can be stranded in
-            # `superseded_by_deleted_file` while its row's marker has already
-            # been cleared by something else, and this is the only thing that
-            # walks it back to `ready` (mirrors PR-reopen restoring a
-            # closed-PR fix). `try_advance` is a no-op from any other state.
-            if wf.fix is not None and sm.try_advance(wf.fix, sm.FixMachine, "restore"):
-                session.add(wf.fix)
-            # Provenance is refreshed even when the content did not change —
-            # that is precisely what makes "unchanged" distinguishable from
-            # "never checked".
-            wf.fetched_at = resolved_at
-            wf.source_commit_sha = head_sha
-            session.add(wf)
-        else:
-            wf = WorkflowFile(
-                repo_id=repo.id,
-                branch=branch,
-                path=path,
-                content_hash=content_hash,
-                raw_content=content,
-                fetched_at=resolved_at,
-                source_commit_sha=head_sha,
-            )
-            session.add(wf)
-            result.added.append(path)
-
-        result.rows[path] = wf
+        result.contents[path] = content_of(item)
+        result.rows[path] = _upsert_one(
+            session, repo, branch, path, existing.get(path), head_sha, result
+        )
 
     session.flush()
 
@@ -348,13 +366,13 @@ def _reconcile_missing_paths(
             session.add(wf)
             result.deleted.append(wf.path)
         open_issues = session.exec(
-            select(Issue)
-            .where(Issue.workflow_file_id == wf.id)
-            .where(col(Issue.resolved_at).is_(None))
+            select(WorkflowFinding)
+            .where(WorkflowFinding.workflow_file_id == wf.id)
+            .where(col(WorkflowFinding.resolved_at).is_(None))
         ).all()
         for issue in open_issues:
             issue.resolved_at = now
-            issue.resolution_reason = IssueResolutionReason.file_removed
+            issue.resolution_reason = FindingResolutionReason.file_removed
             session.add(issue)
             resolved += 1
         if wf.fix is not None and sm.try_advance(

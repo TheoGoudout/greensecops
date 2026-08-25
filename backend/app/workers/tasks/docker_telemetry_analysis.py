@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.services.billing import quota as billing_quota
 from app.services.billing import usage as billing_usage
+from app.services.opa.evaluator import evaluate_container_runtime
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,5 @@ def run_docker_telemetry_analysis(
 
 
 async def _evaluate(document: dict[str, Any]) -> Any:
-    from app.services.opa.evaluator import evaluate_container_runtime
 
     return await evaluate_container_runtime(document)

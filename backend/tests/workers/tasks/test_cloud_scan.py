@@ -8,18 +8,18 @@ import pytest
 from sqlmodel import Session, col, select
 
 from app.models import (
-    AnalysisFailureKind,
+    Category,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
     CloudScan,
     FindingStatus,
-    IssueCategory,
-    IssueSeverity,
     Organization,
     Rule,
     RuleDomain,
+    ScanFailureKind,
     ScanStatus,
+    Severity,
     UserTier,
 )
 from app.services.cloud.aws_collector import CloudCollectionError
@@ -78,7 +78,7 @@ def _patch_evaluate(violations: list[CloudOpaViolation]) -> Any:
     )
 
 
-def test_cloud_account_not_found_returns_error(db: Session) -> None:  # noqa: ARG001
+def test_cloud_account_not_found_returns_error(db: Session) -> None:
     result = _run_cloud_scan_impl(str(uuid.uuid4()))
     assert result["status"] == "error"
     assert result["detail"] == "cloud_account_not_found"
@@ -94,7 +94,7 @@ def test_assume_role_failure_marks_scan_failed_and_account_error(
     scan = db.get(CloudScan, uuid.UUID(str(result["scan_id"])))
     assert scan is not None
     assert scan.status == ScanStatus.failed
-    assert scan.failure_kind == AnalysisFailureKind.permanent
+    assert scan.failure_kind == ScanFailureKind.permanent
 
     db.refresh(cloud_account)
     assert cloud_account.status == CloudAccountStatus.error
@@ -115,7 +115,7 @@ def test_opa_unavailable_marks_scan_failed_transient(
     assert result["status"] == "failed"
     scan = db.get(CloudScan, uuid.UUID(str(result["scan_id"])))
     assert scan is not None
-    assert scan.failure_kind == AnalysisFailureKind.transient
+    assert scan.failure_kind == ScanFailureKind.transient
 
 
 def test_creates_finding_and_computes_score(
@@ -169,8 +169,8 @@ def test_unknown_rule_slug_is_skipped_not_persisted(
 ) -> None:
     violation = CloudOpaViolation(
         rule_slug=f"nonexistent-{uuid.uuid4().hex[:8]}",
-        severity=IssueSeverity.high.value,
-        category=IssueCategory.security.value,
+        severity=Severity.high.value,
+        category=Category.security.value,
         message="orphan violation",
         resource_type="aws_s3_bucket",
         resource_id="my-bucket",

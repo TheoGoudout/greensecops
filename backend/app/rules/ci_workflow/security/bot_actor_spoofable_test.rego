@@ -61,3 +61,20 @@ test_no_violation_on_a_non_workflow_document if {
 	violations := bot_check.violations with input as {"dockerfiles": [{"path": "Dockerfile"}]}
 	count(violations) == 0
 }
+
+# `!=` is a skip-guard: it runs the job for everyone *except* the bot, which is
+# the opposite of trusting the name.
+test_no_violation_for_a_skip_guard if {
+	violations := bot_check.violations with input as {"jobs": {"b": {"if": "github.actor != 'dependabot[bot]'", "steps": [{"run": "make"}]}}}
+	count(violations) == 0
+}
+
+test_no_violation_for_a_negated_contains if {
+	violations := bot_check.violations with input as {"jobs": {"b": {"if": "!contains(github.actor, 'renovate')", "steps": [{"run": "make"}]}}}
+	count(violations) == 0
+}
+
+test_violation_for_a_contains_gate if {
+	violations := bot_check.violations with input as {"jobs": {"b": {"if": "contains(github.actor, 'dependabot')", "steps": [{"run": "make"}]}}}
+	count(violations) == 1
+}

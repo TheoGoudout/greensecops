@@ -33,7 +33,7 @@ class TelemetryMachine(StateMachine):
     enrich = running.to(enriched)  # enrichments persisted
     fail = running.to(failed)  # worker raised
     retry = failed.to(queued)  # re-queue a failed run
-    # Stuck-row sweeper (mirrors AnalysisMachine.swept): a row that never got
+    # Stuck-row sweeper (mirrors ScanMachine.swept): a row that never got
     # picked up (``queued``) or whose worker died mid-enrichment (``running``)
     # is declared failed after the shared staleness cutoff.
     swept = queued.to(failed) | running.to(failed)

@@ -8,19 +8,20 @@ from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
 from app.models import (
-    Analysis,
-    AnalysisStatus,
     DynamicEnrichment,
     Repository,
+    ScanStatus,
     TelemetryRun,
     UsageEngine,
     UsageMeter,
+    WorkflowScan,
 )
 from app.services import state_machines as sm
 from app.services.billing import quota as billing_quota
 from app.services.billing import usage as billing_usage
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.opa.evaluator import evaluate_ci_telemetry
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -127,10 +128,10 @@ def _enrich(session: Session, run: TelemetryRun) -> int:
     ]
 
     latest_analysis = session.exec(
-        select(Analysis)
-        .where(Analysis.repo_id == run.repo_id)
-        .where(Analysis.status == AnalysisStatus.completed)
-        .order_by(col(Analysis.created_at).desc())
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == run.repo_id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(col(WorkflowScan.created_at).desc())
     ).first()
 
     # Persist this run's enrichments, replacing any from a prior run of the
@@ -173,6 +174,5 @@ def run_dynamic_analysis(
 
 
 async def _evaluate(telemetry: dict[str, Any]) -> Any:
-    from app.services.opa.evaluator import evaluate_ci_telemetry
 
     return await evaluate_ci_telemetry(telemetry)

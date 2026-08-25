@@ -8,15 +8,39 @@
 #     bad: |
 #       # compose.override.yml
 #       services:
-#         db:
+#         api:
 #           ports:
-#             - "5432:5432"
+#             - "9990:9990"
+#     bad_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             ports:
+#               - "127.0.0.1:9990:9990"
+#       compose.override.yml: |
+#         services:
+#           api:
+#             ports:
+#               - "9990:9990"
 #     good: |
 #       # compose.override.yml — keep the interface explicit
 #       services:
-#         db:
+#         api:
 #           ports:
-#             - "127.0.0.1:15432:5432"
+#             - "127.0.0.1:19990:9990"
+#     good_files:
+#       compose.yml: |
+#         services:
+#           api:
+#             image: ghcr.io/example/api:1.4.0
+#             ports:
+#               - "127.0.0.1:9990:9990"
+#       compose.override.yml: |
+#         services:
+#           api:
+#             ports:
+#               - "127.0.0.1:19990:9990"
 #     fix: |
 #       Keep the host address in the mapping. If the port needs to be reachable from another machine, say which one by binding to that interface's address rather than to all of them, and remember that a host firewall will not see the traffic.
 package greensecops.container_docker.security.compose_override_exposes_bound_port

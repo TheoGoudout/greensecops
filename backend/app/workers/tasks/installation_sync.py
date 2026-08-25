@@ -3,17 +3,19 @@ import logging
 import uuid
 
 import redis as redis_sync
+import redis.asyncio as aioredis
 from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
 from app.core.db import engine
-from app.models import Analysis
+from app.models import DockerTarget, WorkflowScan
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
-from app.services.github.app_client import InstallationRepo
+from app.services.github.app_client import GitHubAppClient, InstallationRepo
 from app.services.scan_support import SCAN_LOCK_TTL_SECONDS
 from app.workers.celery_app import celery_app
+from app.workers.tasks.static_analysis import run_static_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,9 @@ def _sync_installation_repositories_impl(
                 is_private=repo.private,
             )
             has_analysis = session.exec(
-                select(Analysis.id).where(Analysis.repo_id == db_repo.id).limit(1)
+                select(WorkflowScan.id)
+                .where(WorkflowScan.repo_id == db_repo.id)
+                .limit(1)
             ).first()
             if has_analysis is None:
                 never_analyzed.append(str(db_repo.id))
@@ -48,7 +52,6 @@ def _sync_installation_repositories_impl(
     # otherwise a fresh installation shows nothing until a push arrives.
     # A per-repo "queued" key in Redis prevents duplicate enqueues when two
     # sync tasks race (e.g. `installation` + `installation_repositories` webhooks).
-    from app.workers.tasks.static_analysis import run_static_analysis
 
     r = redis_sync.Redis.from_url(settings.REDIS_URL)
     enqueued: list[str] = []
@@ -69,7 +72,7 @@ def _sync_installation_repositories_impl(
 
             if already_queued:
                 logger.info(
-                    "Analysis already queued for repo %s, skipping duplicate enqueue",
+                    "Scan already queued for repo %s, skipping duplicate enqueue",
                     repo_id,
                 )
                 continue
@@ -129,7 +132,6 @@ def _ensure_default_docker_target(session: Session, repo_id: uuid.UUID) -> None:
     root target": a user who narrowed their setup to specific subdirectories
     must not have the repo-wide target silently reinstated on the next sync.
     """
-    from app.models import DockerTarget
 
     existing = session.exec(
         select(DockerTarget.id).where(DockerTarget.repo_id == repo_id).limit(1)
@@ -142,10 +144,6 @@ def _ensure_default_docker_target(session: Session, repo_id: uuid.UUID) -> None:
 
 def _fetch_installation_repositories(installation_id: int) -> list[InstallationRepo]:
     """Synchronous wrapper for async GitHubAppClient.list_installation_repositories."""
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
 
     async def _fetch() -> list[InstallationRepo]:
         r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]

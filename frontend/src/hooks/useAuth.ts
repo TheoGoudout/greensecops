@@ -10,7 +10,7 @@ import {
   type UserRegister,
   UsersService,
 } from "@/client"
-import { handleApiError, showSuccessToast } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 
 const isLoggedIn = () => {
   return localStorage.getItem("access_token") !== null

@@ -19,6 +19,7 @@ import logging
 from typing import Any
 
 import stripe
+from fastapi import HTTPException
 
 from app.core.config import settings
 from app.core.plans import PLANS, get_plan
@@ -129,7 +130,6 @@ def parse_webhook_event(payload: bytes, signature: str | None) -> dict[str, Any]
     Raises the same ``HTTPException``s the route used to raise inline, so an
     unsigned or tampered payload is a 400 rather than a 500.
     """
-    from fastapi import HTTPException
 
     if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_WEBHOOK_SECRET:
         raise stripe_not_configured()

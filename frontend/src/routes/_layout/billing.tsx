@@ -23,7 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { handleApiError, showSuccessToast } from "@/utils"
+import { formatLongDate } from "@/lib/format"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 
 export const Route = createFileRoute("/_layout/billing")({
   component: Billing,
@@ -76,11 +77,7 @@ const METER_LABELS: Record<string, string> = {
 
 function formatDate(value?: string | null): string {
   if (!value) return "—"
-  return new Date(value).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })
+  return formatLongDate(value)
 }
 
 function formatMoney(cents: number, currency: string): string {

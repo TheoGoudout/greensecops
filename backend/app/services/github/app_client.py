@@ -702,7 +702,7 @@ class GitHubAppClient:
         self,
         code: str,
         code_verifier: str | None = None,
-        redirect_uri: str | None = None,  # noqa: ARG002
+        redirect_uri: str | None = None,
     ) -> str:
         def _exchange() -> str:
             # Optional in Settings but required for the OAuth flow.

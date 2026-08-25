@@ -1,6 +1,6 @@
 # METADATA
 # title: Container ran with no memory limit
-# description: A container was observed doing real work with no memory limit declared. The measured counterpart to compose_missing_resource_limits, which infers the same gap from the Compose file — this one knows how much the workload actually used, so the fix can name a number instead of a guess.
+# description: A container was observed doing real work with no memory limit declared. The measured counterpart to compose_service_unbounded, which infers the same gap from the Compose file — this one knows how much the workload actually used, so the fix can name a number instead of a guess.
 # custom:
 #   severity: medium
 #   detection: dynamic_analysis

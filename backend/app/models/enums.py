@@ -28,21 +28,7 @@ class LLMProvider(str, enum.Enum):
     ollama = "ollama"
 
 
-class AnalysisStatus(str, enum.Enum):
-    # An analysis row is created as ``queued`` (or directly ``no_workflows``)
-    # and advances to ``running`` when the worker begins OPA evaluation. The
-    # broker-queue phase before the worker picks the task up is still signalled
-    # over SSE without a row. Content-hash duplicates reference the prior
-    # analysis and emit ``analysis.skipped`` without writing a row. A
-    # ``skipped`` row is never persisted, so that value is not a machine state.
-    queued = "queued"
-    running = "running"
-    completed = "completed"
-    failed = "failed"
-    no_workflows = "no_workflows"
-
-
-class AnalysisFailureKind(str, enum.Enum):
+class ScanFailureKind(str, enum.Enum):
     """Why an analysis ``failed`` — orthogonal to the state itself.
 
     ``transient`` failures (sweep timeout, OPA/network hiccup) are safe to
@@ -54,7 +40,7 @@ class AnalysisFailureKind(str, enum.Enum):
     permanent = "permanent"
 
 
-class AnalysisTrigger(str, enum.Enum):
+class ScanTrigger(str, enum.Enum):
     webhook_push = "webhook_push"
     webhook_workflow_run = "webhook_workflow_run"
     # A push detected by polling an external repo's default-branch head (external
@@ -65,7 +51,9 @@ class AnalysisTrigger(str, enum.Enum):
     release = "release"
 
 
-class IssueSeverity(str, enum.Enum):
+class Severity(str, enum.Enum):
+    """How bad a rule violation is. Shared by every engine's findings."""
+
     critical = "critical"
     high = "high"
     medium = "medium"
@@ -73,7 +61,9 @@ class IssueSeverity(str, enum.Enum):
     info = "info"
 
 
-class IssueCategory(str, enum.Enum):
+class Category(str, enum.Enum):
+    """Which axis a rule grades on. Also the directory a .rego file lives in."""
+
     energy = "energy"
     reliability = "reliability"
     security = "security"
@@ -81,49 +71,12 @@ class IssueCategory(str, enum.Enum):
     maintainability = "maintainability"
     # NOTE: a "cost" category for IaC/cloud rules is deliberately not added
     # yet. services/scoring.py:compute_category_scores iterates every
-    # IssueCategory member against a penalties dict that workflow analysis
+    # Category member against a penalties dict that workflow analysis
     # builds with exactly the 5 categories above — adding a 6th here without
     # also updating that function (and deciding whether the *workflow*
     # per-category radar should even show a "Cost" spoke) breaks every
     # repo's grade computation. Add it in the phase that ships a rule
     # actually using it, alongside that fix.
-
-
-class IssueStatus(str, enum.Enum):
-    """Derived lifecycle of an issue.
-
-    This value is a persisted column computed by a database trigger from
-    ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
-    migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
-    states so a user-dismissed violation stays muted regardless of fix/resolve
-    activity.
-    """
-
-    open = "open"
-    fix_in_progress = "fix_in_progress"
-    resolved = "resolved"
-    ignored = "ignored"
-
-
-class IssueResolutionReason(str, enum.Enum):
-    """Why an issue was resolved — an attribute of the ``resolved`` state.
-
-    Kept as a column rather than splitting ``resolved`` into several states so
-    the issue graph stays small. Set alongside ``resolved_at`` and cleared when
-    a resolved violation recurs.
-
-    - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
-      disabled/removed rule — the two cannot be told apart after the fact).
-    - ``file_removed``: the workflow file was deleted or renamed.
-    - ``merged``: the fix PR was merged, applying the change to the branch.
-    - ``branch_deleted``: the branch carrying the issue's workflow file was
-      deleted; the violation no longer exists anywhere to fix.
-    """
-
-    no_longer_detected = "no_longer_detected"
-    file_removed = "file_removed"
-    merged = "merged"
-    branch_deleted = "branch_deleted"
 
 
 class FixStatus(str, enum.Enum):
@@ -210,14 +163,14 @@ class RepositoryStatus(str, enum.Enum):
 
 
 class SSESignal(str, enum.Enum):
-    # Analysis
+    # WorkflowScan
     analysis_queued = "analysis.queued"
     analysis_started = "analysis.started"
     analysis_completed = "analysis.completed"
     analysis_failed = "analysis.failed"
     analysis_skipped = "analysis.skipped"
     analysis_no_workflows = "analysis.no_workflows"
-    # Fix generation & delivery
+    # WorkflowFix generation & delivery
     fix_skipped = "fix.skipped"
     fix_pending = "fix.pending"
     fix_generating = "fix.generating"
@@ -254,7 +207,7 @@ class SSESignal(str, enum.Enum):
     dynamic_running = "dynamic.running"
     dynamic_enriched = "dynamic.enriched"
     dynamic_failed = "dynamic.failed"
-    # Analysis refused before any work was dispatched because the org's
+    # WorkflowScan refused before any work was dispatched because the org's
     # billing owner has no metered allowance left. Distinct from
     # ``analysis_failed``: nothing broke, and a retry will not help.
     analysis_quota_exceeded = "analysis.quota_exceeded"
@@ -268,14 +221,24 @@ class SSESignal(str, enum.Enum):
 
 
 class RuleDomain(str, enum.Enum):
-    """Which analysis engine a Rule belongs to.
+    """Which Rego package a rule lives in, and therefore which document it sees.
 
-    Lets the single ``rule`` table and its admin UI serve the CI-workflow
-    engine and the new IaC/cloud engines without three parallel Rule tables.
-    Existing rows default to ``workflow`` (see migration 0042).
+    Lets the single ``rule`` table and its admin UI serve every engine without
+    one Rule table each.
+
+    **Every member is exactly a directory name under ``app/rules/``**, which is
+    what lets ``core/rule_registry`` derive the domain with ``RuleDomain(dir)``.
+    That invariant is the whole point: ``workflow`` used to be the odd one out
+    against a ``ci_workflow/`` directory, and bridging the two took a
+    hand-maintained lookup table that only a comment kept honest.
+
+    Distinct from :class:`Engine`, and deliberately not one-to-one with it:
+    ``container_docker`` and ``container_runtime`` rules both produce findings
+    on the Docker engine, and ``ci_workflow``/``ci_telemetry`` likewise split
+    across the workflow and telemetry engines. See :data:`ENGINE_OF_DOMAIN`.
     """
 
-    workflow = "workflow"
+    ci_workflow = "ci_workflow"
     iac_terraform = "iac_terraform"
     cloud_aws = "cloud_aws"
     ci_telemetry = "ci_telemetry"
@@ -283,13 +246,49 @@ class RuleDomain(str, enum.Enum):
     container_runtime = "container_runtime"
 
 
-class ScanStatus(str, enum.Enum):
-    """Lifecycle of a TerraformScan or CloudScan.
+class Engine(str, enum.Enum):
+    """Which analysis engine produced something.
 
-    Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
-    value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
-    files under this root" and "no resources of the scanned types in this
-    account/region".
+    The one name for an engine across the whole system: usage records tag
+    themselves with it, the dashboard overview keys its stat blocks by it, and
+    ``services/engines.EngineSpec`` is looked up by it. There used to be three
+    of these enums disagreeing about whether the first one is called ``ci`` or
+    ``workflow``; it is ``workflow``, after the ``WorkflowFile`` rows it scans.
+
+    Not the same axis as :class:`RuleDomain`, which names a Rego package — the
+    mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
+    """
+
+    workflow = "workflow"
+    terraform = "terraform"
+    docker = "docker"
+    cloud = "cloud"
+    telemetry = "telemetry"
+
+
+ENGINE_OF_DOMAIN: dict[RuleDomain, Engine] = {
+    RuleDomain.ci_workflow: Engine.workflow,
+    RuleDomain.ci_telemetry: Engine.telemetry,
+    RuleDomain.iac_terraform: Engine.terraform,
+    RuleDomain.cloud_aws: Engine.cloud,
+    RuleDomain.container_docker: Engine.docker,
+    # Runtime container rules grade the Docker engine too: a measured OOM kill
+    # and a missing memory limit in the Compose file are the same engine's
+    # findings, arrived at from different evidence.
+    RuleDomain.container_runtime: Engine.docker,
+}
+
+
+class ScanStatus(str, enum.Enum):
+    """Lifecycle of one engine's run over one target.
+
+    Shared by every scan table. There used to be a second, identical enum called
+    ``ScanStatus`` for the CI engine alone, differing in exactly one member:
+    it spelled the empty case ``no_workflows`` where this one says
+    ``no_targets``. That is workflow-specific vocabulary for a case every engine
+    has — no ``.tf`` files under this root, no resources of the scanned types in
+    this account, no workflow files in this repository — so the general name
+    won and migration 0053 rewrote the rows.
     """
 
     queued = "queued"
@@ -300,24 +299,48 @@ class ScanStatus(str, enum.Enum):
 
 
 class FindingStatus(str, enum.Enum):
-    """Lifecycle of a TerraformFinding or CloudFinding.
+    """Derived lifecycle of a rule violation, on any engine.
 
-    Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
-    findings in this delivery have no fix/PR concept yet (see plan Phase 7),
-    so the application sets this column directly alongside resolved_at/
-    ignored_at rather than needing trigger-derived state.
+    For CI-workflow findings this column is computed by a database trigger from
+    ``ignored_at``, ``resolved_at`` and ``fix_id`` (migrations ``0022``/``0026``,
+    renamed in ``0053``); ``ignored`` takes precedence, so a user-dismissed
+    violation stays muted regardless of fix or resolve activity. The other
+    engines set it directly through ``FindingMachine``.
+
+    ``fix_in_progress`` arrived with the merge of the old ``FindingStatus``: only
+    the CI engine reaches it today, because only its findings carry a ``fix_id``
+    — the other engines key a fix on ``(target, file_path)`` instead. It is
+    declared here rather than in a CI-only enum because the state is about the
+    finding, not about which engine found it.
     """
 
     open = "open"
+    fix_in_progress = "fix_in_progress"
     resolved = "resolved"
     ignored = "ignored"
 
 
 class FindingResolutionReason(str, enum.Enum):
+    """Why a finding stopped being open.
+
+    An attribute of the ``resolved`` state, not a state of its own. The union of
+    what the engines can observe: the first two are available to all of them,
+    the rest need a file or a pull request and so only arise on engines that
+    have one.
+    """
+
+    # The violation is simply no longer reported — the user fixed it, or its
+    # rule was disabled or withdrawn. Indistinguishable from here, and both
+    # mean the same thing to a reader of the finding.
     no_longer_detected = "no_longer_detected"
-    # The Terraform file/resource block was removed, or the cloud resource no
-    # longer exists on the provider side.
+    # The whole target went away (root deleted, account disconnected).
     target_removed = "target_removed"
+    # The file the violation was in no longer exists.
+    file_removed = "file_removed"
+    # A fix PR carrying this finding was merged.
+    merged = "merged"
+    # The branch the finding was observed on was deleted.
+    branch_deleted = "branch_deleted"
 
 
 class CloudProvider(str, enum.Enum):
@@ -372,11 +395,15 @@ class UsageMeter(str, enum.Enum):
 
 
 class UsageEngine(str, enum.Enum):
-    """Which engine produced a usage record.
+    """Which engine produced a usage record, plus one non-engine sentinel.
 
     Every one of these debits the same shared pool; the tag exists so a user
     can see *where* their allowance went, and so tests can assert that each
     engine is actually metered.
+
+    Its engine members are :class:`Engine`'s, spelled out rather than generated
+    so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
+    fails at import if the two ever drift.
     """
 
     workflow = "workflow"
@@ -387,6 +414,20 @@ class UsageEngine(str, enum.Enum):
     # Not produced by an engine: the one-off record the ledger migration writes
     # to carry a subscription's pre-ledger fix usage into its current period.
     carryover = "carryover"
+
+    @classmethod
+    def of(cls, engine: Engine) -> "UsageEngine":
+        """The usage tag for an engine. Total, given the check below."""
+        return cls(engine.value)
+
+
+# A usage record tagged with an engine the rest of the system does not know
+# about is unattributable, and the reverse is a meter that silently bills
+# nothing. Catch either at import rather than in a billing report.
+_ENGINE_MEMBERS_MATCH = {e.value for e in Engine} == {u.value for u in UsageEngine} - {
+    UsageEngine.carryover.value
+}
+assert _ENGINE_MEMBERS_MATCH, "UsageEngine and Engine have drifted apart"
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -406,21 +447,6 @@ class OssApplicationStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     withdrawn = "withdrawn"
-
-
-class OverviewEngineKey(str, enum.Enum):
-    """Which analysis engine a block of dashboard overview stats describes.
-
-    A presentation-layer key, not a persisted column — ``Rule.domain`` stays
-    the DB-level discriminator. The two exist because they don't line up:
-    ``container_docker`` and ``container_runtime`` rules both produce findings
-    on the Docker engine, so one key covers two domains.
-    """
-
-    ci = "ci"
-    docker = "docker"
-    terraform = "terraform"
-    cloud = "cloud"
 
 
 class OverviewSection(str, enum.Enum):

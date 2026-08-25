@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.core.plans import DEFAULT_TIER, Plan, get_plan
+from app.core.plans import DEFAULT_TIER
 from app.models import (
     BillingSubscription,
     SubscriptionStatus,
@@ -61,10 +61,6 @@ def effective_tier(sub: BillingSubscription | None) -> UserTier:
     if sub.status in sm.ENTITLED_STATUSES:
         return sub.tier
     return DEFAULT_TIER
-
-
-def effective_plan(sub: BillingSubscription | None) -> Plan:
-    return get_plan(effective_tier(sub))
 
 
 def is_downgraded(sub: BillingSubscription | None) -> bool:

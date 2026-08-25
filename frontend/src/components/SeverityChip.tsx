@@ -1,12 +1,12 @@
-import type { IssueSeverity } from "@/client"
+import type { Severity } from "@/client"
 import { cn } from "@/lib/utils"
 
 interface SeverityChipProps {
-  severity: IssueSeverity
+  severity: Severity
   className?: string
 }
 
-const SEVERITY_STYLES: Record<IssueSeverity, string> = {
+const SEVERITY_STYLES: Record<Severity, string> = {
   critical:
     "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800",
   high: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 border border-orange-200 dark:border-orange-800",

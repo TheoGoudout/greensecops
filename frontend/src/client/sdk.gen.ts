@@ -3,131 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnalysesListAnalysesData, AnalysesListAnalysesResponse, AnalysesGetAnalysisData, AnalysesGetAnalysisResponse, AnalysesTriggerAnalysisData, AnalysesTriggerAnalysisResponse, AnalysesReanalyzeForWorkflowData, AnalysesReanalyzeForWorkflowResponse, AnalysesReanalyzeAllResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutData, BillingCreateCheckoutResponse, BillingCreatePortalResponse, BillingListMyOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListOssApplicationsData, BillingListOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, FixesListFixesData, FixesListFixesResponse, FixesListPullRequestsData, FixesListPullRequestsResponse, FixesGetFixData, FixesGetFixResponse, FixesRejectFixData, FixesRejectFixResponse, FixesTriggerFixGenerationForRepoData, FixesTriggerFixGenerationForRepoResponse, FixesTriggerWorkflowDeliveryData, FixesTriggerWorkflowDeliveryResponse, FixesTriggerRepoDeliveryData, FixesTriggerRepoDeliveryResponse, FixesRegenerateFixesForRepoData, FixesRegenerateFixesForRepoResponse, FixesRegenerateFixesForWorkflowData, FixesRegenerateFixesForWorkflowResponse, FixesRegenerateFailedFixData, FixesRegenerateFailedFixResponse, FixesSyncPrStatusesData, FixesSyncPrStatusesResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, IssuesListIssuesData, IssuesListIssuesResponse, IssuesGetIssueStatsData, IssuesGetIssueStatsResponse, IssuesGetIssueData, IssuesGetIssueResponse, IssuesIgnoreIssueData, IssuesIgnoreIssueResponse, IssuesUnignoreIssueData, IssuesUnignoreIssueResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, UtilsVersionResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse } from './types.gen';
-
-export class AnalysesService {
-    /**
-     * List Analyses
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.branch
-     * @param data.grade
-     * @param data.status
-     * @param data.skip
-     * @param data.limit
-     * @returns AnalysisPublic Successful Response
-     * @throws ApiError
-     */
-    public static listAnalyses(data: AnalysesListAnalysesData = {}): CancelablePromise<AnalysesListAnalysesResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/analyses/',
-            query: {
-                repo_id: data.repoId,
-                branch: data.branch,
-                grade: data.grade,
-                status: data.status,
-                skip: data.skip,
-                limit: data.limit
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Get Analysis
-     * @param data The data for the request.
-     * @param data.analysisId
-     * @returns AnalysisPublic Successful Response
-     * @throws ApiError
-     */
-    public static getAnalysis(data: AnalysesGetAnalysisData): CancelablePromise<AnalysesGetAnalysisResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/analyses/{analysis_id}',
-            path: {
-                analysis_id: data.analysisId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Trigger Analysis
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.branch
-     * @param data.force
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static triggerAnalysis(data: AnalysesTriggerAnalysisData): CancelablePromise<AnalysesTriggerAnalysisResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/analyses/trigger/{repo_id}',
-            path: {
-                repo_id: data.repoId
-            },
-            query: {
-                branch: data.branch,
-                force: data.force
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Reanalyze For Workflow
-     * Re-run static analysis for a single workflow file.
-     *
-     * Per-workflow analog of ``trigger_analysis`` (which is repo/branch-wide):
-     * the worker re-fetches and re-evaluates just this file on its own branch,
-     * consistent with the per-workflow fix (``regenerate-for-workflow``) and
-     * delivery (``deliver-for-workflow``) endpoints.
-     * @param data The data for the request.
-     * @param data.workflowFileId
-     * @param data.force
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static reanalyzeForWorkflow(data: AnalysesReanalyzeForWorkflowData): CancelablePromise<AnalysesReanalyzeForWorkflowResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/analyses/reanalyze-for-workflow/{workflow_file_id}',
-            path: {
-                workflow_file_id: data.workflowFileId
-            },
-            query: {
-                force: data.force
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Reanalyze All
-     * Fan out a fresh static analysis across all enabled repositories.
-     *
-     * Same mechanism used automatically when a release ships new rules; exposed
-     * so operators can re-apply rules on demand without a redeploy.
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static reanalyzeAll(): CancelablePromise<AnalysesReanalyzeAllResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/analyses/reanalyze-all'
-        });
-    }
-}
+import type { AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutData, BillingCreateCheckoutResponse, BillingCreatePortalResponse, BillingListMyOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListOssApplicationsData, BillingListOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, UtilsVersionResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WorkflowFindingsListIssuesData, WorkflowFindingsListIssuesResponse, WorkflowFindingsGetIssueStatsData, WorkflowFindingsGetIssueStatsResponse, WorkflowFindingsGetIssueData, WorkflowFindingsGetIssueResponse, WorkflowFindingsIgnoreIssueData, WorkflowFindingsIgnoreIssueResponse, WorkflowFindingsUnignoreIssueData, WorkflowFindingsUnignoreIssueResponse, WorkflowFixesListFixesData, WorkflowFixesListFixesResponse, WorkflowFixesListPullRequestsData, WorkflowFixesListPullRequestsResponse, WorkflowFixesGetFixData, WorkflowFixesGetFixResponse, WorkflowFixesRejectFixData, WorkflowFixesRejectFixResponse, WorkflowFixesTriggerFixGenerationForRepoData, WorkflowFixesTriggerFixGenerationForRepoResponse, WorkflowFixesTriggerWorkflowDeliveryData, WorkflowFixesTriggerWorkflowDeliveryResponse, WorkflowFixesTriggerRepoDeliveryData, WorkflowFixesTriggerRepoDeliveryResponse, WorkflowFixesRegenerateFixesForRepoData, WorkflowFixesRegenerateFixesForRepoResponse, WorkflowFixesRegenerateFixesForWorkflowData, WorkflowFixesRegenerateFixesForWorkflowResponse, WorkflowFixesRegenerateFailedFixData, WorkflowFixesRegenerateFailedFixResponse, WorkflowFixesSyncPrStatusesData, WorkflowFixesSyncPrStatusesResponse, WorkflowScansListAnalysesData, WorkflowScansListAnalysesResponse, WorkflowScansGetAnalysisData, WorkflowScansGetAnalysisResponse, WorkflowScansTriggerAnalysisData, WorkflowScansTriggerAnalysisResponse, WorkflowScansReanalyzeForWorkflowData, WorkflowScansReanalyzeForWorkflowResponse, WorkflowScansReanalyzeAllResponse } from './types.gen';
 
 export class AuthService {
     /**
@@ -1011,6 +887,24 @@ export class EventsService {
     }
 
     /**
+     * Get Sse Event Schema
+     * The wire shape of a streamed event, for frontend codegen.
+     *
+     * Nothing calls this at runtime — like ``/signals`` above, it exists so the
+     * type reaches the generated client. Events themselves arrive over
+     * ``/stream``, which is a ``text/event-stream`` and so carries no response
+     * model OpenAPI could describe.
+     * @returns SSEEventPublic Successful Response
+     * @throws ApiError
+     */
+    public static getSseEventSchema(): CancelablePromise<EventsGetSseEventSchemaResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/events/schema'
+        });
+    }
+
+    /**
      * Create Sse Ticket
      * Mint a short-lived, single-use ticket for the SSE stream.
      *
@@ -1042,282 +936,6 @@ export class EventsService {
             url: '/api/v1/events/stream',
             query: {
                 ticket: data.ticket
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-}
-
-export class FixesService {
-    /**
-     * List Fixes
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.status
-     * @param data.branch
-     * @param data.skip
-     * @param data.limit
-     * @returns FixPublic Successful Response
-     * @throws ApiError
-     */
-    public static listFixes(data: FixesListFixesData = {}): CancelablePromise<FixesListFixesResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/fixes/',
-            query: {
-                repo_id: data.repoId,
-                status: data.status,
-                branch: data.branch,
-                skip: data.skip,
-                limit: data.limit
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * List Pull Requests
-     * List a repo's PR rows directly, independent of any Fix's ``pr_id``.
-     *
-     * A ``ready`` fix never carries a ``pr_id`` (see ``_relink_orphaned_fixes``),
-     * so views that need "does a PR already exist for this branch" must read the
-     * ``PullRequest`` table itself rather than deriving it from fixes.
-     * @param data The data for the request.
-     * @param data.repoId
-     * @returns PullRequestPublic Successful Response
-     * @throws ApiError
-     */
-    public static listPullRequests(data: FixesListPullRequestsData): CancelablePromise<FixesListPullRequestsResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/fixes/pull-requests/{repo_id}',
-            path: {
-                repo_id: data.repoId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Get Fix
-     * @param data The data for the request.
-     * @param data.fixId
-     * @returns FixPublic Successful Response
-     * @throws ApiError
-     */
-    public static getFix(data: FixesGetFixData): CancelablePromise<FixesGetFixResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/fixes/{fix_id}',
-            path: {
-                fix_id: data.fixId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Reject Fix
-     * @param data The data for the request.
-     * @param data.fixId
-     * @returns void Successful Response
-     * @throws ApiError
-     */
-    public static rejectFix(data: FixesRejectFixData): CancelablePromise<FixesRejectFixResponse> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/api/v1/fixes/{fix_id}',
-            path: {
-                fix_id: data.fixId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Trigger Fix Generation For Repo
-     * Queue one whole-file fix generation per workflow file for issues in a repo.
-     *
-     * When body.issue_ids is provided, only those issues are processed.
-     * When force=True, delivered fixes are also discarded and regenerated.
-     * Only issues from the latest analysis per workflow file are targeted.
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.force
-     * @param data.requestBody
-     * @returns number Successful Response
-     * @throws ApiError
-     */
-    public static triggerFixGenerationForRepo(data: FixesTriggerFixGenerationForRepoData): CancelablePromise<FixesTriggerFixGenerationForRepoResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/generate-for-repo/{repo_id}',
-            path: {
-                repo_id: data.repoId
-            },
-            query: {
-                force: data.force
-            },
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Trigger Workflow Delivery
-     * Deliver one workflow file's fix as a single PR.
-     *
-     * When force=True, a fix in any status is accepted (not just ready).
-     * @param data The data for the request.
-     * @param data.requestBody
-     * @param data.force
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static triggerWorkflowDelivery(data: FixesTriggerWorkflowDeliveryData): CancelablePromise<FixesTriggerWorkflowDeliveryResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/deliver-for-workflow',
-            query: {
-                force: data.force
-            },
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Trigger Repo Delivery
-     * Deliver all ready fixes for a repo as a single multi-file PR.
-     *
-     * When force=True, fixes in any status are included (not just ready).
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.force
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static triggerRepoDelivery(data: FixesTriggerRepoDeliveryData): CancelablePromise<FixesTriggerRepoDeliveryResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/deliver-for-repo/{repo_id}',
-            path: {
-                repo_id: data.repoId
-            },
-            query: {
-                force: data.force
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Regenerate Fixes For Repo
-     * Discard a repo's regenerable fixes and re-trigger generation.
-     *
-     * A fix is regenerable when no worker is processing it and its PR, if any,
-     * was not merged — merged code changes were already applied. Fixes whose
-     * workflow file has no unresolved issues left in its latest analysis are
-     * kept: there is nothing to regenerate them from.
-     * @param data The data for the request.
-     * @param data.repoId
-     * @returns number Successful Response
-     * @throws ApiError
-     */
-    public static regenerateFixesForRepo(data: FixesRegenerateFixesForRepoData): CancelablePromise<FixesRegenerateFixesForRepoResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/regenerate-for-repo/{repo_id}',
-            path: {
-                repo_id: data.repoId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Regenerate Fixes For Workflow
-     * Discard one workflow file's fix and re-trigger generation.
-     *
-     * Rejected while a worker is processing the fix, once its PR was merged
-     * (the code changes were already applied), and when the latest analysis
-     * has no unresolved issues left to regenerate from.
-     * @param data The data for the request.
-     * @param data.fixId
-     * @returns number Successful Response
-     * @throws ApiError
-     */
-    public static regenerateFixesForWorkflow(data: FixesRegenerateFixesForWorkflowData): CancelablePromise<FixesRegenerateFixesForWorkflowResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/regenerate-for-workflow/{fix_id}',
-            path: {
-                fix_id: data.fixId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Regenerate Failed Fix
-     * Retry a failed fix in place (``failed`` -> ``pending``), reusing the row.
-     *
-     * Unlike ``regenerate-for-workflow`` (which discards the row and creates a new
-     * one), this recovers a fix that failed generation/precheck without losing its
-     * identity or PR linkage. Only legal from ``failed``.
-     * @param data The data for the request.
-     * @param data.fixId
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static regenerateFailedFix(data: FixesRegenerateFailedFixData): CancelablePromise<FixesRegenerateFailedFixResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/{fix_id}/regenerate',
-            path: {
-                fix_id: data.fixId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Sync Pr Statuses
-     * @param data The data for the request.
-     * @param data.repoId
-     * @returns number Successful Response
-     * @throws ApiError
-     */
-    public static syncPrStatuses(data: FixesSyncPrStatusesData): CancelablePromise<FixesSyncPrStatusesResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/fixes/sync-pr-status/{repo_id}',
-            path: {
-                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'
@@ -1360,144 +978,6 @@ export class InstallationsService {
             url: '/api/v1/installations/sync',
             body: data.requestBody,
             mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-}
-
-export class IssuesService {
-    /**
-     * List Issues
-     * @param data The data for the request.
-     * @param data.analysisId
-     * @param data.repoId
-     * @param data.branch
-     * @param data.category
-     * @param data.severity
-     * @param data.unfixed
-     * @param data.latestOnly
-     * @param data.includeResolved
-     * @param data.includeIgnored
-     * @param data.skip
-     * @param data.limit
-     * @returns IssuePublic Successful Response
-     * @throws ApiError
-     */
-    public static listIssues(data: IssuesListIssuesData = {}): CancelablePromise<IssuesListIssuesResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/issues/',
-            query: {
-                analysis_id: data.analysisId,
-                repo_id: data.repoId,
-                branch: data.branch,
-                category: data.category,
-                severity: data.severity,
-                unfixed: data.unfixed,
-                latest_only: data.latestOnly,
-                include_resolved: data.includeResolved,
-                include_ignored: data.includeIgnored,
-                skip: data.skip,
-                limit: data.limit
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Get Issue Stats
-     * Exact open/resolved issue counts by category, aggregated in SQL.
-     *
-     * Powers the dashboard's stat cards and category health breakdown without
-     * the pagination cap a plain ``list_issues`` fetch would hit on a large
-     * org — every matching row is summed server-side, never materialized into
-     * a capped page of ``IssuePublic`` objects.
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.branch
-     * @param data.latestOnly
-     * @returns IssueStatsPublic Successful Response
-     * @throws ApiError
-     */
-    public static getIssueStats(data: IssuesGetIssueStatsData = {}): CancelablePromise<IssuesGetIssueStatsResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/issues/stats',
-            query: {
-                repo_id: data.repoId,
-                branch: data.branch,
-                latest_only: data.latestOnly
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Get Issue
-     * @param data The data for the request.
-     * @param data.issueId
-     * @returns IssuePublic Successful Response
-     * @throws ApiError
-     */
-    public static getIssue(data: IssuesGetIssueData): CancelablePromise<IssuesGetIssueResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/issues/{issue_id}',
-            path: {
-                issue_id: data.issueId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Ignore Issue
-     * Mute a violation (false positive / accepted risk).
-     *
-     * Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
-     * which takes precedence over resolve/fix state and drops the issue out of the
-     * default (active) issue and fix queries. Idempotent.
-     * @param data The data for the request.
-     * @param data.issueId
-     * @returns IssuePublic Successful Response
-     * @throws ApiError
-     */
-    public static ignoreIssue(data: IssuesIgnoreIssueData): CancelablePromise<IssuesIgnoreIssueResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/issues/{issue_id}/ignore',
-            path: {
-                issue_id: data.issueId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Unignore Issue
-     * Un-mute a previously ignored violation. Idempotent.
-     * @param data The data for the request.
-     * @param data.issueId
-     * @returns IssuePublic Successful Response
-     * @throws ApiError
-     */
-    public static unignoreIssue(data: IssuesUnignoreIssueData): CancelablePromise<IssuesUnignoreIssueResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/issues/{issue_id}/unignore',
-            path: {
-                issue_id: data.issueId
-            },
             errors: {
                 422: 'Validation Error'
             }
@@ -2671,6 +2151,544 @@ export class WebhooksService {
             errors: {
                 422: 'Validation Error'
             }
+        });
+    }
+}
+
+export class WorkflowFindingsService {
+    /**
+     * List Issues
+     * @param data The data for the request.
+     * @param data.analysisId
+     * @param data.repoId
+     * @param data.branch
+     * @param data.category
+     * @param data.severity
+     * @param data.unfixed
+     * @param data.latestOnly
+     * @param data.includeResolved
+     * @param data.includeIgnored
+     * @param data.skip
+     * @param data.limit
+     * @returns IssuePublic Successful Response
+     * @throws ApiError
+     */
+    public static listIssues(data: WorkflowFindingsListIssuesData = {}): CancelablePromise<WorkflowFindingsListIssuesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-findings/',
+            query: {
+                analysis_id: data.analysisId,
+                repo_id: data.repoId,
+                branch: data.branch,
+                category: data.category,
+                severity: data.severity,
+                unfixed: data.unfixed,
+                latest_only: data.latestOnly,
+                include_resolved: data.includeResolved,
+                include_ignored: data.includeIgnored,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Issue Stats
+     * Exact open/resolved issue counts by category, aggregated in SQL.
+     *
+     * Powers the dashboard's stat cards and category health breakdown without
+     * the pagination cap a plain ``list_issues`` fetch would hit on a large
+     * org — every matching row is summed server-side, never materialized into
+     * a capped page of ``IssuePublic`` objects.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.branch
+     * @param data.latestOnly
+     * @returns IssueStatsPublic Successful Response
+     * @throws ApiError
+     */
+    public static getIssueStats(data: WorkflowFindingsGetIssueStatsData = {}): CancelablePromise<WorkflowFindingsGetIssueStatsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-findings/stats',
+            query: {
+                repo_id: data.repoId,
+                branch: data.branch,
+                latest_only: data.latestOnly
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Issue
+     * @param data The data for the request.
+     * @param data.issueId
+     * @returns IssuePublic Successful Response
+     * @throws ApiError
+     */
+    public static getIssue(data: WorkflowFindingsGetIssueData): CancelablePromise<WorkflowFindingsGetIssueResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-findings/{issue_id}',
+            path: {
+                issue_id: data.issueId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Ignore Issue
+     * Mute a violation (false positive / accepted risk).
+     *
+     * Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
+     * which takes precedence over resolve/fix state and drops the issue out of the
+     * default (active) issue and fix queries. Idempotent.
+     * @param data The data for the request.
+     * @param data.issueId
+     * @returns IssuePublic Successful Response
+     * @throws ApiError
+     */
+    public static ignoreIssue(data: WorkflowFindingsIgnoreIssueData): CancelablePromise<WorkflowFindingsIgnoreIssueResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-findings/{issue_id}/ignore',
+            path: {
+                issue_id: data.issueId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Unignore Issue
+     * Un-mute a previously ignored violation. Idempotent.
+     * @param data The data for the request.
+     * @param data.issueId
+     * @returns IssuePublic Successful Response
+     * @throws ApiError
+     */
+    public static unignoreIssue(data: WorkflowFindingsUnignoreIssueData): CancelablePromise<WorkflowFindingsUnignoreIssueResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-findings/{issue_id}/unignore',
+            path: {
+                issue_id: data.issueId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class WorkflowFixesService {
+    /**
+     * List Fixes
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.status
+     * @param data.branch
+     * @param data.skip
+     * @param data.limit
+     * @returns FixPublic Successful Response
+     * @throws ApiError
+     */
+    public static listFixes(data: WorkflowFixesListFixesData = {}): CancelablePromise<WorkflowFixesListFixesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-fixes/',
+            query: {
+                repo_id: data.repoId,
+                status: data.status,
+                branch: data.branch,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Pull Requests
+     * List a repo's PR rows directly, independent of any fix's ``pr_id``.
+     *
+     * A ``ready`` fix never carries a ``pr_id`` (see ``_relink_orphaned_fixes``),
+     * so views that need "does a PR already exist for this branch" must read the
+     * ``PullRequest`` table itself rather than deriving it from fixes.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns PullRequestPublic Successful Response
+     * @throws ApiError
+     */
+    public static listPullRequests(data: WorkflowFixesListPullRequestsData): CancelablePromise<WorkflowFixesListPullRequestsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-fixes/pull-requests/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Fix
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns FixPublic Successful Response
+     * @throws ApiError
+     */
+    public static getFix(data: WorkflowFixesGetFixData): CancelablePromise<WorkflowFixesGetFixResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-fixes/{fix_id}',
+            path: {
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Reject Fix
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns void Successful Response
+     * @throws ApiError
+     */
+    public static rejectFix(data: WorkflowFixesRejectFixData): CancelablePromise<WorkflowFixesRejectFixResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/workflow-fixes/{fix_id}',
+            path: {
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Fix Generation For Repo
+     * Queue one whole-file fix generation per workflow file for issues in a repo.
+     *
+     * When body.issue_ids is provided, only those issues are processed.
+     * When force=True, delivered fixes are also discarded and regenerated.
+     * Only issues from the latest analysis per workflow file are targeted.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.force
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static triggerFixGenerationForRepo(data: WorkflowFixesTriggerFixGenerationForRepoData): CancelablePromise<WorkflowFixesTriggerFixGenerationForRepoResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/generate-for-repo/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            query: {
+                force: data.force
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Workflow Delivery
+     * Deliver one workflow file's fix as a single PR.
+     *
+     * When force=True, a fix in any status is accepted (not just ready).
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerWorkflowDelivery(data: WorkflowFixesTriggerWorkflowDeliveryData): CancelablePromise<WorkflowFixesTriggerWorkflowDeliveryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/deliver-for-workflow',
+            query: {
+                force: data.force
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Repo Delivery
+     * Deliver all ready fixes for a repo as a single multi-file PR.
+     *
+     * When force=True, fixes in any status are included (not just ready).
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerRepoDelivery(data: WorkflowFixesTriggerRepoDeliveryData): CancelablePromise<WorkflowFixesTriggerRepoDeliveryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/deliver-for-repo/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            query: {
+                force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Regenerate Fixes For Repo
+     * Discard a repo's regenerable fixes and re-trigger generation.
+     *
+     * A fix is regenerable when no worker is processing it and its PR, if any,
+     * was not merged — merged code changes were already applied. Fixes whose
+     * workflow file has no unresolved issues left in its latest analysis are
+     * kept: there is nothing to regenerate them from.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static regenerateFixesForRepo(data: WorkflowFixesRegenerateFixesForRepoData): CancelablePromise<WorkflowFixesRegenerateFixesForRepoResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/regenerate-for-repo/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Regenerate Fixes For Workflow
+     * Discard one workflow file's fix and re-trigger generation.
+     *
+     * Rejected while a worker is processing the fix, once its PR was merged
+     * (the code changes were already applied), and when the latest analysis
+     * has no unresolved issues left to regenerate from.
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static regenerateFixesForWorkflow(data: WorkflowFixesRegenerateFixesForWorkflowData): CancelablePromise<WorkflowFixesRegenerateFixesForWorkflowResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/regenerate-for-workflow/{fix_id}',
+            path: {
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Regenerate Failed Fix
+     * Retry a failed fix in place (``failed`` -> ``pending``), reusing the row.
+     *
+     * Unlike ``regenerate-for-workflow`` (which discards the row and creates a new
+     * one), this recovers a fix that failed generation/precheck without losing its
+     * identity or PR linkage. Only legal from ``failed``.
+     * @param data The data for the request.
+     * @param data.fixId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static regenerateFailedFix(data: WorkflowFixesRegenerateFailedFixData): CancelablePromise<WorkflowFixesRegenerateFailedFixResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/{fix_id}/regenerate',
+            path: {
+                fix_id: data.fixId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Sync Pr Statuses
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static syncPrStatuses(data: WorkflowFixesSyncPrStatusesData): CancelablePromise<WorkflowFixesSyncPrStatusesResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-fixes/sync-pr-status/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
+
+export class WorkflowScansService {
+    /**
+     * List Analyses
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.branch
+     * @param data.grade
+     * @param data.status
+     * @param data.skip
+     * @param data.limit
+     * @returns AnalysisPublic Successful Response
+     * @throws ApiError
+     */
+    public static listAnalyses(data: WorkflowScansListAnalysesData = {}): CancelablePromise<WorkflowScansListAnalysesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-scans/',
+            query: {
+                repo_id: data.repoId,
+                branch: data.branch,
+                grade: data.grade,
+                status: data.status,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Analysis
+     * @param data The data for the request.
+     * @param data.analysisId
+     * @returns AnalysisPublic Successful Response
+     * @throws ApiError
+     */
+    public static getAnalysis(data: WorkflowScansGetAnalysisData): CancelablePromise<WorkflowScansGetAnalysisResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow-scans/{analysis_id}',
+            path: {
+                analysis_id: data.analysisId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Analysis
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.branch
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerAnalysis(data: WorkflowScansTriggerAnalysisData): CancelablePromise<WorkflowScansTriggerAnalysisResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-scans/trigger/{repo_id}',
+            path: {
+                repo_id: data.repoId
+            },
+            query: {
+                branch: data.branch,
+                force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Reanalyze For Workflow
+     * Re-run static analysis for a single workflow file.
+     *
+     * Per-workflow analog of ``trigger_analysis`` (which is repo/branch-wide):
+     * the worker re-fetches and re-evaluates just this file on its own branch,
+     * consistent with the per-workflow fix (``regenerate-for-workflow``) and
+     * delivery (``deliver-for-workflow``) endpoints.
+     * @param data The data for the request.
+     * @param data.workflowFileId
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static reanalyzeForWorkflow(data: WorkflowScansReanalyzeForWorkflowData): CancelablePromise<WorkflowScansReanalyzeForWorkflowResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-scans/reanalyze-for-workflow/{workflow_file_id}',
+            path: {
+                workflow_file_id: data.workflowFileId
+            },
+            query: {
+                force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Reanalyze All
+     * Fan out a fresh static analysis across all enabled repositories.
+     *
+     * Same mechanism used automatically when a release ships new rules; exposed
+     * so operators can re-apply rules on demand without a redeploy.
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static reanalyzeAll(): CancelablePromise<WorkflowScansReanalyzeAllResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow-scans/reanalyze-all'
         });
     }
 }

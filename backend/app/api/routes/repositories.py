@@ -18,15 +18,15 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
-    Analysis,
-    AnalysisStatus,
     ExternalRepositoryCreate,
     OrgMember,
     Repository,
     RepositoryPublic,
+    ScanStatus,
     User,
     WorkflowFile,
     WorkflowFilePublic,
+    WorkflowScan,
     WorkflowSyncSummary,
 )
 from app.services.badge_signing import build_badge_svg_url
@@ -64,25 +64,27 @@ def _compute_repo_grade(
     skew the repo grade.
     """
     analyses = session.exec(
-        select(Analysis)
-        .join(WorkflowFile, Analysis.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id == repo_id)
+        select(WorkflowScan)
+        .join(WorkflowFile, WorkflowScan.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(Repository, WorkflowScan.repo_id == Repository.id)  # type: ignore[arg-type]
+        .where(WorkflowScan.repo_id == repo_id)
         .where(WorkflowFile.branch == Repository.default_branch)
         # Exclude workflow files deleted from the repo: their stale analysis
         # must not skew the grade.
         .where(col(WorkflowFile.deleted_at).is_(None))
-        .where(Analysis.status == AnalysisStatus.completed)
-        .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .where(WorkflowScan.score.isnot(None))  # type: ignore[union-attr]
+        .order_by(
+            col(WorkflowScan.workflow_file_id), col(WorkflowScan.created_at).desc()
+        )
     ).all()
 
     avg, count = average_latest_scores(list(analyses))
     if avg is None:
         has_no_workflows = session.exec(
-            select(Analysis)
-            .where(Analysis.repo_id == repo_id)
-            .where(Analysis.status == AnalysisStatus.no_workflows)
+            select(WorkflowScan)
+            .where(WorkflowScan.repo_id == repo_id)
+            .where(WorkflowScan.status == ScanStatus.no_targets)
             .limit(1)
         ).first()
         grade = "N/A" if has_no_workflows else "-"
@@ -103,9 +105,9 @@ def _compute_grades_batch(
     no_workflows_repo_ids: set[uuid.UUID] = set()
     if repos_without_grades:
         rows = session.exec(
-            select(Analysis.repo_id)
-            .where(Analysis.repo_id.in_(repos_without_grades))  # type: ignore[attr-defined]
-            .where(Analysis.status == AnalysisStatus.no_workflows)
+            select(WorkflowScan.repo_id)
+            .where(WorkflowScan.repo_id.in_(repos_without_grades))  # type: ignore[attr-defined]
+            .where(WorkflowScan.status == ScanStatus.no_targets)
             .distinct()
         ).all()
         no_workflows_repo_ids = set(rows)
@@ -247,7 +249,7 @@ def get_repository(
 def list_workflow_files(
     repo_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,  # noqa: ARG001
+    current_user: CurrentUser,
     branch: str | None = None,
 ) -> list[WorkflowFilePublic]:
     repo = _get_repo_for_user(repo_id, session, current_user)
@@ -365,16 +367,16 @@ def list_repository_branches(
 ) -> list[str]:
     from sqlmodel import col
 
-    from app.models import Analysis, AnalysisStatus
+    from app.models import ScanStatus, WorkflowScan
 
     _get_repo_for_user(repo_id, session, current_user)
     branches = session.exec(
-        select(col(Analysis.branch))
-        .where(Analysis.repo_id == repo_id)
-        .where(Analysis.status == AnalysisStatus.completed)
-        .where(col(Analysis.branch).isnot(None))
+        select(col(WorkflowScan.branch))
+        .where(WorkflowScan.repo_id == repo_id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .where(col(WorkflowScan.branch).isnot(None))
         .distinct()
-        .order_by(col(Analysis.branch))
+        .order_by(col(WorkflowScan.branch))
     ).all()
     return [b for b in branches if b]
 

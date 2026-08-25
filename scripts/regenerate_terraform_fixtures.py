@@ -80,6 +80,11 @@ def _violation_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "file_path": raw["file_path"],
         "line_start": raw["line_start"],
         "line_end": raw["line_end"],
+        # Part of the fingerprint, so a recording that drops it replays a
+        # different dedup key than production would compute. The security-group
+        # rules discriminate on the port range and CIDR, which is what keeps a
+        # group open on three ports from collapsing onto one row.
+        "discriminator": raw.get("discriminator"),
     }
 
 
@@ -91,11 +96,14 @@ def _render(case_dir: Path) -> str:
         (_violation_payload(v) for v in raw_violations),
         key=lambda v: (v["rule_slug"], v["resource_address"], v["message"]),
     )
-    # One TerraformFinding per (rule, resource_address): the fingerprint
-    # (app/services/deduplication.py) keys on exactly that pair, so a rule
-    # that fires twice on one resource — terragoat's security group, open on
-    # both 22 and 80 — collapses to a single finding.
-    fingerprints = {(v["rule_slug"], v["resource_address"]) for v in violations}
+    # One TerraformFinding per (rule, resource_address, discriminator): the
+    # fingerprint (app/services/deduplication.py) keys on exactly that triple.
+    # A rule that fires twice on one resource collapses only when it supplies
+    # no discriminator to tell the two apart — which is what the security-group
+    # rules used to do, and what made a group open on three ports report one.
+    fingerprints = {
+        (v["rule_slug"], v["resource_address"], v["discriminator"]) for v in violations
+    }
     payload = {
         "source": SOURCES[case_dir.name],
         "files": [name for name, _ in files],
