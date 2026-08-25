@@ -11,6 +11,10 @@
 
 * Fix the false positives, dedup bugs and coverage gaps found by the Rego rule audit. PR [#239](https://github.com/TheoGoudout/greensecops/pull/239) by [@TheoGoudout](https://github.com/TheoGoudout).
 
+### Refactors
+
+* refactor: one vocabulary, one engine registry, one scan pipeline. PR [#240](https://github.com/TheoGoudout/greensecops/pull/240) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ### Internal
 
 * Revert the multi-ecosystem group; guard the Playwright split instead. PR [#233](https://github.com/TheoGoudout/greensecops/pull/233) by [@TheoGoudout](https://github.com/TheoGoudout).
