@@ -5,6 +5,12 @@ growing monolith). Every class is re-exported here so external imports
 how the definitions are organized internally.
 """
 
+from .ansible import (
+    AnsibleFinding,
+    AnsibleFix,
+    AnsibleProject,
+    AnsibleScan,
+)
 from .base import get_datetime_utc
 from .billing import (
     BillingSubscription,
@@ -48,6 +54,10 @@ from .workflow_fix import WorkflowFix
 from .workflow_scan import WorkflowScan
 
 __all__ = [
+    "AnsibleScan",
+    "AnsibleProject",
+    "AnsibleFix",
+    "AnsibleFinding",
     "get_datetime_utc",
     "UserBase",
     "UserCreate",

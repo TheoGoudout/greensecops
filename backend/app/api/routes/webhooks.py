@@ -214,6 +214,14 @@ def _handle_push_event(
         ScanTrigger.webhook_push,
         changed_paths=None if (is_new_branch or forced) else changed_paths,
     )
+    eh.enqueue_ansible_scans(
+        session,
+        repo,
+        branch,
+        commit_sha,
+        ScanTrigger.webhook_push,
+        changed_paths=None if (is_new_branch or forced) else changed_paths,
+    )
 
 
 def _flag_externally_modified_fix_branch(

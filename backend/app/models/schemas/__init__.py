@@ -9,6 +9,14 @@ Everything is re-exported here, so ``from app.models.schemas import X`` and
 ``from app.models import X`` are unchanged.
 """
 
+from .ansible import (
+    AnsibleFilePublic,
+    AnsibleFindingPublic,
+    AnsibleFixPublic,
+    AnsibleProjectCreate,
+    AnsibleProjectPublic,
+    AnsibleScanPublic,
+)
 from .base import (
     FileFixPublicBase,
     FilePublicBase,
@@ -112,6 +120,12 @@ from .workflow import (
 )
 
 __all__ = [
+    "AnsibleScanPublic",
+    "AnsibleProjectPublic",
+    "AnsibleProjectCreate",
+    "AnsibleFixPublic",
+    "AnsibleFindingPublic",
+    "AnsibleFilePublic",
     "AIProviderInfo",
     "AIProvidersPublic",
     "AnalysisPublic",

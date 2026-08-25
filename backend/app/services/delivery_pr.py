@@ -50,6 +50,14 @@ def tf_fix_branch(terraform_root_id: uuid.UUID) -> str:
 DOCKER_FIX_BRANCH_RE = re.compile(r"greensecops/docker-([0-9a-f]{8})$")
 
 
+ANSIBLE_FIX_BRANCH_RE = re.compile(r"^greensecops/ansible-([0-9a-f]{8})$")
+
+
+def ansible_fix_branch(ansible_project_id: uuid.UUID) -> str:
+    """The branch an Ansible project's fixes are delivered on."""
+    return f"greensecops/ansible-{str(ansible_project_id)[:8]}"
+
+
 def docker_fix_branch(docker_target_id: uuid.UUID) -> str:
     """Deterministic branch for a Docker target's fix PR (all its files)."""
     return f"greensecops/docker-{str(docker_target_id)[:8]}"

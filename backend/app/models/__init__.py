@@ -1,6 +1,10 @@
 from sqlmodel import SQLModel
 
 from .db import (
+    AnsibleFinding,
+    AnsibleFix,
+    AnsibleProject,
+    AnsibleScan,
     BillingSubscription,
     BillingUsageRecord,
     BillingWebhookEvent,
@@ -76,6 +80,12 @@ from .schemas import (
     AIProviderInfo,
     AIProvidersPublic,
     AnalysisPublic,
+    AnsibleFilePublic,
+    AnsibleFindingPublic,
+    AnsibleFixPublic,
+    AnsibleProjectCreate,
+    AnsibleProjectPublic,
+    AnsibleScanPublic,
     BillingSubscriptionPublic,
     CheckoutRequest,
     CheckoutSessionPublic,
@@ -146,6 +156,16 @@ from .schemas import (
 )
 
 __all__ = [
+    "AnsibleScanPublic",
+    "AnsibleProjectPublic",
+    "AnsibleProjectCreate",
+    "AnsibleFixPublic",
+    "AnsibleFindingPublic",
+    "AnsibleFilePublic",
+    "AnsibleScan",
+    "AnsibleProject",
+    "AnsibleFix",
+    "AnsibleFinding",
     "SQLModel",
     # db
     "get_datetime_utc",

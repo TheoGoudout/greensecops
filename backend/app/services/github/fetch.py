@@ -34,6 +34,7 @@ from app.services.github.app_client import GitHubAppClient
 if TYPE_CHECKING:
     from app.models import Repository
     from app.services.github.app_client import (
+        AnsibleFileContent,
         DockerFileContent,
         GitHubAppClient,
         TerraformFileContent,
@@ -76,6 +77,17 @@ def fetch_docker_files(
     """The Dockerfiles and Compose files under ``root_path`` at ``ref``."""
     return with_client(
         lambda client: client.fetch_docker_files(
+            repo.installation_id, repo.full_name, root_path, ref=ref
+        )
+    )
+
+
+def fetch_ansible_files(
+    repo: Repository, root_path: str, ref: str | None = None
+) -> list[AnsibleFileContent]:
+    """The playbooks, role files, variables and galaxy requirements under ``root_path``."""
+    return with_client(
+        lambda client: client.fetch_ansible_files(
             repo.installation_id, repo.full_name, root_path, ref=ref
         )
     )

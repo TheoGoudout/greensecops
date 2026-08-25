@@ -10,6 +10,7 @@ from ..enums import CIStatus, PullRequestState, ReviewDecision
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
+    from .ansible import AnsibleFix
     from .docker import DockerFix
     from .repository import Repository
     from .terraform import TerraformFix
@@ -61,5 +62,6 @@ class PullRequest(SQLModel, table=True):
     updated_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     repository: Optional["Repository"] = Relationship(back_populates="pull_requests")
     fixes: list["WorkflowFix"] = Relationship(back_populates="pull_request")
+    ansible_fixes: list["AnsibleFix"] = Relationship(back_populates="pull_request")
     terraform_fixes: list["TerraformFix"] = Relationship(back_populates="pull_request")
     docker_fixes: list["DockerFix"] = Relationship(back_populates="pull_request")

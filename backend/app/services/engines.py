@@ -47,6 +47,10 @@ from sqlalchemy import and_
 from sqlmodel import col
 
 from app.models import (
+    AnsibleFinding,
+    AnsibleFix,
+    AnsibleProject,
+    AnsibleScan,
     CloudAccount,
     CloudAccountStatus,
     CloudFinding,
@@ -69,7 +73,11 @@ from app.models import (
     WorkflowFix,
     WorkflowScan,
 )
-from app.services.delivery_pr import docker_fix_branch, tf_fix_branch
+from app.services.delivery_pr import (
+    ansible_fix_branch,
+    docker_fix_branch,
+    tf_fix_branch,
+)
 from app.services.terraform.hcl_parser import derive_module_path
 
 
@@ -201,6 +209,33 @@ DOCKER_ENGINE = EngineSpec(
 )
 
 
+ANSIBLE_ENGINE = EngineSpec(
+    engine=Engine.ansible,
+    label="Ansible",
+    target_label="Ansible project",
+    target_model=AnsibleProject,
+    target_id_field="ansible_project_id",
+    finding_model=AnsibleFinding,
+    fix_model=AnsibleFix,
+    scan_model=AnsibleScan,
+    rule_domain=RuleDomain.iac_ansible,
+    finding_constraint="uq_ansible_finding_project_fingerprint",
+    # Like Docker and unlike Terraform: an Ansible rule fires on a file, and the
+    # task within it is carried as a column rather than as identity. The task's
+    # name is what keeps two findings of one rule in one file apart, and the
+    # rules emit it as the violation's `discriminator`.
+    fingerprint_locator=lambda v: v.file_path,
+    finding_columns=lambda v, _target: {"task_name": v.task_name},
+    fix_branch=ansible_fix_branch,
+    files_description="Ansible playbooks and roles",
+    # A project is N independent files, so pooling their violations would floor
+    # a large role tree's grade the way it did Docker's — see
+    # `services/scan_runner._score`.
+    scores_per_file=True,
+    tracks_file_count=True,
+)
+
+
 # ─── Dashboard aggregation ────────────────────────────────────────────────────────
 
 
@@ -304,6 +339,24 @@ OVERVIEW_SPECS: list[OverviewSpec] = [
         target_extra=None,
     ),
     OverviewSpec(
+        key=Engine.ansible,
+        section=OverviewSection.infra,
+        label="Ansible",
+        target_model=AnsibleProject,
+        scan_model=AnsibleScan,
+        finding_model=AnsibleFinding,
+        fix_model=AnsibleFix,
+        scan_target_fk=AnsibleScan.ansible_project_id,
+        scan_completed=ScanStatus.completed,
+        scan_failed=ScanStatus.failed,
+        scan_orders_by_completed_at=False,
+        finding_target_fk=AnsibleFinding.ansible_project_id,
+        finding_scan_fk=AnsibleFinding.scan_id,
+        target_enabled=col(AnsibleProject.enabled).is_(True),
+        target_join=None,
+        target_extra=None,
+    ),
+    OverviewSpec(
         key=Engine.cloud,
         section=OverviewSection.infra,
         label="Cloud posture",
@@ -329,7 +382,7 @@ OVERVIEW_SPECS: list[OverviewSpec] = [
 # A silent disagreement would show the dashboard one engine's findings under
 # another's heading, which no test would notice.
 _FILE_FIX_SPECS: dict[Engine, EngineSpec] = {
-    spec.engine: spec for spec in (TERRAFORM_ENGINE, DOCKER_ENGINE)
+    spec.engine: spec for spec in (TERRAFORM_ENGINE, DOCKER_ENGINE, ANSIBLE_ENGINE)
 }
 
 for _ov in OVERVIEW_SPECS:

@@ -57,6 +57,14 @@ class DockerFileContent:
     sha: str
 
 
+@dataclass
+class AnsibleFileContent:
+    path: str
+    content: str
+    content_hash: str
+    sha: str
+
+
 # A pathological repo (a huge module tree, or a committed .terraform/ provider
 # cache) must not turn one scan into thousands of GitHub API calls.
 _TERRAFORM_MAX_FILES = 200
@@ -72,6 +80,13 @@ _TERRAFORM_SKIP_DIRS = {".terraform", ".git"}
 _DOCKER_MAX_FILES = 200
 _DOCKER_MAX_DEPTH = 12
 _DOCKER_SKIP_DIRS = {".git", "node_modules", "vendor", "dist", "build", ".venv"}
+
+# Ansible classification needs the file's *content*, not just its name, so this
+# walk decodes every YAML file under the root before deciding. That is a real
+# cost on a repository with a lot of unrelated YAML, and it is why the file cap
+# is lower than Docker's: the cap bounds bytes downloaded, not just rows kept.
+_ANSIBLE_MAX_FILES = 150
+_ANSIBLE_MAX_DEPTH = 12
 
 
 @dataclass
@@ -617,6 +632,82 @@ class GitHubAppClient:
 
             # A target rooted at "" is the repository root; PyGithub wants ""
             # for that, which is what an empty root_path already is.
+            _walk(root_path, 0)
+            return results
+
+        return await asyncio.to_thread(_fetch)
+
+    async def fetch_ansible_files(
+        self,
+        installation_id: int | None,
+        full_name: str,
+        root_path: str,
+        ref: str | None = None,
+    ) -> list[AnsibleFileContent]:
+        """Recursively fetch the Ansible files under ``root_path``.
+
+        Which files count is decided by
+        ``services.ansible.discovery.classify_ansible_file`` rather than by a
+        filename test, so the fetcher and the scanner can never disagree about
+        what an Ansible file is — a mismatch would silently drop files from a
+        scan. Unlike the Docker walk, that decision needs the content, so this
+        downloads every ``.yml``/``.yaml`` it meets and keeps the ones that
+        classify.
+
+        Returns ``[]`` if ``root_path`` doesn't exist at ``ref``.
+        """
+        from app.services.ansible.discovery import (
+            SKIP_DIRS,
+            classify_ansible_file,
+        )
+
+        if installation_id is not None:
+            token: str | None = await self.get_installation_token(installation_id)
+        else:
+            token = None
+
+        def _fetch() -> list[AnsibleFileContent]:
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            repo = gh.get_repo(full_name)
+            results: list[AnsibleFileContent] = []
+
+            def _walk(path: str, depth: int) -> None:
+                if depth > _ANSIBLE_MAX_DEPTH or len(results) >= _ANSIBLE_MAX_FILES:
+                    return
+                try:
+                    contents = (
+                        repo.get_contents(path, ref=ref)
+                        if ref
+                        else repo.get_contents(path)
+                    )
+                except GithubException as exc:
+                    if exc.status == 404:
+                        return
+                    raise
+                if not isinstance(contents, list):
+                    contents = [contents]
+                for cf in contents:
+                    if len(results) >= _ANSIBLE_MAX_FILES:
+                        return
+                    if cf.type == "dir":
+                        if cf.name in SKIP_DIRS or cf.name.startswith("."):
+                            continue
+                        _walk(cf.path, depth + 1)
+                    elif cf.name.lower().endswith((".yml", ".yaml")):
+                        decoded = cf.decoded_content.decode("utf-8", errors="replace")
+                        if classify_ansible_file(cf.path, decoded) is None:
+                            continue
+                        results.append(
+                            AnsibleFileContent(
+                                path=cf.path,
+                                content=decoded,
+                                content_hash=hashlib.sha256(
+                                    decoded.encode()
+                                ).hexdigest(),
+                                sha=cf.sha,
+                            )
+                        )
+
             _walk(root_path, 0)
             return results
 
