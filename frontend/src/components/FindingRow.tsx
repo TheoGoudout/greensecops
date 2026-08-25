@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { IssueCategory, IssueSeverity } from "@/client"
+import type { Category, Severity } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
@@ -10,8 +10,8 @@ import { SeverityChip } from "@/components/SeverityChip"
  * satisfy this without being named here.
  */
 interface CommonFinding {
-  severity: IssueSeverity
-  category: IssueCategory
+  severity: Severity
+  category: Category
   rule_slug: string
   message: string
 }

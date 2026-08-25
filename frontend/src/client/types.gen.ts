@@ -19,19 +19,15 @@ export type AnalysisPublic = {
     workflow_file_path?: (string | null);
     repo_full_name?: (string | null);
     content_hash: string;
-    status: AnalysisStatus;
+    status: ScanStatus;
     score?: (number | null);
     grade?: (string | null);
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     branch?: (string | null);
     commit_sha?: (string | null);
     created_at?: (string | null);
     completed_at?: (string | null);
 };
-
-export type AnalysisStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_workflows';
-
-export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
 
 export type BatchFixRequest = {
     issue_ids?: (Array<(string)> | null);
@@ -78,6 +74,11 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
+/**
+ * Which axis a rule grades on. Also the directory a .rego file lives in.
+ */
+export type Category = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
+
 export type CheckoutRequest = {
     tier: UserTier;
 };
@@ -123,8 +124,8 @@ export type CloudFindingPublic = {
     scan_id: string;
     rule_id: string;
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     message: string;
     context?: (string | null);
     status: FindingStatus;
@@ -142,7 +143,7 @@ export type CloudProvider = 'aws';
 export type CloudScanPublic = {
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     score?: (number | null);
     grade?: (string | null);
     error_message?: (string | null);
@@ -220,8 +221,8 @@ export type DockerFindingPublic = {
     scan_id: string;
     rule_id: string;
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     message: string;
     context?: (string | null);
     status: FindingStatus;
@@ -273,8 +274,8 @@ export type DockerRuntimeFindingPublic = {
     telemetry_id: string;
     rule_slug: string;
     rule_title?: (string | null);
-    severity?: (IssueSeverity | null);
-    category?: (IssueCategory | null);
+    severity?: (Severity | null);
+    category?: (Category | null);
     evidence: string;
     recommendation: string;
     created_at?: (string | null);
@@ -287,7 +288,7 @@ export type DockerRuntimeFixRequest = {
 export type DockerScanPublic = {
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     score?: (number | null);
     grade?: (string | null);
     error_message?: (string | null);
@@ -346,6 +347,20 @@ export type DynamicEnrichmentPublic = {
 };
 
 /**
+ * Which analysis engine produced something.
+ *
+ * The one name for an engine across the whole system: usage records tag
+ * themselves with it, the dashboard overview keys its stat blocks by it, and
+ * ``services/engines.EngineSpec`` is looked up by it. There used to be three
+ * of these enums disagreeing about whether the first one is called ``ci`` or
+ * ``workflow``; it is ``workflow``, after the ``WorkflowFile`` rows it scans.
+ *
+ * Not the same axis as :class:`RuleDomain`, which names a Rego package — the
+ * mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
+ */
+export type Engine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry';
+
+/**
  * How much of what could be scanned actually has been.
  *
  * ``enabled`` means different things per engine — a bool column for Docker
@@ -391,7 +406,7 @@ export type EngineFreshnessStat = {
 };
 
 export type EngineOverview = {
-    engine: OverviewEngineKey;
+    engine: Engine;
     section: OverviewSection;
     label: string;
     coverage: EngineCoverageStat;
@@ -422,25 +437,40 @@ export type ExternalRepositoryCreate = {
     installation_id?: (number | null);
 };
 
-export type FindingResolutionReason = 'no_longer_detected' | 'target_removed';
+/**
+ * Why a finding stopped being open.
+ *
+ * An attribute of the ``resolved`` state, not a state of its own. The union of
+ * what the engines can observe: the first two are available to all of them,
+ * the rest need a file or a pull request and so only arise on engines that
+ * have one.
+ */
+export type FindingResolutionReason = 'no_longer_detected' | 'target_removed' | 'file_removed' | 'merged' | 'branch_deleted';
 
 /**
- * Lifecycle of a TerraformFinding or CloudFinding.
+ * Derived lifecycle of a rule violation, on any engine.
  *
- * Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
- * findings in this delivery have no fix/PR concept yet (see plan Phase 7),
- * so the application sets this column directly alongside resolved_at/
- * ignored_at rather than needing trigger-derived state.
+ * For CI-workflow findings this column is computed by a database trigger from
+ * ``ignored_at``, ``resolved_at`` and ``fix_id`` (migrations ``0022``/``0026``,
+ * renamed in ``0053``); ``ignored`` takes precedence, so a user-dismissed
+ * violation stays muted regardless of fix or resolve activity. The other
+ * engines set it directly through ``FindingMachine``.
+ *
+ * ``fix_in_progress`` arrived with the merge of the old ``FindingStatus``: only
+ * the CI engine reaches it today, because only its findings carry a ``fix_id``
+ * — the other engines key a fix on ``(target, file_path)`` instead. It is
+ * declared here rather than in a CI-only enum because the state is about the
+ * finding, not about which engine found it.
  */
-export type FindingStatus = 'open' | 'resolved' | 'ignored';
+export type FindingStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
 export type FixIssueSummary = {
     id: string;
     rule_slug?: (string | null);
-    severity?: (IssueSeverity | null);
-    category?: (IssueCategory | null);
+    severity?: (Severity | null);
+    category?: (Category | null);
     message?: (string | null);
     line_start?: (number | null);
     line_end?: (number | null);
@@ -512,10 +542,8 @@ export type InvoicePublic = {
  */
 export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 
-export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
-
 export type IssueCategoryStat = {
-    category: IssueCategory;
+    category: Category;
     open: number;
     resolved: number;
     critical_open: number;
@@ -526,40 +554,22 @@ export type IssuePublic = {
     analysis_id: string;
     rule_id: string;
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     line_start?: (number | null);
     line_end?: (number | null);
     message: string;
     context?: (string | null);
-    status: IssueStatus;
+    status: FindingStatus;
     created_at?: (string | null);
     resolved_at?: (string | null);
-    resolution_reason?: (IssueResolutionReason | null);
+    resolution_reason?: (FindingResolutionReason | null);
     needs_manual_work?: boolean;
     manual_work_note?: (string | null);
     fix_id?: (string | null);
     fix_status?: (FixStatus | null);
     workflow_file_path?: (string | null);
 };
-
-/**
- * Why an issue was resolved — an attribute of the ``resolved`` state.
- *
- * Kept as a column rather than splitting ``resolved`` into several states so
- * the issue graph stays small. Set alongside ``resolved_at`` and cleared when
- * a resolved violation recurs.
- *
- * - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
- * disabled/removed rule — the two cannot be told apart after the fact).
- * - ``file_removed``: the workflow file was deleted or renamed.
- * - ``merged``: the fix PR was merged, applying the change to the branch.
- * - ``branch_deleted``: the branch carrying the issue's workflow file was
- * deleted; the violation no longer exists anywhere to fix.
- */
-export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged' | 'branch_deleted';
-
-export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * Exact issue counts, computed by SQL aggregation rather than fetched and
@@ -572,17 +582,6 @@ export type IssueStatsPublic = {
     by_category: Array<IssueCategoryStat>;
     by_repo?: Array<RepoIssueStats>;
 };
-
-/**
- * Derived lifecycle of an issue.
- *
- * This value is a persisted column computed by a database trigger from
- * ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
- * migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
- * states so a user-dismissed violation stays muted regardless of fix/resolve
- * activity.
- */
-export type IssueStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
 export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
@@ -637,16 +636,6 @@ export type OssApplicationReview = {
  * Review state of a request for the granted open-source plan.
  */
 export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
-
-/**
- * Which analysis engine a block of dashboard overview stats describes.
- *
- * A presentation-layer key, not a persisted column — ``Rule.domain`` stays
- * the DB-level discriminator. The two exist because they don't line up:
- * ``container_docker`` and ``container_runtime`` rules both produce findings
- * on the Docker engine, so one key covers two domains.
- */
-export type OverviewEngineKey = 'ci' | 'docker' | 'terraform' | 'cloud';
 
 export type OverviewPublic = {
     generated_at: string;
@@ -738,7 +727,7 @@ export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
  * are grouped per repo.
  */
 export type RepoCategoryStat = {
-    category: IssueCategory;
+    category: Category;
     open: number;
     critical_open: number;
     score?: (number | null);
@@ -753,7 +742,7 @@ export type RepoCategoryStat = {
  * ``score``/``grade`` here are the repo's own overall grade (same values as
  * ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
  * doesn't need a second lookup to size the radar's "no issues" fallback.
- * Each entry in ``categories`` covers every ``IssueCategory``, including
+ * Each entry in ``categories`` covers every ``Category``, including
  * categories with zero open issues, so their scores average out to exactly
  * the repo's overall score (see ``compute_category_scores``).
  */
@@ -789,8 +778,8 @@ export type ReviewDecision = 'approved' | 'changes_requested' | 'review_required
 export type RulePublic = {
     id: string;
     slug: string;
-    category: IssueCategory;
-    severity: IssueSeverity;
+    category: Category;
+    severity: Severity;
     title: string;
     description: string;
     enabled: boolean;
@@ -809,25 +798,85 @@ export type SamplePayload = {
 };
 
 /**
- * Lifecycle of a TerraformScan or CloudScan.
+ * Lifecycle of one engine's run over one target.
  *
- * Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
- * value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
- * files under this root" and "no resources of the scanned types in this
- * account/region".
+ * Shared by every scan table. There used to be a second, identical enum called
+ * ``ScanStatus`` for the CI engine alone, differing in exactly one member:
+ * it spelled the empty case ``no_workflows`` where this one says
+ * ``no_targets``. That is workflow-specific vocabulary for a case every engine
+ * has — no ``.tf`` files under this root, no resources of the scanned types in
+ * this account, no workflow files in this repository — so the general name
+ * won and migration 0053 rewrote the rows.
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
+
+/**
+ * How bad a rule violation is. Shared by every engine's findings.
+ */
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * Open/resolved finding counts for one severity.
  *
- * Emitted for every ``IssueSeverity`` including zeros, so the frontend can
+ * Emitted for every ``Severity`` including zeros, so the frontend can
  * render a fixed-segment severity bar without gap logic.
  */
 export type SeverityStat = {
-    severity: IssueSeverity;
+    severity: Severity;
     open: number;
     resolved: number;
+};
+
+/**
+ * The wire shape of one server-sent event.
+ *
+ * Every event is a flat JSON object: an ``event`` discriminant plus whatever
+ * the emitting factory in ``services/events/schemas.py`` put beside it. That
+ * payload was a bare ``dict[str, Any]`` and never reached OpenAPI, so the
+ * frontend read it by hand — ``data.grade as string | undefined``, forty times
+ * over in ``hooks/useRepoEvents.ts``. A renamed field broke silently at
+ * runtime, in a browser, with nothing to catch it.
+ *
+ * Declaring it here puts the field names in the generated client, which turns
+ * that class of break into a TypeScript error.
+ *
+ * Every field but ``event`` is optional, and deliberately so: this is a union
+ * of what ~30 distinct signals carry, not a claim that any one of them carries
+ * all of it. Which fields a given signal actually populates is documented on
+ * its factory function. The alternative — a discriminated union with one model
+ * per signal — buys per-signal precision at the cost of thirty-odd models to
+ * keep in step with their factories, and the consumer switches on ``event``
+ * anyway.
+ */
+export type SSEEventPublic = {
+    event: SSESignal;
+    org_id?: (string | null);
+    repo_id?: (string | null);
+    repo_ids?: (Array<(string)> | null);
+    analysis_id?: (string | null);
+    fix_id?: (string | null);
+    fix_ids?: (Array<(string)> | null);
+    issue_ids?: (Array<(string)> | null);
+    telemetry_run_id?: (string | null);
+    installation_id?: (number | null);
+    branch?: (string | null);
+    trigger?: (string | null);
+    score?: (number | null);
+    grade?: (string | null);
+    issues_count?: (number | null);
+    error?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    org_name?: (string | null);
+    repo_count?: (number | null);
+    repos_disabled?: (number | null);
+    enabled?: (boolean | null);
+    tier?: (string | null);
+    status?: (string | null);
+    meter?: (string | null);
+    message?: (string | null);
 };
 
 export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.completed' | 'analysis.failed' | 'analysis.skipped' | 'analysis.no_workflows' | 'fix.skipped' | 'fix.pending' | 'fix.generating' | 'fix.ready' | 'fix.delivering' | 'fix.delivered' | 'fix.failed' | 'fix.rejected' | 'fix.landed' | 'pr.opened' | 'pr.updated' | 'pr.closed' | 'pr.merged' | 'installation.syncing' | 'installation.synced' | 'installation.created' | 'installation.deleted' | 'installation.suspended' | 'installation.unsuspended' | 'installation.updated' | 'repository.added' | 'repository.disabled' | 'repository.toggled' | 'repository.action_pr_opened' | 'repository.suspended' | 'repository.archived' | 'repository.inaccessible' | 'repository.restored' | 'dynamic.queued' | 'dynamic.running' | 'dynamic.enriched' | 'dynamic.failed' | 'analysis.quota_exceeded' | 'subscription.activated' | 'subscription.past_due' | 'subscription.unpaid' | 'subscription.canceled' | 'subscription.updated';
@@ -919,8 +968,8 @@ export type TerraformFindingPublic = {
     scan_id: string;
     rule_id: string;
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     message: string;
     context?: (string | null);
     status: FindingStatus;
@@ -980,7 +1029,7 @@ export type TerraformRootPublic = {
 export type TerraformScanPublic = {
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     score?: (number | null);
     grade?: (string | null);
     error_message?: (string | null);
@@ -1003,8 +1052,8 @@ export type TopRuleStat = {
     rule_id: string;
     slug: string;
     title: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     open: number;
 };
 
@@ -1023,11 +1072,15 @@ export type UsageBreakdownPublic = {
 };
 
 /**
- * Which engine produced a usage record.
+ * Which engine produced a usage record, plus one non-engine sentinel.
  *
  * Every one of these debits the same shared pool; the tag exists so a user
  * can see *where* their allowance went, and so tests can assert that each
  * engine is actually metered.
+ *
+ * Its engine members are :class:`Engine`'s, spelled out rather than generated
+ * so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
+ * fails at import if the two ever drift.
  */
 export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
 
@@ -1135,46 +1188,6 @@ export type WorkflowFilePublic = {
     branch?: (string | null);
     raw_content?: (string | null);
 };
-
-export type AnalysesListAnalysesData = {
-    branch?: (string | null);
-    grade?: (string | null);
-    limit?: number;
-    repoId?: (string | null);
-    skip?: number;
-    status?: (AnalysisStatus | null);
-};
-
-export type AnalysesListAnalysesResponse = (Array<AnalysisPublic>);
-
-export type AnalysesGetAnalysisData = {
-    analysisId: string;
-};
-
-export type AnalysesGetAnalysisResponse = (AnalysisPublic);
-
-export type AnalysesTriggerAnalysisData = {
-    branch?: (string | null);
-    force?: boolean;
-    repoId: string;
-};
-
-export type AnalysesTriggerAnalysisResponse = ({
-    [key: string]: (string);
-});
-
-export type AnalysesReanalyzeForWorkflowData = {
-    force?: boolean;
-    workflowFileId: string;
-};
-
-export type AnalysesReanalyzeForWorkflowResponse = ({
-    [key: string]: (string);
-});
-
-export type AnalysesReanalyzeAllResponse = ({
-    [key: string]: (string);
-});
 
 export type AuthGithubCallbackData = {
     formData: Body_auth_github_callback;
@@ -1430,6 +1443,8 @@ export type DockerTriggerDockerDeliveryResponse = ({
 
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
+export type EventsGetSseEventSchemaResponse = (SSEEventPublic);
+
 export type EventsCreateSseTicketResponse = ({
     [key: string]: (string | number);
 });
@@ -1440,94 +1455,6 @@ export type EventsStreamEventsData = {
 
 export type EventsStreamEventsResponse = (unknown);
 
-export type FixesListFixesData = {
-    branch?: (string | null);
-    limit?: number;
-    repoId?: (string | null);
-    skip?: number;
-    status?: (FixStatus | null);
-};
-
-export type FixesListFixesResponse = (Array<FixPublic>);
-
-export type FixesListPullRequestsData = {
-    repoId: string;
-};
-
-export type FixesListPullRequestsResponse = (Array<PullRequestPublic>);
-
-export type FixesGetFixData = {
-    fixId: string;
-};
-
-export type FixesGetFixResponse = (FixPublic);
-
-export type FixesRejectFixData = {
-    fixId: string;
-};
-
-export type FixesRejectFixResponse = (void);
-
-export type FixesTriggerFixGenerationForRepoData = {
-    force?: boolean;
-    repoId: string;
-    requestBody?: BatchFixRequest;
-};
-
-export type FixesTriggerFixGenerationForRepoResponse = ({
-    [key: string]: (number);
-});
-
-export type FixesTriggerWorkflowDeliveryData = {
-    force?: boolean;
-    requestBody: WorkflowDeliverRequest;
-};
-
-export type FixesTriggerWorkflowDeliveryResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesTriggerRepoDeliveryData = {
-    force?: boolean;
-    repoId: string;
-};
-
-export type FixesTriggerRepoDeliveryResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesRegenerateFixesForRepoData = {
-    repoId: string;
-};
-
-export type FixesRegenerateFixesForRepoResponse = ({
-    [key: string]: (number);
-});
-
-export type FixesRegenerateFixesForWorkflowData = {
-    fixId: string;
-};
-
-export type FixesRegenerateFixesForWorkflowResponse = ({
-    [key: string]: (number);
-});
-
-export type FixesRegenerateFailedFixData = {
-    fixId: string;
-};
-
-export type FixesRegenerateFailedFixResponse = ({
-    [key: string]: (string);
-});
-
-export type FixesSyncPrStatusesData = {
-    repoId: string;
-};
-
-export type FixesSyncPrStatusesResponse = ({
-    [key: string]: (number);
-});
-
 export type InstallationsListInstallationsResponse = (Array<OrganizationPublic>);
 
 export type InstallationsSyncInstallationsData = {
@@ -1535,48 +1462,6 @@ export type InstallationsSyncInstallationsData = {
 };
 
 export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>);
-
-export type IssuesListIssuesData = {
-    analysisId?: (string | null);
-    branch?: (string | null);
-    category?: (IssueCategory | null);
-    includeIgnored?: boolean;
-    includeResolved?: boolean;
-    latestOnly?: boolean;
-    limit?: number;
-    repoId?: (string | null);
-    severity?: (IssueSeverity | null);
-    skip?: number;
-    unfixed?: boolean;
-};
-
-export type IssuesListIssuesResponse = (Array<IssuePublic>);
-
-export type IssuesGetIssueStatsData = {
-    branch?: (string | null);
-    latestOnly?: boolean;
-    repoId?: (string | null);
-};
-
-export type IssuesGetIssueStatsResponse = (IssueStatsPublic);
-
-export type IssuesGetIssueData = {
-    issueId: string;
-};
-
-export type IssuesGetIssueResponse = (IssuePublic);
-
-export type IssuesIgnoreIssueData = {
-    issueId: string;
-};
-
-export type IssuesIgnoreIssueResponse = (IssuePublic);
-
-export type IssuesUnignoreIssueData = {
-    issueId: string;
-};
-
-export type IssuesUnignoreIssueResponse = (IssuePublic);
 
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;
@@ -1690,7 +1575,7 @@ export type RepositoriesIntegrateActionResponse = ({
 });
 
 export type RulesListRulesData = {
-    category?: (IssueCategory | null);
+    category?: (Category | null);
     enabled?: (boolean | null);
     limit?: number;
     skip?: number;
@@ -1912,5 +1797,175 @@ export type WebhooksGithubWebhookData = {
 };
 
 export type WebhooksGithubWebhookResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFindingsListIssuesData = {
+    analysisId?: (string | null);
+    branch?: (string | null);
+    category?: (Category | null);
+    includeIgnored?: boolean;
+    includeResolved?: boolean;
+    latestOnly?: boolean;
+    limit?: number;
+    repoId?: (string | null);
+    severity?: (Severity | null);
+    skip?: number;
+    unfixed?: boolean;
+};
+
+export type WorkflowFindingsListIssuesResponse = (Array<IssuePublic>);
+
+export type WorkflowFindingsGetIssueStatsData = {
+    branch?: (string | null);
+    latestOnly?: boolean;
+    repoId?: (string | null);
+};
+
+export type WorkflowFindingsGetIssueStatsResponse = (IssueStatsPublic);
+
+export type WorkflowFindingsGetIssueData = {
+    issueId: string;
+};
+
+export type WorkflowFindingsGetIssueResponse = (IssuePublic);
+
+export type WorkflowFindingsIgnoreIssueData = {
+    issueId: string;
+};
+
+export type WorkflowFindingsIgnoreIssueResponse = (IssuePublic);
+
+export type WorkflowFindingsUnignoreIssueData = {
+    issueId: string;
+};
+
+export type WorkflowFindingsUnignoreIssueResponse = (IssuePublic);
+
+export type WorkflowFixesListFixesData = {
+    branch?: (string | null);
+    limit?: number;
+    repoId?: (string | null);
+    skip?: number;
+    status?: (FixStatus | null);
+};
+
+export type WorkflowFixesListFixesResponse = (Array<FixPublic>);
+
+export type WorkflowFixesListPullRequestsData = {
+    repoId: string;
+};
+
+export type WorkflowFixesListPullRequestsResponse = (Array<PullRequestPublic>);
+
+export type WorkflowFixesGetFixData = {
+    fixId: string;
+};
+
+export type WorkflowFixesGetFixResponse = (FixPublic);
+
+export type WorkflowFixesRejectFixData = {
+    fixId: string;
+};
+
+export type WorkflowFixesRejectFixResponse = (void);
+
+export type WorkflowFixesTriggerFixGenerationForRepoData = {
+    force?: boolean;
+    repoId: string;
+    requestBody?: BatchFixRequest;
+};
+
+export type WorkflowFixesTriggerFixGenerationForRepoResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowFixesTriggerWorkflowDeliveryData = {
+    force?: boolean;
+    requestBody: WorkflowDeliverRequest;
+};
+
+export type WorkflowFixesTriggerWorkflowDeliveryResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFixesTriggerRepoDeliveryData = {
+    force?: boolean;
+    repoId: string;
+};
+
+export type WorkflowFixesTriggerRepoDeliveryResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFixesRegenerateFixesForRepoData = {
+    repoId: string;
+};
+
+export type WorkflowFixesRegenerateFixesForRepoResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowFixesRegenerateFixesForWorkflowData = {
+    fixId: string;
+};
+
+export type WorkflowFixesRegenerateFixesForWorkflowResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowFixesRegenerateFailedFixData = {
+    fixId: string;
+};
+
+export type WorkflowFixesRegenerateFailedFixResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowFixesSyncPrStatusesData = {
+    repoId: string;
+};
+
+export type WorkflowFixesSyncPrStatusesResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowScansListAnalysesData = {
+    branch?: (string | null);
+    grade?: (string | null);
+    limit?: number;
+    repoId?: (string | null);
+    skip?: number;
+    status?: (ScanStatus | null);
+};
+
+export type WorkflowScansListAnalysesResponse = (Array<AnalysisPublic>);
+
+export type WorkflowScansGetAnalysisData = {
+    analysisId: string;
+};
+
+export type WorkflowScansGetAnalysisResponse = (AnalysisPublic);
+
+export type WorkflowScansTriggerAnalysisData = {
+    branch?: (string | null);
+    force?: boolean;
+    repoId: string;
+};
+
+export type WorkflowScansTriggerAnalysisResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowScansReanalyzeForWorkflowData = {
+    force?: boolean;
+    workflowFileId: string;
+};
+
+export type WorkflowScansReanalyzeForWorkflowResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowScansReanalyzeAllResponse = ({
     [key: string]: (string);
 });

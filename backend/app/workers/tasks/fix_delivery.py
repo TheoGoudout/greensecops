@@ -5,27 +5,30 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import redis.asyncio as aioredis
 from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
-    Fix,
     FixDeliveryMode,
     FixStatus,
     PullRequest,
     PullRequestState,
     Repository,
+    WorkflowFix,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github.app_client import GitHubAppClient
 from app.services.github.fix_delivery import (
     STALE_CONTENT_ERROR_CODE,
     FixDeliveryResult,
     FixDeliveryService,
 )
 from app.workers.celery_app import celery_app
+from app.workers.tasks.static_analysis import run_static_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +49,7 @@ def deliver_fixes_batch(
         if not repo:
             return {"status": "error", "detail": "repository_not_found"}
 
-        loaded = [session.get(Fix, uuid.UUID(fid)) for fid in fix_ids]
+        loaded = [session.get(WorkflowFix, uuid.UUID(fid)) for fid in fix_ids]
         fixes = [f for f in loaded if f and (force or f.status == FixStatus.ready)]
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
@@ -124,7 +127,7 @@ def deliver_fixes_batch(
         expected_base_contents: dict[str, str] = {}
         commit_messages: dict[str, str] = {}
         base_branch = repo.default_branch or "main"
-        deliverable: list[Fix] = []
+        deliverable: list[WorkflowFix] = []
         for fix in fixes:
             wf = fix.workflow_file
             if not wf or wf.path in seen:
@@ -145,7 +148,7 @@ def deliver_fixes_batch(
                 continue
             seen[wf.path] = (wf.path, fix.full_content)
             expected_base_contents[wf.path] = wf.raw_content
-            n_issues = len(fix.issues)
+            n_issues = len(fix.findings)
             commit_messages[wf.path] = (
                 f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {wf.path}"
             )
@@ -244,8 +247,6 @@ def deliver_fixes_batch(
                 )
             )
             if result.error_code == STALE_CONTENT_ERROR_CODE:
-                from app.workers.tasks.static_analysis import run_static_analysis
-
                 run_static_analysis.delay(
                     repo_id=repo_id_str,
                     branch=base_branch,
@@ -270,10 +271,6 @@ def deliver_fixes_batch(
 
 @asynccontextmanager
 async def _delivery_service() -> AsyncGenerator[FixDeliveryService, None]:
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
 
     r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:
@@ -323,19 +320,18 @@ async def _deliver_batch(
         )
 
 
-def _build_comment_body(fixes: list[Fix]) -> str:
+def _build_comment_body(fixes: list[WorkflowFix]) -> str:
     """Markdown body for a comment-mode delivery: issues + proposed content."""
-    from app.core.config import settings
 
     lines = [f"## {settings.PROJECT_NAME} suggested workflow fixes", ""]
     for fix in fixes:
         wf = fix.workflow_file
         path = wf.path if wf else "workflow"
         lines.append(f"### `{path}`")
-        if fix.issues:
+        if fix.findings:
             lines.append("")
             lines.append("Issues addressed:")
-            for issue in fix.issues:
+            for issue in fix.findings:
                 slug = issue.rule.slug if issue.rule else "issue"
                 lines.append(f"- **{slug}** ({issue.severity.value}): {issue.message}")
         lines += [
@@ -367,12 +363,12 @@ async def _post_comment(
 def _deliver_batch_as_comment(
     session: Session,
     repo: Repository,
-    fixes: list[Fix],
+    fixes: list[WorkflowFix],
     org_id: str,
     repo_id_str: str,
 ) -> dict[str, str]:
     """Deliver ready fixes as a single commit comment on the base branch HEAD."""
-    deliverable: list[Fix] = []
+    deliverable: list[WorkflowFix] = []
     seen: set[str] = set()
     for fix in fixes:
         wf = fix.workflow_file

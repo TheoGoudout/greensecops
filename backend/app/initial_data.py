@@ -4,6 +4,9 @@ from sqlmodel import Session, select
 
 from app.core.db import engine, init_db
 from app.models import Repository
+from app.workers.tasks.static_analysis import (
+    reanalyze_all_repositories,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,10 +23,6 @@ def init() -> list[str]:
         if new_rule_slugs:
             has_repos = session.exec(select(Repository)).first() is not None
             if has_repos:
-                from app.workers.tasks.static_analysis import (
-                    reanalyze_all_repositories,
-                )
-
                 reanalyze_all_repositories.delay()
                 logger.info(
                     "Seeded %d new rule(s) %s; enqueued re-analysis of all repos",

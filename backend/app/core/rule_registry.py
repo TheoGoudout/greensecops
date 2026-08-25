@@ -25,30 +25,19 @@ from typing import Any
 import yaml
 
 from app.core.rego_metadata import RULES_DIR, iter_rule_files, read_metadata_block
-from app.models import IssueCategory, IssueSeverity, RuleDomain
-
-# The rules directory is named for the analysis engine; RuleDomain predates it
-# and calls the CI-workflow engine `workflow`. Every other name lines up.
-_RULES_DIR_TO_DOMAIN: dict[str, RuleDomain] = {
-    "ci_workflow": RuleDomain.workflow,
-    "ci_telemetry": RuleDomain.ci_telemetry,
-    "iac_terraform": RuleDomain.iac_terraform,
-    "cloud_aws": RuleDomain.cloud_aws,
-    "container_docker": RuleDomain.container_docker,
-    "container_runtime": RuleDomain.container_runtime,
-}
+from app.models import Category, RuleDomain, Severity
 
 # What `severity_weight` a rule gets when its METADATA does not name one. These
 # are the modal weights of the old hand-maintained lists, so the default is
 # what most rules of that severity already scored at. A rule that genuinely
 # deserves more or less weight within its band overrides it with
 # `custom.severity_weight`; twelve rules do.
-_DEFAULT_SEVERITY_WEIGHTS: dict[IssueSeverity, float] = {
-    IssueSeverity.critical: 3.5,
-    IssueSeverity.high: 1.8,
-    IssueSeverity.medium: 1.0,
-    IssueSeverity.low: 0.5,
-    IssueSeverity.info: 0.2,
+_DEFAULT_SEVERITY_WEIGHTS: dict[Severity, float] = {
+    Severity.critical: 3.5,
+    Severity.high: 1.8,
+    Severity.medium: 1.0,
+    Severity.low: 0.5,
+    Severity.info: 0.2,
 }
 
 # Mirrors docs/ext/rego_autodoc.py's _DETECTION_LABELS. Validated here so a typo
@@ -108,17 +97,19 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
         )
     domain_dir, category_dir, _ = parts
 
-    domain = _RULES_DIR_TO_DOMAIN.get(domain_dir)
-    if domain is None:
+    # RuleDomain's members *are* the directory names, so no lookup table stands
+    # between the two to be kept in step.
+    try:
+        domain = RuleDomain(domain_dir)
+    except ValueError as exc:
         raise _fail(
             path,
-            f"unknown engine directory '{domain_dir}' — add it to "
-            "_RULES_DIR_TO_DOMAIN and to RuleDomain",
-        )
+            f"unknown engine directory '{domain_dir}' — add it to RuleDomain",
+        ) from exc
     try:
-        category = IssueCategory(category_dir)
+        category = Category(category_dir)
     except ValueError as exc:
-        raise _fail(path, f"'{category_dir}' is not an IssueCategory") from exc
+        raise _fail(path, f"'{category_dir}' is not an Category") from exc
 
     meta = _parse_metadata(path)
     custom = meta.get("custom") or {}
@@ -143,9 +134,9 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
     if raw_severity is None:
         raise _fail(path, "METADATA has no 'custom.severity'")
     try:
-        severity = IssueSeverity(str(raw_severity))
+        severity = Severity(str(raw_severity))
     except ValueError as exc:
-        raise _fail(path, f"'{raw_severity}' is not an IssueSeverity") from exc
+        raise _fail(path, f"'{raw_severity}' is not an Severity") from exc
 
     detection = custom.get("detection")
     if detection not in VALID_DETECTION_METHODS:

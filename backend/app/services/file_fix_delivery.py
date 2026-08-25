@@ -20,6 +20,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+import redis.asyncio as aioredis
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
@@ -28,6 +29,7 @@ from app.models import PullRequest, PullRequestState, Repository
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
 from app.services.engines import EngineSpec
+from app.services.github.app_client import GitHubAppClient
 from app.services.github.fix_delivery import FixDeliveryResult, FixDeliveryService
 
 logger = logging.getLogger(__name__)
@@ -232,9 +234,6 @@ async def _deliver(
     force: bool,
     commit_messages: dict[str, str],
 ) -> FixDeliveryResult:
-    import redis.asyncio as aioredis
-
-    from app.services.github.app_client import GitHubAppClient
 
     r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:

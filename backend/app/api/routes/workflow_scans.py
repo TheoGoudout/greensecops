@@ -14,12 +14,13 @@ from app.api.mappers import to_analysis_public
 from app.api.router import Role, RoleRouter
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
-    Analysis,
     AnalysisPublic,
-    AnalysisStatus,
     Repository,
+    ScanStatus,
     WorkflowFile,
+    WorkflowScan,
 )
+from app.services.billing.quota import enforce_quota
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.workers.tasks.static_analysis import (
@@ -27,7 +28,7 @@ from app.workers.tasks.static_analysis import (
     run_static_analysis,
 )
 
-router = RoleRouter(prefix="/analyses", tags=["analyses"])
+router = RoleRouter()
 
 
 @router.get("/", role=Role.user, response_model=list[AnalysisPublic])
@@ -37,28 +38,30 @@ def list_analyses(
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
     grade: str | None = None,
-    status: AnalysisStatus | None = None,
+    status: ScanStatus | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
 ) -> list[AnalysisPublic]:
-    query = select(Analysis)
+    query = select(WorkflowScan)
     if not current_user.is_superuser:
         query = query.where(
-            Analysis.repo_id.in_(  # type: ignore[attr-defined]
+            WorkflowScan.repo_id.in_(  # type: ignore[attr-defined]
                 select(Repository.id).where(
                     Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
                 )
             )
         )
     if repo_id:
-        query = query.where(Analysis.repo_id == repo_id)
+        query = query.where(WorkflowScan.repo_id == repo_id)
     if branch:
-        query = query.where(Analysis.branch == branch)
+        query = query.where(WorkflowScan.branch == branch)
     if grade:
-        query = query.where(Analysis.grade == grade)
+        query = query.where(WorkflowScan.grade == grade)
     if status:
-        query = query.where(Analysis.status == status)
-    query = query.order_by(col(Analysis.created_at).desc()).offset(skip).limit(limit)
+        query = query.where(WorkflowScan.status == status)
+    query = (
+        query.order_by(col(WorkflowScan.created_at).desc()).offset(skip).limit(limit)
+    )
     return [to_analysis_public(a) for a in session.exec(query).all()]
 
 
@@ -68,10 +71,10 @@ def get_analysis(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AnalysisPublic:
-    analysis = get_or_404(session, Analysis, analysis_id)
+    analysis = get_or_404(session, WorkflowScan, analysis_id)
     if not current_user.is_superuser:
         authorize_repo(
-            session, current_user, analysis.repo_id, detail="Analysis not found"
+            session, current_user, analysis.repo_id, detail="Workflow scan not found"
         )
     return to_analysis_public(analysis)
 
@@ -89,7 +92,6 @@ def trigger_analysis(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.services.billing.quota import enforce_quota
 
     effective_branch = branch or repo.default_branch
     # One trigger fans out to one analysis *per workflow file*, so checking for
@@ -146,7 +148,6 @@ def reanalyze_for_workflow(
     repo = authorize_repo(session, current_user, wf_file.repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
-    from app.services.billing.quota import enforce_quota
 
     enforce_quota(session, current_user, repo.org_id, "analyses")
     effective_branch = wf_file.branch or repo.default_branch

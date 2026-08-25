@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.models.enums import IssueSeverity
+from app.models.enums import Severity
 
 _SEVERITY_EMOJI: dict[str, str] = {
     "critical": "🔴",
@@ -10,7 +10,7 @@ _SEVERITY_EMOJI: dict[str, str] = {
     "info": "⚪",
 }
 
-_SEVERITY_ORDER: dict[str, int] = {s.value: i for i, s in enumerate(IssueSeverity)}
+_SEVERITY_ORDER: dict[str, int] = {s.value: i for i, s in enumerate(Severity)}
 
 
 @dataclass

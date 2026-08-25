@@ -1,6 +1,6 @@
-import type { IssueSeverity } from "@/client"
+import type { Severity } from "@/client"
 
-export const SEVERITY_ORDER: IssueSeverity[] = [
+export const SEVERITY_ORDER: Severity[] = [
   "critical",
   "high",
   "medium",
@@ -8,7 +8,7 @@ export const SEVERITY_ORDER: IssueSeverity[] = [
   "info",
 ]
 
-export const severityRank = (s: IssueSeverity): number => {
+export const severityRank = (s: Severity): number => {
   const rank = SEVERITY_ORDER.indexOf(s)
   return rank === -1 ? 99 : rank
 }

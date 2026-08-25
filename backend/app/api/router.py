@@ -37,17 +37,17 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.rate_limit import NO_RATE_LIMIT, rate_limit_dependency
 from app.models import (
-    Analysis,
     CloudAccount,
     DockerTarget,
-    Fix,
-    Issue,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
     TerraformRoot,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 
 
@@ -130,17 +130,17 @@ def _org_of_workflow_file(
 
 
 def _org_of_analysis(session: Session, analysis_id: uuid.UUID) -> uuid.UUID | None:
-    analysis = session.get(Analysis, analysis_id)
+    analysis = session.get(WorkflowScan, analysis_id)
     return _org_of_repo(session, analysis.repo_id) if analysis else None
 
 
 def _org_of_fix(session: Session, fix_id: uuid.UUID) -> uuid.UUID | None:
-    fix = session.get(Fix, fix_id)
+    fix = session.get(WorkflowFix, fix_id)
     return _org_of_workflow_file(session, fix.workflow_file_id) if fix else None
 
 
 def _org_of_issue(session: Session, issue_id: uuid.UUID) -> uuid.UUID | None:
-    issue = session.get(Issue, issue_id)
+    issue = session.get(WorkflowFinding, issue_id)
     return _org_of_analysis(session, issue.analysis_id) if issue else None
 
 
@@ -180,9 +180,9 @@ ORG_RESOLVERS: dict[str, OrgResolver] = {
     "org_id": OrgResolver(_org_of_organization, "Organization not found"),
     "repo_id": OrgResolver(_org_of_repo, "Repository not found"),
     "workflow_file_id": OrgResolver(_org_of_workflow_file, "Workflow file not found"),
-    "analysis_id": OrgResolver(_org_of_analysis, "Analysis not found"),
-    "fix_id": OrgResolver(_org_of_fix, "Fix not found"),
-    "issue_id": OrgResolver(_org_of_issue, "Issue not found"),
+    "analysis_id": OrgResolver(_org_of_analysis, "Workflow scan not found"),
+    "fix_id": OrgResolver(_org_of_fix, "Workflow fix not found"),
+    "issue_id": OrgResolver(_org_of_issue, "Workflow finding not found"),
     "account_id": OrgResolver(_org_of_cloud_account, "Cloud account not found"),
     "target_id": OrgResolver(_org_of_docker_target, "Docker target not found"),
     "root_id": OrgResolver(_org_of_terraform_root, "Terraform root not found"),

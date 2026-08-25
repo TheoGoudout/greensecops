@@ -12,16 +12,10 @@ import uuid
 from sqlmodel import Session, select
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
+    Category,
     CIStatus,
-    Fix,
+    FindingResolutionReason,
     FixStatus,
-    Issue,
-    IssueCategory,
-    IssueResolutionReason,
-    IssueSeverity,
     LLMProvider,
     Organization,
     PullRequest,
@@ -29,8 +23,14 @@ from app.models import (
     Repository,
     ReviewDecision,
     Rule,
+    ScanStatus,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.github import event_handlers as eh
 
@@ -39,7 +39,7 @@ def _build_pr_with_delivered_fix(
     db: Session,
     *,
     is_external: bool = True,
-) -> tuple[Repository, PullRequest, Fix, Issue]:
+) -> tuple[Repository, PullRequest, WorkflowFix, WorkflowFinding]:
     org = Organization(name=f"eh-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free)
     db.add(org)
     db.commit()
@@ -68,12 +68,12 @@ def _build_pr_with_delivered_fix(
     db.commit()
     db.refresh(wf)
 
-    analysis = Analysis(
+    analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        status=ScanStatus.completed,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(analysis)
     db.commit()
@@ -81,8 +81,8 @@ def _build_pr_with_delivered_fix(
 
     rule = Rule(
         slug=f"eh_rule_{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="t",
         description="d",
     )
@@ -100,7 +100,7 @@ def _build_pr_with_delivered_fix(
     db.commit()
     db.refresh(pr)
 
-    fix = Fix(
+    fix = WorkflowFix(
         workflow_file_id=wf.id,
         pr_id=pr.id,
         llm_provider=LLMProvider.openai,
@@ -111,13 +111,13 @@ def _build_pr_with_delivered_fix(
     db.commit()
     db.refresh(fix)
 
-    issue = Issue(
+    issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=wf.id,
         rule_id=rule.id,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="m",
         fix_id=fix.id,
     )
@@ -139,7 +139,7 @@ def test_merge_lands_fixes_and_resolves_issues(db: Session) -> None:
     assert pr.pr_state == PullRequestState.merged
     assert fix.status == FixStatus.landed
     assert issue.resolved_at is not None
-    assert issue.resolution_reason == IssueResolutionReason.merged
+    assert issue.resolution_reason == FindingResolutionReason.merged
 
 
 def test_close_supersedes_delivered_fix(db: Session) -> None:
@@ -271,4 +271,6 @@ def test_unmatched_pr_lifecycle_still_publishes_when_no_fix(db: Session) -> None
     eh.handle_pull_request_lifecycle(db, pr, "merge")
     db.refresh(pr)
     assert pr.pr_state == PullRequestState.merged
-    assert not list(db.exec(select(Fix).where(Fix.pr_id == pr.id)).all())
+    assert not list(
+        db.exec(select(WorkflowFix).where(WorkflowFix.pr_id == pr.id)).all()
+    )

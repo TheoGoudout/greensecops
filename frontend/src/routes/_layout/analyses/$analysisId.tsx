@@ -2,12 +2,12 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft, ExternalLink, Wand2 } from "lucide-react"
 import { toast } from "sonner"
-import type { IssueCategory, IssuePublic } from "@/client"
+import type { Category, IssuePublic } from "@/client"
 import {
-  AnalysesService,
-  FixesService,
-  IssuesService,
   RepositoriesService,
+  WorkflowFindingsService,
+  WorkflowFixesService,
+  WorkflowScansService,
 } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -27,10 +27,10 @@ export const Route = createFileRoute("/_layout/analyses/$analysisId")({
 
 function groupByCategory(
   issues: IssuePublic[],
-): Record<IssueCategory, IssuePublic[]> {
+): Record<Category, IssuePublic[]> {
   const groups = Object.fromEntries(
     ISSUE_CATEGORIES.map((c) => [c, [] as IssuePublic[]]),
-  ) as Record<IssueCategory, IssuePublic[]>
+  ) as Record<Category, IssuePublic[]>
   for (const issue of issues) {
     groups[issue.category].push(issue)
   }
@@ -46,12 +46,13 @@ function AnalysisDetail() {
     isError: analysisError,
   } = useQuery({
     queryKey: ["analysis", analysisId],
-    queryFn: () => AnalysesService.getAnalysis({ analysisId }),
+    queryFn: () => WorkflowScansService.getAnalysis({ analysisId }),
   })
 
   const { data: issues, isLoading: issuesLoading } = useQuery({
     queryKey: ["issues", analysisId],
-    queryFn: () => IssuesService.listIssues({ analysisId, limit: 500 }),
+    queryFn: () =>
+      WorkflowFindingsService.listIssues({ analysisId, limit: 500 }),
     enabled: !!analysisId,
   })
 
@@ -65,7 +66,7 @@ function AnalysisDetail() {
 
   const fixMutation = useMutation({
     mutationFn: () =>
-      FixesService.triggerFixGenerationForRepo({
+      WorkflowFixesService.triggerFixGenerationForRepo({
         repoId: analysis!.repo_id,
         force: true,
         requestBody: issues?.length

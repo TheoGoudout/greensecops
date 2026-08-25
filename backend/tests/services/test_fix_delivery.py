@@ -660,7 +660,7 @@ def test_forked_pr_creates_cross_repo_pr_when_none_open() -> None:
     assert result.error is None
     assert result.pr_url == "https://github.com/facebook/react/pull/42"
     svc._app.ensure_fork.assert_called_once_with(bot, "facebook/react")
-    # Fix branch is created on the fork at the upstream base SHA.
+    # WorkflowFix branch is created on the fork at the upstream base SHA.
     fork.create_git_ref.assert_called_once_with(
         ref="refs/heads/greensecops/fixes-abc", sha="base1"
     )

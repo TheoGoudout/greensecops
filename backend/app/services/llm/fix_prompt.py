@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models import Issue
+    from app.models import WorkflowFinding
 
 FIX_SYSTEM_PROMPT = """You are a GitHub Actions workflow expert. Fix issues in a CI/CD workflow YAML file.
 
@@ -47,7 +47,7 @@ Return the <full_content> and <unfixed> blocks — no markdown, no explanation."
 
 def build_fix_prompt(
     workflow_content: str,
-    issues: "list[Issue]",
+    issues: "list[WorkflowFinding]",
     default_branch: str = "main",
     action_sha_map: dict[str, str] | None = None,
 ) -> tuple[str, str]:

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import IssueCategory, IssueSeverity, Rule
+from app.models import Category, Rule, Severity
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -124,8 +124,8 @@ def test_toggle_rule_by_superuser(
     # Arrange — create a fresh rule to avoid side-effects on seeded data
     rule = Rule(
         slug=f"test-toggle-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.energy,
-        severity=IssueSeverity.low,
+        category=Category.energy,
+        severity=Severity.low,
         title="Toggle Test Rule",
         description="Used by toggle test",
         enabled=True,
@@ -160,8 +160,8 @@ def test_toggle_rule_re_enable(
     # Arrange — create a disabled rule
     rule = Rule(
         slug=f"test-reenable-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.energy,
-        severity=IssueSeverity.low,
+        category=Category.energy,
+        severity=Severity.low,
         title="Re-enable Test Rule",
         description="Used by re-enable test",
         enabled=False,

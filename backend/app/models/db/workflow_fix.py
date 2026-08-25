@@ -10,12 +10,14 @@ from ..enums import FixStatus, LLMProvider
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
-    from .issue import Issue
     from .pull_request import PullRequest
     from .workflow_file import WorkflowFile
+    from .workflow_finding import WorkflowFinding
 
 
-class Fix(SQLModel, table=True):
+class WorkflowFix(SQLModel, table=True):
+    __tablename__ = "workflow_fix"
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     workflow_file_id: uuid.UUID = Field(
         foreign_key="workflow_file.id", unique=True, nullable=False, ondelete="CASCADE"
@@ -41,5 +43,5 @@ class Fix(SQLModel, table=True):
     )
     delivered_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     workflow_file: Optional["WorkflowFile"] = Relationship(back_populates="fix")
-    issues: list["Issue"] = Relationship(back_populates="fix")
+    findings: list["WorkflowFinding"] = Relationship(back_populates="fix")
     pull_request: Optional["PullRequest"] = Relationship(back_populates="fixes")

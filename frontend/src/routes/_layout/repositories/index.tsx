@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitBranch, Lock, Play, WifiOff } from "lucide-react"
 import { toast } from "sonner"
 import type { RepositoryPublic } from "@/client"
-import { AnalysesService, RepositoriesService } from "@/client"
+import { RepositoriesService, WorkflowScansService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -53,7 +53,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   })
 
   const triggerMutation = useMutation({
-    mutationFn: () => AnalysesService.triggerAnalysis({ repoId: repo.id }),
+    mutationFn: () => WorkflowScansService.triggerAnalysis({ repoId: repo.id }),
     onSuccess: () => {
       toast.success(`Analysis queued for ${repo.full_name}`)
       queryClient.invalidateQueries({ queryKey: ["analyses", repo.id] })

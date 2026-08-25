@@ -1,3 +1,5 @@
+from app.core.config import settings
+
 _GRADE_COLORS: dict[str, str] = {
     "A+++": "#10B981",
     "A++": "#22C55E",
@@ -38,8 +40,6 @@ textLength="{value_text_width}" lengthAdjust="spacing">{grade}</text>
 
 
 def render_badge(grade: str, label: str | None = None) -> str:
-    from app.core.config import settings
-
     label = label or settings.PROJECT_NAME
     color = _GRADE_COLORS.get(grade, "#9CA3AF")
     label_width = max(100, 10 + len(label) * 8)

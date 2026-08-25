@@ -8,18 +8,18 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
-    Issue,
-    IssueCategory,
-    IssueSeverity,
-    IssueStatus,
+    Category,
+    FindingStatus,
     Organization,
     Repository,
     Rule,
+    ScanStatus,
+    ScanTrigger,
+    Severity,
     UserTier,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowScan,
 )
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -65,17 +65,19 @@ def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
 
 
 @pytest.fixture()
-def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Analysis:
+def analysis(
+    db: Session, repo: Repository, workflow_file: WorkflowFile
+) -> WorkflowScan:
     from datetime import datetime, timezone
 
-    a = Analysis(
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=workflow_file.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=75.0,
         grade="C",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -89,8 +91,8 @@ def analysis(db: Session, repo: Repository, workflow_file: WorkflowFile) -> Anal
 def rule(db: Session) -> Rule:
     r = Rule(
         slug=f"test-issues-rule-{uuid.uuid4().hex[:8]}",
-        category=IssueCategory.security,
-        severity=IssueSeverity.high,
+        category=Category.security,
+        severity=Severity.high,
         title="Test Issues Rule",
         description="A test rule for issues tests",
         enabled=True,
@@ -103,13 +105,13 @@ def rule(db: Session) -> Rule:
 
 
 @pytest.fixture()
-def issue(db: Session, analysis: Analysis, rule: Rule) -> Issue:
-    i = Issue(
+def issue(db: Session, analysis: WorkflowScan, rule: Rule) -> WorkflowFinding:
+    i = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=10,
         line_end=12,
         message="Test security issue",
@@ -157,14 +159,14 @@ def test_list_issues_empty(
     db.commit()
     db.refresh(fresh_wf)
 
-    fresh_analysis = Analysis(
+    fresh_analysis = WorkflowScan(
         repo_id=fresh_repo.id,
         workflow_file_id=fresh_wf.id,
         content_hash=fresh_wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=100.0,
         grade="A+++",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(fresh_analysis)
     db.commit()
@@ -172,7 +174,7 @@ def test_list_issues_empty(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"analysis_id": str(fresh_analysis.id)},
         headers=superuser_token_headers,
     )
@@ -185,12 +187,12 @@ def test_list_issues_empty(
 def test_list_issues_with_data(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
-    analysis: Analysis,
+    issue: WorkflowFinding,
+    analysis: WorkflowScan,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"analysis_id": str(analysis.id)},
         headers=superuser_token_headers,
     )
@@ -206,12 +208,12 @@ def test_list_issues_with_data(
 def test_list_issues_filter_by_category(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
-    analysis: Analysis,
+    issue: WorkflowFinding,
+    analysis: WorkflowScan,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"analysis_id": str(analysis.id), "category": "security"},
         headers=superuser_token_headers,
     )
@@ -226,12 +228,12 @@ def test_list_issues_filter_by_category(
 def test_list_issues_filter_by_severity(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
-    analysis: Analysis,
+    issue: WorkflowFinding,
+    analysis: WorkflowScan,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"analysis_id": str(analysis.id), "severity": "high"},
         headers=superuser_token_headers,
     )
@@ -246,12 +248,12 @@ def test_list_issues_filter_by_severity(
 def test_list_issues_filter_by_repo_id(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
+    issue: WorkflowFinding,
     repo: Repository,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -265,12 +267,12 @@ def test_list_issues_filter_by_repo_id(
 def test_list_issues_unfixed_filter(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
-    analysis: Analysis,
+    issue: WorkflowFinding,
+    analysis: WorkflowScan,
 ) -> None:
     # Act — issue with no fix should appear when unfixed=true
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"analysis_id": str(analysis.id), "unfixed": "true"},
         headers=superuser_token_headers,
     )
@@ -284,12 +286,12 @@ def test_list_issues_unfixed_filter(
 def test_list_issues_includes_fix_status(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
-    analysis: Analysis,
+    issue: WorkflowFinding,
+    analysis: WorkflowScan,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"analysis_id": str(analysis.id)},
         headers=superuser_token_headers,
     )
@@ -308,11 +310,11 @@ def test_list_issues_includes_fix_status(
 def test_issue_stats_counts_open_by_category(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
+    issue: WorkflowFinding,
     repo: Repository,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -331,23 +333,23 @@ def test_issue_stats_counts_critical_separately(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
-    analysis: Analysis,
+    analysis: WorkflowScan,
     rule: Rule,
     repo: Repository,
 ) -> None:
-    critical_issue = Issue(
+    critical_issue = WorkflowFinding(
         analysis_id=analysis.id,
         workflow_file_id=analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.critical,
-        category=IssueCategory.security,
+        severity=Severity.critical,
+        category=Category.security,
         message="Critical test issue",
     )
     db.add(critical_issue)
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -362,7 +364,7 @@ def test_issue_stats_splits_resolved_from_open(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
-    issue: Issue,
+    issue: WorkflowFinding,
     repo: Repository,
 ) -> None:
     from datetime import datetime, timezone
@@ -372,7 +374,7 @@ def test_issue_stats_splits_resolved_from_open(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -387,7 +389,7 @@ def test_issue_stats_excludes_ignored_issues(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
-    issue: Issue,
+    issue: WorkflowFinding,
     repo: Repository,
 ) -> None:
     from datetime import datetime, timezone
@@ -397,7 +399,7 @@ def test_issue_stats_excludes_ignored_issues(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -413,7 +415,7 @@ def test_issue_stats_not_capped_by_pagination(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
-    analysis: Analysis,
+    analysis: WorkflowScan,
     rule: Rule,
     repo: Repository,
 ) -> None:
@@ -423,19 +425,19 @@ def test_issue_stats_not_capped_by_pagination(
     n = 205
     for _ in range(n):
         db.add(
-            Issue(
+            WorkflowFinding(
                 analysis_id=analysis.id,
                 workflow_file_id=analysis.workflow_file_id,
                 rule_id=rule.id,
-                severity=IssueSeverity.low,
-                category=IssueCategory.maintainability,
+                severity=Severity.low,
+                category=Category.maintainability,
                 message="Bulk stats test issue",
             )
         )
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -451,7 +453,7 @@ def test_issue_stats_by_repo_breakdown(
     db: Session,
     org: Organization,
     repo: Repository,
-    issue: Issue,
+    issue: WorkflowFinding,
     rule: Rule,
 ) -> None:
     # `repo`/`issue` fixtures give repo #1 one open `security` issue.
@@ -476,14 +478,14 @@ def test_issue_stats_by_repo_breakdown(
     db.commit()
     db.refresh(other_wf)
 
-    other_analysis = Analysis(
+    other_analysis = WorkflowScan(
         repo_id=other_repo.id,
         workflow_file_id=other_wf.id,
         content_hash=other_wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=60.0,
         grade="D",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(other_analysis)
@@ -491,19 +493,19 @@ def test_issue_stats_by_repo_breakdown(
     db.refresh(other_analysis)
 
     db.add(
-        Issue(
+        WorkflowFinding(
             analysis_id=other_analysis.id,
             workflow_file_id=other_wf.id,
             rule_id=rule.id,
-            severity=IssueSeverity.medium,
-            category=IssueCategory.energy,
+            severity=Severity.medium,
+            category=Category.energy,
             message="Other repo energy issue",
         )
     )
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         headers=superuser_token_headers,
     )
 
@@ -542,11 +544,11 @@ def test_issue_stats_by_repo_breakdown(
 def test_issue_stats_by_repo_empty_when_scoped_to_single_repo(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
+    issue: WorkflowFinding,
     repo: Repository,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/issues/stats",
+        f"{settings.API_V1_STR}/workflow-findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -561,11 +563,11 @@ def test_issue_stats_by_repo_empty_when_scoped_to_single_repo(
 def test_get_issue_found(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    issue: Issue,
+    issue: WorkflowFinding,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/{issue.id}",
+        f"{settings.API_V1_STR}/workflow-findings/{issue.id}",
         headers=superuser_token_headers,
     )
 
@@ -583,13 +585,13 @@ def test_get_issue_not_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/issues/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow-findings/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
     # Assert
     assert response.status_code == 404
-    assert response.json()["detail"] == "Issue not found"
+    assert response.json()["detail"] == "Workflow finding not found"
 
 
 def test_list_issues_latest_only_excludes_old_analysis(
@@ -599,20 +601,20 @@ def test_list_issues_latest_only_excludes_old_analysis(
     repo: Repository,
     workflow_file: WorkflowFile,
     rule: Rule,
-    analysis: Analysis,
-    issue: Issue,
+    analysis: WorkflowScan,
+    issue: WorkflowFinding,
 ) -> None:
     from datetime import datetime, timezone
 
     # Arrange — create a newer analysis with a later completed_at
-    new_analysis = Analysis(
+    new_analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=90.0,
         grade="A",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -620,12 +622,12 @@ def test_list_issues_latest_only_excludes_old_analysis(
     db.commit()
     db.refresh(new_analysis)
 
-    new_issue = Issue(
+    new_issue = WorkflowFinding(
         analysis_id=new_analysis.id,
         workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=5,
         line_end=7,
         message="New analysis issue",
@@ -636,7 +638,7 @@ def test_list_issues_latest_only_excludes_old_analysis(
 
     # Act — default latest_only=True should return only new_issue
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -654,20 +656,20 @@ def test_list_issues_latest_only_false_includes_all(
     repo: Repository,
     workflow_file: WorkflowFile,
     rule: Rule,
-    analysis: Analysis,
-    issue: Issue,
+    analysis: WorkflowScan,
+    issue: WorkflowFinding,
 ) -> None:
     from datetime import datetime, timezone
 
     # Arrange — create a newer analysis with a later completed_at
-    new_analysis = Analysis(
+    new_analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=90.0,
         grade="A",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -675,12 +677,12 @@ def test_list_issues_latest_only_false_includes_all(
     db.commit()
     db.refresh(new_analysis)
 
-    new_issue = Issue(
+    new_issue = WorkflowFinding(
         analysis_id=new_analysis.id,
         workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=5,
         line_end=7,
         message="New analysis issue",
@@ -691,7 +693,7 @@ def test_list_issues_latest_only_false_includes_all(
 
     # Act — latest_only=False returns issues from all analyses
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"repo_id": str(repo.id), "latest_only": "false"},
         headers=superuser_token_headers,
     )
@@ -709,8 +711,8 @@ def test_list_issues_latest_only_applies_without_repo_id(
     repo: Repository,
     workflow_file: WorkflowFile,
     rule: Rule,
-    analysis: Analysis,
-    issue: Issue,
+    analysis: WorkflowScan,
+    issue: WorkflowFinding,
 ) -> None:
     """latest_only must filter stale issue rows from an org-wide listing
     (no repo_id), the same as it does when scoped to one repo — otherwise
@@ -718,14 +720,14 @@ def test_list_issues_latest_only_applies_without_repo_id(
     of a workflow file, not just its current one."""
     from datetime import datetime, timezone
 
-    new_analysis = Analysis(
+    new_analysis = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=workflow_file.id,
         content_hash=uuid.uuid4().hex,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=90.0,
         grade="A",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
         completed_at=datetime.now(timezone.utc),
     )
@@ -733,12 +735,12 @@ def test_list_issues_latest_only_applies_without_repo_id(
     db.commit()
     db.refresh(new_analysis)
 
-    new_issue = Issue(
+    new_issue = WorkflowFinding(
         analysis_id=new_analysis.id,
         workflow_file_id=new_analysis.workflow_file_id,
         rule_id=rule.id,
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         line_start=5,
         line_end=7,
         message="New analysis issue",
@@ -749,7 +751,7 @@ def test_list_issues_latest_only_applies_without_repo_id(
 
     # Act — no repo_id, default latest_only=True (org-wide, e.g. dashboard)
     response = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         headers=superuser_token_headers,
     )
 
@@ -766,22 +768,22 @@ def test_ignore_and_unignore_issue(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
-    issue: Issue,
+    issue: WorkflowFinding,
 ) -> None:
     # Ignore → status becomes ignored (DB trigger) and ignored_at is set.
     resp = client.post(
-        f"{settings.API_V1_STR}/issues/{issue.id}/ignore",
+        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
     db.refresh(issue)
     assert issue.ignored_at is not None
-    assert issue.status is IssueStatus.ignored
+    assert issue.status is FindingStatus.ignored
 
     # Ignore again is idempotent.
     resp = client.post(
-        f"{settings.API_V1_STR}/issues/{issue.id}/ignore",
+        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -789,7 +791,7 @@ def test_ignore_and_unignore_issue(
 
     # Unignore → reverts to the underlying (open) state.
     resp = client.post(
-        f"{settings.API_V1_STR}/issues/{issue.id}/unignore",
+        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/unignore",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -803,15 +805,15 @@ def test_ignored_issue_hidden_by_default_shown_with_flag(
     superuser_token_headers: dict[str, str],
     db: Session,
     repo: Repository,
-    issue: Issue,
+    issue: WorkflowFinding,
 ) -> None:
     client.post(
-        f"{settings.API_V1_STR}/issues/{issue.id}/ignore",
+        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     # Default list excludes ignored issues.
     resp = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={"repo_id": str(repo.id), "latest_only": "false"},
         headers=superuser_token_headers,
     )
@@ -819,7 +821,7 @@ def test_ignored_issue_hidden_by_default_shown_with_flag(
     assert str(issue.id) not in [i["id"] for i in resp.json()]
     # include_ignored=true surfaces it again.
     resp = client.get(
-        f"{settings.API_V1_STR}/issues/",
+        f"{settings.API_V1_STR}/workflow-findings/",
         params={
             "repo_id": str(repo.id),
             "latest_only": "false",
@@ -842,7 +844,7 @@ def test_repo_issue_listing_defaults_to_default_branch(
     rule = db.exec(select(Rule)).first()
     assert rule is not None
 
-    def _seed(branch: str, path: str, message: str) -> Issue:
+    def _seed(branch: str, path: str, message: str) -> WorkflowFinding:
         wf = WorkflowFile(
             repo_id=repo.id,
             branch=branch,
@@ -853,18 +855,18 @@ def test_repo_issue_listing_defaults_to_default_branch(
         db.add(wf)
         db.commit()
         db.refresh(wf)
-        analysis = Analysis(
+        analysis = WorkflowScan(
             repo_id=repo.id,
             workflow_file_id=wf.id,
             content_hash=wf.content_hash,
-            status=AnalysisStatus.completed,
-            triggered_by=AnalysisTrigger.manual,
+            status=ScanStatus.completed,
+            triggered_by=ScanTrigger.manual,
             branch=branch,
         )
         db.add(analysis)
         db.commit()
         db.refresh(analysis)
-        issue = Issue(
+        issue = WorkflowFinding(
             analysis_id=analysis.id,
             workflow_file_id=wf.id,
             rule_id=rule.id,
@@ -880,7 +882,7 @@ def test_repo_issue_listing_defaults_to_default_branch(
     _seed("main", ".github/workflows/ci.yml", "on main")
     _seed("feature", ".github/workflows/ci.yml", "on feature")
 
-    url = f"{settings.API_V1_STR}/issues/"
+    url = f"{settings.API_V1_STR}/workflow-findings/"
     default_listing = client.get(
         url, params={"repo_id": str(repo.id)}, headers=superuser_token_headers
     )

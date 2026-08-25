@@ -10,10 +10,8 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import (
-    AnalysisTrigger,
+    Category,
     FixStatus,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     OrgMember,
@@ -22,6 +20,8 @@ from app.models import (
     Rule,
     RuleDomain,
     ScanStatus,
+    ScanTrigger,
+    Severity,
     TerraformFinding,
     TerraformFix,
     TerraformRoot,
@@ -81,7 +81,7 @@ def completed_scan(db: Session, terraform_root: TerraformRoot) -> TerraformScan:
     scan = TerraformScan(
         terraform_root_id=terraform_root.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         score=72.0,
         grade="B",
     )
@@ -171,7 +171,7 @@ def test_list_terraform_roots_includes_latest_grade(
     superuser_token_headers: dict[str, str],
     repo: Repository,
     terraform_root: TerraformRoot,
-    completed_scan: TerraformScan,  # noqa: ARG001
+    completed_scan: TerraformScan,
 ) -> None:
     response = client.get(
         f"{settings.API_V1_STR}/terraform-roots/",
@@ -394,8 +394,8 @@ def test_list_terraform_findings_excludes_resolved_by_default(
         resource_address="aws_s3_bucket.data",
         file_path="main.tf",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="open finding",
     )
     resolved_finding = TerraformFinding(
@@ -405,8 +405,8 @@ def test_list_terraform_findings_excludes_resolved_by_default(
         resource_address="aws_s3_bucket.other",
         file_path="main.tf",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="resolved finding",
         resolved_at=datetime.now(timezone.utc),
     )
@@ -442,8 +442,8 @@ def test_list_terraform_findings_include_resolved(
         resource_address="aws_s3_bucket.other",
         file_path="main.tf",
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="resolved finding",
         resolved_at=datetime.now(timezone.utc),
     )
@@ -522,8 +522,8 @@ def _make_open_finding(
         resource_address="aws_s3_bucket.data",
         file_path=file_path,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="unencrypted bucket",
     )
     db.add(finding)

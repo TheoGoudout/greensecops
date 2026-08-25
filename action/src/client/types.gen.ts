@@ -64,7 +64,7 @@ export type AnalysisPublic = {
      * Content Hash
      */
     content_hash: string;
-    status: AnalysisStatus;
+    status: ScanStatus;
     /**
      * Score
      */
@@ -73,7 +73,7 @@ export type AnalysisPublic = {
      * Grade
      */
     grade?: string | null;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Branch
      */
@@ -91,16 +91,6 @@ export type AnalysisPublic = {
      */
     completed_at?: string | null;
 };
-
-/**
- * AnalysisStatus
- */
-export type AnalysisStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_workflows';
-
-/**
- * AnalysisTrigger
- */
-export type AnalysisTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
 
 /**
  * BatchFixRequest
@@ -230,6 +220,12 @@ export type BodyLoginLoginAccessToken = {
 export type CiStatus = 'pending' | 'success' | 'failure' | 'none';
 
 /**
+ * Category
+ * Which axis a rule grades on. Also the directory a .rego file lives in.
+ */
+export type Category = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
+
+/**
  * CheckoutRequest
  */
 export type CheckoutRequest = {
@@ -342,8 +338,8 @@ export type CloudFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Message
      */
@@ -394,7 +390,7 @@ export type CloudScanPublic = {
      */
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Score
      */
@@ -586,8 +582,8 @@ export type DockerFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Message
      */
@@ -727,8 +723,8 @@ export type DockerRuntimeFindingPublic = {
      * Rule Title
      */
     rule_title?: string | null;
-    severity?: IssueSeverity | null;
-    category?: IssueCategory | null;
+    severity?: Severity | null;
+    category?: Category | null;
     /**
      * Evidence
      */
@@ -762,7 +758,7 @@ export type DockerScanPublic = {
      */
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Score
      */
@@ -913,6 +909,21 @@ export type DynamicEnrichmentPublic = {
 };
 
 /**
+ * Engine
+ * Which analysis engine produced something.
+ *
+ * The one name for an engine across the whole system: usage records tag
+ * themselves with it, the dashboard overview keys its stat blocks by it, and
+ * ``services/engines.EngineSpec`` is looked up by it. There used to be three
+ * of these enums disagreeing about whether the first one is called ``ci`` or
+ * ``workflow``; it is ``workflow``, after the ``WorkflowFile`` rows it scans.
+ *
+ * Not the same axis as :class:`RuleDomain`, which names a Rego package — the
+ * mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
+ */
+export type Engine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry';
+
+/**
  * EngineCoverageStat
  * How much of what could be scanned actually has been.
  *
@@ -1023,7 +1034,7 @@ export type EngineFreshnessStat = {
  * EngineOverview
  */
 export type EngineOverview = {
-    engine: OverviewEngineKey;
+    engine: Engine;
     section: OverviewSection;
     /**
      * Label
@@ -1084,19 +1095,32 @@ export type ExternalRepositoryCreate = {
 
 /**
  * FindingResolutionReason
+ * Why a finding stopped being open.
+ *
+ * An attribute of the ``resolved`` state, not a state of its own. The union of
+ * what the engines can observe: the first two are available to all of them,
+ * the rest need a file or a pull request and so only arise on engines that
+ * have one.
  */
-export type FindingResolutionReason = 'no_longer_detected' | 'target_removed';
+export type FindingResolutionReason = 'no_longer_detected' | 'target_removed' | 'file_removed' | 'merged' | 'branch_deleted';
 
 /**
  * FindingStatus
- * Lifecycle of a TerraformFinding or CloudFinding.
+ * Derived lifecycle of a rule violation, on any engine.
  *
- * Unlike ``Issue.status`` (owned by a DB trigger reacting to ``fix_id``),
- * findings in this delivery have no fix/PR concept yet (see plan Phase 7),
- * so the application sets this column directly alongside resolved_at/
- * ignored_at rather than needing trigger-derived state.
+ * For CI-workflow findings this column is computed by a database trigger from
+ * ``ignored_at``, ``resolved_at`` and ``fix_id`` (migrations ``0022``/``0026``,
+ * renamed in ``0053``); ``ignored`` takes precedence, so a user-dismissed
+ * violation stays muted regardless of fix or resolve activity. The other
+ * engines set it directly through ``FindingMachine``.
+ *
+ * ``fix_in_progress`` arrived with the merge of the old ``FindingStatus``: only
+ * the CI engine reaches it today, because only its findings carry a ``fix_id``
+ * — the other engines key a fix on ``(target, file_path)`` instead. It is
+ * declared here rather than in a CI-only enum because the state is about the
+ * finding, not about which engine found it.
  */
-export type FindingStatus = 'open' | 'resolved' | 'ignored';
+export type FindingStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
 /**
  * FixDeliveryMode
@@ -1115,8 +1139,8 @@ export type FixIssueSummary = {
      * Rule Slug
      */
     rule_slug?: string | null;
-    severity?: IssueSeverity | null;
-    category?: IssueCategory | null;
+    severity?: Severity | null;
+    category?: Category | null;
     /**
      * Message
      */
@@ -1311,15 +1335,10 @@ export type InvoicePublic = {
 export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 
 /**
- * IssueCategory
- */
-export type IssueCategory = 'energy' | 'reliability' | 'security' | 'performance' | 'maintainability';
-
-/**
  * IssueCategoryStat
  */
 export type IssueCategoryStat = {
-    category: IssueCategory;
+    category: Category;
     /**
      * Open
      */
@@ -1354,8 +1373,8 @@ export type IssuePublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Line Start
      */
@@ -1372,7 +1391,7 @@ export type IssuePublic = {
      * Context
      */
     context?: string | null;
-    status: IssueStatus;
+    status: FindingStatus;
     /**
      * Created At
      */
@@ -1381,7 +1400,7 @@ export type IssuePublic = {
      * Resolved At
      */
     resolved_at?: string | null;
-    resolution_reason?: IssueResolutionReason | null;
+    resolution_reason?: FindingResolutionReason | null;
     /**
      * Needs Manual Work
      */
@@ -1400,28 +1419,6 @@ export type IssuePublic = {
      */
     workflow_file_path?: string | null;
 };
-
-/**
- * IssueResolutionReason
- * Why an issue was resolved — an attribute of the ``resolved`` state.
- *
- * Kept as a column rather than splitting ``resolved`` into several states so
- * the issue graph stays small. Set alongside ``resolved_at`` and cleared when
- * a resolved violation recurs.
- *
- * - ``no_longer_detected``: absent from the latest analysis (a manual fix or a
- * disabled/removed rule — the two cannot be told apart after the fact).
- * - ``file_removed``: the workflow file was deleted or renamed.
- * - ``merged``: the fix PR was merged, applying the change to the branch.
- * - ``branch_deleted``: the branch carrying the issue's workflow file was
- * deleted; the violation no longer exists anywhere to fix.
- */
-export type IssueResolutionReason = 'no_longer_detected' | 'file_removed' | 'merged' | 'branch_deleted';
-
-/**
- * IssueSeverity
- */
-export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * IssueStatsPublic
@@ -1450,18 +1447,6 @@ export type IssueStatsPublic = {
      */
     by_repo?: Array<RepoIssueStats>;
 };
-
-/**
- * IssueStatus
- * Derived lifecycle of an issue.
- *
- * This value is a persisted column computed by a database trigger from
- * ``ignored_at``, ``resolved_at`` and ``fix_id`` (see ``Issue.status`` and
- * migrations ``0022``/``0026``). ``ignored`` takes precedence over the other
- * states so a user-dismissed violation stays muted regardless of fix/resolve
- * activity.
- */
-export type IssueStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
 /**
  * LLMProvider
@@ -1604,17 +1589,6 @@ export type OssApplicationReview = {
  * Review state of a request for the granted open-source plan.
  */
 export type OssApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
-
-/**
- * OverviewEngineKey
- * Which analysis engine a block of dashboard overview stats describes.
- *
- * A presentation-layer key, not a persisted column — ``Rule.domain`` stays
- * the DB-level discriminator. The two exist because they don't line up:
- * ``container_docker`` and ``container_runtime`` rules both produce findings
- * on the Docker engine, so one key covers two domains.
- */
-export type OverviewEngineKey = 'ci' | 'docker' | 'terraform' | 'cloud';
 
 /**
  * OverviewPublic
@@ -1836,7 +1810,7 @@ export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
  * are grouped per repo.
  */
 export type RepoCategoryStat = {
-    category: IssueCategory;
+    category: Category;
     /**
      * Open
      */
@@ -1864,7 +1838,7 @@ export type RepoCategoryStat = {
  * ``score``/``grade`` here are the repo's own overall grade (same values as
  * ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
  * doesn't need a second lookup to size the radar's "no issues" fallback.
- * Each entry in ``categories`` covers every ``IssueCategory``, including
+ * Each entry in ``categories`` covers every ``Category``, including
  * categories with zero open issues, so their scores average out to exactly
  * the repo's overall score (see ``compute_category_scores``).
  */
@@ -1964,8 +1938,8 @@ export type RulePublic = {
      * Slug
      */
     slug: string;
-    category: IssueCategory;
-    severity: IssueSeverity;
+    category: Category;
+    severity: Severity;
     /**
      * Title
      */
@@ -1978,6 +1952,132 @@ export type RulePublic = {
      * Enabled
      */
     enabled: boolean;
+};
+
+/**
+ * SSEEventPublic
+ * The wire shape of one server-sent event.
+ *
+ * Every event is a flat JSON object: an ``event`` discriminant plus whatever
+ * the emitting factory in ``services/events/schemas.py`` put beside it. That
+ * payload was a bare ``dict[str, Any]`` and never reached OpenAPI, so the
+ * frontend read it by hand — ``data.grade as string | undefined``, forty times
+ * over in ``hooks/useRepoEvents.ts``. A renamed field broke silently at
+ * runtime, in a browser, with nothing to catch it.
+ *
+ * Declaring it here puts the field names in the generated client, which turns
+ * that class of break into a TypeScript error.
+ *
+ * Every field but ``event`` is optional, and deliberately so: this is a union
+ * of what ~30 distinct signals carry, not a claim that any one of them carries
+ * all of it. Which fields a given signal actually populates is documented on
+ * its factory function. The alternative — a discriminated union with one model
+ * per signal — buys per-signal precision at the cost of thirty-odd models to
+ * keep in step with their factories, and the consumer switches on ``event``
+ * anyway.
+ */
+export type SseEventPublic = {
+    event: SseSignal;
+    /**
+     * Org Id
+     */
+    org_id?: string | null;
+    /**
+     * Repo Id
+     */
+    repo_id?: string | null;
+    /**
+     * Repo Ids
+     */
+    repo_ids?: Array<string> | null;
+    /**
+     * Analysis Id
+     */
+    analysis_id?: string | null;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    /**
+     * Fix Ids
+     */
+    fix_ids?: Array<string> | null;
+    /**
+     * Issue Ids
+     */
+    issue_ids?: Array<string> | null;
+    /**
+     * Telemetry Run Id
+     */
+    telemetry_run_id?: string | null;
+    /**
+     * Installation Id
+     */
+    installation_id?: number | null;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Trigger
+     */
+    trigger?: string | null;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Issues Count
+     */
+    issues_count?: number | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    /**
+     * Org Name
+     */
+    org_name?: string | null;
+    /**
+     * Repo Count
+     */
+    repo_count?: number | null;
+    /**
+     * Repos Disabled
+     */
+    repos_disabled?: number | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Tier
+     */
+    tier?: string | null;
+    /**
+     * Status
+     */
+    status?: string | null;
+    /**
+     * Meter
+     */
+    meter?: string | null;
+    /**
+     * Message
+     */
+    message?: string | null;
 };
 
 /**
@@ -2023,24 +2123,38 @@ export type SamplePayload = {
 
 /**
  * ScanStatus
- * Lifecycle of a TerraformScan or CloudScan.
+ * Lifecycle of one engine's run over one target.
  *
- * Deliberately separate from ``AnalysisStatus``: that enum's ``no_workflows``
- * value is workflow-specific vocabulary. ``no_targets`` covers both "no .tf
- * files under this root" and "no resources of the scanned types in this
- * account/region".
+ * Shared by every scan table. There used to be a second, identical enum called
+ * ``ScanStatus`` for the CI engine alone, differing in exactly one member:
+ * it spelled the empty case ``no_workflows`` where this one says
+ * ``no_targets``. That is workflow-specific vocabulary for a case every engine
+ * has — no ``.tf`` files under this root, no resources of the scanned types in
+ * this account, no workflow files in this repository — so the general name
+ * won and migration 0053 rewrote the rows.
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
+ * ScanTrigger
+ */
+export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
+
+/**
+ * Severity
+ * How bad a rule violation is. Shared by every engine's findings.
+ */
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * SeverityStat
  * Open/resolved finding counts for one severity.
  *
- * Emitted for every ``IssueSeverity`` including zeros, so the frontend can
+ * Emitted for every ``Severity`` including zeros, so the frontend can
  * render a fixed-segment severity bar without gap logic.
  */
 export type SeverityStat = {
-    severity: IssueSeverity;
+    severity: Severity;
     /**
      * Open
      */
@@ -2240,8 +2354,8 @@ export type TerraformFindingPublic = {
      * Rule Slug
      */
     rule_slug: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Message
      */
@@ -2427,7 +2541,7 @@ export type TerraformScanPublic = {
      */
     id: string;
     status: ScanStatus;
-    triggered_by: AnalysisTrigger;
+    triggered_by: ScanTrigger;
     /**
      * Score
      */
@@ -2493,8 +2607,8 @@ export type TopRuleStat = {
      * Title
      */
     title: string;
-    severity: IssueSeverity;
-    category: IssueCategory;
+    severity: Severity;
+    category: Category;
     /**
      * Open
      */
@@ -2530,11 +2644,15 @@ export type UsageBreakdownPublic = {
 
 /**
  * UsageEngine
- * Which engine produced a usage record.
+ * Which engine produced a usage record, plus one non-engine sentinel.
  *
  * Every one of these debits the same shared pool; the tag exists so a user
  * can see *where* their allowance went, and so tests can assert that each
  * engine is actually metered.
+ *
+ * Its engine members are :class:`Engine`'s, spelled out rather than generated
+ * so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
+ * fails at import if the two ever drift.
  */
 export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
 
@@ -3708,6 +3826,22 @@ export type EventsGetSseSignalsResponses = {
 
 export type EventsGetSseSignalsResponse = EventsGetSseSignalsResponses[keyof EventsGetSseSignalsResponses];
 
+export type EventsGetSseEventSchemaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/events/schema';
+};
+
+export type EventsGetSseEventSchemaResponses = {
+    /**
+     * Successful Response
+     */
+    200: SseEventPublic;
+};
+
+export type EventsGetSseEventSchemaResponse = EventsGetSseEventSchemaResponses[keyof EventsGetSseEventSchemaResponses];
+
 export type EventsCreateSseTicketData = {
     body?: never;
     path?: never;
@@ -3755,7 +3889,7 @@ export type EventsStreamEventsResponses = {
     200: unknown;
 };
 
-export type AnalysesListAnalysesData = {
+export type WorkflowScansListAnalysesData = {
     body?: never;
     path?: never;
     query?: {
@@ -3774,7 +3908,7 @@ export type AnalysesListAnalysesData = {
         /**
          * Status
          */
-        status?: AnalysisStatus | null;
+        status?: ScanStatus | null;
         /**
          * Skip
          */
@@ -3784,29 +3918,29 @@ export type AnalysesListAnalysesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/analyses/';
+    url: '/api/v1/workflow-scans/';
 };
 
-export type AnalysesListAnalysesErrors = {
+export type WorkflowScansListAnalysesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesListAnalysesError = AnalysesListAnalysesErrors[keyof AnalysesListAnalysesErrors];
+export type WorkflowScansListAnalysesError = WorkflowScansListAnalysesErrors[keyof WorkflowScansListAnalysesErrors];
 
-export type AnalysesListAnalysesResponses = {
+export type WorkflowScansListAnalysesResponses = {
     /**
-     * Response Analyses-List Analyses
+     * Response Workflow-Scans-List Analyses
      * Successful Response
      */
     200: Array<AnalysisPublic>;
 };
 
-export type AnalysesListAnalysesResponse = AnalysesListAnalysesResponses[keyof AnalysesListAnalysesResponses];
+export type WorkflowScansListAnalysesResponse = WorkflowScansListAnalysesResponses[keyof WorkflowScansListAnalysesResponses];
 
-export type AnalysesGetAnalysisData = {
+export type WorkflowScansGetAnalysisData = {
     body?: never;
     path: {
         /**
@@ -3815,28 +3949,28 @@ export type AnalysesGetAnalysisData = {
         analysis_id: string;
     };
     query?: never;
-    url: '/api/v1/analyses/{analysis_id}';
+    url: '/api/v1/workflow-scans/{analysis_id}';
 };
 
-export type AnalysesGetAnalysisErrors = {
+export type WorkflowScansGetAnalysisErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesGetAnalysisError = AnalysesGetAnalysisErrors[keyof AnalysesGetAnalysisErrors];
+export type WorkflowScansGetAnalysisError = WorkflowScansGetAnalysisErrors[keyof WorkflowScansGetAnalysisErrors];
 
-export type AnalysesGetAnalysisResponses = {
+export type WorkflowScansGetAnalysisResponses = {
     /**
      * Successful Response
      */
     200: AnalysisPublic;
 };
 
-export type AnalysesGetAnalysisResponse = AnalysesGetAnalysisResponses[keyof AnalysesGetAnalysisResponses];
+export type WorkflowScansGetAnalysisResponse = WorkflowScansGetAnalysisResponses[keyof WorkflowScansGetAnalysisResponses];
 
-export type AnalysesTriggerAnalysisData = {
+export type WorkflowScansTriggerAnalysisData = {
     body?: never;
     path: {
         /**
@@ -3854,21 +3988,21 @@ export type AnalysesTriggerAnalysisData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/analyses/trigger/{repo_id}';
+    url: '/api/v1/workflow-scans/trigger/{repo_id}';
 };
 
-export type AnalysesTriggerAnalysisErrors = {
+export type WorkflowScansTriggerAnalysisErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesTriggerAnalysisError = AnalysesTriggerAnalysisErrors[keyof AnalysesTriggerAnalysisErrors];
+export type WorkflowScansTriggerAnalysisError = WorkflowScansTriggerAnalysisErrors[keyof WorkflowScansTriggerAnalysisErrors];
 
-export type AnalysesTriggerAnalysisResponses = {
+export type WorkflowScansTriggerAnalysisResponses = {
     /**
-     * Response Analyses-Trigger Analysis
+     * Response Workflow-Scans-Trigger Analysis
      * Successful Response
      */
     202: {
@@ -3876,9 +4010,9 @@ export type AnalysesTriggerAnalysisResponses = {
     };
 };
 
-export type AnalysesTriggerAnalysisResponse = AnalysesTriggerAnalysisResponses[keyof AnalysesTriggerAnalysisResponses];
+export type WorkflowScansTriggerAnalysisResponse = WorkflowScansTriggerAnalysisResponses[keyof WorkflowScansTriggerAnalysisResponses];
 
-export type AnalysesReanalyzeForWorkflowData = {
+export type WorkflowScansReanalyzeForWorkflowData = {
     body?: never;
     path: {
         /**
@@ -3892,21 +4026,21 @@ export type AnalysesReanalyzeForWorkflowData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/analyses/reanalyze-for-workflow/{workflow_file_id}';
+    url: '/api/v1/workflow-scans/reanalyze-for-workflow/{workflow_file_id}';
 };
 
-export type AnalysesReanalyzeForWorkflowErrors = {
+export type WorkflowScansReanalyzeForWorkflowErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnalysesReanalyzeForWorkflowError = AnalysesReanalyzeForWorkflowErrors[keyof AnalysesReanalyzeForWorkflowErrors];
+export type WorkflowScansReanalyzeForWorkflowError = WorkflowScansReanalyzeForWorkflowErrors[keyof WorkflowScansReanalyzeForWorkflowErrors];
 
-export type AnalysesReanalyzeForWorkflowResponses = {
+export type WorkflowScansReanalyzeForWorkflowResponses = {
     /**
-     * Response Analyses-Reanalyze For Workflow
+     * Response Workflow-Scans-Reanalyze For Workflow
      * Successful Response
      */
     202: {
@@ -3914,18 +4048,18 @@ export type AnalysesReanalyzeForWorkflowResponses = {
     };
 };
 
-export type AnalysesReanalyzeForWorkflowResponse = AnalysesReanalyzeForWorkflowResponses[keyof AnalysesReanalyzeForWorkflowResponses];
+export type WorkflowScansReanalyzeForWorkflowResponse = WorkflowScansReanalyzeForWorkflowResponses[keyof WorkflowScansReanalyzeForWorkflowResponses];
 
-export type AnalysesReanalyzeAllData = {
+export type WorkflowScansReanalyzeAllData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/analyses/reanalyze-all';
+    url: '/api/v1/workflow-scans/reanalyze-all';
 };
 
-export type AnalysesReanalyzeAllResponses = {
+export type WorkflowScansReanalyzeAllResponses = {
     /**
-     * Response Analyses-Reanalyze All
+     * Response Workflow-Scans-Reanalyze All
      * Successful Response
      */
     202: {
@@ -3933,9 +4067,9 @@ export type AnalysesReanalyzeAllResponses = {
     };
 };
 
-export type AnalysesReanalyzeAllResponse = AnalysesReanalyzeAllResponses[keyof AnalysesReanalyzeAllResponses];
+export type WorkflowScansReanalyzeAllResponse = WorkflowScansReanalyzeAllResponses[keyof WorkflowScansReanalyzeAllResponses];
 
-export type IssuesListIssuesData = {
+export type WorkflowFindingsListIssuesData = {
     body?: never;
     path?: never;
     query?: {
@@ -3954,11 +4088,11 @@ export type IssuesListIssuesData = {
         /**
          * Category
          */
-        category?: IssueCategory | null;
+        category?: Category | null;
         /**
          * Severity
          */
-        severity?: IssueSeverity | null;
+        severity?: Severity | null;
         /**
          * Unfixed
          */
@@ -3984,29 +4118,29 @@ export type IssuesListIssuesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/issues/';
+    url: '/api/v1/workflow-findings/';
 };
 
-export type IssuesListIssuesErrors = {
+export type WorkflowFindingsListIssuesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesListIssuesError = IssuesListIssuesErrors[keyof IssuesListIssuesErrors];
+export type WorkflowFindingsListIssuesError = WorkflowFindingsListIssuesErrors[keyof WorkflowFindingsListIssuesErrors];
 
-export type IssuesListIssuesResponses = {
+export type WorkflowFindingsListIssuesResponses = {
     /**
-     * Response Issues-List Issues
+     * Response Workflow-Findings-List Issues
      * Successful Response
      */
     200: Array<IssuePublic>;
 };
 
-export type IssuesListIssuesResponse = IssuesListIssuesResponses[keyof IssuesListIssuesResponses];
+export type WorkflowFindingsListIssuesResponse = WorkflowFindingsListIssuesResponses[keyof WorkflowFindingsListIssuesResponses];
 
-export type IssuesGetIssueStatsData = {
+export type WorkflowFindingsGetIssueStatsData = {
     body?: never;
     path?: never;
     query?: {
@@ -4023,28 +4157,28 @@ export type IssuesGetIssueStatsData = {
          */
         latest_only?: boolean;
     };
-    url: '/api/v1/issues/stats';
+    url: '/api/v1/workflow-findings/stats';
 };
 
-export type IssuesGetIssueStatsErrors = {
+export type WorkflowFindingsGetIssueStatsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesGetIssueStatsError = IssuesGetIssueStatsErrors[keyof IssuesGetIssueStatsErrors];
+export type WorkflowFindingsGetIssueStatsError = WorkflowFindingsGetIssueStatsErrors[keyof WorkflowFindingsGetIssueStatsErrors];
 
-export type IssuesGetIssueStatsResponses = {
+export type WorkflowFindingsGetIssueStatsResponses = {
     /**
      * Successful Response
      */
     200: IssueStatsPublic;
 };
 
-export type IssuesGetIssueStatsResponse = IssuesGetIssueStatsResponses[keyof IssuesGetIssueStatsResponses];
+export type WorkflowFindingsGetIssueStatsResponse = WorkflowFindingsGetIssueStatsResponses[keyof WorkflowFindingsGetIssueStatsResponses];
 
-export type IssuesGetIssueData = {
+export type WorkflowFindingsGetIssueData = {
     body?: never;
     path: {
         /**
@@ -4053,28 +4187,28 @@ export type IssuesGetIssueData = {
         issue_id: string;
     };
     query?: never;
-    url: '/api/v1/issues/{issue_id}';
+    url: '/api/v1/workflow-findings/{issue_id}';
 };
 
-export type IssuesGetIssueErrors = {
+export type WorkflowFindingsGetIssueErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesGetIssueError = IssuesGetIssueErrors[keyof IssuesGetIssueErrors];
+export type WorkflowFindingsGetIssueError = WorkflowFindingsGetIssueErrors[keyof WorkflowFindingsGetIssueErrors];
 
-export type IssuesGetIssueResponses = {
+export type WorkflowFindingsGetIssueResponses = {
     /**
      * Successful Response
      */
     200: IssuePublic;
 };
 
-export type IssuesGetIssueResponse = IssuesGetIssueResponses[keyof IssuesGetIssueResponses];
+export type WorkflowFindingsGetIssueResponse = WorkflowFindingsGetIssueResponses[keyof WorkflowFindingsGetIssueResponses];
 
-export type IssuesIgnoreIssueData = {
+export type WorkflowFindingsIgnoreIssueData = {
     body?: never;
     path: {
         /**
@@ -4083,28 +4217,28 @@ export type IssuesIgnoreIssueData = {
         issue_id: string;
     };
     query?: never;
-    url: '/api/v1/issues/{issue_id}/ignore';
+    url: '/api/v1/workflow-findings/{issue_id}/ignore';
 };
 
-export type IssuesIgnoreIssueErrors = {
+export type WorkflowFindingsIgnoreIssueErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesIgnoreIssueError = IssuesIgnoreIssueErrors[keyof IssuesIgnoreIssueErrors];
+export type WorkflowFindingsIgnoreIssueError = WorkflowFindingsIgnoreIssueErrors[keyof WorkflowFindingsIgnoreIssueErrors];
 
-export type IssuesIgnoreIssueResponses = {
+export type WorkflowFindingsIgnoreIssueResponses = {
     /**
      * Successful Response
      */
     200: IssuePublic;
 };
 
-export type IssuesIgnoreIssueResponse = IssuesIgnoreIssueResponses[keyof IssuesIgnoreIssueResponses];
+export type WorkflowFindingsIgnoreIssueResponse = WorkflowFindingsIgnoreIssueResponses[keyof WorkflowFindingsIgnoreIssueResponses];
 
-export type IssuesUnignoreIssueData = {
+export type WorkflowFindingsUnignoreIssueData = {
     body?: never;
     path: {
         /**
@@ -4113,28 +4247,28 @@ export type IssuesUnignoreIssueData = {
         issue_id: string;
     };
     query?: never;
-    url: '/api/v1/issues/{issue_id}/unignore';
+    url: '/api/v1/workflow-findings/{issue_id}/unignore';
 };
 
-export type IssuesUnignoreIssueErrors = {
+export type WorkflowFindingsUnignoreIssueErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type IssuesUnignoreIssueError = IssuesUnignoreIssueErrors[keyof IssuesUnignoreIssueErrors];
+export type WorkflowFindingsUnignoreIssueError = WorkflowFindingsUnignoreIssueErrors[keyof WorkflowFindingsUnignoreIssueErrors];
 
-export type IssuesUnignoreIssueResponses = {
+export type WorkflowFindingsUnignoreIssueResponses = {
     /**
      * Successful Response
      */
     200: IssuePublic;
 };
 
-export type IssuesUnignoreIssueResponse = IssuesUnignoreIssueResponses[keyof IssuesUnignoreIssueResponses];
+export type WorkflowFindingsUnignoreIssueResponse = WorkflowFindingsUnignoreIssueResponses[keyof WorkflowFindingsUnignoreIssueResponses];
 
-export type FixesListFixesData = {
+export type WorkflowFixesListFixesData = {
     body?: never;
     path?: never;
     query?: {
@@ -4159,29 +4293,29 @@ export type FixesListFixesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/fixes/';
+    url: '/api/v1/workflow-fixes/';
 };
 
-export type FixesListFixesErrors = {
+export type WorkflowFixesListFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesListFixesError = FixesListFixesErrors[keyof FixesListFixesErrors];
+export type WorkflowFixesListFixesError = WorkflowFixesListFixesErrors[keyof WorkflowFixesListFixesErrors];
 
-export type FixesListFixesResponses = {
+export type WorkflowFixesListFixesResponses = {
     /**
-     * Response Fixes-List Fixes
+     * Response Workflow-Fixes-List Fixes
      * Successful Response
      */
     200: Array<FixPublic>;
 };
 
-export type FixesListFixesResponse = FixesListFixesResponses[keyof FixesListFixesResponses];
+export type WorkflowFixesListFixesResponse = WorkflowFixesListFixesResponses[keyof WorkflowFixesListFixesResponses];
 
-export type FixesListPullRequestsData = {
+export type WorkflowFixesListPullRequestsData = {
     body?: never;
     path: {
         /**
@@ -4190,29 +4324,29 @@ export type FixesListPullRequestsData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/pull-requests/{repo_id}';
+    url: '/api/v1/workflow-fixes/pull-requests/{repo_id}';
 };
 
-export type FixesListPullRequestsErrors = {
+export type WorkflowFixesListPullRequestsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesListPullRequestsError = FixesListPullRequestsErrors[keyof FixesListPullRequestsErrors];
+export type WorkflowFixesListPullRequestsError = WorkflowFixesListPullRequestsErrors[keyof WorkflowFixesListPullRequestsErrors];
 
-export type FixesListPullRequestsResponses = {
+export type WorkflowFixesListPullRequestsResponses = {
     /**
-     * Response Fixes-List Pull Requests
+     * Response Workflow-Fixes-List Pull Requests
      * Successful Response
      */
     200: Array<PullRequestPublic>;
 };
 
-export type FixesListPullRequestsResponse = FixesListPullRequestsResponses[keyof FixesListPullRequestsResponses];
+export type WorkflowFixesListPullRequestsResponse = WorkflowFixesListPullRequestsResponses[keyof WorkflowFixesListPullRequestsResponses];
 
-export type FixesRejectFixData = {
+export type WorkflowFixesRejectFixData = {
     body?: never;
     path: {
         /**
@@ -4221,28 +4355,28 @@ export type FixesRejectFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/{fix_id}';
+    url: '/api/v1/workflow-fixes/{fix_id}';
 };
 
-export type FixesRejectFixErrors = {
+export type WorkflowFixesRejectFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRejectFixError = FixesRejectFixErrors[keyof FixesRejectFixErrors];
+export type WorkflowFixesRejectFixError = WorkflowFixesRejectFixErrors[keyof WorkflowFixesRejectFixErrors];
 
-export type FixesRejectFixResponses = {
+export type WorkflowFixesRejectFixResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type FixesRejectFixResponse = FixesRejectFixResponses[keyof FixesRejectFixResponses];
+export type WorkflowFixesRejectFixResponse = WorkflowFixesRejectFixResponses[keyof WorkflowFixesRejectFixResponses];
 
-export type FixesGetFixData = {
+export type WorkflowFixesGetFixData = {
     body?: never;
     path: {
         /**
@@ -4251,28 +4385,28 @@ export type FixesGetFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/{fix_id}';
+    url: '/api/v1/workflow-fixes/{fix_id}';
 };
 
-export type FixesGetFixErrors = {
+export type WorkflowFixesGetFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesGetFixError = FixesGetFixErrors[keyof FixesGetFixErrors];
+export type WorkflowFixesGetFixError = WorkflowFixesGetFixErrors[keyof WorkflowFixesGetFixErrors];
 
-export type FixesGetFixResponses = {
+export type WorkflowFixesGetFixResponses = {
     /**
      * Successful Response
      */
     200: FixPublic;
 };
 
-export type FixesGetFixResponse = FixesGetFixResponses[keyof FixesGetFixResponses];
+export type WorkflowFixesGetFixResponse = WorkflowFixesGetFixResponses[keyof WorkflowFixesGetFixResponses];
 
-export type FixesTriggerFixGenerationForRepoData = {
+export type WorkflowFixesTriggerFixGenerationForRepoData = {
     body?: BatchFixRequest;
     path: {
         /**
@@ -4286,21 +4420,21 @@ export type FixesTriggerFixGenerationForRepoData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/fixes/generate-for-repo/{repo_id}';
+    url: '/api/v1/workflow-fixes/generate-for-repo/{repo_id}';
 };
 
-export type FixesTriggerFixGenerationForRepoErrors = {
+export type WorkflowFixesTriggerFixGenerationForRepoErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesTriggerFixGenerationForRepoError = FixesTriggerFixGenerationForRepoErrors[keyof FixesTriggerFixGenerationForRepoErrors];
+export type WorkflowFixesTriggerFixGenerationForRepoError = WorkflowFixesTriggerFixGenerationForRepoErrors[keyof WorkflowFixesTriggerFixGenerationForRepoErrors];
 
-export type FixesTriggerFixGenerationForRepoResponses = {
+export type WorkflowFixesTriggerFixGenerationForRepoResponses = {
     /**
-     * Response Fixes-Trigger Fix Generation For Repo
+     * Response Workflow-Fixes-Trigger Fix Generation For Repo
      * Successful Response
      */
     202: {
@@ -4308,9 +4442,9 @@ export type FixesTriggerFixGenerationForRepoResponses = {
     };
 };
 
-export type FixesTriggerFixGenerationForRepoResponse = FixesTriggerFixGenerationForRepoResponses[keyof FixesTriggerFixGenerationForRepoResponses];
+export type WorkflowFixesTriggerFixGenerationForRepoResponse = WorkflowFixesTriggerFixGenerationForRepoResponses[keyof WorkflowFixesTriggerFixGenerationForRepoResponses];
 
-export type FixesTriggerWorkflowDeliveryData = {
+export type WorkflowFixesTriggerWorkflowDeliveryData = {
     body: WorkflowDeliverRequest;
     path?: never;
     query?: {
@@ -4319,21 +4453,21 @@ export type FixesTriggerWorkflowDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/fixes/deliver-for-workflow';
+    url: '/api/v1/workflow-fixes/deliver-for-workflow';
 };
 
-export type FixesTriggerWorkflowDeliveryErrors = {
+export type WorkflowFixesTriggerWorkflowDeliveryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesTriggerWorkflowDeliveryError = FixesTriggerWorkflowDeliveryErrors[keyof FixesTriggerWorkflowDeliveryErrors];
+export type WorkflowFixesTriggerWorkflowDeliveryError = WorkflowFixesTriggerWorkflowDeliveryErrors[keyof WorkflowFixesTriggerWorkflowDeliveryErrors];
 
-export type FixesTriggerWorkflowDeliveryResponses = {
+export type WorkflowFixesTriggerWorkflowDeliveryResponses = {
     /**
-     * Response Fixes-Trigger Workflow Delivery
+     * Response Workflow-Fixes-Trigger Workflow Delivery
      * Successful Response
      */
     202: {
@@ -4341,9 +4475,9 @@ export type FixesTriggerWorkflowDeliveryResponses = {
     };
 };
 
-export type FixesTriggerWorkflowDeliveryResponse = FixesTriggerWorkflowDeliveryResponses[keyof FixesTriggerWorkflowDeliveryResponses];
+export type WorkflowFixesTriggerWorkflowDeliveryResponse = WorkflowFixesTriggerWorkflowDeliveryResponses[keyof WorkflowFixesTriggerWorkflowDeliveryResponses];
 
-export type FixesTriggerRepoDeliveryData = {
+export type WorkflowFixesTriggerRepoDeliveryData = {
     body?: never;
     path: {
         /**
@@ -4357,21 +4491,21 @@ export type FixesTriggerRepoDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/fixes/deliver-for-repo/{repo_id}';
+    url: '/api/v1/workflow-fixes/deliver-for-repo/{repo_id}';
 };
 
-export type FixesTriggerRepoDeliveryErrors = {
+export type WorkflowFixesTriggerRepoDeliveryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesTriggerRepoDeliveryError = FixesTriggerRepoDeliveryErrors[keyof FixesTriggerRepoDeliveryErrors];
+export type WorkflowFixesTriggerRepoDeliveryError = WorkflowFixesTriggerRepoDeliveryErrors[keyof WorkflowFixesTriggerRepoDeliveryErrors];
 
-export type FixesTriggerRepoDeliveryResponses = {
+export type WorkflowFixesTriggerRepoDeliveryResponses = {
     /**
-     * Response Fixes-Trigger Repo Delivery
+     * Response Workflow-Fixes-Trigger Repo Delivery
      * Successful Response
      */
     202: {
@@ -4379,9 +4513,9 @@ export type FixesTriggerRepoDeliveryResponses = {
     };
 };
 
-export type FixesTriggerRepoDeliveryResponse = FixesTriggerRepoDeliveryResponses[keyof FixesTriggerRepoDeliveryResponses];
+export type WorkflowFixesTriggerRepoDeliveryResponse = WorkflowFixesTriggerRepoDeliveryResponses[keyof WorkflowFixesTriggerRepoDeliveryResponses];
 
-export type FixesRegenerateFixesForRepoData = {
+export type WorkflowFixesRegenerateFixesForRepoData = {
     body?: never;
     path: {
         /**
@@ -4390,21 +4524,21 @@ export type FixesRegenerateFixesForRepoData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/regenerate-for-repo/{repo_id}';
+    url: '/api/v1/workflow-fixes/regenerate-for-repo/{repo_id}';
 };
 
-export type FixesRegenerateFixesForRepoErrors = {
+export type WorkflowFixesRegenerateFixesForRepoErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRegenerateFixesForRepoError = FixesRegenerateFixesForRepoErrors[keyof FixesRegenerateFixesForRepoErrors];
+export type WorkflowFixesRegenerateFixesForRepoError = WorkflowFixesRegenerateFixesForRepoErrors[keyof WorkflowFixesRegenerateFixesForRepoErrors];
 
-export type FixesRegenerateFixesForRepoResponses = {
+export type WorkflowFixesRegenerateFixesForRepoResponses = {
     /**
-     * Response Fixes-Regenerate Fixes For Repo
+     * Response Workflow-Fixes-Regenerate Fixes For Repo
      * Successful Response
      */
     202: {
@@ -4412,9 +4546,9 @@ export type FixesRegenerateFixesForRepoResponses = {
     };
 };
 
-export type FixesRegenerateFixesForRepoResponse = FixesRegenerateFixesForRepoResponses[keyof FixesRegenerateFixesForRepoResponses];
+export type WorkflowFixesRegenerateFixesForRepoResponse = WorkflowFixesRegenerateFixesForRepoResponses[keyof WorkflowFixesRegenerateFixesForRepoResponses];
 
-export type FixesRegenerateFixesForWorkflowData = {
+export type WorkflowFixesRegenerateFixesForWorkflowData = {
     body?: never;
     path: {
         /**
@@ -4423,21 +4557,21 @@ export type FixesRegenerateFixesForWorkflowData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/regenerate-for-workflow/{fix_id}';
+    url: '/api/v1/workflow-fixes/regenerate-for-workflow/{fix_id}';
 };
 
-export type FixesRegenerateFixesForWorkflowErrors = {
+export type WorkflowFixesRegenerateFixesForWorkflowErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRegenerateFixesForWorkflowError = FixesRegenerateFixesForWorkflowErrors[keyof FixesRegenerateFixesForWorkflowErrors];
+export type WorkflowFixesRegenerateFixesForWorkflowError = WorkflowFixesRegenerateFixesForWorkflowErrors[keyof WorkflowFixesRegenerateFixesForWorkflowErrors];
 
-export type FixesRegenerateFixesForWorkflowResponses = {
+export type WorkflowFixesRegenerateFixesForWorkflowResponses = {
     /**
-     * Response Fixes-Regenerate Fixes For Workflow
+     * Response Workflow-Fixes-Regenerate Fixes For Workflow
      * Successful Response
      */
     202: {
@@ -4445,9 +4579,9 @@ export type FixesRegenerateFixesForWorkflowResponses = {
     };
 };
 
-export type FixesRegenerateFixesForWorkflowResponse = FixesRegenerateFixesForWorkflowResponses[keyof FixesRegenerateFixesForWorkflowResponses];
+export type WorkflowFixesRegenerateFixesForWorkflowResponse = WorkflowFixesRegenerateFixesForWorkflowResponses[keyof WorkflowFixesRegenerateFixesForWorkflowResponses];
 
-export type FixesRegenerateFailedFixData = {
+export type WorkflowFixesRegenerateFailedFixData = {
     body?: never;
     path: {
         /**
@@ -4456,21 +4590,21 @@ export type FixesRegenerateFailedFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/{fix_id}/regenerate';
+    url: '/api/v1/workflow-fixes/{fix_id}/regenerate';
 };
 
-export type FixesRegenerateFailedFixErrors = {
+export type WorkflowFixesRegenerateFailedFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesRegenerateFailedFixError = FixesRegenerateFailedFixErrors[keyof FixesRegenerateFailedFixErrors];
+export type WorkflowFixesRegenerateFailedFixError = WorkflowFixesRegenerateFailedFixErrors[keyof WorkflowFixesRegenerateFailedFixErrors];
 
-export type FixesRegenerateFailedFixResponses = {
+export type WorkflowFixesRegenerateFailedFixResponses = {
     /**
-     * Response Fixes-Regenerate Failed Fix
+     * Response Workflow-Fixes-Regenerate Failed Fix
      * Successful Response
      */
     202: {
@@ -4478,9 +4612,9 @@ export type FixesRegenerateFailedFixResponses = {
     };
 };
 
-export type FixesRegenerateFailedFixResponse = FixesRegenerateFailedFixResponses[keyof FixesRegenerateFailedFixResponses];
+export type WorkflowFixesRegenerateFailedFixResponse = WorkflowFixesRegenerateFailedFixResponses[keyof WorkflowFixesRegenerateFailedFixResponses];
 
-export type FixesSyncPrStatusesData = {
+export type WorkflowFixesSyncPrStatusesData = {
     body?: never;
     path: {
         /**
@@ -4489,21 +4623,21 @@ export type FixesSyncPrStatusesData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/fixes/sync-pr-status/{repo_id}';
+    url: '/api/v1/workflow-fixes/sync-pr-status/{repo_id}';
 };
 
-export type FixesSyncPrStatusesErrors = {
+export type WorkflowFixesSyncPrStatusesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type FixesSyncPrStatusesError = FixesSyncPrStatusesErrors[keyof FixesSyncPrStatusesErrors];
+export type WorkflowFixesSyncPrStatusesError = WorkflowFixesSyncPrStatusesErrors[keyof WorkflowFixesSyncPrStatusesErrors];
 
-export type FixesSyncPrStatusesResponses = {
+export type WorkflowFixesSyncPrStatusesResponses = {
     /**
-     * Response Fixes-Sync Pr Statuses
+     * Response Workflow-Fixes-Sync Pr Statuses
      * Successful Response
      */
     200: {
@@ -4511,7 +4645,7 @@ export type FixesSyncPrStatusesResponses = {
     };
 };
 
-export type FixesSyncPrStatusesResponse = FixesSyncPrStatusesResponses[keyof FixesSyncPrStatusesResponses];
+export type WorkflowFixesSyncPrStatusesResponse = WorkflowFixesSyncPrStatusesResponses[keyof WorkflowFixesSyncPrStatusesResponses];
 
 export type RulesListRulesData = {
     body?: never;
@@ -4520,7 +4654,7 @@ export type RulesListRulesData = {
         /**
          * Category
          */
-        category?: IssueCategory | null;
+        category?: Category | null;
         /**
          * Enabled
          */

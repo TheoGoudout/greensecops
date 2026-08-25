@@ -3,7 +3,7 @@
 import uuid
 
 from app.models import DockerBuildEnrichment, DockerFinding
-from app.models.enums import IssueCategory, IssueSeverity
+from app.models.enums import Category, Severity
 from app.services.llm.docker_fix_prompt import (
     NO_STATIC_FINDINGS_PLACEHOLDER,
     build_docker_fix_prompt,
@@ -17,8 +17,8 @@ def _finding(message: str) -> DockerFinding:
         rule_id=uuid.uuid4(),
         file_path="Dockerfile",
         fingerprint="abc123",
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message=message,
     )
 

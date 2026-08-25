@@ -10,12 +10,12 @@ from app.core import db as db_module
 from app.core.db import _seed_rules
 from app.core.rule_registry import discover_rules
 from app.models import (
-    IssueCategory,
-    IssueSeverity,
+    Category,
     Organization,
     Repository,
     Rule,
     RuleDomain,
+    Severity,
     UserTier,
 )
 
@@ -75,9 +75,9 @@ def test_seed_rules_returns_newly_inserted_slug(db: Session) -> None:
     new_slug = f"throwaway-rule-{uuid.uuid4().hex[:8]}"
     extra = {
         "slug": new_slug,
-        "domain": RuleDomain.workflow,
-        "category": IssueCategory.energy,
-        "severity": IssueSeverity.low,
+        "domain": RuleDomain.ci_workflow,
+        "category": Category.energy,
+        "severity": Severity.low,
         "severity_weight": 0.5,
         "title": "Throwaway test rule",
         "description": "Temporary rule used only to exercise _seed_rules.",
@@ -156,7 +156,7 @@ def _org(db: Session) -> Organization:
 
 def test_init_enqueues_reanalysis_when_new_rules_and_repos_exist(
     db: Session,
-    _org: Organization,  # noqa: ARG001
+    _org: Organization,
 ) -> None:
     from app import initial_data
 
@@ -181,7 +181,7 @@ def test_init_enqueues_reanalysis_when_new_rules_and_repos_exist(
     mock_delay.assert_called_once()
 
 
-def test_init_does_not_enqueue_when_no_new_rules(db: Session) -> None:  # noqa: ARG001
+def test_init_does_not_enqueue_when_no_new_rules(db: Session) -> None:
     from app import initial_data
 
     with (

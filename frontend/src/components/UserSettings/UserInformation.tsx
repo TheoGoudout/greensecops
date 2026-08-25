@@ -17,8 +17,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import useAuth from "@/hooks/useAuth"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
-import { handleApiError, showSuccessToast } from "@/utils"
 
 const formSchema = z.object({
   full_name: z.string().max(30).optional(),

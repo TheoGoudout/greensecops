@@ -68,6 +68,7 @@ from app.services.billing.lifecycle import (
     # is the OpenAPI operation id and therefore the generated client's method.
     get_subscription as load_subscription,
 )
+from app.services.billing.notifications import send_billing_email
 from app.services.billing.quota import snapshot
 
 logger = logging.getLogger(__name__)
@@ -606,7 +607,6 @@ def _notify(
     briefly down would re-run the whole handler — and re-send whatever did
     succeed.
     """
-    from app.services.billing.notifications import send_billing_email
 
     try:
         send_billing_email(session, sub, kind, **context)

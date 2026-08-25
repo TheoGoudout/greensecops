@@ -1,15 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Bell, BellOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { type IssuePublic, IssuesService } from "@/client"
+import { type IssuePublic, WorkflowFindingsService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { issueStatusColor, issueStatusLabel } from "@/lib/status-colors"
-import { apiErrorDetail } from "@/utils"
+import { apiErrorDetail } from "@/lib/api-error"
+import { findingStatusColor, findingStatusLabel } from "@/lib/status-colors"
 
 interface IssueRowProps {
   issue: IssuePublic
@@ -34,8 +34,8 @@ export function IssueRow({
   const muteMutation = useMutation({
     mutationFn: () =>
       ignored
-        ? IssuesService.unignoreIssue({ issueId: issue.id })
-        : IssuesService.ignoreIssue({ issueId: issue.id }),
+        ? WorkflowFindingsService.unignoreIssue({ issueId: issue.id })
+        : WorkflowFindingsService.ignoreIssue({ issueId: issue.id }),
     onSuccess: () => {
       toast.success(ignored ? "Issue unignored" : "Issue ignored")
       queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
@@ -71,10 +71,10 @@ export function IssueRow({
           <RuleSlugChip>{issue.rule_slug}</RuleSlugChip>
           {issue.status && issue.status !== "open" && (
             <StatusPill
-              colorClass={issueStatusColor(issue.status)}
+              colorClass={findingStatusColor(issue.status)}
               className="inline-flex items-center capitalize"
             >
-              {issueStatusLabel(issue.status)}
+              {findingStatusLabel(issue.status)}
             </StatusPill>
           )}
           {issue.needs_manual_work && (

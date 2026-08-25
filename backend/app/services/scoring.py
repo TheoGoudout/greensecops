@@ -3,24 +3,25 @@ from collections import defaultdict
 from typing import Any
 
 from sqlalchemy import Case, case
+from sqlalchemy.orm import Mapped
 from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, select
 
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    IssueCategory,
-    IssueSeverity,
+    Category,
     Repository,
+    ScanStatus,
+    Severity,
     WorkflowFile,
+    WorkflowScan,
 )
 
 _SEVERITY_PENALTY: dict[str, float] = {
-    IssueSeverity.critical: 20.0,
-    IssueSeverity.high: 10.0,
-    IssueSeverity.medium: 5.0,
-    IssueSeverity.low: 2.0,
-    IssueSeverity.info: 0.5,
+    Severity.critical: 20.0,
+    Severity.high: 10.0,
+    Severity.medium: 5.0,
+    Severity.low: 2.0,
+    Severity.info: 0.5,
 }
 
 _GRADE_THRESHOLDS: list[tuple[float, str]] = [
@@ -48,26 +49,33 @@ def _compute_penalty(
 
 
 def compute_score(
-    workflow_violations: list[tuple[str, float]],
-    job_violations: dict[str, list[tuple[str, float]]],
+    target_violations: list[tuple[str, float]],
+    group_violations: dict[str, list[tuple[str, float]]],
 ) -> float:
-    """Compute 0-100 score normalised by number of jobs.
+    """Compute a 0-100 score, normalised across whatever the groups are.
 
-    Each job is scored independently (100 minus its penalties, clamped to 0).
-    The workflow score is the mean of all job scores, minus workflow-level
-    penalties.
+    Each group is scored independently (100 minus its penalties, clamped to 0)
+    and the result is their mean, minus any penalties that apply to the target
+    as a whole rather than to one group.
+
+    The parameters used to be named ``workflow_violations`` and
+    ``job_violations``, after the first engine to use this. Every engine scores
+    through it now, and the names stopped describing what callers pass: the
+    Docker engine groups by *file*, and needed a paragraph of comment at its own
+    call site explaining that files take the place jobs occupy here. A group is
+    a job for the CI engine, a file for Docker; Terraform has no groups and
+    passes ``{}``, which scores the target's violations against a clean 100.
     """
-    if job_violations:
-        job_scores = [
+    if group_violations:
+        group_scores = [
             max(0.0, 100.0 - _compute_penalty(viols))
-            for viols in job_violations.values()
+            for viols in group_violations.values()
         ]
-        avg_job_score = sum(job_scores) / len(job_scores)
+        avg_group_score = sum(group_scores) / len(group_scores)
     else:
-        avg_job_score = 100.0
+        avg_group_score = 100.0
 
-    wf_penalty = _compute_penalty(workflow_violations)
-    return max(0.0, avg_job_score - wf_penalty)
+    return max(0.0, avg_group_score - _compute_penalty(target_violations))
 
 
 def score_to_grade(score: float) -> str:
@@ -115,15 +123,17 @@ def compute_avg_scores_batch(
         return {}
 
     analyses = session.exec(
-        select(Analysis)
-        .join(WorkflowFile, Analysis.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-        .where(Analysis.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
+        select(WorkflowScan)
+        .join(WorkflowFile, WorkflowScan.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(Repository, WorkflowScan.repo_id == Repository.id)  # type: ignore[arg-type]
+        .where(WorkflowScan.repo_id.in_(repo_ids))  # type: ignore[attr-defined]
         .where(WorkflowFile.branch == Repository.default_branch)
         .where(col(WorkflowFile.deleted_at).is_(None))
-        .where(Analysis.status == AnalysisStatus.completed)
-        .where(Analysis.score.isnot(None))  # type: ignore[union-attr]
-        .order_by(col(Analysis.workflow_file_id), col(Analysis.created_at).desc())
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .where(WorkflowScan.score.isnot(None))  # type: ignore[union-attr]
+        .order_by(
+            col(WorkflowScan.workflow_file_id), col(WorkflowScan.created_at).desc()
+        )
     ).all()
 
     seen: set[uuid.UUID] = set()
@@ -141,11 +151,15 @@ def compute_avg_scores_batch(
     return result
 
 
-def severity_penalty_case(severity_col: ColumnElement[Any]) -> Case[Any]:
+def severity_penalty_case(severity_col: ColumnElement[Any] | Mapped[Any]) -> Case[Any]:
     """SQL ``CASE`` mapping a severity column to its penalty weight.
 
     Mirrors ``_SEVERITY_PENALTY`` for use inside aggregate queries (e.g.
     summing weighted issue penalty per category without fetching rows).
+
+    ``Mapped`` is in the union because callers reach the column through
+    SQLModel's ``col()``, which is typed to return it — a model attribute is a
+    column expression at runtime, but only ``col()`` says so to the checker.
     """
     return case(
         *[(severity_col == sev, penalty) for sev, penalty in _SEVERITY_PENALTY.items()],
@@ -154,8 +168,8 @@ def severity_penalty_case(severity_col: ColumnElement[Any]) -> Case[Any]:
 
 
 def compute_category_scores(
-    repo_avg_score: float, penalties: dict[IssueCategory, float]
-) -> dict[IssueCategory, tuple[float, str]]:
+    repo_avg_score: float, penalties: dict[Category, float]
+) -> dict[Category, tuple[float, str]]:
     """Split a repo's overall score into per-category scores/grades.
 
     Each category's score deviates from ``repo_avg_score`` by how far its
@@ -165,13 +179,13 @@ def compute_category_scores(
     share can still clamp at 0, which then breaks the exact-average
     property, but only for pathologically skewed repos).
 
-    ``penalties`` must have an entry for every ``IssueCategory`` (0.0 where
+    ``penalties`` must have an entry for every ``Category`` (0.0 where
     there are no open issues) so the mean is computed over all axes, not just
     the categories that happen to have issues.
     """
-    mean_penalty = sum(penalties.values()) / len(IssueCategory)
-    result: dict[IssueCategory, tuple[float, str]] = {}
-    for category in IssueCategory:
+    mean_penalty = sum(penalties.values()) / len(Category)
+    result: dict[Category, tuple[float, str]] = {}
+    for category in Category:
         deviation = penalties[category] - mean_penalty
         score = max(0.0, min(100.0, repo_avg_score - deviation))
         result[category] = (score, score_to_grade(score))

@@ -17,6 +17,8 @@ from collections.abc import Awaitable, Callable
 
 import redis.asyncio as aioredis
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_TTL = 24 * 60 * 60
@@ -24,8 +26,6 @@ DEFAULT_TTL = 24 * 60 * 60
 
 def open_cache() -> aioredis.Redis | None:
     try:
-        from app.core.config import settings
-
         return aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call,no-any-return]
     except Exception:
         logger.warning("Redis unavailable for GitHub ref cache", exc_info=True)

@@ -21,16 +21,16 @@ from datetime import datetime, timezone
 from sqlmodel import Session, col, select
 
 from app.models import (
-    Analysis,
-    AnalysisTrigger,
     CIStatus,
-    Fix,
+    FindingResolutionReason,
     FixStatus,
-    Issue,
-    IssueResolutionReason,
     PullRequest,
     Repository,
     ReviewDecision,
+    ScanTrigger,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
@@ -70,14 +70,14 @@ def review_state_to_decision(state: str) -> ReviewDecision | None:
     }.get(state.lower())
 
 
-# ─── Analysis ────────────────────────────────────────────────────────────────
+# ─── Scan ────────────────────────────────────────────────────────────────────
 
 
 def enqueue_workflow_analysis(
     repo: Repository,
     branch: str,
     commit_sha: str,
-    trigger: AnalysisTrigger,
+    trigger: ScanTrigger,
     force: bool = False,
 ) -> None:
     """Enqueue a static analysis for ``branch`` and announce it over SSE.
@@ -107,7 +107,7 @@ def enqueue_terraform_scans(
     repo: Repository,
     branch: str,
     commit_sha: str,
-    trigger: AnalysisTrigger,
+    trigger: ScanTrigger,
     changed_paths: set[str] | None,
 ) -> None:
     """Enqueue a scan for every enabled TerraformRoot a push touched.
@@ -152,7 +152,7 @@ def enqueue_docker_scans(
     repo: Repository,
     branch: str,
     commit_sha: str,
-    trigger: AnalysisTrigger,
+    trigger: ScanTrigger,
     changed_paths: set[str] | None,
 ) -> None:
     """Enqueue a scan for every enabled DockerTarget a push touched.
@@ -230,7 +230,9 @@ def handle_pull_request_lifecycle(
         pr_record.id,
     )
 
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    pr_fixes = list(
+        session.exec(select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)).all()
+    )
 
     if event == "reopen":
         # Reopening withdraws the close-as-rejection signal: fixes the closed-PR
@@ -245,7 +247,7 @@ def handle_pull_request_lifecycle(
         # A delivered PR closed without merging withdraws its fixes: move them to
         # ``superseded_by_closed_pr`` so ``reopen`` restores them. try_advance
         # keeps it a no-op for any already-terminal fix.
-        superseded_fixes: list[Fix] = []
+        superseded_fixes: list[WorkflowFix] = []
         for pr_fix in pr_fixes:
             if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr"):
                 session.add(pr_fix)
@@ -262,7 +264,7 @@ def handle_pull_request_lifecycle(
         # The PR merged: land its delivered fixes (terminal) and resolve the
         # issues they addressed — the code is now on the branch. try_advance
         # keeps non-``delivered`` fixes untouched.
-        landed_fixes: list[Fix] = []
+        landed_fixes: list[WorkflowFix] = []
         for pr_fix in pr_fixes:
             if sm.try_advance(pr_fix, sm.FixMachine, "land"):
                 session.add(pr_fix)
@@ -305,7 +307,7 @@ def handle_pull_request_lifecycle(
 
 def _resolve_issues_for_landed_fixes(
     session: Session,
-    fixes: list[Fix],
+    fixes: list[WorkflowFix],
 ) -> None:
     """Resolve the still-open issues addressed by merged (landed) fixes.
 
@@ -316,13 +318,13 @@ def _resolve_issues_for_landed_fixes(
     now = datetime.now(timezone.utc)
     fix_ids = [f.id for f in fixes]
     issues = session.exec(
-        select(Issue)
-        .where(col(Issue.fix_id).in_(fix_ids))
-        .where(col(Issue.resolved_at).is_(None))
+        select(WorkflowFinding)
+        .where(col(WorkflowFinding.fix_id).in_(fix_ids))
+        .where(col(WorkflowFinding.resolved_at).is_(None))
     ).all()
     for issue in issues:
         issue.resolved_at = now
-        issue.resolution_reason = IssueResolutionReason.merged
+        issue.resolution_reason = FindingResolutionReason.merged
         session.add(issue)
 
 
@@ -331,7 +333,9 @@ def _publish_pr_updated(session: Session, pr_record: PullRequest) -> None:
     repo = session.get(Repository, pr_record.repo_id)
     if not repo:
         return
-    pr_fixes = list(session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).all())
+    pr_fixes = list(
+        session.exec(select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)).all()
+    )
     events_pub.publish_event(
         ev.pr_updated(
             str(repo.org_id),
@@ -450,7 +454,7 @@ def handle_issue_command(
             repo,
             branch=repo.default_branch,
             commit_sha="",
-            trigger=AnalysisTrigger.manual,
+            trigger=ScanTrigger.manual,
             force=True,
         )
     else:
@@ -471,10 +475,10 @@ def _handle_issue_ignore_command(
     fingerprint = command[1]
     issues = list(
         session.exec(
-            select(Issue)
-            .join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
-            .where(Analysis.repo_id == repo.id)
-            .where(Issue.fingerprint == fingerprint)
+            select(WorkflowFinding)
+            .join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
+            .where(WorkflowScan.repo_id == repo.id)
+            .where(WorkflowFinding.fingerprint == fingerprint)
         ).all()
     )
     if not issues:

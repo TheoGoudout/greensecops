@@ -17,7 +17,7 @@ class SSEEvent:
         return f"data: {json.dumps(payload)}\n\n"
 
 
-# ─── Analysis ────────────────────────────────────────────────────────────────
+# ─── Scan ────────────────────────────────────────────────────────────────────
 
 
 def analysis_queued(org_id: str, repo_id: str, branch: str, trigger: str) -> SSEEvent:

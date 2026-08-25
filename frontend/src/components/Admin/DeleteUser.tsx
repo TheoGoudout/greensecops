@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { LoadingButton } from "@/components/ui/loading-button"
-import { handleApiError, showSuccessToast } from "@/utils"
+import { handleApiError, showSuccessToast } from "@/lib/toast"
 
 interface DeleteUserProps {
   id: string

@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/analyses/ endpoints."""
+"""Tests for the /api/v1/workflow-scans/ endpoints."""
 
 import uuid
 from unittest.mock import patch
@@ -9,78 +9,49 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
     Organization,
     Repository,
-    UserTier,
+    ScanStatus,
     WorkflowFile,
+    WorkflowScan,
 )
+from tests.fixtures import factories as f
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture()
 def org(db: Session) -> Organization:
-    organization = Organization(
-        name=f"analyses-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
-    )
-    db.add(organization)
-    db.commit()
-    db.refresh(organization)
-    return organization
+    return f.make_org(db)
 
 
 @pytest.fixture()
 def repo(db: Session, org: Organization) -> Repository:
-    repository = Repository(
-        org_id=org.id,
-        github_repo_id=int(uuid.uuid4().int % 10**9),
-        full_name=f"analysesowner/repo-{uuid.uuid4().hex[:8]}",
-        installation_id=55555,
-    )
-    db.add(repository)
-    db.commit()
-    db.refresh(repository)
-    return repository
+    return f.make_repo(db, org, installation_id=55555)
 
 
 @pytest.fixture()
 def workflow_file(db: Session, repo: Repository) -> WorkflowFile:
-    wf = WorkflowFile(
-        repo_id=repo.id,
-        path=".github/workflows/ci.yml",
-        content_hash=uuid.uuid4().hex,
-        raw_content="on: push\njobs: {}",
-    )
-    db.add(wf)
-    db.commit()
-    db.refresh(wf)
-    return wf
+    return f.make_workflow_file(db, repo, raw_content="on: push\njobs: {}")
 
 
 @pytest.fixture()
 def completed_analysis(
     db: Session, repo: Repository, workflow_file: WorkflowFile
-) -> Analysis:
-    analysis = Analysis(
-        repo_id=repo.id,
-        workflow_file_id=workflow_file.id,
-        content_hash=workflow_file.content_hash,
-        status=AnalysisStatus.completed,
+) -> WorkflowScan:
+    return f.make_scan(
+        db,
+        repo,
+        workflow_file,
+        status=ScanStatus.completed,
         score=85.0,
         grade="B",
-        triggered_by=AnalysisTrigger.manual,
         branch="main",
+        content_hash=workflow_file.content_hash,
     )
-    db.add(analysis)
-    db.commit()
-    db.refresh(analysis)
-    return analysis
 
 
-# ─── GET /analyses/ ───────────────────────────────────────────────────────────
+# ─── GET /workflow-scans/ ───────────────────────────────────────────────────────────
 
 
 def test_list_analyses_empty(
@@ -89,26 +60,11 @@ def test_list_analyses_empty(
     db: Session,
 ) -> None:
     # Arrange — fresh repo with no analyses
-    fresh_org = Organization(
-        name=f"no-analyses-org-{uuid.uuid4().hex[:8]}", tier=UserTier.free
-    )
-    db.add(fresh_org)
-    db.commit()
-    db.refresh(fresh_org)
-
-    fresh_repo = Repository(
-        org_id=fresh_org.id,
-        github_repo_id=int(uuid.uuid4().int % 10**9),
-        full_name=f"empty-analyses/repo-{uuid.uuid4().hex[:8]}",
-        installation_id=66666,
-    )
-    db.add(fresh_repo)
-    db.commit()
-    db.refresh(fresh_repo)
+    fresh_repo = f.make_repo(db, f.make_org(db), installation_id=66666)
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/",
+        f"{settings.API_V1_STR}/workflow-scans/",
         params={"repo_id": str(fresh_repo.id)},
         headers=superuser_token_headers,
     )
@@ -121,12 +77,12 @@ def test_list_analyses_empty(
 def test_list_analyses_with_data(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
     repo: Repository,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/",
+        f"{settings.API_V1_STR}/workflow-scans/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -142,12 +98,12 @@ def test_list_analyses_with_data(
 def test_list_analyses_filter_by_grade(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
     repo: Repository,
 ) -> None:
     # Act — filter by grade B
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/",
+        f"{settings.API_V1_STR}/workflow-scans/",
         params={"repo_id": str(repo.id), "grade": "B"},
         headers=superuser_token_headers,
     )
@@ -162,12 +118,12 @@ def test_list_analyses_filter_by_grade(
 def test_list_analyses_filter_by_status(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
     repo: Repository,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/",
+        f"{settings.API_V1_STR}/workflow-scans/",
         params={"repo_id": str(repo.id), "status": "completed"},
         headers=superuser_token_headers,
     )
@@ -185,11 +141,11 @@ def test_list_analyses_filter_by_status(
 def test_get_analysis_found(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/{completed_analysis.id}",
+        f"{settings.API_V1_STR}/workflow-scans/{completed_analysis.id}",
         headers=superuser_token_headers,
     )
 
@@ -204,13 +160,13 @@ def test_get_analysis_found(
 def test_get_analysis_includes_workflow_path(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    completed_analysis: Analysis,
+    completed_analysis: WorkflowScan,
     workflow_file: WorkflowFile,
     repo: Repository,
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/{completed_analysis.id}",
+        f"{settings.API_V1_STR}/workflow-scans/{completed_analysis.id}",
         headers=superuser_token_headers,
     )
 
@@ -227,13 +183,13 @@ def test_get_analysis_not_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/analyses/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow-scans/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
     # Assert
     assert response.status_code == 404
-    assert response.json()["detail"] == "Analysis not found"
+    assert response.json()["detail"] == "Workflow scan not found"
 
 
 # ─── POST /analyses/trigger/{repo_id} ────────────────────────────────────────
@@ -249,7 +205,7 @@ def test_trigger_analysis_success(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/trigger/{repo.id}",
+            f"{settings.API_V1_STR}/workflow-scans/trigger/{repo.id}",
             headers=superuser_token_headers,
         )
 
@@ -272,7 +228,7 @@ def test_trigger_analysis_force_defaults_to_true(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/trigger/{repo.id}",
+            f"{settings.API_V1_STR}/workflow-scans/trigger/{repo.id}",
             headers=superuser_token_headers,
         )
 
@@ -290,7 +246,7 @@ def test_trigger_analysis_can_opt_out_of_force(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/trigger/{repo.id}",
+            f"{settings.API_V1_STR}/workflow-scans/trigger/{repo.id}",
             params={"force": "false"},
             headers=superuser_token_headers,
         )
@@ -306,7 +262,7 @@ def test_trigger_analysis_repo_not_found(
     # Act
     with patch("app.workers.tasks.static_analysis.run_static_analysis.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/trigger/{uuid.uuid4()}",
+            f"{settings.API_V1_STR}/workflow-scans/trigger/{uuid.uuid4()}",
             headers=superuser_token_headers,
         )
 
@@ -329,7 +285,7 @@ def test_reanalyze_for_workflow_success(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/reanalyze-for-workflow/{workflow_file.id}",
+            f"{settings.API_V1_STR}/workflow-scans/reanalyze-for-workflow/{workflow_file.id}",
             headers=superuser_token_headers,
         )
 
@@ -353,7 +309,7 @@ def test_reanalyze_for_workflow_can_opt_out_of_force(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/reanalyze-for-workflow/{workflow_file.id}",
+            f"{settings.API_V1_STR}/workflow-scans/reanalyze-for-workflow/{workflow_file.id}",
             params={"force": "false"},
             headers=superuser_token_headers,
         )
@@ -368,7 +324,7 @@ def test_reanalyze_for_workflow_not_found(
 ) -> None:
     with patch("app.workers.tasks.static_analysis.run_static_analysis.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/analyses/reanalyze-for-workflow/{uuid.uuid4()}",
+            f"{settings.API_V1_STR}/workflow-scans/reanalyze-for-workflow/{uuid.uuid4()}",
             headers=superuser_token_headers,
         )
 

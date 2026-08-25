@@ -7,29 +7,31 @@ from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..enums import (
-    IssueCategory,
-    IssueResolutionReason,
-    IssueSeverity,
-    IssueStatus,
+    Category,
+    FindingResolutionReason,
+    FindingStatus,
+    Severity,
 )
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
-    from .analysis import Analysis
-    from .fix import Fix
     from .rule import Rule
+    from .workflow_fix import WorkflowFix
+    from .workflow_scan import WorkflowScan
 
 
-class Issue(SQLModel, table=True):
+class WorkflowFinding(SQLModel, table=True):
+    __tablename__ = "workflow_finding"
+
     __table_args__ = (
         UniqueConstraint(
-            "workflow_file_id", "fingerprint", name="uq_issue_wf_fingerprint"
+            "workflow_file_id", "fingerprint", name="uq_workflow_finding_wf_fingerprint"
         ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     analysis_id: uuid.UUID = Field(
-        foreign_key="analysis.id", nullable=False, ondelete="CASCADE"
+        foreign_key="workflow_scan.id", nullable=False, ondelete="CASCADE"
     )
     workflow_file_id: uuid.UUID | None = Field(
         default=None,
@@ -44,15 +46,15 @@ class Issue(SQLModel, table=True):
     step: str | None = Field(default=None, max_length=255)
     step_index: int | None = Field(default=None)
     fingerprint: str | None = Field(default=None, max_length=16, index=True)
-    severity: IssueSeverity
-    category: IssueCategory
+    severity: Severity
+    category: Category
     # Derived from ignored_at + resolved_at + fix_id, but persisted and kept
     # authoritative by a DB trigger (see migrations 0022/0026) so it survives
     # the fix_id ON DELETE SET NULL cascade. Applications never set it directly;
     # the trigger owns writes. To mute/unmute an issue, set/clear ignored_at.
-    status: IssueStatus = Field(
-        default=IssueStatus.open,
-        sa_column_kwargs={"server_default": IssueStatus.open.value},
+    status: FindingStatus = Field(
+        default=FindingStatus.open,
+        sa_column_kwargs={"server_default": FindingStatus.open.value},
         index=True,
     )
     line_start: int | None = Field(default=None)
@@ -65,7 +67,7 @@ class Issue(SQLModel, table=True):
     resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     # Why the issue resolved (set with resolved_at, cleared on recur). An
     # attribute of the ``resolved`` state, not a separate state.
-    resolution_reason: IssueResolutionReason | None = Field(default=None)
+    resolution_reason: FindingResolutionReason | None = Field(default=None)
     # Set when a user dismisses the violation (false positive / accepted risk);
     # takes precedence in the status trigger so the issue reads ``ignored``.
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
@@ -80,10 +82,10 @@ class Issue(SQLModel, table=True):
         default=None,
         sa_column=sa.Column(
             sa.UUID,
-            sa.ForeignKey("fix.id", ondelete="SET NULL"),
+            sa.ForeignKey("workflow_fix.id", ondelete="SET NULL"),
             nullable=True,
         ),
     )
-    analysis: Optional["Analysis"] = Relationship(back_populates="issues")
-    rule: Optional["Rule"] = Relationship(back_populates="issues")
-    fix: Optional["Fix"] = Relationship(back_populates="issues")
+    scan: Optional["WorkflowScan"] = Relationship(back_populates="findings")
+    rule: Optional["Rule"] = Relationship(back_populates="findings")
+    fix: Optional["WorkflowFix"] = Relationship(back_populates="findings")

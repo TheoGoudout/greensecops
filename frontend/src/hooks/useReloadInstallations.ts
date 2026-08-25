@@ -1,7 +1,7 @@
 import { OAuthError, OAuthErrorCode, useGitHubLogin } from "@react-oauth/github"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { InstallationsService } from "@/client"
-import { showErrorToast, showSuccessToast } from "@/utils"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
 
 const REDIRECT_URI = `${window.location.origin}/auth/github/callback`
 

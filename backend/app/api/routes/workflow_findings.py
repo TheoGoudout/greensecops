@@ -10,20 +10,20 @@ from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
 from app.api.mappers import to_issue_public
 from app.api.router import Role, RoleRouter
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    Fix,
-    Issue,
-    IssueCategory,
+    Category,
     IssueCategoryStat,
     IssuePublic,
-    IssueSeverity,
     IssueStatsPublic,
     RepoCategoryStat,
     RepoIssueStats,
     Repository,
     Rule,
+    ScanStatus,
+    Severity,
     WorkflowFile,
+    WorkflowFinding,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services.scoring import (
     compute_avg_scores_batch,
@@ -33,19 +33,19 @@ from app.services.scoring import (
 )
 from app.services.state_machines import REJECTED_STATUSES
 
-router = RoleRouter(prefix="/issues", tags=["issues"])
+router = RoleRouter()
 
 
 def _authorize_issue(
-    session: SessionDep, current_user: CurrentUser, issue: Issue
+    session: SessionDep, current_user: CurrentUser, issue: WorkflowFinding
 ) -> None:
     """404 unless the caller is a superuser or a member of the issue's org."""
     if current_user.is_superuser:
         return
-    analysis = session.get(Analysis, issue.analysis_id)
+    analysis = session.get(WorkflowScan, issue.analysis_id)
     repo = session.get(Repository, analysis.repo_id) if analysis else None
     if not repo or repo.org_id not in user_org_ids(session, current_user):
-        raise HTTPException(status_code=404, detail="Issue not found")
+        raise HTTPException(status_code=404, detail="Workflow finding not found")
 
 
 @router.get("/", role=Role.user, response_model=list[IssuePublic])
@@ -55,8 +55,8 @@ def list_issues(
     analysis_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
-    category: IssueCategory | None = None,
-    severity: IssueSeverity | None = None,
+    category: Category | None = None,
+    severity: Severity | None = None,
     unfixed: bool = False,
     latest_only: bool = True,
     include_resolved: bool = False,
@@ -64,75 +64,78 @@ def list_issues(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
 ) -> list[IssuePublic]:
-    query = select(Issue)
+    query = select(WorkflowFinding)
     if not include_resolved:
-        query = query.where(col(Issue.resolved_at).is_(None))
+        query = query.where(col(WorkflowFinding.resolved_at).is_(None))
     if not include_ignored:
-        query = query.where(col(Issue.ignored_at).is_(None))
+        query = query.where(col(WorkflowFinding.ignored_at).is_(None))
     # Issues belong to a per-branch WorkflowFile row; a repo listing without an
     # explicit branch shows the default branch (feature-branch issues only
     # appear when asked for).
     if repo_id is not None and branch is None:
         repo = session.get(Repository, repo_id)
         branch = repo.default_branch if repo else None
-    # Join Analysis once if either tenant scoping or repo filtering needs it.
+    # Join WorkflowScan once if either tenant scoping or repo filtering needs it.
     needs_analysis_join = repo_id is not None or not current_user.is_superuser
     if needs_analysis_join:
-        query = query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        query = query.join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
     if not current_user.is_superuser:
         query = query.where(
-            Analysis.repo_id.in_(  # type: ignore[attr-defined]
+            WorkflowScan.repo_id.in_(  # type: ignore[attr-defined]
                 select(Repository.id).where(
                     Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
                 )
             )
         )
     if analysis_id:
-        query = query.where(Issue.analysis_id == analysis_id)
+        query = query.where(WorkflowFinding.analysis_id == analysis_id)
     if branch:
         query = query.join(
             WorkflowFile,
-            Issue.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
+            WorkflowFinding.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
         ).where(WorkflowFile.branch == branch)
     if repo_id:
-        query = query.where(Analysis.repo_id == repo_id)
+        query = query.where(WorkflowScan.repo_id == repo_id)
     if latest_only:
         # The workflow_file_id correlation is inherently branch-scoped now
         # that WorkflowFile rows are per-branch. Applies regardless of repo_id
         # scoping so org-wide listings (e.g. the dashboard) don't count stale
         # issue rows left over from a workflow file's earlier analyses.
         latest_subq = (
-            select(Analysis.id)
-            .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-            .where(Analysis.status == AnalysisStatus.completed)
+            select(WorkflowScan.id)
+            .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
+            .where(WorkflowScan.status == ScanStatus.completed)
             .order_by(
-                col(Analysis.completed_at).desc().nulls_last(),
-                col(Analysis.created_at).desc(),
+                col(WorkflowScan.completed_at).desc().nulls_last(),
+                col(WorkflowScan.created_at).desc(),
             )
             .limit(1)
-            .correlate(Issue)
+            .correlate(WorkflowFinding)
             .scalar_subquery()
         )
-        query = query.where(Issue.analysis_id == latest_subq)
+        query = query.where(WorkflowFinding.analysis_id == latest_subq)
     if unfixed:
-        active_fix_ids = select(Fix.id).where(col(Fix.status).not_in(REJECTED_STATUSES))
+        active_fix_ids = select(WorkflowFix.id).where(
+            col(WorkflowFix.status).not_in(REJECTED_STATUSES)
+        )
         query = query.where(
-            col(Issue.fix_id).is_(None) | ~col(Issue.fix_id).in_(active_fix_ids)
+            col(WorkflowFinding.fix_id).is_(None)
+            | ~col(WorkflowFinding.fix_id).in_(active_fix_ids)
         )
     if category:
-        query = query.where(Issue.category == category)
+        query = query.where(WorkflowFinding.category == category)
     if severity:
-        query = query.where(Issue.severity == severity)
+        query = query.where(WorkflowFinding.severity == severity)
     severity_rank = case(
-        (col(Issue.severity) == IssueSeverity.critical, 0),
-        (col(Issue.severity) == IssueSeverity.high, 1),
-        (col(Issue.severity) == IssueSeverity.medium, 2),
-        (col(Issue.severity) == IssueSeverity.low, 3),
-        (col(Issue.severity) == IssueSeverity.info, 4),
+        (col(WorkflowFinding.severity) == Severity.critical, 0),
+        (col(WorkflowFinding.severity) == Severity.high, 1),
+        (col(WorkflowFinding.severity) == Severity.medium, 2),
+        (col(WorkflowFinding.severity) == Severity.low, 3),
+        (col(WorkflowFinding.severity) == Severity.info, 4),
         else_=99,
     )
     query = (
-        query.order_by(severity_rank, col(Issue.created_at).desc())
+        query.order_by(severity_rank, col(WorkflowFinding.created_at).desc())
         .offset(skip)
         .limit(limit)
     )
@@ -154,7 +157,7 @@ def get_issue_stats(
     org — every matching row is summed server-side, never materialized into
     a capped page of ``IssuePublic`` objects.
     """
-    query = select(Issue).where(col(Issue.ignored_at).is_(None))
+    query = select(WorkflowFinding).where(col(WorkflowFinding.ignored_at).is_(None))
 
     if repo_id is not None and branch is None:
         repo = session.get(Repository, repo_id)
@@ -162,10 +165,10 @@ def get_issue_stats(
 
     needs_analysis_join = repo_id is not None or not current_user.is_superuser
     if needs_analysis_join:
-        query = query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+        query = query.join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
     if not current_user.is_superuser:
         query = query.where(
-            Analysis.repo_id.in_(  # type: ignore[attr-defined]
+            WorkflowScan.repo_id.in_(  # type: ignore[attr-defined]
                 select(Repository.id).where(
                     Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
                 )
@@ -174,36 +177,36 @@ def get_issue_stats(
     if branch:
         query = query.join(
             WorkflowFile,
-            Issue.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
+            WorkflowFinding.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
         ).where(WorkflowFile.branch == branch)
     if repo_id:
-        query = query.where(Analysis.repo_id == repo_id)
+        query = query.where(WorkflowScan.repo_id == repo_id)
     if latest_only:
         latest_subq = (
-            select(Analysis.id)
-            .where(Analysis.workflow_file_id == Issue.workflow_file_id)
-            .where(Analysis.status == AnalysisStatus.completed)
+            select(WorkflowScan.id)
+            .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
+            .where(WorkflowScan.status == ScanStatus.completed)
             .order_by(
-                col(Analysis.completed_at).desc().nulls_last(),
-                col(Analysis.created_at).desc(),
+                col(WorkflowScan.completed_at).desc().nulls_last(),
+                col(WorkflowScan.created_at).desc(),
             )
             .limit(1)
-            .correlate(Issue)
+            .correlate(WorkflowFinding)
             .scalar_subquery()
         )
-        query = query.where(Issue.analysis_id == latest_subq)
+        query = query.where(WorkflowFinding.analysis_id == latest_subq)
 
-    is_open = col(Issue.resolved_at).is_(None)
-    is_critical = Issue.severity == IssueSeverity.critical
+    is_open = col(WorkflowFinding.resolved_at).is_(None)
+    is_critical = WorkflowFinding.severity == Severity.critical
     grouped = query.with_only_columns(  # type: ignore[call-overload]
-        Issue.category,
+        WorkflowFinding.category,
         func.sum(case((is_open, 1), else_=0)).label("open"),
         func.sum(case((~is_open, 1), else_=0)).label("resolved"),
         func.sum(case((is_open & is_critical, 1), else_=0)).label("critical_open"),
-    ).group_by(Issue.category)
+    ).group_by(WorkflowFinding.category)
 
     # session.exec() would scalarize this to just the first column: the
-    # original select(Issue) statement stays a sqlmodel SelectOfScalar even
+    # original select(WorkflowFinding) statement stays a sqlmodel SelectOfScalar even
     # after with_only_columns() swaps in the aggregate columns. session.execute()
     # (the underlying SQLAlchemy call) returns full Row tuples instead.
     by_category = [
@@ -218,38 +221,41 @@ def get_issue_stats(
 
     # Per-repo breakdown for the dashboard's category health star diagram.
     # Only meaningful when not already scoped to a single repo; needs
-    # Analysis (and Rule, for severity_weight) joined regardless of the
+    # WorkflowScan (and Rule, for severity_weight) joined regardless of the
     # superuser/org-filter branch above.
     by_repo: list[RepoIssueStats] = []
     if repo_id is None:
         repo_query = (
             query
             if needs_analysis_join
-            else query.join(Analysis, Issue.analysis_id == Analysis.id)  # type: ignore[arg-type]
+            else query.join(
+                WorkflowScan, col(WorkflowFinding.analysis_id) == WorkflowScan.id
+            )
         )
-        repo_query = repo_query.join(Rule, Issue.rule_id == Rule.id)  # type: ignore[arg-type]
+        repo_query = repo_query.join(Rule, WorkflowFinding.rule_id == Rule.id)  # type: ignore[arg-type]
         repo_grouped = repo_query.with_only_columns(  # type: ignore[call-overload]
-            Analysis.repo_id,  # type: ignore[attr-defined]
-            Issue.category,
+            WorkflowScan.repo_id,
+            WorkflowFinding.category,
             func.sum(case((is_open, 1), else_=0)).label("open"),
             func.sum(case((is_open & is_critical, 1), else_=0)).label("critical_open"),
             func.sum(
                 case(
                     (
                         is_open,
-                        severity_penalty_case(Issue.severity) * Rule.severity_weight,
+                        severity_penalty_case(col(WorkflowFinding.severity))
+                        * Rule.severity_weight,
                     ),
                     else_=0.0,
                 )
             ).label("weighted_penalty"),
-        ).group_by(Analysis.repo_id, Issue.category)  # type: ignore[attr-defined]
+        ).group_by(WorkflowScan.repo_id, WorkflowFinding.category)
         rows = session.execute(repo_grouped).all()
 
-        counts_by_repo: dict[uuid.UUID, dict[IssueCategory, tuple[int, int]]] = (
-            defaultdict(dict)
+        counts_by_repo: dict[uuid.UUID, dict[Category, tuple[int, int]]] = defaultdict(
+            dict
         )
-        penalties_by_repo: dict[uuid.UUID, dict[IssueCategory, float]] = defaultdict(
-            lambda: dict.fromkeys(IssueCategory, 0.0)
+        penalties_by_repo: dict[uuid.UUID, dict[Category, float]] = defaultdict(
+            lambda: dict.fromkeys(Category, 0.0)
         )
         for row in rows:
             counts_by_repo[row.repo_id][row.category] = (
@@ -279,7 +285,7 @@ def get_issue_stats(
                     score=category_scores.get(category, (None, None))[0],
                     grade=category_scores.get(category, (None, None))[1],
                 )
-                for category in IssueCategory
+                for category in Category
             ]
             by_repo.append(
                 RepoIssueStats(
@@ -309,7 +315,7 @@ def get_issue(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> IssuePublic:
-    issue = get_or_404(session, Issue, issue_id)
+    issue = get_or_404(session, WorkflowFinding, issue_id)
     _authorize_issue(session, current_user, issue)
     return to_issue_public(issue)
 
@@ -326,7 +332,7 @@ def ignore_issue(
     which takes precedence over resolve/fix state and drops the issue out of the
     default (active) issue and fix queries. Idempotent.
     """
-    issue = get_or_404(session, Issue, issue_id)
+    issue = get_or_404(session, WorkflowFinding, issue_id)
     _authorize_issue(session, current_user, issue)
     if issue.ignored_at is None:
         issue.ignored_at = datetime.now(timezone.utc)
@@ -343,7 +349,7 @@ def unignore_issue(
     current_user: CurrentUser,
 ) -> IssuePublic:
     """Un-mute a previously ignored violation. Idempotent."""
-    issue = get_or_404(session, Issue, issue_id)
+    issue = get_or_404(session, WorkflowFinding, issue_id)
     _authorize_issue(session, current_user, issue)
     if issue.ignored_at is not None:
         issue.ignored_at = None

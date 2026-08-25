@@ -8,13 +8,19 @@ from typing import TYPE_CHECKING
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models import Fix, FixStatus, Issue, Repository, WorkflowFile
+from app.models import FixStatus, Repository, WorkflowFile, WorkflowFinding, WorkflowFix
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.llm.response import (
+    parse_full_content,
+    parse_unfixed_issues,
+    restore_trailing_whitespace,
+)
 from app.workers.celery_app import celery_app
 
 if TYPE_CHECKING:
+    from app.models import WorkflowFinding
     from app.services.llm.base import LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -73,7 +79,7 @@ _SHA_REF_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def unrequested_pin_changes(
-    original: str, patched: str, issues: list["Issue"]
+    original: str, patched: str, issues: list["WorkflowFinding"]
 ) -> set[str]:
     """Pins the rewrite moved backwards or sideways rather than tightening them.
 
@@ -133,28 +139,6 @@ def _is_valid_workflow_yaml(content: str) -> bool:
         return False
 
 
-def restore_trailing_whitespace(original: str, patched: str) -> str:
-    """Restore original trailing whitespace on lines that only differ in trailing whitespace.
-
-    LLMs routinely strip trailing whitespace when regenerating file content.
-    For lines where the stripped versions are identical, keep the original so
-    the delivered diff contains only meaningful changes.
-    """
-    orig_lines = original.split("\n")
-    new_lines = patched.split("\n")
-    result = []
-    for i, new_line in enumerate(new_lines):
-        if (
-            i < len(orig_lines)
-            and new_line.rstrip() == orig_lines[i].rstrip()
-            and new_line != orig_lines[i]
-        ):
-            result.append(orig_lines[i])
-        else:
-            result.append(new_line)
-    return "\n".join(result)
-
-
 # ─── Batch coordination ──────────────────────────────────────────────────────
 # A repo-wide generation run fans out into one Celery task per workflow file.
 # A Redis counter tracks the outstanding tasks so that exactly one aggregated
@@ -209,13 +193,13 @@ def _maybe_auto_deliver(repo_id: str, fix_ids: list[str]) -> None:
 
             fixes = list(
                 session.exec(
-                    _select(Fix)
-                    .join(WorkflowFile, Fix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+                    _select(WorkflowFix)
+                    .join(WorkflowFile, WorkflowFix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
                     .where(WorkflowFile.repo_id == repo.id)
                     # Fixes are default-branch-only; never deliver a legacy
                     # feature-branch fix.
                     .where(WorkflowFile.branch == repo.default_branch)
-                    .where(Fix.status == FixStatus.ready)
+                    .where(WorkflowFix.status == FixStatus.ready)
                     .order_by(col(WorkflowFile.path).asc())
                 ).all()
             )
@@ -367,22 +351,22 @@ def resolve_llm_provider(repo: Repository) -> tuple[str, str]:
 def _load_generation_context(
     session: Session,
     issue_ids: list[str],
-) -> tuple[list[Issue], WorkflowFile, Repository] | dict[str, object]:
+) -> tuple[list[WorkflowFinding], WorkflowFile, Repository] | dict[str, object]:
     """Load and validate issues, workflow file, and repo. Returns error dict on failure."""
-    loaded = [session.get(Issue, uuid.UUID(iid)) for iid in issue_ids]
+    loaded = [session.get(WorkflowFinding, uuid.UUID(iid)) for iid in issue_ids]
     issues = [i for i in loaded if i is not None]
     if not issues:
         return {"status": "error", "detail": "no_issues_found"}
 
-    analysis = issues[0].analysis
-    if not analysis:
-        return {"status": "error", "detail": "analysis_not_found"}
+    scan = issues[0].scan
+    if not scan:
+        return {"status": "error", "detail": "scan_not_found"}
 
-    wf_file = session.get(WorkflowFile, analysis.workflow_file_id)
+    wf_file = session.get(WorkflowFile, scan.workflow_file_id)
     if not wf_file:
         return {"status": "error", "detail": "workflow_file_not_found"}
 
-    repo = session.get(Repository, analysis.repo_id)
+    repo = session.get(Repository, scan.repo_id)
     if not repo:
         return {"status": "error", "detail": "repository_not_found"}
 
@@ -397,7 +381,7 @@ def run_fix_generation(
 ) -> dict[str, object]:
     """Single LLM call regenerating one workflow file to fix the given issues.
 
-    The API routes create a pending Fix row per workflow file before queuing
+    The API routes create a pending WorkflowFix row per workflow file before queuing
     this task; it consumes that row. When ``batch_id`` is set the task is part
     of a repo-wide run and its completion events are aggregated via Redis.
     """
@@ -410,13 +394,13 @@ def run_fix_generation(
         org_id = str(repo.org_id)
         repo_id_str = str(repo.id)
 
-        # The route creates one pending Fix per workflow file being (re)generated.
+        # The route creates one pending fix per workflow file being (re)generated.
         # A workflow file whose fix is in any other state (e.g. a delivered fix
         # kept when force=False) has no pending row and is skipped here.
         fix = session.exec(
-            select(Fix)
-            .where(Fix.workflow_file_id == wf_file.id)
-            .where(Fix.status == FixStatus.pending)
+            select(WorkflowFix)
+            .where(WorkflowFix.workflow_file_id == wf_file.id)
+            .where(WorkflowFix.status == FixStatus.pending)
         ).first()
         if fix is None:
             if batch_id:
@@ -485,7 +469,7 @@ def run_fix_generation(
             _emit_failure(batch_id, org_id, repo_id_str, str(fix.id), str(exc)[:200])
             return {"status": "failed", "issue_ids": issue_ids}
 
-        full_content = _parse_llm_response(result.content)
+        full_content: str | None = parse_full_content(result.content)
         generation_error: str | None = None
 
         if not full_content:
@@ -529,7 +513,7 @@ def run_fix_generation(
             # The LLM's own report of which issues it couldn't resolve in this
             # diff. Re-evaluated on every attempt so a retry that succeeds
             # clears a manual-work flag left over from an earlier attempt.
-            unfixed = _parse_unfixed_issues(result.content)
+            unfixed = parse_unfixed_issues(result.content)
             for i, issue in enumerate(issues, start=1):
                 issue.needs_manual_work = i in unfixed
                 issue.manual_work_note = unfixed.get(i)
@@ -576,43 +560,6 @@ def _emit_failure(
         )
 
 
-def _parse_llm_response(content: str) -> str:
-    """Extract the full regenerated workflow from the LLM's XML-delimited response."""
-    import re
-
-    full_content_match = re.search(
-        r"<full_content>\n?(.*?)</full_content>", content, re.DOTALL
-    )
-    full_content = full_content_match.group(1) if full_content_match else ""
-
-    if not full_content:
-        logger.warning(
-            "LLM response missing <full_content> block. First 500 chars: %r",
-            content[:500],
-        )
-    logger.info("Parsed LLM response: full_content=%d chars", len(full_content))
-    return full_content
-
-
-def _parse_unfixed_issues(content: str) -> dict[int, str]:
-    """Extract the ``<unfixed>`` block: 1-based prompt issue index -> reason.
-
-    Absent or empty block (every issue was fixed) returns ``{}``.
-    """
-    import re
-
-    match = re.search(r"<unfixed>\n?(.*?)</unfixed>", content, re.DOTALL)
-    if not match:
-        return {}
-    line_re = re.compile(r"^\s*(\d+)\s*:\s*(.+?)\s*$")
-    unfixed: dict[int, str] = {}
-    for line in match.group(1).splitlines():
-        line_match = line_re.match(line)
-        if line_match:
-            unfixed[int(line_match.group(1))] = line_match.group(2)[:1024]
-    return unfixed
-
-
 def _configure_langchain() -> None:
     from app.core.config import settings
 
@@ -625,7 +572,7 @@ def _configure_langchain() -> None:
 
 async def _generate_fixes(
     workflow_content: str,
-    issues: list[Issue],
+    issues: list[WorkflowFinding],
     provider_str: str,
     model_str: str,
     installation_id: int | None = None,

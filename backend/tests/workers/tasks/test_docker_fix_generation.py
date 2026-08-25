@@ -9,21 +9,21 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models import (
+    Category,
     DockerFinding,
     DockerFix,
     DockerScan,
     DockerTarget,
-    IssueCategory,
-    IssueSeverity,
     LLMProvider,
     Organization,
     Repository,
     Rule,
     RuleDomain,
     ScanStatus,
+    Severity,
     UserTier,
 )
-from app.models.enums import AnalysisTrigger, FixStatus
+from app.models.enums import FixStatus, ScanTrigger
 from app.workers.tasks.docker_fix_generation import (
     INVALID_COMPOSE_ERROR,
     INVALID_DOCKERFILE_ERROR,
@@ -100,7 +100,7 @@ def _finding(
     scan = DockerScan(
         docker_target_id=target.id,
         status=ScanStatus.completed,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
     )
     db.add(scan)
     db.commit()
@@ -111,8 +111,8 @@ def _finding(
         rule_id=rule.id,
         file_path=file_path,
         fingerprint=uuid.uuid4().hex[:16],
-        severity=IssueSeverity.high,
-        category=IssueCategory.security,
+        severity=Severity.high,
+        category=Category.security,
         message="runs as root",
     )
     db.add(finding)

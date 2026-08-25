@@ -10,16 +10,16 @@ from sqlmodel import Session, select
 from app.api.routes.repositories import _inject_action_into_workflow
 from app.core.config import settings
 from app.models import (
-    Analysis,
-    AnalysisStatus,
-    AnalysisTrigger,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
+    ScanStatus,
+    ScanTrigger,
     User,
     UserTier,
     WorkflowFile,
+    WorkflowScan,
 )
 from tests.utils.user import authentication_token_from_email, create_random_user
 
@@ -563,15 +563,15 @@ def _make_workflow_file(
 
 def _make_completed_analysis(
     db: Session, repo: Repository, wf: WorkflowFile, score: float, grade: str
-) -> Analysis:
-    a = Analysis(
+) -> WorkflowScan:
+    a = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=wf.id,
         content_hash=wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=score,
         grade=grade,
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="main",
     )
     db.add(a)
@@ -1115,7 +1115,7 @@ def test_list_repository_branches(
     repo: Repository,
     db: Session,
 ) -> None:
-    from app.models import Analysis, AnalysisStatus, WorkflowFile
+    from app.models import ScanStatus, WorkflowFile, WorkflowScan
 
     wf = WorkflowFile(
         repo_id=repo.id,
@@ -1127,13 +1127,13 @@ def test_list_repository_branches(
     db.commit()
     db.refresh(wf)
     for branch, status in [
-        ("main", AnalysisStatus.completed),
-        ("dev", AnalysisStatus.completed),
-        ("main", AnalysisStatus.completed),
-        ("wip", AnalysisStatus.running),
+        ("main", ScanStatus.completed),
+        ("dev", ScanStatus.completed),
+        ("main", ScanStatus.completed),
+        ("wip", ScanStatus.running),
     ]:
         db.add(
-            Analysis(
+            WorkflowScan(
                 repo_id=repo.id,
                 workflow_file_id=wf.id,
                 content_hash=uuid.uuid4().hex,
@@ -1174,14 +1174,14 @@ def test_grade_ignores_feature_branch_analyses(
     db.add(feature_wf)
     db.commit()
     db.refresh(feature_wf)
-    bad = Analysis(
+    bad = WorkflowScan(
         repo_id=repo.id,
         workflow_file_id=feature_wf.id,
         content_hash=feature_wf.content_hash,
-        status=AnalysisStatus.completed,
+        status=ScanStatus.completed,
         score=10.0,
         grade="F",
-        triggered_by=AnalysisTrigger.manual,
+        triggered_by=ScanTrigger.manual,
         branch="feature",
     )
     db.add(bad)

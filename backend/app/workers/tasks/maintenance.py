@@ -1,30 +1,35 @@
 import asyncio
 import logging
+import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 
+import redis as redis_sync
+import redis.asyncio as aioredis
 from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models import (
-    Analysis,
-    AnalysisFailureKind,
-    AnalysisStatus,
     CloudScan,
     DockerScan,
     DynamicAnalysisStatus,
-    Fix,
     FixStatus,
     PullRequest,
     PullRequestState,
     Repository,
+    ScanFailureKind,
     ScanStatus,
     TelemetryRun,
     TerraformScan,
+    WorkflowFix,
+    WorkflowScan,
 )
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.github.app_client import GitHubAppClient, parse_pr_url
 from app.workers.celery_app import celery_app
+from app.workers.tasks.static_analysis import run_static_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -43,37 +48,35 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
     swept_scans = 0
     with Session(engine) as session:
         stuck_analyses = session.exec(
-            select(Analysis)
+            select(WorkflowScan)
             .where(
-                col(Analysis.status).in_(
-                    [AnalysisStatus.queued, AnalysisStatus.running]
-                )
+                col(WorkflowScan.status).in_([ScanStatus.queued, ScanStatus.running])
             )
-            .where(Analysis.created_at < cutoff)  # type: ignore[operator]
+            .where(WorkflowScan.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for analysis in stuck_analyses:
-            sm.advance(analysis, sm.AnalysisMachine, "swept")
+            sm.advance(analysis, sm.ScanMachine, "swept")
             analysis.error_message = (
                 "Timed out: the analysis worker was interrupted before completion"
             )
             # A sweep is a transient failure (worker/broker interruption) — safe
             # to retry once the pipeline is healthy again.
-            analysis.failure_kind = AnalysisFailureKind.transient
+            analysis.failure_kind = ScanFailureKind.transient
             analysis.completed_at = now
             session.add(analysis)
             swept_analyses += 1
 
-        # Fix rows have no updated_at; created_at is a conservative proxy. A
+        # WorkflowFix rows have no updated_at; created_at is a conservative proxy. A
         # genuinely in-flight task commits its final status afterwards and
         # wins the race, so a false sweep self-corrects.
         stuck_fixes = session.exec(
-            select(Fix)
+            select(WorkflowFix)
             .where(
-                col(Fix.status).in_(
+                col(WorkflowFix.status).in_(
                     [FixStatus.pending, FixStatus.generating, FixStatus.delivering]
                 )
             )
-            .where(Fix.created_at < cutoff)  # type: ignore[operator]
+            .where(WorkflowFix.created_at < cutoff)  # type: ignore[operator]
         ).all()
         for fix in stuck_fixes:
             sm.advance(fix, sm.FixMachine, "swept")
@@ -84,7 +87,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
             swept_fixes += 1
 
         # TelemetryRun has no created_at/updated_at; collected_at (set at
-        # ingest) is the same kind of conservative proxy used for Fix above.
+        # ingest) is the same kind of conservative proxy used for WorkflowFix above.
         stuck_telemetry = session.exec(
             select(TelemetryRun)
             .where(
@@ -114,7 +117,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
                 scan.error_message = (
                     "Timed out: the scan worker was interrupted before completion"
                 )
-                scan.failure_kind = AnalysisFailureKind.transient
+                scan.failure_kind = ScanFailureKind.transient
                 session.add(scan)
                 swept_scans += 1
 
@@ -150,7 +153,6 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
     reconcile poller. Attribute-only: no lifecycle transition, and explicitly
     no auto-rebase/redeliver (that would overwrite or spam the PR).
     """
-    import uuid as _uuid
 
     with Session(engine) as session:
         repo = session.get(Repository, _uuid.UUID(repo_id))
@@ -170,8 +172,6 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
         )
         if not rows:
             return {"checked": 0, "updated": 0}
-
-        from app.services.github.app_client import parse_pr_url
 
         checked = 0
         updated = 0
@@ -202,7 +202,9 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
             session.add(pr_record)
             session.commit()
             updated += 1
-            fix = session.exec(select(Fix).where(Fix.pr_id == pr_record.id)).first()
+            fix = session.exec(
+                select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)
+            ).first()
             if fix and pr_record.pr_url:
                 events_pub.publish_event(
                     ev.pr_updated(
@@ -219,10 +221,6 @@ def _refresh_pr_mergeable_state_impl(repo_id: str) -> dict[str, int]:
 async def _fetch_pr_mergeable_state(
     installation_id: int, full_name: str, pr_number: int
 ) -> str | None:
-    import redis.asyncio as aioredis
-
-    from app.core.config import settings
-    from app.services.github.app_client import GitHubAppClient
 
     r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
     try:
@@ -251,7 +249,7 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
     """Re-run recent transient analysis failures (OPA timeout, network error).
 
     Enqueues a fresh repo/branch analysis rather than firing the machine's
-    ``retry`` event on the old rows: the worker creates new Analysis rows, so
+    ``retry`` event on the old rows: the worker creates new WorkflowScan rows, so
     a re-queued old row would only be swept back to ``failed``. The in-place
     ``retry`` edge stays reserved for a future per-row worker (doc §1).
     """
@@ -261,12 +259,12 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
     skipped_exhausted = 0
     with Session(engine) as session:
         candidates = session.exec(
-            select(Analysis, Repository)
-            .join(Repository, Analysis.repo_id == Repository.id)  # type: ignore[arg-type]
-            .where(Analysis.status == AnalysisStatus.failed)
-            .where(Analysis.failure_kind == AnalysisFailureKind.transient)
-            .where(col(Analysis.completed_at).is_not(None))
-            .where(Analysis.completed_at >= cutoff)  # type: ignore[operator]
+            select(WorkflowScan, Repository)
+            .join(Repository, WorkflowScan.repo_id == Repository.id)  # type: ignore[arg-type]
+            .where(WorkflowScan.status == ScanStatus.failed)
+            .where(WorkflowScan.failure_kind == ScanFailureKind.transient)
+            .where(col(WorkflowScan.completed_at).is_not(None))
+            .where(WorkflowScan.completed_at >= cutoff)  # type: ignore[operator]
             .where(Repository.enabled)
         ).all()
 
@@ -274,12 +272,12 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
         for analysis, repo in candidates:
             attempts = len(
                 session.exec(
-                    select(Analysis.id)
-                    .where(Analysis.repo_id == analysis.repo_id)
-                    .where(Analysis.workflow_file_id == analysis.workflow_file_id)
-                    .where(Analysis.content_hash == analysis.content_hash)
-                    .where(Analysis.status == AnalysisStatus.failed)
-                    .where(Analysis.failure_kind == AnalysisFailureKind.transient)
+                    select(WorkflowScan.id)
+                    .where(WorkflowScan.repo_id == analysis.repo_id)
+                    .where(WorkflowScan.workflow_file_id == analysis.workflow_file_id)
+                    .where(WorkflowScan.content_hash == analysis.content_hash)
+                    .where(WorkflowScan.status == ScanStatus.failed)
+                    .where(WorkflowScan.failure_kind == ScanFailureKind.transient)
                 ).all()
             )
             if attempts >= MAX_AUTO_RETRY_ATTEMPTS:
@@ -292,7 +290,6 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
             seen_targets.add(target)
             if not _try_acquire_auto_retry_slot(str(repo.id), branch):
                 continue
-            from app.workers.tasks.static_analysis import run_static_analysis
 
             # force=True: a stale *completed* analysis for the same hash would
             # otherwise dedup-skip the retry.
@@ -318,9 +315,6 @@ def _retry_transient_analyses_impl() -> dict[str, int]:
 
 def _try_acquire_auto_retry_slot(repo_id: str, branch: str) -> bool:
     """Redis dedup so hourly beats don't stack retries. Fails open."""
-    import redis as redis_sync
-
-    from app.core.config import settings
 
     try:
         r = redis_sync.Redis.from_url(settings.REDIS_URL)

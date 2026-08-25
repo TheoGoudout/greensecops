@@ -1,5 +1,14 @@
 import type { Page } from "@playwright/test"
-import type { RepositoryPublic, UserPublic } from "@/client"
+import type {
+  BillingSubscriptionPublic,
+  DockerBuildTelemetryPublic,
+  Engine,
+  OverviewSection,
+  PlanLimitsPublic,
+  RepositoryPublic,
+  UsagePublic,
+  UserPublic,
+} from "@/client"
 import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
 
 // Mirrors the backend's severity-penalty weighting (app/services/scoring.py
@@ -318,7 +327,7 @@ export const MOCK_DOCKER_RUNTIME_FINDING = {
   created_at: "2024-01-02T10:05:00Z",
 }
 
-export const MOCK_DOCKER_RUNTIME_BUILD = {
+export const MOCK_DOCKER_RUNTIME_BUILD: DockerBuildTelemetryPublic = {
   id: ID.dockerTelemetry,
   workflow_run_id: 12345678901,
   image_ref: "sha256:abc",
@@ -350,18 +359,19 @@ export const MOCK_DOCKER_RUNTIME_BUILD = {
 
 // A build reported without the action's dockerfile_path input: its findings
 // are real but cannot drive a fix, because nothing names a file to rewrite.
-export const MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED = {
-  ...MOCK_DOCKER_RUNTIME_BUILD,
-  id: ID.dockerTelemetryUnattributed,
-  dockerfile_path: null,
-  findings: [
-    {
-      ...MOCK_DOCKER_RUNTIME_FINDING,
-      id: ID.dockerRuntimeFindingUnattributed,
-      telemetry_id: ID.dockerTelemetryUnattributed,
-    },
-  ],
-}
+export const MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED: DockerBuildTelemetryPublic =
+  {
+    ...MOCK_DOCKER_RUNTIME_BUILD,
+    id: ID.dockerTelemetryUnattributed,
+    dockerfile_path: null,
+    findings: [
+      {
+        ...MOCK_DOCKER_RUNTIME_FINDING,
+        id: ID.dockerRuntimeFindingUnattributed,
+        telemetry_id: ID.dockerTelemetryUnattributed,
+      },
+    ],
+  }
 
 // Branch mirrors dockerFixBranch(ID.dockerTargetRoot) in src/lib/delivery.ts,
 // which is what the Docker PRs tab filters and maps on.
@@ -846,7 +856,7 @@ export const MOCK_PLANS = [
   },
 ]
 
-export const MOCK_SUBSCRIPTION = {
+export const MOCK_SUBSCRIPTION: BillingSubscriptionPublic = {
   id: ID.subscription,
   tier: "free" as const,
   effective_tier: "free" as const,
@@ -862,7 +872,7 @@ export const MOCK_SUBSCRIPTION = {
   billing_enabled: true,
 }
 
-export const MOCK_USAGE = {
+export const MOCK_USAGE: UsagePublic = {
   period_start: "2026-08-01T00:00:00Z",
   period_end: "2026-09-01T00:00:00Z",
   analyses_used: 12,
@@ -876,12 +886,12 @@ export const MOCK_USAGE = {
   ],
 }
 
-export const MOCK_TIER_LIMITS = {
+export const MOCK_TIER_LIMITS: { tier: string; limits: PlanLimitsPublic } = {
   tier: "free",
   limits: { analyses: 100, fixes: 10, repos: 3 },
 }
 
-export const MOCK_SUBSCRIPTION_PRO = {
+export const MOCK_SUBSCRIPTION_PRO: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION,
   id: ID.subscriptionPro,
   tier: "pro" as const,
@@ -891,7 +901,7 @@ export const MOCK_SUBSCRIPTION_PRO = {
   repos_used: 2,
 }
 
-export const MOCK_USAGE_PRO = {
+export const MOCK_USAGE_PRO: UsagePublic = {
   ...MOCK_USAGE,
   analyses_used: 5,
   fixes_used: 10,
@@ -899,19 +909,20 @@ export const MOCK_USAGE_PRO = {
   limits: { analyses: 10000, fixes: 1000, repos: 100 },
 }
 
-export const MOCK_TIER_LIMITS_PRO = {
-  tier: "pro",
-  limits: { analyses: 10000, fixes: 1000, repos: 100 },
-}
+export const MOCK_TIER_LIMITS_PRO: { tier: string; limits: PlanLimitsPublic } =
+  {
+    tier: "pro",
+    limits: { analyses: 10000, fixes: 1000, repos: 100 },
+  }
 
-export const MOCK_SUBSCRIPTION_AT_LIMIT = {
+export const MOCK_SUBSCRIPTION_AT_LIMIT: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION,
   analyses_used: 100,
   fixes_used: 10,
   repos_used: 3,
 }
 
-export const MOCK_USAGE_AT_LIMIT = {
+export const MOCK_USAGE_AT_LIMIT: UsagePublic = {
   ...MOCK_USAGE,
   analyses_used: 100,
   fixes_used: 10,
@@ -920,14 +931,14 @@ export const MOCK_USAGE_AT_LIMIT = {
 
 // A Pro subscription whose payment failed. Still fully entitled — the grace
 // window is the whole point — but the UI must say so.
-export const MOCK_SUBSCRIPTION_PAST_DUE = {
+export const MOCK_SUBSCRIPTION_PAST_DUE: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION_PRO,
   status: "past_due" as const,
   grace_expires_at: "2099-01-10T00:00:00Z",
 }
 
 // Grace expired: still a Pro subscription, but metered at Free.
-export const MOCK_SUBSCRIPTION_UNPAID = {
+export const MOCK_SUBSCRIPTION_UNPAID: BillingSubscriptionPublic = {
   ...MOCK_SUBSCRIPTION_PRO,
   status: "unpaid" as const,
   effective_tier: "free" as const,
@@ -1020,7 +1031,7 @@ export async function mockRepositories(
 }
 
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
-  await page.route("**/api/v1/analyses/**", (route) => {
+  await page.route("**/api/v1/workflow-scans/**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "POST" && url.includes("/trigger/")) {
@@ -1028,7 +1039,7 @@ export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
         status: 202,
         json: { status: "queued", repo_id: MOCK_REPO.id },
       })
-    } else if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
       route.fulfill({ json: analysis })
@@ -1043,9 +1054,9 @@ export async function mockIssues(
   issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
   analyses: Array<{ id: string; repo_id: string }> = [MOCK_ANALYSIS],
 ) {
-  await page.route("**/api/v1/issues/**", (route) => {
+  await page.route("**/api/v1/workflow-findings/**", (route) => {
     const url = route.request().url()
-    if (url.includes("/issues/stats")) {
+    if (url.includes("/workflow-findings/stats")) {
       // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
       // per category, plus a nested per-repo breakdown for the dashboard's
       // star diagram), computed from the same fixture list the dashboard's
@@ -1151,7 +1162,7 @@ export async function mockIssues(
       })
       return
     }
-    if (url.match(/\/issues\/[0-9a-f-]{36}$/)) {
+    if (url.match(/\/workflow-findings\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const issue = issues.find((i) => i.id === id) ?? issues[0]
       route.fulfill({ json: issue })
@@ -1166,7 +1177,7 @@ export async function mockFixes(
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
   pullRequests: unknown[] = [],
 ) {
-  await page.route("**/api/v1/fixes/**", (route) => {
+  await page.route("**/api/v1/workflow-fixes/**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "POST" && url.includes("/sync-pr-status")) {
@@ -1181,7 +1192,7 @@ export async function mockFixes(
       route.fulfill({ status: 204 })
     } else if (url.includes("/pull-requests/")) {
       route.fulfill({ json: pullRequests })
-    } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/workflow-fixes\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const fix = fixes.find((f) => f.id === id) ?? fixes[0]
       route.fulfill({ json: fix })
@@ -1364,8 +1375,8 @@ type EngineOverrides = {
  * let a component bug through.
  */
 function buildEngine(
-  engine: "ci" | "docker" | "terraform" | "cloud",
-  section: "ci" | "docker" | "infra",
+  engine: Engine,
+  section: OverviewSection,
   label: string,
   o: EngineOverrides = {},
 ) {
@@ -1466,11 +1477,11 @@ function buildEngine(
 
 export function buildOverview(
   overrides: Partial<
-    Record<"ci" | "docker" | "terraform" | "cloud", EngineOverrides>
+    Record<Exclude<Engine, "telemetry">, EngineOverrides>
   > = {},
 ) {
   const engines = [
-    buildEngine("ci", "ci", "CI workflows", overrides.ci),
+    buildEngine("workflow", "ci", "CI workflows", overrides.workflow),
     buildEngine("docker", "docker", "Docker", overrides.docker),
     buildEngine("terraform", "infra", "Terraform", overrides.terraform),
     // Cloud posture has no fix pipeline at all — `fixes` is null, never zeroes.
@@ -1541,7 +1552,14 @@ export function buildOverview(
 }
 
 export const MOCK_OVERVIEW = buildOverview({
-  ci: { open: 3, critical: 1, resolved: 2, total: 2, scanned: 2, topRules: 2 },
+  workflow: {
+    open: 3,
+    critical: 1,
+    resolved: 2,
+    total: 2,
+    scanned: 2,
+    topRules: 2,
+  },
   docker: { open: 2, critical: 0, total: 1, scanned: 1 },
   terraform: { open: 0, total: 1, scanned: 0, score: null, grade: null },
   cloud: { open: 1, critical: 1, total: 1, scanned: 1 },
