@@ -240,6 +240,7 @@ class RuleDomain(str, enum.Enum):
 
     ci_workflow = "ci_workflow"
     iac_terraform = "iac_terraform"
+    iac_ansible = "iac_ansible"
     cloud_aws = "cloud_aws"
     ci_telemetry = "ci_telemetry"
     container_docker = "container_docker"
@@ -276,6 +277,9 @@ ENGINE_OF_DOMAIN: dict[RuleDomain, Engine] = {
     # and a missing memory limit in the Compose file are the same engine's
     # findings, arrived at from different evidence.
     RuleDomain.container_runtime: Engine.docker,
+    # `iac_ansible` is deliberately absent: its rules ship before the engine
+    # that persists their findings does, so there is no `Engine` member to map
+    # it to yet. The entry lands with the tables and the scan worker.
 }
 
 

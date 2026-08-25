@@ -42,6 +42,8 @@ Each engine gets exactly one document, and rules cannot read across engines.
      - ``{"runner_specs": {...}, "metrics": {...}}`` as measured by the Action.
    * - ``iac_terraform``
      - Every ``.tf`` in the root merged into one config, list-concatenated per block type.
+   * - ``iac_ansible``
+     - ``{"files": [...]}`` — one entry per playbook, task file, variables file or galaxy requirements file, each carrying ``__ansible_file`` and a ``kind``. Task-bearing entries expose a **flat** ``tasks`` array with blocks already unwound and each task's ``__module__`` and ``__args__`` resolved.
    * - ``cloud_aws``
      - A normalized snapshot of fourteen AWS resource types.
    * - ``container_docker``
@@ -51,6 +53,31 @@ Each engine gets exactly one document, and rules cannot read across engines.
 
 Traps worth knowing before writing a rule
 -----------------------------------------
+
+**Every Ansible rule must start from ``input.files``.** The document is an
+envelope, and that is load-bearing rather than stylistic:
+``scripts/validate_examples.py`` evaluates the reference *GitHub Actions
+workflow* against every domain's packages through the aggregate query. A rule
+that iterates ``input.files`` is vacuously silent on a document that has no such
+key; one that keys on a missing field at the top level fires on it and breaks
+the build.
+
+**Ansible templating is opaque, and pretending otherwise produces noise.**
+``mode: "{{ file_mode }}"`` cannot be judged without resolving variables across
+``group_vars``, ``host_vars``, role defaults and ``set_fact``. Rules skip
+templated values (``lib/ansible.rego``'s ``is_templated``) rather than guess. A
+false positive on a templated value is worse than a miss, because the fix an
+operator is offered would be wrong.
+
+**A block's keywords are inherited, and the parser has already applied them.**
+``no_log`` or ``become`` set on a ``block`` reaches every task inside it, so the
+flattened tasks carry the inherited value where they do not set their own. A
+rule reading ``task.no_log`` therefore sees what Ansible would see — do not
+try to re-derive it.
+
+**Task keywords are not module arguments.** ``when``, ``loop`` and ``become``
+live on the task; everything the module receives is under ``__args__``. Reading
+``task.mode`` finds nothing, because the mode is ``__args__.mode``.
 
 **Terraform values are frequently unresolved.** ``python-hcl2`` does not
 evaluate expressions, so ``retention_in_days = var.log_retention_days`` arrives
@@ -167,5 +194,5 @@ treat an unresolved reference as configured.
 dependency data, git and branch-protection metadata, other CI providers, other
 clouds. Each needs a collector, an ``evaluate_*`` and violation dataclass in
 ``services/opa/evaluator.py``, a ``RuleDomain`` value, a findings table and a
-Celery task — the six existing engines are the template. No rule-registration
+Celery task — the seven existing engines are the template. No rule-registration
 work, though: the catalog follows from the files.

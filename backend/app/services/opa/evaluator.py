@@ -148,6 +148,7 @@ POLICY_PACKAGES = _discover_policy_packages("ci_workflow") or [
 ]
 
 IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
+IAC_ANSIBLE_POLICY_PACKAGES = _discover_policy_packages("iac_ansible")
 CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages("cloud_aws")
 CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages("ci_telemetry")
 CONTAINER_DOCKER_POLICY_PACKAGES = _discover_policy_packages("container_docker")

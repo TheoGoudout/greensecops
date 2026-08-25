@@ -1,0 +1,20 @@
+# A first-pass Ansible role. Between an unpinned package install, an unverified
+# download, a world-writable entrypoint and a token passed in the clear, it
+# trips most of the iac_ansible suite. The handler is correct and must stay
+# quiet: a restart handler is reacting to a change, not declaring boot state,
+# so service_not_enabled does not apply to it.
+violations:
+  - apt_cache_always_updated
+  - command_without_changed_when
+  - git_module_without_version
+  - get_url_without_checksum
+  - ignore_errors_true
+  - no_log_missing_on_secret_task
+  - package_module_in_loop
+  - package_state_latest
+  - service_not_enabled
+  - shell_with_unquoted_variable
+  - task_missing_name
+  - unarchive_remote_src_without_creates
+  - validate_certs_disabled
+  - world_writable_mode

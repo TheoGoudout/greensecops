@@ -1,0 +1,6 @@
+---
+- name: Restart the web service
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: restarted
+    enabled: true

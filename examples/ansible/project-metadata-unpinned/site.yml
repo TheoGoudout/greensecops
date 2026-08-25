@@ -1,0 +1,5 @@
+---
+- name: Configure the web tier
+  hosts: web
+  roles:
+    - web

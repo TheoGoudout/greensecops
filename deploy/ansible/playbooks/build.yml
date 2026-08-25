@@ -83,8 +83,8 @@
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail &&
-          aws ecr get-login-password --region {{ greensecops_region }} |
-          docker login --username AWS --password-stdin {{ greensecops_config.ECR_REGISTRY }}
+          aws ecr get-login-password --region {{ greensecops_region | quote }} |
+          docker login --username AWS --password-stdin {{ greensecops_config.ECR_REGISTRY | quote }}
         executable: /bin/bash
       changed_when: false
 
