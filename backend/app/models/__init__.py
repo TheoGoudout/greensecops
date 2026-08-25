@@ -142,6 +142,7 @@ from .schemas import (
     UsersPublic,
     VersionInfo,
     WorkflowFilePublic,
+    WorkflowSyncSummary,
 )
 
 __all__ = [
@@ -260,6 +261,7 @@ __all__ = [
     "TokenPayload",
     "NewPassword",
     "WorkflowFilePublic",
+    "WorkflowSyncSummary",
     "TerraformRootCreate",
     "TerraformRootPublic",
     "TerraformScanPublic",

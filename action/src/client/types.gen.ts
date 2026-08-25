@@ -2918,6 +2918,56 @@ export type WorkflowFilePublic = {
      * Raw Content
      */
     raw_content?: string | null;
+    /**
+     * Source Commit Sha
+     */
+    source_commit_sha?: string | null;
+    /**
+     * Fetched At
+     */
+    fetched_at?: string | null;
+};
+
+/**
+ * WorkflowSyncSummary
+ * What a manual "sync from GitHub" run changed, for the toast in the UI.
+ *
+ * ``head_sha`` is None when the branch head could not be resolved, in which
+ * case the sync read a mutable ref and reconciled nothing it wasn't sure of.
+ */
+export type WorkflowSyncSummary = {
+    /**
+     * Branch
+     */
+    branch: string;
+    /**
+     * Head Sha
+     */
+    head_sha?: string | null;
+    /**
+     * Added
+     */
+    added?: number;
+    /**
+     * Updated
+     */
+    updated?: number;
+    /**
+     * Unchanged
+     */
+    unchanged?: number;
+    /**
+     * Restored
+     */
+    restored?: number;
+    /**
+     * Deleted
+     */
+    deleted?: number;
+    /**
+     * Skipped Stale
+     */
+    skipped_stale?: number;
 };
 
 export type LoginLoginAccessTokenData = {
@@ -3634,6 +3684,41 @@ export type RepositoriesListWorkflowFilesResponses = {
 };
 
 export type RepositoriesListWorkflowFilesResponse = RepositoriesListWorkflowFilesResponses[keyof RepositoriesListWorkflowFilesResponses];
+
+export type RepositoriesSyncRepositoryWorkflowsData = {
+    body?: never;
+    path: {
+        /**
+         * Repo Id
+         */
+        repo_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/repositories/{repo_id}/sync-workflows';
+};
+
+export type RepositoriesSyncRepositoryWorkflowsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RepositoriesSyncRepositoryWorkflowsError = RepositoriesSyncRepositoryWorkflowsErrors[keyof RepositoriesSyncRepositoryWorkflowsErrors];
+
+export type RepositoriesSyncRepositoryWorkflowsResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkflowSyncSummary;
+};
+
+export type RepositoriesSyncRepositoryWorkflowsResponse = RepositoriesSyncRepositoryWorkflowsResponses[keyof RepositoriesSyncRepositoryWorkflowsResponses];
 
 export type RepositoriesToggleRepositoryData = {
     body?: never;

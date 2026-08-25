@@ -186,6 +186,8 @@ export const MOCK_WORKFLOW_FILE = {
   path: ".github/workflows/ci.yml",
   branch: "main",
   raw_content: WORKFLOW_RAW_CONTENT,
+  source_commit_sha: "abc1234def5678901234567890abcdef12345678",
+  fetched_at: "2026-01-01T00:00:00Z",
 }
 
 export const MOCK_WORKFLOW_FILE_DEPLOY = {
@@ -193,6 +195,8 @@ export const MOCK_WORKFLOW_FILE_DEPLOY = {
   path: ".github/workflows/deploy.yml",
   branch: "main",
   raw_content: WORKFLOW_RAW_CONTENT,
+  source_commit_sha: "abc1234def5678901234567890abcdef12345678",
+  fetched_at: "2026-01-01T00:00:00Z",
 }
 
 // ── Pull requests (PullRequestPublic) ─────────────────────────────────
@@ -1009,7 +1013,20 @@ export async function mockRepositories(
 ) {
   await page.route("**/api/v1/repositories/**", (route) => {
     const url = route.request().url()
-    if (url.includes("/workflow-files")) {
+    if (url.includes("/sync-workflows")) {
+      route.fulfill({
+        json: {
+          branch: "main",
+          head_sha: "abc1234def5678901234567890abcdef12345678",
+          added: 1,
+          updated: 2,
+          unchanged: 3,
+          restored: 0,
+          deleted: 1,
+          skipped_stale: 0,
+        },
+      })
+    } else if (url.includes("/workflow-files")) {
       route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
     } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()

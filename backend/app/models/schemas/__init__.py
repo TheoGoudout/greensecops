@@ -75,6 +75,7 @@ from .repository import (
     RepositoryPublic,
     RulePublic,
     WorkflowFilePublic,
+    WorkflowSyncSummary,
 )
 from .telemetry import (
     DynamicEnrichmentPublic,
@@ -187,4 +188,5 @@ __all__ = [
     "UsersPublic",
     "VersionInfo",
     "WorkflowFilePublic",
+    "WorkflowSyncSummary",
 ]

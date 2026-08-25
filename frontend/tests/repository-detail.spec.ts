@@ -48,7 +48,20 @@ test.describe("Repository Detail", () => {
     return Promise.all([
       page.route("**/api/v1/repositories/**", (route) => {
         const url = route.request().url()
-        if (url.includes("/workflow-files")) {
+        if (url.includes("/sync-workflows")) {
+          route.fulfill({
+            json: {
+              branch: "main",
+              head_sha: "abc1234def5678901234567890abcdef12345678",
+              added: 1,
+              updated: 2,
+              unchanged: 3,
+              restored: 0,
+              deleted: 1,
+              skipped_stale: 0,
+            },
+          })
+        } else if (url.includes("/workflow-files")) {
           route.fulfill({ json: workflowFiles })
         } else if (url.includes("/integrate-action")) {
           route.fulfill({
@@ -286,6 +299,29 @@ test.describe("Repository Detail", () => {
     await page.getByRole("button", { name: "Run analysis" }).click()
 
     await expect(page.getByText("Analysis queued")).toBeVisible()
+  })
+
+  test("Sync from GitHub reports what changed", async ({ page }) => {
+    await setupRepoMocks(page)
+
+    await page.goto(`/repositories/${MOCK_REPO.id}`)
+
+    await page.getByRole("button", { name: "Sync from GitHub" }).click()
+
+    // The toast summarises the reconciliation rather than just saying "done".
+    await expect(
+      page.getByText("Synced: 1 added, 2 updated, 1 removed"),
+    ).toBeVisible()
+  })
+
+  test("workflow card shows which commit the stored copy came from", async ({
+    page,
+  }) => {
+    await setupRepoMocks(page)
+
+    await page.goto(`/repositories/${MOCK_REPO.id}`)
+
+    await expect(page.getByText(/Synced at abc1234/)).toBeVisible()
   })
 
   test("Integrate action button triggers PR", async ({ page }) => {

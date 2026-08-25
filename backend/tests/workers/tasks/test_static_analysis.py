@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import (
     Category,
@@ -24,11 +24,13 @@ from app.models import (
     WorkflowFix,
     WorkflowScan,
 )
+from app.services.deduplication import compute_content_hash
 from app.services.github.app_client import WorkflowFileContent
 from app.workers.tasks.static_analysis import (
     _reanalyze_all_repositories_impl,
     _run_static_analysis_impl,
 )
+from tests.workers.tasks.conftest import FAKE_HEAD_SHA
 
 # ─── Violation stub ──────────────────────────────────────────────────────────
 
@@ -1764,3 +1766,185 @@ def test_feature_branch_analysis_never_queues_fix_generation(
         _run_static_analysis_impl(str(repo.id), branch="feature")
 
     mock_gen.assert_not_called()
+
+
+# ─── Stored content stays in step with the remote ────────────────────────────
+#
+# These pin the defect this whole sync step exists for: persisting a workflow
+# file used to happen *inside* the analysis loop, below the content-dedup check,
+# so anything the dedup skipped kept whatever content it was last analysed with.
+
+
+def _wf_content(path: str, body: str) -> WorkflowFileContent:
+    return WorkflowFileContent(
+        path=path, content=body, content_hash="unused", sha="blob"
+    )
+
+
+def _run_with(repo: Repository, files: list[WorkflowFileContent]) -> None:
+    with (
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=files,
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+
+def test_dedup_skip_still_refreshes_stored_content(
+    db: Session, repo: Repository
+) -> None:
+    """Reverting a workflow must not leave the stored copy on the newer content.
+
+    A → B → A: the third run is a content duplicate of the first, so no new
+    analysis is performed — but the row must still come back to A. It used to
+    stay frozen on B, and every consumer (the UI, a fix's base, delivery's
+    freshness check) then read a file the repository no longer had.
+    """
+    path = ".github/workflows/revert.yml"
+    a = "on: push\njobs: {}\n"
+    b = "on: pull_request\njobs: {}\n"
+
+    _run_with(repo, [_wf_content(path, a)])
+    _run_with(repo, [_wf_content(path, b)])
+
+    analyses_before = len(
+        db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
+    )
+
+    _run_with(repo, [_wf_content(path, a)])
+
+    db.expire_all()
+    wf = db.exec(
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.path == path)
+    ).one()
+    assert wf.raw_content == a
+    assert wf.content_hash == compute_content_hash(a)
+
+    # Still deduplicated: the point is that storage no longer rides on that
+    # decision, not that the revert forces a fresh analysis.
+    analyses_after = len(
+        db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
+    )
+    assert analyses_after == analyses_before
+
+
+def test_new_path_with_duplicate_content_gets_its_own_row(
+    db: Session, repo: Repository
+) -> None:
+    """Dedup keys on (content_hash, repo, branch), not on path.
+
+    A second workflow byte-identical to the first — a copied file — used to be
+    dedup-skipped before its row was ever created, so it never appeared at all.
+    """
+    body = "on: push\njobs: {}\n"
+    first = ".github/workflows/ci.yml"
+    second = ".github/workflows/ci-copy.yml"
+
+    _run_with(repo, [_wf_content(first, body)])
+    _run_with(repo, [_wf_content(first, body), _wf_content(second, body)])
+
+    db.expire_all()
+    paths = {
+        wf.path
+        for wf in db.exec(
+            select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
+        ).all()
+    }
+    assert first in paths
+    assert second in paths
+
+
+def test_analysis_records_the_resolved_commit(db: Session, repo: Repository) -> None:
+    """Provenance lands on the WorkflowScan row even though no caller passed a SHA."""
+    _run_with(repo, [_wf_content(".github/workflows/ci.yml", "on: push\n")])
+
+    db.expire_all()
+    analysis = db.exec(
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(col(WorkflowScan.workflow_file_id).is_not(None))
+    ).first()
+    assert analysis is not None
+    assert analysis.commit_sha == FAKE_HEAD_SHA
+
+    wf = db.exec(select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)).one()
+    assert wf.source_commit_sha == FAKE_HEAD_SHA
+
+
+def test_no_workflows_row_records_the_resolved_commit(
+    db: Session, repo: Repository
+) -> None:
+    _run_with(repo, [])
+
+    db.expire_all()
+    analysis = db.exec(
+        select(WorkflowScan)
+        .where(WorkflowScan.repo_id == repo.id)
+        .where(WorkflowScan.status == ScanStatus.no_targets)
+    ).one()
+    assert analysis.commit_sha == FAKE_HEAD_SHA
+
+
+def test_unresolvable_branch_records_no_analysis(db: Session, repo: Repository) -> None:
+    """ "We could not read the branch" must not be filed as "it has no workflows".
+
+    Both look like a 404 from GitHub, and recording the second states as fact
+    the one thing the run just established it cannot tell.
+    """
+    before = len(
+        db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
+    )
+
+    with (
+        patch("app.workers.tasks.static_analysis._resolve_ref_sha", return_value=None),
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        result = _run_static_analysis_impl(str(repo.id))
+
+    assert result["status"] == "ref_unresolved"
+    db.expire_all()
+    after = len(
+        db.exec(select(WorkflowScan).where(WorkflowScan.repo_id == repo.id)).all()
+    )
+    assert after == before
+
+
+def test_unresolvable_branch_does_not_soft_delete_everything(
+    db: Session, repo: Repository
+) -> None:
+    """A dead ref 404s exactly like a repo with no workflows directory.
+
+    Reading the second as the first would soft-delete every workflow file on the
+    branch and withdraw every fix targeting them, off nothing but a lookup that
+    failed.
+    """
+    wf = WorkflowFile(
+        repo_id=repo.id,
+        branch=repo.default_branch,
+        path=".github/workflows/ci.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\n",
+    )
+    db.add(wf)
+    db.commit()
+
+    with (
+        patch("app.workers.tasks.static_analysis._resolve_ref_sha", return_value=None),
+        patch(
+            "app.workers.tasks.static_analysis._fetch_workflow_files",
+            return_value=[],
+        ),
+        patch("app.workers.tasks.static_analysis._evaluate", return_value=[]),
+    ):
+        _run_static_analysis_impl(str(repo.id))
+
+    db.refresh(wf)
+    assert wf.deleted_at is None

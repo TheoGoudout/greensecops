@@ -323,6 +323,29 @@ class GitHubAppClient:
             return settings.GITHUB_BOT_TOKEN
         return None
 
+    async def get_branch_head(
+        self, token: str | None, full_name: str, branch: str
+    ) -> str | None:
+        """Return ``branch``'s head commit SHA, or ``None`` if it doesn't exist.
+
+        A missing branch is a normal outcome, not an error: by the time a queued
+        analysis runs, the branch that triggered it may have been merged and
+        deleted. Callers need to tell that apart from "the fetch failed", because
+        an empty file listing off a dead ref would otherwise read as "every
+        workflow file was deleted". Anything other than a 404 still raises.
+        """
+
+        def _fetch() -> str | None:
+            gh = Github(auth=Auth.Token(token)) if token is not None else Github()
+            try:
+                return gh.get_repo(full_name).get_branch(branch).commit.sha
+            except GithubException as exc:
+                if exc.status == 404:
+                    return None
+                raise
+
+        return await asyncio.to_thread(_fetch)
+
     async def get_default_branch_head(
         self, token: str | None, full_name: str
     ) -> tuple[str, str]:
@@ -418,17 +441,21 @@ class GitHubAppClient:
         return await asyncio.to_thread(_fetch)
 
     async def fetch_workflow_files(
-        self, installation_id: int | None, full_name: str, ref: str | None = None
+        self, repo: "Repository", ref: str | None = None
     ) -> list[WorkflowFileContent]:
         """Fetch workflow files at ``ref`` (branch or commit SHA).
 
         When ``ref`` is empty the repository's default branch is used, so an
         analysis triggered for a feature branch sees that branch's content.
+
+        The credential comes from ``resolve_repo_token``, not from
+        ``installation_id`` alone: an external repo has no installation, and
+        reading it unauthenticated caps us at GitHub's 60 req/h anonymous
+        limit — which surfaced as fetches failing and a repo's stored workflow
+        content staying stale indefinitely.
         """
-        if installation_id is not None:
-            token: str | None = await self.get_installation_token(installation_id)
-        else:
-            token = None
+        token = await self.resolve_repo_token(repo)
+        full_name = repo.full_name
 
         def _fetch() -> list[WorkflowFileContent]:
             gh = Github(auth=Auth.Token(token)) if token is not None else Github()

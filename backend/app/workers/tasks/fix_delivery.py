@@ -147,7 +147,13 @@ def deliver_fixes_batch(
                 )
                 continue
             seen[wf.path] = (wf.path, fix.full_content)
-            expected_base_contents[wf.path] = wf.raw_content
+            # The base the rewrite was generated from, not the scan's
+            # snapshot of the file. They agree in the normal case; when they
+            # don't, comparing the remote against the snapshot rejected fixes
+            # that were built correctly against a newer remote. `raw_content`
+            # remains the fallback for fixes generated before base_content
+            # existed, and while an older worker is still creating them.
+            expected_base_contents[wf.path] = fix.base_content or wf.raw_content
             n_issues = len(fix.findings)
             commit_messages[wf.path] = (
                 f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {wf.path}"

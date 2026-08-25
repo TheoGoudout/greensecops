@@ -47,6 +47,27 @@ class WorkflowFilePublic(SQLModel):
     path: str
     branch: str | None = None
     raw_content: str | None = None
+    # Provenance of ``raw_content``, so the UI can say which commit is on screen
+    # and how long ago it was verified rather than implying it is live.
+    source_commit_sha: str | None = None
+    fetched_at: datetime | None = None
+
+
+class WorkflowSyncSummary(SQLModel):
+    """What a manual "sync from GitHub" run changed, for the toast in the UI.
+
+    ``head_sha`` is None when the branch head could not be resolved, in which
+    case the sync read a mutable ref and reconciled nothing it wasn't sure of.
+    """
+
+    branch: str
+    head_sha: str | None = None
+    added: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    restored: int = 0
+    deleted: int = 0
+    skipped_stale: int = 0
 
 
 # --------------------------------------------------------------------------

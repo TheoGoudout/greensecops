@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -1227,3 +1228,125 @@ def test_list_workflow_files_scoped_to_branch(
     feature_paths = [wf["path"] for wf in feature_listing.json()]
     assert feature_paths == [".github/workflows/feature-only.yml"]
     assert feature_listing.json()[0]["branch"] == "feature"
+
+
+# ─── POST /repositories/{id}/sync-workflows ──────────────────────────────────
+
+
+def _sync_url(repo: Repository) -> str:
+    return f"{settings.API_V1_STR}/repositories/{repo.id}/sync-workflows"
+
+
+def _scan_lock(*, acquired: bool):
+    """Stand in for the Redis-backed scan lock the sync route takes.
+
+    The backend CI job runs Postgres but no Redis, so a test that let the route
+    reach the real lock would fail on a refused connection rather than on
+    anything it was written to check.
+    """
+    from unittest.mock import MagicMock
+
+    client = MagicMock()
+    client.set.return_value = acquired
+    return patch(
+        "app.services.scan_support.redis_sync.Redis.from_url", return_value=client
+    )
+
+
+def test_sync_workflows_reports_what_changed(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    """One added file, and one stored file that is gone from the remote."""
+    from app.services.github.app_client import WorkflowFileContent
+
+    stale = WorkflowFile(
+        repo_id=repo.id,
+        branch=repo.default_branch,
+        path=".github/workflows/gone.yml",
+        content_hash=uuid.uuid4().hex,
+        raw_content="on: push\n",
+    )
+    db.add(stale)
+    db.commit()
+
+    fresh = WorkflowFileContent(
+        path=".github/workflows/new.yml",
+        content="on: push\njobs: {}\n",
+        content_hash="unused",
+        sha="blob",
+    )
+    with (
+        _scan_lock(acquired=True),
+        patch("app.services.workflow_sync.resolve_branch_head", return_value="c" * 40),
+        patch(
+            "app.services.workflow_sync.fetch_workflow_files_for_repo",
+            return_value=[fresh],
+        ),
+    ):
+        response = client.post(_sync_url(repo), headers=superuser_token_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["branch"] == repo.default_branch
+    assert body["head_sha"] == "c" * 40
+    assert body["added"] == 1
+    assert body["deleted"] == 1
+
+    # The new path is registered with its provenance, the missing one is
+    # soft-deleted rather than dropped.
+    db.expire_all()
+    added = db.exec(
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.path == ".github/workflows/new.yml")
+    ).one()
+    assert added.source_commit_sha == "c" * 40
+    assert added.fetched_at is not None
+    db.refresh(stale)
+    assert stale.deleted_at is not None
+
+
+def test_sync_workflows_conflicts_with_a_running_analysis(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+) -> None:
+    """The per-repo scan lock is held, so the sync must not write concurrently."""
+    with _scan_lock(acquired=False):
+        response = client.post(_sync_url(repo), headers=superuser_token_headers)
+
+    assert response.status_code == 409
+
+
+def test_sync_workflows_requires_org_admin(
+    client: TestClient,
+    db: Session,
+    org: Organization,
+    repo: Repository,
+) -> None:
+    member = create_random_user(db)
+    db.add(OrgMember(org_id=org.id, user_id=member.id, role=OrgRole.member))
+    db.commit()
+    headers = authentication_token_from_email(client=client, email=member.email, db=db)
+
+    response = client.post(_sync_url(repo), headers=headers)
+
+    assert response.status_code == 403
+
+
+def test_sync_workflows_rejects_inaccessible_repo(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    repo.is_accessible = False
+    db.add(repo)
+    db.commit()
+
+    response = client.post(_sync_url(repo), headers=superuser_token_headers)
+
+    assert response.status_code == 403

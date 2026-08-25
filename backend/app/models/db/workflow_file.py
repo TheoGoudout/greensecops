@@ -30,9 +30,20 @@ class WorkflowFile(SQLModel, table=True):
     path: str = Field(max_length=512)
     content_hash: str = Field(max_length=64, index=True)
     raw_content: str
+    # When this snapshot was last verified against GitHub — refreshed by every
+    # sync, including one that finds the content unchanged. It is *not* the row's
+    # creation time (which is what it silently recorded while nothing wrote it),
+    # and it doubles as the write-ordering cursor: a sync that resolved the ref
+    # earlier than this must not overwrite the content a later one already
+    # stored. See ``services/workflow_sync``.
     fetched_at: datetime | None = Field(
         default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
     )
+    # The commit ``raw_content`` was read at. Always a resolved head, never the
+    # SHA a webhook happened to carry, so "which code did we analyse?" has an
+    # answer that survives the branch moving. NULL on rows last synced before
+    # provenance existed; the next sync fills it in.
+    source_commit_sha: str | None = Field(default=None, max_length=40)
     # Soft-delete marker: set when the path no longer exists on its branch (the
     # file was deleted/renamed in the repo). The row is kept so its resolved
     # issues and analysis history stay queryable, but it is filtered out of the

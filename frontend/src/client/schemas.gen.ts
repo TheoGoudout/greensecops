@@ -5341,9 +5341,89 @@ export const WorkflowFilePublicSchema = {
                 }
             ],
             title: 'Raw Content'
+        },
+        source_commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Source Commit Sha'
+        },
+        fetched_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fetched At'
         }
     },
     type: 'object',
     required: ['id', 'path'],
     title: 'WorkflowFilePublic'
+} as const;
+
+export const WorkflowSyncSummarySchema = {
+    properties: {
+        branch: {
+            type: 'string',
+            title: 'Branch'
+        },
+        head_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Head Sha'
+        },
+        added: {
+            type: 'integer',
+            title: 'Added',
+            default: 0
+        },
+        updated: {
+            type: 'integer',
+            title: 'Updated',
+            default: 0
+        },
+        unchanged: {
+            type: 'integer',
+            title: 'Unchanged',
+            default: 0
+        },
+        restored: {
+            type: 'integer',
+            title: 'Restored',
+            default: 0
+        },
+        deleted: {
+            type: 'integer',
+            title: 'Deleted',
+            default: 0
+        },
+        skipped_stale: {
+            type: 'integer',
+            title: 'Skipped Stale',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['branch'],
+    title: 'WorkflowSyncSummary',
+    description: `What a manual "sync from GitHub" run changed, for the toast in the UI.
+
+\`\`head_sha\`\` is None when the branch head could not be resolved, in which
+case the sync read a mutable ref and reconciled nothing it wasn't sure of.`
 } as const;
