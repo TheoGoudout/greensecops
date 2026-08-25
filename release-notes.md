@@ -19,6 +19,10 @@
 
 * refactor: one vocabulary, one engine registry, one scan pipeline. PR [#240](https://github.com/TheoGoudout/greensecops/pull/240) by [@TheoGoudout](https://github.com/TheoGoudout).
 
+### Upgrades
+
+* ⬆ bump python from 3.14.6-slim to 3.14.7-slim in /backend in the python group across 1 directory. PR [#234](https://github.com/TheoGoudout/greensecops/pull/234) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
 ### Internal
 
 * ⬆ bump pydantic-settings from 2.14.2 to 2.15.0 in the python-packages group across 1 directory. PR [#232](https://github.com/TheoGoudout/greensecops/pull/232) by [@dependabot[bot]](https://github.com/apps/dependabot).
