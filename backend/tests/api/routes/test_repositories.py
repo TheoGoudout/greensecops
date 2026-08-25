@@ -1237,6 +1237,22 @@ def _sync_url(repo: Repository) -> str:
     return f"{settings.API_V1_STR}/repositories/{repo.id}/sync-workflows"
 
 
+def _scan_lock(*, acquired: bool):
+    """Stand in for the Redis-backed scan lock the sync route takes.
+
+    The backend CI job runs Postgres but no Redis, so a test that let the route
+    reach the real lock would fail on a refused connection rather than on
+    anything it was written to check.
+    """
+    from unittest.mock import MagicMock
+
+    client = MagicMock()
+    client.set.return_value = acquired
+    return patch(
+        "app.services.scan_support.redis_sync.Redis.from_url", return_value=client
+    )
+
+
 def test_sync_workflows_reports_what_changed(
     client: TestClient,
     superuser_token_headers: dict[str, str],
@@ -1263,6 +1279,7 @@ def test_sync_workflows_reports_what_changed(
         sha="blob",
     )
     with (
+        _scan_lock(acquired=True),
         patch("app.services.workflow_sync.resolve_branch_head", return_value="c" * 40),
         patch(
             "app.services.workflow_sync.fetch_workflow_files_for_repo",
@@ -1298,13 +1315,7 @@ def test_sync_workflows_conflicts_with_a_running_analysis(
     repo: Repository,
 ) -> None:
     """The per-repo scan lock is held, so the sync must not write concurrently."""
-    from unittest.mock import MagicMock
-
-    held = MagicMock()
-    held.set.return_value = False  # lock not acquired
-    with patch(
-        "app.services.scan_support.redis_sync.Redis.from_url", return_value=held
-    ):
+    with _scan_lock(acquired=False):
         response = client.post(_sync_url(repo), headers=superuser_token_headers)
 
     assert response.status_code == 409
