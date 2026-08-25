@@ -3,6 +3,12 @@
 ``from app.api.mappers import X`` is unaffected by the internal split.
 """
 
+from .ansible import (
+    to_ansible_finding_public,
+    to_ansible_fix_public,
+    to_ansible_project_public,
+    to_ansible_scan_public,
+)
 from .base import latest_completed_scan, to_public
 from .cloud import (
     to_cloud_account_public,
@@ -32,6 +38,10 @@ from .terraform import (
 from .workflow import to_analysis_public, to_issue_public
 
 __all__ = [
+    "to_ansible_scan_public",
+    "to_ansible_project_public",
+    "to_ansible_fix_public",
+    "to_ansible_finding_public",
     "to_analysis_public",
     "to_issue_public",
     "to_dynamic_enrichment_public",

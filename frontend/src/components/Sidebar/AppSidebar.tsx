@@ -77,6 +77,7 @@ const infraSubItems = [
   // engine, and nesting the same word under itself reads as a broken link.
   // Mirrors the Docker section's Analysis tab.
   { title: "Analysis", segment: "terraform" },
+  { title: "Ansible", segment: "ansible" },
   { title: "Cloud", segment: "cloud" },
   { title: "PRs", segment: "pull-requests" },
 ] as const

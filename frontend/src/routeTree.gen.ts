@@ -26,6 +26,7 @@ import { Route as LayoutRulesRouteImport } from './routes/_layout/rules'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 import { Route as LayoutBadgesIndexRouteImport } from './routes/_layout/badges/index'
+import { Route as LayoutBadgesAnsibleRouteImport } from './routes/_layout/badges/ansible'
 import { Route as LayoutBadgesDockerRouteImport } from './routes/_layout/badges/docker'
 import { Route as LayoutBadgesRepositoriesRouteImport } from './routes/_layout/badges/repositories'
 import { Route as LayoutBadgesTerraformRouteImport } from './routes/_layout/badges/terraform'
@@ -46,6 +47,7 @@ import { Route as LayoutDockerRepoIdPullRequestsRouteImport } from './routes/_la
 import { Route as LayoutDockerRepoIdRuntimeRouteImport } from './routes/_layout/docker/$repoId/runtime'
 import { Route as LayoutDockerRepoIdScansRouteImport } from './routes/_layout/docker/$repoId/scans'
 import { Route as LayoutInfrastructureRepoIdIndexRouteImport } from './routes/_layout/infrastructure/$repoId/index'
+import { Route as LayoutInfrastructureRepoIdAnsibleRouteImport } from './routes/_layout/infrastructure/$repoId/ansible'
 import { Route as LayoutInfrastructureRepoIdCloudRouteImport } from './routes/_layout/infrastructure/$repoId/cloud'
 import { Route as LayoutInfrastructureRepoIdDockerRouteImport } from './routes/_layout/infrastructure/$repoId/docker'
 import { Route as LayoutInfrastructureRepoIdPullRequestsRouteImport } from './routes/_layout/infrastructure/$repoId/pull-requests'
@@ -138,6 +140,11 @@ const LayoutAnalysesAnalysisIdRoute =
 const LayoutBadgesIndexRoute = LayoutBadgesIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LayoutBadgesRoute,
+} as any)
+const LayoutBadgesAnsibleRoute = LayoutBadgesAnsibleRouteImport.update({
+  id: '/ansible',
+  path: '/ansible',
   getParentRoute: () => LayoutBadgesRoute,
 } as any)
 const LayoutBadgesDockerRoute = LayoutBadgesDockerRouteImport.update({
@@ -249,6 +256,12 @@ const LayoutInfrastructureRepoIdIndexRoute =
     path: '/',
     getParentRoute: () => LayoutInfrastructureRepoIdRoute,
   } as any)
+const LayoutInfrastructureRepoIdAnsibleRoute =
+  LayoutInfrastructureRepoIdAnsibleRouteImport.update({
+    id: '/ansible',
+    path: '/ansible',
+    getParentRoute: () => LayoutInfrastructureRepoIdRoute,
+  } as any)
 const LayoutInfrastructureRepoIdCloudRoute =
   LayoutInfrastructureRepoIdCloudRouteImport.update({
     id: '/cloud',
@@ -314,6 +327,7 @@ export interface FileRoutesByFullPath {
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/badges/ansible': typeof LayoutBadgesAnsibleRoute
   '/badges/docker': typeof LayoutBadgesDockerRoute
   '/badges/repositories': typeof LayoutBadgesRepositoriesRoute
   '/badges/terraform': typeof LayoutBadgesTerraformRoute
@@ -333,6 +347,7 @@ export interface FileRoutesByFullPath {
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
   '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
+  '/infrastructure/$repoId/ansible': typeof LayoutInfrastructureRepoIdAnsibleRoute
   '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
   '/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
@@ -356,6 +371,7 @@ export interface FileRoutesByTo {
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/badges/ansible': typeof LayoutBadgesAnsibleRoute
   '/badges/docker': typeof LayoutBadgesDockerRoute
   '/badges/repositories': typeof LayoutBadgesRepositoriesRoute
   '/badges/terraform': typeof LayoutBadgesTerraformRoute
@@ -372,6 +388,7 @@ export interface FileRoutesByTo {
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
   '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
+  '/infrastructure/$repoId/ansible': typeof LayoutInfrastructureRepoIdAnsibleRoute
   '/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
   '/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
@@ -401,6 +418,7 @@ export interface FileRoutesById {
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
+  '/_layout/badges/ansible': typeof LayoutBadgesAnsibleRoute
   '/_layout/badges/docker': typeof LayoutBadgesDockerRoute
   '/_layout/badges/repositories': typeof LayoutBadgesRepositoriesRoute
   '/_layout/badges/terraform': typeof LayoutBadgesTerraformRoute
@@ -420,6 +438,7 @@ export interface FileRoutesById {
   '/_layout/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
   '/_layout/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
   '/_layout/docker/$repoId/scans': typeof LayoutDockerRepoIdScansRoute
+  '/_layout/infrastructure/$repoId/ansible': typeof LayoutInfrastructureRepoIdAnsibleRoute
   '/_layout/infrastructure/$repoId/cloud': typeof LayoutInfrastructureRepoIdCloudRoute
   '/_layout/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
   '/_layout/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
@@ -449,6 +468,7 @@ export interface FileRouteTypes {
     | '/rules'
     | '/settings'
     | '/analyses/$analysisId'
+    | '/badges/ansible'
     | '/badges/docker'
     | '/badges/repositories'
     | '/badges/terraform'
@@ -468,6 +488,7 @@ export interface FileRouteTypes {
     | '/docker/$repoId/pull-requests'
     | '/docker/$repoId/runtime'
     | '/docker/$repoId/scans'
+    | '/infrastructure/$repoId/ansible'
     | '/infrastructure/$repoId/cloud'
     | '/infrastructure/$repoId/docker'
     | '/infrastructure/$repoId/pull-requests'
@@ -491,6 +512,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/'
     | '/analyses/$analysisId'
+    | '/badges/ansible'
     | '/badges/docker'
     | '/badges/repositories'
     | '/badges/terraform'
@@ -507,6 +529,7 @@ export interface FileRouteTypes {
     | '/docker/$repoId/pull-requests'
     | '/docker/$repoId/runtime'
     | '/docker/$repoId/scans'
+    | '/infrastructure/$repoId/ansible'
     | '/infrastructure/$repoId/cloud'
     | '/infrastructure/$repoId/docker'
     | '/infrastructure/$repoId/pull-requests'
@@ -535,6 +558,7 @@ export interface FileRouteTypes {
     | '/_layout/settings'
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
+    | '/_layout/badges/ansible'
     | '/_layout/badges/docker'
     | '/_layout/badges/repositories'
     | '/_layout/badges/terraform'
@@ -554,6 +578,7 @@ export interface FileRouteTypes {
     | '/_layout/docker/$repoId/pull-requests'
     | '/_layout/docker/$repoId/runtime'
     | '/_layout/docker/$repoId/scans'
+    | '/_layout/infrastructure/$repoId/ansible'
     | '/_layout/infrastructure/$repoId/cloud'
     | '/_layout/infrastructure/$repoId/docker'
     | '/_layout/infrastructure/$repoId/pull-requests'
@@ -697,6 +722,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutBadgesIndexRouteImport
       parentRoute: typeof LayoutBadgesRoute
     }
+    '/_layout/badges/ansible': {
+      id: '/_layout/badges/ansible'
+      path: '/ansible'
+      fullPath: '/badges/ansible'
+      preLoaderRoute: typeof LayoutBadgesAnsibleRouteImport
+      parentRoute: typeof LayoutBadgesRoute
+    }
     '/_layout/badges/docker': {
       id: '/_layout/badges/docker'
       path: '/docker'
@@ -837,6 +869,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInfrastructureRepoIdIndexRouteImport
       parentRoute: typeof LayoutInfrastructureRepoIdRoute
     }
+    '/_layout/infrastructure/$repoId/ansible': {
+      id: '/_layout/infrastructure/$repoId/ansible'
+      path: '/ansible'
+      fullPath: '/infrastructure/$repoId/ansible'
+      preLoaderRoute: typeof LayoutInfrastructureRepoIdAnsibleRouteImport
+      parentRoute: typeof LayoutInfrastructureRepoIdRoute
+    }
     '/_layout/infrastructure/$repoId/cloud': {
       id: '/_layout/infrastructure/$repoId/cloud'
       path: '/cloud'
@@ -897,6 +936,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface LayoutBadgesRouteChildren {
+  LayoutBadgesAnsibleRoute: typeof LayoutBadgesAnsibleRoute
   LayoutBadgesDockerRoute: typeof LayoutBadgesDockerRoute
   LayoutBadgesRepositoriesRoute: typeof LayoutBadgesRepositoriesRoute
   LayoutBadgesTerraformRoute: typeof LayoutBadgesTerraformRoute
@@ -904,6 +944,7 @@ interface LayoutBadgesRouteChildren {
 }
 
 const LayoutBadgesRouteChildren: LayoutBadgesRouteChildren = {
+  LayoutBadgesAnsibleRoute: LayoutBadgesAnsibleRoute,
   LayoutBadgesDockerRoute: LayoutBadgesDockerRoute,
   LayoutBadgesRepositoriesRoute: LayoutBadgesRepositoriesRoute,
   LayoutBadgesTerraformRoute: LayoutBadgesTerraformRoute,
@@ -950,6 +991,7 @@ const LayoutDockerRouteWithChildren = LayoutDockerRoute._addFileChildren(
 )
 
 interface LayoutInfrastructureRepoIdRouteChildren {
+  LayoutInfrastructureRepoIdAnsibleRoute: typeof LayoutInfrastructureRepoIdAnsibleRoute
   LayoutInfrastructureRepoIdCloudRoute: typeof LayoutInfrastructureRepoIdCloudRoute
   LayoutInfrastructureRepoIdDockerRoute: typeof LayoutInfrastructureRepoIdDockerRoute
   LayoutInfrastructureRepoIdPullRequestsRoute: typeof LayoutInfrastructureRepoIdPullRequestsRoute
@@ -959,6 +1001,8 @@ interface LayoutInfrastructureRepoIdRouteChildren {
 
 const LayoutInfrastructureRepoIdRouteChildren: LayoutInfrastructureRepoIdRouteChildren =
   {
+    LayoutInfrastructureRepoIdAnsibleRoute:
+      LayoutInfrastructureRepoIdAnsibleRoute,
     LayoutInfrastructureRepoIdCloudRoute: LayoutInfrastructureRepoIdCloudRoute,
     LayoutInfrastructureRepoIdDockerRoute:
       LayoutInfrastructureRepoIdDockerRoute,

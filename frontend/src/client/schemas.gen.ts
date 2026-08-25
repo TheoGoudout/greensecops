@@ -176,6 +176,405 @@ export const AnalysisPublicSchema = {
     title: 'AnalysisPublic'
 } as const;
 
+export const AnsibleFilePublicSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        raw_content: {
+            type: 'string',
+            title: 'Raw Content'
+        },
+        kind: {
+            type: 'string',
+            title: 'Kind'
+        }
+    },
+    type: 'object',
+    required: ['path', 'raw_content', 'kind'],
+    title: 'AnsibleFilePublic',
+    description: `One Ansible file's live source for a project.
+
+Ansible files aren't persisted (unlike \`\`WorkflowFile\`\`); they're fetched
+from GitHub on demand, so this carries no id or branch — just the path and
+content, mirroring \`\`TerraformFilePublic\`\`.`
+} as const;
+
+export const AnsibleFindingPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        scan_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Scan Id'
+        },
+        rule_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Rule Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        severity: {
+            '$ref': '#/components/schemas/Severity'
+        },
+        category: {
+            '$ref': '#/components/schemas/Category'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        ansible_project_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Ansible Project Id'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        line_start: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line Start'
+        },
+        line_end: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line End'
+        },
+        task_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Task Name'
+        }
+    },
+    type: 'object',
+    required: ['id', 'scan_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status', 'ansible_project_id', 'file_path'],
+    title: 'AnsibleFindingPublic'
+} as const;
+
+export const AnsibleProjectCreateSchema = {
+    properties: {
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        root_path: {
+            type: 'string',
+            maxLength: 512,
+            title: 'Root Path'
+        }
+    },
+    type: 'object',
+    required: ['repo_id', 'root_path'],
+    title: 'AnsibleProjectCreate'
+} as const;
+
+export const AnsibleProjectPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        repo_full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Full Name'
+        },
+        root_path: {
+            type: 'string',
+            title: 'Root Path'
+        },
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled'
+        },
+        last_scanned_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scanned At'
+        },
+        last_scanned_head_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Scanned Head Sha'
+        },
+        latest_score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Score'
+        },
+        latest_grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Latest Grade'
+        },
+        badge_sig: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Badge Sig'
+        }
+    },
+    type: 'object',
+    required: ['id', 'repo_id', 'root_path', 'enabled'],
+    title: 'AnsibleProjectPublic'
+} as const;
+
+export const AnsibleScanPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        status: {
+            '$ref': '#/components/schemas/ScanStatus'
+        },
+        triggered_by: {
+            '$ref': '#/components/schemas/ScanTrigger'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        completed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Completed At'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Commit Sha'
+        },
+        ansible_project_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Ansible Project Id'
+        },
+        file_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Count'
+        }
+    },
+    type: 'object',
+    required: ['id', 'status', 'triggered_by', 'ansible_project_id'],
+    title: 'AnsibleScanPublic'
+} as const;
+
 export const BatchFixRequestSchema = {
     properties: {
         issue_ids: {
@@ -1757,7 +2156,7 @@ static issue list.`
 
 export const EngineSchema = {
     type: 'string',
-    enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry'],
+    enum: ['workflow', 'terraform', 'ansible', 'docker', 'cloud', 'telemetry'],
     title: 'Engine',
     description: `Which analysis engine produced something.
 
@@ -4896,7 +5295,7 @@ export const UsageBreakdownPublicSchema = {
 
 export const UsageEngineSchema = {
     type: 'string',
-    enum: ['workflow', 'terraform', 'docker', 'cloud', 'telemetry', 'carryover'],
+    enum: ['workflow', 'terraform', 'ansible', 'docker', 'cloud', 'telemetry', 'carryover'],
     title: 'UsageEngine',
     description: `Which engine produced a usage record, plus one non-engine sentinel.
 

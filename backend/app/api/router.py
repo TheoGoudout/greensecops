@@ -37,6 +37,7 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.rate_limit import NO_RATE_LIMIT, rate_limit_dependency
 from app.models import (
+    AnsibleProject,
     CloudAccount,
     DockerTarget,
     Organization,
@@ -154,6 +155,13 @@ def _org_of_docker_target(session: Session, target_id: uuid.UUID) -> uuid.UUID |
     return _org_of_repo(session, target.repo_id) if target else None
 
 
+def _org_of_ansible_project(
+    session: Session, project_id: uuid.UUID
+) -> uuid.UUID | None:
+    project = session.get(AnsibleProject, project_id)
+    return _org_of_repo(session, project.repo_id) if project else None
+
+
 def _org_of_terraform_root(session: Session, root_id: uuid.UUID) -> uuid.UUID | None:
     root = session.get(TerraformRoot, root_id)
     return _org_of_repo(session, root.repo_id) if root else None
@@ -186,6 +194,10 @@ ORG_RESOLVERS: dict[str, OrgResolver] = {
     "account_id": OrgResolver(_org_of_cloud_account, "Cloud account not found"),
     "target_id": OrgResolver(_org_of_docker_target, "Docker target not found"),
     "root_id": OrgResolver(_org_of_terraform_root, "Terraform root not found"),
+    # A distinct name is mandatory, not stylistic: this dict is keyed by path
+    # parameter, so an engine reusing "target_id" or "root_id" would have its
+    # role checks resolved against another engine's table.
+    "project_id": OrgResolver(_org_of_ansible_project, "Ansible project not found"),
 }
 
 _PATH_PARAM_RE = re.compile(r"\{([^}:]+)")

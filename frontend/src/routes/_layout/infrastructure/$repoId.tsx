@@ -12,6 +12,7 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId")({
 
 const NAV: readonly TabNavItem[] = [
   { label: "Analysis", to: "/infrastructure/$repoId/terraform" },
+  { label: "Ansible", to: "/infrastructure/$repoId/ansible" },
   { label: "Cloud", to: "/infrastructure/$repoId/cloud" },
   { label: "PRs", to: "/infrastructure/$repoId/pull-requests" },
 ]

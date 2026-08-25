@@ -93,6 +93,204 @@ export type AnalysisPublic = {
 };
 
 /**
+ * AnsibleFilePublic
+ * One Ansible file's live source for a project.
+ *
+ * Ansible files aren't persisted (unlike ``WorkflowFile``); they're fetched
+ * from GitHub on demand, so this carries no id or branch — just the path and
+ * content, mirroring ``TerraformFilePublic``.
+ */
+export type AnsibleFilePublic = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Raw Content
+     */
+    raw_content: string;
+    /**
+     * Kind
+     */
+    kind: string;
+};
+
+/**
+ * AnsibleFindingPublic
+ */
+export type AnsibleFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    severity: Severity;
+    category: Category;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
+     * Ansible Project Id
+     */
+    ansible_project_id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Line Start
+     */
+    line_start?: number | null;
+    /**
+     * Line End
+     */
+    line_end?: number | null;
+    /**
+     * Task Name
+     */
+    task_name?: string | null;
+};
+
+/**
+ * AnsibleProjectCreate
+ */
+export type AnsibleProjectCreate = {
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Root Path
+     */
+    root_path: string;
+};
+
+/**
+ * AnsibleProjectPublic
+ */
+export type AnsibleProjectPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Repo Full Name
+     */
+    repo_full_name?: string | null;
+    /**
+     * Root Path
+     */
+    root_path: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Last Scanned At
+     */
+    last_scanned_at?: string | null;
+    /**
+     * Last Scanned Head Sha
+     */
+    last_scanned_head_sha?: string | null;
+    /**
+     * Latest Score
+     */
+    latest_score?: number | null;
+    /**
+     * Latest Grade
+     */
+    latest_grade?: string | null;
+    /**
+     * Badge Sig
+     */
+    badge_sig?: string | null;
+};
+
+/**
+ * AnsibleScanPublic
+ */
+export type AnsibleScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    status: ScanStatus;
+    triggered_by: ScanTrigger;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Ansible Project Id
+     */
+    ansible_project_id: string;
+    /**
+     * File Count
+     */
+    file_count?: number | null;
+};
+
+/**
  * BatchFixRequest
  */
 export type BatchFixRequest = {
@@ -921,7 +1119,7 @@ export type DynamicEnrichmentPublic = {
  * Not the same axis as :class:`RuleDomain`, which names a Rego package — the
  * mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
  */
-export type Engine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry';
+export type Engine = 'workflow' | 'terraform' | 'ansible' | 'docker' | 'cloud' | 'telemetry';
 
 /**
  * EngineCoverageStat
@@ -2654,7 +2852,7 @@ export type UsageBreakdownPublic = {
  * so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
  * fails at import if the two ever drift.
  */
-export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
+export type UsageEngine = 'workflow' | 'terraform' | 'ansible' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
 
 /**
  * UsageMeter
@@ -5040,6 +5238,77 @@ export type BadgesGetTerraformRootBadgeJsonResponses = {
 
 export type BadgesGetTerraformRootBadgeJsonResponse = BadgesGetTerraformRootBadgeJsonResponses[keyof BadgesGetTerraformRootBadgeJsonResponses];
 
+export type BadgesGetAnsibleProjectBadgeData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/ansible/{project_id}.svg';
+};
+
+export type BadgesGetAnsibleProjectBadgeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetAnsibleProjectBadgeError = BadgesGetAnsibleProjectBadgeErrors[keyof BadgesGetAnsibleProjectBadgeErrors];
+
+export type BadgesGetAnsibleProjectBadgeResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type BadgesGetAnsibleProjectBadgeJsonData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/ansible/{project_id}.json';
+};
+
+export type BadgesGetAnsibleProjectBadgeJsonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetAnsibleProjectBadgeJsonError = BadgesGetAnsibleProjectBadgeJsonErrors[keyof BadgesGetAnsibleProjectBadgeJsonErrors];
+
+export type BadgesGetAnsibleProjectBadgeJsonResponses = {
+    /**
+     * Response Badges-Get Ansible Project Badge Json
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type BadgesGetAnsibleProjectBadgeJsonResponse = BadgesGetAnsibleProjectBadgeJsonResponses[keyof BadgesGetAnsibleProjectBadgeJsonResponses];
+
 export type BadgesGetDockerTargetBadgeData = {
     body?: never;
     path: {
@@ -5578,6 +5847,271 @@ export type BillingStripeWebhookResponses = {
 };
 
 export type BillingStripeWebhookResponse = BillingStripeWebhookResponses[keyof BillingStripeWebhookResponses];
+
+export type AnsibleListAnsibleProjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Repo Id
+         */
+        repo_id?: string | null;
+    };
+    url: '/api/v1/ansible-projects/';
+};
+
+export type AnsibleListAnsibleProjectsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListAnsibleProjectsError = AnsibleListAnsibleProjectsErrors[keyof AnsibleListAnsibleProjectsErrors];
+
+export type AnsibleListAnsibleProjectsResponses = {
+    /**
+     * Response Ansible-List Ansible Projects
+     * Successful Response
+     */
+    200: Array<AnsibleProjectPublic>;
+};
+
+export type AnsibleListAnsibleProjectsResponse = AnsibleListAnsibleProjectsResponses[keyof AnsibleListAnsibleProjectsResponses];
+
+export type AnsibleCreateAnsibleProjectData = {
+    body: AnsibleProjectCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/ansible-projects/';
+};
+
+export type AnsibleCreateAnsibleProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleCreateAnsibleProjectError = AnsibleCreateAnsibleProjectErrors[keyof AnsibleCreateAnsibleProjectErrors];
+
+export type AnsibleCreateAnsibleProjectResponses = {
+    /**
+     * Successful Response
+     */
+    201: AnsibleProjectPublic;
+};
+
+export type AnsibleCreateAnsibleProjectResponse = AnsibleCreateAnsibleProjectResponses[keyof AnsibleCreateAnsibleProjectResponses];
+
+export type AnsibleToggleAnsibleProjectData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query: {
+        /**
+         * Enabled
+         */
+        enabled: boolean;
+    };
+    url: '/api/v1/ansible-projects/{project_id}/toggle';
+};
+
+export type AnsibleToggleAnsibleProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleToggleAnsibleProjectError = AnsibleToggleAnsibleProjectErrors[keyof AnsibleToggleAnsibleProjectErrors];
+
+export type AnsibleToggleAnsibleProjectResponses = {
+    /**
+     * Response Ansible-Toggle Ansible Project
+     * Successful Response
+     */
+    200: {
+        [key: string]: string | boolean;
+    };
+};
+
+export type AnsibleToggleAnsibleProjectResponse = AnsibleToggleAnsibleProjectResponses[keyof AnsibleToggleAnsibleProjectResponses];
+
+export type AnsibleDeleteAnsibleProjectData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible-projects/{project_id}';
+};
+
+export type AnsibleDeleteAnsibleProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleDeleteAnsibleProjectError = AnsibleDeleteAnsibleProjectErrors[keyof AnsibleDeleteAnsibleProjectErrors];
+
+export type AnsibleDeleteAnsibleProjectResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type AnsibleDeleteAnsibleProjectResponse = AnsibleDeleteAnsibleProjectResponses[keyof AnsibleDeleteAnsibleProjectResponses];
+
+export type AnsibleTriggerAnsibleScanData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/ansible-projects/{project_id}/scan';
+};
+
+export type AnsibleTriggerAnsibleScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleTriggerAnsibleScanError = AnsibleTriggerAnsibleScanErrors[keyof AnsibleTriggerAnsibleScanErrors];
+
+export type AnsibleTriggerAnsibleScanResponses = {
+    /**
+     * Response Ansible-Trigger Ansible Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type AnsibleTriggerAnsibleScanResponse = AnsibleTriggerAnsibleScanResponses[keyof AnsibleTriggerAnsibleScanResponses];
+
+export type AnsibleListAnsibleScansData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible-projects/{project_id}/scans';
+};
+
+export type AnsibleListAnsibleScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListAnsibleScansError = AnsibleListAnsibleScansErrors[keyof AnsibleListAnsibleScansErrors];
+
+export type AnsibleListAnsibleScansResponses = {
+    /**
+     * Response Ansible-List Ansible Scans
+     * Successful Response
+     */
+    200: Array<AnsibleScanPublic>;
+};
+
+export type AnsibleListAnsibleScansResponse = AnsibleListAnsibleScansResponses[keyof AnsibleListAnsibleScansResponses];
+
+export type AnsibleListAnsibleFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/ansible-projects/{project_id}/findings';
+};
+
+export type AnsibleListAnsibleFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListAnsibleFindingsError = AnsibleListAnsibleFindingsErrors[keyof AnsibleListAnsibleFindingsErrors];
+
+export type AnsibleListAnsibleFindingsResponses = {
+    /**
+     * Response Ansible-List Ansible Findings
+     * Successful Response
+     */
+    200: Array<AnsibleFindingPublic>;
+};
+
+export type AnsibleListAnsibleFindingsResponse = AnsibleListAnsibleFindingsResponses[keyof AnsibleListAnsibleFindingsResponses];
+
+export type AnsibleListAnsibleFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Ref
+         */
+        ref?: string | null;
+    };
+    url: '/api/v1/ansible-projects/{project_id}/files';
+};
+
+export type AnsibleListAnsibleFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListAnsibleFilesError = AnsibleListAnsibleFilesErrors[keyof AnsibleListAnsibleFilesErrors];
+
+export type AnsibleListAnsibleFilesResponses = {
+    /**
+     * Response Ansible-List Ansible Files
+     * Successful Response
+     */
+    200: Array<AnsibleFilePublic>;
+};
+
+export type AnsibleListAnsibleFilesResponse = AnsibleListAnsibleFilesResponses[keyof AnsibleListAnsibleFilesResponses];
 
 export type TerraformListTerraformRootsData = {
     body?: never;

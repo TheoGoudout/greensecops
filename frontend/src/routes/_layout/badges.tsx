@@ -14,6 +14,7 @@ export const Route = createFileRoute("/_layout/badges")({
 const NAV: readonly TabNavItem[] = [
   { label: "Repositories", to: "/badges/repositories" },
   { label: "Terraform", to: "/badges/terraform" },
+  { label: "Ansible", to: "/badges/ansible" },
   { label: "Docker", to: "/badges/docker" },
 ]
 
