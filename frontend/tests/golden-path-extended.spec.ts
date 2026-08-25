@@ -90,8 +90,13 @@ test.describe("Golden Path — Extended", () => {
       .click()
     await expect(page).toHaveURL(new RegExp(`/analyses/${MOCK_ANALYSIS.id}`))
 
+    // `.first()` because the analysis page shows a finding's message twice —
+    // once in its row, once as the annotation beside the offending line in the
+    // file viewer. Same reason issue-filters.spec.ts does it.
     await expect(
-      page.getByText("Workflow uses overly permissive token permissions."),
+      page
+        .getByText("Workflow uses overly permissive token permissions.")
+        .first(),
     ).toBeVisible()
 
     const fixBtn = page.getByRole("button", { name: /fix/i }).first()
