@@ -13,6 +13,7 @@
 
 ### Fixes
 
+* 🐛 Make workflow-file storage a sync step, not an analysis by-product. PR [#242](https://github.com/TheoGoudout/greensecops/pull/242) by [@TheoGoudout](https://github.com/TheoGoudout).
 * Fix the false positives, dedup bugs and coverage gaps found by the Rego rule audit. PR [#239](https://github.com/TheoGoudout/greensecops/pull/239) by [@TheoGoudout](https://github.com/TheoGoudout).
 
 ### Refactors
