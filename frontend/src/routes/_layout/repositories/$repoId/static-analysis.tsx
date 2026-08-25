@@ -34,8 +34,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
 import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
-import { relativeTime } from "@/lib/format"
 import { resolvedIssueIds } from "@/lib/file-viewer"
+import { relativeTime } from "@/lib/format"
 import { severityRank } from "@/lib/severity"
 import {
   fixStatusColor,
