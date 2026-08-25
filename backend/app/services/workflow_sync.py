@@ -266,9 +266,7 @@ def sync_workflow_files(
             # been cleared by something else, and this is the only thing that
             # walks it back to `ready` (mirrors PR-reopen restoring a
             # closed-PR fix). `try_advance` is a no-op from any other state.
-            if wf.fix is not None and sm.try_advance(
-                wf.fix, sm.FixMachine, "restore"
-            ):
+            if wf.fix is not None and sm.try_advance(wf.fix, sm.FixMachine, "restore"):
                 session.add(wf.fix)
             # Provenance is refreshed even when the content did not change —
             # that is precisely what makes "unchanged" distinguishable from

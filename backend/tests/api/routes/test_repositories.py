@@ -1263,9 +1263,7 @@ def test_sync_workflows_reports_what_changed(
         sha="blob",
     )
     with (
-        patch(
-            "app.services.workflow_sync.resolve_branch_head", return_value="c" * 40
-        ),
+        patch("app.services.workflow_sync.resolve_branch_head", return_value="c" * 40),
         patch(
             "app.services.workflow_sync.fetch_workflow_files_for_repo",
             return_value=[fresh],
@@ -1321,9 +1319,7 @@ def test_sync_workflows_requires_org_admin(
     member = create_random_user(db)
     db.add(OrgMember(org_id=org.id, user_id=member.id, role=OrgRole.member))
     db.commit()
-    headers = authentication_token_from_email(
-        client=client, email=member.email, db=db
-    )
+    headers = authentication_token_from_email(client=client, email=member.email, db=db)
 
     response = client.post(_sync_url(repo), headers=headers)
 

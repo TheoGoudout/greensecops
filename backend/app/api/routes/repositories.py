@@ -272,9 +272,7 @@ def list_workflow_files(
     ]
 
 
-@router.post(
-    "/{repo_id}/sync-workflows", role=Role.org_admin, limit=LIMIT_EXPENSIVE
-)
+@router.post("/{repo_id}/sync-workflows", role=Role.org_admin, limit=LIMIT_EXPENSIVE)
 def sync_repository_workflows(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -306,9 +304,7 @@ def sync_repository_workflows(
                 detail="An analysis is already running for this repository",
             )
         try:
-            result = sync_workflow_files(
-                session, repo, branch or repo.default_branch
-            )
+            result = sync_workflow_files(session, repo, branch or repo.default_branch)
         except WorkflowFetchError as exc:
             raise HTTPException(
                 status_code=502,

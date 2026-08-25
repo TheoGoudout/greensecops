@@ -1822,9 +1822,7 @@ def test_new_path_with_duplicate_content_gets_its_own_row(
     assert second in paths
 
 
-def test_analysis_records_the_resolved_commit(
-    db: Session, repo: Repository
-) -> None:
+def test_analysis_records_the_resolved_commit(db: Session, repo: Repository) -> None:
     """Provenance lands on the Analysis row even though no caller passed a SHA."""
     _run_with(repo, [_wf_content(".github/workflows/ci.yml", "on: push\n")])
 
@@ -1837,9 +1835,7 @@ def test_analysis_records_the_resolved_commit(
     assert analysis is not None
     assert analysis.commit_sha == FAKE_HEAD_SHA
 
-    wf = db.exec(
-        select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)
-    ).one()
+    wf = db.exec(select(WorkflowFile).where(WorkflowFile.repo_id == repo.id)).one()
     assert wf.source_commit_sha == FAKE_HEAD_SHA
 
 
@@ -1857,10 +1853,8 @@ def test_no_workflows_row_records_the_resolved_commit(
     assert analysis.commit_sha == FAKE_HEAD_SHA
 
 
-def test_unresolvable_branch_records_no_analysis(
-    db: Session, repo: Repository
-) -> None:
-    """"We could not read the branch" must not be filed as "it has no workflows".
+def test_unresolvable_branch_records_no_analysis(db: Session, repo: Repository) -> None:
+    """ "We could not read the branch" must not be filed as "it has no workflows".
 
     Both look like a 404 from GitHub, and recording the second states as fact
     the one thing the run just established it cannot tell.
@@ -1868,9 +1862,7 @@ def test_unresolvable_branch_records_no_analysis(
     before = len(db.exec(select(Analysis).where(Analysis.repo_id == repo.id)).all())
 
     with (
-        patch(
-            "app.workers.tasks.static_analysis._resolve_ref_sha", return_value=None
-        ),
+        patch("app.workers.tasks.static_analysis._resolve_ref_sha", return_value=None),
         patch(
             "app.workers.tasks.static_analysis._fetch_workflow_files",
             return_value=[],
@@ -1905,9 +1897,7 @@ def test_unresolvable_branch_does_not_soft_delete_everything(
     db.commit()
 
     with (
-        patch(
-            "app.workers.tasks.static_analysis._resolve_ref_sha", return_value=None
-        ),
+        patch("app.workers.tasks.static_analysis._resolve_ref_sha", return_value=None),
         patch(
             "app.workers.tasks.static_analysis._fetch_workflow_files",
             return_value=[],

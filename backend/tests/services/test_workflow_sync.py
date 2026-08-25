@@ -117,7 +117,7 @@ def test_added_updated_and_unchanged_are_classified(
 def test_provenance_is_written_even_when_content_is_unchanged(
     db: Session, repo: Repository
 ) -> None:
-    """"Unchanged" must stay distinguishable from "never checked"."""
+    """ "Unchanged" must stay distinguishable from "never checked"."""
     path = ".github/workflows/ci.yml"
     _sync(db, repo, [_file(path, "on: push\n")])
 
@@ -317,9 +317,7 @@ def test_module_level_functions_are_the_default_seam(
     """Callers that pass nothing still get patchable behaviour."""
     path = ".github/workflows/ci.yml"
     with (
-        patch(
-            "app.services.workflow_sync.resolve_branch_head", return_value=HEAD
-        ),
+        patch("app.services.workflow_sync.resolve_branch_head", return_value=HEAD),
         patch(
             "app.services.workflow_sync.fetch_workflow_files_for_repo",
             return_value=[_file(path, "on: push\n")],
