@@ -25,6 +25,7 @@
 
 ### Internal
 
+* ⬆ bump the npm-packages group with 8 updates. PR [#235](https://github.com/TheoGoudout/greensecops/pull/235) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump pydantic-settings from 2.14.2 to 2.15.0 in the python-packages group across 1 directory. PR [#232](https://github.com/TheoGoudout/greensecops/pull/232) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * Revert the multi-ecosystem group; guard the Playwright split instead. PR [#233](https://github.com/TheoGoudout/greensecops/pull/233) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump alembic from 1.19.0 to 1.19.1 in the python-packages group across 1 directory. PR [#224](https://github.com/TheoGoudout/greensecops/pull/224) by [@dependabot[bot]](https://github.com/apps/dependabot).
