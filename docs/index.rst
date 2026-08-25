@@ -1,7 +1,7 @@
 GreenSecOps
 ===========
 
-GreenSecOps grades your software delivery pipeline across six analysis engines, sharing one
+GreenSecOps grades your software delivery pipeline across seven analysis engines, sharing one
 Rego-rule catalog and one grading model:
 
 - **CI Workflow** — static analysis of GitHub Actions YAML across five categories: security,
@@ -10,6 +10,9 @@ Rego-rule catalog and one grading model:
   pressure) from completed workflow runs.
 - **Terraform** — static analysis of ``.tf``/``.tf.json`` files in any configured folder of a
   repository, before they're ever applied.
+- **Ansible** — static analysis of playbooks, roles, variable files and galaxy requirements in
+  any configured folder of a repository, covering repeated work, unverified downloads,
+  credentials in source and shell-injection paths.
 - **AWS Cloud Posture** — live scanning of a connected AWS account (read-only, via
   ``sts:AssumeRole``) across S3, IAM, security groups, RDS, EBS, Lambda, CloudTrail,
   CloudWatch Logs, EKS, ECR, load balancers, Secrets Manager and KMS. See

@@ -33,6 +33,7 @@ _RULES_DIR_TO_DOMAIN: dict[str, RuleDomain] = {
     "ci_workflow": RuleDomain.workflow,
     "ci_telemetry": RuleDomain.ci_telemetry,
     "iac_terraform": RuleDomain.iac_terraform,
+    "iac_ansible": RuleDomain.iac_ansible,
     "cloud_aws": RuleDomain.cloud_aws,
     "container_docker": RuleDomain.container_docker,
     "container_runtime": RuleDomain.container_runtime,

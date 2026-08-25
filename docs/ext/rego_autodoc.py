@@ -44,6 +44,7 @@ _DOMAIN_LABELS = {
     "ci_workflow": "CI Workflow (static)",
     "ci_telemetry": "CI Telemetry (dynamic)",
     "iac_terraform": "Terraform (IaC)",
+    "iac_ansible": "Ansible (IaC)",
     "cloud_aws": "AWS Cloud Posture (dynamic)",
     "container_docker": "Docker & Compose (static)",
     "container_runtime": "Docker Runtime (dynamic)",
@@ -58,6 +59,7 @@ _EXAMPLE_LANGUAGES = {
     "ci_workflow": "yaml",
     "ci_telemetry": "yaml",
     "iac_terraform": "terraform",
+    "iac_ansible": "yaml",
     "cloud_aws": "bash",
     "container_docker": "docker",
     "container_runtime": "yaml",
@@ -283,10 +285,11 @@ def _render_rules_index(domains: dict[str, dict[str, list[dict[str, Any]]]]) -> 
     return f"""Rules Reference
 ===============
 
-Four analysis engines share this rule catalog: static CI-workflow YAML
-analysis, dynamic CI-telemetry analysis, static Terraform (IaC) analysis, and
-live AWS cloud-posture scanning. Each rule is a Rego policy evaluated by the
-same OPA-backed engine.
+Every analysis engine shares this rule catalog — static CI-workflow YAML,
+dynamic CI telemetry, Terraform and Ansible source, Docker images and their
+runtime, and live AWS cloud posture. Each rule is a Rego policy evaluated by the
+same OPA-backed engine, and the sections below are generated from the policy
+files themselves.
 
 {domain_summaries}
 

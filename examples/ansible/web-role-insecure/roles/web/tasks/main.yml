@@ -1,0 +1,68 @@
+---
+# A first-pass role, written the way one usually looks before anybody has had
+# to operate it. Nothing here is exotic or contrived.
+
+- name: Install the web packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: true
+  loop:
+    - nginx
+    - curl
+
+- name: Fetch the release bundle
+  ansible.builtin.get_url:
+    url: https://releases.example.com/app-latest.tar.gz
+    dest: /tmp/app.tar.gz
+    validate_certs: false
+
+- name: Unpack the release
+  ansible.builtin.unarchive:
+    src: /tmp/app.tar.gz
+    dest: /opt/app
+    remote_src: true
+
+- name: Check out the configuration repository
+  ansible.builtin.git:
+    repo: https://github.com/example/app-config.git
+    dest: /etc/app
+
+- name: Install the entrypoint
+  ansible.builtin.copy:
+    src: entrypoint.sh
+    dest: /usr/local/bin/app-entrypoint
+    mode: "0777"
+
+- ansible.builtin.file:
+    path: /var/lib/app
+    state: directory
+    mode: "0755"
+
+- name: Register the deployment
+  ansible.builtin.uri:
+    url: https://api.example.com/deployments
+    method: POST
+    body_format: json
+    body:
+      host: "{{ inventory_hostname }}"
+      api_token: "{{ deploy_token }}"
+
+- name: Reload the firewall
+  ansible.builtin.command: /usr/sbin/firewall reload
+
+- name: Drop the legacy unit file
+  ansible.builtin.command: rm /etc/systemd/system/legacy.service
+  changed_when: true
+  ignore_errors: true
+
+- name: Log in to the registry
+  ansible.builtin.shell:
+    cmd: docker login --username deploy --password-stdin {{ registry_host }}
+    executable: /bin/bash
+  changed_when: false
+
+- name: Start the web service
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: started

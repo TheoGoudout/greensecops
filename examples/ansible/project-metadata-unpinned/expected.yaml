@@ -1,0 +1,10 @@
+# Project metadata rather than tasks: a galaxy file with one dependency pinned
+# and two not, and a group_vars file carrying one committed credential beside a
+# templated one and a list of secret *names*.
+#
+# The list is the point of the case. `required_secrets` holds identifiers, not
+# values, and a rule keyed on "the name looks like a secret" reports it. Only
+# `postgres_password` may be reported here.
+violations:
+  - galaxy_requirement_unpinned
+  - hardcoded_secret_in_vars

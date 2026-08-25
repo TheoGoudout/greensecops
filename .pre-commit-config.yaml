@@ -187,6 +187,16 @@ repos:
         files: ^(deploy/terraform/.*\.tf(\.json)?|backend/app/rules/iac_terraform/.*\.rego|scripts/(validate_deploy_terraform|opa_terraform_eval)\.py)$
         pass_filenames: false
 
+      # The same bar for the deployment playbooks. ansible-lint below asks a
+      # different question — this one grades them on the five axes the product
+      # sells, which is the claim that has to hold for our own infrastructure.
+      - id: deploy-ansible-opa
+        name: Scan deployment Ansible with the GreenSecOps rules
+        entry: python3 scripts/validate_deploy_ansible.py
+        language: system
+        files: ^(deploy/ansible/.*\.ya?ml|backend/app/rules/(iac_ansible|lib)/.*\.rego|backend/app/services/ansible/.*\.py|scripts/(validate_deploy_ansible|opa_ansible_eval)\.py)$
+        pass_filenames: false
+
       # Runs from inside deploy/ansible, which is what makes ansible-lint pick
       # up its ansible.cfg — without that, roles_path never applies and every
       # role in the playbooks fails to resolve. Same working directory as the

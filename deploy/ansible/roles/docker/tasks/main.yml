@@ -10,6 +10,7 @@
     url: >-
       https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-{{ docker_compose_arch }}
     dest: /usr/libexec/docker/cli-plugins/docker-compose
+    checksum: "sha256:{{ docker_compose_sha256[docker_compose_arch] }}"
     mode: "0755"
     owner: root
     group: root
@@ -48,8 +49,8 @@
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail &&
-      aws ecr get-login-password --region {{ greensecops_region }} |
-      docker login --username AWS --password-stdin {{ greensecops_config.ECR_REGISTRY }}
+      aws ecr get-login-password --region {{ greensecops_region | quote }} |
+      docker login --username AWS --password-stdin {{ greensecops_config.ECR_REGISTRY | quote }}
     executable: /bin/bash
   become: true
   changed_when: false

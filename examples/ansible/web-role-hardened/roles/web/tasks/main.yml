@@ -1,0 +1,89 @@
+---
+# The same role, fixed. Must trip nothing: a rule that fires here is producing
+# noise on content that is already correct, and the build fails for it.
+
+- name: Install the web packages
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Fetch the release bundle
+  ansible.builtin.get_url:
+    url: "https://releases.example.com/app-{{ app_version }}.tar.gz"
+    dest: "/tmp/app-{{ app_version }}.tar.gz"
+    checksum: "sha256:{{ app_sha256 }}"
+    mode: "0640"
+  become: true
+
+- name: Unpack the release
+  ansible.builtin.unarchive:
+    src: "/tmp/app-{{ app_version }}.tar.gz"
+    dest: /opt/app
+    remote_src: true
+    creates: "/opt/app/{{ app_version }}/bin/app"
+  become: true
+
+- name: Check out the configuration repository
+  ansible.builtin.git:
+    repo: https://github.com/example/app-config.git
+    dest: /etc/app
+    version: v3.2.0
+  become: true
+
+- name: Install the entrypoint
+  ansible.builtin.copy:
+    src: entrypoint.sh
+    dest: /usr/local/bin/app-entrypoint
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+
+- name: Create the application state directory
+  ansible.builtin.file:
+    path: /var/lib/app
+    state: directory
+    mode: "0750"
+    owner: root
+    group: root
+  become: true
+
+- name: Register the deployment
+  ansible.builtin.uri:
+    url: https://api.example.com/deployments
+    method: POST
+    body_format: json
+    body:
+      host: "{{ inventory_hostname }}"
+      api_token: "{{ deploy_token }}"
+  no_log: true
+
+- name: Reload the firewall
+  ansible.builtin.command: /usr/sbin/firewall reload
+  changed_when: true
+  become: true
+
+- name: Drop the legacy unit file
+  ansible.builtin.file:
+    path: /etc/systemd/system/legacy.service
+    state: absent
+  become: true
+
+- name: Log in to the registry
+  ansible.builtin.shell:
+    cmd: docker login --username deploy --password-stdin {{ registry_host | quote }}
+    executable: /bin/bash
+  changed_when: false
+  become: true
+
+- name: Start the web service
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: started
+    enabled: true
+  become: true

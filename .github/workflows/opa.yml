@@ -7,13 +7,17 @@ on:
       - "backend/app/rules/**"
       - "backend/app/services/terraform/**"
       - "backend/app/services/docker/**"
+      - "backend/app/services/ansible/**"
       - "examples/**"
       - "landing/**"
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
       - "scripts/validate_docker_examples.py"
+      - "scripts/validate_ansible_examples.py"
       - "scripts/validate_deploy_terraform.py"
+      - "scripts/validate_deploy_ansible.py"
+      - "scripts/opa_ansible_eval.py"
       - "scripts/opa_terraform_eval.py"
       - "scripts/opa_eval.py"
       - "scripts/regenerate_terraform_fixtures.py"
@@ -23,19 +27,24 @@ on:
       - "backend/tests/fixtures/terraform/**"
       - "scripts/opa/**"
       - "deploy/terraform/**"
+      - "deploy/ansible/**"
       - ".github/workflows/opa.yml"
   pull_request:
     paths:
       - "backend/app/rules/**"
       - "backend/app/services/terraform/**"
       - "backend/app/services/docker/**"
+      - "backend/app/services/ansible/**"
       - "examples/**"
       - "landing/**"
       - "docs/**"
       - "scripts/validate_examples.py"
       - "scripts/validate_terraform_examples.py"
       - "scripts/validate_docker_examples.py"
+      - "scripts/validate_ansible_examples.py"
       - "scripts/validate_deploy_terraform.py"
+      - "scripts/validate_deploy_ansible.py"
+      - "scripts/opa_ansible_eval.py"
       - "scripts/opa_terraform_eval.py"
       - "scripts/opa_eval.py"
       - "scripts/regenerate_terraform_fixtures.py"
@@ -45,6 +54,7 @@ on:
       - "backend/tests/fixtures/terraform/**"
       - "scripts/opa/**"
       - "deploy/terraform/**"
+      - "deploy/ansible/**"
       - ".github/workflows/opa.yml"
 
 permissions: {}
@@ -94,10 +104,17 @@ jobs:
       - name: Validate Docker examples against the rule suite
         run: python scripts/validate_docker_examples.py
 
+      - name: Validate Ansible examples against the rule suite
+        run: python scripts/validate_ansible_examples.py
+
       # The reference deployment of a product that scans Terraform has to be
       # one its own rules pass. Any violation fails the build.
       - name: Scan the AWS deployment Terraform with the rule suite
         run: python scripts/validate_deploy_terraform.py
+
+      # Same bar for the playbooks that configure those instances.
+      - name: Scan the deployment Ansible with the rule suite
+        run: python scripts/validate_deploy_ansible.py
 
       # The backend's Terraform tests replay violations recorded from this
       # suite, because the pytest environment has no opa binary. A rule change

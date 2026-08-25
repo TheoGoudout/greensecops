@@ -1,0 +1,13 @@
+---
+# Project-wide variables. Two of these have no business being in git.
+app_environment: production
+app_listen_port: 8080
+
+postgres_password: hT4vN8qLzR2wXm9KpB6d
+deploy_token: "{{ lookup('env', 'DEPLOY_TOKEN') }}"
+
+# A list of the secrets an operator must seed before deploying. These are
+# names, not values — nothing here is a credential.
+required_secrets:
+  - POSTGRES_PASSWORD
+  - DEPLOY_TOKEN

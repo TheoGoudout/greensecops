@@ -277,6 +277,7 @@ class RuleDomain(str, enum.Enum):
 
     workflow = "workflow"
     iac_terraform = "iac_terraform"
+    iac_ansible = "iac_ansible"
     cloud_aws = "cloud_aws"
     ci_telemetry = "ci_telemetry"
     container_docker = "container_docker"

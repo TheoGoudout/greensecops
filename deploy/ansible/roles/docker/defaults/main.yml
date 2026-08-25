@@ -1,5 +1,13 @@
 ---
-docker_compose_version: "2.40.4"
+docker_compose_version: "2.40.3"
+
+# Verified against the release's own checksums.txt. Keyed by architecture
+# because the download is too, and the pair has to move together: bumping the
+# version without the digests fails the download rather than installing the
+# wrong binary, which is the outcome to want.
+docker_compose_sha256:
+  aarch64: d26373b19e89160546d15407516cc59f453030d9bc5b43ba7faf16f7b4980137
+  x86_64: dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372
 
 # Graviton instances by default, matching the arm64 images. Falls back to the
 # host's own architecture so an x86_64 environment works unchanged.
