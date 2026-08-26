@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ansible — GreenSecOps</title>
+  <meta name="description" content="GreenSecOps grades your Ansible playbooks and roles — unchecked downloads, unquoted shell interpolation, secrets in plain variables, packages pinned to latest — graded A+++ to F, with AI fixes delivered as a pull request." />
+  <!-- codegen:head:start -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("theme");
+        var theme = ["light", "dark", "system"].indexOf(stored) !== -1 ? stored : "system";
+        var resolved = theme === "system"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : theme;
+        document.documentElement.classList.add(resolved);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="./assets/style.css" />
+  <link rel="icon" type="image/png" href="./assets/images/favicon.png" />
+<!-- codegen:head:end -->
+</head>
+<body>
+
+<!-- codegen:nav:start -->
+<header>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="container">
+      <div class="nav__inner">
+        <a href="./index.html" class="nav__logo" aria-label="GreenSecOps home">
+          <img src="./assets/images/logo-mark.png" data-logo="light" width="24" height="24" alt="" aria-hidden="true">
+          <img src="./assets/images/logo-mark-dark.png" data-logo="dark" width="24" height="24" alt="" aria-hidden="true">
+          GreenSecOps
+        </a>
+        <div class="nav__links">
+          <a href="./features.html" class="nav__link">Features</a>
+          <a href="./pricing.html" class="nav__link">Pricing</a>
+          <a href="${DOCS_URL}" class="nav__link">Docs</a>
+          <div class="theme-menu">
+            <button type="button" class="theme-toggle" aria-label="Toggle theme" aria-haspopup="true">
+              <svg class="icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
+              <svg class="icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
+            </button>
+            <div class="theme-menu__dropdown" data-open="false" role="menu">
+              <button type="button" class="theme-menu__item" data-theme="light" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v1.5M8 13.5V15M2.6 2.6l1.06 1.06M12.34 12.34l1.06 1.06M1 8h1.5M13.5 8H15M2.6 13.4l1.06-1.06M12.34 3.66l1.06-1.06"/></svg>
+                Light
+              </button>
+              <button type="button" class="theme-menu__item" data-theme="dark" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14 9.5A6 6 0 1 1 6.5 2a4.8 4.8 0 1 0 7.5 7.5z"/></svg>
+                Dark
+              </button>
+              <button type="button" class="theme-menu__item" data-theme="system" role="menuitem">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M5.5 14h5M8 11v3"/></svg>
+                System
+              </button>
+            </div>
+          </div>
+          <a href="${APP_URL}/login" class="btn btn--ghost btn--sm">Sign In</a>
+          <a href="${APP_URL}/signup" class="btn btn--primary btn--sm">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+</header>
+<!-- codegen:nav:end -->
+
+<main>
+
+<!-- HERO -->
+<section class="pricing-hero" aria-labelledby="ansible-page-heading">
+  <div class="container container--narrow">
+    <div class="section__label" style="display:inline-block; margin-bottom:1rem;">Configuration Management</div>
+    <h1 class="section__heading" id="ansible-page-heading" style="font-size: clamp(2rem, 4vw, 3rem);">Grade the playbooks that touch production</h1>
+    <p class="section__sub" style="margin: 0.875rem auto 0;">Ansible is the code that runs as root on every host you own — and the least reviewed code most teams have. GreenSecOps reads your playbooks and roles statically, with no inventory and no connection to a single machine.</p>
+    <div class="hero__actions" style="justify-content:center; margin-top:1.5rem;">
+      <a href="${APP_URL}/signup" class="btn btn--primary btn--lg">Start for Free</a>
+      <a href="#compare" class="btn btn--outline btn--lg">See a fix</a>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT WE CHECK -->
+<section class="section" aria-labelledby="ansible-checks-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">Ansible</div>
+      <h2 class="section__heading" id="ansible-checks-heading">Every task, read the way an attacker would</h2>
+      <p class="section__sub">Point GreenSecOps at any folder in your repo — a flat playbook directory, a full <code>roles/</code> tree, or the whole repository — and every playbook, task file, handler, variables file and <code>requirements.yml</code> is graded across four categories.</p>
+    </div>
+
+    <div class="checks-grid checks-grid--2x2">
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--security"></span>Security</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Shell commands interpolating variables without <code>| quote</code></li>
+          <li class="check-card__item">Credentials written literally into variables files</li>
+          <li class="check-card__item">Tasks handling secrets without <code>no_log</code>, leaking them into logs</li>
+          <li class="check-card__item">TLS verification disabled with <code>validate_certs: false</code></li>
+          <li class="check-card__item">World-writable file and directory modes</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--reliability"></span>Reliability</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Remote downloads with no <code>checksum</code> to verify what arrived</li>
+          <li class="check-card__item">Galaxy collections and roles pinned to no version</li>
+          <li class="check-card__item"><code>ignore_errors: true</code> hiding real failures</li>
+          <li class="check-card__item">Services started but never enabled, so they vanish on reboot</li>
+          <li class="check-card__item"><code>command</code> and <code>shell</code> tasks with no <code>changed_when</code></li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--energy"></span>Energy</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Packages pinned to <code>state: latest</code>, re-resolving on every run</li>
+          <li class="check-card__item">Package modules called in a loop instead of once with a list</li>
+          <li class="check-card__item"><code>git</code> checkouts with no <code>version</code>, refetching each time</li>
+          <li class="check-card__item">Apt caches updated on every play</li>
+        </ul>
+      </div>
+
+      <div class="check-card">
+        <div class="check-card__title"><span class="check-card__dot check-card__dot--maintainability"></span>Maintainability</div>
+        <ul class="check-card__list">
+          <li class="check-card__item">Unnamed tasks, unreadable in output and unreachable by <code>--start-at-task</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section section--alt" aria-labelledby="ansible-how-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">How It Works</div>
+      <h2 class="section__heading" id="ansible-how-heading">No inventory, no dry run, no SSH</h2>
+      <p class="section__sub">GreenSecOps analyses your Ansible source directly. It never connects to a host, never needs an inventory, and never runs a play in check mode to grade it.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step__num">1</div>
+        <div>
+          <div class="step__title">Point it at your Ansible</div>
+          <p class="step__desc">Register the directory that holds your playbooks and roles — or the repository root, since an Ansible project often <em>is</em> the whole repo. Files are recognised by shape, not by path, so an inventory or a Compose file living alongside them is left alone.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">2</div>
+        <div>
+          <div class="step__title">Graded on every push</div>
+          <p class="step__desc">Each push parses your YAML — flattening <code>block</code>, <code>rescue</code> and <code>always</code> so an inherited <code>no_log</code> counts — and runs the shared Rego rule catalog, returning per-category grades in seconds.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__num">3</div>
+        <div>
+          <div class="step__title">Fix it in a pull request</div>
+          <p class="step__desc">Review each finding against the task it fired on, generate an AI fix, and open a pull request. Every rewrite is checked to have kept each Jinja variable and every <code>!vault</code> tag it started with — so a fix can never quietly change what a play does.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BEFORE / AFTER -->
+<section class="section" id="compare" aria-labelledby="ansible-compare-heading">
+  <div class="container">
+    <div class="section__header section__header--center">
+      <div class="section__label">See It In Action</div>
+      <h2 class="section__heading" id="ansible-compare-heading">From unverified download to pinned and quiet</h2>
+      <p class="section__sub">A task that fetches a binary over the network with nothing to verify it, and logs a registry password while it works — and the same task after its AI-generated fix.</p>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-panel">
+        <span class="compare-panel__label compare-panel__label--before">Before</span>
+        <div class="hero__code-card">
+          <div class="hero__code-header">
+            <span class="hero__dot hero__dot--red"></span>
+            <span class="hero__dot hero__dot--yellow"></span>
+            <span class="hero__dot hero__dot--green"></span>
+            <span class="hero__code-filename">roles/docker/tasks/main.yml</span>
+          </div>
+          <div class="hero__code-body"><span class="token-key">- name</span>: Install the Compose plugin
+  <span class="token-key">ansible.builtin.get_url</span>:
+    <span class="token-key">url</span>: <span class="token-str">"{{ compose_url }}"</span>
+    <span class="token-key">dest</span>: <span class="token-str">"/usr/libexec/docker/cli-plugins/docker-compose"</span>
+    <span class="token-key">mode</span>: <span class="token-str">"0755"</span>
+
+<span class="token-key">- name</span>: Log in to the registry
+  <span class="token-key">ansible.builtin.shell</span>:
+    <span class="token-key">cmd</span>: <span class="token-str">"docker login -u AWS {{ registry }}"</span></div>
+        </div>
+        <div class="compare-panel__grade">
+          <span class="grade-badge grade-badge--lg grade-badge--d" aria-label="Grade D">D</span>
+          <span class="compare-panel__grade-text">Unverified download, unquoted<br>interpolation, no changed_when,<br>credential logged in the clear</span>
+        </div>
+      </div>
+
+      <div class="compare-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        <span>AI-generated fix</span>
+      </div>
+
+      <div class="compare-panel">
+        <span class="compare-panel__label compare-panel__label--after">After</span>
+        <div class="hero__code-card">
+          <div class="hero__code-header">
+            <span class="hero__dot hero__dot--red"></span>
+            <span class="hero__dot hero__dot--yellow"></span>
+            <span class="hero__dot hero__dot--green"></span>
+            <span class="hero__code-filename">roles/docker/tasks/main.yml</span>
+          </div>
+          <div class="hero__code-body"><span class="token-key">- name</span>: Install the Compose plugin
+  <span class="token-key">ansible.builtin.get_url</span>:
+    <span class="token-key">url</span>: <span class="token-str">"{{ compose_url }}"</span>
+    <span class="token-key">dest</span>: <span class="token-str">"/usr/libexec/docker/cli-plugins/docker-compose"</span>
+    <span class="token-key">mode</span>: <span class="token-str">"0755"</span>
+    <span class="token-key">checksum</span>: <span class="token-str">"sha256:{{ compose_sha256[arch] }}"</span>
+
+<span class="token-key">- name</span>: Log in to the registry
+  <span class="token-key">ansible.builtin.shell</span>:
+    <span class="token-key">cmd</span>: <span class="token-str">"docker login -u AWS {{ registry | quote }}"</span>
+  <span class="token-key">changed_when</span>: <span class="token-num">false</span>
+  <span class="token-key">no_log</span>: <span class="token-num">true</span></div>
+        </div>
+        <div class="compare-panel__grade">
+          <span class="grade-badge grade-badge--lg grade-badge--aaa" aria-label="Grade A plus plus plus">A+++</span>
+          <span class="compare-panel__grade-text">Binary pinned to a digest, input<br>quoted, honest changed state,<br>credential kept out of the log</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" aria-labelledby="ansible-cta-heading">
+  <div class="container">
+    <h2 class="cta__headline" id="ansible-cta-heading">Grade the code<br>that runs as root</h2>
+    <p class="cta__sub">Point GreenSecOps at your playbooks and roles and see where you stand — free to start.</p>
+    <div class="cta__actions">
+      <a href="${APP_URL}/signup" class="btn btn--white btn--lg">Get Started for Free</a>
+      <a href="./terraform.html" class="btn btn--outline-white btn--lg">Explore Terraform &amp; Cloud</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- codegen:footer:start -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <a href="./index.html" class="footer__logo" aria-label="GreenSecOps home">
+        <img src="./assets/images/logo-mark.png" width="18" height="18" alt="" aria-hidden="true">
+        GreenSecOps
+      </a>
+      <p class="footer__copy">&copy; 2026 GreenSecOps. All rights reserved.</p>
+      <nav class="footer__links" aria-label="Footer navigation">
+        <a href="./features.html" class="footer__link">Features</a>
+        <a href="./pricing.html" class="footer__link">Pricing</a>
+        <a href="./privacy.html" class="footer__link">Privacy</a>
+        <a href="./terms.html" class="footer__link">Terms</a>
+        <a href="${APP_URL}" class="footer__link">App</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+<!-- codegen:footer:end -->
+
+<script src="./assets/theme.js" defer></script>
+
+</body>
+</html>

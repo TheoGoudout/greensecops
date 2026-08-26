@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inject the landing site's shared partials into every page.
 
-The seven pages each carried their own copy of the head boilerplate, the
+The pages each carried their own copy of the head boilerplate, the
 navigation bar and the footer — the same markup seven times, which had already
 drifted: two different logo hrefs, and two formatting styles because
 ``biome.json`` listed four of the pages and not the other three.

@@ -76,6 +76,11 @@
   /* Indigo rather than Docker's brand blue, which is indistinguishable from
      --surface-terraform at the 3px card border these are used for. */
   --surface-docker: #6366f1;
+  /* Rose: the four card borders it sits beside are brand green, sky, indigo
+     and orange, and a teal read as green against the workflows card. Nods to
+     Ansible's brand red without being --cat-security's #ef4444, which appears
+     as a category dot on these same pages. */
+  --surface-ansible: #db2777;
 
   /* Shadows */
   --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
@@ -1049,6 +1054,11 @@ a { color: inherit; }
 .surface-card--docker::before { background: var(--surface-docker); }
 .surface-card--docker .surface-card__icon { color: var(--surface-docker); background: #e8e9fd; }
 .surface-card--docker .surface-card__tag { color: var(--surface-docker); background: #e8e9fd; }
+
+.surface-card--ansible { border-top-color: var(--surface-ansible); }
+.surface-card--ansible::before { background: var(--surface-ansible); }
+.surface-card--ansible .surface-card__icon { color: var(--surface-ansible); background: #fce7f3; }
+.surface-card--ansible .surface-card__tag { color: var(--surface-ansible); background: #fce7f3; }
 
 .surface-card__icon {
   width: 2.75rem;

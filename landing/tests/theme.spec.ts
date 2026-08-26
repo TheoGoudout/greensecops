@@ -5,6 +5,7 @@ const PAGES = [
   "/features.html",
   "/workflows.html",
   "/terraform.html",
+  "/ansible.html",
   "/docker.html",
   "/pricing.html",
   "/privacy.html",
