@@ -137,7 +137,7 @@ jobs:
       - name: Check landing pricing is in sync with the plan catalog
         run: python scripts/render_landing_pricing.py --check
 
-      # The seven landing pages share their head, nav and footer from
+      # The landing pages share their head, nav and footer from
       # landing/partials/. Editing a page's copy directly instead of the
       # partial is exactly the drift this catches.
       - name: Check landing pages are in sync with partials

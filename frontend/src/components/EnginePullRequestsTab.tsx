@@ -41,6 +41,13 @@ interface EnginePullRequestsTabProps {
   /** The engine's scan targets, and the branch each one's PR uses. */
   targets: Target[] | undefined
   branchForTarget: (targetId: string) => string
+  /**
+   * Tab the reader should go to in order to produce these PRs. Defaults to
+   * "Analysis" — the name Terraform and Docker both use — but the Ansible
+   * engine's analysis lives on a tab named after the engine itself, and
+   * pointing someone at a tab that isn't there is worse than no hint.
+   */
+  sourceTabLabel?: string
   /** Re-run delivery for a target, updating (or reopening) its PR. */
   deliver: (vars: { targetId: string; force: boolean }) => Promise<unknown>
 }
@@ -60,6 +67,7 @@ export function EnginePullRequestsTab({
   targets,
   branchForTarget,
   deliver,
+  sourceTabLabel = "Analysis",
 }: EnginePullRequestsTabProps) {
   const queryClient = useQueryClient()
 
@@ -115,7 +123,8 @@ export function EnginePullRequestsTab({
         ) : prs.length === 0 ? (
           <p className="text-sm text-muted-foreground p-6 text-center">
             No {label} PRs yet. Generate and deliver fixes from the{" "}
-            <span className="font-medium">Analysis</span> tab to see them here.
+            <span className="font-medium">{sourceTabLabel}</span> tab to see
+            them here.
           </p>
         ) : (
           <div className="divide-y">

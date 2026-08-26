@@ -74,6 +74,14 @@ const ID = {
   dockerTelemetryUnattributed: "0000a051-0000-0000-0000-000000000051",
   dockerRuntimeFinding: "0000a060-0000-0000-0000-000000000060",
   dockerRuntimeFindingUnattributed: "0000a061-0000-0000-0000-000000000061",
+  // Same rule as the Docker ids above: ansibleFixBranch() slices the first 8
+  // characters, so two projects sharing a prefix would share a PR branch.
+  ansibleProjectDeploy: "0000b001-0000-0000-0000-000000000001",
+  ansibleProjectRoles: "0000b002-0000-0000-0000-000000000002",
+  ansibleScan: "0000b010-0000-0000-0000-000000000010",
+  ansibleFinding: "0000b020-0000-0000-0000-000000000020",
+  ansibleFindingFileLevel: "0000b021-0000-0000-0000-000000000021",
+  ansibleFix: "0000b030-0000-0000-0000-000000000030",
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -288,6 +296,123 @@ export const MOCK_DOCKER_FIX = {
   pr_state: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
+}
+
+// ── Ansible ───────────────────────────────────────────────────────────
+// The offending task is the real one from this repo's own deployment: an ECR
+// login whose shell command interpolates a variable without quoting it.
+const ANSIBLE_RAW_CONTENT = `---
+- name: Log in to ECR
+  ansible.builtin.shell:
+    cmd: docker login -u AWS {{ registry }} --region {{ greensecops_region }}
+  changed_when: false
+  become: true
+`
+
+export const MOCK_ANSIBLE_PROJECT = {
+  id: ID.ansibleProjectDeploy,
+  repo_id: ID.repo,
+  repo_full_name: "acme/web-app",
+  // "" is legal for this engine and means the repository root, unlike Terraform.
+  root_path: "",
+  enabled: true,
+  last_scanned_at: "2024-01-02T10:00:00Z",
+  last_scanned_head_sha: "abc1234",
+  latest_score: 68,
+  latest_grade: "C",
+  badge_sig: "sig-ansible-root",
+}
+
+export const MOCK_ANSIBLE_PROJECT_ROLES = {
+  id: ID.ansibleProjectRoles,
+  repo_id: ID.repo,
+  repo_full_name: "acme/web-app",
+  root_path: "deploy/ansible",
+  enabled: true,
+  last_scanned_at: null,
+  last_scanned_head_sha: null,
+  latest_score: null,
+  latest_grade: null,
+  badge_sig: "sig-ansible-roles",
+}
+
+export const MOCK_ANSIBLE_FILE = {
+  path: "roles/docker/tasks/main.yml",
+  raw_content: ANSIBLE_RAW_CONTENT,
+  kind: "tasks",
+}
+
+export const MOCK_ANSIBLE_FINDING = {
+  id: ID.ansibleFinding,
+  scan_id: ID.ansibleScan,
+  ansible_project_id: ID.ansibleProjectDeploy,
+  rule_id: ID.ruleSecurity,
+  rule_slug: "shell_with_unquoted_variable",
+  file_path: "roles/docker/tasks/main.yml",
+  task_name: "Log in to ECR",
+  line_start: 2,
+  line_end: 6,
+  severity: "high" as const,
+  category: "security" as const,
+  message: "Shell command interpolates {{ registry }} without quoting it.",
+  context: null,
+  status: "open" as const,
+  fix_id: null,
+  fix_status: null,
+  created_at: "2024-01-02T10:00:00Z",
+  resolved_at: null,
+}
+
+// A finding about the file rather than a task: no task name, no line. The
+// FileViewer groups these under their own heading, so the mock keeps the case
+// that would otherwise render nowhere.
+export const MOCK_ANSIBLE_FINDING_FILE_LEVEL = {
+  ...MOCK_ANSIBLE_FINDING,
+  id: ID.ansibleFindingFileLevel,
+  rule_slug: "galaxy_requirement_unpinned",
+  task_name: null,
+  line_start: null,
+  line_end: null,
+  severity: "medium" as const,
+  category: "reliability" as const,
+  message: "Collection community.docker is not pinned to a version.",
+}
+
+export const MOCK_ANSIBLE_FIX = {
+  id: ID.ansibleFix,
+  ansible_project_id: ID.ansibleProjectDeploy,
+  file_path: "roles/docker/tasks/main.yml",
+  pr_id: null,
+  llm_provider: "openai" as const,
+  llm_model: "gpt-4o",
+  status: "ready" as const,
+  // The fix the rule asks for: quote both interpolations, change nothing else.
+  full_content: ANSIBLE_RAW_CONTENT.replace(
+    "{{ registry }} --region {{ greensecops_region }}",
+    "{{ registry | quote }} --region {{ greensecops_region | quote }}",
+  ),
+  error_message: null,
+  pr_url: null,
+  pr_branch: null,
+  pr_state: null,
+  created_at: "2024-01-02T10:02:00Z",
+  delivered_at: null,
+}
+
+export const MOCK_ANSIBLE_SCAN = {
+  id: ID.ansibleScan,
+  ansible_project_id: ID.ansibleProjectDeploy,
+  status: "completed" as const,
+  triggered_by: "manual" as const,
+  branch: "main",
+  commit_sha: "abc1234",
+  score: 68,
+  grade: "C",
+  file_count: 3,
+  error_message: null,
+  failure_kind: null,
+  created_at: "2024-01-02T10:00:00Z",
+  completed_at: "2024-01-02T10:00:30Z",
 }
 
 export const MOCK_DOCKER_SCAN = {
@@ -1351,6 +1476,63 @@ export async function mockDockerTargets(
       const repoId = new URL(url).searchParams.get("repo_id")
       route.fulfill({
         json: repoId ? targets.filter((t) => t.repo_id === repoId) : targets,
+      })
+    }
+  })
+}
+
+export async function mockAnsibleProjects(
+  page: Page,
+  projects: Array<{ id: string; repo_id: string }> = [
+    MOCK_ANSIBLE_PROJECT,
+    MOCK_ANSIBLE_PROJECT_ROLES,
+  ],
+  {
+    files = [MOCK_ANSIBLE_FILE],
+    findings = [MOCK_ANSIBLE_FINDING, MOCK_ANSIBLE_FINDING_FILE_LEVEL],
+    fixes = [MOCK_ANSIBLE_FIX],
+    scans = [MOCK_ANSIBLE_SCAN],
+  } = {},
+) {
+  await page.route("**/api/v1/ansible-projects/**", (route) => {
+    const url = route.request().url()
+    const method = route.request().method()
+    if (method === "DELETE") {
+      route.fulfill({ status: 204 })
+    } else if (method === "PATCH" && url.includes("/toggle")) {
+      route.fulfill({
+        json: { ansible_project_id: projects[0].id, enabled: false },
+      })
+    } else if (method === "POST" && url.includes("/scan")) {
+      route.fulfill({
+        status: 202,
+        json: { status: "queued", ansible_project_id: projects[0].id },
+      })
+    } else if (method === "POST" && url.includes("/fixes")) {
+      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
+    } else if (method === "POST" && url.includes("/deliver")) {
+      route.fulfill({
+        status: 202,
+        json: {
+          status: "queued",
+          ansible_project_id: projects[0].id,
+          pr_branch: `greensecops/ansible-${projects[0].id.slice(0, 8)}`,
+        },
+      })
+    } else if (url.includes("/files")) {
+      route.fulfill({ json: files })
+    } else if (url.includes("/findings")) {
+      route.fulfill({ json: findings })
+    } else if (url.includes("/fixes")) {
+      route.fulfill({ json: fixes })
+    } else if (url.includes("/scans")) {
+      // Only the project that has actually been scanned has a history.
+      route.fulfill({ json: url.includes(projects[0].id) ? scans : [] })
+    } else {
+      // Both the org-wide list (no repo_id) and the per-repo list land here.
+      const repoId = new URL(url).searchParams.get("repo_id")
+      route.fulfill({
+        json: repoId ? projects.filter((p) => p.repo_id === repoId) : projects,
       })
     }
   })

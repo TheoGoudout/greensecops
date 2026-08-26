@@ -1,6 +1,8 @@
 import uuid
+from collections import defaultdict
 
 from fastapi import HTTPException
+from pydantic import BaseModel
 from sqlmodel import col, select
 
 from app.api.deps import (
@@ -10,9 +12,10 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.engine_routes import get_target_for_user
+from app.api.engine_routes import get_target_for_user, prepare_pending_fix
 from app.api.mappers import (
     to_ansible_finding_public,
+    to_ansible_fix_public,
     to_ansible_project_public,
     to_ansible_scan_public,
 )
@@ -22,6 +25,8 @@ from app.models import (
     AnsibleFilePublic,
     AnsibleFinding,
     AnsibleFindingPublic,
+    AnsibleFix,
+    AnsibleFixPublic,
     AnsibleProject,
     AnsibleProjectCreate,
     AnsibleProjectPublic,
@@ -32,15 +37,26 @@ from app.models import (
 )
 from app.services.ansible.discovery import classify_ansible_file
 from app.services.billing.quota import enforce_quota
+from app.services.delivery_pr import ansible_fix_branch
 from app.services.engines import ANSIBLE_ENGINE
 from app.services.github.fetch import fetch_ansible_files as _fetch_ansible_files
 from app.workers.tasks.ansible_analysis import run_ansible_scan
+from app.workers.tasks.ansible_fix_delivery import deliver_ansible_fixes
+from app.workers.tasks.ansible_fix_generation import run_ansible_fix_generation
+from app.workers.tasks.fix_generation import resolve_llm_provider
 
 # `project_id` rather than `target_id` or `root_id`: `api/router.ORG_RESOLVERS`
 # is keyed by path-parameter *name*, and those two are already taken by Docker
 # and Terraform. Reusing one would resolve this engine's role checks against
 # the wrong table.
 router = RoleRouter(prefix="/ansible-projects", tags=["ansible"])
+
+
+class AnsibleFixGenerateRequest(BaseModel):
+    # Optional subset of finding ids to fix; omit to fix every open finding
+    # in the project. Findings are grouped by file into one whole-file fix
+    # each, the way the Terraform route groups them.
+    finding_ids: list[uuid.UUID] | None = None
 
 
 @router.post("/", role=Role.user, response_model=AnsibleProjectPublic, status_code=201)
@@ -248,3 +264,108 @@ def list_ansible_files(
         )
         for f in sorted(fetched, key=lambda f: f.path)
     ]
+
+
+@router.get(
+    "/{project_id}/fixes", role=Role.org_member, response_model=list[AnsibleFixPublic]
+)
+def list_ansible_fixes(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[AnsibleFixPublic]:
+    get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
+    fixes = session.exec(
+        select(AnsibleFix)
+        .where(AnsibleFix.ansible_project_id == project_id)
+        .order_by(col(AnsibleFix.created_at).desc())
+    ).all()
+    return [to_ansible_fix_public(f) for f in fixes]
+
+
+@router.post(
+    "/{project_id}/fixes", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
+def trigger_ansible_fix_generation(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: AnsibleFixGenerateRequest | None = None,
+    force: bool = False,
+) -> dict[str, str | int]:
+    """Generate LLM fixes for a project's open findings, one whole-file fix each."""
+    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
+    repo = get_or_404(
+        session, Repository, project.repo_id, detail="Repository not found"
+    )
+
+    query = (
+        select(AnsibleFinding)
+        .where(AnsibleFinding.ansible_project_id == project_id)
+        .where(col(AnsibleFinding.resolved_at).is_(None))
+        .where(col(AnsibleFinding.ignored_at).is_(None))
+    )
+    if body and body.finding_ids:
+        query = query.where(col(AnsibleFinding.id).in_(body.finding_ids))
+    findings = list(session.exec(query).all())
+    if not findings:
+        return {"status": "no_findings", "queued": 0}
+
+    by_file: dict[str, list[AnsibleFinding]] = defaultdict(list)
+    for finding in findings:
+        by_file[finding.file_path].append(finding)
+
+    # One whole-file LLM rewrite per file, so the request costs as many fix
+    # generations as there are files.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "fixes",
+        requested=len(by_file),
+        engine=UsageEngine.ansible,
+    )
+
+    provider_str, model_str = resolve_llm_provider(repo)
+    queued = 0
+    for file_path, group in by_file.items():
+        fix = prepare_pending_fix(
+            ANSIBLE_ENGINE,
+            session,
+            project_id,
+            file_path,
+            provider_str,
+            model_str,
+            force,
+            repo=repo,
+        )
+        if fix is None:
+            continue
+        session.flush()
+        for finding in group:
+            finding.fix_id = fix.id
+            session.add(finding)
+        session.commit()
+        run_ansible_fix_generation.delay(finding_ids=[str(f.id) for f in group])
+        queued += 1
+
+    return {"status": "queued", "queued": queued}
+
+
+@router.post(
+    "/{project_id}/deliver", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+)
+def trigger_ansible_delivery(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    force: bool = False,
+) -> dict[str, str]:
+    """Deliver the project's ready fixes as a single PR (branch per project)."""
+    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
+    deliver_ansible_fixes.delay(ansible_project_id=str(project.id), force=force)
+    return {
+        "status": "queued",
+        "ansible_project_id": str(project_id),
+        "pr_branch": ansible_fix_branch(project.id),
+    }

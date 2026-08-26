@@ -13,9 +13,18 @@ from app.workers.celery_app import celery_app
 INVALID_HCL_ERROR = "LLM returned invalid Terraform (HCL)"
 
 
-def _validate(file_path: str, content: str) -> str | None:
+def _validate(
+    file_path: str,
+    original: str,  # noqa: ARG001 — the shared guard contract is differential
+    content: str,
+) -> str | None:
     """Only trust the rewrite if it still parses as HCL; otherwise delivery
-    would push a broken ``.tf`` file to the user's branch."""
+    would push a broken ``.tf`` file to the user's branch.
+
+    ``original`` is unused: HCL has no value that must survive byte-identical,
+    so there is nothing to diff against. It is in the signature because the
+    shared flow's guard contract is differential for Ansible's sake.
+    """
     if parse_terraform_content(file_path, content) is None:
         return INVALID_HCL_ERROR
     return None

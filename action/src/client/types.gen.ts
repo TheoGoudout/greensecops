@@ -183,6 +183,69 @@ export type AnsibleFindingPublic = {
 };
 
 /**
+ * AnsibleFixGenerateRequest
+ */
+export type AnsibleFixGenerateRequest = {
+    /**
+     * Finding Ids
+     */
+    finding_ids?: Array<string> | null;
+};
+
+/**
+ * AnsibleFixPublic
+ */
+export type AnsibleFixPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Pr Id
+     */
+    pr_id?: string | null;
+    llm_provider: LlmProvider;
+    /**
+     * Llm Model
+     */
+    llm_model: string;
+    status: FixStatus;
+    /**
+     * Full Content
+     */
+    full_content?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    pr_state?: PullRequestState | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Delivered At
+     */
+    delivered_at?: string | null;
+    /**
+     * Ansible Project Id
+     */
+    ansible_project_id: string;
+};
+
+/**
  * AnsibleProjectCreate
  */
 export type AnsibleProjectCreate = {
@@ -6112,6 +6175,116 @@ export type AnsibleListAnsibleFilesResponses = {
 };
 
 export type AnsibleListAnsibleFilesResponse = AnsibleListAnsibleFilesResponses[keyof AnsibleListAnsibleFilesResponses];
+
+export type AnsibleListAnsibleFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible-projects/{project_id}/fixes';
+};
+
+export type AnsibleListAnsibleFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListAnsibleFixesError = AnsibleListAnsibleFixesErrors[keyof AnsibleListAnsibleFixesErrors];
+
+export type AnsibleListAnsibleFixesResponses = {
+    /**
+     * Response Ansible-List Ansible Fixes
+     * Successful Response
+     */
+    200: Array<AnsibleFixPublic>;
+};
+
+export type AnsibleListAnsibleFixesResponse = AnsibleListAnsibleFixesResponses[keyof AnsibleListAnsibleFixesResponses];
+
+export type AnsibleTriggerAnsibleFixGenerationData = {
+    /**
+     * Body
+     */
+    body?: AnsibleFixGenerateRequest | null;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/ansible-projects/{project_id}/fixes';
+};
+
+export type AnsibleTriggerAnsibleFixGenerationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleTriggerAnsibleFixGenerationError = AnsibleTriggerAnsibleFixGenerationErrors[keyof AnsibleTriggerAnsibleFixGenerationErrors];
+
+export type AnsibleTriggerAnsibleFixGenerationResponses = {
+    /**
+     * Response Ansible-Trigger Ansible Fix Generation
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type AnsibleTriggerAnsibleFixGenerationResponse = AnsibleTriggerAnsibleFixGenerationResponses[keyof AnsibleTriggerAnsibleFixGenerationResponses];
+
+export type AnsibleTriggerAnsibleDeliveryData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/ansible-projects/{project_id}/deliver';
+};
+
+export type AnsibleTriggerAnsibleDeliveryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleTriggerAnsibleDeliveryError = AnsibleTriggerAnsibleDeliveryErrors[keyof AnsibleTriggerAnsibleDeliveryErrors];
+
+export type AnsibleTriggerAnsibleDeliveryResponses = {
+    /**
+     * Response Ansible-Trigger Ansible Delivery
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type AnsibleTriggerAnsibleDeliveryResponse = AnsibleTriggerAnsibleDeliveryResponses[keyof AnsibleTriggerAnsibleDeliveryResponses];
 
 export type TerraformListTerraformRootsData = {
     body?: never;

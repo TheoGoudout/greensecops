@@ -64,6 +64,27 @@ export type AnsibleFindingPublic = {
     task_name?: (string | null);
 };
 
+export type AnsibleFixGenerateRequest = {
+    finding_ids?: (Array<(string)> | null);
+};
+
+export type AnsibleFixPublic = {
+    id: string;
+    file_path: string;
+    pr_id?: (string | null);
+    llm_provider: LLMProvider;
+    llm_model: string;
+    status: FixStatus;
+    full_content?: (string | null);
+    error_message?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    pr_state?: (PullRequestState | null);
+    created_at?: (string | null);
+    delivered_at?: (string | null);
+    ansible_project_id: string;
+};
+
 export type AnsibleProjectCreate = {
     repo_id: string;
     root_path: string;
@@ -1331,6 +1352,31 @@ export type AnsibleListAnsibleFilesData = {
 };
 
 export type AnsibleListAnsibleFilesResponse = (Array<AnsibleFilePublic>);
+
+export type AnsibleListAnsibleFixesData = {
+    projectId: string;
+};
+
+export type AnsibleListAnsibleFixesResponse = (Array<AnsibleFixPublic>);
+
+export type AnsibleTriggerAnsibleFixGenerationData = {
+    force?: boolean;
+    projectId: string;
+    requestBody?: (AnsibleFixGenerateRequest | null);
+};
+
+export type AnsibleTriggerAnsibleFixGenerationResponse = ({
+    [key: string]: (string | number);
+});
+
+export type AnsibleTriggerAnsibleDeliveryData = {
+    force?: boolean;
+    projectId: string;
+};
+
+export type AnsibleTriggerAnsibleDeliveryResponse = ({
+    [key: string]: (string);
+});
 
 export type AuthGithubCallbackData = {
     formData: Body_auth_github_callback;

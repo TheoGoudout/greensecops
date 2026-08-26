@@ -19,11 +19,19 @@ INVALID_DOCKERFILE_ERROR = "LLM returned an unparseable Dockerfile"
 INVALID_COMPOSE_ERROR = "LLM returned invalid Compose YAML"
 
 
-def _validate(file_path: str, content: str) -> str | None:
+def _validate(
+    file_path: str,
+    original: str,  # noqa: ARG001 — the shared guard contract is differential
+    content: str,
+) -> str | None:
     """Only trust the rewrite if it still parses as what it claims to be.
 
     Uses the production parsers, not a lenient re-check, so anything the
     scanner would choke on is rejected here first.
+
+    ``original`` is unused, as it is for Terraform: neither format has a value
+    that must survive byte-identical. The argument exists because Ansible's
+    guard is differential and the contract is shared.
     """
     if classify_docker_file(file_path) == COMPOSE:
         if parse_compose_content(file_path, content) is None:
