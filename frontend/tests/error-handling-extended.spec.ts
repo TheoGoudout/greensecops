@@ -14,7 +14,7 @@ test.describe("Error Handling — Extended", () => {
     await mockEvents(page)
     await mockBilling(page)
     await mockRules(page)
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/workflow/scans**", (route) => {
@@ -39,7 +39,7 @@ test.describe("Error Handling — Extended", () => {
   })
 
   test("repository detail 404 does not crash the app", async ({ page }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ status: 404, json: { detail: "Repository not found" } })
     })
 
@@ -61,7 +61,7 @@ test.describe("Error Handling — Extended", () => {
       })
     })
 
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ json: [MOCK_REPO] })
     })
 
@@ -74,9 +74,9 @@ test.describe("Error Handling — Extended", () => {
   test("fix list API 500 shows empty or error state without crashing", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -107,9 +107,9 @@ test.describe("Error Handling — Extended", () => {
   })
 
   test("analyses API 500 shows empty state not crash", async ({ page }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -147,7 +147,7 @@ test.describe("Error Handling — Extended", () => {
   test("network timeout on analyses shows retry or empty state", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
       if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })

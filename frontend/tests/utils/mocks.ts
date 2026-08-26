@@ -1454,7 +1454,7 @@ export async function mockDockerTargets(
     const method = route.request().method()
     if (method === "DELETE") {
       route.fulfill({ status: 204 })
-    } else if (method === "PATCH" && url.includes("/toggle")) {
+    } else if (method === "PATCH") {
       route.fulfill({ json: { id: targets[0].id, enabled: false } })
     } else if (method === "POST" && url.includes("/scan")) {
       route.fulfill({

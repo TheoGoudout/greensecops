@@ -31,11 +31,11 @@ function setupFixDetailMocks(
     page.route("**/api/v1/workflow/fixes**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
-      if (method === "POST" && url.includes("/retry-delivery")) {
+      if (method === "POST" && url.includes("/retry")) {
         route.fulfill({ status: 202, json: { status: "queued" } })
-      } else if (method === "POST" && url.includes("/deliver")) {
+      } else if (method === "POST" && url.includes("/deliveries")) {
         route.fulfill({ json: { status: "delivering" } })
-      } else if (method === "POST" && url.includes("/reject")) {
+      } else if (method === "DELETE") {
         route.fulfill({ json: { ...(fix as object), status: "rejected" } })
       } else {
         route.fulfill({ json: fix })
@@ -173,7 +173,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     }
   })
 
-  test("retrying a failed fix calls retry-delivery API", async ({ page }) => {
+  test("retrying a failed fix calls the retry endpoint", async ({ page }) => {
     let retryCalled = false
 
     await mockUserMe(page)
@@ -185,7 +185,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await page.route("**/api/v1/workflow/fixes**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
-      if (method === "POST" && url.includes("/regenerate")) {
+      if (method === "POST" && url.includes("/retry")) {
         retryCalled = true
         route.fulfill({ status: 202, json: { status: "queued" } })
       } else {

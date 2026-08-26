@@ -247,7 +247,11 @@ test.describe("Repository Detail", () => {
     await page.route(/\/api\/v1\/workflow\/(fixes|repositories)\b/, (route) => {
       const url = route.request().url()
       const method = route.request().method()
-      if (method === "POST" && url.includes("/repositories/") && url.endsWith("/deliveries")) {
+      if (
+        method === "POST" &&
+        url.includes("/repositories/") &&
+        url.endsWith("/deliveries")
+      ) {
         deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })
       } else if (url.includes("/pull-requests")) {
