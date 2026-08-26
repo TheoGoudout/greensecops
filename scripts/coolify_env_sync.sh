@@ -25,6 +25,10 @@
 # It does not deploy. Coolify applies an environment variable on the resource's
 # next deploy, so a *changed* value reaches the containers then rather than
 # immediately — see the note this prints when it changes something.
+#
+# Both callers therefore run it immediately *before* the deploy they trigger:
+# .github/workflows/images.yml for staging, release-deploy.yml for production.
+# Run anywhere else in a pipeline and a changed hostname lands one deploy late.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -181,8 +185,9 @@ if [ "${#changes[@]}" -eq 0 ]; then
 fi
 
 # Loud on purpose. This script does not deploy, so anything it changed applies
-# on the resource's *next* deploy — and on staging, the deploy Coolify started
-# from this very push is already running with the previous values.
+# on the resource's *next* deploy. Both callers trigger one straight after, so
+# in CI that is the deploy in this same run — but run by hand, this is the whole
+# of the warning.
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
     echo "## Coolify (${ENVIRONMENT}): ${#changes[@]} variable(s) changed"
@@ -194,9 +199,9 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
       echo "| \`${key}\` | \`${previous}\` | \`${value}\` |"
     done
     echo
-    echo "> These apply on the resource's **next deploy**. Any deploy running"
-    echo "> now started before the change and is using the previous values."
-    echo "> Redeploy from Coolify to apply them immediately."
+    echo "> These apply on the resource's **next deploy**. In CI that is the"
+    echo "> deploy this same run triggers next. Run by hand, redeploy from"
+    echo "> Coolify to apply them."
   } >>"${GITHUB_STEP_SUMMARY}"
 fi
 

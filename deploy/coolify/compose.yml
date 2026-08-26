@@ -12,6 +12,17 @@
 #     running Coolify compiles anything — and the same tag runs on whichever
 #     Hetzner line happens to be in stock.
 #
+# Every image-based service carries `pull_policy: always`, because Compose's
+# default is `missing`: an image already on the host is reused, and a tag that
+# does not change gives Docker no reason to look for a new one. That is how this
+# deployment served a stale backend against a freshly published dashboard.
+#
+# The real fix is upstream — CI pins TAG to an immutable `sha-<short>` per
+# commit (images.yml on staging, release-deploy.yml on production), so the
+# reference itself changes and the pull cannot be skipped. This is the braces to
+# that belt: it covers a redeploy clicked by hand, a fork still on `TAG=latest`,
+# and anyone running this file directly.
+#
 # Five containers instead of ten, on a box that costs about €13/month. See
 # deploy/coolify/README.md.
 #
@@ -79,6 +90,7 @@ services:
   opa:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-opa:${TAG:-latest}
     restart: always
+    pull_policy: always
     # The compiled rule bundle dominates the footprint and does not grow with
     # load, which is why this is the smallest steady-state service here.
     mem_limit: 512m
@@ -101,6 +113,7 @@ services:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     command: bash scripts/prestart.sh
     restart: "no"
+    pull_policy: always
     # Migrates and exits, so it never overlaps steady state.
     mem_limit: 512m
     mem_reservation: 128m
@@ -206,6 +219,7 @@ services:
   backend:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     restart: always
+    pull_policy: always
     # The image runs `fastapi run --workers 4`; each uvicorn worker holds its
     # own copy of the application, so the floor is four of them.
     mem_limit: 1536m
@@ -234,6 +248,7 @@ services:
   celery-worker:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     restart: always
+    pull_policy: always
     # The service most likely to hit its cap, and the reason the caps exist.
     # Prefork holds CELERY_CONCURRENCY children plus a parent, each with the
     # whole application, and a scan's working set on top — budget roughly 500m

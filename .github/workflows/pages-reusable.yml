@@ -79,18 +79,11 @@ on:
       CLOUDFLARE_ACCOUNT_ID:
         description: Cloudflare account the Workers live in.
         required: false
-      # The Coolify half of the same deployment. The static surfaces get their
-      # hostnames baked into a bundle here; the API has to be *told* the same
-      # hostnames, and cannot derive them — see the coolify-env job below.
-      COOLIFY_URL:
-        description: Base URL of the Coolify control plane. Empty disables the sync.
-        required: false
-      COOLIFY_TOKEN:
-        description: API token permitted to read and write the resource's variables.
-        required: false
-      COOLIFY_STAGING_UUID:
-        description: Staging resource UUID. Empty disables the sync.
-        required: false
+      # No Coolify secrets here any more. The API half of a staging deployment
+      # — syncing the resource's public URLs and deploying it — moved to
+      # images.yml's deploy-staging job, which is the only place that knows the
+      # commit's images exist. This workflow now *waits* on that run rather than
+      # racing it; see the api-gate job below.
     outputs:
       # Empty on every run that is not a preview, and on preview runs with no
       # Cloudflare credentials. pages.yml owns the job that reports these,
@@ -365,7 +358,11 @@ jobs:
 
   frontend:
     name: Dashboard (${{ inputs.environment }})
-    needs: config
+    # api-gate, and only here: this is the surface that ships the generated
+    # OpenAPI client, so it is the only one that can get ahead of the API in a
+    # way that breaks. The landing page and the docs are independent of the
+    # contract and stay ungated, and therefore fast.
+    needs: [config, api-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ inputs.environment }}
@@ -565,162 +562,120 @@ jobs:
           workingDirectory: docs
           command: deploy ${{ env.WRANGLER_ENV }}
 
-  coolify-env:
-    name: API variables (${{ inputs.environment }})
-    needs: [config]
-    # Staging only, and never for a preview. Production's sync lives in
-    # release-deploy.yml instead, and has to: that workflow calls this one
-    # *after* it has already deployed the API, so a sync here would land one
-    # deploy late on every release. A preview has no Coolify resource of its
-    # own, and must never write to staging's.
-    if: ${{ inputs.environment == 'staging' && !inputs.preview }}
+  api-gate:
+    name: Wait for the API (${{ inputs.environment }})
+    # Deliberately unconditional, with the condition on the step instead. A
+    # skipped `needs` dependency skips its dependents, so an `if:` here would
+    # silently stop publishing the dashboard on production and on previews —
+    # the exact class of quiet non-deployment this file keeps guarding against.
+    # Everywhere but staging this job succeeds having done nothing.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
+
     permissions:
-      contents: read
+      # To read this commit's workflow runs.
+      actions: read
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # Skip in one direction only. No Coolify secrets at all is a fork or an
-      # account that does not run one — nothing to do. *Some* of them is a
-      # misconfiguration, and going green having synced nothing is precisely
-      # how FRONTEND_HOST stayed unset on staging for the life of the
-      # deployment. The same distinction HAS_CLOUDFLARE draws above, in the
-      # same file, for the same reason.
-      - name: Check the Coolify secrets
-        id: secrets
+      # The dashboard ships a *generated* OpenAPI client, so publishing it
+      # before the API that serves that contract is the one mismatch direction
+      # that actually breaks: a client calling endpoints the server has not
+      # shipped. release-deploy.yml sequences production for exactly this
+      # reason; this is staging's equivalent.
+      #
+      # The API deploy is the last job of images.yml, so waiting for that run to
+      # finish is waiting for the API. A commit that changed nothing images.yml
+      # watches has no run at all, and publishes immediately.
+      - name: Wait for this commit's API deploy
+        if: ${{ inputs.environment == 'staging' && !inputs.preview }}
         env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          present=0; missing=""
-          for name in COOLIFY_URL COOLIFY_TOKEN UUID; do
-            if [ -n "${!name}" ]; then
-              present=$((present + 1))
-            else
-              missing="${missing} ${name}"
+
+          status=""; conclusion=""; url=""
+
+          # Sets the three above from the newest images.yml run for this commit,
+          # and returns non-zero if the API could not be read. That distinction
+          # matters: a failed call must not be mistaken for "no run exists",
+          # which would publish the dashboard on an API error.
+          #
+          # Pipe-separated rather than space-separated, because `read` with the
+          # default IFS collapses runs of whitespace — an in-progress run, whose
+          # conclusion is empty, would shift its URL into the conclusion field
+          # and be read as a failure. `.workflow_runs // []` keeps a malformed
+          # response an empty list rather than a jq error.
+          poll() {
+            local out
+            if ! out=$(gh api "repos/${REPO}/actions/runs?head_sha=${SHA}&per_page=100" \
+              --jq '(.workflow_runs // [])
+                    | map(select(.path == ".github/workflows/images.yml"))
+                    | sort_by(.run_started_at)
+                    | last
+                    | "\(.status // "")|\(.conclusion // "")|\(.html_url // "")"' 2>&1); then
+              echo "  Could not list this commit's runs: ${out}"
+              return 1
             fi
+            IFS='|' read -r status conclusion url <<< "${out}"
+          }
+
+          # No run is ambiguous for a short window: a workflow filtered out by
+          # its `paths:` produces no run at all, which looks exactly like one
+          # that has not been created yet. Both this workflow and images.yml are
+          # started by the same push, so give the latter a grace period to
+          # appear before concluding it never will.
+          read_once=false
+          for attempt in $(seq 1 9); do
+            if poll; then
+              read_once=true
+              if [ -n "${status}" ]; then
+                break
+              fi
+              echo "  No images run for ${SHA} yet (${attempt}/9)."
+            fi
+            sleep 10
           done
 
-          if [ "${present}" -eq 0 ]; then
-            echo "::notice::No Coolify secrets on this repository — skipping the API variable sync."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ -n "${missing}" ]; then
-            echo "::error::Coolify is partly configured: missing${missing}. Set all three or none — a partial set would sync nothing and still pass."
+          # An API that never answered is not the same as a commit with no run,
+          # and concluding the latter from the former would publish the
+          # dashboard on an outage. Only silence that was actually *read* counts
+          # as absence.
+          if [ "${read_once}" != "true" ]; then
+            echo "::error::Could not read this commit's workflow runs at all, so whether the staging API deployed is unknown. Refusing to publish the dashboard."
             exit 1
           fi
 
-          echo "run=true" >> "$GITHUB_OUTPUT"
-
-      - name: Sync the public URLs
-        if: steps.secrets.outputs.run == 'true'
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-          ENVIRONMENT: ${{ inputs.environment }}
-        run: scripts/coolify_env_sync.sh "${ENVIRONMENT}" "${UUID}"
-
-      # Nothing here triggers a deploy: Coolify's git watcher redeploys staging
-      # on push to main by itself. This finds that deployment and reports how it
-      # ended, so "did staging come up?" is answerable from the Actions tab
-      # rather than only from Coolify's own UI.
-      - name: Watch the automatic deploy
-        if: steps.secrets.outputs.run == 'true'
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-        run: |
-          set -euo pipefail
-
-          # Newest first. A deploy we did not start may not have been queued yet
-          # when this job began, so give it a short grace period to appear.
-          deployment=""
-          for attempt in $(seq 1 6); do
-            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
-              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-              "${COOLIFY_URL}/api/v1/deployments/applications/${UUID}")
-            http=${response##*$'\n'}
-            body=${response%$'\n'*}
-
-            if [ "${http}" -lt 200 ] || [ "${http}" -ge 300 ]; then
-              echo "  HTTP ${http} listing deployments (${attempt}/6): ${body}"
-              sleep 10
-              continue
-            fi
-
-            deployment=$(jq -r '
-              (if type == "array" then . else (.data // .deployments // []) end)
-              | map(select(.status == "queued" or .status == "in_progress"))
-              | (.[0].deployment_uuid // empty)
-            ' <<< "${body}")
-            if [ -n "${deployment}" ]; then
-              break
-            fi
-            echo "  No deployment in flight yet (${attempt}/6)."
-            sleep 10
-          done
-
-          # Not a failure. Coolify's watcher may have finished before this job
-          # started, or the push may have touched nothing it redeploys for.
-          if [ -z "${deployment}" ]; then
-            echo "::warning::No Coolify deployment in flight for ${UUID}; nothing to watch."
+          if [ -z "${status}" ]; then
+            echo "::notice::No images.yml run for ${SHA} — the API is unchanged by this commit, so there is nothing to wait for."
             exit 0
           fi
 
-          echo "Watching deployment ${deployment}"
-          status="unknown"
-          for attempt in $(seq 1 90); do
-            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
-              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-              "${COOLIFY_URL}/api/v1/deployments/${deployment}")
-            http=${response##*$'\n'}
-            body=${response%$'\n'*}
+          echo "Waiting on ${url}"
 
-            if [ "${http}" -lt 200 ] || [ "${http}" -ge 300 ]; then
-              echo "  HTTP ${http} polling the deployment (${attempt}/90): ${body}"
-              sleep 10
-              continue
+          # 120 x 20s = 40 minutes, which covers four image builds, two manifest
+          # merges and a Coolify rollout with room to spare. Capped rather than
+          # left to the job timeout so the failure names the run. A read that
+          # fails is retried rather than fatal — the run is very likely still
+          # going, and the cap is what stops this waiting forever.
+          for attempt in $(seq 1 120); do
+            if [ "${status}" = "completed" ]; then
+              break
             fi
-
-            status=$(jq -r '.status // "unknown"' <<< "${body}")
-
-            case "${status}" in
-              finished)
-                echo "Staging API deployed ✅"
-                exit 0
-                ;;
-              failed|cancelled-by-user)
-                echo "::error::Coolify reported '${status}' for deployment ${deployment}."
-                {
-                  echo "## Staging API deploy ${status}"
-                  echo
-                  jq -r '.deployment_url // empty' <<< "${body}" | sed 's/^/Logs: /'
-                  echo
-                  echo '```'
-                  jq -r '.logs // "(no logs returned)"' <<< "${body}" | tail -100
-                  echo '```'
-                } >> "$GITHUB_STEP_SUMMARY"
-                exit 1
-                ;;
-              queued|in_progress)
-                echo "  ${status} (${attempt}/90)"
-                ;;
-              *)
-                echo "  unrecognised status '${status}' (${attempt}/90)"
-                ;;
-            esac
-            sleep 10
+            echo "  ${status} (${attempt}/120)"
+            sleep 20
+            poll || true
           done
 
-          echo "::error::Deployment ${deployment} was still '${status}' after 15 minutes. Check Coolify."
-          exit 1
+          if [ "${status}" != "completed" ]; then
+            echo "::error::${url} was still '${status}' after 40 minutes. The dashboard has NOT been published — it would have gone out ahead of the API."
+            exit 1
+          fi
+
+          if [ "${conclusion}" != "success" ]; then
+            echo "::error::${url} finished '${conclusion}', so the staging API is not on ${SHA}. Refusing to publish a dashboard ahead of it — fix that run, then re-run this one."
+            exit 1
+          fi
+
+          echo "Staging API is on ${SHA} ✅"

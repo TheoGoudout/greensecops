@@ -15,7 +15,8 @@ That is exactly the kind of drift a comment cannot prevent, so this checks it:
 * both Coolify services agree with each other, since they share a YAML anchor
   and a divergence would mean the anchor was accidentally broken, and
 * every variable the Coolify compose reads without a default is either named in
-  the README's configuration block or recorded here as optional.
+  the README's configuration block or recorded here as optional,
+* and every service running a pre-built image pulls it every deploy.
 
 The third check exists because the first two cannot see the other half of the
 loop. Naming a variable in the compose file only asks Coolify for it; something
@@ -94,6 +95,34 @@ OPTIONAL = {
     "LANGCHAIN_API_KEY": "unset disables LangSmith tracing only",
     "RATE_LIMIT_STORAGE_URI": "falls back to REDIS_URL in config.py",
 }
+
+
+def _stale_image_services(coolify: dict) -> list[str]:
+    """Image-based services that could serve a cached image on a deploy.
+
+    Compose's default pull policy is ``missing``: an image already on the host
+    is reused, and a tag that does not change gives Docker no reason to look for
+    a new one. Coolify's ordinary deploy does not force a pull either. Together
+    that is how this deployment served a stale backend against a dashboard
+    published from the same commit — the desynchronisation ``pull_policy:
+    always`` exists here to make impossible.
+
+    CI pinning ``TAG`` to an immutable ``sha-<short>`` is the primary fix and
+    makes this redundant on that path. It is not redundant on the others: a
+    redeploy clicked in Coolify, a fork still on ``TAG=latest``, or this file
+    run by hand.
+
+    Only *this project's* images are checked — the ones carrying ``${TAG}``.
+    ``db`` and ``redis`` run upstream tags, and pulling those on every deploy
+    would mean a Postgres minor upgrade nobody asked for arriving in the middle
+    of one. Their staleness is a feature.
+    """
+    return [
+        name
+        for name, service in sorted((coolify.get("services") or {}).items())
+        if "${TAG" in (service.get("image") or "")
+        and service.get("pull_policy") != "always"
+    ]
 
 
 def _declared(service: dict) -> set[str]:
@@ -192,6 +221,18 @@ def main() -> int:
             + "\n".join(f"      - {name}" for name in undocumented)
             + "\n    Document each one there, or add it to OPTIONAL in this "
             "script with the feature it turns off when empty."
+        )
+
+    unpulled = _stale_image_services(coolify)
+    if unpulled:
+        errors.append(
+            f"{len(unpulled)} service(s) run one of this project's images "
+            "without `pull_policy: always`, so a deploy may reuse whatever "
+            "image the host already has under that tag rather than the one "
+            "just published:\n"
+            + "\n".join(f"      - {name}" for name in unpulled)
+            + "\n    That is how staging served a backend one commit behind "
+            "its dashboard. Add `pull_policy: always` to each."
         )
 
     stale = sorted(set(OPTIONAL) - _undefaulted_references(coolify_text))

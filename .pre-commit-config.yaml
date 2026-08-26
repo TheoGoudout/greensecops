@@ -145,11 +145,15 @@ repos:
       # Coolify substitutes only the variables a compose file names, so one
       # forgotten in the Coolify variant silently takes its default in
       # production rather than failing. This catches that.
+      #
+      # The README is in the pattern because the script reads it: half the check
+      # is that every undefaulted variable is documented there, so an edit that
+      # drops one from the configuration block has to re-run this.
       - id: coolify-compose-drift
         name: Check the Coolify compose against compose.yml
         entry: python3 scripts/validate_coolify_compose.py
         language: system
-        files: ^(compose\.yml|deploy/coolify/compose\.yml|scripts/validate_coolify_compose\.py)$
+        files: ^(compose\.yml|deploy/coolify/(compose\.yml|README\.md)|scripts/validate_coolify_compose\.py)$
         pass_filenames: false
 
       # The version lives in six places, all derived from the root VERSION

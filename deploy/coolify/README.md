@@ -223,7 +223,8 @@ the resource's **Environment Variables** tab:
 
 ```
 IMAGE_REGISTRY=ghcr.io/theogoudout
-TAG=latest
+# No TAG — CI owns it on both resources, and the compose file defaults it to
+# `latest` until the first deploy sets it. See below.
 
 SERVICE_URL_BACKEND=https://api.greensecops.com
 FRONTEND_HOST=https://app.greensecops.com
@@ -295,16 +296,34 @@ Only `api.` needs a domain in Coolify — set it on the `backend` service so
 Coolify's proxy terminates TLS and routes to it. The other three hostnames are
 Cloudflare's.
 
-**`TAG` means different things on the two resources.** Staging keeps
-`TAG=latest` and tracks `main`, so every push redeploys it. On **production**,
-`TAG` is owned by `.github/workflows/release-deploy.yml`: publishing a release
-sets it to that release's tag over Coolify's API, alongside the resource's git
-ref.
+**`TAG` is owned by CI on both resources, and you should not set it by hand.**
+On **staging** it belongs to `.github/workflows/images.yml`, which sets it to
+`sha-<short>` for the commit it has just built. On **production** it belongs to
+`.github/workflows/release-deploy.yml`, which sets it to the published release's
+tag alongside the resource's git ref.
 
-You do not need to create `TAG` on the production resource by hand — the
-workflow creates it if it is absent and updates it if it is not. Leave it alone
-after that: editing it by hand pins production to whatever you typed until the
-next release overwrites it.
+Neither needs creating by hand — both workflows create the variable if it is
+absent and update it if it is not. Leave it alone after that: editing it pins
+the resource to whatever you typed until the next deploy overwrites it.
+
+**Turn Automatic Deployment off on the staging resource.** This is the one
+setting that has to be clicked rather than committed, and leaving it on is a
+bug rather than a redundancy. Coolify's git watcher fires the moment a push
+lands — ten to twenty-five minutes before `images.yml` has published that
+commit's images — so it deploys the *previous* commit's image while `pages.yml`
+puts the new commit's dashboard on Cloudflare within a minute. The dashboard
+ships a generated OpenAPI client, so that is a client calling a contract the
+server has not shipped. With the watcher off, `images.yml` deploys staging
+itself once the images provably exist.
+
+An immutable per-commit tag is what makes the pull reliable, and it is worth
+knowing why `latest` was not enough. A tag that does not change gives Docker no
+reason to look for a new image: Compose's default pull policy is `missing`, and
+an ordinary Coolify deploy does not force a pull — which is what `force=true` in
+`release-deploy.yml` is for. `sha-<short>` is a reference the host has never
+seen, so the pull happens because it must. `deploy/coolify/compose.yml` also
+carries `pull_policy: always` on every service running one of this project's
+images, which covers a redeploy clicked here by hand.
 
 The two API calls are deliberately different operations, and the distinction is
 easy to get wrong. `PATCH /applications/{uuid}/envs` *updates* an existing
@@ -315,9 +334,22 @@ back to the create.
 
 ### 5. Deploy
 
-**Staging is automatic.** Push to `main`: `images.yml` publishes the backend and
-OPA images to GHCR as `latest`, `pages.yml` publishes the three static sites to
-the staging Workers, and Coolify's staging resource redeploys itself. Look at
+**Staging is automatic, and ordered.** Push to `main` and three things happen in
+sequence, not in parallel:
+
+1. `images.yml` publishes the backend and OPA images to GHCR, tagged both
+   `latest` and `sha-<short>` for the commit.
+2. The same run then deploys the staging API: it syncs the resource's public
+   URLs, sets `TAG` to that `sha-<short>`, triggers the deploy and blocks until
+   Coolify reports it finished.
+3. Only then does `pages.yml` publish the dashboard. Its `api-gate` job waits on
+   this commit's `images.yml` run and fails rather than publishing if that run
+   failed — the same "API first" rule `release-deploy.yml` enforces for
+   production, for the same reason. The landing page and docs do not ship the
+   generated client, so they publish without waiting.
+
+A commit that touches nothing `images.yml` watches produces no run for that SHA,
+the gate clears immediately, and the static surfaces publish as before. Look at
 staging.
 
 **Production is two clicks**, and both halves move together:
@@ -354,12 +386,12 @@ Four repository secrets, all for the Coolify half:
 | Secret | What it is |
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
-| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy production |
-| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID |
-| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Used only to sync its URLs and watch its automatic deploy — nothing here ever triggers one |
+| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy either of them |
+| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release-deploy.yml` |
+| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `images.yml`, which syncs its URLs, sets its `TAG` and deploys it |
 
-Set all four or none. `pages.yml` refuses a partial set rather than skipping:
-syncing nothing and passing is exactly how staging kept a localhost
+Set all four or none. Both workflows refuse a partial set rather than skipping:
+deploying nothing and passing is exactly how staging kept a localhost
 `FRONTEND_HOST` for the life of the deployment.
 
 The Pi is not in the request path, but it *is* in the deploy path — if its API
