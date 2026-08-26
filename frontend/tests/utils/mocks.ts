@@ -581,7 +581,7 @@ export const MOCK_ANALYSIS_GRADE_F = {
 // ── Issues ─────────────────────────────────────────────────────────────
 export const MOCK_ISSUE_SECURITY = {
   id: ID.issueSecurity,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleSecurity,
   rule_slug: "excessive_token_permissions",
   severity: "critical" as const,
@@ -598,7 +598,7 @@ export const MOCK_ISSUE_SECURITY = {
 
 export const MOCK_ISSUE_RELIABILITY = {
   id: ID.issueReliability,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -615,7 +615,7 @@ export const MOCK_ISSUE_RELIABILITY = {
 
 export const MOCK_ISSUE_ENERGY = {
   id: ID.issueEnergy,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: "00000000-0000-0000-0000-000000000063",
   rule_slug: "caching_missing",
   severity: "medium" as const,
@@ -632,7 +632,7 @@ export const MOCK_ISSUE_ENERGY = {
 
 export const MOCK_ISSUE_WITH_FIX = {
   id: ID.issueWithFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -649,7 +649,7 @@ export const MOCK_ISSUE_WITH_FIX = {
 
 export const MOCK_ISSUE_WITH_CONTEXT = {
   id: ID.issueWithContext,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -666,7 +666,7 @@ export const MOCK_ISSUE_WITH_CONTEXT = {
 
 export const MOCK_ISSUE_WITH_PENDING_FIX = {
   id: ID.issueWithPendingFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleSecurity,
   rule_slug: "excessive_token_permissions",
   severity: "critical" as const,
@@ -683,7 +683,7 @@ export const MOCK_ISSUE_WITH_PENDING_FIX = {
 
 export const MOCK_ISSUE_WITH_FAILED_FIX = {
   id: ID.issueWithFailedFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -700,7 +700,7 @@ export const MOCK_ISSUE_WITH_FAILED_FIX = {
 
 export const MOCK_ISSUE_WITH_DELIVERED_FIX = {
   id: ID.issueWithDeliveredFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -740,7 +740,7 @@ export const MOCK_FIX_READY = {
   pr_state: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
-  issues: [
+  findings: [
     {
       id: ID.issueWithFix,
       rule_slug: "missing_timeout",
@@ -770,7 +770,7 @@ export const MOCK_FIX_DELIVERED = {
   pr_state: "open",
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: "2024-01-02T10:03:00Z",
-  issues: [
+  findings: [
     {
       id: ID.issueReliability,
       rule_slug: "missing_timeout",
@@ -800,7 +800,7 @@ export const MOCK_FIX_PENDING = {
   pr_state: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
-  issues: [
+  findings: [
     {
       id: ID.issueSecurity,
       rule_slug: "excessive_token_permissions",
@@ -1222,7 +1222,7 @@ export async function mockIssues(
       const byRepo = new Map<string, Map<string, RepoCategoryBucket>>()
       const analysisToRepo = new Map(analyses.map((a) => [a.id, a.repo_id]))
       for (const i of active as Array<{
-        analysis_id: string
+        scan_id: string
         category: string
         severity: string
         resolved_at?: string | null
@@ -1238,7 +1238,7 @@ export async function mockIssues(
           entry.open += 1
           if (i.severity === "critical") entry.critical_open += 1
 
-          const repoId = analysisToRepo.get(i.analysis_id)
+          const repoId = analysisToRepo.get(i.scan_id)
           if (repoId) {
             const categories =
               byRepo.get(repoId) ?? new Map<string, RepoCategoryBucket>()

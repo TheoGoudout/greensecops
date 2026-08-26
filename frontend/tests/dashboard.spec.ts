@@ -392,7 +392,7 @@ test.describe("Dashboard", () => {
     const issueB = {
       ...MOCK_ISSUE_ENERGY,
       id: "00000000-0000-0000-0000-000000000202",
-      analysis_id: analysisB.id,
+      scan_id: analysisB.id,
     }
 
     await mockRepositories(page, [MOCK_REPO, repoB])
@@ -432,7 +432,7 @@ test.describe("Dashboard", () => {
     const issueB = {
       ...MOCK_ISSUE_ENERGY,
       id: "00000000-0000-0000-0000-000000000202",
-      analysis_id: analysisB.id,
+      scan_id: analysisB.id,
     }
 
     await mockRepositories(page, [MOCK_REPO, repoB])

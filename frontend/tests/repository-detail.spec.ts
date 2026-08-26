@@ -30,7 +30,7 @@ test.describe("Repository Detail", () => {
     opts: {
       repo?: typeof MOCK_REPO
       analyses?: unknown[]
-      issues?: unknown[]
+      findings?: unknown[]
       fixes?: unknown[]
       workflowFiles?: unknown[]
       pullRequests?: unknown[]
@@ -39,7 +39,7 @@ test.describe("Repository Detail", () => {
     const {
       repo = MOCK_REPO,
       analyses = [MOCK_ANALYSIS],
-      issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
+      findings = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
       fixes = [],
       workflowFiles = [MOCK_WORKFLOW_FILE],
       pullRequests = [],
@@ -90,7 +90,7 @@ test.describe("Repository Detail", () => {
         }
       }),
       page.route("**/api/v1/workflow/findings**", (route) => {
-        route.fulfill({ json: issues })
+        route.fulfill({ json: findings })
       }),
       page.route(/\/api\/v1\/workflow\/(fixes|repositories)\b/, (route) => {
         const url = route.request().url()
@@ -100,7 +100,7 @@ test.describe("Repository Detail", () => {
         } else if (method === "POST" && url.endsWith("/fixes")) {
           route.fulfill({
             status: 202,
-            json: { queued: issues.length, skipped: 0 },
+            json: { queued: findings.length, skipped: 0 },
           })
         } else if (method === "POST" && url.includes("/deliveries")) {
           route.fulfill({ json: { status: "delivering" } })
@@ -199,8 +199,8 @@ test.describe("Repository Detail", () => {
   })
 
   test("Fix selected button queues fixes", async ({ page }) => {
-    const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
-    await setupRepoMocks(page, { issues })
+    const findings = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
+    await setupRepoMocks(page, { findings })
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
@@ -215,7 +215,7 @@ test.describe("Repository Detail", () => {
     page,
   }) => {
     await setupRepoMocks(page, {
-      issues: [MOCK_ISSUE_WITH_FIX],
+      findings: [MOCK_ISSUE_WITH_FIX],
       fixes: [MOCK_FIX_READY],
     })
 
@@ -230,7 +230,9 @@ test.describe("Repository Detail", () => {
     let deliverCalled = false
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })

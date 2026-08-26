@@ -28,7 +28,9 @@ test.describe("Repository Edge Cases", () => {
   test("external repo shows in repository list", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO_EXTERNAL })
       } else {
         route.fulfill({ json: [MOCK_REPO, MOCK_REPO_EXTERNAL] })
@@ -47,7 +49,9 @@ test.describe("Repository Edge Cases", () => {
   test("external repo detail page loads without crash", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -68,7 +72,9 @@ test.describe("Repository Edge Cases", () => {
   test("disabled repo shows as disabled in list", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO_DISABLED })
       } else {
         route.fulfill({ json: [MOCK_REPO_DISABLED] })
@@ -89,7 +95,9 @@ test.describe("Repository Edge Cases", () => {
   test("repo with no analyses shows no grade", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -115,7 +123,9 @@ test.describe("Repository Edge Cases", () => {
   }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -144,7 +154,9 @@ test.describe("Repository Edge Cases", () => {
   test("repo with pending analysis shows pending status", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -204,7 +216,9 @@ test.describe("Repository Edge Cases", () => {
   }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
       } else {
         route.fulfill({

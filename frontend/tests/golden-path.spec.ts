@@ -35,7 +35,7 @@ const MOCK_WORKFLOW_FILE = {
 
 const MOCK_ISSUE = {
   id: "00000000-0000-0000-0000-000000000030",
-  analysis_id: MOCK_ANALYSIS.id,
+  scan_id: MOCK_ANALYSIS.id,
   rule_id: "00000000-0000-0000-0000-000000000040",
   rule_slug: "missing_timeout",
   severity: "high",
@@ -58,7 +58,7 @@ const MOCK_FIX = {
   full_content: "name: CI\non: push\njobs:\n  build:\n    timeout-minutes: 30",
   pr_url: null,
   created_at: "2024-01-02T10:01:00Z",
-  issues: [
+  findings: [
     {
       id: MOCK_ISSUE.id,
       rule_slug: MOCK_ISSUE.rule_slug,
@@ -77,7 +77,9 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
     // (not the { data: [...], count: N } envelope).
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })

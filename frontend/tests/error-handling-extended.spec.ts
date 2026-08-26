@@ -76,7 +76,9 @@ test.describe("Error Handling — Extended", () => {
   }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -109,7 +111,9 @@ test.describe("Error Handling — Extended", () => {
   test("analyses API 500 shows empty state not crash", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })

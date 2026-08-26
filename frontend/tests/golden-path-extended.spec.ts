@@ -25,7 +25,9 @@ test.describe("Golden Path — Extended", () => {
   }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -107,7 +109,9 @@ test.describe("Golden Path — Extended", () => {
   test("repo detail: batch fix + workflow PR delivery", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -158,7 +162,9 @@ test.describe("Golden Path — Extended", () => {
   test("repo detail: integrate action flow", async ({ page }) => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/action-integration")) {
         route.fulfill({
