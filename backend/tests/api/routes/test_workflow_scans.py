@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/workflow-scans/ endpoints."""
+"""Tests for the /api/v1/workflow/scans/ endpoints."""
 
 import uuid
 from unittest.mock import patch
@@ -51,7 +51,7 @@ def completed_analysis(
     )
 
 
-# ─── GET /workflow-scans/ ───────────────────────────────────────────────────────────
+# ─── GET /workflow/scans/ ───────────────────────────────────────────────────────────
 
 
 def test_list_analyses_empty(
@@ -64,7 +64,7 @@ def test_list_analyses_empty(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/",
+        f"{settings.API_V1_STR}/workflow/scans/",
         params={"repo_id": str(fresh_repo.id)},
         headers=superuser_token_headers,
     )
@@ -82,7 +82,7 @@ def test_list_analyses_with_data(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/",
+        f"{settings.API_V1_STR}/workflow/scans/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -103,7 +103,7 @@ def test_list_analyses_filter_by_grade(
 ) -> None:
     # Act — filter by grade B
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/",
+        f"{settings.API_V1_STR}/workflow/scans/",
         params={"repo_id": str(repo.id), "grade": "B"},
         headers=superuser_token_headers,
     )
@@ -123,7 +123,7 @@ def test_list_analyses_filter_by_status(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/",
+        f"{settings.API_V1_STR}/workflow/scans/",
         params={"repo_id": str(repo.id), "status": "completed"},
         headers=superuser_token_headers,
     )
@@ -145,7 +145,7 @@ def test_get_analysis_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/{completed_analysis.id}",
+        f"{settings.API_V1_STR}/workflow/scans/{completed_analysis.id}",
         headers=superuser_token_headers,
     )
 
@@ -166,7 +166,7 @@ def test_get_scan_includes_workflow_path(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/{completed_analysis.id}",
+        f"{settings.API_V1_STR}/workflow/scans/{completed_analysis.id}",
         headers=superuser_token_headers,
     )
 
@@ -183,7 +183,7 @@ def test_get_analysis_not_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-scans/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/scans/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
@@ -205,7 +205,7 @@ def test_trigger_analysis_success(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/trigger/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/scans",
             headers=superuser_token_headers,
         )
 
@@ -228,7 +228,7 @@ def test_trigger_analysis_force_defaults_to_true(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/trigger/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/scans",
             headers=superuser_token_headers,
         )
 
@@ -246,7 +246,7 @@ def test_trigger_analysis_can_opt_out_of_force(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/trigger/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/scans",
             params={"force": "false"},
             headers=superuser_token_headers,
         )
@@ -262,7 +262,7 @@ def test_trigger_analysis_repo_not_found(
     # Act
     with patch("app.workers.tasks.static_analysis.run_static_analysis.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/trigger/{uuid.uuid4()}",
+            f"{settings.API_V1_STR}/workflow/repositories/{uuid.uuid4()}/scans",
             headers=superuser_token_headers,
         )
 
@@ -285,7 +285,7 @@ def test_reanalyze_for_workflow_success(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/reanalyze-for-workflow/{workflow_file.id}",
+            f"{settings.API_V1_STR}/workflow/files/{workflow_file.id}/scans",
             headers=superuser_token_headers,
         )
 
@@ -309,7 +309,7 @@ def test_reanalyze_for_workflow_can_opt_out_of_force(
         "app.workers.tasks.static_analysis.run_static_analysis.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/reanalyze-for-workflow/{workflow_file.id}",
+            f"{settings.API_V1_STR}/workflow/files/{workflow_file.id}/scans",
             params={"force": "false"},
             headers=superuser_token_headers,
         )
@@ -324,7 +324,7 @@ def test_reanalyze_for_workflow_not_found(
 ) -> None:
     with patch("app.workers.tasks.static_analysis.run_static_analysis.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-scans/reanalyze-for-workflow/{uuid.uuid4()}",
+            f"{settings.API_V1_STR}/workflow/files/{uuid.uuid4()}/scans",
             headers=superuser_token_headers,
         )
 

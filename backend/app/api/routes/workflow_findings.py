@@ -48,8 +48,8 @@ def _authorize_issue(
         raise HTTPException(status_code=404, detail="Workflow finding not found")
 
 
-@router.get("/", role=Role.user, response_model=list[WorkflowFindingPublic])
-def list_issues(
+@router.get("/findings", role=Role.user, response_model=list[WorkflowFindingPublic])
+def list_findings(
     session: SessionDep,
     current_user: CurrentUser,
     scan_id: uuid.UUID | None = None,
@@ -142,8 +142,10 @@ def list_issues(
     return [to_workflow_finding_public(issue) for issue in session.exec(query).all()]
 
 
-@router.get("/stats", role=Role.user, response_model=WorkflowFindingStatsPublic)
-def get_issue_stats(
+@router.get(
+    "/findings/stats", role=Role.user, response_model=WorkflowFindingStatsPublic
+)
+def get_finding_stats(
     session: SessionDep,
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
@@ -309,8 +311,12 @@ def get_issue_stats(
     )
 
 
-@router.get("/{finding_id}", role=Role.org_member, response_model=WorkflowFindingPublic)
-def get_issue(
+@router.get(
+    "/findings/{finding_id}",
+    role=Role.org_member,
+    response_model=WorkflowFindingPublic,
+)
+def get_finding(
     finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -320,10 +326,12 @@ def get_issue(
     return to_workflow_finding_public(issue)
 
 
-@router.post(
-    "/{finding_id}/ignore", role=Role.org_admin, response_model=WorkflowFindingPublic
+@router.put(
+    "/findings/{finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=WorkflowFindingPublic,
 )
-def ignore_issue(
+def ignore_finding(
     finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -344,10 +352,12 @@ def ignore_issue(
     return to_workflow_finding_public(issue)
 
 
-@router.post(
-    "/{finding_id}/unignore", role=Role.org_admin, response_model=WorkflowFindingPublic
+@router.delete(
+    "/findings/{finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=WorkflowFindingPublic,
 )
-def unignore_issue(
+def unignore_finding(
     finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

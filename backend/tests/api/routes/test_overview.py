@@ -198,7 +198,7 @@ def _engine(body: dict, key: str) -> dict:
 
 def _fetch(client: TestClient, headers: dict[str, str], **params: object) -> dict:
     response = client.get(
-        f"{settings.API_V1_STR}/overview/", headers=headers, params=params
+        f"{settings.API_V1_STR}/overview", headers=headers, params=params
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -208,7 +208,7 @@ def _fetch(client: TestClient, headers: dict[str, str], **params: object) -> dic
 
 
 def test_overview_requires_authentication(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/overview/")
+    response = client.get(f"{settings.API_V1_STR}/overview")
     assert response.status_code == 401
 
 
@@ -291,7 +291,7 @@ def test_org_id_scopes_to_one_org_and_rejects_non_members(
     db.refresh(stranger)
 
     response = client.get(
-        f"{settings.API_V1_STR}/overview/",
+        f"{settings.API_V1_STR}/overview",
         headers=member,
         params={"org_id": str(stranger.id)},
     )
@@ -682,7 +682,7 @@ def test_ci_open_issue_count_matches_the_issues_stats_endpoint(
 
     overview_ci = _engine(_fetch(client, member), "workflow")
     stats = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats", headers=member
+        f"{settings.API_V1_STR}/workflow/findings/stats", headers=member
     ).json()
 
     assert overview_ci["findings"]["open"] == 2

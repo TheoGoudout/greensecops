@@ -23,6 +23,7 @@ from app.api.router import Role, RoleRouter
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
     Repository,
+    ScanTargetUpdate,
     TerraformFilePublic,
     TerraformFinding,
     TerraformFindingPublic,
@@ -46,7 +47,7 @@ from app.workers.tasks.terraform_analysis import run_terraform_scan
 from app.workers.tasks.terraform_fix_delivery import deliver_terraform_fixes
 from app.workers.tasks.terraform_fix_generation import run_terraform_fix_generation
 
-router = RoleRouter(prefix="/terraform-roots", tags=["terraform"])
+router = RoleRouter(prefix="/terraform", tags=["terraform"])
 
 
 class TerraformFixGenerateRequest(BaseModel):
@@ -55,8 +56,10 @@ class TerraformFixGenerateRequest(BaseModel):
     finding_ids: list[uuid.UUID] | None = None
 
 
-@router.post("/", role=Role.user, response_model=TerraformRootPublic, status_code=201)
-def create_terraform_root(
+@router.post(
+    "/roots", role=Role.user, response_model=TerraformRootPublic, status_code=201
+)
+def create_root(
     root_in: TerraformRootCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -86,8 +89,8 @@ def create_terraform_root(
     return to_terraform_root_public(root)
 
 
-@router.get("/", role=Role.user, response_model=list[TerraformRootPublic])
-def list_terraform_roots(
+@router.get("/roots", role=Role.user, response_model=list[TerraformRootPublic])
+def list_roots(
     session: SessionDep,
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
@@ -109,22 +112,26 @@ def list_terraform_roots(
     return [to_terraform_root_public(r) for r in roots]
 
 
-@router.patch("/{root_id}/toggle", role=Role.org_admin)
-def toggle_terraform_root(
+@router.patch(
+    "/roots/{root_id}", role=Role.org_admin, response_model=TerraformRootPublic
+)
+def update_root(
     root_id: uuid.UUID,
+    body: ScanTargetUpdate,
     session: SessionDep,
     current_user: CurrentUser,
-    enabled: bool,
-) -> dict[str, str | bool]:
+) -> TerraformRootPublic:
     root = get_target_for_user(TERRAFORM_ENGINE, root_id, session, current_user)
-    root.enabled = enabled
+    if body.enabled is not None:
+        root.enabled = body.enabled
     session.add(root)
     session.commit()
-    return {"terraform_root_id": str(root_id), "enabled": enabled}
+    session.refresh(root)
+    return to_terraform_root_public(root)
 
 
-@router.delete("/{root_id}", role=Role.org_admin, status_code=204)
-def delete_terraform_root(
+@router.delete("/roots/{root_id}", role=Role.org_admin, status_code=204)
+def delete_root(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -137,9 +144,12 @@ def delete_terraform_root(
 
 
 @router.post(
-    "/{root_id}/scan", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/roots/{root_id}/scans",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_terraform_scan(
+def trigger_scan(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -167,9 +177,11 @@ def trigger_terraform_scan(
 
 
 @router.get(
-    "/{root_id}/scans", role=Role.org_member, response_model=list[TerraformScanPublic]
+    "/roots/{root_id}/scans",
+    role=Role.org_member,
+    response_model=list[TerraformScanPublic],
 )
-def list_terraform_scans(
+def list_scans(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -185,11 +197,11 @@ def list_terraform_scans(
 
 
 @router.get(
-    "/{root_id}/findings",
+    "/roots/{root_id}/findings",
     role=Role.org_member,
     response_model=list[TerraformFindingPublic],
 )
-def list_terraform_findings(
+def list_findings(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -208,9 +220,11 @@ def list_terraform_findings(
 
 
 @router.get(
-    "/{root_id}/files", role=Role.org_member, response_model=list[TerraformFilePublic]
+    "/roots/{root_id}/files",
+    role=Role.org_member,
+    response_model=list[TerraformFilePublic],
 )
-def list_terraform_files(
+def list_files(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -237,9 +251,11 @@ def list_terraform_files(
 
 
 @router.get(
-    "/{root_id}/fixes", role=Role.org_member, response_model=list[TerraformFixPublic]
+    "/roots/{root_id}/fixes",
+    role=Role.org_member,
+    response_model=list[TerraformFixPublic],
 )
-def list_terraform_fixes(
+def list_fixes(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -254,9 +270,12 @@ def list_terraform_fixes(
 
 
 @router.post(
-    "/{root_id}/fixes", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/roots/{root_id}/fixes",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_terraform_fix_generation(
+def generate_fixes(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -323,9 +342,12 @@ def trigger_terraform_fix_generation(
 
 
 @router.post(
-    "/{root_id}/deliver", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/roots/{root_id}/deliveries",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_terraform_delivery(
+def deliver_fixes(
     root_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

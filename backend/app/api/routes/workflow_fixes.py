@@ -376,7 +376,7 @@ def _fixes_to_public(
     return result
 
 
-@router.get("/", role=Role.user, response_model=list[WorkflowFixPublic])
+@router.get("/fixes", role=Role.user, response_model=list[WorkflowFixPublic])
 def list_fixes(
     session: SessionDep,
     current_user: CurrentUser,
@@ -420,7 +420,7 @@ def list_fixes(
 
 
 @router.get(
-    "/pull-requests/{repo_id}",
+    "/repositories/{repo_id}/pull-requests",
     role=Role.org_member,
     response_model=list[PullRequestPublic],
 )
@@ -445,7 +445,7 @@ def list_pull_requests(
     )
 
 
-@router.get("/{fix_id}", role=Role.org_member, response_model=WorkflowFixPublic)
+@router.get("/fixes/{fix_id}", role=Role.org_member, response_model=WorkflowFixPublic)
 def get_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
@@ -464,12 +464,12 @@ def get_fix(
 
 
 @router.post(
-    "/generate-for-repo/{repo_id}",
+    "/repositories/{repo_id}/fixes",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def trigger_fix_generation_for_repo(
+def generate_repository_fixes(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -526,15 +526,14 @@ def trigger_fix_generation_for_repo(
     return {"queued": len(pending_fixes)}
 
 
-class WorkflowDeliverRequest(BaseModel):
-    fix_id: uuid.UUID
-
-
 @router.post(
-    "/deliver-for-workflow", role=Role.user, limit=LIMIT_EXPENSIVE, status_code=202
+    "/fixes/{fix_id}/deliveries",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_workflow_delivery(
-    body: WorkflowDeliverRequest,
+def deliver_fix(
+    fix_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
     force: bool = False,
@@ -542,8 +541,12 @@ def trigger_workflow_delivery(
     """Deliver one workflow file's fix as a single PR.
 
     When force=True, a fix in any status is accepted (not just ready).
+
+    The fix id used to arrive in the body, which left this endpoint no path
+    parameter to resolve an organization from and so no org role — it ran as
+    ``Role.user`` while every sibling delivery endpoint was ``org_admin``.
     """
-    fix = session.get(WorkflowFix, body.fix_id)
+    fix = session.get(WorkflowFix, fix_id)
     if not fix or (not force and fix.status != FixStatus.ready):
         raise HTTPException(status_code=404, detail="No ready fix found")
 
@@ -575,12 +578,12 @@ def trigger_workflow_delivery(
 
 
 @router.post(
-    "/deliver-for-repo/{repo_id}",
+    "/repositories/{repo_id}/deliveries",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def trigger_repo_delivery(
+def deliver_repository_fixes(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -628,7 +631,7 @@ def trigger_repo_delivery(
     return {"status": "queued"}
 
 
-@router.delete("/{fix_id}", role=Role.org_admin, status_code=204)
+@router.delete("/fixes/{fix_id}", role=Role.org_admin, status_code=204)
 def reject_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
@@ -653,12 +656,12 @@ def reject_fix(
 
 
 @router.post(
-    "/regenerate-for-repo/{repo_id}",
+    "/repositories/{repo_id}/fixes/regenerate",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def regenerate_fixes_for_repo(
+def regenerate_repository_fixes(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -723,12 +726,12 @@ def regenerate_fixes_for_repo(
 
 
 @router.post(
-    "/regenerate-for-workflow/{fix_id}",
+    "/fixes/{fix_id}/regenerate",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def regenerate_fixes_for_workflow(
+def regenerate_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -785,9 +788,9 @@ def regenerate_fixes_for_workflow(
 
 
 @router.post(
-    "/{fix_id}/regenerate", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/fixes/{fix_id}/retry", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
 )
-def regenerate_failed_fix(
+def retry_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -897,8 +900,12 @@ def _relink_orphaned_fixes(session: SessionDep, repo: Repository) -> int:
     return relinked
 
 
-@router.post("/sync-pr-status/{repo_id}", role=Role.org_member, limit=LIMIT_EXPENSIVE)
-async def sync_pr_statuses(
+@router.post(
+    "/repositories/{repo_id}/pull-requests/sync",
+    role=Role.org_member,
+    limit=LIMIT_EXPENSIVE,
+)
+async def sync_pull_request_statuses(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

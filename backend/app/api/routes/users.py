@@ -31,7 +31,7 @@ router = RoleRouter(prefix="/users", tags=["users"])
 
 
 @router.get(
-    "/",
+    "",
     role=Role.admin,
     response_model=UsersPublic,
 )
@@ -52,7 +52,7 @@ def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     return UsersPublic(data=users_public, count=count)
 
 
-@router.post("/", role=Role.admin, response_model=UserPublic)
+@router.post("", role=Role.admin, response_model=UserPublic)
 def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     """
     Create new user.

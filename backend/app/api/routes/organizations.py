@@ -44,7 +44,7 @@ def list_ai_providers(
     )
 
 
-@router.get("/", role=Role.user, response_model=list[OrganizationPublic])
+@router.get("", role=Role.user, response_model=list[OrganizationPublic])
 def list_my_organizations(
     session: SessionDep,
     current_user: CurrentUser,
@@ -68,10 +68,8 @@ def list_my_organizations(
     ]
 
 
-@router.patch(
-    "/{org_id}/ai-preferences", role=Role.org_admin, response_model=OrganizationPublic
-)
-def update_org_ai_preferences(
+@router.patch("/{org_id}", role=Role.org_admin, response_model=OrganizationPublic)
+def update_organization(
     org_id: uuid.UUID,
     body: OrganizationUpdate,
     session: SessionDep,

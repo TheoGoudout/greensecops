@@ -40,6 +40,7 @@ from app.models import (
     DockerTargetPublic,
     Repository,
     Rule,
+    ScanTargetUpdate,
     UsageEngine,
 )
 from app.services.billing.quota import enforce_quota
@@ -52,7 +53,7 @@ from app.workers.tasks.docker_fix_delivery import deliver_docker_fixes
 from app.workers.tasks.docker_fix_generation import run_docker_fix_generation
 from app.workers.tasks.fix_generation import resolve_llm_provider
 
-router = RoleRouter(prefix="/docker-targets", tags=["docker"])
+router = RoleRouter(prefix="/docker", tags=["docker"])
 
 
 class DockerFixGenerateRequest(BaseModel):
@@ -72,8 +73,10 @@ def _normalize_root_path(raw: str) -> str:
     return "" if stripped in ("", ".") else stripped
 
 
-@router.post("/", role=Role.user, response_model=DockerTargetPublic, status_code=201)
-def create_docker_target(
+@router.post(
+    "/targets", role=Role.user, response_model=DockerTargetPublic, status_code=201
+)
+def create_target(
     target_in: DockerTargetCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -103,8 +106,8 @@ def create_docker_target(
     return to_docker_target_public(target)
 
 
-@router.get("/", role=Role.user, response_model=list[DockerTargetPublic])
-def list_docker_targets(
+@router.get("/targets", role=Role.user, response_model=list[DockerTargetPublic])
+def list_targets(
     session: SessionDep,
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
@@ -130,19 +133,26 @@ def list_docker_targets(
     return [to_docker_target_public(t) for t in targets]
 
 
-@router.patch("/{target_id}/toggle", role=Role.org_admin)
-def toggle_docker_target(
-    target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
-) -> dict[str, str | bool]:
+@router.patch(
+    "/targets/{target_id}", role=Role.org_admin, response_model=DockerTargetPublic
+)
+def update_target(
+    target_id: uuid.UUID,
+    body: ScanTargetUpdate,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DockerTargetPublic:
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    target.enabled = not target.enabled
+    if body.enabled is not None:
+        target.enabled = body.enabled
     session.add(target)
     session.commit()
-    return {"id": str(target.id), "enabled": target.enabled}
+    session.refresh(target)
+    return to_docker_target_public(target)
 
 
-@router.delete("/{target_id}", role=Role.org_admin, status_code=204)
-def delete_docker_target(
+@router.delete("/targets/{target_id}", role=Role.org_admin, status_code=204)
+def delete_target(
     target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
@@ -151,9 +161,12 @@ def delete_docker_target(
 
 
 @router.post(
-    "/{target_id}/scan", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/targets/{target_id}/scans",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_docker_scan(
+def trigger_scan(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -176,9 +189,11 @@ def trigger_docker_scan(
 
 
 @router.get(
-    "/{target_id}/scans", role=Role.org_member, response_model=list[DockerScanPublic]
+    "/targets/{target_id}/scans",
+    role=Role.org_member,
+    response_model=list[DockerScanPublic],
 )
-def list_docker_scans(
+def list_scans(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -195,11 +210,11 @@ def list_docker_scans(
 
 
 @router.get(
-    "/{target_id}/findings",
+    "/targets/{target_id}/findings",
     role=Role.org_member,
     response_model=list[DockerFindingPublic],
 )
-def list_docker_findings(
+def list_findings(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -216,9 +231,11 @@ def list_docker_findings(
 
 
 @router.get(
-    "/{target_id}/files", role=Role.org_member, response_model=list[DockerFilePublic]
+    "/targets/{target_id}/files",
+    role=Role.org_member,
+    response_model=list[DockerFilePublic],
 )
-def list_docker_files(
+def list_files(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -281,11 +298,11 @@ def _owning_root_path(dockerfile_path: str | None, roots: list[str]) -> str:
 
 
 @router.get(
-    "/{target_id}/runtime",
+    "/targets/{target_id}/runtime-findings",
     role=Role.org_member,
     response_model=list[DockerBuildTelemetryPublic],
 )
-def list_docker_runtime(
+def list_runtime_findings(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -347,9 +364,11 @@ def list_docker_runtime(
 
 
 @router.get(
-    "/{target_id}/fixes", role=Role.org_member, response_model=list[DockerFixPublic]
+    "/targets/{target_id}/fixes",
+    role=Role.org_member,
+    response_model=list[DockerFixPublic],
 )
-def list_docker_fixes(
+def list_fixes(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -364,9 +383,12 @@ def list_docker_fixes(
 
 
 @router.post(
-    "/{target_id}/fixes", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/targets/{target_id}/fixes",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_docker_fix_generation(
+def generate_fixes(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -442,12 +464,12 @@ class DockerRuntimeFixRequest(BaseModel):
 
 
 @router.post(
-    "/{target_id}/runtime-fixes",
+    "/targets/{target_id}/runtime-fixes",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def trigger_docker_runtime_fix_generation(
+def generate_runtime_fixes(
     target_id: uuid.UUID,
     body: DockerRuntimeFixRequest,
     session: SessionDep,
@@ -546,9 +568,12 @@ def trigger_docker_runtime_fix_generation(
 
 
 @router.post(
-    "/{target_id}/deliver", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/targets/{target_id}/deliveries",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_docker_delivery(
+def deliver_fixes(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

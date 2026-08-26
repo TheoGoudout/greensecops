@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/docker-targets/ endpoints."""
+"""Tests for the /api/v1/docker/targets/ endpoints."""
 
 import uuid
 from dataclasses import dataclass
@@ -96,14 +96,14 @@ class FakeDockerFile:
     content: str
 
 
-# ─── POST /docker-targets/ ────────────────────────────────────────────────────
+# ─── POST /docker/targets/ ────────────────────────────────────────────────────
 
 
 def test_create_docker_target(
     client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": "services/api"},
     )
@@ -126,7 +126,7 @@ def test_create_docker_target_normalizes_the_repository_root(
     repo could accumulate several root targets all scanning the same files.
     """
     response = client.post(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": raw},
     )
@@ -141,7 +141,7 @@ def test_create_docker_target_rejects_a_duplicate_path(
     target: DockerTarget,
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": target.root_path},
     )
@@ -152,13 +152,13 @@ def test_create_docker_target_requires_auth(
     client: TestClient, repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         json={"repo_id": str(repo.id), "root_path": "x"},
     )
     assert response.status_code == 401
 
 
-# ─── GET /docker-targets/ ─────────────────────────────────────────────────────
+# ─── GET /docker/targets/ ─────────────────────────────────────────────────────
 
 
 def test_list_docker_targets_filtered_by_repo(
@@ -168,7 +168,7 @@ def test_list_docker_targets_filtered_by_repo(
     target: DockerTarget,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -184,7 +184,7 @@ def test_list_docker_targets_surfaces_the_latest_grade(
     completed_scan: DockerScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -211,7 +211,7 @@ def test_a_failed_scan_does_not_define_the_grade(
     )
     db.commit()
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/",
+        f"{settings.API_V1_STR}/docker/targets/",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -252,7 +252,7 @@ def test_another_tenants_target_is_404_not_403(
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings", headers=headers
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/findings", headers=headers
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Docker target not found"
@@ -266,7 +266,7 @@ def test_trigger_scan_queues_the_task(
 ) -> None:
     with patch("app.api.routes.docker.run_docker_scan.delay") as delay:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/scan",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/scans",
             headers=superuser_token_headers,
         )
     assert response.status_code == 202
@@ -284,18 +284,21 @@ def test_trigger_scan_is_forbidden_on_a_disabled_target(
     db.add(target)
     db.commit()
     response = client.post(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/scan",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
 
 
-def test_toggle_flips_enabled(
+def test_update_sets_enabled(
     client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
 ) -> None:
+    # The endpoint used to flip whatever was there; it now takes the value it
+    # should end up with, so two clients racing cannot land on opposite states.
     response = client.patch(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/toggle",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}",
         headers=superuser_token_headers,
+        json={"enabled": False},
     )
     assert response.status_code == 200
     assert response.json()["enabled"] is False
@@ -309,7 +312,7 @@ def test_delete_removes_the_target(
 ) -> None:
     target_id = target.id
     response = client.delete(
-        f"{settings.API_V1_STR}/docker-targets/{target_id}",
+        f"{settings.API_V1_STR}/docker/targets/{target_id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 204
@@ -366,7 +369,7 @@ def test_list_findings_returns_the_rule_slug_and_locators(
         line_end=9,
     )
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -395,13 +398,13 @@ def test_list_findings_hides_resolved_by_default(
         resolved_at=datetime.now(timezone.utc),
     )
     default = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/findings",
         headers=superuser_token_headers,
     )
     assert default.json() == []
 
     included = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/findings",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/findings",
         headers=superuser_token_headers,
         params={"include_resolved": True},
     )
@@ -420,7 +423,7 @@ def test_list_scans_exposes_the_file_count(
     # The score is a mean of per-file scores; without the denominator the
     # grade can't be reasoned about.
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/scans",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -441,7 +444,7 @@ def test_list_files_classifies_each_file(
         ],
     ):
         response = client.get(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/files",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/files",
             headers=superuser_token_headers,
         )
     assert response.status_code == 200
@@ -459,7 +462,7 @@ def test_list_files_reports_a_github_failure_as_502(
         side_effect=RuntimeError("upstream is down"),
     ):
         response = client.get(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/files",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/files",
             headers=superuser_token_headers,
         )
     assert response.status_code == 502
@@ -513,7 +516,7 @@ def test_superuser_sees_targets_across_orgs(
     target: DockerTarget,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/", headers=superuser_token_headers
+        f"{settings.API_V1_STR}/docker/targets/", headers=superuser_token_headers
     )
     assert response.status_code == 200
     assert str(target.id) in {t["id"] for t in response.json()}
@@ -523,7 +526,7 @@ def test_findings_for_a_missing_target_are_404(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{uuid.uuid4()}/findings",
+        f"{settings.API_V1_STR}/docker/targets/{uuid.uuid4()}/findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
@@ -554,7 +557,7 @@ def test_generate_fixes_groups_findings_by_file(
 
     with patch("app.api.routes.docker.run_docker_fix_generation.delay") as delay:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/fixes",
             headers=superuser_token_headers,
             json={},
         )
@@ -569,7 +572,7 @@ def test_generate_fixes_with_no_open_findings_queues_nothing(
     client: TestClient, superuser_token_headers: dict[str, str], target: DockerTarget
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/fixes",
         headers=superuser_token_headers,
         json={},
     )
@@ -589,12 +592,12 @@ def test_a_second_generation_request_does_not_duplicate_an_in_flight_fix(
 
     with patch("app.api.routes.docker.run_docker_fix_generation.delay"):
         first = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/fixes",
             headers=superuser_token_headers,
             json={},
         )
         second = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/fixes",
             headers=superuser_token_headers,
             json={},
         )
@@ -611,7 +614,7 @@ def test_deliver_returns_the_deterministic_branch(
 
     with patch("app.api.routes.docker.deliver_docker_fixes.delay") as delay:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/deliver",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/deliveries",
             headers=superuser_token_headers,
         )
     assert response.status_code == 202
@@ -641,7 +644,7 @@ def test_list_fixes_is_scoped_to_the_target(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/fixes",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/fixes",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -651,7 +654,7 @@ def test_list_fixes_is_scoped_to_the_target(
     assert body[0]["status"] == "ready"
 
 
-# ─── GET /docker-targets/{id}/runtime ────────────────────────────────────────
+# ─── GET /docker/targets/{id}/runtime-findings ────────────────────────────────────────
 
 
 @pytest.fixture()
@@ -705,7 +708,7 @@ def test_list_runtime_returns_builds_with_their_findings(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/runtime-findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -739,7 +742,7 @@ def test_list_runtime_excludes_builds_owned_by_another_target(
     _make_telemetry(db, repo, f"{other.root_path}/Dockerfile")
 
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime",
+        f"{settings.API_V1_STR}/docker/targets/{target.id}/runtime-findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -761,14 +764,14 @@ def test_list_runtime_gives_unattributed_builds_to_the_repo_root(
     _make_telemetry(db, repo, None)
 
     response = client.get(
-        f"{settings.API_V1_STR}/docker-targets/{root.id}/runtime",
+        f"{settings.API_V1_STR}/docker/targets/{root.id}/runtime-findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
 
 
-# ─── POST /docker-targets/{id}/runtime-fixes ─────────────────────────────────
+# ─── POST /docker/targets/{id}/runtime-fixes ─────────────────────────────────
 
 
 def _make_enrichment(
@@ -803,7 +806,7 @@ def test_runtime_fix_queues_generation_for_the_measured_file(
 
     with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/runtime-fixes",
             headers=superuser_token_headers,
             json={"enrichment_ids": [str(enrichment.id)]},
         )
@@ -841,7 +844,7 @@ def test_runtime_fix_skips_builds_with_no_dockerfile_path(
 
     with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/runtime-fixes",
             headers=superuser_token_headers,
             json={"enrichment_ids": [str(enrichment.id)]},
         )
@@ -883,7 +886,7 @@ def test_runtime_fix_folds_in_open_static_findings_for_the_same_file(
 
     with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/runtime-fixes",
             headers=superuser_token_headers,
             json={"enrichment_ids": [str(enrichment.id)]},
         )
@@ -919,7 +922,7 @@ def test_runtime_fix_rejects_enrichments_from_another_repo(
 
     with patch("app.api.routes.docker.run_docker_fix_generation.delay") as queued:
         response = client.post(
-            f"{settings.API_V1_STR}/docker-targets/{target.id}/runtime-fixes",
+            f"{settings.API_V1_STR}/docker/targets/{target.id}/runtime-fixes",
             headers=superuser_token_headers,
             json={"enrichment_ids": [str(enrichment.id)]},
         )

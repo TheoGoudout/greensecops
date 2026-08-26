@@ -46,7 +46,7 @@ def test_create_user_new_email(
         password = random_lower_string()
         data = {"email": username, "password": password}
         r = client.post(
-            f"{settings.API_V1_STR}/users/",
+            f"{settings.API_V1_STR}/users",
             headers=superuser_token_headers,
             json=data,
         )
@@ -153,7 +153,7 @@ def test_create_user_existing_username(
     crud.create_user(session=db, user_create=user_in)
     data = {"email": username, "password": password}
     r = client.post(
-        f"{settings.API_V1_STR}/users/",
+        f"{settings.API_V1_STR}/users",
         headers=superuser_token_headers,
         json=data,
     )
@@ -169,7 +169,7 @@ def test_create_user_by_normal_user(
     password = random_lower_string()
     data = {"email": username, "password": password}
     r = client.post(
-        f"{settings.API_V1_STR}/users/",
+        f"{settings.API_V1_STR}/users",
         headers=normal_user_token_headers,
         json=data,
     )
@@ -189,7 +189,7 @@ def test_retrieve_users(
     user_in2 = UserCreate(email=username2, password=password2)
     crud.create_user(session=db, user_create=user_in2)
 
-    r = client.get(f"{settings.API_V1_STR}/users/", headers=superuser_token_headers)
+    r = client.get(f"{settings.API_V1_STR}/users", headers=superuser_token_headers)
     all_users = r.json()
 
     assert len(all_users["data"]) > 1

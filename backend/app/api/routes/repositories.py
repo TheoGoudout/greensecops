@@ -22,10 +22,10 @@ from app.models import (
     OrgMember,
     Repository,
     RepositoryPublic,
+    RepositoryUpdate,
     ScanStatus,
     User,
     WorkflowFile,
-    WorkflowFilePublic,
     WorkflowScan,
     WorkflowSyncSummary,
 )
@@ -125,7 +125,7 @@ def _compute_grades_batch(
     return result
 
 
-@router.get("/", role=Role.user, response_model=list[RepositoryPublic])
+@router.get("", role=Role.user, response_model=list[RepositoryPublic])
 def list_repositories(
     session: SessionDep,
     current_user: CurrentUser,
@@ -241,40 +241,7 @@ def get_repository(
     return to_repo_public(repo, avg_score, grade)
 
 
-@router.get(
-    "/{repo_id}/workflow-files",
-    role=Role.org_member,
-    response_model=list[WorkflowFilePublic],
-)
-def list_workflow_files(
-    repo_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-    branch: str | None = None,
-) -> list[WorkflowFilePublic]:
-    repo = _get_repo_for_user(repo_id, session, current_user)
-    wf_files = session.exec(
-        select(WorkflowFile)
-        .where(WorkflowFile.repo_id == repo.id)
-        .where(WorkflowFile.branch == (branch or repo.default_branch))
-        # Soft-deleted files (path removed from the repo) are kept for history
-        # but must not show as current workflows.
-        .where(col(WorkflowFile.deleted_at).is_(None))
-    ).all()
-    return [
-        WorkflowFilePublic(
-            id=wf.id,
-            path=wf.path,
-            branch=wf.branch,
-            raw_content=wf.raw_content,
-            source_commit_sha=wf.source_commit_sha,
-            fetched_at=wf.fetched_at,
-        )
-        for wf in wf_files
-    ]
-
-
-@router.post("/{repo_id}/sync-workflows", role=Role.org_admin, limit=LIMIT_EXPENSIVE)
+@router.post("/{repo_id}/workflow-sync", role=Role.org_admin, limit=LIMIT_EXPENSIVE)
 def sync_repository_workflows(
     repo_id: uuid.UUID,
     session: SessionDep,
@@ -320,43 +287,49 @@ def sync_repository_workflows(
     )
 
 
-@router.patch("/{repo_id}/toggle", role=Role.org_admin)
-def toggle_repository(
+@router.patch("/{repo_id}", role=Role.org_admin, response_model=RepositoryPublic)
+def update_repository(
     repo_id: uuid.UUID,
+    body: RepositoryUpdate,
     session: SessionDep,
     current_user: CurrentUser,
-    enabled: bool,
-) -> dict[str, str | bool]:
-    repo = _get_repo_for_user(repo_id, session, current_user)
-    if enabled and not repo.enabled:
-        from app.services.billing.quota import enforce_quota
+) -> RepositoryPublic:
+    """Flip a repository's two switches.
 
-        enforce_quota(session, current_user, repo.org_id, "repos")
-    repo.enabled = enabled
+    Both were their own ``PATCH .../toggle``-style endpoint taking ``enabled``
+    as a *query* parameter and answering with a bespoke dict. They are one
+    ``PATCH`` of the resource now, answering with the resource; a body naming
+    only one field leaves the other alone.
+
+    Enabling either is quota-checked, and only when it is actually a
+    transition — re-enabling something already enabled must not spend quota.
+    """
+    repo = _get_repo_for_user(repo_id, session, current_user)
+
+    if body.enabled is not None:
+        if body.enabled and not repo.enabled:
+            from app.services.billing.quota import enforce_quota
+
+            enforce_quota(session, current_user, repo.org_id, "repos")
+        repo.enabled = body.enabled
+
+    if body.auto_fix_enabled is not None:
+        if body.auto_fix_enabled and not repo.auto_fix_enabled:
+            from app.services.billing.quota import enforce_auto_fix_enable
+
+            enforce_auto_fix_enable(session, current_user, repo.org_id)
+        repo.auto_fix_enabled = body.auto_fix_enabled
+
     session.add(repo)
     session.commit()
-    events_pub.publish_event(
-        ev.repository_toggled(str(repo.org_id), str(repo_id), enabled)
-    )
-    return {"repo_id": str(repo_id), "enabled": enabled}
+    session.refresh(repo)
 
-
-@router.patch("/{repo_id}/auto-fix", role=Role.org_admin)
-def toggle_auto_fix(
-    repo_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-    enabled: bool,
-) -> dict[str, str | bool]:
-    repo = _get_repo_for_user(repo_id, session, current_user)
-    if enabled and not repo.auto_fix_enabled:
-        from app.services.billing.quota import enforce_auto_fix_enable
-
-        enforce_auto_fix_enable(session, current_user, repo.org_id)
-    repo.auto_fix_enabled = enabled
-    session.add(repo)
-    session.commit()
-    return {"repo_id": str(repo_id), "auto_fix_enabled": enabled}
+    if body.enabled is not None:
+        events_pub.publish_event(
+            ev.repository_toggled(str(repo.org_id), str(repo_id), repo.enabled)
+        )
+    avg_score, grade, _ = _compute_repo_grade(session, repo_id)
+    return to_repo_public(repo, avg_score, grade)
 
 
 @router.get("/{repo_id}/branches", role=Role.org_member, response_model=list[str])
@@ -540,7 +513,7 @@ def _insert_badge_simple(readme_content: str, badge_markdown: str) -> str:
 
 
 @router.post(
-    "/{repo_id}/integrate-action",
+    "/{repo_id}/action-integration",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,

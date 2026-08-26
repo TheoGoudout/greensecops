@@ -27,13 +27,14 @@ from app.models import (
     CloudFindingPublic,
     CloudScan,
     CloudScanPublic,
+    ScanTargetUpdate,
     UsageEngine,
 )
 from app.services import state_machines as sm
 from app.services.billing.quota import enforce_quota
 from app.workers.tasks.cloud_scan import run_cloud_scan
 
-router = RoleRouter(prefix="/cloud-accounts", tags=["cloud"])
+router = RoleRouter(prefix="/cloud", tags=["cloud"])
 
 # Length of the generated external_id — long enough to be infeasible to
 # guess/replay against another customer's role trust policy.
@@ -53,13 +54,13 @@ def _get_account_for_user(
 
 
 @router.post(
-    "/",
+    "/accounts",
     role=Role.user,
     limit=LIMIT_EXPENSIVE,
     response_model=CloudAccountPublic,
     status_code=201,
 )
-def create_cloud_account(
+def create_account(
     account_in: CloudAccountCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -78,8 +79,8 @@ def create_cloud_account(
     return to_cloud_account_public(account)
 
 
-@router.get("/", role=Role.user, response_model=list[CloudAccountPublic])
-def list_cloud_accounts(
+@router.get("/accounts", role=Role.user, response_model=list[CloudAccountPublic])
+def list_accounts(
     session: SessionDep,
     current_user: CurrentUser,
     org_id: uuid.UUID | None = None,
@@ -99,27 +100,31 @@ def list_cloud_accounts(
     return [to_cloud_account_public(a) for a in accounts]
 
 
-@router.patch("/{account_id}/toggle", role=Role.org_admin)
-def toggle_cloud_account(
+@router.patch(
+    "/accounts/{account_id}", role=Role.org_admin, response_model=CloudAccountPublic
+)
+def update_account(
     account_id: uuid.UUID,
+    body: ScanTargetUpdate,
     session: SessionDep,
     current_user: CurrentUser,
-    enabled: bool,
-) -> dict[str, str | bool]:
+) -> CloudAccountPublic:
     account = _get_account_for_user(account_id, session, current_user)
-    event = "enable" if enabled else "disable"
-    if not sm.try_advance(account, sm.CloudAccountMachine, event):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Cannot {event} account in its current state",
-        )
+    if body.enabled is not None:
+        event = "enable" if body.enabled else "disable"
+        if not sm.try_advance(account, sm.CloudAccountMachine, event):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot {event} account in its current state",
+            )
     session.add(account)
     session.commit()
-    return {"cloud_account_id": str(account_id), "enabled": enabled}
+    session.refresh(account)
+    return to_cloud_account_public(account)
 
 
-@router.delete("/{account_id}", role=Role.org_admin, status_code=204)
-def delete_cloud_account(
+@router.delete("/accounts/{account_id}", role=Role.org_admin, status_code=204)
+def delete_account(
     account_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -132,9 +137,12 @@ def delete_cloud_account(
 
 
 @router.post(
-    "/{account_id}/scan", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/accounts/{account_id}/scans",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_cloud_scan(
+def trigger_scan(
     account_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -152,9 +160,11 @@ def trigger_cloud_scan(
 
 
 @router.get(
-    "/{account_id}/scans", role=Role.org_member, response_model=list[CloudScanPublic]
+    "/accounts/{account_id}/scans",
+    role=Role.org_member,
+    response_model=list[CloudScanPublic],
 )
-def list_cloud_scans(
+def list_scans(
     account_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -170,11 +180,11 @@ def list_cloud_scans(
 
 
 @router.get(
-    "/{account_id}/findings",
+    "/accounts/{account_id}/findings",
     role=Role.org_member,
     response_model=list[CloudFindingPublic],
 )
-def list_cloud_findings(
+def list_findings(
     account_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

@@ -26,7 +26,7 @@ def test_list_all_rules(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/rules/",
+        f"{settings.API_V1_STR}/rules",
         headers=superuser_token_headers,
     )
 
@@ -44,7 +44,7 @@ def test_list_rules_filter_by_category(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/rules/",
+        f"{settings.API_V1_STR}/rules",
         params={"category": "security"},
         headers=superuser_token_headers,
     )
@@ -63,7 +63,7 @@ def test_list_rules_filter_by_enabled(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/rules/",
+        f"{settings.API_V1_STR}/rules",
         params={"enabled": "true"},
         headers=superuser_token_headers,
     )
@@ -113,7 +113,7 @@ def test_get_rule_not_found(
     assert response.json()["detail"] == "Rule not found"
 
 
-# ─── PATCH /rules/{id}/toggle ─────────────────────────────────────────────────
+# ─── PATCH /rules/{id} ─────────────────────────────────────────────────
 
 
 def test_toggle_rule_by_superuser(
@@ -137,8 +137,8 @@ def test_toggle_rule_by_superuser(
 
     # Act — disable
     response = client.patch(
-        f"{settings.API_V1_STR}/rules/{rule.id}/toggle",
-        params={"enabled": "false"},
+        f"{settings.API_V1_STR}/rules/{rule.id}",
+        json={"enabled": False},
         headers=superuser_token_headers,
     )
 
@@ -173,8 +173,8 @@ def test_toggle_rule_re_enable(
 
     # Act — re-enable
     response = client.patch(
-        f"{settings.API_V1_STR}/rules/{rule.id}/toggle",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/rules/{rule.id}",
+        json={"enabled": True},
         headers=superuser_token_headers,
     )
 
@@ -190,8 +190,8 @@ def test_toggle_rule_not_found(
 ) -> None:
     # Act
     response = client.patch(
-        f"{settings.API_V1_STR}/rules/{uuid.uuid4()}/toggle",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/rules/{uuid.uuid4()}",
+        json={"enabled": True},
         headers=superuser_token_headers,
     )
 

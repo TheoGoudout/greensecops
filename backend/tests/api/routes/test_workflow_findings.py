@@ -174,7 +174,7 @@ def test_list_issues_empty(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"scan_id": str(fresh_analysis.id)},
         headers=superuser_token_headers,
     )
@@ -192,7 +192,7 @@ def test_list_issues_with_data(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"scan_id": str(analysis.id)},
         headers=superuser_token_headers,
     )
@@ -213,7 +213,7 @@ def test_list_issues_filter_by_category(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"scan_id": str(analysis.id), "category": "security"},
         headers=superuser_token_headers,
     )
@@ -233,7 +233,7 @@ def test_list_issues_filter_by_severity(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"scan_id": str(analysis.id), "severity": "high"},
         headers=superuser_token_headers,
     )
@@ -253,7 +253,7 @@ def test_list_issues_filter_by_repo_id(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -272,7 +272,7 @@ def test_list_issues_unfixed_filter(
 ) -> None:
     # Act — issue with no fix should appear when unfixed=true
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"scan_id": str(analysis.id), "unfixed": "true"},
         headers=superuser_token_headers,
     )
@@ -291,7 +291,7 @@ def test_list_issues_includes_fix_status(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"scan_id": str(analysis.id)},
         headers=superuser_token_headers,
     )
@@ -314,7 +314,7 @@ def test_issue_stats_counts_open_by_category(
     repo: Repository,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -349,7 +349,7 @@ def test_issue_stats_counts_critical_separately(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -374,7 +374,7 @@ def test_issue_stats_splits_resolved_from_open(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -399,7 +399,7 @@ def test_issue_stats_excludes_ignored_issues(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -437,7 +437,7 @@ def test_issue_stats_not_capped_by_pagination(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -505,7 +505,7 @@ def test_issue_stats_by_repo_breakdown(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         headers=superuser_token_headers,
     )
 
@@ -548,7 +548,7 @@ def test_issue_stats_by_repo_empty_when_scoped_to_single_repo(
     repo: Repository,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/stats",
+        f"{settings.API_V1_STR}/workflow/findings/stats",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -567,7 +567,7 @@ def test_get_issue_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/{issue.id}",
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}",
         headers=superuser_token_headers,
     )
 
@@ -585,7 +585,7 @@ def test_get_issue_not_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/findings/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
@@ -638,7 +638,7 @@ def test_list_issues_latest_only_excludes_old_analysis(
 
     # Act — default latest_only=True should return only new_issue
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -693,7 +693,7 @@ def test_list_issues_latest_only_false_includes_all(
 
     # Act — latest_only=False returns issues from all analyses
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"repo_id": str(repo.id), "latest_only": "false"},
         headers=superuser_token_headers,
     )
@@ -751,7 +751,7 @@ def test_list_issues_latest_only_applies_without_repo_id(
 
     # Act — no repo_id, default latest_only=True (org-wide, e.g. dashboard)
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         headers=superuser_token_headers,
     )
 
@@ -764,15 +764,15 @@ def test_list_issues_latest_only_applies_without_repo_id(
 # ─── POST /issues/{id}/ignore & /unignore ─────────────────────────────────────
 
 
-def test_ignore_and_unignore_issue(
+def test_ignore_and_unignore_finding(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
     issue: WorkflowFinding,
 ) -> None:
     # Ignore → status becomes ignored (DB trigger) and ignored_at is set.
-    resp = client.post(
-        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/ignore",
+    resp = client.put(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -782,16 +782,16 @@ def test_ignore_and_unignore_issue(
     assert issue.status is FindingStatus.ignored
 
     # Ignore again is idempotent.
-    resp = client.post(
-        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/ignore",
+    resp = client.put(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
 
     # Unignore → reverts to the underlying (open) state.
-    resp = client.post(
-        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/unignore",
+    resp = client.delete(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -807,13 +807,13 @@ def test_ignored_issue_hidden_by_default_shown_with_flag(
     repo: Repository,
     issue: WorkflowFinding,
 ) -> None:
-    client.post(
-        f"{settings.API_V1_STR}/workflow-findings/{issue.id}/ignore",
+    client.put(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
         headers=superuser_token_headers,
     )
     # Default list excludes ignored issues.
     resp = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={"repo_id": str(repo.id), "latest_only": "false"},
         headers=superuser_token_headers,
     )
@@ -821,7 +821,7 @@ def test_ignored_issue_hidden_by_default_shown_with_flag(
     assert str(issue.id) not in [i["id"] for i in resp.json()]
     # include_ignored=true surfaces it again.
     resp = client.get(
-        f"{settings.API_V1_STR}/workflow-findings/",
+        f"{settings.API_V1_STR}/workflow/findings/",
         params={
             "repo_id": str(repo.id),
             "latest_only": "false",
@@ -882,7 +882,7 @@ def test_repo_issue_listing_defaults_to_default_branch(
     _seed("main", ".github/workflows/ci.yml", "on main")
     _seed("feature", ".github/workflows/ci.yml", "on feature")
 
-    url = f"{settings.API_V1_STR}/workflow-findings/"
+    url = f"{settings.API_V1_STR}/workflow/findings/"
     default_listing = client.get(
         url, params={"repo_id": str(repo.id)}, headers=superuser_token_headers
     )

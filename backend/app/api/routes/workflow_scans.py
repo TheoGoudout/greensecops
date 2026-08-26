@@ -17,6 +17,7 @@ from app.models import (
     Repository,
     ScanStatus,
     WorkflowFile,
+    WorkflowFilePublic,
     WorkflowScan,
     WorkflowScanPublic,
 )
@@ -31,8 +32,8 @@ from app.workers.tasks.static_analysis import (
 router = RoleRouter()
 
 
-@router.get("/", role=Role.user, response_model=list[WorkflowScanPublic])
-def list_analyses(
+@router.get("/scans", role=Role.user, response_model=list[WorkflowScanPublic])
+def list_scans(
     session: SessionDep,
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
@@ -65,8 +66,8 @@ def list_analyses(
     return [to_workflow_scan_public(a) for a in session.exec(query).all()]
 
 
-@router.get("/{scan_id}", role=Role.org_member, response_model=WorkflowScanPublic)
-def get_analysis(
+@router.get("/scans/{scan_id}", role=Role.org_member, response_model=WorkflowScanPublic)
+def get_scan(
     scan_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -80,9 +81,12 @@ def get_analysis(
 
 
 @router.post(
-    "/trigger/{repo_id}", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/repositories/{repo_id}/scans",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_analysis(
+def trigger_repository_scan(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -126,12 +130,12 @@ def trigger_analysis(
 
 
 @router.post(
-    "/reanalyze-for-workflow/{workflow_file_id}",
+    "/files/{workflow_file_id}/scans",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def reanalyze_for_workflow(
+def trigger_file_scan(
     workflow_file_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -139,10 +143,9 @@ def reanalyze_for_workflow(
 ) -> dict[str, str]:
     """Re-run static analysis for a single workflow file.
 
-    Per-workflow analog of ``trigger_analysis`` (which is repo/branch-wide):
+    Per-file analog of ``trigger_repository_scan`` (which is repo/branch-wide):
     the worker re-fetches and re-evaluates just this file on its own branch,
-    consistent with the per-workflow fix (``regenerate-for-workflow``) and
-    delivery (``deliver-for-workflow``) endpoints.
+    consistent with the per-file fix and delivery endpoints alongside it.
     """
     wf_file = get_or_404(session, WorkflowFile, workflow_file_id)
     repo = authorize_repo(session, current_user, wf_file.repo_id)
@@ -165,12 +168,12 @@ def reanalyze_for_workflow(
 
 
 @router.post(
-    "/reanalyze-all",
+    "/scans/backfill",
     role=Role.admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def reanalyze_all() -> dict[str, str]:
+def backfill_scans() -> dict[str, str]:
     """Fan out a fresh static analysis across all enabled repositories.
 
     Same mechanism used automatically when a release ships new rules; exposed
@@ -178,3 +181,36 @@ def reanalyze_all() -> dict[str, str]:
     """
     reanalyze_all_repositories.delay()
     return {"status": "queued"}
+
+
+@router.get(
+    "/repositories/{repo_id}/files",
+    role=Role.org_member,
+    response_model=list[WorkflowFilePublic],
+)
+def list_files(
+    repo_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    branch: str | None = None,
+) -> list[WorkflowFilePublic]:
+    repo = authorize_repo(session, current_user, repo_id)
+    wf_files = session.exec(
+        select(WorkflowFile)
+        .where(WorkflowFile.repo_id == repo.id)
+        .where(WorkflowFile.branch == (branch or repo.default_branch))
+        # Soft-deleted files (path removed from the repo) are kept for history
+        # but must not show as current workflows.
+        .where(col(WorkflowFile.deleted_at).is_(None))
+    ).all()
+    return [
+        WorkflowFilePublic(
+            id=wf.id,
+            path=wf.path,
+            branch=wf.branch,
+            raw_content=wf.raw_content,
+            source_commit_sha=wf.source_commit_sha,
+            fetched_at=wf.fetched_at,
+        )
+        for wf in wf_files
+    ]

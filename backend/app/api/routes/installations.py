@@ -21,7 +21,7 @@ class InstallationSyncRequest(BaseModel):
     redirect_uri: str | None = None
 
 
-@router.get("/", role=Role.user, response_model=list[OrganizationPublic])
+@router.get("", role=Role.user, response_model=list[OrganizationPublic])
 def list_installations(
     session: SessionDep,
     current_user: CurrentUser,

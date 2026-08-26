@@ -505,7 +505,7 @@ def _totals(engines: list[EngineOverview]) -> OverviewTotals:
 # ─── Route ────────────────────────────────────────────────────────────────────
 
 
-@router.get("/", role=Role.user, response_model=OverviewPublic)
+@router.get("", role=Role.user, response_model=OverviewPublic)
 def get_overview(
     session: SessionDep,
     current_user: CurrentUser,

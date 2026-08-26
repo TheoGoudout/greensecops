@@ -232,7 +232,7 @@ def test_list_fixes_empty(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/",
+        f"{settings.API_V1_STR}/workflow/fixes/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -250,7 +250,7 @@ def test_list_fixes_with_data(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/",
+        f"{settings.API_V1_STR}/workflow/fixes/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -271,7 +271,7 @@ def test_list_fixes_filter_by_status(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/",
+        f"{settings.API_V1_STR}/workflow/fixes/",
         params={"repo_id": str(repo.id), "status": "ready"},
         headers=superuser_token_headers,
     )
@@ -294,7 +294,7 @@ def test_list_fixes_includes_finding_summaries(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/",
+        f"{settings.API_V1_STR}/workflow/fixes/",
         params={"repo_id": str(repo.id)},
         headers=superuser_token_headers,
     )
@@ -323,7 +323,7 @@ def test_get_fix_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/{ready_fix.id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}",
         headers=superuser_token_headers,
     )
 
@@ -343,7 +343,7 @@ def test_get_fix_not_found(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/fixes/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
@@ -375,7 +375,7 @@ def test_list_pull_requests_returns_repo_prs(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/pull-requests/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests",
         headers=superuser_token_headers,
     )
 
@@ -395,7 +395,7 @@ def test_list_pull_requests_empty_when_none_exist(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/pull-requests/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests",
         headers=superuser_token_headers,
     )
 
@@ -410,7 +410,7 @@ def test_list_pull_requests_repo_not_found_returns_404(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/workflow-fixes/pull-requests/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/repositories/{uuid.uuid4()}/pull-requests",
         headers=superuser_token_headers,
     )
 
@@ -431,7 +431,7 @@ def test_generate_fixes_for_repo_queues_tasks(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
         )
 
@@ -456,7 +456,7 @@ def test_generate_fixes_for_repo_one_task_per_workflow_file(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
             json={"issue_ids": [str(issue1.id), str(issue2.id)]},
         )
@@ -481,7 +481,7 @@ def test_generate_fixes_for_repo_with_issue_ids_filter(
     # Act — pass issue_ids to restrict which issues get fixes generated
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
             json={"issue_ids": [str(issue.id)]},
         )
@@ -511,7 +511,7 @@ def test_generate_fixes_for_repo_bulk_skips_needs_manual_work_issue(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
         )
 
@@ -535,7 +535,7 @@ def test_generate_fixes_for_repo_explicit_issue_ids_retries_needs_manual_work(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
             json={"issue_ids": [str(issue.id)]},
         )
@@ -553,7 +553,7 @@ def test_generate_fixes_for_repo_with_nonexistent_issue_ids_returns_zero(
     # Act — pass a random issue_id that doesn't belong to this repo
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
             json={"issue_ids": [str(uuid.uuid4())]},
         )
@@ -599,7 +599,7 @@ def test_generate_fixes_for_repo_regeneration_allowed_at_quota(
     # Act — regenerate all fixes while already at the quota
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=headers,
         )
 
@@ -629,7 +629,7 @@ def test_generate_fixes_for_repo_blocks_net_new_over_quota(
     # Act — no existing fixes; requesting limit+1 new ones must be rejected
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=headers,
         )
 
@@ -655,7 +655,7 @@ def test_generate_fixes_for_repo_replaces_existing_fixes(
     fix_id = ready_fix.id
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
         )
 
@@ -678,7 +678,7 @@ def test_reject_fix_found(
 ) -> None:
     # Act
     response = client.delete(
-        f"{settings.API_V1_STR}/workflow-fixes/{ready_fix.id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}",
         headers=superuser_token_headers,
     )
 
@@ -695,7 +695,7 @@ def test_reject_fix_not_found(
 ) -> None:
     # Act
     response = client.delete(
-        f"{settings.API_V1_STR}/workflow-fixes/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/fixes/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
@@ -717,9 +717,8 @@ def test_deliver_for_workflow_queues_batch(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
+            f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}/deliveries",
             headers=superuser_token_headers,
-            json={"fix_id": str(ready_fix.id)},
         )
 
     # Assert
@@ -741,9 +740,8 @@ def test_deliver_for_workflow_no_ready_fixes_returns_404(
     # Act
     with patch("app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
+            f"{settings.API_V1_STR}/workflow/fixes/{pending_fix.id}/deliveries",
             headers=superuser_token_headers,
-            json={"fix_id": str(pending_fix.id)},
         )
 
     # Assert
@@ -758,9 +756,8 @@ def test_deliver_for_workflow_unknown_id_returns_404(
     # Act
     with patch("app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
+            f"{settings.API_V1_STR}/workflow/fixes/{uuid.uuid4()}/deliveries",
             headers=superuser_token_headers,
-            json={"fix_id": str(uuid.uuid4())},
         )
 
     # Assert
@@ -794,9 +791,8 @@ def test_deliver_for_workflow_reuses_existing_pr_branch(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
+            f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}/deliveries",
             headers=superuser_token_headers,
-            json={"fix_id": str(ready_fix.id)},
         )
 
     assert response.status_code == 202
@@ -850,9 +846,8 @@ def test_deliver_for_workflow_body_keeps_sibling_fixes_on_shared_pr(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
+            f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}/deliveries",
             headers=superuser_token_headers,
-            json={"fix_id": str(ready_fix.id)},
         )
 
     # Assert
@@ -877,7 +872,7 @@ def test_deliver_for_repo_queues_batch(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/deliveries",
             headers=superuser_token_headers,
         )
 
@@ -897,7 +892,7 @@ def test_deliver_for_repo_not_found_returns_404(
     # Act
     with patch("app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{uuid.uuid4()}",
+            f"{settings.API_V1_STR}/workflow/repositories/{uuid.uuid4()}/deliveries",
             headers=superuser_token_headers,
         )
 
@@ -915,7 +910,7 @@ def test_deliver_for_repo_no_ready_fixes_returns_404(
     # Act — repo only has a pending fix (not ready)
     with patch("app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/deliveries",
             headers=superuser_token_headers,
         )
 
@@ -951,7 +946,7 @@ def test_generate_fixes_for_repo_preserves_delivered_and_skips_in_task(
     # Act — no force: delivered fix preserved, task queued
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
         )
 
@@ -986,7 +981,7 @@ def test_generate_fixes_for_repo_force_deletes_delivered(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             params={"force": "true"},
             headers=superuser_token_headers,
         )
@@ -1007,10 +1002,9 @@ def test_deliver_for_workflow_force_includes_non_ready(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-workflow",
+            f"{settings.API_V1_STR}/workflow/fixes/{pending_fix.id}/deliveries",
             params={"force": "true"},
             headers=superuser_token_headers,
-            json={"fix_id": str(pending_fix.id)},
         )
 
     # Assert — force=True includes the pending fix
@@ -1073,7 +1067,7 @@ def test_generate_fixes_for_repo_only_targets_latest_analysis(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
         )
 
@@ -1097,7 +1091,7 @@ def test_deliver_for_repo_uses_stable_branch_name(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/deliveries",
             headers=superuser_token_headers,
         )
 
@@ -1135,7 +1129,7 @@ def test_deliver_for_repo_reuses_existing_pr_branch(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/deliveries",
             params={"force": "true"},
             headers=superuser_token_headers,
         )
@@ -1189,7 +1183,7 @@ def test_deliver_for_repo_body_keeps_previously_delivered_fixes(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/deliver-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/deliveries",
             headers=superuser_token_headers,
         )
 
@@ -1241,7 +1235,7 @@ def test_sync_pr_status_no_open_prs(
     repo: Repository,
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -1289,7 +1283,7 @@ def test_sync_pr_status_relinks_orphan_fix_by_wf_branch(
     fix = _make_orphan_fix(db, workflow_file)
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -1317,7 +1311,7 @@ def test_sync_pr_status_no_relink_without_matching_branch(
     fix = _make_orphan_fix(db, workflow_file)
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -1355,7 +1349,7 @@ def test_sync_pr_status_leaves_linked_fix_untouched(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -1400,7 +1394,7 @@ def test_sync_pr_status_relinks_delivered_fix_to_batch_pr(
     not_delivered = _make_orphan_fix(db, other_wf, status=FixStatus.ready)
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -1430,7 +1424,7 @@ def test_sync_pr_status_updates_merged_pr(
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
             headers=superuser_token_headers,
         )
     finally:
@@ -1463,7 +1457,7 @@ def test_sync_pr_status_updates_closed_pr(
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
             headers=superuser_token_headers,
         )
     finally:
@@ -1505,7 +1499,7 @@ def test_sync_pr_status_skips_already_closed(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
         headers=superuser_token_headers,
     )
 
@@ -1533,7 +1527,7 @@ def test_sync_pr_status_handles_github_error(
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
             headers=superuser_token_headers,
         )
     finally:
@@ -1553,7 +1547,7 @@ def test_sync_pr_status_repo_not_found(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/repositories/{uuid.uuid4()}/pull-requests/sync",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
@@ -1646,7 +1640,7 @@ def test_regenerate_for_repo_replaces_fixes_and_queues_per_workflow(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1691,7 +1685,7 @@ def test_regenerate_for_repo_skips_merged_pr_fix(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1720,7 +1714,7 @@ def test_regenerate_for_repo_skips_in_flight_fix(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1747,7 +1741,7 @@ def test_regenerate_for_repo_sweeps_orphaned_closed_pr(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1779,7 +1773,7 @@ def test_regenerate_for_repo_keeps_closed_pr_referenced_by_surviving_fix(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1846,7 +1840,7 @@ def test_regenerate_for_repo_keeps_closed_pr_referenced_by_other_engine(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1878,7 +1872,7 @@ def test_regenerate_for_repo_regenerates_guard_rejected_fix(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1907,7 +1901,7 @@ def test_regenerate_for_repo_keeps_fix_without_unresolved_issues(
     # Act
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1926,7 +1920,7 @@ def test_regenerate_for_repo_without_fixes_returns_zero(
 ) -> None:
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -1956,7 +1950,7 @@ def test_regenerate_for_repo_allowed_at_quota(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
             headers=headers,
         )
 
@@ -1970,7 +1964,7 @@ def test_regenerate_for_repo_not_found(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/repositories/{uuid.uuid4()}/fixes/regenerate",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
@@ -1985,7 +1979,7 @@ def test_regenerate_for_repo_denied_for_non_member(
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
         headers=headers,
     )
     assert response.status_code == 404
@@ -2002,7 +1996,7 @@ def test_regenerate_for_repo_inaccessible_repo(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-repo/{repo.id}",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes/regenerate",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
@@ -2023,7 +2017,7 @@ def test_regenerate_for_workflow_replaces_fix(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{old_fix_id}",
+            f"{settings.API_V1_STR}/workflow/fixes/{old_fix_id}/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -2059,7 +2053,7 @@ def test_regenerate_for_workflow_retries_needs_manual_work_issue(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{ready_fix.id}",
+            f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -2078,7 +2072,7 @@ def test_regenerate_for_workflow_rejects_in_flight_fix(
     fix_id = pending_fix.id
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{fix_id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{fix_id}/regenerate",
         headers=superuser_token_headers,
     )
 
@@ -2100,7 +2094,7 @@ def test_regenerate_for_workflow_rejects_merged_pr_fix(
     pr_id = pr.id
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{fix_id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{fix_id}/regenerate",
         headers=superuser_token_headers,
     )
 
@@ -2124,7 +2118,7 @@ def test_regenerate_for_workflow_rejects_when_issues_resolved(
     fix_id = ready_fix.id
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{fix_id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{fix_id}/regenerate",
         headers=superuser_token_headers,
     )
 
@@ -2147,7 +2141,7 @@ def test_regenerate_for_workflow_sweeps_orphaned_closed_pr(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{fix_id}",
+            f"{settings.API_V1_STR}/workflow/fixes/{fix_id}/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -2176,7 +2170,7 @@ def test_regenerate_for_workflow_keeps_shared_closed_pr(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay"):
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{fix_id}",
+            f"{settings.API_V1_STR}/workflow/fixes/{fix_id}/regenerate",
             headers=superuser_token_headers,
         )
 
@@ -2210,7 +2204,7 @@ def test_regenerate_for_workflow_allowed_at_quota(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{target_fix_id}",
+            f"{settings.API_V1_STR}/workflow/fixes/{target_fix_id}/regenerate",
             headers=headers,
         )
 
@@ -2224,7 +2218,7 @@ def test_regenerate_for_workflow_not_found(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/workflow/fixes/{uuid.uuid4()}/regenerate",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
@@ -2239,7 +2233,7 @@ def test_regenerate_for_workflow_denied_for_non_member(
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{ready_fix.id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}/regenerate",
         headers=headers,
     )
     assert response.status_code == 404
@@ -2257,7 +2251,7 @@ def test_regenerate_for_workflow_inaccessible_repo(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/regenerate-for-workflow/{ready_fix.id}",
+        f"{settings.API_V1_STR}/workflow/fixes/{ready_fix.id}/regenerate",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
@@ -2282,7 +2276,7 @@ def test_regenerate_failed_fix_in_place(
 
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         resp = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/{fix.id}/regenerate",
+            f"{settings.API_V1_STR}/workflow/fixes/{fix.id}/retry",
             headers=superuser_token_headers,
         )
     assert resp.status_code == 202
@@ -2306,7 +2300,7 @@ def test_regenerate_non_failed_fix_conflicts(
     db.commit()
 
     resp = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/{fix.id}/regenerate",
+        f"{settings.API_V1_STR}/workflow/fixes/{fix.id}/retry",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 409
@@ -2332,7 +2326,7 @@ def test_regenerate_failed_fix_without_open_issues_conflicts(
     db.commit()
 
     resp = client.post(
-        f"{settings.API_V1_STR}/workflow-fixes/{fix.id}/regenerate",
+        f"{settings.API_V1_STR}/workflow/fixes/{fix.id}/retry",
         headers=superuser_token_headers,
     )
     assert resp.status_code == 409
