@@ -130,9 +130,9 @@ def _org_of_workflow_file(
     return _org_of_repo(session, workflow_file.repo_id) if workflow_file else None
 
 
-def _org_of_analysis(session: Session, analysis_id: uuid.UUID) -> uuid.UUID | None:
-    analysis = session.get(WorkflowScan, analysis_id)
-    return _org_of_repo(session, analysis.repo_id) if analysis else None
+def _org_of_workflow_scan(session: Session, scan_id: uuid.UUID) -> uuid.UUID | None:
+    scan = session.get(WorkflowScan, scan_id)
+    return _org_of_repo(session, scan.repo_id) if scan else None
 
 
 def _org_of_fix(session: Session, fix_id: uuid.UUID) -> uuid.UUID | None:
@@ -140,9 +140,13 @@ def _org_of_fix(session: Session, fix_id: uuid.UUID) -> uuid.UUID | None:
     return _org_of_workflow_file(session, fix.workflow_file_id) if fix else None
 
 
-def _org_of_issue(session: Session, issue_id: uuid.UUID) -> uuid.UUID | None:
-    issue = session.get(WorkflowFinding, issue_id)
-    return _org_of_analysis(session, issue.analysis_id) if issue else None
+def _org_of_workflow_finding(
+    session: Session, finding_id: uuid.UUID
+) -> uuid.UUID | None:
+    finding = session.get(WorkflowFinding, finding_id)
+    # ``analysis_id`` is the column name the table still carries; the public
+    # schema and the path parameter both call it ``scan_id``.
+    return _org_of_workflow_scan(session, finding.analysis_id) if finding else None
 
 
 def _org_of_cloud_account(session: Session, account_id: uuid.UUID) -> uuid.UUID | None:
@@ -188,9 +192,9 @@ ORG_RESOLVERS: dict[str, OrgResolver] = {
     "org_id": OrgResolver(_org_of_organization, "Organization not found"),
     "repo_id": OrgResolver(_org_of_repo, "Repository not found"),
     "workflow_file_id": OrgResolver(_org_of_workflow_file, "Workflow file not found"),
-    "analysis_id": OrgResolver(_org_of_analysis, "Workflow scan not found"),
+    "scan_id": OrgResolver(_org_of_workflow_scan, "Workflow scan not found"),
     "fix_id": OrgResolver(_org_of_fix, "Workflow fix not found"),
-    "issue_id": OrgResolver(_org_of_issue, "Workflow finding not found"),
+    "finding_id": OrgResolver(_org_of_workflow_finding, "Workflow finding not found"),
     "account_id": OrgResolver(_org_of_cloud_account, "Cloud account not found"),
     "target_id": OrgResolver(_org_of_docker_target, "Docker target not found"),
     "root_id": OrgResolver(_org_of_terraform_root, "Terraform root not found"),
@@ -266,7 +270,7 @@ def _role_dependencies(role: Role, path: str) -> list[params.Depends]:
     """Map a declared role onto the dependencies that enforce it.
 
     Raises at import when an org role has nothing to resolve an org from.
-    Collection endpoints (``GET /repositories/``, ``GET /issues/``) address no
+    Collection endpoints (``GET /repositories``, ``GET /workflow/findings``) address no
     single resource, so they cannot carry an org role — they take ``Role.user``
     and scope their own query with ``deps.user_org_ids``. Catching that here
     turns a would-be runtime 500 into an import failure the test suite trips on.

@@ -52,7 +52,7 @@ def _authorize_issue(
 def list_issues(
     session: SessionDep,
     current_user: CurrentUser,
-    analysis_id: uuid.UUID | None = None,
+    scan_id: uuid.UUID | None = None,
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
     category: Category | None = None,
@@ -87,8 +87,8 @@ def list_issues(
                 )
             )
         )
-    if analysis_id:
-        query = query.where(WorkflowFinding.analysis_id == analysis_id)
+    if scan_id:
+        query = query.where(WorkflowFinding.analysis_id == scan_id)
     if branch:
         query = query.join(
             WorkflowFile,
@@ -309,20 +309,20 @@ def get_issue_stats(
     )
 
 
-@router.get("/{issue_id}", role=Role.org_member, response_model=IssuePublic)
+@router.get("/{finding_id}", role=Role.org_member, response_model=IssuePublic)
 def get_issue(
-    issue_id: uuid.UUID,
+    finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> IssuePublic:
-    issue = get_or_404(session, WorkflowFinding, issue_id)
+    issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
     return to_issue_public(issue)
 
 
-@router.post("/{issue_id}/ignore", role=Role.org_admin, response_model=IssuePublic)
+@router.post("/{finding_id}/ignore", role=Role.org_admin, response_model=IssuePublic)
 def ignore_issue(
-    issue_id: uuid.UUID,
+    finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> IssuePublic:
@@ -332,7 +332,7 @@ def ignore_issue(
     which takes precedence over resolve/fix state and drops the issue out of the
     default (active) issue and fix queries. Idempotent.
     """
-    issue = get_or_404(session, WorkflowFinding, issue_id)
+    issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
     if issue.ignored_at is None:
         issue.ignored_at = datetime.now(timezone.utc)
@@ -342,14 +342,14 @@ def ignore_issue(
     return to_issue_public(issue)
 
 
-@router.post("/{issue_id}/unignore", role=Role.org_admin, response_model=IssuePublic)
+@router.post("/{finding_id}/unignore", role=Role.org_admin, response_model=IssuePublic)
 def unignore_issue(
-    issue_id: uuid.UUID,
+    finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> IssuePublic:
     """Un-mute a previously ignored violation. Idempotent."""
-    issue = get_or_404(session, WorkflowFinding, issue_id)
+    issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
     if issue.ignored_at is not None:
         issue.ignored_at = None

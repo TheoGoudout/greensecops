@@ -175,7 +175,7 @@ def test_list_issues_empty(
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/workflow-findings/",
-        params={"analysis_id": str(fresh_analysis.id)},
+        params={"scan_id": str(fresh_analysis.id)},
         headers=superuser_token_headers,
     )
 
@@ -193,7 +193,7 @@ def test_list_issues_with_data(
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/workflow-findings/",
-        params={"analysis_id": str(analysis.id)},
+        params={"scan_id": str(analysis.id)},
         headers=superuser_token_headers,
     )
 
@@ -214,7 +214,7 @@ def test_list_issues_filter_by_category(
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/workflow-findings/",
-        params={"analysis_id": str(analysis.id), "category": "security"},
+        params={"scan_id": str(analysis.id), "category": "security"},
         headers=superuser_token_headers,
     )
 
@@ -234,7 +234,7 @@ def test_list_issues_filter_by_severity(
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/workflow-findings/",
-        params={"analysis_id": str(analysis.id), "severity": "high"},
+        params={"scan_id": str(analysis.id), "severity": "high"},
         headers=superuser_token_headers,
     )
 
@@ -273,7 +273,7 @@ def test_list_issues_unfixed_filter(
     # Act — issue with no fix should appear when unfixed=true
     response = client.get(
         f"{settings.API_V1_STR}/workflow-findings/",
-        params={"analysis_id": str(analysis.id), "unfixed": "true"},
+        params={"scan_id": str(analysis.id), "unfixed": "true"},
         headers=superuser_token_headers,
     )
 
@@ -292,7 +292,7 @@ def test_list_issues_includes_fix_status(
     # Act
     response = client.get(
         f"{settings.API_V1_STR}/workflow-findings/",
-        params={"analysis_id": str(analysis.id)},
+        params={"scan_id": str(analysis.id)},
         headers=superuser_token_headers,
     )
 

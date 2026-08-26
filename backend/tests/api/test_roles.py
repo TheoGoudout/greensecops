@@ -101,7 +101,7 @@ def test_role_argument_is_mandatory() -> None:
 def test_org_param_prefers_a_known_resolver() -> None:
     assert _org_param("/{repo_id}/branches") == "repo_id"
     assert _org_param("/oss-applications/{application_id}") is None
-    assert set(ORG_RESOLVERS) >= {"org_id", "repo_id", "fix_id", "issue_id"}
+    assert set(ORG_RESOLVERS) >= {"org_id", "repo_id", "fix_id", "finding_id", "scan_id"}
 
 
 # ─── Org role hierarchy, end to end ───────────────────────────────────────────

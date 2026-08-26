@@ -65,13 +65,13 @@ def list_analyses(
     return [to_analysis_public(a) for a in session.exec(query).all()]
 
 
-@router.get("/{analysis_id}", role=Role.org_member, response_model=AnalysisPublic)
+@router.get("/{scan_id}", role=Role.org_member, response_model=AnalysisPublic)
 def get_analysis(
-    analysis_id: uuid.UUID,
+    scan_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AnalysisPublic:
-    analysis = get_or_404(session, WorkflowScan, analysis_id)
+    analysis = get_or_404(session, WorkflowScan, scan_id)
     if not current_user.is_superuser:
         authorize_repo(
             session, current_user, analysis.repo_id, detail="Workflow scan not found"
