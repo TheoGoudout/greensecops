@@ -9,8 +9,8 @@ from app.models import (
     AIProviderInfo,
     AIProvidersPublic,
     Organization,
-    OrganizationAIUpdate,
     OrganizationPublic,
+    OrganizationUpdate,
     OrgMember,
 )
 from app.services.llm.catalog import _KEY_MAP, load_provider_catalog
@@ -73,7 +73,7 @@ def list_my_organizations(
 )
 def update_org_ai_preferences(
     org_id: uuid.UUID,
-    body: OrganizationAIUpdate,
+    body: OrganizationUpdate,
     session: SessionDep,
 ) -> OrganizationPublic:
     # Membership and rank are enforced by role=Role.org_admin before this runs;

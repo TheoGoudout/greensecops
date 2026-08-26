@@ -40,9 +40,9 @@ from app.models import (
     EngineFreshnessStat,
     EngineOverview,
     EngineScoreStat,
+    FindingCategoryStat,
     FixStatus,
     GradeStat,
-    IssueCategoryStat,
     OverviewPublic,
     OverviewTotals,
     Repository,
@@ -340,7 +340,7 @@ def _findings(
             for severity, counts in by_severity.items()
         ],
         by_category=[
-            IssueCategoryStat(
+            FindingCategoryStat(
                 category=category,
                 open=counts[0],
                 resolved=counts[1],
@@ -490,7 +490,7 @@ def _totals(engines: list[EngineOverview]) -> OverviewTotals:
             for severity, counts in by_severity.items()
         ],
         by_category=[
-            IssueCategoryStat(
+            FindingCategoryStat(
                 category=category,
                 open=counts[0],
                 resolved=counts[1],

@@ -7,21 +7,21 @@ from sqlalchemy import case, func
 from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
-from app.api.mappers import to_issue_public
+from app.api.mappers import to_workflow_finding_public
 from app.api.router import Role, RoleRouter
 from app.models import (
     Category,
-    IssueCategoryStat,
-    IssuePublic,
-    IssueStatsPublic,
+    FindingCategoryStat,
     RepoCategoryStat,
-    RepoIssueStats,
+    RepoFindingStats,
     Repository,
     Rule,
     ScanStatus,
     Severity,
     WorkflowFile,
     WorkflowFinding,
+    WorkflowFindingPublic,
+    WorkflowFindingStatsPublic,
     WorkflowFix,
     WorkflowScan,
 )
@@ -48,7 +48,7 @@ def _authorize_issue(
         raise HTTPException(status_code=404, detail="Workflow finding not found")
 
 
-@router.get("/", role=Role.user, response_model=list[IssuePublic])
+@router.get("/", role=Role.user, response_model=list[WorkflowFindingPublic])
 def list_issues(
     session: SessionDep,
     current_user: CurrentUser,
@@ -63,7 +63,7 @@ def list_issues(
     include_ignored: bool = False,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
-) -> list[IssuePublic]:
+) -> list[WorkflowFindingPublic]:
     query = select(WorkflowFinding)
     if not include_resolved:
         query = query.where(col(WorkflowFinding.resolved_at).is_(None))
@@ -139,23 +139,23 @@ def list_issues(
         .offset(skip)
         .limit(limit)
     )
-    return [to_issue_public(issue) for issue in session.exec(query).all()]
+    return [to_workflow_finding_public(issue) for issue in session.exec(query).all()]
 
 
-@router.get("/stats", role=Role.user, response_model=IssueStatsPublic)
+@router.get("/stats", role=Role.user, response_model=WorkflowFindingStatsPublic)
 def get_issue_stats(
     session: SessionDep,
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
     branch: str | None = None,
     latest_only: bool = True,
-) -> IssueStatsPublic:
+) -> WorkflowFindingStatsPublic:
     """Exact open/resolved issue counts by category, aggregated in SQL.
 
     Powers the dashboard's stat cards and category health breakdown without
     the pagination cap a plain ``list_issues`` fetch would hit on a large
     org — every matching row is summed server-side, never materialized into
-    a capped page of ``IssuePublic`` objects.
+    a capped page of ``WorkflowFindingPublic`` objects.
     """
     query = select(WorkflowFinding).where(col(WorkflowFinding.ignored_at).is_(None))
 
@@ -210,7 +210,7 @@ def get_issue_stats(
     # after with_only_columns() swaps in the aggregate columns. session.execute()
     # (the underlying SQLAlchemy call) returns full Row tuples instead.
     by_category = [
-        IssueCategoryStat(
+        FindingCategoryStat(
             category=row.category,
             open=row.open or 0,
             resolved=row.resolved or 0,
@@ -223,7 +223,7 @@ def get_issue_stats(
     # Only meaningful when not already scoped to a single repo; needs
     # WorkflowScan (and Rule, for severity_weight) joined regardless of the
     # superuser/org-filter branch above.
-    by_repo: list[RepoIssueStats] = []
+    by_repo: list[RepoFindingStats] = []
     if repo_id is None:
         repo_query = (
             query
@@ -288,7 +288,7 @@ def get_issue_stats(
                 for category in Category
             ]
             by_repo.append(
-                RepoIssueStats(
+                RepoFindingStats(
                     repo_id=repo_id_,
                     score=round(repo_avg_score, 1)
                     if repo_avg_score is not None
@@ -300,7 +300,7 @@ def get_issue_stats(
                 )
             )
 
-    return IssueStatsPublic(
+    return WorkflowFindingStatsPublic(
         total_open=sum(r.open for r in by_category),
         total_resolved=sum(r.resolved for r in by_category),
         critical_open=sum(r.critical_open for r in by_category),
@@ -309,23 +309,25 @@ def get_issue_stats(
     )
 
 
-@router.get("/{finding_id}", role=Role.org_member, response_model=IssuePublic)
+@router.get("/{finding_id}", role=Role.org_member, response_model=WorkflowFindingPublic)
 def get_issue(
     finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-) -> IssuePublic:
+) -> WorkflowFindingPublic:
     issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
-    return to_issue_public(issue)
+    return to_workflow_finding_public(issue)
 
 
-@router.post("/{finding_id}/ignore", role=Role.org_admin, response_model=IssuePublic)
+@router.post(
+    "/{finding_id}/ignore", role=Role.org_admin, response_model=WorkflowFindingPublic
+)
 def ignore_issue(
     finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-) -> IssuePublic:
+) -> WorkflowFindingPublic:
     """Mute a violation (false positive / accepted risk).
 
     Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
@@ -339,15 +341,17 @@ def ignore_issue(
         session.add(issue)
         session.commit()
         session.refresh(issue)
-    return to_issue_public(issue)
+    return to_workflow_finding_public(issue)
 
 
-@router.post("/{finding_id}/unignore", role=Role.org_admin, response_model=IssuePublic)
+@router.post(
+    "/{finding_id}/unignore", role=Role.org_admin, response_model=WorkflowFindingPublic
+)
 def unignore_issue(
     finding_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-) -> IssuePublic:
+) -> WorkflowFindingPublic:
     """Un-mute a previously ignored violation. Idempotent."""
     issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
@@ -356,4 +360,4 @@ def unignore_issue(
         session.add(issue)
         session.commit()
         session.refresh(issue)
-    return to_issue_public(issue)
+    return to_workflow_finding_public(issue)

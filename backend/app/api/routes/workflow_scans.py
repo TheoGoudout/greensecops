@@ -10,15 +10,15 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.mappers import to_analysis_public
+from app.api.mappers import to_workflow_scan_public
 from app.api.router import Role, RoleRouter
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
-    AnalysisPublic,
     Repository,
     ScanStatus,
     WorkflowFile,
     WorkflowScan,
+    WorkflowScanPublic,
 )
 from app.services.billing.quota import enforce_quota
 from app.services.events import publisher as events_pub
@@ -31,7 +31,7 @@ from app.workers.tasks.static_analysis import (
 router = RoleRouter()
 
 
-@router.get("/", role=Role.user, response_model=list[AnalysisPublic])
+@router.get("/", role=Role.user, response_model=list[WorkflowScanPublic])
 def list_analyses(
     session: SessionDep,
     current_user: CurrentUser,
@@ -41,7 +41,7 @@ def list_analyses(
     status: ScanStatus | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, le=200),
-) -> list[AnalysisPublic]:
+) -> list[WorkflowScanPublic]:
     query = select(WorkflowScan)
     if not current_user.is_superuser:
         query = query.where(
@@ -62,21 +62,21 @@ def list_analyses(
     query = (
         query.order_by(col(WorkflowScan.created_at).desc()).offset(skip).limit(limit)
     )
-    return [to_analysis_public(a) for a in session.exec(query).all()]
+    return [to_workflow_scan_public(a) for a in session.exec(query).all()]
 
 
-@router.get("/{scan_id}", role=Role.org_member, response_model=AnalysisPublic)
+@router.get("/{scan_id}", role=Role.org_member, response_model=WorkflowScanPublic)
 def get_analysis(
     scan_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-) -> AnalysisPublic:
+) -> WorkflowScanPublic:
     analysis = get_or_404(session, WorkflowScan, scan_id)
     if not current_user.is_superuser:
         authorize_repo(
             session, current_user, analysis.repo_id, detail="Workflow scan not found"
         )
-    return to_analysis_public(analysis)
+    return to_workflow_scan_public(analysis)
 
 
 @router.post(

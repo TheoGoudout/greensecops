@@ -283,7 +283,7 @@ def test_list_fixes_filter_by_status(
     assert any(f["id"] == str(ready_fix.id) for f in data)
 
 
-def test_list_fixes_includes_issue_summaries(
+def test_list_fixes_includes_finding_summaries(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     ready_fix: WorkflowFix,
@@ -299,17 +299,17 @@ def test_list_fixes_includes_issue_summaries(
         headers=superuser_token_headers,
     )
 
-    # Assert — the fix carries its addressed issues and workflow path
+    # Assert — the fix carries its addressed findings and workflow path
     assert response.status_code == 200
     fix_data = next(f for f in response.json() if f["id"] == str(ready_fix.id))
     assert fix_data["workflow_file_id"] == str(workflow_file.id)
-    assert fix_data["workflow_file_path"] == workflow_file.path
+    assert fix_data["file_path"] == workflow_file.path
     assert fix_data["repo_id"] == str(repo.id)
-    issue_ids = [i["id"] for i in fix_data["issues"]]
-    assert str(issue.id) in issue_ids
-    issue_data = next(i for i in fix_data["issues"] if i["id"] == str(issue.id))
-    assert issue_data["rule_slug"] == rule.slug
-    assert issue_data["message"] == issue.message
+    finding_ids = [f["id"] for f in fix_data["findings"]]
+    assert str(issue.id) in finding_ids
+    finding_data = next(f for f in fix_data["findings"] if f["id"] == str(issue.id))
+    assert finding_data["rule_slug"] == rule.slug
+    assert finding_data["message"] == issue.message
 
 
 # ─── GET /fixes/{id} ──────────────────────────────────────────────────────────

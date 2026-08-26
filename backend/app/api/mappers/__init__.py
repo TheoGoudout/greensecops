@@ -35,15 +35,15 @@ from .terraform import (
     to_terraform_root_public,
     to_terraform_scan_public,
 )
-from .workflow import to_analysis_public, to_issue_public
+from .workflow import to_workflow_finding_public, to_workflow_scan_public
 
 __all__ = [
     "to_ansible_scan_public",
     "to_ansible_project_public",
     "to_ansible_fix_public",
     "to_ansible_finding_public",
-    "to_analysis_public",
-    "to_issue_public",
+    "to_workflow_scan_public",
+    "to_workflow_finding_public",
     "to_dynamic_enrichment_public",
     "to_telemetry_run_public",
     "compute_telemetry_average",

@@ -103,3 +103,21 @@ class RulePublic(SQLModel):
     title: str
     description: str
     enabled: bool
+
+
+class RepositoryUpdate(SQLModel):
+    """The two switches a repository owner can flip.
+
+    Both are optional: a ``PATCH`` naming only one leaves the other alone.
+    Enabling either is quota-checked, which is why they are not a blanket
+    "update the repository" body — nothing else about a repo is user-writable.
+    """
+
+    enabled: bool | None = None
+    auto_fix_enabled: bool | None = None
+
+
+class RuleUpdate(SQLModel):
+    """A rule's catalog-wide on/off switch."""
+
+    enabled: bool | None = None

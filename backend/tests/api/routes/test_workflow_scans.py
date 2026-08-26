@@ -157,7 +157,7 @@ def test_get_analysis_found(
     assert body["status"] == "completed"
 
 
-def test_get_analysis_includes_workflow_path(
+def test_get_scan_includes_workflow_path(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     completed_analysis: WorkflowScan,
@@ -173,7 +173,7 @@ def test_get_analysis_includes_workflow_path(
     # Assert
     assert response.status_code == 200
     body = response.json()
-    assert body["workflow_file_path"] == workflow_file.path
+    assert body["file_path"] == workflow_file.path
     assert body["repo_full_name"] == repo.full_name
 
 
