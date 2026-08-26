@@ -75,9 +75,9 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   test.beforeEach(async ({ page }) => {
     // The generated API client returns arrays directly for list endpoints
     // (not the { data: [...], count: N } envelope).
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })

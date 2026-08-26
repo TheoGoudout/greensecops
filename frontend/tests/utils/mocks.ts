@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test"
+import type { Page, Route } from "@playwright/test"
 import type {
   BillingSubscriptionPublic,
   DockerBuildTelemetryPublic,
@@ -1136,9 +1136,20 @@ export async function mockRepositories(
   page: Page,
   repos: RepositoryPublic[] = [MOCK_REPO],
 ) {
+  // `/workflow-files` moved to `/workflow/repositories/{id}/files`, so it needs
+  // its own glob rather than riding along under `/repositories`.
+  await page.route("**/api/v1/workflow/repositories/*/files*", (route) => {
+    route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+  })
   await page.route("**/api/v1/repositories**", (route) => {
     const url = route.request().url()
-    if (url.includes("/sync-workflows")) {
+    const method = route.request().method()
+    // PATCH first: it addresses `/repositories/{id}`, which the by-id GET
+    // branch below would otherwise answer with an unchanged repo.
+    if (method === "PATCH") {
+      const repo = repos[0]
+      route.fulfill({ json: { ...repo, enabled: !repo.enabled } })
+    } else if (url.includes("/workflow-sync")) {
       route.fulfill({
         json: {
           branch: "main",
@@ -1151,16 +1162,11 @@ export async function mockRepositories(
           skipped_stale: 0,
         },
       })
-    } else if (url.includes("/workflow-files")) {
-      route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
     } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const repo = repos.find((r) => r.id === id) ?? repos[0]
       route.fulfill({ json: repo })
-    } else if (url.includes("/toggle")) {
-      const repo = repos[0]
-      route.fulfill({ json: { ...repo, enabled: !repo.enabled } })
-    } else if (url.includes("/integrate-action")) {
+    } else if (url.includes("/action-integration")) {
       route.fulfill({
         json: { pr_url: "https://github.com/acme/web-app/pull/99" },
       })
@@ -1319,20 +1325,28 @@ export async function mockFixes(
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
   pullRequests: unknown[] = [],
 ) {
-  await page.route("**/api/v1/workflow/fixes**", (route) => {
+  // Two globs, because the workflow engine's fix surface is addressed two ways:
+  // by fix (`/workflow/fixes/...`) and by repository
+  // (`/workflow/repositories/{id}/fixes|deliveries|pull-requests`). One glob
+  // over `/workflow/**` would be simpler but would also swallow the scan and
+  // finding routes, which have their own handlers.
+  const handler = (route: Route) => {
     const url = route.request().url()
     const method = route.request().method()
-    if (method === "POST" && url.includes("/sync-pr-status")) {
+    if (method === "POST" && url.includes("/pull-requests/sync")) {
       route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
     } else if (method === "POST" && url.includes("/regenerate")) {
       route.fulfill({ status: 202, json: { status: "queued" } })
-    } else if (method === "POST" && url.includes("/generate")) {
-      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
-    } else if (method === "POST" && url.includes("/deliver")) {
+    } else if (method === "POST" && url.includes("/retry")) {
+      route.fulfill({ status: 202, json: { status: "queued" } })
+    } else if (method === "POST" && url.includes("/deliveries")) {
       route.fulfill({ json: { status: "delivering" } })
+    } else if (method === "POST" && url.endsWith("/fixes")) {
+      // Repo-wide generation: `POST /workflow/repositories/{id}/fixes`.
+      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
     } else if (method === "DELETE") {
       route.fulfill({ status: 204 })
-    } else if (url.includes("/pull-requests/")) {
+    } else if (url.includes("/pull-requests")) {
       route.fulfill({ json: pullRequests })
     } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
@@ -1341,7 +1355,9 @@ export async function mockFixes(
     } else {
       route.fulfill({ json: fixes })
     }
-  })
+  }
+  await page.route("**/api/v1/workflow/fixes**", handler)
+  await page.route("**/api/v1/workflow/repositories/**", handler)
 }
 
 export async function mockRules(
@@ -1350,7 +1366,8 @@ export async function mockRules(
 ) {
   await page.route("**/api/v1/rules**", (route) => {
     const url = route.request().url()
-    if (url.includes("/toggle")) {
+    const method = route.request().method()
+    if (method === "PATCH") {
       route.fulfill({ json: { ...rules[0], enabled: !rules[0].enabled } })
     } else if (url.match(/\/rules\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()

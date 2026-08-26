@@ -46,9 +46,9 @@ test.describe("Repository Detail", () => {
     } = opts
 
     return Promise.all([
-      page.route("**/api/v1/repositories**", (route) => {
+      page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
         const url = route.request().url()
-        if (url.includes("/sync-workflows")) {
+        if (url.includes("/workflow-sync")) {
           route.fulfill({
             json: {
               branch: "main",
@@ -61,9 +61,9 @@ test.describe("Repository Detail", () => {
               skipped_stale: 0,
             },
           })
-        } else if (url.includes("/workflow-files")) {
+        } else if (url.includes("/files")) {
           route.fulfill({ json: workflowFiles })
-        } else if (url.includes("/integrate-action")) {
+        } else if (url.includes("/action-integration")) {
           route.fulfill({
             json: { pr_url: "https://github.com/acme/web-app/pull/99" },
           })
@@ -92,19 +92,19 @@ test.describe("Repository Detail", () => {
       page.route("**/api/v1/workflow/findings**", (route) => {
         route.fulfill({ json: issues })
       }),
-      page.route("**/api/v1/workflow/fixes**", (route) => {
+      page.route(/\/api\/v1\/workflow\/(fixes|repositories)\b/, (route) => {
         const url = route.request().url()
         const method = route.request().method()
-        if (method === "POST" && url.includes("/sync-pr-status")) {
+        if (method === "POST" && url.includes("/pull-requests/sync")) {
           route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
-        } else if (method === "POST" && url.includes("for-repo")) {
+        } else if (method === "POST" && url.endsWith("/fixes")) {
           route.fulfill({
             status: 202,
             json: { queued: issues.length, skipped: 0 },
           })
-        } else if (method === "POST" && url.includes("/deliver")) {
+        } else if (method === "POST" && url.includes("/deliveries")) {
           route.fulfill({ json: { status: "delivering" } })
-        } else if (url.includes("/pull-requests/")) {
+        } else if (url.includes("/pull-requests")) {
           route.fulfill({ json: pullRequests })
         } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
           const id = url.split("/").pop()
@@ -228,9 +228,9 @@ test.describe("Repository Detail", () => {
     page,
   }) => {
     let deliverCalled = false
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -244,13 +244,13 @@ test.describe("Repository Detail", () => {
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FIX] })
     })
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories)\b/, (route) => {
       const url = route.request().url()
       const method = route.request().method()
-      if (method === "POST" && url.includes("deliver-for-repo")) {
+      if (method === "POST" && url.includes("/repositories/") && url.endsWith("/deliveries")) {
         deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })
-      } else if (url.includes("/pull-requests/")) {
+      } else if (url.includes("/pull-requests")) {
         route.fulfill({ json: [] })
       } else {
         route.fulfill({ json: [MOCK_FIX_READY] })

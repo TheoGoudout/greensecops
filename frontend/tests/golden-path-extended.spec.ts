@@ -23,9 +23,9 @@ test.describe("Golden Path — Extended", () => {
   test("repos → trigger → analysis detail → issues → generate fix", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -105,9 +105,9 @@ test.describe("Golden Path — Extended", () => {
   })
 
   test("repo detail: batch fix + workflow PR delivery", async ({ page }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -130,7 +130,7 @@ test.describe("Golden Path — Extended", () => {
     await page.route("**/api/v1/workflow/fixes**", (route) => {
       const method = route.request().method()
       const url = route.request().url()
-      if (method === "POST" && url.includes("generate-for-repo")) {
+      if (method === "POST" && url.endsWith("/fixes")) {
         batchFixCalled = true
         route.fulfill({
           status: 202,
@@ -156,11 +156,11 @@ test.describe("Golden Path — Extended", () => {
   })
 
   test("repo detail: integrate action flow", async ({ page }) => {
-    await page.route("**/api/v1/repositories**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
-      } else if (url.includes("/integrate-action")) {
+      } else if (url.includes("/action-integration")) {
         route.fulfill({
           json: { pr_url: "https://github.com/acme/web-app/pull/99" },
         })

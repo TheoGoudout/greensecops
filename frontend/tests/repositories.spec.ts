@@ -66,7 +66,8 @@ test.describe("Repositories", () => {
     let toggleCalled = false
     await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
-      if (url.includes("/toggle")) {
+      const method = route.request().method()
+      if (method === "PATCH") {
         toggleCalled = true
         route.fulfill({
           json: { ...MOCK_REPO, enabled: false },
