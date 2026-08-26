@@ -92,7 +92,7 @@ test.describe("Repository Detail", () => {
       page.route("**/api/v1/workflow/findings**", (route) => {
         route.fulfill({ json: findings })
       }),
-      page.route(/\/api\/v1\/workflow\/(fixes|repositories)\b/, (route) => {
+      page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries|pull-requests))/, (route) => {
         const url = route.request().url()
         const method = route.request().method()
         if (method === "POST" && url.includes("/pull-requests/sync")) {
@@ -246,7 +246,7 @@ test.describe("Repository Detail", () => {
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FIX] })
     })
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories)\b/, (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries|pull-requests))/, (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (
