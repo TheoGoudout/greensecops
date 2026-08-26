@@ -25,7 +25,7 @@ test.describe("Analysis Detail", () => {
   test("shows metadata: grade, score, status, branch, workflow", async ({
     page,
   }) => {
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: MOCK_ANALYSIS })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
@@ -42,7 +42,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("issues grouped by category", async ({ page }) => {
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: MOCK_ANALYSIS })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
@@ -65,7 +65,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("Generate fix button visible per issue", async ({ page }) => {
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: MOCK_ANALYSIS })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
@@ -80,7 +80,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("empty issues state", async ({ page }) => {
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: MOCK_ANALYSIS })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
@@ -95,7 +95,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("invalid analysis ID shows error alert", async ({ page }) => {
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ status: 404, json: { detail: "Not found" } })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {

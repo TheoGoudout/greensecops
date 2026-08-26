@@ -17,7 +17,7 @@ test.describe("Error Handling — Extended", () => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
@@ -26,7 +26,7 @@ test.describe("Error Handling — Extended", () => {
   })
 
   test("fix detail 404 shows error state", async ({ page }) => {
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       route.fulfill({ status: 404, json: { detail: "Fix not found" } })
     })
 
@@ -88,13 +88,13 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
 
@@ -123,7 +123,7 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
 
@@ -170,7 +170,7 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [] })
       },
     )
-    await page.route("**/api/v1/workflow/scans**", async (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, async (route) => {
       await new Promise((r) => setTimeout(r, 3000))
       route.fulfill({ json: [] })
     })

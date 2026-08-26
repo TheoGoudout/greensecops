@@ -39,7 +39,7 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let analysisTriggered = false
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       const method = route.request().method()
       const url = route.request().url()
       if (method === "POST" && url.includes("/repositories/")) {
@@ -61,7 +61,7 @@ test.describe("Golden Path — Extended", () => {
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY],
       })
     })
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       const method = route.request().method()
       if (method === "POST") {
         fixGenerated = true
@@ -121,7 +121,7 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
 
@@ -131,7 +131,7 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let batchFixCalled = false
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       const method = route.request().method()
       const url = route.request().url()
       if (method === "POST" && url.endsWith("/fixes")) {
@@ -178,13 +178,13 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/telemetry**", (route) => {

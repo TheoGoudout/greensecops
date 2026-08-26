@@ -75,7 +75,7 @@ test.describe("Repository Detail", () => {
           route.fulfill({ json: [repo] })
         }
       }),
-      page.route("**/api/v1/workflow/scans**", (route) => {
+      page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
         const url = route.request().url()
         const method = route.request().method()
         if (method === "POST" && url.includes("/repositories/")) {
@@ -240,7 +240,7 @@ test.describe("Repository Detail", () => {
         route.fulfill({ json: MOCK_REPO })
       }
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {

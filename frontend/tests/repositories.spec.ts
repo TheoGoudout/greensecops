@@ -93,7 +93,7 @@ test.describe("Repositories", () => {
     await mockRepositories(page, [MOCK_REPO])
 
     let triggerCalled = false
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       const method = route.request().method()
       if (method === "POST") {
         triggerCalled = true

@@ -1179,7 +1179,7 @@ export async function mockRepositories(
 }
 
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
-  await page.route("**/api/v1/workflow/scans**", (route) => {
+  await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "POST" && url.includes("/repositories/")) {
@@ -1356,7 +1356,7 @@ export async function mockFixes(
       route.fulfill({ json: fixes })
     }
   }
-  await page.route("**/api/v1/workflow/fixes**", handler)
+  await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, handler)
   await page.route("**/api/v1/workflow/repositories/**", handler)
 }
 

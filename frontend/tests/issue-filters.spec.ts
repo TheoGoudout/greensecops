@@ -25,7 +25,7 @@ test.describe("Issue Filters and Display", () => {
     await mockRules(page)
     await mockRepositories(page)
     await mockFixes(page, [])
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
   })
@@ -171,7 +171,7 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("analysis detail shows issues grouped by workflow", async ({ page }) => {
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       const url = route.request().url()
       if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS })

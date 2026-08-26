@@ -28,7 +28,7 @@ function setupFixDetailMocks(
     mockBilling(page),
     mockRules(page),
     mockRepositories(page),
-    page.route("**/api/v1/workflow/fixes**", (route) => {
+    page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (method === "POST" && url.includes("/retry")) {
@@ -44,7 +44,7 @@ function setupFixDetailMocks(
     page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: issue })
     }),
-    page.route("**/api/v1/workflow/scans**", (route) => {
+    page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [] })
     }),
   ])
@@ -144,7 +144,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await mockRules(page)
     await mockRepositories(page)
 
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (method === "POST" && url.includes("/deliver")) {
@@ -157,7 +157,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FIX })
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -182,7 +182,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await mockRules(page)
     await mockRepositories(page)
 
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (method === "POST" && url.includes("/retry")) {
@@ -195,7 +195,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FAILED_FIX })
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -216,7 +216,7 @@ test.describe("Fix Lifecycle — Actions", () => {
     await mockRules(page)
     await mockRepositories(page)
 
-    await page.route("**/api/v1/workflow/fixes**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       route.fulfill({
         json: [
           MOCK_FIX_PENDING,
@@ -236,7 +236,7 @@ test.describe("Fix Lifecycle — Actions", () => {
         ],
       })
     })
-    await page.route("**/api/v1/workflow/scans**", (route) => {
+    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
       route.fulfill({ json: [] })
     })
 
