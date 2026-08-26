@@ -9,6 +9,7 @@
 
 ### Features
 
+* feat(ansible): give Ansible its own Infrastructure nav entry. PR [#246](https://github.com/TheoGoudout/greensecops/pull/246) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(ansible): generate and deliver LLM fixes for Ansible findings. PR [#244](https://github.com/TheoGoudout/greensecops/pull/244) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(ansible): scan, persist and surface the Ansible engine. PR [#243](https://github.com/TheoGoudout/greensecops/pull/243) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(rules): add the iac_ansible analysis engine's rule corpus. PR [#241](https://github.com/TheoGoudout/greensecops/pull/241) by [@TheoGoudout](https://github.com/TheoGoudout).
