@@ -3,7 +3,7 @@ import Prism from "prismjs"
 import "prismjs/components/prism-yaml"
 import "prismjs/components/prism-hcl"
 import "prismjs/components/prism-docker"
-import type { FixPublic, Severity } from "@/client"
+import type { Severity, WorkflowFixPublic } from "@/client"
 
 /**
  * The mechanics behind {@link FileViewer}: turning a file (optionally with a
@@ -192,9 +192,9 @@ export function computeSegments(
  * has resolved nothing yet, and badging its issues would promise a change the
  * diff below does not contain.
  */
-export function resolvedIssueIds(fix?: FixPublic | null): Set<string> {
+export function resolvedIssueIds(fix?: WorkflowFixPublic | null): Set<string> {
   if (!fix || (fix.status !== "ready" && fix.status !== "delivered")) {
     return new Set<string>()
   }
-  return new Set((fix.issues ?? []).map((issue) => issue.id))
+  return new Set((fix.findings ?? []).map((issue) => issue.id))
 }

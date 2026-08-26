@@ -40,7 +40,7 @@ export async function ingestTelemetry(
   token: string,
   payload: IngestPayload,
 ): Promise<boolean> {
-  return post(`${baseUrl}/api/v1/telemetry/ingest`, token, payload)
+  return post(`${baseUrl}/api/v1/telemetry/runs`, token, payload)
 }
 
 export async function sendSample(
@@ -48,7 +48,7 @@ export async function sendSample(
   token: string,
   payload: SamplePayload,
 ): Promise<boolean> {
-  return post(`${baseUrl}/api/v1/telemetry/sample`, token, payload)
+  return post(`${baseUrl}/api/v1/telemetry/samples`, token, payload)
 }
 
 export async function refreshOidcToken(): Promise<string | null> {
@@ -75,7 +75,7 @@ export async function ingestDockerBuild(
   payload: DockerBuildPayload,
 ): Promise<boolean> {
   return post(
-    `${baseUrl.replace(/\/$/, "")}/api/v1/telemetry/docker-build`,
+    `${baseUrl.replace(/\/$/, "")}/api/v1/telemetry/docker-builds`,
     token,
     payload,
   )

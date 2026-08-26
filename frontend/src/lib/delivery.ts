@@ -1,4 +1,4 @@
-import type { FixPublic, PullRequestPublic } from "@/client"
+import type { PullRequestPublic, WorkflowFixPublic } from "@/client"
 
 // Mirrors the deterministic branch names delivery mints server-side (see
 // backend/app/services/delivery_pr.py wf_fix_branch / repo_fix_branch).
@@ -56,7 +56,7 @@ export function labelForBranch(
 // after the user closed the PR without merging needs force=true to bypass the
 // closed-PR delivery guard.
 export function deliverAction(
-  fix: FixPublic,
+  fix: WorkflowFixPublic,
   prByBranch: Map<string, PullRequestPublic>,
 ): { label: string; force: boolean } | null {
   if (fix.status === "ready") {

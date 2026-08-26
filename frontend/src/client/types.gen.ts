@@ -12,23 +12,6 @@ export type AIProvidersPublic = {
     providers: Array<AIProviderInfo>;
 };
 
-export type AnalysisPublic = {
-    id: string;
-    repo_id: string;
-    workflow_file_id?: (string | null);
-    workflow_file_path?: (string | null);
-    repo_full_name?: (string | null);
-    content_hash: string;
-    status: ScanStatus;
-    score?: (number | null);
-    grade?: (string | null);
-    triggered_by: ScanTrigger;
-    branch?: (string | null);
-    commit_sha?: (string | null);
-    created_at?: (string | null);
-    completed_at?: (string | null);
-};
-
 /**
  * One Ansible file's live source for a project.
  *
@@ -146,21 +129,21 @@ export type BillingSubscriptionPublic = {
     billing_enabled?: boolean;
 };
 
-export type Body_auth_github_callback = {
-    grant_type?: (string | null);
-    code: string;
-    client_id?: (string | null);
-    redirect_uri?: (string | null);
-    code_verifier?: (string | null);
-};
-
-export type Body_login_login_access_token = {
+export type Body_auth_create_token = {
     grant_type?: (string | null);
     username: string;
     password: string;
     scope?: string;
     client_id?: (string | null);
     client_secret?: (string | null);
+};
+
+export type Body_auth_github_callback = {
+    grant_type?: (string | null);
+    code: string;
+    client_id?: (string | null);
+    redirect_uri?: (string | null);
+    code_verifier?: (string | null);
 };
 
 /**
@@ -420,7 +403,7 @@ export type DynamicAnalysisStatus = 'queued' | 'running' | 'enriched' | 'failed'
 /**
  * A runtime-telemetry finding, exposed for the frontend.
  *
- * Deliberately thinner than ``IssuePublic``: enrichments carry no severity,
+ * Deliberately thinner than ``WorkflowFindingPublic``: enrichments carry no severity,
  * category, status/lifecycle, line numbers, or fix linkage, so they are
  * presented as their own "Runtime findings" class rather than merged into the
  * static issue list.
@@ -470,7 +453,7 @@ export type EngineFindingStat = {
     resolved: number;
     critical_open: number;
     by_severity: Array<SeverityStat>;
-    by_category: Array<IssueCategoryStat>;
+    by_category: Array<FindingCategoryStat>;
 };
 
 /**
@@ -526,6 +509,13 @@ export type ExternalRepositoryCreate = {
     installation_id?: (number | null);
 };
 
+export type FindingCategoryStat = {
+    category: Category;
+    open: number;
+    resolved: number;
+    critical_open: number;
+};
+
 /**
  * Why a finding stopped being open.
  *
@@ -555,7 +545,10 @@ export type FindingStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
-export type FixIssueSummary = {
+/**
+ * The findings one fix set out to resolve, as the fix detail view lists them.
+ */
+export type FixFindingSummary = {
     id: string;
     rule_slug?: (string | null);
     severity?: (Severity | null);
@@ -563,27 +556,6 @@ export type FixIssueSummary = {
     message?: (string | null);
     line_start?: (number | null);
     line_end?: (number | null);
-};
-
-export type FixPublic = {
-    id: string;
-    workflow_file_id: string;
-    workflow_file_path?: (string | null);
-    repo_id?: (string | null);
-    pr_id?: (string | null);
-    llm_provider: LLMProvider;
-    llm_model: string;
-    status: FixStatus;
-    full_content?: (string | null);
-    base_content?: (string | null);
-    error_message?: (string | null);
-    pr_url?: (string | null);
-    pr_branch?: (string | null);
-    pr_state?: (PullRequestState | null);
-    comment_url?: (string | null);
-    created_at?: (string | null);
-    delivered_at?: (string | null);
-    issues?: Array<FixIssueSummary>;
 };
 
 export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'superseded_by_deleted_file' | 'landed';
@@ -631,47 +603,6 @@ export type InvoicePublic = {
  */
 export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 
-export type IssueCategoryStat = {
-    category: Category;
-    open: number;
-    resolved: number;
-    critical_open: number;
-};
-
-export type IssuePublic = {
-    id: string;
-    analysis_id: string;
-    rule_id: string;
-    rule_slug: string;
-    severity: Severity;
-    category: Category;
-    line_start?: (number | null);
-    line_end?: (number | null);
-    message: string;
-    context?: (string | null);
-    status: FindingStatus;
-    created_at?: (string | null);
-    resolved_at?: (string | null);
-    resolution_reason?: (FindingResolutionReason | null);
-    needs_manual_work?: boolean;
-    manual_work_note?: (string | null);
-    fix_id?: (string | null);
-    fix_status?: (FixStatus | null);
-    workflow_file_path?: (string | null);
-};
-
-/**
- * Exact issue counts, computed by SQL aggregation rather than fetched and
- * counted client-side — unaffected by any page's ``skip``/``limit``.
- */
-export type IssueStatsPublic = {
-    total_open: number;
-    total_resolved: number;
-    critical_open: number;
-    by_category: Array<IssueCategoryStat>;
-    by_repo?: Array<RepoIssueStats>;
-};
-
 export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
 export type Message = {
@@ -683,11 +614,6 @@ export type NewPassword = {
     new_password: string;
 };
 
-export type OrganizationAIUpdate = {
-    default_llm_provider?: (LLMProvider | null);
-    default_llm_model?: (string | null);
-};
-
 export type OrganizationPublic = {
     id: string;
     name: string;
@@ -696,6 +622,11 @@ export type OrganizationPublic = {
     default_llm_model?: (string | null);
     fix_delivery_mode: FixDeliveryMode;
     created_at?: (string | null);
+};
+
+export type OrganizationUpdate = {
+    default_llm_provider?: (LLMProvider | null);
+    default_llm_model?: (string | null);
 };
 
 export type OssApplicationCreate = {
@@ -758,8 +689,18 @@ export type OverviewTotals = {
     avg_score: (number | null);
     grade: (string | null);
     by_severity: Array<SeverityStat>;
-    by_category: Array<IssueCategoryStat>;
+    by_category: Array<FindingCategoryStat>;
     engines_with_data: number;
+};
+
+/**
+ * The address to send a reset link to.
+ *
+ * A body rather than a path segment: an email in a URL lands in every access
+ * log and needs percent-encoding that callers were not doing.
+ */
+export type PasswordRecovery = {
+    email: string;
 };
 
 /**
@@ -809,10 +750,10 @@ export type PullRequestPublic = {
 export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
 
 /**
- * A repo's open-issue counts and severity-weighted grade for one category.
+ * A repo's open-finding counts and severity-weighted grade for one category.
  *
  * ``score``/``grade`` are ``None`` when the repo has no overall grade yet
- * (e.g. no completed analysis). See ``RepoIssueStats`` for how categories
+ * (e.g. no completed scan). See ``RepoFindingStats`` for how categories
  * are grouped per repo.
  */
 export type RepoCategoryStat = {
@@ -824,18 +765,18 @@ export type RepoCategoryStat = {
 };
 
 /**
- * Per-repo issue breakdown — powers the dashboard's category health star
+ * Per-repo finding breakdown — powers the dashboard's category health star
  * diagram. Only populated on the unscoped (all-repos) stats call;
  * meaningless once already filtered to a single ``repo_id``.
  *
  * ``score``/``grade`` here are the repo's own overall grade (same values as
  * ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
- * doesn't need a second lookup to size the radar's "no issues" fallback.
+ * doesn't need a second lookup to size the radar's "no findings" fallback.
  * Each entry in ``categories`` covers every ``Category``, including
- * categories with zero open issues, so their scores average out to exactly
+ * categories with zero open findings, so their scores average out to exactly
  * the repo's overall score (see ``compute_category_scores``).
  */
-export type RepoIssueStats = {
+export type RepoFindingStats = {
     repo_id: string;
     score?: (number | null);
     grade?: (string | null);
@@ -860,6 +801,18 @@ export type RepositoryPublic = {
 };
 
 /**
+ * The two switches a repository owner can flip.
+ *
+ * Both are optional: a ``PATCH`` naming only one leaves the other alone.
+ * Enabling either is quota-checked, which is why they are not a blanket
+ * "update the repository" body — nothing else about a repo is user-writable.
+ */
+export type RepositoryUpdate = {
+    enabled?: (boolean | null);
+    auto_fix_enabled?: (boolean | null);
+};
+
+/**
  * Latest human review decision for a PR, from ``pull_request_review``.
  */
 export type ReviewDecision = 'approved' | 'changes_requested' | 'review_required';
@@ -872,6 +825,13 @@ export type RulePublic = {
     title: string;
     description: string;
     enabled: boolean;
+};
+
+/**
+ * A rule's catalog-wide on/off switch.
+ */
+export type RuleUpdate = {
+    enabled?: (boolean | null);
 };
 
 export type SamplePayload = {
@@ -898,6 +858,17 @@ export type SamplePayload = {
  * won and migration 0053 rewrote the rows.
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
+ * The mutable part of a registered scan target.
+ *
+ * Every engine enables and disables its target the same way, so one body
+ * serves all of them rather than three identical copies. Optional so a
+ * ``PATCH`` that omits the field leaves it alone.
+ */
+export type ScanTargetUpdate = {
+    enabled?: (boolean | null);
+};
 
 export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
 
@@ -1267,10 +1238,6 @@ export type VersionInfo = {
     environment: string;
 };
 
-export type WorkflowDeliverRequest = {
-    fix_id: string;
-};
-
 export type WorkflowFilePublic = {
     id: string;
     path: string;
@@ -1278,6 +1245,88 @@ export type WorkflowFilePublic = {
     raw_content?: (string | null);
     source_commit_sha?: (string | null);
     fetched_at?: (string | null);
+};
+
+/**
+ * A rule violation in a workflow file.
+ */
+export type WorkflowFindingPublic = {
+    id: string;
+    scan_id: string;
+    rule_id: string;
+    rule_slug: string;
+    severity: Severity;
+    category: Category;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
+    file_path?: (string | null);
+    line_start?: (number | null);
+    line_end?: (number | null);
+    needs_manual_work?: boolean;
+    manual_work_note?: (string | null);
+};
+
+/**
+ * Exact finding counts, computed by SQL aggregation rather than fetched and
+ * counted client-side — unaffected by any page's ``skip``/``limit``.
+ */
+export type WorkflowFindingStatsPublic = {
+    total_open: number;
+    total_resolved: number;
+    critical_open: number;
+    by_category: Array<FindingCategoryStat>;
+    by_repo?: Array<RepoFindingStats>;
+};
+
+/**
+ * An LLM rewrite of one workflow file.
+ */
+export type WorkflowFixPublic = {
+    id: string;
+    file_path: string;
+    pr_id?: (string | null);
+    llm_provider: LLMProvider;
+    llm_model: string;
+    status: FixStatus;
+    full_content?: (string | null);
+    error_message?: (string | null);
+    pr_url?: (string | null);
+    pr_branch?: (string | null);
+    pr_state?: (PullRequestState | null);
+    created_at?: (string | null);
+    delivered_at?: (string | null);
+    workflow_file_id: string;
+    repo_id?: (string | null);
+    base_content?: (string | null);
+    comment_url?: (string | null);
+    findings?: Array<FixFindingSummary>;
+};
+
+/**
+ * One static-analysis run over a repository's workflow files.
+ */
+export type WorkflowScanPublic = {
+    id: string;
+    status: ScanStatus;
+    triggered_by: ScanTrigger;
+    score?: (number | null);
+    grade?: (string | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    repo_id: string;
+    workflow_file_id?: (string | null);
+    file_path?: (string | null);
+    repo_full_name?: (string | null);
+    content_hash: string;
 };
 
 /**
@@ -1384,6 +1433,32 @@ export type AuthGithubCallbackData = {
 
 export type AuthGithubCallbackResponse = (Token);
 
+export type AuthCreateTokenData = {
+    formData: Body_auth_create_token;
+};
+
+export type AuthCreateTokenResponse = (Token);
+
+export type AuthVerifyTokenResponse = (UserPublic);
+
+export type AuthRecoverPasswordData = {
+    requestBody: PasswordRecovery;
+};
+
+export type AuthRecoverPasswordResponse = (Message);
+
+export type AuthResetPasswordData = {
+    requestBody: NewPassword;
+};
+
+export type AuthResetPasswordResponse = (Message);
+
+export type AuthRegisterUserData = {
+    requestBody: UserRegister;
+};
+
+export type AuthRegisterUserResponse = (UserPublic);
+
 export type BadgesGetBadgeData = {
     branch: string;
     owner: string;
@@ -1464,15 +1539,15 @@ export type BillingGetTierLimitsResponse = ({
 
 export type BillingListInvoicesResponse = (Array<InvoicePublic>);
 
-export type BillingCreateCheckoutData = {
+export type BillingCreateCheckoutSessionData = {
     requestBody: CheckoutRequest;
 };
 
-export type BillingCreateCheckoutResponse = (CheckoutSessionPublic);
+export type BillingCreateCheckoutSessionResponse = (CheckoutSessionPublic);
 
-export type BillingCreatePortalResponse = (CheckoutSessionPublic);
+export type BillingCreatePortalSessionResponse = (CheckoutSessionPublic);
 
-export type BillingListMyOssApplicationsResponse = (Array<OssApplicationPublic>);
+export type BillingListOssApplicationsResponse = (Array<OssApplicationPublic>);
 
 export type BillingCreateOssApplicationData = {
     requestBody: OssApplicationCreate;
@@ -1480,11 +1555,11 @@ export type BillingCreateOssApplicationData = {
 
 export type BillingCreateOssApplicationResponse = (OssApplicationPublic);
 
-export type BillingListOssApplicationsData = {
+export type BillingListAllOssApplicationsData = {
     status?: (OssApplicationStatus | null);
 };
 
-export type BillingListOssApplicationsResponse = (Array<OssApplicationPublic>);
+export type BillingListAllOssApplicationsResponse = (Array<OssApplicationPublic>);
 
 export type BillingReviewOssApplicationData = {
     applicationId: string;
@@ -1493,156 +1568,145 @@ export type BillingReviewOssApplicationData = {
 
 export type BillingReviewOssApplicationResponse = (OssApplicationPublic);
 
-export type BillingStripeWebhookData = {
-    stripeSignature?: (string | null);
-};
-
-export type BillingStripeWebhookResponse = ({
-    [key: string]: (string);
-});
-
-export type CloudCreateCloudAccountData = {
+export type CloudCreateAccountData = {
     requestBody: CloudAccountCreate;
 };
 
-export type CloudCreateCloudAccountResponse = (CloudAccountPublic);
+export type CloudCreateAccountResponse = (CloudAccountPublic);
 
-export type CloudListCloudAccountsData = {
+export type CloudListAccountsData = {
     orgId?: (string | null);
 };
 
-export type CloudListCloudAccountsResponse = (Array<CloudAccountPublic>);
+export type CloudListAccountsResponse = (Array<CloudAccountPublic>);
 
-export type CloudToggleCloudAccountData = {
+export type CloudUpdateAccountData = {
     accountId: string;
-    enabled: boolean;
+    requestBody: ScanTargetUpdate;
 };
 
-export type CloudToggleCloudAccountResponse = ({
-    [key: string]: (string | boolean);
-});
+export type CloudUpdateAccountResponse = (CloudAccountPublic);
 
-export type CloudDeleteCloudAccountData = {
+export type CloudDeleteAccountData = {
     accountId: string;
 };
 
-export type CloudDeleteCloudAccountResponse = (void);
+export type CloudDeleteAccountResponse = (void);
 
-export type CloudTriggerCloudScanData = {
+export type CloudTriggerScanData = {
     accountId: string;
 };
 
-export type CloudTriggerCloudScanResponse = ({
+export type CloudTriggerScanResponse = ({
     [key: string]: (string);
 });
 
-export type CloudListCloudScansData = {
+export type CloudListScansData = {
     accountId: string;
 };
 
-export type CloudListCloudScansResponse = (Array<CloudScanPublic>);
+export type CloudListScansResponse = (Array<CloudScanPublic>);
 
-export type CloudListCloudFindingsData = {
+export type CloudListFindingsData = {
     accountId: string;
     includeResolved?: boolean;
 };
 
-export type CloudListCloudFindingsResponse = (Array<CloudFindingPublic>);
+export type CloudListFindingsResponse = (Array<CloudFindingPublic>);
 
-export type DockerCreateDockerTargetData = {
+export type DockerCreateTargetData = {
     requestBody: DockerTargetCreate;
 };
 
-export type DockerCreateDockerTargetResponse = (DockerTargetPublic);
+export type DockerCreateTargetResponse = (DockerTargetPublic);
 
-export type DockerListDockerTargetsData = {
+export type DockerListTargetsData = {
     repoId?: (string | null);
 };
 
-export type DockerListDockerTargetsResponse = (Array<DockerTargetPublic>);
+export type DockerListTargetsResponse = (Array<DockerTargetPublic>);
 
-export type DockerToggleDockerTargetData = {
+export type DockerUpdateTargetData = {
+    requestBody: ScanTargetUpdate;
     targetId: string;
 };
 
-export type DockerToggleDockerTargetResponse = ({
-    [key: string]: (string | boolean);
-});
+export type DockerUpdateTargetResponse = (DockerTargetPublic);
 
-export type DockerDeleteDockerTargetData = {
+export type DockerDeleteTargetData = {
     targetId: string;
 };
 
-export type DockerDeleteDockerTargetResponse = (void);
+export type DockerDeleteTargetResponse = (void);
 
-export type DockerTriggerDockerScanData = {
+export type DockerTriggerScanData = {
     branch?: (string | null);
     targetId: string;
 };
 
-export type DockerTriggerDockerScanResponse = ({
+export type DockerTriggerScanResponse = ({
     [key: string]: (string);
 });
 
-export type DockerListDockerScansData = {
+export type DockerListScansData = {
     limit?: number;
     targetId: string;
 };
 
-export type DockerListDockerScansResponse = (Array<DockerScanPublic>);
+export type DockerListScansResponse = (Array<DockerScanPublic>);
 
-export type DockerListDockerFindingsData = {
+export type DockerListFindingsData = {
     includeResolved?: boolean;
     targetId: string;
 };
 
-export type DockerListDockerFindingsResponse = (Array<DockerFindingPublic>);
+export type DockerListFindingsResponse = (Array<DockerFindingPublic>);
 
-export type DockerListDockerFilesData = {
+export type DockerListFilesData = {
     ref?: (string | null);
     targetId: string;
 };
 
-export type DockerListDockerFilesResponse = (Array<DockerFilePublic>);
+export type DockerListFilesResponse = (Array<DockerFilePublic>);
 
-export type DockerListDockerRuntimeData = {
+export type DockerListRuntimeFindingsData = {
     targetId: string;
 };
 
-export type DockerListDockerRuntimeResponse = (Array<DockerBuildTelemetryPublic>);
+export type DockerListRuntimeFindingsResponse = (Array<DockerBuildTelemetryPublic>);
 
-export type DockerListDockerFixesData = {
+export type DockerListFixesData = {
     targetId: string;
 };
 
-export type DockerListDockerFixesResponse = (Array<DockerFixPublic>);
+export type DockerListFixesResponse = (Array<DockerFixPublic>);
 
-export type DockerTriggerDockerFixGenerationData = {
+export type DockerGenerateFixesData = {
     force?: boolean;
     requestBody?: (DockerFixGenerateRequest | null);
     targetId: string;
 };
 
-export type DockerTriggerDockerFixGenerationResponse = ({
+export type DockerGenerateFixesResponse = ({
     [key: string]: (string | number);
 });
 
-export type DockerTriggerDockerRuntimeFixGenerationData = {
+export type DockerGenerateRuntimeFixesData = {
     force?: boolean;
     requestBody: DockerRuntimeFixRequest;
     targetId: string;
 };
 
-export type DockerTriggerDockerRuntimeFixGenerationResponse = ({
+export type DockerGenerateRuntimeFixesResponse = ({
     [key: string]: (string | number);
 });
 
-export type DockerTriggerDockerDeliveryData = {
+export type DockerDeliverFixesData = {
     force?: boolean;
     targetId: string;
 };
 
-export type DockerTriggerDockerDeliveryResponse = ({
+export type DockerDeliverFixesResponse = ({
     [key: string]: (string);
 });
 
@@ -1668,36 +1732,16 @@ export type InstallationsSyncInstallationsData = {
 
 export type InstallationsSyncInstallationsResponse = (Array<OrganizationPublic>);
 
-export type LoginLoginAccessTokenData = {
-    formData: Body_login_login_access_token;
-};
-
-export type LoginLoginAccessTokenResponse = (Token);
-
-export type LoginTestTokenResponse = (UserPublic);
-
-export type LoginRecoverPasswordData = {
-    email: string;
-};
-
-export type LoginRecoverPasswordResponse = (Message);
-
-export type LoginResetPasswordData = {
-    requestBody: NewPassword;
-};
-
-export type LoginResetPasswordResponse = (Message);
-
 export type OrganizationsListAiProvidersResponse = (AIProvidersPublic);
 
 export type OrganizationsListMyOrganizationsResponse = (Array<OrganizationPublic>);
 
-export type OrganizationsUpdateOrgAiPreferencesData = {
+export type OrganizationsUpdateOrganizationData = {
     orgId: string;
-    requestBody: OrganizationAIUpdate;
+    requestBody: OrganizationUpdate;
 };
 
-export type OrganizationsUpdateOrgAiPreferencesResponse = (OrganizationPublic);
+export type OrganizationsUpdateOrganizationResponse = (OrganizationPublic);
 
 export type OverviewGetOverviewData = {
     orgId?: (string | null);
@@ -1740,12 +1784,12 @@ export type RepositoriesGetRepositoryData = {
 
 export type RepositoriesGetRepositoryResponse = (RepositoryPublic);
 
-export type RepositoriesListWorkflowFilesData = {
-    branch?: (string | null);
+export type RepositoriesUpdateRepositoryData = {
     repoId: string;
+    requestBody: RepositoryUpdate;
 };
 
-export type RepositoriesListWorkflowFilesResponse = (Array<WorkflowFilePublic>);
+export type RepositoriesUpdateRepositoryResponse = (RepositoryPublic);
 
 export type RepositoriesSyncRepositoryWorkflowsData = {
     branch?: (string | null);
@@ -1753,24 +1797,6 @@ export type RepositoriesSyncRepositoryWorkflowsData = {
 };
 
 export type RepositoriesSyncRepositoryWorkflowsResponse = (WorkflowSyncSummary);
-
-export type RepositoriesToggleRepositoryData = {
-    enabled: boolean;
-    repoId: string;
-};
-
-export type RepositoriesToggleRepositoryResponse = ({
-    [key: string]: (string | boolean);
-});
-
-export type RepositoriesToggleAutoFixData = {
-    enabled: boolean;
-    repoId: string;
-};
-
-export type RepositoriesToggleAutoFixResponse = ({
-    [key: string]: (string | boolean);
-});
 
 export type RepositoriesListRepositoryBranchesData = {
     repoId: string;
@@ -1801,19 +1827,29 @@ export type RulesGetRuleData = {
 
 export type RulesGetRuleResponse = (RulePublic);
 
-export type RulesToggleRuleData = {
-    enabled: boolean;
+export type RulesUpdateRuleData = {
+    requestBody: RuleUpdate;
     ruleId: string;
 };
 
-export type RulesToggleRuleResponse = (RulePublic);
+export type RulesUpdateRuleResponse = (RulePublic);
 
-export type TelemetryIngestTelemetryData = {
+export type SystemTestEmailData = {
+    emailTo: string;
+};
+
+export type SystemTestEmailResponse = (Message);
+
+export type SystemHealthResponse = (boolean);
+
+export type SystemVersionResponse = (VersionInfo);
+
+export type TelemetryIngestRunData = {
     authorization?: (string | null);
     requestBody: TelemetryPayload;
 };
 
-export type TelemetryIngestTelemetryResponse = ({
+export type TelemetryIngestRunResponse = ({
     [key: string]: (string);
 });
 
@@ -1835,106 +1871,104 @@ export type TelemetryIngestSampleResponse = ({
     [key: string]: (string);
 });
 
-export type TelemetryGetTelemetrySummaryData = {
+export type TelemetryGetSummaryData = {
     limit?: number;
     repoId: string;
     skip?: number;
 };
 
-export type TelemetryGetTelemetrySummaryResponse = (TelemetrySummaryPublic);
+export type TelemetryGetSummaryResponse = (TelemetrySummaryPublic);
 
-export type TelemetryGetTelemetryFindingsData = {
+export type TelemetryListFindingsData = {
     repoId: string;
 };
 
-export type TelemetryGetTelemetryFindingsResponse = (Array<DynamicEnrichmentPublic>);
+export type TelemetryListFindingsResponse = (Array<DynamicEnrichmentPublic>);
 
-export type TelemetryAnalyzeTelemetryData = {
+export type TelemetryTriggerScanData = {
     repoId: string;
 };
 
-export type TelemetryAnalyzeTelemetryResponse = ({
+export type TelemetryTriggerScanResponse = ({
     [key: string]: (string | number);
 });
 
-export type TerraformCreateTerraformRootData = {
+export type TerraformCreateRootData = {
     requestBody: TerraformRootCreate;
 };
 
-export type TerraformCreateTerraformRootResponse = (TerraformRootPublic);
+export type TerraformCreateRootResponse = (TerraformRootPublic);
 
-export type TerraformListTerraformRootsData = {
+export type TerraformListRootsData = {
     repoId?: (string | null);
 };
 
-export type TerraformListTerraformRootsResponse = (Array<TerraformRootPublic>);
+export type TerraformListRootsResponse = (Array<TerraformRootPublic>);
 
-export type TerraformToggleTerraformRootData = {
-    enabled: boolean;
+export type TerraformUpdateRootData = {
+    requestBody: ScanTargetUpdate;
     rootId: string;
 };
 
-export type TerraformToggleTerraformRootResponse = ({
-    [key: string]: (string | boolean);
-});
+export type TerraformUpdateRootResponse = (TerraformRootPublic);
 
-export type TerraformDeleteTerraformRootData = {
+export type TerraformDeleteRootData = {
     rootId: string;
 };
 
-export type TerraformDeleteTerraformRootResponse = (void);
+export type TerraformDeleteRootResponse = (void);
 
-export type TerraformTriggerTerraformScanData = {
+export type TerraformTriggerScanData = {
     branch?: (string | null);
     rootId: string;
 };
 
-export type TerraformTriggerTerraformScanResponse = ({
+export type TerraformTriggerScanResponse = ({
     [key: string]: (string);
 });
 
-export type TerraformListTerraformScansData = {
+export type TerraformListScansData = {
     rootId: string;
 };
 
-export type TerraformListTerraformScansResponse = (Array<TerraformScanPublic>);
+export type TerraformListScansResponse = (Array<TerraformScanPublic>);
 
-export type TerraformListTerraformFindingsData = {
+export type TerraformListFindingsData = {
     includeResolved?: boolean;
     rootId: string;
 };
 
-export type TerraformListTerraformFindingsResponse = (Array<TerraformFindingPublic>);
+export type TerraformListFindingsResponse = (Array<TerraformFindingPublic>);
 
-export type TerraformListTerraformFilesData = {
+export type TerraformListFilesData = {
     ref?: (string | null);
     rootId: string;
 };
 
-export type TerraformListTerraformFilesResponse = (Array<TerraformFilePublic>);
+export type TerraformListFilesResponse = (Array<TerraformFilePublic>);
 
-export type TerraformListTerraformFixesData = {
+export type TerraformListFixesData = {
     rootId: string;
 };
 
-export type TerraformListTerraformFixesResponse = (Array<TerraformFixPublic>);
+export type TerraformListFixesResponse = (Array<TerraformFixPublic>);
 
-export type TerraformTriggerTerraformFixGenerationData = {
+export type TerraformGenerateFixesData = {
     force?: boolean;
     requestBody?: (TerraformFixGenerateRequest | null);
     rootId: string;
 };
 
-export type TerraformTriggerTerraformFixGenerationResponse = ({
+export type TerraformGenerateFixesResponse = ({
     [key: string]: (string | number);
 });
 
-export type TerraformTriggerTerraformDeliveryData = {
+export type TerraformDeliverFixesData = {
     force?: boolean;
     rootId: string;
 };
 
-export type TerraformTriggerTerraformDeliveryResponse = ({
+export type TerraformDeliverFixesResponse = ({
     [key: string]: (string);
 });
 
@@ -1967,12 +2001,6 @@ export type UsersUpdatePasswordMeData = {
 
 export type UsersUpdatePasswordMeResponse = (Message);
 
-export type UsersRegisterUserData = {
-    requestBody: UserRegister;
-};
-
-export type UsersRegisterUserResponse = (UserPublic);
-
 export type UsersReadUserByIdData = {
     userId: string;
 };
@@ -1992,16 +2020,6 @@ export type UsersDeleteUserData = {
 
 export type UsersDeleteUserResponse = (Message);
 
-export type UtilsTestEmailData = {
-    emailTo: string;
-};
-
-export type UtilsTestEmailResponse = (Message);
-
-export type UtilsHealthCheckResponse = (boolean);
-
-export type UtilsVersionResponse = (VersionInfo);
-
 export type WebhooksGithubWebhookData = {
     xGithubDelivery?: (string | null);
     xGithubEvent?: (string | null);
@@ -2012,137 +2030,15 @@ export type WebhooksGithubWebhookResponse = ({
     [key: string]: (string);
 });
 
-export type WorkflowFindingsListIssuesData = {
-    analysisId?: (string | null);
-    branch?: (string | null);
-    category?: (Category | null);
-    includeIgnored?: boolean;
-    includeResolved?: boolean;
-    latestOnly?: boolean;
-    limit?: number;
-    repoId?: (string | null);
-    severity?: (Severity | null);
-    skip?: number;
-    unfixed?: boolean;
+export type WebhooksStripeWebhookData = {
+    stripeSignature?: (string | null);
 };
 
-export type WorkflowFindingsListIssuesResponse = (Array<IssuePublic>);
-
-export type WorkflowFindingsGetIssueStatsData = {
-    branch?: (string | null);
-    latestOnly?: boolean;
-    repoId?: (string | null);
-};
-
-export type WorkflowFindingsGetIssueStatsResponse = (IssueStatsPublic);
-
-export type WorkflowFindingsGetIssueData = {
-    issueId: string;
-};
-
-export type WorkflowFindingsGetIssueResponse = (IssuePublic);
-
-export type WorkflowFindingsIgnoreIssueData = {
-    issueId: string;
-};
-
-export type WorkflowFindingsIgnoreIssueResponse = (IssuePublic);
-
-export type WorkflowFindingsUnignoreIssueData = {
-    issueId: string;
-};
-
-export type WorkflowFindingsUnignoreIssueResponse = (IssuePublic);
-
-export type WorkflowFixesListFixesData = {
-    branch?: (string | null);
-    limit?: number;
-    repoId?: (string | null);
-    skip?: number;
-    status?: (FixStatus | null);
-};
-
-export type WorkflowFixesListFixesResponse = (Array<FixPublic>);
-
-export type WorkflowFixesListPullRequestsData = {
-    repoId: string;
-};
-
-export type WorkflowFixesListPullRequestsResponse = (Array<PullRequestPublic>);
-
-export type WorkflowFixesGetFixData = {
-    fixId: string;
-};
-
-export type WorkflowFixesGetFixResponse = (FixPublic);
-
-export type WorkflowFixesRejectFixData = {
-    fixId: string;
-};
-
-export type WorkflowFixesRejectFixResponse = (void);
-
-export type WorkflowFixesTriggerFixGenerationForRepoData = {
-    force?: boolean;
-    repoId: string;
-    requestBody?: BatchFixRequest;
-};
-
-export type WorkflowFixesTriggerFixGenerationForRepoResponse = ({
-    [key: string]: (number);
-});
-
-export type WorkflowFixesTriggerWorkflowDeliveryData = {
-    force?: boolean;
-    requestBody: WorkflowDeliverRequest;
-};
-
-export type WorkflowFixesTriggerWorkflowDeliveryResponse = ({
+export type WebhooksStripeWebhookResponse = ({
     [key: string]: (string);
 });
 
-export type WorkflowFixesTriggerRepoDeliveryData = {
-    force?: boolean;
-    repoId: string;
-};
-
-export type WorkflowFixesTriggerRepoDeliveryResponse = ({
-    [key: string]: (string);
-});
-
-export type WorkflowFixesRegenerateFixesForRepoData = {
-    repoId: string;
-};
-
-export type WorkflowFixesRegenerateFixesForRepoResponse = ({
-    [key: string]: (number);
-});
-
-export type WorkflowFixesRegenerateFixesForWorkflowData = {
-    fixId: string;
-};
-
-export type WorkflowFixesRegenerateFixesForWorkflowResponse = ({
-    [key: string]: (number);
-});
-
-export type WorkflowFixesRegenerateFailedFixData = {
-    fixId: string;
-};
-
-export type WorkflowFixesRegenerateFailedFixResponse = ({
-    [key: string]: (string);
-});
-
-export type WorkflowFixesSyncPrStatusesData = {
-    repoId: string;
-};
-
-export type WorkflowFixesSyncPrStatusesResponse = ({
-    [key: string]: (number);
-});
-
-export type WorkflowScansListAnalysesData = {
+export type WorkflowListScansData = {
     branch?: (string | null);
     grade?: (string | null);
     limit?: number;
@@ -2151,33 +2047,170 @@ export type WorkflowScansListAnalysesData = {
     status?: (ScanStatus | null);
 };
 
-export type WorkflowScansListAnalysesResponse = (Array<AnalysisPublic>);
+export type WorkflowListScansResponse = (Array<WorkflowScanPublic>);
 
-export type WorkflowScansGetAnalysisData = {
-    analysisId: string;
+export type WorkflowGetScanData = {
+    scanId: string;
 };
 
-export type WorkflowScansGetAnalysisResponse = (AnalysisPublic);
+export type WorkflowGetScanResponse = (WorkflowScanPublic);
 
-export type WorkflowScansTriggerAnalysisData = {
+export type WorkflowTriggerRepositoryScanData = {
     branch?: (string | null);
     force?: boolean;
     repoId: string;
 };
 
-export type WorkflowScansTriggerAnalysisResponse = ({
+export type WorkflowTriggerRepositoryScanResponse = ({
     [key: string]: (string);
 });
 
-export type WorkflowScansReanalyzeForWorkflowData = {
+export type WorkflowTriggerFileScanData = {
     force?: boolean;
     workflowFileId: string;
 };
 
-export type WorkflowScansReanalyzeForWorkflowResponse = ({
+export type WorkflowTriggerFileScanResponse = ({
     [key: string]: (string);
 });
 
-export type WorkflowScansReanalyzeAllResponse = ({
+export type WorkflowBackfillScansResponse = ({
     [key: string]: (string);
+});
+
+export type WorkflowListFilesData = {
+    branch?: (string | null);
+    repoId: string;
+};
+
+export type WorkflowListFilesResponse = (Array<WorkflowFilePublic>);
+
+export type WorkflowListFindingsData = {
+    branch?: (string | null);
+    category?: (Category | null);
+    includeIgnored?: boolean;
+    includeResolved?: boolean;
+    latestOnly?: boolean;
+    limit?: number;
+    repoId?: (string | null);
+    scanId?: (string | null);
+    severity?: (Severity | null);
+    skip?: number;
+    unfixed?: boolean;
+};
+
+export type WorkflowListFindingsResponse = (Array<WorkflowFindingPublic>);
+
+export type WorkflowGetFindingStatsData = {
+    branch?: (string | null);
+    latestOnly?: boolean;
+    repoId?: (string | null);
+};
+
+export type WorkflowGetFindingStatsResponse = (WorkflowFindingStatsPublic);
+
+export type WorkflowGetFindingData = {
+    findingId: string;
+};
+
+export type WorkflowGetFindingResponse = (WorkflowFindingPublic);
+
+export type WorkflowIgnoreFindingData = {
+    findingId: string;
+};
+
+export type WorkflowIgnoreFindingResponse = (WorkflowFindingPublic);
+
+export type WorkflowUnignoreFindingData = {
+    findingId: string;
+};
+
+export type WorkflowUnignoreFindingResponse = (WorkflowFindingPublic);
+
+export type WorkflowListFixesData = {
+    branch?: (string | null);
+    limit?: number;
+    repoId?: (string | null);
+    skip?: number;
+    status?: (FixStatus | null);
+};
+
+export type WorkflowListFixesResponse = (Array<WorkflowFixPublic>);
+
+export type WorkflowListPullRequestsData = {
+    repoId: string;
+};
+
+export type WorkflowListPullRequestsResponse = (Array<PullRequestPublic>);
+
+export type WorkflowGetFixData = {
+    fixId: string;
+};
+
+export type WorkflowGetFixResponse = (WorkflowFixPublic);
+
+export type WorkflowRejectFixData = {
+    fixId: string;
+};
+
+export type WorkflowRejectFixResponse = (void);
+
+export type WorkflowGenerateRepositoryFixesData = {
+    force?: boolean;
+    repoId: string;
+    requestBody?: BatchFixRequest;
+};
+
+export type WorkflowGenerateRepositoryFixesResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowDeliverFixData = {
+    fixId: string;
+    force?: boolean;
+};
+
+export type WorkflowDeliverFixResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowDeliverRepositoryFixesData = {
+    force?: boolean;
+    repoId: string;
+};
+
+export type WorkflowDeliverRepositoryFixesResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowRegenerateRepositoryFixesData = {
+    repoId: string;
+};
+
+export type WorkflowRegenerateRepositoryFixesResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowRegenerateFixData = {
+    fixId: string;
+};
+
+export type WorkflowRegenerateFixResponse = ({
+    [key: string]: (number);
+});
+
+export type WorkflowRetryFixData = {
+    fixId: string;
+};
+
+export type WorkflowRetryFixResponse = ({
+    [key: string]: (string);
+});
+
+export type WorkflowSyncPullRequestStatusesData = {
+    repoId: string;
+};
+
+export type WorkflowSyncPullRequestStatusesResponse = ({
+    [key: string]: (number);
 });

@@ -16,7 +16,7 @@ import type {
   DockerTargetPublic,
   PullRequestPublic,
 } from "@/client"
-import { DockerService, WorkflowFixesService } from "@/client"
+import { DockerService, WorkflowService } from "@/client"
 import { DockerFindingRow } from "@/components/DockerFindingRow"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -47,14 +47,14 @@ function DockerAnalysisTab() {
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
-    queryFn: () => DockerService.listDockerTargets({ repoId }),
+    queryFn: () => DockerService.listTargets({ repoId }),
   })
 
   // A ready fix carries no PR of its own, so whether one already exists for
   // its deterministic branch has to come from the real PullRequest rows.
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
@@ -137,24 +137,25 @@ function TargetCard({
     {
       keyPrefix: "docker",
       targetLabel: "Target",
-      listFiles: () => DockerService.listDockerFiles({ targetId: target.id }),
-      listFindings: () =>
-        DockerService.listDockerFindings({ targetId: target.id }),
-      listFixes: () => DockerService.listDockerFixes({ targetId: target.id }),
-      // The Docker endpoint flips server-side, so the desired state is
-      // passed for the shared signature's sake and ignored here.
-      toggle: () => DockerService.toggleDockerTarget({ targetId: target.id }),
-      scan: () => DockerService.triggerDockerScan({ targetId: target.id }),
-      remove: () => DockerService.deleteDockerTarget({ targetId: target.id }),
+      listFiles: () => DockerService.listFiles({ targetId: target.id }),
+      listFindings: () => DockerService.listFindings({ targetId: target.id }),
+      listFixes: () => DockerService.listFixes({ targetId: target.id }),
+      toggle: (enabled) =>
+        DockerService.updateTarget({
+          targetId: target.id,
+          requestBody: { enabled },
+        }),
+      scan: () => DockerService.triggerScan({ targetId: target.id }),
+      remove: () => DockerService.deleteTarget({ targetId: target.id }),
       generate: (findingIds) =>
-        DockerService.triggerDockerFixGeneration({
+        DockerService.generateFixes({
           targetId: target.id,
           requestBody: findingIds.length
             ? { finding_ids: findingIds }
             : { finding_ids: null },
         }),
       deliver: (force) =>
-        DockerService.triggerDockerDelivery({ targetId: target.id, force }),
+        DockerService.deliverFixes({ targetId: target.id, force }),
     },
   )
 

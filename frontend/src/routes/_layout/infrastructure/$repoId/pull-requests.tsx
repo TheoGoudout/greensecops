@@ -31,7 +31,7 @@ function InfrastructurePullRequestsTab() {
 
   const { data: roots } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
-    queryFn: () => TerraformService.listTerraformRoots({ repoId }),
+    queryFn: () => TerraformService.listRoots({ repoId }),
   })
 
   const { data: projects } = useQuery({
@@ -50,10 +50,7 @@ function InfrastructurePullRequestsTab() {
           targets={roots}
           branchForTarget={tfFixBranch}
           deliver={({ targetId, force }) =>
-            TerraformService.triggerTerraformDelivery({
-              rootId: targetId,
-              force,
-            })
+            TerraformService.deliverFixes({ rootId: targetId, force })
           }
         />
       </section>

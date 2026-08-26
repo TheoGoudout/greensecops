@@ -37,7 +37,7 @@ function RuleRow({
   const queryClient = useQueryClient()
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
-      RulesService.toggleRule({ ruleId: rule.id, enabled }),
+      RulesService.updateRule({ ruleId: rule.id, requestBody: { enabled } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] })
     },

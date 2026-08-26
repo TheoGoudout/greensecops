@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { GitBranch, Lock, Play, WifiOff } from "lucide-react"
 import { toast } from "sonner"
 import type { RepositoryPublic } from "@/client"
-import { RepositoriesService, WorkflowScansService } from "@/client"
+import { RepositoriesService, WorkflowService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -36,7 +36,10 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
 
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
-      RepositoriesService.toggleRepository({ repoId: repo.id, enabled }),
+      RepositoriesService.updateRepository({
+        repoId: repo.id,
+        requestBody: { enabled },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
     },
@@ -44,7 +47,10 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
 
   const autoFixMutation = useMutation({
     mutationFn: (enabled: boolean) =>
-      RepositoriesService.toggleAutoFix({ repoId: repo.id, enabled }),
+      RepositoriesService.updateRepository({
+        repoId: repo.id,
+        requestBody: { auto_fix_enabled: enabled },
+      }),
     onSuccess: (_data, enabled) => {
       toast.success(enabled ? "Auto-fix enabled" : "Auto-fix disabled")
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
@@ -53,10 +59,11 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   })
 
   const triggerMutation = useMutation({
-    mutationFn: () => WorkflowScansService.triggerAnalysis({ repoId: repo.id }),
+    mutationFn: () =>
+      WorkflowService.triggerRepositoryScan({ repoId: repo.id }),
     onSuccess: () => {
       toast.success(`Analysis queued for ${repo.full_name}`)
-      queryClient.invalidateQueries({ queryKey: ["analyses", repo.id] })
+      queryClient.invalidateQueries({ queryKey: ["scans", repo.id] })
     },
     onError: () => {
       toast.error(`Failed to trigger analysis for ${repo.full_name}`)

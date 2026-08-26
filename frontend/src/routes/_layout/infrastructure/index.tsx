@@ -47,7 +47,7 @@ function InfrastructurePage() {
     isError,
   } = useQuery({
     queryKey: ["terraform-roots"],
-    queryFn: () => TerraformService.listTerraformRoots({}),
+    queryFn: () => TerraformService.listRoots({}),
   })
 
   const { data: repos } = useQuery({
@@ -57,7 +57,7 @@ function InfrastructurePage() {
 
   const createMutation = useMutation({
     mutationFn: (vars: { repoId: string; rootPath: string }) =>
-      TerraformService.createTerraformRoot({
+      TerraformService.createRoot({
         requestBody: { repo_id: vars.repoId, root_path: vars.rootPath },
       }),
     onSuccess: () => {

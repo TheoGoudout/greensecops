@@ -14,7 +14,7 @@ import {
 /**
  * What every engine reports against a line of a file: an issue from the CI
  * workflow engine, a finding from Terraform, Docker or cloud. Structural
- * typing means IssuePublic and the three *FindingPublic types all satisfy it.
+ * typing means WorkflowFindingPublic and the three *FindingPublic types all satisfy it.
  */
 export interface Annotation {
   id: string

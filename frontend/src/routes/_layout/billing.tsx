@@ -409,7 +409,7 @@ function Billing() {
   })
   const { data: ossApplications } = useQuery({
     queryKey: ["billing", "oss"],
-    queryFn: BillingService.listMyOssApplications,
+    queryFn: BillingService.listOssApplications,
   })
 
   // Checkout and the portal both hand back a Stripe-hosted URL to navigate to;
@@ -417,14 +417,14 @@ function Billing() {
   // touch this application.
   const checkout = useMutation({
     mutationFn: (tier: UserTier) =>
-      BillingService.createCheckout({ requestBody: { tier } }),
+      BillingService.createCheckoutSession({ requestBody: { tier } }),
     onSuccess: (data) => {
       window.location.href = data.url
     },
     onError: handleApiError,
   })
   const portal = useMutation({
-    mutationFn: () => BillingService.createPortal(),
+    mutationFn: () => BillingService.createPortalSession(),
     onSuccess: (data) => {
       window.location.href = data.url
     },

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { UtilsService } from "@/client"
+import { SystemService } from "@/client"
 import { Badge } from "@/components/ui/badge"
 import {
   Tooltip,
@@ -27,7 +27,7 @@ export function Footer() {
   // everywhere else in the UI, and a footer is the wrong place to raise it.
   const { data: api } = useQuery({
     queryKey: ["api-version"],
-    queryFn: () => UtilsService.version(),
+    queryFn: () => SystemService.version(),
     staleTime: 5 * 60 * 1000,
     retry: false,
   })

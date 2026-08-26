@@ -46,136 +46,6 @@ export const AIProvidersPublicSchema = {
     title: 'AIProvidersPublic'
 } as const;
 
-export const AnalysisPublicSchema = {
-    properties: {
-        id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Id'
-        },
-        repo_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Repo Id'
-        },
-        workflow_file_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Workflow File Id'
-        },
-        workflow_file_path: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Workflow File Path'
-        },
-        repo_full_name: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Repo Full Name'
-        },
-        content_hash: {
-            type: 'string',
-            title: 'Content Hash'
-        },
-        status: {
-            '$ref': '#/components/schemas/ScanStatus'
-        },
-        score: {
-            anyOf: [
-                {
-                    type: 'number'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Score'
-        },
-        grade: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Grade'
-        },
-        triggered_by: {
-            '$ref': '#/components/schemas/ScanTrigger'
-        },
-        branch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Branch'
-        },
-        commit_sha: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Commit Sha'
-        },
-        created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Created At'
-        },
-        completed_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Completed At'
-        }
-    },
-    type: 'object',
-    required: ['id', 'repo_id', 'content_hash', 'status', 'triggered_by'],
-    title: 'AnalysisPublic'
-} as const;
-
 export const AnsibleFilePublicSchema = {
     properties: {
         path: {
@@ -840,6 +710,63 @@ actually being applied — they differ exactly when a subscription is
 currently limited to Free" instead of silently misreporting one or other.`
 } as const;
 
+export const Body_auth_create_tokenSchema = {
+    properties: {
+        grant_type: {
+            anyOf: [
+                {
+                    type: 'string',
+                    pattern: '^password$'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grant Type'
+        },
+        username: {
+            type: 'string',
+            title: 'Username'
+        },
+        password: {
+            type: 'string',
+            format: 'password',
+            title: 'Password'
+        },
+        scope: {
+            type: 'string',
+            title: 'Scope',
+            default: ''
+        },
+        client_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Client Id'
+        },
+        client_secret: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            format: 'password',
+            title: 'Client Secret'
+        }
+    },
+    type: 'object',
+    required: ['username', 'password'],
+    title: 'Body_auth-create_token'
+} as const;
+
 export const Body_auth_github_callbackSchema = {
     properties: {
         grant_type: {
@@ -898,63 +825,6 @@ export const Body_auth_github_callbackSchema = {
     type: 'object',
     required: ['code'],
     title: 'Body_auth-github_callback'
-} as const;
-
-export const Body_login_login_access_tokenSchema = {
-    properties: {
-        grant_type: {
-            anyOf: [
-                {
-                    type: 'string',
-                    pattern: '^password$'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Grant Type'
-        },
-        username: {
-            type: 'string',
-            title: 'Username'
-        },
-        password: {
-            type: 'string',
-            format: 'password',
-            title: 'Password'
-        },
-        scope: {
-            type: 'string',
-            title: 'Scope',
-            default: ''
-        },
-        client_id: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Client Id'
-        },
-        client_secret: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            format: 'password',
-            title: 'Client Secret'
-        }
-    },
-    type: 'object',
-    required: ['username', 'password'],
-    title: 'Body_login-login_access_token'
 } as const;
 
 export const CIStatusSchema = {
@@ -2292,7 +2162,7 @@ export const DynamicEnrichmentPublicSchema = {
     title: 'DynamicEnrichmentPublic',
     description: `A runtime-telemetry finding, exposed for the frontend.
 
-Deliberately thinner than \`\`IssuePublic\`\`: enrichments carry no severity,
+Deliberately thinner than \`\`WorkflowFindingPublic\`\`: enrichments carry no severity,
 category, status/lifecycle, line numbers, or fix linkage, so they are
 presented as their own "Runtime findings" class rather than merged into the
 static issue list.`
@@ -2371,7 +2241,7 @@ export const EngineFindingStatSchema = {
         },
         by_category: {
             items: {
-                '$ref': '#/components/schemas/IssueCategoryStat'
+                '$ref': '#/components/schemas/FindingCategoryStat'
             },
             type: 'array',
             title: 'By Category'
@@ -2569,6 +2439,29 @@ export const ExternalRepositoryCreateSchema = {
     title: 'ExternalRepositoryCreate'
 } as const;
 
+export const FindingCategoryStatSchema = {
+    properties: {
+        category: {
+            '$ref': '#/components/schemas/Category'
+        },
+        open: {
+            type: 'integer',
+            title: 'Open'
+        },
+        resolved: {
+            type: 'integer',
+            title: 'Resolved'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        }
+    },
+    type: 'object',
+    required: ['category', 'open', 'resolved', 'critical_open'],
+    title: 'FindingCategoryStat'
+} as const;
+
 export const FindingResolutionReasonSchema = {
     type: 'string',
     enum: ['no_longer_detected', 'target_removed', 'file_removed', 'merged', 'branch_deleted'],
@@ -2606,7 +2499,7 @@ export const FixDeliveryModeSchema = {
     title: 'FixDeliveryMode'
 } as const;
 
-export const FixIssueSummarySchema = {
+export const FixFindingSummarySchema = {
     properties: {
         id: {
             type: 'string',
@@ -2680,178 +2573,8 @@ export const FixIssueSummarySchema = {
     },
     type: 'object',
     required: ['id'],
-    title: 'FixIssueSummary'
-} as const;
-
-export const FixPublicSchema = {
-    properties: {
-        id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Id'
-        },
-        workflow_file_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Workflow File Id'
-        },
-        workflow_file_path: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Workflow File Path'
-        },
-        repo_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Repo Id'
-        },
-        pr_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Id'
-        },
-        llm_provider: {
-            '$ref': '#/components/schemas/LLMProvider'
-        },
-        llm_model: {
-            type: 'string',
-            title: 'Llm Model'
-        },
-        status: {
-            '$ref': '#/components/schemas/FixStatus'
-        },
-        full_content: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Full Content'
-        },
-        base_content: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Base Content'
-        },
-        error_message: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Error Message'
-        },
-        pr_url: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Url'
-        },
-        pr_branch: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Pr Branch'
-        },
-        pr_state: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/PullRequestState'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        comment_url: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Comment Url'
-        },
-        created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Created At'
-        },
-        delivered_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Delivered At'
-        },
-        issues: {
-            items: {
-                '$ref': '#/components/schemas/FixIssueSummary'
-            },
-            type: 'array',
-            title: 'Issues',
-            default: []
-        }
-    },
-    type: 'object',
-    required: ['id', 'workflow_file_id', 'llm_provider', 'llm_model', 'status'],
-    title: 'FixPublic'
+    title: 'FixFindingSummary',
+    description: 'The findings one fix set out to resolve, as the fix detail view lists them.'
 } as const;
 
 export const FixStatusSchema = {
@@ -3039,222 +2762,6 @@ export const InvoiceStatusSchema = {
     description: "Mirrors Stripe's invoice statuses, minus ``deleted`` (drafts only)."
 } as const;
 
-export const IssueCategoryStatSchema = {
-    properties: {
-        category: {
-            '$ref': '#/components/schemas/Category'
-        },
-        open: {
-            type: 'integer',
-            title: 'Open'
-        },
-        resolved: {
-            type: 'integer',
-            title: 'Resolved'
-        },
-        critical_open: {
-            type: 'integer',
-            title: 'Critical Open'
-        }
-    },
-    type: 'object',
-    required: ['category', 'open', 'resolved', 'critical_open'],
-    title: 'IssueCategoryStat'
-} as const;
-
-export const IssuePublicSchema = {
-    properties: {
-        id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Id'
-        },
-        analysis_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Analysis Id'
-        },
-        rule_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Rule Id'
-        },
-        rule_slug: {
-            type: 'string',
-            title: 'Rule Slug'
-        },
-        severity: {
-            '$ref': '#/components/schemas/Severity'
-        },
-        category: {
-            '$ref': '#/components/schemas/Category'
-        },
-        line_start: {
-            anyOf: [
-                {
-                    type: 'integer'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Line Start'
-        },
-        line_end: {
-            anyOf: [
-                {
-                    type: 'integer'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Line End'
-        },
-        message: {
-            type: 'string',
-            title: 'Message'
-        },
-        context: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Context'
-        },
-        status: {
-            '$ref': '#/components/schemas/FindingStatus'
-        },
-        created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Created At'
-        },
-        resolved_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Resolved At'
-        },
-        resolution_reason: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/FindingResolutionReason'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        needs_manual_work: {
-            type: 'boolean',
-            title: 'Needs Manual Work',
-            default: false
-        },
-        manual_work_note: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Manual Work Note'
-        },
-        fix_id: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'uuid'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Fix Id'
-        },
-        fix_status: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/FixStatus'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        workflow_file_path: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Workflow File Path'
-        }
-    },
-    type: 'object',
-    required: ['id', 'analysis_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status'],
-    title: 'IssuePublic'
-} as const;
-
-export const IssueStatsPublicSchema = {
-    properties: {
-        total_open: {
-            type: 'integer',
-            title: 'Total Open'
-        },
-        total_resolved: {
-            type: 'integer',
-            title: 'Total Resolved'
-        },
-        critical_open: {
-            type: 'integer',
-            title: 'Critical Open'
-        },
-        by_category: {
-            items: {
-                '$ref': '#/components/schemas/IssueCategoryStat'
-            },
-            type: 'array',
-            title: 'By Category'
-        },
-        by_repo: {
-            items: {
-                '$ref': '#/components/schemas/RepoIssueStats'
-            },
-            type: 'array',
-            title: 'By Repo',
-            default: []
-        }
-    },
-    type: 'object',
-    required: ['total_open', 'total_resolved', 'critical_open', 'by_category'],
-    title: 'IssueStatsPublic',
-    description: `Exact issue counts, computed by SQL aggregation rather than fetched and
-counted client-side — unaffected by any page's \`\`skip\`\`/\`\`limit\`\`.`
-} as const;
-
 export const LLMProviderSchema = {
     type: 'string',
     enum: ['openai', 'anthropic', 'gemini', 'ollama'],
@@ -3289,34 +2796,6 @@ export const NewPasswordSchema = {
     type: 'object',
     required: ['token', 'new_password'],
     title: 'NewPassword'
-} as const;
-
-export const OrganizationAIUpdateSchema = {
-    properties: {
-        default_llm_provider: {
-            anyOf: [
-                {
-                    '$ref': '#/components/schemas/LLMProvider'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        default_llm_model: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Default Llm Model'
-        }
-    },
-    type: 'object',
-    title: 'OrganizationAIUpdate'
 } as const;
 
 export const OrganizationPublicSchema = {
@@ -3373,6 +2852,34 @@ export const OrganizationPublicSchema = {
     type: 'object',
     required: ['id', 'name', 'tier', 'fix_delivery_mode'],
     title: 'OrganizationPublic'
+} as const;
+
+export const OrganizationUpdateSchema = {
+    properties: {
+        default_llm_provider: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/LLMProvider'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        default_llm_model: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Default Llm Model'
+        }
+    },
+    type: 'object',
+    title: 'OrganizationUpdate'
 } as const;
 
 export const OssApplicationCreateSchema = {
@@ -3591,7 +3098,7 @@ export const OverviewTotalsSchema = {
         },
         by_category: {
             items: {
-                '$ref': '#/components/schemas/IssueCategoryStat'
+                '$ref': '#/components/schemas/FindingCategoryStat'
             },
             type: 'array',
             title: 'By Category'
@@ -3609,6 +3116,23 @@ export const OverviewTotalsSchema = {
 \`\`avg_score\`\` is the unweighted mean of the per-engine averages that
 exist, not of every target: averaging targets directly would let a repo
 with forty workflow files drown out a failing cloud posture.`
+} as const;
+
+export const PasswordRecoverySchema = {
+    properties: {
+        email: {
+            type: 'string',
+            format: 'email',
+            title: 'Email'
+        }
+    },
+    type: 'object',
+    required: ['email'],
+    title: 'PasswordRecovery',
+    description: `The address to send a reset link to.
+
+A body rather than a path segment: an email in a URL lands in every access
+log and needs percent-encoding that callers were not doing.`
 } as const;
 
 export const PlanLimitsPublicSchema = {
@@ -3886,14 +3410,14 @@ export const RepoCategoryStatSchema = {
     type: 'object',
     required: ['category', 'open', 'critical_open'],
     title: 'RepoCategoryStat',
-    description: `A repo's open-issue counts and severity-weighted grade for one category.
+    description: `A repo's open-finding counts and severity-weighted grade for one category.
 
 \`\`score\`\`/\`\`grade\`\` are \`\`None\`\` when the repo has no overall grade yet
-(e.g. no completed analysis). See \`\`RepoIssueStats\`\` for how categories
+(e.g. no completed scan). See \`\`RepoFindingStats\`\` for how categories
 are grouped per repo.`
 } as const;
 
-export const RepoIssueStatsSchema = {
+export const RepoFindingStatsSchema = {
     properties: {
         repo_id: {
             type: 'string',
@@ -3933,16 +3457,16 @@ export const RepoIssueStatsSchema = {
     },
     type: 'object',
     required: ['repo_id'],
-    title: 'RepoIssueStats',
-    description: `Per-repo issue breakdown — powers the dashboard's category health star
+    title: 'RepoFindingStats',
+    description: `Per-repo finding breakdown — powers the dashboard's category health star
 diagram. Only populated on the unscoped (all-repos) stats call;
 meaningless once already filtered to a single \`\`repo_id\`\`.
 
 \`\`score\`\`/\`\`grade\`\` here are the repo's own overall grade (same values as
 \`\`RepositoryPublic.avg_score\`\`/\`\`grade\`\`), repeated so the frontend
-doesn't need a second lookup to size the radar's "no issues" fallback.
+doesn't need a second lookup to size the radar's "no findings" fallback.
 Each entry in \`\`categories\`\` covers every \`\`Category\`\`, including
-categories with zero open issues, so their scores average out to exactly
+categories with zero open findings, so their scores average out to exactly
 the repo's overall score (see \`\`compute_category_scores\`\`).`
 } as const;
 
@@ -4051,6 +3575,40 @@ export const RepositoryPublicSchema = {
     title: 'RepositoryPublic'
 } as const;
 
+export const RepositoryUpdateSchema = {
+    properties: {
+        enabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enabled'
+        },
+        auto_fix_enabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Auto Fix Enabled'
+        }
+    },
+    type: 'object',
+    title: 'RepositoryUpdate',
+    description: `The two switches a repository owner can flip.
+
+Both are optional: a \`\`PATCH\`\` naming only one leaves the other alone.
+Enabling either is quota-checked, which is why they are not a blanket
+"update the repository" body — nothing else about a repo is user-writable.`
+} as const;
+
 export const ReviewDecisionSchema = {
     type: 'string',
     enum: ['approved', 'changes_requested', 'review_required'],
@@ -4091,6 +3649,25 @@ export const RulePublicSchema = {
     type: 'object',
     required: ['id', 'slug', 'category', 'severity', 'title', 'description', 'enabled'],
     title: 'RulePublic'
+} as const;
+
+export const RuleUpdateSchema = {
+    properties: {
+        enabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enabled'
+        }
+    },
+    type: 'object',
+    title: 'RuleUpdate',
+    description: "A rule's catalog-wide on/off switch."
 } as const;
 
 export const SSEEventPublicSchema = {
@@ -4508,6 +4085,29 @@ it spelled the empty case \`\`no_workflows\`\` where this one says
 has — no \`\`.tf\`\` files under this root, no resources of the scanned types in
 this account, no workflow files in this repository — so the general name
 won and migration 0053 rewrote the rows.`
+} as const;
+
+export const ScanTargetUpdateSchema = {
+    properties: {
+        enabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enabled'
+        }
+    },
+    type: 'object',
+    title: 'ScanTargetUpdate',
+    description: `The mutable part of a registered scan target.
+
+Every engine enables and disables its target the same way, so one body
+serves all of them rather than three identical copies. Optional so a
+\`\`PATCH\`\` that omits the field leaves it alone.`
 } as const;
 
 export const ScanTriggerSchema = {
@@ -5839,19 +5439,6 @@ version from its own. Reporting it here is what makes a half-finished
 promotion visible instead of showing up later as a confusing 422.`
 } as const;
 
-export const WorkflowDeliverRequestSchema = {
-    properties: {
-        fix_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Fix Id'
-        }
-    },
-    type: 'object',
-    required: ['fix_id'],
-    title: 'WorkflowDeliverRequest'
-} as const;
-
 export const WorkflowFilePublicSchema = {
     properties: {
         id: {
@@ -5912,6 +5499,507 @@ export const WorkflowFilePublicSchema = {
     type: 'object',
     required: ['id', 'path'],
     title: 'WorkflowFilePublic'
+} as const;
+
+export const WorkflowFindingPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        scan_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Scan Id'
+        },
+        rule_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Rule Id'
+        },
+        rule_slug: {
+            type: 'string',
+            title: 'Rule Slug'
+        },
+        severity: {
+            '$ref': '#/components/schemas/Severity'
+        },
+        category: {
+            '$ref': '#/components/schemas/Category'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        },
+        context: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Context'
+        },
+        status: {
+            '$ref': '#/components/schemas/FindingStatus'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        resolved_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resolved At'
+        },
+        resolution_reason: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FindingResolutionReason'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        fix_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Fix Id'
+        },
+        fix_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/FixStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        file_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Path'
+        },
+        line_start: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line Start'
+        },
+        line_end: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Line End'
+        },
+        needs_manual_work: {
+            type: 'boolean',
+            title: 'Needs Manual Work',
+            default: false
+        },
+        manual_work_note: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Manual Work Note'
+        }
+    },
+    type: 'object',
+    required: ['id', 'scan_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status'],
+    title: 'WorkflowFindingPublic',
+    description: 'A rule violation in a workflow file.'
+} as const;
+
+export const WorkflowFindingStatsPublicSchema = {
+    properties: {
+        total_open: {
+            type: 'integer',
+            title: 'Total Open'
+        },
+        total_resolved: {
+            type: 'integer',
+            title: 'Total Resolved'
+        },
+        critical_open: {
+            type: 'integer',
+            title: 'Critical Open'
+        },
+        by_category: {
+            items: {
+                '$ref': '#/components/schemas/FindingCategoryStat'
+            },
+            type: 'array',
+            title: 'By Category'
+        },
+        by_repo: {
+            items: {
+                '$ref': '#/components/schemas/RepoFindingStats'
+            },
+            type: 'array',
+            title: 'By Repo',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['total_open', 'total_resolved', 'critical_open', 'by_category'],
+    title: 'WorkflowFindingStatsPublic',
+    description: `Exact finding counts, computed by SQL aggregation rather than fetched and
+counted client-side — unaffected by any page's \`\`skip\`\`/\`\`limit\`\`.`
+} as const;
+
+export const WorkflowFixPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
+        llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        llm_model: {
+            type: 'string',
+            title: 'Llm Model'
+        },
+        status: {
+            '$ref': '#/components/schemas/FixStatus'
+        },
+        full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Content'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        delivered_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Delivered At'
+        },
+        workflow_file_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow File Id'
+        },
+        repo_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Id'
+        },
+        base_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Base Content'
+        },
+        comment_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Comment Url'
+        },
+        findings: {
+            items: {
+                '$ref': '#/components/schemas/FixFindingSummary'
+            },
+            type: 'array',
+            title: 'Findings',
+            default: []
+        }
+    },
+    type: 'object',
+    required: ['id', 'file_path', 'llm_provider', 'llm_model', 'status', 'workflow_file_id'],
+    title: 'WorkflowFixPublic',
+    description: 'An LLM rewrite of one workflow file.'
+} as const;
+
+export const WorkflowScanPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        status: {
+            '$ref': '#/components/schemas/ScanStatus'
+        },
+        triggered_by: {
+            '$ref': '#/components/schemas/ScanTrigger'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        grade: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Grade'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        completed_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Completed At'
+        },
+        branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Branch'
+        },
+        commit_sha: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Commit Sha'
+        },
+        repo_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Repo Id'
+        },
+        workflow_file_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Workflow File Id'
+        },
+        file_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Path'
+        },
+        repo_full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Repo Full Name'
+        },
+        content_hash: {
+            type: 'string',
+            title: 'Content Hash'
+        }
+    },
+    type: 'object',
+    required: ['id', 'status', 'triggered_by', 'repo_id', 'content_hash'],
+    title: 'WorkflowScanPublic',
+    description: "One static-analysis run over a repository's workflow files."
 } as const;
 
 export const WorkflowSyncSummarySchema = {

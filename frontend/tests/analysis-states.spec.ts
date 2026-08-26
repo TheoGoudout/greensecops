@@ -141,7 +141,7 @@ test.describe("Analysis States", () => {
     const analysisFile2 = {
       ...MOCK_ANALYSIS,
       id: "00000000-0000-0000-0000-000000000099",
-      workflow_file_path: ".github/workflows/deploy.yml",
+      file_path: ".github/workflows/deploy.yml",
       workflow_file_id: "00000000-0000-0000-0000-000000000031",
     }
 

@@ -37,62 +37,6 @@ export type AiProvidersPublic = {
 };
 
 /**
- * AnalysisPublic
- */
-export type AnalysisPublic = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Repo Id
-     */
-    repo_id: string;
-    /**
-     * Workflow File Id
-     */
-    workflow_file_id?: string | null;
-    /**
-     * Workflow File Path
-     */
-    workflow_file_path?: string | null;
-    /**
-     * Repo Full Name
-     */
-    repo_full_name?: string | null;
-    /**
-     * Content Hash
-     */
-    content_hash: string;
-    status: ScanStatus;
-    /**
-     * Score
-     */
-    score?: number | null;
-    /**
-     * Grade
-     */
-    grade?: string | null;
-    triggered_by: ScanTrigger;
-    /**
-     * Branch
-     */
-    branch?: string | null;
-    /**
-     * Commit Sha
-     */
-    commit_sha?: string | null;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Completed At
-     */
-    completed_at?: string | null;
-};
-
-/**
  * AnsibleFilePublic
  * One Ansible file's live source for a project.
  *
@@ -419,35 +363,9 @@ export type BillingSubscriptionPublic = {
 };
 
 /**
- * Body_auth-github_callback
+ * Body_auth-create_token
  */
-export type BodyAuthGithubCallback = {
-    /**
-     * Grant Type
-     */
-    grant_type?: string | null;
-    /**
-     * Code
-     */
-    code: string;
-    /**
-     * Client Id
-     */
-    client_id?: string | null;
-    /**
-     * Redirect Uri
-     */
-    redirect_uri?: string | null;
-    /**
-     * Code Verifier
-     */
-    code_verifier?: string | null;
-};
-
-/**
- * Body_login-login_access_token
- */
-export type BodyLoginLoginAccessToken = {
+export type BodyAuthCreateToken = {
     /**
      * Grant Type
      */
@@ -472,6 +390,32 @@ export type BodyLoginLoginAccessToken = {
      * Client Secret
      */
     client_secret?: string | null;
+};
+
+/**
+ * Body_auth-github_callback
+ */
+export type BodyAuthGithubCallback = {
+    /**
+     * Grant Type
+     */
+    grant_type?: string | null;
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri?: string | null;
+    /**
+     * Code Verifier
+     */
+    code_verifier?: string | null;
 };
 
 /**
@@ -1133,7 +1077,7 @@ export type DynamicAnalysisStatus = 'queued' | 'running' | 'enriched' | 'failed'
  * DynamicEnrichmentPublic
  * A runtime-telemetry finding, exposed for the frontend.
  *
- * Deliberately thinner than ``IssuePublic``: enrichments carry no severity,
+ * Deliberately thinner than ``WorkflowFindingPublic``: enrichments carry no severity,
  * category, status/lifecycle, line numbers, or fix linkage, so they are
  * presented as their own "Runtime findings" class rather than merged into the
  * static issue list.
@@ -1239,7 +1183,7 @@ export type EngineFindingStat = {
     /**
      * By Category
      */
-    by_category: Array<IssueCategoryStat>;
+    by_category: Array<FindingCategoryStat>;
 };
 
 /**
@@ -1355,6 +1299,25 @@ export type ExternalRepositoryCreate = {
 };
 
 /**
+ * FindingCategoryStat
+ */
+export type FindingCategoryStat = {
+    category: Category;
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Resolved
+     */
+    resolved: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+};
+
+/**
  * FindingResolutionReason
  * Why a finding stopped being open.
  *
@@ -1389,9 +1352,10 @@ export type FindingStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
 /**
- * FixIssueSummary
+ * FixFindingSummary
+ * The findings one fix set out to resolve, as the fix detail view lists them.
  */
-export type FixIssueSummary = {
+export type FixFindingSummary = {
     /**
      * Id
      */
@@ -1414,75 +1378,6 @@ export type FixIssueSummary = {
      * Line End
      */
     line_end?: number | null;
-};
-
-/**
- * FixPublic
- */
-export type FixPublic = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Workflow File Id
-     */
-    workflow_file_id: string;
-    /**
-     * Workflow File Path
-     */
-    workflow_file_path?: string | null;
-    /**
-     * Repo Id
-     */
-    repo_id?: string | null;
-    /**
-     * Pr Id
-     */
-    pr_id?: string | null;
-    llm_provider: LlmProvider;
-    /**
-     * Llm Model
-     */
-    llm_model: string;
-    status: FixStatus;
-    /**
-     * Full Content
-     */
-    full_content?: string | null;
-    /**
-     * Base Content
-     */
-    base_content?: string | null;
-    /**
-     * Error Message
-     */
-    error_message?: string | null;
-    /**
-     * Pr Url
-     */
-    pr_url?: string | null;
-    /**
-     * Pr Branch
-     */
-    pr_branch?: string | null;
-    pr_state?: PullRequestState | null;
-    /**
-     * Comment Url
-     */
-    comment_url?: string | null;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Delivered At
-     */
-    delivered_at?: string | null;
-    /**
-     * Issues
-     */
-    issues?: Array<FixIssueSummary>;
 };
 
 /**
@@ -1596,120 +1491,6 @@ export type InvoicePublic = {
 export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 
 /**
- * IssueCategoryStat
- */
-export type IssueCategoryStat = {
-    category: Category;
-    /**
-     * Open
-     */
-    open: number;
-    /**
-     * Resolved
-     */
-    resolved: number;
-    /**
-     * Critical Open
-     */
-    critical_open: number;
-};
-
-/**
- * IssuePublic
- */
-export type IssuePublic = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Analysis Id
-     */
-    analysis_id: string;
-    /**
-     * Rule Id
-     */
-    rule_id: string;
-    /**
-     * Rule Slug
-     */
-    rule_slug: string;
-    severity: Severity;
-    category: Category;
-    /**
-     * Line Start
-     */
-    line_start?: number | null;
-    /**
-     * Line End
-     */
-    line_end?: number | null;
-    /**
-     * Message
-     */
-    message: string;
-    /**
-     * Context
-     */
-    context?: string | null;
-    status: FindingStatus;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Resolved At
-     */
-    resolved_at?: string | null;
-    resolution_reason?: FindingResolutionReason | null;
-    /**
-     * Needs Manual Work
-     */
-    needs_manual_work?: boolean;
-    /**
-     * Manual Work Note
-     */
-    manual_work_note?: string | null;
-    /**
-     * Fix Id
-     */
-    fix_id?: string | null;
-    fix_status?: FixStatus | null;
-    /**
-     * Workflow File Path
-     */
-    workflow_file_path?: string | null;
-};
-
-/**
- * IssueStatsPublic
- * Exact issue counts, computed by SQL aggregation rather than fetched and
- * counted client-side — unaffected by any page's ``skip``/``limit``.
- */
-export type IssueStatsPublic = {
-    /**
-     * Total Open
-     */
-    total_open: number;
-    /**
-     * Total Resolved
-     */
-    total_resolved: number;
-    /**
-     * Critical Open
-     */
-    critical_open: number;
-    /**
-     * By Category
-     */
-    by_category: Array<IssueCategoryStat>;
-    /**
-     * By Repo
-     */
-    by_repo?: Array<RepoIssueStats>;
-};
-
-/**
  * LLMProvider
  */
 export type LlmProvider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
@@ -1739,17 +1520,6 @@ export type NewPassword = {
 };
 
 /**
- * OrganizationAIUpdate
- */
-export type OrganizationAiUpdate = {
-    default_llm_provider?: LlmProvider | null;
-    /**
-     * Default Llm Model
-     */
-    default_llm_model?: string | null;
-};
-
-/**
  * OrganizationPublic
  */
 export type OrganizationPublic = {
@@ -1772,6 +1542,17 @@ export type OrganizationPublic = {
      * Created At
      */
     created_at?: string | null;
+};
+
+/**
+ * OrganizationUpdate
+ */
+export type OrganizationUpdate = {
+    default_llm_provider?: LlmProvider | null;
+    /**
+     * Default Llm Model
+     */
+    default_llm_model?: string | null;
 };
 
 /**
@@ -1924,11 +1705,25 @@ export type OverviewTotals = {
     /**
      * By Category
      */
-    by_category: Array<IssueCategoryStat>;
+    by_category: Array<FindingCategoryStat>;
     /**
      * Engines With Data
      */
     engines_with_data: number;
+};
+
+/**
+ * PasswordRecovery
+ * The address to send a reset link to.
+ *
+ * A body rather than a path segment: an email in a URL lands in every access
+ * log and needs percent-encoding that callers were not doing.
+ */
+export type PasswordRecovery = {
+    /**
+     * Email
+     */
+    email: string;
 };
 
 /**
@@ -2064,10 +1859,10 @@ export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
 
 /**
  * RepoCategoryStat
- * A repo's open-issue counts and severity-weighted grade for one category.
+ * A repo's open-finding counts and severity-weighted grade for one category.
  *
  * ``score``/``grade`` are ``None`` when the repo has no overall grade yet
- * (e.g. no completed analysis). See ``RepoIssueStats`` for how categories
+ * (e.g. no completed scan). See ``RepoFindingStats`` for how categories
  * are grouped per repo.
  */
 export type RepoCategoryStat = {
@@ -2091,19 +1886,19 @@ export type RepoCategoryStat = {
 };
 
 /**
- * RepoIssueStats
- * Per-repo issue breakdown — powers the dashboard's category health star
+ * RepoFindingStats
+ * Per-repo finding breakdown — powers the dashboard's category health star
  * diagram. Only populated on the unscoped (all-repos) stats call;
  * meaningless once already filtered to a single ``repo_id``.
  *
  * ``score``/``grade`` here are the repo's own overall grade (same values as
  * ``RepositoryPublic.avg_score``/``grade``), repeated so the frontend
- * doesn't need a second lookup to size the radar's "no issues" fallback.
+ * doesn't need a second lookup to size the radar's "no findings" fallback.
  * Each entry in ``categories`` covers every ``Category``, including
- * categories with zero open issues, so their scores average out to exactly
+ * categories with zero open findings, so their scores average out to exactly
  * the repo's overall score (see ``compute_category_scores``).
  */
-export type RepoIssueStats = {
+export type RepoFindingStats = {
     /**
      * Repo Id
      */
@@ -2182,6 +1977,25 @@ export type RepositoryPublic = {
 };
 
 /**
+ * RepositoryUpdate
+ * The two switches a repository owner can flip.
+ *
+ * Both are optional: a ``PATCH`` naming only one leaves the other alone.
+ * Enabling either is quota-checked, which is why they are not a blanket
+ * "update the repository" body — nothing else about a repo is user-writable.
+ */
+export type RepositoryUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Auto Fix Enabled
+     */
+    auto_fix_enabled?: boolean | null;
+};
+
+/**
  * ReviewDecision
  * Latest human review decision for a PR, from ``pull_request_review``.
  */
@@ -2213,6 +2027,17 @@ export type RulePublic = {
      * Enabled
      */
     enabled: boolean;
+};
+
+/**
+ * RuleUpdate
+ * A rule's catalog-wide on/off switch.
+ */
+export type RuleUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
 };
 
 /**
@@ -2395,6 +2220,21 @@ export type SamplePayload = {
  * won and migration 0053 rewrote the rows.
  */
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_targets';
+
+/**
+ * ScanTargetUpdate
+ * The mutable part of a registered scan target.
+ *
+ * Every engine enables and disables its target the same way, so one body
+ * serves all of them rather than three identical copies. Optional so a
+ * ``PATCH`` that omits the field leaves it alone.
+ */
+export type ScanTargetUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+};
 
 /**
  * ScanTrigger
@@ -3150,16 +2990,6 @@ export type VersionInfo = {
 };
 
 /**
- * WorkflowDeliverRequest
- */
-export type WorkflowDeliverRequest = {
-    /**
-     * Fix Id
-     */
-    fix_id: string;
-};
-
-/**
  * WorkflowFilePublic
  */
 export type WorkflowFilePublic = {
@@ -3187,6 +3017,233 @@ export type WorkflowFilePublic = {
      * Fetched At
      */
     fetched_at?: string | null;
+};
+
+/**
+ * WorkflowFindingPublic
+ * A rule violation in a workflow file.
+ */
+export type WorkflowFindingPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Slug
+     */
+    rule_slug: string;
+    severity: Severity;
+    category: Category;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Context
+     */
+    context?: string | null;
+    status: FindingStatus;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Resolved At
+     */
+    resolved_at?: string | null;
+    resolution_reason?: FindingResolutionReason | null;
+    /**
+     * Fix Id
+     */
+    fix_id?: string | null;
+    fix_status?: FixStatus | null;
+    /**
+     * File Path
+     */
+    file_path?: string | null;
+    /**
+     * Line Start
+     */
+    line_start?: number | null;
+    /**
+     * Line End
+     */
+    line_end?: number | null;
+    /**
+     * Needs Manual Work
+     */
+    needs_manual_work?: boolean;
+    /**
+     * Manual Work Note
+     */
+    manual_work_note?: string | null;
+};
+
+/**
+ * WorkflowFindingStatsPublic
+ * Exact finding counts, computed by SQL aggregation rather than fetched and
+ * counted client-side — unaffected by any page's ``skip``/``limit``.
+ */
+export type WorkflowFindingStatsPublic = {
+    /**
+     * Total Open
+     */
+    total_open: number;
+    /**
+     * Total Resolved
+     */
+    total_resolved: number;
+    /**
+     * Critical Open
+     */
+    critical_open: number;
+    /**
+     * By Category
+     */
+    by_category: Array<FindingCategoryStat>;
+    /**
+     * By Repo
+     */
+    by_repo?: Array<RepoFindingStats>;
+};
+
+/**
+ * WorkflowFixPublic
+ * An LLM rewrite of one workflow file.
+ */
+export type WorkflowFixPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * File Path
+     */
+    file_path: string;
+    /**
+     * Pr Id
+     */
+    pr_id?: string | null;
+    llm_provider: LlmProvider;
+    /**
+     * Llm Model
+     */
+    llm_model: string;
+    status: FixStatus;
+    /**
+     * Full Content
+     */
+    full_content?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Pr Url
+     */
+    pr_url?: string | null;
+    /**
+     * Pr Branch
+     */
+    pr_branch?: string | null;
+    pr_state?: PullRequestState | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Delivered At
+     */
+    delivered_at?: string | null;
+    /**
+     * Workflow File Id
+     */
+    workflow_file_id: string;
+    /**
+     * Repo Id
+     */
+    repo_id?: string | null;
+    /**
+     * Base Content
+     */
+    base_content?: string | null;
+    /**
+     * Comment Url
+     */
+    comment_url?: string | null;
+    /**
+     * Findings
+     */
+    findings?: Array<FixFindingSummary>;
+};
+
+/**
+ * WorkflowScanPublic
+ * One static-analysis run over a repository's workflow files.
+ */
+export type WorkflowScanPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    status: ScanStatus;
+    triggered_by: ScanTrigger;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * Grade
+     */
+    grade?: string | null;
+    /**
+     * Error Message
+     */
+    error_message?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
+    /**
+     * Branch
+     */
+    branch?: string | null;
+    /**
+     * Commit Sha
+     */
+    commit_sha?: string | null;
+    /**
+     * Repo Id
+     */
+    repo_id: string;
+    /**
+     * Workflow File Id
+     */
+    workflow_file_id?: string | null;
+    /**
+     * File Path
+     */
+    file_path?: string | null;
+    /**
+     * Repo Full Name
+     */
+    repo_full_name?: string | null;
+    /**
+     * Content Hash
+     */
+    content_hash: string;
 };
 
 /**
@@ -3231,101 +3288,146 @@ export type WorkflowSyncSummary = {
     skipped_stale?: number;
 };
 
-export type LoginLoginAccessTokenData = {
-    body: BodyLoginLoginAccessToken;
+export type AuthGithubCallbackData = {
+    body: BodyAuthGithubCallback;
     path?: never;
     query?: never;
-    url: '/api/v1/login/access-token';
+    url: '/api/v1/auth/github/callback';
 };
 
-export type LoginLoginAccessTokenErrors = {
+export type AuthGithubCallbackErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type LoginLoginAccessTokenError = LoginLoginAccessTokenErrors[keyof LoginLoginAccessTokenErrors];
+export type AuthGithubCallbackError = AuthGithubCallbackErrors[keyof AuthGithubCallbackErrors];
 
-export type LoginLoginAccessTokenResponses = {
+export type AuthGithubCallbackResponses = {
     /**
      * Successful Response
      */
     200: Token;
 };
 
-export type LoginLoginAccessTokenResponse = LoginLoginAccessTokenResponses[keyof LoginLoginAccessTokenResponses];
+export type AuthGithubCallbackResponse = AuthGithubCallbackResponses[keyof AuthGithubCallbackResponses];
 
-export type LoginTestTokenData = {
+export type AuthCreateTokenData = {
+    body: BodyAuthCreateToken;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/token';
+};
+
+export type AuthCreateTokenErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AuthCreateTokenError = AuthCreateTokenErrors[keyof AuthCreateTokenErrors];
+
+export type AuthCreateTokenResponses = {
+    /**
+     * Successful Response
+     */
+    200: Token;
+};
+
+export type AuthCreateTokenResponse = AuthCreateTokenResponses[keyof AuthCreateTokenResponses];
+
+export type AuthVerifyTokenData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/login/test-token';
+    url: '/api/v1/auth/token/verify';
 };
 
-export type LoginTestTokenResponses = {
+export type AuthVerifyTokenResponses = {
     /**
      * Successful Response
      */
     200: UserPublic;
 };
 
-export type LoginTestTokenResponse = LoginTestTokenResponses[keyof LoginTestTokenResponses];
+export type AuthVerifyTokenResponse = AuthVerifyTokenResponses[keyof AuthVerifyTokenResponses];
 
-export type LoginRecoverPasswordData = {
-    body?: never;
-    path: {
-        /**
-         * Email
-         */
-        email: string;
-    };
+export type AuthRecoverPasswordData = {
+    body: PasswordRecovery;
+    path?: never;
     query?: never;
-    url: '/api/v1/password-recovery/{email}';
+    url: '/api/v1/auth/password-recovery';
 };
 
-export type LoginRecoverPasswordErrors = {
+export type AuthRecoverPasswordErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type LoginRecoverPasswordError = LoginRecoverPasswordErrors[keyof LoginRecoverPasswordErrors];
+export type AuthRecoverPasswordError = AuthRecoverPasswordErrors[keyof AuthRecoverPasswordErrors];
 
-export type LoginRecoverPasswordResponses = {
+export type AuthRecoverPasswordResponses = {
     /**
      * Successful Response
      */
     200: Message;
 };
 
-export type LoginRecoverPasswordResponse = LoginRecoverPasswordResponses[keyof LoginRecoverPasswordResponses];
+export type AuthRecoverPasswordResponse = AuthRecoverPasswordResponses[keyof AuthRecoverPasswordResponses];
 
-export type LoginResetPasswordData = {
+export type AuthResetPasswordData = {
     body: NewPassword;
     path?: never;
     query?: never;
-    url: '/api/v1/reset-password/';
+    url: '/api/v1/auth/password-reset';
 };
 
-export type LoginResetPasswordErrors = {
+export type AuthResetPasswordErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type LoginResetPasswordError = LoginResetPasswordErrors[keyof LoginResetPasswordErrors];
+export type AuthResetPasswordError = AuthResetPasswordErrors[keyof AuthResetPasswordErrors];
 
-export type LoginResetPasswordResponses = {
+export type AuthResetPasswordResponses = {
     /**
      * Successful Response
      */
     200: Message;
 };
 
-export type LoginResetPasswordResponse = LoginResetPasswordResponses[keyof LoginResetPasswordResponses];
+export type AuthResetPasswordResponse = AuthResetPasswordResponses[keyof AuthResetPasswordResponses];
+
+export type AuthRegisterUserData = {
+    body: UserRegister;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/register';
+};
+
+export type AuthRegisterUserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AuthRegisterUserError = AuthRegisterUserErrors[keyof AuthRegisterUserErrors];
+
+export type AuthRegisterUserResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserPublic;
+};
+
+export type AuthRegisterUserResponse = AuthRegisterUserResponses[keyof AuthRegisterUserResponses];
 
 export type UsersReadUsersData = {
     body?: never;
@@ -3340,7 +3442,7 @@ export type UsersReadUsersData = {
          */
         limit?: number;
     };
-    url: '/api/v1/users/';
+    url: '/api/v1/users';
 };
 
 export type UsersReadUsersErrors = {
@@ -3365,7 +3467,7 @@ export type UsersCreateUserData = {
     body: UserCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/users/';
+    url: '/api/v1/users';
 };
 
 export type UsersCreateUserErrors = {
@@ -3468,31 +3570,6 @@ export type UsersUpdatePasswordMeResponses = {
 
 export type UsersUpdatePasswordMeResponse = UsersUpdatePasswordMeResponses[keyof UsersUpdatePasswordMeResponses];
 
-export type UsersRegisterUserData = {
-    body: UserRegister;
-    path?: never;
-    query?: never;
-    url: '/api/v1/users/signup';
-};
-
-export type UsersRegisterUserErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UsersRegisterUserError = UsersRegisterUserErrors[keyof UsersRegisterUserErrors];
-
-export type UsersRegisterUserResponses = {
-    /**
-     * Successful Response
-     */
-    200: UserPublic;
-};
-
-export type UsersRegisterUserResponse = UsersRegisterUserResponses[keyof UsersRegisterUserResponses];
-
 export type UsersDeleteUserData = {
     body?: never;
     path: {
@@ -3583,7 +3660,7 @@ export type UsersUpdateUserResponses = {
 
 export type UsersUpdateUserResponse = UsersUpdateUserResponses[keyof UsersUpdateUserResponses];
 
-export type UtilsTestEmailData = {
+export type SystemTestEmailData = {
     body?: never;
     path?: never;
     query: {
@@ -3592,90 +3669,65 @@ export type UtilsTestEmailData = {
          */
         email_to: string;
     };
-    url: '/api/v1/utils/test-email/';
+    url: '/api/v1/system/test-email';
 };
 
-export type UtilsTestEmailErrors = {
+export type SystemTestEmailErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type UtilsTestEmailError = UtilsTestEmailErrors[keyof UtilsTestEmailErrors];
+export type SystemTestEmailError = SystemTestEmailErrors[keyof SystemTestEmailErrors];
 
-export type UtilsTestEmailResponses = {
+export type SystemTestEmailResponses = {
     /**
      * Successful Response
      */
     201: Message;
 };
 
-export type UtilsTestEmailResponse = UtilsTestEmailResponses[keyof UtilsTestEmailResponses];
+export type SystemTestEmailResponse = SystemTestEmailResponses[keyof SystemTestEmailResponses];
 
-export type UtilsHealthCheckData = {
+export type SystemHealthData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/utils/health-check/';
+    url: '/api/v1/system/health';
 };
 
-export type UtilsHealthCheckResponses = {
+export type SystemHealthResponses = {
     /**
-     * Response Utils-Health Check
+     * Response System-Health
      * Successful Response
      */
     200: boolean;
 };
 
-export type UtilsHealthCheckResponse = UtilsHealthCheckResponses[keyof UtilsHealthCheckResponses];
+export type SystemHealthResponse = SystemHealthResponses[keyof SystemHealthResponses];
 
-export type UtilsVersionData = {
+export type SystemVersionData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/utils/version/';
+    url: '/api/v1/system/version';
 };
 
-export type UtilsVersionResponses = {
+export type SystemVersionResponses = {
     /**
      * Successful Response
      */
     200: VersionInfo;
 };
 
-export type UtilsVersionResponse = UtilsVersionResponses[keyof UtilsVersionResponses];
-
-export type AuthGithubCallbackData = {
-    body: BodyAuthGithubCallback;
-    path?: never;
-    query?: never;
-    url: '/api/v1/auth/github/callback';
-};
-
-export type AuthGithubCallbackErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AuthGithubCallbackError = AuthGithubCallbackErrors[keyof AuthGithubCallbackErrors];
-
-export type AuthGithubCallbackResponses = {
-    /**
-     * Successful Response
-     */
-    200: Token;
-};
-
-export type AuthGithubCallbackResponse = AuthGithubCallbackResponses[keyof AuthGithubCallbackResponses];
+export type SystemVersionResponse = SystemVersionResponses[keyof SystemVersionResponses];
 
 export type InstallationsListInstallationsData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/installations/';
+    url: '/api/v1/installations';
 };
 
 export type InstallationsListInstallationsResponses = {
@@ -3734,7 +3786,7 @@ export type OrganizationsListMyOrganizationsData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/organizations/';
+    url: '/api/v1/organizations';
 };
 
 export type OrganizationsListMyOrganizationsResponses = {
@@ -3747,8 +3799,8 @@ export type OrganizationsListMyOrganizationsResponses = {
 
 export type OrganizationsListMyOrganizationsResponse = OrganizationsListMyOrganizationsResponses[keyof OrganizationsListMyOrganizationsResponses];
 
-export type OrganizationsUpdateOrgAiPreferencesData = {
-    body: OrganizationAiUpdate;
+export type OrganizationsUpdateOrganizationData = {
+    body: OrganizationUpdate;
     path: {
         /**
          * Org Id
@@ -3756,26 +3808,26 @@ export type OrganizationsUpdateOrgAiPreferencesData = {
         org_id: string;
     };
     query?: never;
-    url: '/api/v1/organizations/{org_id}/ai-preferences';
+    url: '/api/v1/organizations/{org_id}';
 };
 
-export type OrganizationsUpdateOrgAiPreferencesErrors = {
+export type OrganizationsUpdateOrganizationErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type OrganizationsUpdateOrgAiPreferencesError = OrganizationsUpdateOrgAiPreferencesErrors[keyof OrganizationsUpdateOrgAiPreferencesErrors];
+export type OrganizationsUpdateOrganizationError = OrganizationsUpdateOrganizationErrors[keyof OrganizationsUpdateOrganizationErrors];
 
-export type OrganizationsUpdateOrgAiPreferencesResponses = {
+export type OrganizationsUpdateOrganizationResponses = {
     /**
      * Successful Response
      */
     200: OrganizationPublic;
 };
 
-export type OrganizationsUpdateOrgAiPreferencesResponse = OrganizationsUpdateOrgAiPreferencesResponses[keyof OrganizationsUpdateOrgAiPreferencesResponses];
+export type OrganizationsUpdateOrganizationResponse = OrganizationsUpdateOrganizationResponses[keyof OrganizationsUpdateOrganizationResponses];
 
 export type RepositoriesListRepositoriesData = {
     body?: never;
@@ -3798,7 +3850,7 @@ export type RepositoriesListRepositoriesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/repositories/';
+    url: '/api/v1/repositories';
 };
 
 export type RepositoriesListRepositoriesErrors = {
@@ -3910,41 +3962,35 @@ export type RepositoriesGetRepositoryResponses = {
 
 export type RepositoriesGetRepositoryResponse = RepositoriesGetRepositoryResponses[keyof RepositoriesGetRepositoryResponses];
 
-export type RepositoriesListWorkflowFilesData = {
-    body?: never;
+export type RepositoriesUpdateRepositoryData = {
+    body: RepositoryUpdate;
     path: {
         /**
          * Repo Id
          */
         repo_id: string;
     };
-    query?: {
-        /**
-         * Branch
-         */
-        branch?: string | null;
-    };
-    url: '/api/v1/repositories/{repo_id}/workflow-files';
+    query?: never;
+    url: '/api/v1/repositories/{repo_id}';
 };
 
-export type RepositoriesListWorkflowFilesErrors = {
+export type RepositoriesUpdateRepositoryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type RepositoriesListWorkflowFilesError = RepositoriesListWorkflowFilesErrors[keyof RepositoriesListWorkflowFilesErrors];
+export type RepositoriesUpdateRepositoryError = RepositoriesUpdateRepositoryErrors[keyof RepositoriesUpdateRepositoryErrors];
 
-export type RepositoriesListWorkflowFilesResponses = {
+export type RepositoriesUpdateRepositoryResponses = {
     /**
-     * Response Repositories-List Workflow Files
      * Successful Response
      */
-    200: Array<WorkflowFilePublic>;
+    200: RepositoryPublic;
 };
 
-export type RepositoriesListWorkflowFilesResponse = RepositoriesListWorkflowFilesResponses[keyof RepositoriesListWorkflowFilesResponses];
+export type RepositoriesUpdateRepositoryResponse = RepositoriesUpdateRepositoryResponses[keyof RepositoriesUpdateRepositoryResponses];
 
 export type RepositoriesSyncRepositoryWorkflowsData = {
     body?: never;
@@ -3960,7 +4006,7 @@ export type RepositoriesSyncRepositoryWorkflowsData = {
          */
         branch?: string | null;
     };
-    url: '/api/v1/repositories/{repo_id}/sync-workflows';
+    url: '/api/v1/repositories/{repo_id}/workflow-sync';
 };
 
 export type RepositoriesSyncRepositoryWorkflowsErrors = {
@@ -3980,82 +4026,6 @@ export type RepositoriesSyncRepositoryWorkflowsResponses = {
 };
 
 export type RepositoriesSyncRepositoryWorkflowsResponse = RepositoriesSyncRepositoryWorkflowsResponses[keyof RepositoriesSyncRepositoryWorkflowsResponses];
-
-export type RepositoriesToggleRepositoryData = {
-    body?: never;
-    path: {
-        /**
-         * Repo Id
-         */
-        repo_id: string;
-    };
-    query: {
-        /**
-         * Enabled
-         */
-        enabled: boolean;
-    };
-    url: '/api/v1/repositories/{repo_id}/toggle';
-};
-
-export type RepositoriesToggleRepositoryErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RepositoriesToggleRepositoryError = RepositoriesToggleRepositoryErrors[keyof RepositoriesToggleRepositoryErrors];
-
-export type RepositoriesToggleRepositoryResponses = {
-    /**
-     * Response Repositories-Toggle Repository
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | boolean;
-    };
-};
-
-export type RepositoriesToggleRepositoryResponse = RepositoriesToggleRepositoryResponses[keyof RepositoriesToggleRepositoryResponses];
-
-export type RepositoriesToggleAutoFixData = {
-    body?: never;
-    path: {
-        /**
-         * Repo Id
-         */
-        repo_id: string;
-    };
-    query: {
-        /**
-         * Enabled
-         */
-        enabled: boolean;
-    };
-    url: '/api/v1/repositories/{repo_id}/auto-fix';
-};
-
-export type RepositoriesToggleAutoFixErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RepositoriesToggleAutoFixError = RepositoriesToggleAutoFixErrors[keyof RepositoriesToggleAutoFixErrors];
-
-export type RepositoriesToggleAutoFixResponses = {
-    /**
-     * Response Repositories-Toggle Auto Fix
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | boolean;
-    };
-};
-
-export type RepositoriesToggleAutoFixResponse = RepositoriesToggleAutoFixResponses[keyof RepositoriesToggleAutoFixResponses];
 
 export type RepositoriesListRepositoryBranchesData = {
     body?: never;
@@ -4097,7 +4067,7 @@ export type RepositoriesIntegrateActionData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/repositories/{repo_id}/integrate-action';
+    url: '/api/v1/repositories/{repo_id}/action-integration';
 };
 
 export type RepositoriesIntegrateActionErrors = {
@@ -4134,7 +4104,7 @@ export type OverviewGetOverviewData = {
          */
         top_rules_limit?: number;
     };
-    url: '/api/v1/overview/';
+    url: '/api/v1/overview';
 };
 
 export type OverviewGetOverviewErrors = {
@@ -4235,7 +4205,7 @@ export type EventsStreamEventsResponses = {
     200: unknown;
 };
 
-export type WorkflowScansListAnalysesData = {
+export type WorkflowListScansData = {
     body?: never;
     path?: never;
     query?: {
@@ -4264,59 +4234,59 @@ export type WorkflowScansListAnalysesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/workflow-scans/';
+    url: '/api/v1/workflow/scans';
 };
 
-export type WorkflowScansListAnalysesErrors = {
+export type WorkflowListScansErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowScansListAnalysesError = WorkflowScansListAnalysesErrors[keyof WorkflowScansListAnalysesErrors];
+export type WorkflowListScansError = WorkflowListScansErrors[keyof WorkflowListScansErrors];
 
-export type WorkflowScansListAnalysesResponses = {
+export type WorkflowListScansResponses = {
     /**
-     * Response Workflow-Scans-List Analyses
+     * Response Workflow-List Scans
      * Successful Response
      */
-    200: Array<AnalysisPublic>;
+    200: Array<WorkflowScanPublic>;
 };
 
-export type WorkflowScansListAnalysesResponse = WorkflowScansListAnalysesResponses[keyof WorkflowScansListAnalysesResponses];
+export type WorkflowListScansResponse = WorkflowListScansResponses[keyof WorkflowListScansResponses];
 
-export type WorkflowScansGetAnalysisData = {
+export type WorkflowGetScanData = {
     body?: never;
     path: {
         /**
-         * Analysis Id
+         * Scan Id
          */
-        analysis_id: string;
+        scan_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-scans/{analysis_id}';
+    url: '/api/v1/workflow/scans/{scan_id}';
 };
 
-export type WorkflowScansGetAnalysisErrors = {
+export type WorkflowGetScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowScansGetAnalysisError = WorkflowScansGetAnalysisErrors[keyof WorkflowScansGetAnalysisErrors];
+export type WorkflowGetScanError = WorkflowGetScanErrors[keyof WorkflowGetScanErrors];
 
-export type WorkflowScansGetAnalysisResponses = {
+export type WorkflowGetScanResponses = {
     /**
      * Successful Response
      */
-    200: AnalysisPublic;
+    200: WorkflowScanPublic;
 };
 
-export type WorkflowScansGetAnalysisResponse = WorkflowScansGetAnalysisResponses[keyof WorkflowScansGetAnalysisResponses];
+export type WorkflowGetScanResponse = WorkflowGetScanResponses[keyof WorkflowGetScanResponses];
 
-export type WorkflowScansTriggerAnalysisData = {
+export type WorkflowTriggerRepositoryScanData = {
     body?: never;
     path: {
         /**
@@ -4334,21 +4304,21 @@ export type WorkflowScansTriggerAnalysisData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/workflow-scans/trigger/{repo_id}';
+    url: '/api/v1/workflow/repositories/{repo_id}/scans';
 };
 
-export type WorkflowScansTriggerAnalysisErrors = {
+export type WorkflowTriggerRepositoryScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowScansTriggerAnalysisError = WorkflowScansTriggerAnalysisErrors[keyof WorkflowScansTriggerAnalysisErrors];
+export type WorkflowTriggerRepositoryScanError = WorkflowTriggerRepositoryScanErrors[keyof WorkflowTriggerRepositoryScanErrors];
 
-export type WorkflowScansTriggerAnalysisResponses = {
+export type WorkflowTriggerRepositoryScanResponses = {
     /**
-     * Response Workflow-Scans-Trigger Analysis
+     * Response Workflow-Trigger Repository Scan
      * Successful Response
      */
     202: {
@@ -4356,9 +4326,9 @@ export type WorkflowScansTriggerAnalysisResponses = {
     };
 };
 
-export type WorkflowScansTriggerAnalysisResponse = WorkflowScansTriggerAnalysisResponses[keyof WorkflowScansTriggerAnalysisResponses];
+export type WorkflowTriggerRepositoryScanResponse = WorkflowTriggerRepositoryScanResponses[keyof WorkflowTriggerRepositoryScanResponses];
 
-export type WorkflowScansReanalyzeForWorkflowData = {
+export type WorkflowTriggerFileScanData = {
     body?: never;
     path: {
         /**
@@ -4372,21 +4342,21 @@ export type WorkflowScansReanalyzeForWorkflowData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/workflow-scans/reanalyze-for-workflow/{workflow_file_id}';
+    url: '/api/v1/workflow/files/{workflow_file_id}/scans';
 };
 
-export type WorkflowScansReanalyzeForWorkflowErrors = {
+export type WorkflowTriggerFileScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowScansReanalyzeForWorkflowError = WorkflowScansReanalyzeForWorkflowErrors[keyof WorkflowScansReanalyzeForWorkflowErrors];
+export type WorkflowTriggerFileScanError = WorkflowTriggerFileScanErrors[keyof WorkflowTriggerFileScanErrors];
 
-export type WorkflowScansReanalyzeForWorkflowResponses = {
+export type WorkflowTriggerFileScanResponses = {
     /**
-     * Response Workflow-Scans-Reanalyze For Workflow
+     * Response Workflow-Trigger File Scan
      * Successful Response
      */
     202: {
@@ -4394,18 +4364,18 @@ export type WorkflowScansReanalyzeForWorkflowResponses = {
     };
 };
 
-export type WorkflowScansReanalyzeForWorkflowResponse = WorkflowScansReanalyzeForWorkflowResponses[keyof WorkflowScansReanalyzeForWorkflowResponses];
+export type WorkflowTriggerFileScanResponse = WorkflowTriggerFileScanResponses[keyof WorkflowTriggerFileScanResponses];
 
-export type WorkflowScansReanalyzeAllData = {
+export type WorkflowBackfillScansData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/workflow-scans/reanalyze-all';
+    url: '/api/v1/workflow/scans/backfill';
 };
 
-export type WorkflowScansReanalyzeAllResponses = {
+export type WorkflowBackfillScansResponses = {
     /**
-     * Response Workflow-Scans-Reanalyze All
+     * Response Workflow-Backfill Scans
      * Successful Response
      */
     202: {
@@ -4413,16 +4383,52 @@ export type WorkflowScansReanalyzeAllResponses = {
     };
 };
 
-export type WorkflowScansReanalyzeAllResponse = WorkflowScansReanalyzeAllResponses[keyof WorkflowScansReanalyzeAllResponses];
+export type WorkflowBackfillScansResponse = WorkflowBackfillScansResponses[keyof WorkflowBackfillScansResponses];
 
-export type WorkflowFindingsListIssuesData = {
+export type WorkflowListFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Repo Id
+         */
+        repo_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/workflow/repositories/{repo_id}/files';
+};
+
+export type WorkflowListFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type WorkflowListFilesError = WorkflowListFilesErrors[keyof WorkflowListFilesErrors];
+
+export type WorkflowListFilesResponses = {
+    /**
+     * Response Workflow-List Files
+     * Successful Response
+     */
+    200: Array<WorkflowFilePublic>;
+};
+
+export type WorkflowListFilesResponse = WorkflowListFilesResponses[keyof WorkflowListFilesResponses];
+
+export type WorkflowListFindingsData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Analysis Id
+         * Scan Id
          */
-        analysis_id?: string | null;
+        scan_id?: string | null;
         /**
          * Repo Id
          */
@@ -4464,29 +4470,29 @@ export type WorkflowFindingsListIssuesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/workflow-findings/';
+    url: '/api/v1/workflow/findings';
 };
 
-export type WorkflowFindingsListIssuesErrors = {
+export type WorkflowListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFindingsListIssuesError = WorkflowFindingsListIssuesErrors[keyof WorkflowFindingsListIssuesErrors];
+export type WorkflowListFindingsError = WorkflowListFindingsErrors[keyof WorkflowListFindingsErrors];
 
-export type WorkflowFindingsListIssuesResponses = {
+export type WorkflowListFindingsResponses = {
     /**
-     * Response Workflow-Findings-List Issues
+     * Response Workflow-List Findings
      * Successful Response
      */
-    200: Array<IssuePublic>;
+    200: Array<WorkflowFindingPublic>;
 };
 
-export type WorkflowFindingsListIssuesResponse = WorkflowFindingsListIssuesResponses[keyof WorkflowFindingsListIssuesResponses];
+export type WorkflowListFindingsResponse = WorkflowListFindingsResponses[keyof WorkflowListFindingsResponses];
 
-export type WorkflowFindingsGetIssueStatsData = {
+export type WorkflowGetFindingStatsData = {
     body?: never;
     path?: never;
     query?: {
@@ -4503,118 +4509,118 @@ export type WorkflowFindingsGetIssueStatsData = {
          */
         latest_only?: boolean;
     };
-    url: '/api/v1/workflow-findings/stats';
+    url: '/api/v1/workflow/findings/stats';
 };
 
-export type WorkflowFindingsGetIssueStatsErrors = {
+export type WorkflowGetFindingStatsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFindingsGetIssueStatsError = WorkflowFindingsGetIssueStatsErrors[keyof WorkflowFindingsGetIssueStatsErrors];
+export type WorkflowGetFindingStatsError = WorkflowGetFindingStatsErrors[keyof WorkflowGetFindingStatsErrors];
 
-export type WorkflowFindingsGetIssueStatsResponses = {
+export type WorkflowGetFindingStatsResponses = {
     /**
      * Successful Response
      */
-    200: IssueStatsPublic;
+    200: WorkflowFindingStatsPublic;
 };
 
-export type WorkflowFindingsGetIssueStatsResponse = WorkflowFindingsGetIssueStatsResponses[keyof WorkflowFindingsGetIssueStatsResponses];
+export type WorkflowGetFindingStatsResponse = WorkflowGetFindingStatsResponses[keyof WorkflowGetFindingStatsResponses];
 
-export type WorkflowFindingsGetIssueData = {
+export type WorkflowGetFindingData = {
     body?: never;
     path: {
         /**
-         * Issue Id
+         * Finding Id
          */
-        issue_id: string;
+        finding_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-findings/{issue_id}';
+    url: '/api/v1/workflow/findings/{finding_id}';
 };
 
-export type WorkflowFindingsGetIssueErrors = {
+export type WorkflowGetFindingErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFindingsGetIssueError = WorkflowFindingsGetIssueErrors[keyof WorkflowFindingsGetIssueErrors];
+export type WorkflowGetFindingError = WorkflowGetFindingErrors[keyof WorkflowGetFindingErrors];
 
-export type WorkflowFindingsGetIssueResponses = {
+export type WorkflowGetFindingResponses = {
     /**
      * Successful Response
      */
-    200: IssuePublic;
+    200: WorkflowFindingPublic;
 };
 
-export type WorkflowFindingsGetIssueResponse = WorkflowFindingsGetIssueResponses[keyof WorkflowFindingsGetIssueResponses];
+export type WorkflowGetFindingResponse = WorkflowGetFindingResponses[keyof WorkflowGetFindingResponses];
 
-export type WorkflowFindingsIgnoreIssueData = {
+export type WorkflowUnignoreFindingData = {
     body?: never;
     path: {
         /**
-         * Issue Id
+         * Finding Id
          */
-        issue_id: string;
+        finding_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-findings/{issue_id}/ignore';
+    url: '/api/v1/workflow/findings/{finding_id}/ignore';
 };
 
-export type WorkflowFindingsIgnoreIssueErrors = {
+export type WorkflowUnignoreFindingErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFindingsIgnoreIssueError = WorkflowFindingsIgnoreIssueErrors[keyof WorkflowFindingsIgnoreIssueErrors];
+export type WorkflowUnignoreFindingError = WorkflowUnignoreFindingErrors[keyof WorkflowUnignoreFindingErrors];
 
-export type WorkflowFindingsIgnoreIssueResponses = {
+export type WorkflowUnignoreFindingResponses = {
     /**
      * Successful Response
      */
-    200: IssuePublic;
+    200: WorkflowFindingPublic;
 };
 
-export type WorkflowFindingsIgnoreIssueResponse = WorkflowFindingsIgnoreIssueResponses[keyof WorkflowFindingsIgnoreIssueResponses];
+export type WorkflowUnignoreFindingResponse = WorkflowUnignoreFindingResponses[keyof WorkflowUnignoreFindingResponses];
 
-export type WorkflowFindingsUnignoreIssueData = {
+export type WorkflowIgnoreFindingData = {
     body?: never;
     path: {
         /**
-         * Issue Id
+         * Finding Id
          */
-        issue_id: string;
+        finding_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-findings/{issue_id}/unignore';
+    url: '/api/v1/workflow/findings/{finding_id}/ignore';
 };
 
-export type WorkflowFindingsUnignoreIssueErrors = {
+export type WorkflowIgnoreFindingErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFindingsUnignoreIssueError = WorkflowFindingsUnignoreIssueErrors[keyof WorkflowFindingsUnignoreIssueErrors];
+export type WorkflowIgnoreFindingError = WorkflowIgnoreFindingErrors[keyof WorkflowIgnoreFindingErrors];
 
-export type WorkflowFindingsUnignoreIssueResponses = {
+export type WorkflowIgnoreFindingResponses = {
     /**
      * Successful Response
      */
-    200: IssuePublic;
+    200: WorkflowFindingPublic;
 };
 
-export type WorkflowFindingsUnignoreIssueResponse = WorkflowFindingsUnignoreIssueResponses[keyof WorkflowFindingsUnignoreIssueResponses];
+export type WorkflowIgnoreFindingResponse = WorkflowIgnoreFindingResponses[keyof WorkflowIgnoreFindingResponses];
 
-export type WorkflowFixesListFixesData = {
+export type WorkflowListFixesData = {
     body?: never;
     path?: never;
     query?: {
@@ -4639,29 +4645,29 @@ export type WorkflowFixesListFixesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/workflow-fixes/';
+    url: '/api/v1/workflow/fixes';
 };
 
-export type WorkflowFixesListFixesErrors = {
+export type WorkflowListFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesListFixesError = WorkflowFixesListFixesErrors[keyof WorkflowFixesListFixesErrors];
+export type WorkflowListFixesError = WorkflowListFixesErrors[keyof WorkflowListFixesErrors];
 
-export type WorkflowFixesListFixesResponses = {
+export type WorkflowListFixesResponses = {
     /**
-     * Response Workflow-Fixes-List Fixes
+     * Response Workflow-List Fixes
      * Successful Response
      */
-    200: Array<FixPublic>;
+    200: Array<WorkflowFixPublic>;
 };
 
-export type WorkflowFixesListFixesResponse = WorkflowFixesListFixesResponses[keyof WorkflowFixesListFixesResponses];
+export type WorkflowListFixesResponse = WorkflowListFixesResponses[keyof WorkflowListFixesResponses];
 
-export type WorkflowFixesListPullRequestsData = {
+export type WorkflowListPullRequestsData = {
     body?: never;
     path: {
         /**
@@ -4670,29 +4676,29 @@ export type WorkflowFixesListPullRequestsData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/pull-requests/{repo_id}';
+    url: '/api/v1/workflow/repositories/{repo_id}/pull-requests';
 };
 
-export type WorkflowFixesListPullRequestsErrors = {
+export type WorkflowListPullRequestsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesListPullRequestsError = WorkflowFixesListPullRequestsErrors[keyof WorkflowFixesListPullRequestsErrors];
+export type WorkflowListPullRequestsError = WorkflowListPullRequestsErrors[keyof WorkflowListPullRequestsErrors];
 
-export type WorkflowFixesListPullRequestsResponses = {
+export type WorkflowListPullRequestsResponses = {
     /**
-     * Response Workflow-Fixes-List Pull Requests
+     * Response Workflow-List Pull Requests
      * Successful Response
      */
     200: Array<PullRequestPublic>;
 };
 
-export type WorkflowFixesListPullRequestsResponse = WorkflowFixesListPullRequestsResponses[keyof WorkflowFixesListPullRequestsResponses];
+export type WorkflowListPullRequestsResponse = WorkflowListPullRequestsResponses[keyof WorkflowListPullRequestsResponses];
 
-export type WorkflowFixesRejectFixData = {
+export type WorkflowRejectFixData = {
     body?: never;
     path: {
         /**
@@ -4701,28 +4707,28 @@ export type WorkflowFixesRejectFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/{fix_id}';
+    url: '/api/v1/workflow/fixes/{fix_id}';
 };
 
-export type WorkflowFixesRejectFixErrors = {
+export type WorkflowRejectFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesRejectFixError = WorkflowFixesRejectFixErrors[keyof WorkflowFixesRejectFixErrors];
+export type WorkflowRejectFixError = WorkflowRejectFixErrors[keyof WorkflowRejectFixErrors];
 
-export type WorkflowFixesRejectFixResponses = {
+export type WorkflowRejectFixResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type WorkflowFixesRejectFixResponse = WorkflowFixesRejectFixResponses[keyof WorkflowFixesRejectFixResponses];
+export type WorkflowRejectFixResponse = WorkflowRejectFixResponses[keyof WorkflowRejectFixResponses];
 
-export type WorkflowFixesGetFixData = {
+export type WorkflowGetFixData = {
     body?: never;
     path: {
         /**
@@ -4731,28 +4737,28 @@ export type WorkflowFixesGetFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/{fix_id}';
+    url: '/api/v1/workflow/fixes/{fix_id}';
 };
 
-export type WorkflowFixesGetFixErrors = {
+export type WorkflowGetFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesGetFixError = WorkflowFixesGetFixErrors[keyof WorkflowFixesGetFixErrors];
+export type WorkflowGetFixError = WorkflowGetFixErrors[keyof WorkflowGetFixErrors];
 
-export type WorkflowFixesGetFixResponses = {
+export type WorkflowGetFixResponses = {
     /**
      * Successful Response
      */
-    200: FixPublic;
+    200: WorkflowFixPublic;
 };
 
-export type WorkflowFixesGetFixResponse = WorkflowFixesGetFixResponses[keyof WorkflowFixesGetFixResponses];
+export type WorkflowGetFixResponse = WorkflowGetFixResponses[keyof WorkflowGetFixResponses];
 
-export type WorkflowFixesTriggerFixGenerationForRepoData = {
+export type WorkflowGenerateRepositoryFixesData = {
     body?: BatchFixRequest;
     path: {
         /**
@@ -4766,21 +4772,21 @@ export type WorkflowFixesTriggerFixGenerationForRepoData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/workflow-fixes/generate-for-repo/{repo_id}';
+    url: '/api/v1/workflow/repositories/{repo_id}/fixes';
 };
 
-export type WorkflowFixesTriggerFixGenerationForRepoErrors = {
+export type WorkflowGenerateRepositoryFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesTriggerFixGenerationForRepoError = WorkflowFixesTriggerFixGenerationForRepoErrors[keyof WorkflowFixesTriggerFixGenerationForRepoErrors];
+export type WorkflowGenerateRepositoryFixesError = WorkflowGenerateRepositoryFixesErrors[keyof WorkflowGenerateRepositoryFixesErrors];
 
-export type WorkflowFixesTriggerFixGenerationForRepoResponses = {
+export type WorkflowGenerateRepositoryFixesResponses = {
     /**
-     * Response Workflow-Fixes-Trigger Fix Generation For Repo
+     * Response Workflow-Generate Repository Fixes
      * Successful Response
      */
     202: {
@@ -4788,32 +4794,37 @@ export type WorkflowFixesTriggerFixGenerationForRepoResponses = {
     };
 };
 
-export type WorkflowFixesTriggerFixGenerationForRepoResponse = WorkflowFixesTriggerFixGenerationForRepoResponses[keyof WorkflowFixesTriggerFixGenerationForRepoResponses];
+export type WorkflowGenerateRepositoryFixesResponse = WorkflowGenerateRepositoryFixesResponses[keyof WorkflowGenerateRepositoryFixesResponses];
 
-export type WorkflowFixesTriggerWorkflowDeliveryData = {
-    body: WorkflowDeliverRequest;
-    path?: never;
+export type WorkflowDeliverFixData = {
+    body?: never;
+    path: {
+        /**
+         * Fix Id
+         */
+        fix_id: string;
+    };
     query?: {
         /**
          * Force
          */
         force?: boolean;
     };
-    url: '/api/v1/workflow-fixes/deliver-for-workflow';
+    url: '/api/v1/workflow/fixes/{fix_id}/deliveries';
 };
 
-export type WorkflowFixesTriggerWorkflowDeliveryErrors = {
+export type WorkflowDeliverFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesTriggerWorkflowDeliveryError = WorkflowFixesTriggerWorkflowDeliveryErrors[keyof WorkflowFixesTriggerWorkflowDeliveryErrors];
+export type WorkflowDeliverFixError = WorkflowDeliverFixErrors[keyof WorkflowDeliverFixErrors];
 
-export type WorkflowFixesTriggerWorkflowDeliveryResponses = {
+export type WorkflowDeliverFixResponses = {
     /**
-     * Response Workflow-Fixes-Trigger Workflow Delivery
+     * Response Workflow-Deliver Fix
      * Successful Response
      */
     202: {
@@ -4821,9 +4832,9 @@ export type WorkflowFixesTriggerWorkflowDeliveryResponses = {
     };
 };
 
-export type WorkflowFixesTriggerWorkflowDeliveryResponse = WorkflowFixesTriggerWorkflowDeliveryResponses[keyof WorkflowFixesTriggerWorkflowDeliveryResponses];
+export type WorkflowDeliverFixResponse = WorkflowDeliverFixResponses[keyof WorkflowDeliverFixResponses];
 
-export type WorkflowFixesTriggerRepoDeliveryData = {
+export type WorkflowDeliverRepositoryFixesData = {
     body?: never;
     path: {
         /**
@@ -4837,21 +4848,21 @@ export type WorkflowFixesTriggerRepoDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/workflow-fixes/deliver-for-repo/{repo_id}';
+    url: '/api/v1/workflow/repositories/{repo_id}/deliveries';
 };
 
-export type WorkflowFixesTriggerRepoDeliveryErrors = {
+export type WorkflowDeliverRepositoryFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesTriggerRepoDeliveryError = WorkflowFixesTriggerRepoDeliveryErrors[keyof WorkflowFixesTriggerRepoDeliveryErrors];
+export type WorkflowDeliverRepositoryFixesError = WorkflowDeliverRepositoryFixesErrors[keyof WorkflowDeliverRepositoryFixesErrors];
 
-export type WorkflowFixesTriggerRepoDeliveryResponses = {
+export type WorkflowDeliverRepositoryFixesResponses = {
     /**
-     * Response Workflow-Fixes-Trigger Repo Delivery
+     * Response Workflow-Deliver Repository Fixes
      * Successful Response
      */
     202: {
@@ -4859,9 +4870,9 @@ export type WorkflowFixesTriggerRepoDeliveryResponses = {
     };
 };
 
-export type WorkflowFixesTriggerRepoDeliveryResponse = WorkflowFixesTriggerRepoDeliveryResponses[keyof WorkflowFixesTriggerRepoDeliveryResponses];
+export type WorkflowDeliverRepositoryFixesResponse = WorkflowDeliverRepositoryFixesResponses[keyof WorkflowDeliverRepositoryFixesResponses];
 
-export type WorkflowFixesRegenerateFixesForRepoData = {
+export type WorkflowRegenerateRepositoryFixesData = {
     body?: never;
     path: {
         /**
@@ -4870,21 +4881,21 @@ export type WorkflowFixesRegenerateFixesForRepoData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/regenerate-for-repo/{repo_id}';
+    url: '/api/v1/workflow/repositories/{repo_id}/fixes/regenerate';
 };
 
-export type WorkflowFixesRegenerateFixesForRepoErrors = {
+export type WorkflowRegenerateRepositoryFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesRegenerateFixesForRepoError = WorkflowFixesRegenerateFixesForRepoErrors[keyof WorkflowFixesRegenerateFixesForRepoErrors];
+export type WorkflowRegenerateRepositoryFixesError = WorkflowRegenerateRepositoryFixesErrors[keyof WorkflowRegenerateRepositoryFixesErrors];
 
-export type WorkflowFixesRegenerateFixesForRepoResponses = {
+export type WorkflowRegenerateRepositoryFixesResponses = {
     /**
-     * Response Workflow-Fixes-Regenerate Fixes For Repo
+     * Response Workflow-Regenerate Repository Fixes
      * Successful Response
      */
     202: {
@@ -4892,9 +4903,9 @@ export type WorkflowFixesRegenerateFixesForRepoResponses = {
     };
 };
 
-export type WorkflowFixesRegenerateFixesForRepoResponse = WorkflowFixesRegenerateFixesForRepoResponses[keyof WorkflowFixesRegenerateFixesForRepoResponses];
+export type WorkflowRegenerateRepositoryFixesResponse = WorkflowRegenerateRepositoryFixesResponses[keyof WorkflowRegenerateRepositoryFixesResponses];
 
-export type WorkflowFixesRegenerateFixesForWorkflowData = {
+export type WorkflowRegenerateFixData = {
     body?: never;
     path: {
         /**
@@ -4903,21 +4914,21 @@ export type WorkflowFixesRegenerateFixesForWorkflowData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/regenerate-for-workflow/{fix_id}';
+    url: '/api/v1/workflow/fixes/{fix_id}/regenerate';
 };
 
-export type WorkflowFixesRegenerateFixesForWorkflowErrors = {
+export type WorkflowRegenerateFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesRegenerateFixesForWorkflowError = WorkflowFixesRegenerateFixesForWorkflowErrors[keyof WorkflowFixesRegenerateFixesForWorkflowErrors];
+export type WorkflowRegenerateFixError = WorkflowRegenerateFixErrors[keyof WorkflowRegenerateFixErrors];
 
-export type WorkflowFixesRegenerateFixesForWorkflowResponses = {
+export type WorkflowRegenerateFixResponses = {
     /**
-     * Response Workflow-Fixes-Regenerate Fixes For Workflow
+     * Response Workflow-Regenerate Fix
      * Successful Response
      */
     202: {
@@ -4925,9 +4936,9 @@ export type WorkflowFixesRegenerateFixesForWorkflowResponses = {
     };
 };
 
-export type WorkflowFixesRegenerateFixesForWorkflowResponse = WorkflowFixesRegenerateFixesForWorkflowResponses[keyof WorkflowFixesRegenerateFixesForWorkflowResponses];
+export type WorkflowRegenerateFixResponse = WorkflowRegenerateFixResponses[keyof WorkflowRegenerateFixResponses];
 
-export type WorkflowFixesRegenerateFailedFixData = {
+export type WorkflowRetryFixData = {
     body?: never;
     path: {
         /**
@@ -4936,21 +4947,21 @@ export type WorkflowFixesRegenerateFailedFixData = {
         fix_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/{fix_id}/regenerate';
+    url: '/api/v1/workflow/fixes/{fix_id}/retry';
 };
 
-export type WorkflowFixesRegenerateFailedFixErrors = {
+export type WorkflowRetryFixErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesRegenerateFailedFixError = WorkflowFixesRegenerateFailedFixErrors[keyof WorkflowFixesRegenerateFailedFixErrors];
+export type WorkflowRetryFixError = WorkflowRetryFixErrors[keyof WorkflowRetryFixErrors];
 
-export type WorkflowFixesRegenerateFailedFixResponses = {
+export type WorkflowRetryFixResponses = {
     /**
-     * Response Workflow-Fixes-Regenerate Failed Fix
+     * Response Workflow-Retry Fix
      * Successful Response
      */
     202: {
@@ -4958,9 +4969,9 @@ export type WorkflowFixesRegenerateFailedFixResponses = {
     };
 };
 
-export type WorkflowFixesRegenerateFailedFixResponse = WorkflowFixesRegenerateFailedFixResponses[keyof WorkflowFixesRegenerateFailedFixResponses];
+export type WorkflowRetryFixResponse = WorkflowRetryFixResponses[keyof WorkflowRetryFixResponses];
 
-export type WorkflowFixesSyncPrStatusesData = {
+export type WorkflowSyncPullRequestStatusesData = {
     body?: never;
     path: {
         /**
@@ -4969,21 +4980,21 @@ export type WorkflowFixesSyncPrStatusesData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/workflow-fixes/sync-pr-status/{repo_id}';
+    url: '/api/v1/workflow/repositories/{repo_id}/pull-requests/sync';
 };
 
-export type WorkflowFixesSyncPrStatusesErrors = {
+export type WorkflowSyncPullRequestStatusesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WorkflowFixesSyncPrStatusesError = WorkflowFixesSyncPrStatusesErrors[keyof WorkflowFixesSyncPrStatusesErrors];
+export type WorkflowSyncPullRequestStatusesError = WorkflowSyncPullRequestStatusesErrors[keyof WorkflowSyncPullRequestStatusesErrors];
 
-export type WorkflowFixesSyncPrStatusesResponses = {
+export type WorkflowSyncPullRequestStatusesResponses = {
     /**
-     * Response Workflow-Fixes-Sync Pr Statuses
+     * Response Workflow-Sync Pull Request Statuses
      * Successful Response
      */
     200: {
@@ -4991,7 +5002,7 @@ export type WorkflowFixesSyncPrStatusesResponses = {
     };
 };
 
-export type WorkflowFixesSyncPrStatusesResponse = WorkflowFixesSyncPrStatusesResponses[keyof WorkflowFixesSyncPrStatusesResponses];
+export type WorkflowSyncPullRequestStatusesResponse = WorkflowSyncPullRequestStatusesResponses[keyof WorkflowSyncPullRequestStatusesResponses];
 
 export type RulesListRulesData = {
     body?: never;
@@ -5014,7 +5025,7 @@ export type RulesListRulesData = {
          */
         limit?: number;
     };
-    url: '/api/v1/rules/';
+    url: '/api/v1/rules';
 };
 
 export type RulesListRulesErrors = {
@@ -5066,40 +5077,35 @@ export type RulesGetRuleResponses = {
 
 export type RulesGetRuleResponse = RulesGetRuleResponses[keyof RulesGetRuleResponses];
 
-export type RulesToggleRuleData = {
-    body?: never;
+export type RulesUpdateRuleData = {
+    body: RuleUpdate;
     path: {
         /**
          * Rule Id
          */
         rule_id: string;
     };
-    query: {
-        /**
-         * Enabled
-         */
-        enabled: boolean;
-    };
-    url: '/api/v1/rules/{rule_id}/toggle';
+    query?: never;
+    url: '/api/v1/rules/{rule_id}';
 };
 
-export type RulesToggleRuleErrors = {
+export type RulesUpdateRuleErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type RulesToggleRuleError = RulesToggleRuleErrors[keyof RulesToggleRuleErrors];
+export type RulesUpdateRuleError = RulesUpdateRuleErrors[keyof RulesUpdateRuleErrors];
 
-export type RulesToggleRuleResponses = {
+export type RulesUpdateRuleResponses = {
     /**
      * Successful Response
      */
     200: RulePublic;
 };
 
-export type RulesToggleRuleResponse = RulesToggleRuleResponses[keyof RulesToggleRuleResponses];
+export type RulesUpdateRuleResponse = RulesUpdateRuleResponses[keyof RulesUpdateRuleResponses];
 
 export type WebhooksGithubWebhookData = {
     body?: never;
@@ -5143,6 +5149,40 @@ export type WebhooksGithubWebhookResponses = {
 
 export type WebhooksGithubWebhookResponse = WebhooksGithubWebhookResponses[keyof WebhooksGithubWebhookResponses];
 
+export type WebhooksStripeWebhookData = {
+    body?: never;
+    headers?: {
+        /**
+         * Stripe-Signature
+         */
+        'stripe-signature'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/webhooks/stripe';
+};
+
+export type WebhooksStripeWebhookErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type WebhooksStripeWebhookError = WebhooksStripeWebhookErrors[keyof WebhooksStripeWebhookErrors];
+
+export type WebhooksStripeWebhookResponses = {
+    /**
+     * Response Webhooks-Stripe Webhook
+     * Successful Response
+     */
+    200: {
+        [key: string]: string;
+    };
+};
+
+export type WebhooksStripeWebhookResponse = WebhooksStripeWebhookResponses[keyof WebhooksStripeWebhookResponses];
+
 export type BadgesGetBadgeData = {
     body?: never;
     path: {
@@ -5165,7 +5205,7 @@ export type BadgesGetBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/{owner}/{repo}/{branch}.svg';
+    url: '/api/v1/badges/repositories/{owner}/{repo}/{branch}.svg';
 };
 
 export type BadgesGetBadgeErrors = {
@@ -5206,7 +5246,7 @@ export type BadgesGetBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/{owner}/{repo}/{branch}.json';
+    url: '/api/v1/badges/repositories/{owner}/{repo}/{branch}.json';
 };
 
 export type BadgesGetBadgeJsonErrors = {
@@ -5244,7 +5284,7 @@ export type BadgesGetTerraformRootBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/terraform/{root_id}.svg';
+    url: '/api/v1/badges/terraform-roots/{root_id}.svg';
 };
 
 export type BadgesGetTerraformRootBadgeErrors = {
@@ -5277,7 +5317,7 @@ export type BadgesGetTerraformRootBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/terraform/{root_id}.json';
+    url: '/api/v1/badges/terraform-roots/{root_id}.json';
 };
 
 export type BadgesGetTerraformRootBadgeJsonErrors = {
@@ -5386,7 +5426,7 @@ export type BadgesGetDockerTargetBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/docker/{target_id}.svg';
+    url: '/api/v1/badges/docker-targets/{target_id}.svg';
 };
 
 export type BadgesGetDockerTargetBadgeErrors = {
@@ -5419,7 +5459,7 @@ export type BadgesGetDockerTargetBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/docker/{target_id}.json';
+    url: '/api/v1/badges/docker-targets/{target_id}.json';
 };
 
 export type BadgesGetDockerTargetBadgeJsonErrors = {
@@ -5443,7 +5483,7 @@ export type BadgesGetDockerTargetBadgeJsonResponses = {
 
 export type BadgesGetDockerTargetBadgeJsonResponse = BadgesGetDockerTargetBadgeJsonResponses[keyof BadgesGetDockerTargetBadgeJsonResponses];
 
-export type TelemetryIngestTelemetryData = {
+export type TelemetryIngestRunData = {
     body: TelemetryPayload;
     headers?: {
         /**
@@ -5453,21 +5493,21 @@ export type TelemetryIngestTelemetryData = {
     };
     path?: never;
     query?: never;
-    url: '/api/v1/telemetry/ingest';
+    url: '/api/v1/telemetry/runs';
 };
 
-export type TelemetryIngestTelemetryErrors = {
+export type TelemetryIngestRunErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TelemetryIngestTelemetryError = TelemetryIngestTelemetryErrors[keyof TelemetryIngestTelemetryErrors];
+export type TelemetryIngestRunError = TelemetryIngestRunErrors[keyof TelemetryIngestRunErrors];
 
-export type TelemetryIngestTelemetryResponses = {
+export type TelemetryIngestRunResponses = {
     /**
-     * Response Telemetry-Ingest Telemetry
+     * Response Telemetry-Ingest Run
      * Successful Response
      */
     201: {
@@ -5475,7 +5515,7 @@ export type TelemetryIngestTelemetryResponses = {
     };
 };
 
-export type TelemetryIngestTelemetryResponse = TelemetryIngestTelemetryResponses[keyof TelemetryIngestTelemetryResponses];
+export type TelemetryIngestRunResponse = TelemetryIngestRunResponses[keyof TelemetryIngestRunResponses];
 
 export type TelemetryIngestDockerBuildData = {
     body: DockerBuildPayload;
@@ -5487,7 +5527,7 @@ export type TelemetryIngestDockerBuildData = {
     };
     path?: never;
     query?: never;
-    url: '/api/v1/telemetry/docker-build';
+    url: '/api/v1/telemetry/docker-builds';
 };
 
 export type TelemetryIngestDockerBuildErrors = {
@@ -5521,7 +5561,7 @@ export type TelemetryIngestSampleData = {
     };
     path?: never;
     query?: never;
-    url: '/api/v1/telemetry/sample';
+    url: '/api/v1/telemetry/samples';
 };
 
 export type TelemetryIngestSampleErrors = {
@@ -5545,7 +5585,7 @@ export type TelemetryIngestSampleResponses = {
 
 export type TelemetryIngestSampleResponse = TelemetryIngestSampleResponses[keyof TelemetryIngestSampleResponses];
 
-export type TelemetryGetTelemetrySummaryData = {
+export type TelemetryGetSummaryData = {
     body?: never;
     path: {
         /**
@@ -5563,28 +5603,28 @@ export type TelemetryGetTelemetrySummaryData = {
          */
         skip?: number;
     };
-    url: '/api/v1/telemetry/summary/{repo_id}';
+    url: '/api/v1/telemetry/repositories/{repo_id}';
 };
 
-export type TelemetryGetTelemetrySummaryErrors = {
+export type TelemetryGetSummaryErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TelemetryGetTelemetrySummaryError = TelemetryGetTelemetrySummaryErrors[keyof TelemetryGetTelemetrySummaryErrors];
+export type TelemetryGetSummaryError = TelemetryGetSummaryErrors[keyof TelemetryGetSummaryErrors];
 
-export type TelemetryGetTelemetrySummaryResponses = {
+export type TelemetryGetSummaryResponses = {
     /**
      * Successful Response
      */
     200: TelemetrySummaryPublic;
 };
 
-export type TelemetryGetTelemetrySummaryResponse = TelemetryGetTelemetrySummaryResponses[keyof TelemetryGetTelemetrySummaryResponses];
+export type TelemetryGetSummaryResponse = TelemetryGetSummaryResponses[keyof TelemetryGetSummaryResponses];
 
-export type TelemetryGetTelemetryFindingsData = {
+export type TelemetryListFindingsData = {
     body?: never;
     path: {
         /**
@@ -5593,29 +5633,29 @@ export type TelemetryGetTelemetryFindingsData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/telemetry/findings/{repo_id}';
+    url: '/api/v1/telemetry/repositories/{repo_id}/findings';
 };
 
-export type TelemetryGetTelemetryFindingsErrors = {
+export type TelemetryListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TelemetryGetTelemetryFindingsError = TelemetryGetTelemetryFindingsErrors[keyof TelemetryGetTelemetryFindingsErrors];
+export type TelemetryListFindingsError = TelemetryListFindingsErrors[keyof TelemetryListFindingsErrors];
 
-export type TelemetryGetTelemetryFindingsResponses = {
+export type TelemetryListFindingsResponses = {
     /**
-     * Response Telemetry-Get Telemetry Findings
+     * Response Telemetry-List Findings
      * Successful Response
      */
     200: Array<DynamicEnrichmentPublic>;
 };
 
-export type TelemetryGetTelemetryFindingsResponse = TelemetryGetTelemetryFindingsResponses[keyof TelemetryGetTelemetryFindingsResponses];
+export type TelemetryListFindingsResponse = TelemetryListFindingsResponses[keyof TelemetryListFindingsResponses];
 
-export type TelemetryAnalyzeTelemetryData = {
+export type TelemetryTriggerScanData = {
     body?: never;
     path: {
         /**
@@ -5624,21 +5664,21 @@ export type TelemetryAnalyzeTelemetryData = {
         repo_id: string;
     };
     query?: never;
-    url: '/api/v1/telemetry/analyze/{repo_id}';
+    url: '/api/v1/telemetry/repositories/{repo_id}/scans';
 };
 
-export type TelemetryAnalyzeTelemetryErrors = {
+export type TelemetryTriggerScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TelemetryAnalyzeTelemetryError = TelemetryAnalyzeTelemetryErrors[keyof TelemetryAnalyzeTelemetryErrors];
+export type TelemetryTriggerScanError = TelemetryTriggerScanErrors[keyof TelemetryTriggerScanErrors];
 
-export type TelemetryAnalyzeTelemetryResponses = {
+export type TelemetryTriggerScanResponses = {
     /**
-     * Response Telemetry-Analyze Telemetry
+     * Response Telemetry-Trigger Scan
      * Successful Response
      */
     202: {
@@ -5646,7 +5686,7 @@ export type TelemetryAnalyzeTelemetryResponses = {
     };
 };
 
-export type TelemetryAnalyzeTelemetryResponse = TelemetryAnalyzeTelemetryResponses[keyof TelemetryAnalyzeTelemetryResponses];
+export type TelemetryTriggerScanResponse = TelemetryTriggerScanResponses[keyof TelemetryTriggerScanResponses];
 
 export type BillingListPlansData = {
     body?: never;
@@ -5733,69 +5773,69 @@ export type BillingListInvoicesResponses = {
 
 export type BillingListInvoicesResponse = BillingListInvoicesResponses[keyof BillingListInvoicesResponses];
 
-export type BillingCreateCheckoutData = {
+export type BillingCreateCheckoutSessionData = {
     body: CheckoutRequest;
     path?: never;
     query?: never;
-    url: '/api/v1/billing/checkout';
+    url: '/api/v1/billing/checkout-sessions';
 };
 
-export type BillingCreateCheckoutErrors = {
+export type BillingCreateCheckoutSessionErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type BillingCreateCheckoutError = BillingCreateCheckoutErrors[keyof BillingCreateCheckoutErrors];
+export type BillingCreateCheckoutSessionError = BillingCreateCheckoutSessionErrors[keyof BillingCreateCheckoutSessionErrors];
 
-export type BillingCreateCheckoutResponses = {
+export type BillingCreateCheckoutSessionResponses = {
     /**
      * Successful Response
      */
     200: CheckoutSessionPublic;
 };
 
-export type BillingCreateCheckoutResponse = BillingCreateCheckoutResponses[keyof BillingCreateCheckoutResponses];
+export type BillingCreateCheckoutSessionResponse = BillingCreateCheckoutSessionResponses[keyof BillingCreateCheckoutSessionResponses];
 
-export type BillingCreatePortalData = {
+export type BillingCreatePortalSessionData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/billing/portal';
+    url: '/api/v1/billing/portal-sessions';
 };
 
-export type BillingCreatePortalResponses = {
+export type BillingCreatePortalSessionResponses = {
     /**
      * Successful Response
      */
     200: CheckoutSessionPublic;
 };
 
-export type BillingCreatePortalResponse = BillingCreatePortalResponses[keyof BillingCreatePortalResponses];
+export type BillingCreatePortalSessionResponse = BillingCreatePortalSessionResponses[keyof BillingCreatePortalSessionResponses];
 
-export type BillingListMyOssApplicationsData = {
+export type BillingListOssApplicationsData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/billing/oss-application';
+    url: '/api/v1/billing/oss-applications';
 };
 
-export type BillingListMyOssApplicationsResponses = {
+export type BillingListOssApplicationsResponses = {
     /**
-     * Response Billing-List My Oss Applications
+     * Response Billing-List Oss Applications
      * Successful Response
      */
     200: Array<OssApplicationPublic>;
 };
 
-export type BillingListMyOssApplicationsResponse = BillingListMyOssApplicationsResponses[keyof BillingListMyOssApplicationsResponses];
+export type BillingListOssApplicationsResponse = BillingListOssApplicationsResponses[keyof BillingListOssApplicationsResponses];
 
 export type BillingCreateOssApplicationData = {
     body: OssApplicationCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/billing/oss-application';
+    url: '/api/v1/billing/oss-applications';
 };
 
 export type BillingCreateOssApplicationErrors = {
@@ -5816,7 +5856,7 @@ export type BillingCreateOssApplicationResponses = {
 
 export type BillingCreateOssApplicationResponse = BillingCreateOssApplicationResponses[keyof BillingCreateOssApplicationResponses];
 
-export type BillingListOssApplicationsData = {
+export type BillingListAllOssApplicationsData = {
     body?: never;
     path?: never;
     query?: {
@@ -5825,27 +5865,27 @@ export type BillingListOssApplicationsData = {
          */
         status?: OssApplicationStatus | null;
     };
-    url: '/api/v1/billing/oss-applications';
+    url: '/api/v1/billing/oss-applications/all';
 };
 
-export type BillingListOssApplicationsErrors = {
+export type BillingListAllOssApplicationsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type BillingListOssApplicationsError = BillingListOssApplicationsErrors[keyof BillingListOssApplicationsErrors];
+export type BillingListAllOssApplicationsError = BillingListAllOssApplicationsErrors[keyof BillingListAllOssApplicationsErrors];
 
-export type BillingListOssApplicationsResponses = {
+export type BillingListAllOssApplicationsResponses = {
     /**
-     * Response Billing-List Oss Applications
+     * Response Billing-List All Oss Applications
      * Successful Response
      */
     200: Array<OssApplicationPublic>;
 };
 
-export type BillingListOssApplicationsResponse = BillingListOssApplicationsResponses[keyof BillingListOssApplicationsResponses];
+export type BillingListAllOssApplicationsResponse = BillingListAllOssApplicationsResponses[keyof BillingListAllOssApplicationsResponses];
 
 export type BillingReviewOssApplicationData = {
     body: OssApplicationReview;
@@ -5876,40 +5916,6 @@ export type BillingReviewOssApplicationResponses = {
 };
 
 export type BillingReviewOssApplicationResponse = BillingReviewOssApplicationResponses[keyof BillingReviewOssApplicationResponses];
-
-export type BillingStripeWebhookData = {
-    body?: never;
-    headers?: {
-        /**
-         * Stripe-Signature
-         */
-        'stripe-signature'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/billing/webhook/stripe';
-};
-
-export type BillingStripeWebhookErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type BillingStripeWebhookError = BillingStripeWebhookErrors[keyof BillingStripeWebhookErrors];
-
-export type BillingStripeWebhookResponses = {
-    /**
-     * Response Billing-Stripe Webhook
-     * Successful Response
-     */
-    200: {
-        [key: string]: string;
-    };
-};
-
-export type BillingStripeWebhookResponse = BillingStripeWebhookResponses[keyof BillingStripeWebhookResponses];
 
 export type AnsibleListAnsibleProjectsData = {
     body?: never;
@@ -6286,7 +6292,7 @@ export type AnsibleTriggerAnsibleDeliveryResponses = {
 
 export type AnsibleTriggerAnsibleDeliveryResponse = AnsibleTriggerAnsibleDeliveryResponses[keyof AnsibleTriggerAnsibleDeliveryResponses];
 
-export type TerraformListTerraformRootsData = {
+export type TerraformListRootsData = {
     body?: never;
     path?: never;
     query?: {
@@ -6295,92 +6301,54 @@ export type TerraformListTerraformRootsData = {
          */
         repo_id?: string | null;
     };
-    url: '/api/v1/terraform-roots/';
+    url: '/api/v1/terraform/roots';
 };
 
-export type TerraformListTerraformRootsErrors = {
+export type TerraformListRootsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformListTerraformRootsError = TerraformListTerraformRootsErrors[keyof TerraformListTerraformRootsErrors];
+export type TerraformListRootsError = TerraformListRootsErrors[keyof TerraformListRootsErrors];
 
-export type TerraformListTerraformRootsResponses = {
+export type TerraformListRootsResponses = {
     /**
-     * Response Terraform-List Terraform Roots
+     * Response Terraform-List Roots
      * Successful Response
      */
     200: Array<TerraformRootPublic>;
 };
 
-export type TerraformListTerraformRootsResponse = TerraformListTerraformRootsResponses[keyof TerraformListTerraformRootsResponses];
+export type TerraformListRootsResponse = TerraformListRootsResponses[keyof TerraformListRootsResponses];
 
-export type TerraformCreateTerraformRootData = {
+export type TerraformCreateRootData = {
     body: TerraformRootCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/terraform-roots/';
+    url: '/api/v1/terraform/roots';
 };
 
-export type TerraformCreateTerraformRootErrors = {
+export type TerraformCreateRootErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformCreateTerraformRootError = TerraformCreateTerraformRootErrors[keyof TerraformCreateTerraformRootErrors];
+export type TerraformCreateRootError = TerraformCreateRootErrors[keyof TerraformCreateRootErrors];
 
-export type TerraformCreateTerraformRootResponses = {
+export type TerraformCreateRootResponses = {
     /**
      * Successful Response
      */
     201: TerraformRootPublic;
 };
 
-export type TerraformCreateTerraformRootResponse = TerraformCreateTerraformRootResponses[keyof TerraformCreateTerraformRootResponses];
+export type TerraformCreateRootResponse = TerraformCreateRootResponses[keyof TerraformCreateRootResponses];
 
-export type TerraformToggleTerraformRootData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query: {
-        /**
-         * Enabled
-         */
-        enabled: boolean;
-    };
-    url: '/api/v1/terraform-roots/{root_id}/toggle';
-};
-
-export type TerraformToggleTerraformRootErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformToggleTerraformRootError = TerraformToggleTerraformRootErrors[keyof TerraformToggleTerraformRootErrors];
-
-export type TerraformToggleTerraformRootResponses = {
-    /**
-     * Response Terraform-Toggle Terraform Root
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | boolean;
-    };
-};
-
-export type TerraformToggleTerraformRootResponse = TerraformToggleTerraformRootResponses[keyof TerraformToggleTerraformRootResponses];
-
-export type TerraformDeleteTerraformRootData = {
+export type TerraformDeleteRootData = {
     body?: never;
     path: {
         /**
@@ -6389,28 +6357,89 @@ export type TerraformDeleteTerraformRootData = {
         root_id: string;
     };
     query?: never;
-    url: '/api/v1/terraform-roots/{root_id}';
+    url: '/api/v1/terraform/roots/{root_id}';
 };
 
-export type TerraformDeleteTerraformRootErrors = {
+export type TerraformDeleteRootErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformDeleteTerraformRootError = TerraformDeleteTerraformRootErrors[keyof TerraformDeleteTerraformRootErrors];
+export type TerraformDeleteRootError = TerraformDeleteRootErrors[keyof TerraformDeleteRootErrors];
 
-export type TerraformDeleteTerraformRootResponses = {
+export type TerraformDeleteRootResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type TerraformDeleteTerraformRootResponse = TerraformDeleteTerraformRootResponses[keyof TerraformDeleteTerraformRootResponses];
+export type TerraformDeleteRootResponse = TerraformDeleteRootResponses[keyof TerraformDeleteRootResponses];
 
-export type TerraformTriggerTerraformScanData = {
+export type TerraformUpdateRootData = {
+    body: ScanTargetUpdate;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/roots/{root_id}';
+};
+
+export type TerraformUpdateRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformUpdateRootError = TerraformUpdateRootErrors[keyof TerraformUpdateRootErrors];
+
+export type TerraformUpdateRootResponses = {
+    /**
+     * Successful Response
+     */
+    200: TerraformRootPublic;
+};
+
+export type TerraformUpdateRootResponse = TerraformUpdateRootResponses[keyof TerraformUpdateRootResponses];
+
+export type TerraformListScansData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/roots/{root_id}/scans';
+};
+
+export type TerraformListScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListScansError = TerraformListScansErrors[keyof TerraformListScansErrors];
+
+export type TerraformListScansResponses = {
+    /**
+     * Response Terraform-List Scans
+     * Successful Response
+     */
+    200: Array<TerraformScanPublic>;
+};
+
+export type TerraformListScansResponse = TerraformListScansResponses[keyof TerraformListScansResponses];
+
+export type TerraformTriggerScanData = {
     body?: never;
     path: {
         /**
@@ -6424,21 +6453,21 @@ export type TerraformTriggerTerraformScanData = {
          */
         branch?: string | null;
     };
-    url: '/api/v1/terraform-roots/{root_id}/scan';
+    url: '/api/v1/terraform/roots/{root_id}/scans';
 };
 
-export type TerraformTriggerTerraformScanErrors = {
+export type TerraformTriggerScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformTriggerTerraformScanError = TerraformTriggerTerraformScanErrors[keyof TerraformTriggerTerraformScanErrors];
+export type TerraformTriggerScanError = TerraformTriggerScanErrors[keyof TerraformTriggerScanErrors];
 
-export type TerraformTriggerTerraformScanResponses = {
+export type TerraformTriggerScanResponses = {
     /**
-     * Response Terraform-Trigger Terraform Scan
+     * Response Terraform-Trigger Scan
      * Successful Response
      */
     202: {
@@ -6446,40 +6475,9 @@ export type TerraformTriggerTerraformScanResponses = {
     };
 };
 
-export type TerraformTriggerTerraformScanResponse = TerraformTriggerTerraformScanResponses[keyof TerraformTriggerTerraformScanResponses];
+export type TerraformTriggerScanResponse = TerraformTriggerScanResponses[keyof TerraformTriggerScanResponses];
 
-export type TerraformListTerraformScansData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: never;
-    url: '/api/v1/terraform-roots/{root_id}/scans';
-};
-
-export type TerraformListTerraformScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformListTerraformScansError = TerraformListTerraformScansErrors[keyof TerraformListTerraformScansErrors];
-
-export type TerraformListTerraformScansResponses = {
-    /**
-     * Response Terraform-List Terraform Scans
-     * Successful Response
-     */
-    200: Array<TerraformScanPublic>;
-};
-
-export type TerraformListTerraformScansResponse = TerraformListTerraformScansResponses[keyof TerraformListTerraformScansResponses];
-
-export type TerraformListTerraformFindingsData = {
+export type TerraformListFindingsData = {
     body?: never;
     path: {
         /**
@@ -6493,29 +6491,29 @@ export type TerraformListTerraformFindingsData = {
          */
         include_resolved?: boolean;
     };
-    url: '/api/v1/terraform-roots/{root_id}/findings';
+    url: '/api/v1/terraform/roots/{root_id}/findings';
 };
 
-export type TerraformListTerraformFindingsErrors = {
+export type TerraformListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformListTerraformFindingsError = TerraformListTerraformFindingsErrors[keyof TerraformListTerraformFindingsErrors];
+export type TerraformListFindingsError = TerraformListFindingsErrors[keyof TerraformListFindingsErrors];
 
-export type TerraformListTerraformFindingsResponses = {
+export type TerraformListFindingsResponses = {
     /**
-     * Response Terraform-List Terraform Findings
+     * Response Terraform-List Findings
      * Successful Response
      */
     200: Array<TerraformFindingPublic>;
 };
 
-export type TerraformListTerraformFindingsResponse = TerraformListTerraformFindingsResponses[keyof TerraformListTerraformFindingsResponses];
+export type TerraformListFindingsResponse = TerraformListFindingsResponses[keyof TerraformListFindingsResponses];
 
-export type TerraformListTerraformFilesData = {
+export type TerraformListFilesData = {
     body?: never;
     path: {
         /**
@@ -6529,29 +6527,29 @@ export type TerraformListTerraformFilesData = {
          */
         ref?: string | null;
     };
-    url: '/api/v1/terraform-roots/{root_id}/files';
+    url: '/api/v1/terraform/roots/{root_id}/files';
 };
 
-export type TerraformListTerraformFilesErrors = {
+export type TerraformListFilesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformListTerraformFilesError = TerraformListTerraformFilesErrors[keyof TerraformListTerraformFilesErrors];
+export type TerraformListFilesError = TerraformListFilesErrors[keyof TerraformListFilesErrors];
 
-export type TerraformListTerraformFilesResponses = {
+export type TerraformListFilesResponses = {
     /**
-     * Response Terraform-List Terraform Files
+     * Response Terraform-List Files
      * Successful Response
      */
     200: Array<TerraformFilePublic>;
 };
 
-export type TerraformListTerraformFilesResponse = TerraformListTerraformFilesResponses[keyof TerraformListTerraformFilesResponses];
+export type TerraformListFilesResponse = TerraformListFilesResponses[keyof TerraformListFilesResponses];
 
-export type TerraformListTerraformFixesData = {
+export type TerraformListFixesData = {
     body?: never;
     path: {
         /**
@@ -6560,29 +6558,29 @@ export type TerraformListTerraformFixesData = {
         root_id: string;
     };
     query?: never;
-    url: '/api/v1/terraform-roots/{root_id}/fixes';
+    url: '/api/v1/terraform/roots/{root_id}/fixes';
 };
 
-export type TerraformListTerraformFixesErrors = {
+export type TerraformListFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformListTerraformFixesError = TerraformListTerraformFixesErrors[keyof TerraformListTerraformFixesErrors];
+export type TerraformListFixesError = TerraformListFixesErrors[keyof TerraformListFixesErrors];
 
-export type TerraformListTerraformFixesResponses = {
+export type TerraformListFixesResponses = {
     /**
-     * Response Terraform-List Terraform Fixes
+     * Response Terraform-List Fixes
      * Successful Response
      */
     200: Array<TerraformFixPublic>;
 };
 
-export type TerraformListTerraformFixesResponse = TerraformListTerraformFixesResponses[keyof TerraformListTerraformFixesResponses];
+export type TerraformListFixesResponse = TerraformListFixesResponses[keyof TerraformListFixesResponses];
 
-export type TerraformTriggerTerraformFixGenerationData = {
+export type TerraformGenerateFixesData = {
     /**
      * Body
      */
@@ -6599,21 +6597,21 @@ export type TerraformTriggerTerraformFixGenerationData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/terraform-roots/{root_id}/fixes';
+    url: '/api/v1/terraform/roots/{root_id}/fixes';
 };
 
-export type TerraformTriggerTerraformFixGenerationErrors = {
+export type TerraformGenerateFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformTriggerTerraformFixGenerationError = TerraformTriggerTerraformFixGenerationErrors[keyof TerraformTriggerTerraformFixGenerationErrors];
+export type TerraformGenerateFixesError = TerraformGenerateFixesErrors[keyof TerraformGenerateFixesErrors];
 
-export type TerraformTriggerTerraformFixGenerationResponses = {
+export type TerraformGenerateFixesResponses = {
     /**
-     * Response Terraform-Trigger Terraform Fix Generation
+     * Response Terraform-Generate Fixes
      * Successful Response
      */
     202: {
@@ -6621,9 +6619,9 @@ export type TerraformTriggerTerraformFixGenerationResponses = {
     };
 };
 
-export type TerraformTriggerTerraformFixGenerationResponse = TerraformTriggerTerraformFixGenerationResponses[keyof TerraformTriggerTerraformFixGenerationResponses];
+export type TerraformGenerateFixesResponse = TerraformGenerateFixesResponses[keyof TerraformGenerateFixesResponses];
 
-export type TerraformTriggerTerraformDeliveryData = {
+export type TerraformDeliverFixesData = {
     body?: never;
     path: {
         /**
@@ -6637,21 +6635,21 @@ export type TerraformTriggerTerraformDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/terraform-roots/{root_id}/deliver';
+    url: '/api/v1/terraform/roots/{root_id}/deliveries';
 };
 
-export type TerraformTriggerTerraformDeliveryErrors = {
+export type TerraformDeliverFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformTriggerTerraformDeliveryError = TerraformTriggerTerraformDeliveryErrors[keyof TerraformTriggerTerraformDeliveryErrors];
+export type TerraformDeliverFixesError = TerraformDeliverFixesErrors[keyof TerraformDeliverFixesErrors];
 
-export type TerraformTriggerTerraformDeliveryResponses = {
+export type TerraformDeliverFixesResponses = {
     /**
-     * Response Terraform-Trigger Terraform Delivery
+     * Response Terraform-Deliver Fixes
      * Successful Response
      */
     202: {
@@ -6659,9 +6657,9 @@ export type TerraformTriggerTerraformDeliveryResponses = {
     };
 };
 
-export type TerraformTriggerTerraformDeliveryResponse = TerraformTriggerTerraformDeliveryResponses[keyof TerraformTriggerTerraformDeliveryResponses];
+export type TerraformDeliverFixesResponse = TerraformDeliverFixesResponses[keyof TerraformDeliverFixesResponses];
 
-export type CloudListCloudAccountsData = {
+export type CloudListAccountsData = {
     body?: never;
     path?: never;
     query?: {
@@ -6670,92 +6668,54 @@ export type CloudListCloudAccountsData = {
          */
         org_id?: string | null;
     };
-    url: '/api/v1/cloud-accounts/';
+    url: '/api/v1/cloud/accounts';
 };
 
-export type CloudListCloudAccountsErrors = {
+export type CloudListAccountsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CloudListCloudAccountsError = CloudListCloudAccountsErrors[keyof CloudListCloudAccountsErrors];
+export type CloudListAccountsError = CloudListAccountsErrors[keyof CloudListAccountsErrors];
 
-export type CloudListCloudAccountsResponses = {
+export type CloudListAccountsResponses = {
     /**
-     * Response Cloud-List Cloud Accounts
+     * Response Cloud-List Accounts
      * Successful Response
      */
     200: Array<CloudAccountPublic>;
 };
 
-export type CloudListCloudAccountsResponse = CloudListCloudAccountsResponses[keyof CloudListCloudAccountsResponses];
+export type CloudListAccountsResponse = CloudListAccountsResponses[keyof CloudListAccountsResponses];
 
-export type CloudCreateCloudAccountData = {
+export type CloudCreateAccountData = {
     body: CloudAccountCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/cloud-accounts/';
+    url: '/api/v1/cloud/accounts';
 };
 
-export type CloudCreateCloudAccountErrors = {
+export type CloudCreateAccountErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CloudCreateCloudAccountError = CloudCreateCloudAccountErrors[keyof CloudCreateCloudAccountErrors];
+export type CloudCreateAccountError = CloudCreateAccountErrors[keyof CloudCreateAccountErrors];
 
-export type CloudCreateCloudAccountResponses = {
+export type CloudCreateAccountResponses = {
     /**
      * Successful Response
      */
     201: CloudAccountPublic;
 };
 
-export type CloudCreateCloudAccountResponse = CloudCreateCloudAccountResponses[keyof CloudCreateCloudAccountResponses];
+export type CloudCreateAccountResponse = CloudCreateAccountResponses[keyof CloudCreateAccountResponses];
 
-export type CloudToggleCloudAccountData = {
-    body?: never;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query: {
-        /**
-         * Enabled
-         */
-        enabled: boolean;
-    };
-    url: '/api/v1/cloud-accounts/{account_id}/toggle';
-};
-
-export type CloudToggleCloudAccountErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudToggleCloudAccountError = CloudToggleCloudAccountErrors[keyof CloudToggleCloudAccountErrors];
-
-export type CloudToggleCloudAccountResponses = {
-    /**
-     * Response Cloud-Toggle Cloud Account
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | boolean;
-    };
-};
-
-export type CloudToggleCloudAccountResponse = CloudToggleCloudAccountResponses[keyof CloudToggleCloudAccountResponses];
-
-export type CloudDeleteCloudAccountData = {
+export type CloudDeleteAccountData = {
     body?: never;
     path: {
         /**
@@ -6764,28 +6724,58 @@ export type CloudDeleteCloudAccountData = {
         account_id: string;
     };
     query?: never;
-    url: '/api/v1/cloud-accounts/{account_id}';
+    url: '/api/v1/cloud/accounts/{account_id}';
 };
 
-export type CloudDeleteCloudAccountErrors = {
+export type CloudDeleteAccountErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CloudDeleteCloudAccountError = CloudDeleteCloudAccountErrors[keyof CloudDeleteCloudAccountErrors];
+export type CloudDeleteAccountError = CloudDeleteAccountErrors[keyof CloudDeleteAccountErrors];
 
-export type CloudDeleteCloudAccountResponses = {
+export type CloudDeleteAccountResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type CloudDeleteCloudAccountResponse = CloudDeleteCloudAccountResponses[keyof CloudDeleteCloudAccountResponses];
+export type CloudDeleteAccountResponse = CloudDeleteAccountResponses[keyof CloudDeleteAccountResponses];
 
-export type CloudTriggerCloudScanData = {
+export type CloudUpdateAccountData = {
+    body: ScanTargetUpdate;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/accounts/{account_id}';
+};
+
+export type CloudUpdateAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudUpdateAccountError = CloudUpdateAccountErrors[keyof CloudUpdateAccountErrors];
+
+export type CloudUpdateAccountResponses = {
+    /**
+     * Successful Response
+     */
+    200: CloudAccountPublic;
+};
+
+export type CloudUpdateAccountResponse = CloudUpdateAccountResponses[keyof CloudUpdateAccountResponses];
+
+export type CloudListScansData = {
     body?: never;
     path: {
         /**
@@ -6794,21 +6784,52 @@ export type CloudTriggerCloudScanData = {
         account_id: string;
     };
     query?: never;
-    url: '/api/v1/cloud-accounts/{account_id}/scan';
+    url: '/api/v1/cloud/accounts/{account_id}/scans';
 };
 
-export type CloudTriggerCloudScanErrors = {
+export type CloudListScansErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CloudTriggerCloudScanError = CloudTriggerCloudScanErrors[keyof CloudTriggerCloudScanErrors];
+export type CloudListScansError = CloudListScansErrors[keyof CloudListScansErrors];
 
-export type CloudTriggerCloudScanResponses = {
+export type CloudListScansResponses = {
     /**
-     * Response Cloud-Trigger Cloud Scan
+     * Response Cloud-List Scans
+     * Successful Response
+     */
+    200: Array<CloudScanPublic>;
+};
+
+export type CloudListScansResponse = CloudListScansResponses[keyof CloudListScansResponses];
+
+export type CloudTriggerScanData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/accounts/{account_id}/scans';
+};
+
+export type CloudTriggerScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudTriggerScanError = CloudTriggerScanErrors[keyof CloudTriggerScanErrors];
+
+export type CloudTriggerScanResponses = {
+    /**
+     * Response Cloud-Trigger Scan
      * Successful Response
      */
     202: {
@@ -6816,40 +6837,9 @@ export type CloudTriggerCloudScanResponses = {
     };
 };
 
-export type CloudTriggerCloudScanResponse = CloudTriggerCloudScanResponses[keyof CloudTriggerCloudScanResponses];
+export type CloudTriggerScanResponse = CloudTriggerScanResponses[keyof CloudTriggerScanResponses];
 
-export type CloudListCloudScansData = {
-    body?: never;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query?: never;
-    url: '/api/v1/cloud-accounts/{account_id}/scans';
-};
-
-export type CloudListCloudScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudListCloudScansError = CloudListCloudScansErrors[keyof CloudListCloudScansErrors];
-
-export type CloudListCloudScansResponses = {
-    /**
-     * Response Cloud-List Cloud Scans
-     * Successful Response
-     */
-    200: Array<CloudScanPublic>;
-};
-
-export type CloudListCloudScansResponse = CloudListCloudScansResponses[keyof CloudListCloudScansResponses];
-
-export type CloudListCloudFindingsData = {
+export type CloudListFindingsData = {
     body?: never;
     path: {
         /**
@@ -6863,29 +6853,29 @@ export type CloudListCloudFindingsData = {
          */
         include_resolved?: boolean;
     };
-    url: '/api/v1/cloud-accounts/{account_id}/findings';
+    url: '/api/v1/cloud/accounts/{account_id}/findings';
 };
 
-export type CloudListCloudFindingsErrors = {
+export type CloudListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CloudListCloudFindingsError = CloudListCloudFindingsErrors[keyof CloudListCloudFindingsErrors];
+export type CloudListFindingsError = CloudListFindingsErrors[keyof CloudListFindingsErrors];
 
-export type CloudListCloudFindingsResponses = {
+export type CloudListFindingsResponses = {
     /**
-     * Response Cloud-List Cloud Findings
+     * Response Cloud-List Findings
      * Successful Response
      */
     200: Array<CloudFindingPublic>;
 };
 
-export type CloudListCloudFindingsResponse = CloudListCloudFindingsResponses[keyof CloudListCloudFindingsResponses];
+export type CloudListFindingsResponse = CloudListFindingsResponses[keyof CloudListFindingsResponses];
 
-export type DockerListDockerTargetsData = {
+export type DockerListTargetsData = {
     body?: never;
     path?: never;
     query?: {
@@ -6894,54 +6884,54 @@ export type DockerListDockerTargetsData = {
          */
         repo_id?: string | null;
     };
-    url: '/api/v1/docker-targets/';
+    url: '/api/v1/docker/targets';
 };
 
-export type DockerListDockerTargetsErrors = {
+export type DockerListTargetsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerListDockerTargetsError = DockerListDockerTargetsErrors[keyof DockerListDockerTargetsErrors];
+export type DockerListTargetsError = DockerListTargetsErrors[keyof DockerListTargetsErrors];
 
-export type DockerListDockerTargetsResponses = {
+export type DockerListTargetsResponses = {
     /**
-     * Response Docker-List Docker Targets
+     * Response Docker-List Targets
      * Successful Response
      */
     200: Array<DockerTargetPublic>;
 };
 
-export type DockerListDockerTargetsResponse = DockerListDockerTargetsResponses[keyof DockerListDockerTargetsResponses];
+export type DockerListTargetsResponse = DockerListTargetsResponses[keyof DockerListTargetsResponses];
 
-export type DockerCreateDockerTargetData = {
+export type DockerCreateTargetData = {
     body: DockerTargetCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/docker-targets/';
+    url: '/api/v1/docker/targets';
 };
 
-export type DockerCreateDockerTargetErrors = {
+export type DockerCreateTargetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerCreateDockerTargetError = DockerCreateDockerTargetErrors[keyof DockerCreateDockerTargetErrors];
+export type DockerCreateTargetError = DockerCreateTargetErrors[keyof DockerCreateTargetErrors];
 
-export type DockerCreateDockerTargetResponses = {
+export type DockerCreateTargetResponses = {
     /**
      * Successful Response
      */
     201: DockerTargetPublic;
 };
 
-export type DockerCreateDockerTargetResponse = DockerCreateDockerTargetResponses[keyof DockerCreateDockerTargetResponses];
+export type DockerCreateTargetResponse = DockerCreateTargetResponses[keyof DockerCreateTargetResponses];
 
-export type DockerToggleDockerTargetData = {
+export type DockerDeleteTargetData = {
     body?: never;
     path: {
         /**
@@ -6950,99 +6940,58 @@ export type DockerToggleDockerTargetData = {
         target_id: string;
     };
     query?: never;
-    url: '/api/v1/docker-targets/{target_id}/toggle';
+    url: '/api/v1/docker/targets/{target_id}';
 };
 
-export type DockerToggleDockerTargetErrors = {
+export type DockerDeleteTargetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerToggleDockerTargetError = DockerToggleDockerTargetErrors[keyof DockerToggleDockerTargetErrors];
+export type DockerDeleteTargetError = DockerDeleteTargetErrors[keyof DockerDeleteTargetErrors];
 
-export type DockerToggleDockerTargetResponses = {
-    /**
-     * Response Docker-Toggle Docker Target
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | boolean;
-    };
-};
-
-export type DockerToggleDockerTargetResponse = DockerToggleDockerTargetResponses[keyof DockerToggleDockerTargetResponses];
-
-export type DockerDeleteDockerTargetData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: never;
-    url: '/api/v1/docker-targets/{target_id}';
-};
-
-export type DockerDeleteDockerTargetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerDeleteDockerTargetError = DockerDeleteDockerTargetErrors[keyof DockerDeleteDockerTargetErrors];
-
-export type DockerDeleteDockerTargetResponses = {
+export type DockerDeleteTargetResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type DockerDeleteDockerTargetResponse = DockerDeleteDockerTargetResponses[keyof DockerDeleteDockerTargetResponses];
+export type DockerDeleteTargetResponse = DockerDeleteTargetResponses[keyof DockerDeleteTargetResponses];
 
-export type DockerTriggerDockerScanData = {
-    body?: never;
+export type DockerUpdateTargetData = {
+    body: ScanTargetUpdate;
     path: {
         /**
          * Target Id
          */
         target_id: string;
     };
-    query?: {
-        /**
-         * Branch
-         */
-        branch?: string | null;
-    };
-    url: '/api/v1/docker-targets/{target_id}/scan';
+    query?: never;
+    url: '/api/v1/docker/targets/{target_id}';
 };
 
-export type DockerTriggerDockerScanErrors = {
+export type DockerUpdateTargetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerTriggerDockerScanError = DockerTriggerDockerScanErrors[keyof DockerTriggerDockerScanErrors];
+export type DockerUpdateTargetError = DockerUpdateTargetErrors[keyof DockerUpdateTargetErrors];
 
-export type DockerTriggerDockerScanResponses = {
+export type DockerUpdateTargetResponses = {
     /**
-     * Response Docker-Trigger Docker Scan
      * Successful Response
      */
-    202: {
-        [key: string]: string;
-    };
+    200: DockerTargetPublic;
 };
 
-export type DockerTriggerDockerScanResponse = DockerTriggerDockerScanResponses[keyof DockerTriggerDockerScanResponses];
+export type DockerUpdateTargetResponse = DockerUpdateTargetResponses[keyof DockerUpdateTargetResponses];
 
-export type DockerListDockerScansData = {
+export type DockerListScansData = {
     body?: never;
     path: {
         /**
@@ -7056,29 +7005,67 @@ export type DockerListDockerScansData = {
          */
         limit?: number;
     };
-    url: '/api/v1/docker-targets/{target_id}/scans';
+    url: '/api/v1/docker/targets/{target_id}/scans';
 };
 
-export type DockerListDockerScansErrors = {
+export type DockerListScansErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerListDockerScansError = DockerListDockerScansErrors[keyof DockerListDockerScansErrors];
+export type DockerListScansError = DockerListScansErrors[keyof DockerListScansErrors];
 
-export type DockerListDockerScansResponses = {
+export type DockerListScansResponses = {
     /**
-     * Response Docker-List Docker Scans
+     * Response Docker-List Scans
      * Successful Response
      */
     200: Array<DockerScanPublic>;
 };
 
-export type DockerListDockerScansResponse = DockerListDockerScansResponses[keyof DockerListDockerScansResponses];
+export type DockerListScansResponse = DockerListScansResponses[keyof DockerListScansResponses];
 
-export type DockerListDockerFindingsData = {
+export type DockerTriggerScanData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/docker/targets/{target_id}/scans';
+};
+
+export type DockerTriggerScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerScanError = DockerTriggerScanErrors[keyof DockerTriggerScanErrors];
+
+export type DockerTriggerScanResponses = {
+    /**
+     * Response Docker-Trigger Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type DockerTriggerScanResponse = DockerTriggerScanResponses[keyof DockerTriggerScanResponses];
+
+export type DockerListFindingsData = {
     body?: never;
     path: {
         /**
@@ -7092,29 +7079,29 @@ export type DockerListDockerFindingsData = {
          */
         include_resolved?: boolean;
     };
-    url: '/api/v1/docker-targets/{target_id}/findings';
+    url: '/api/v1/docker/targets/{target_id}/findings';
 };
 
-export type DockerListDockerFindingsErrors = {
+export type DockerListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerListDockerFindingsError = DockerListDockerFindingsErrors[keyof DockerListDockerFindingsErrors];
+export type DockerListFindingsError = DockerListFindingsErrors[keyof DockerListFindingsErrors];
 
-export type DockerListDockerFindingsResponses = {
+export type DockerListFindingsResponses = {
     /**
-     * Response Docker-List Docker Findings
+     * Response Docker-List Findings
      * Successful Response
      */
     200: Array<DockerFindingPublic>;
 };
 
-export type DockerListDockerFindingsResponse = DockerListDockerFindingsResponses[keyof DockerListDockerFindingsResponses];
+export type DockerListFindingsResponse = DockerListFindingsResponses[keyof DockerListFindingsResponses];
 
-export type DockerListDockerFilesData = {
+export type DockerListFilesData = {
     body?: never;
     path: {
         /**
@@ -7128,29 +7115,29 @@ export type DockerListDockerFilesData = {
          */
         ref?: string | null;
     };
-    url: '/api/v1/docker-targets/{target_id}/files';
+    url: '/api/v1/docker/targets/{target_id}/files';
 };
 
-export type DockerListDockerFilesErrors = {
+export type DockerListFilesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerListDockerFilesError = DockerListDockerFilesErrors[keyof DockerListDockerFilesErrors];
+export type DockerListFilesError = DockerListFilesErrors[keyof DockerListFilesErrors];
 
-export type DockerListDockerFilesResponses = {
+export type DockerListFilesResponses = {
     /**
-     * Response Docker-List Docker Files
+     * Response Docker-List Files
      * Successful Response
      */
     200: Array<DockerFilePublic>;
 };
 
-export type DockerListDockerFilesResponse = DockerListDockerFilesResponses[keyof DockerListDockerFilesResponses];
+export type DockerListFilesResponse = DockerListFilesResponses[keyof DockerListFilesResponses];
 
-export type DockerListDockerRuntimeData = {
+export type DockerListRuntimeFindingsData = {
     body?: never;
     path: {
         /**
@@ -7159,29 +7146,29 @@ export type DockerListDockerRuntimeData = {
         target_id: string;
     };
     query?: never;
-    url: '/api/v1/docker-targets/{target_id}/runtime';
+    url: '/api/v1/docker/targets/{target_id}/runtime-findings';
 };
 
-export type DockerListDockerRuntimeErrors = {
+export type DockerListRuntimeFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerListDockerRuntimeError = DockerListDockerRuntimeErrors[keyof DockerListDockerRuntimeErrors];
+export type DockerListRuntimeFindingsError = DockerListRuntimeFindingsErrors[keyof DockerListRuntimeFindingsErrors];
 
-export type DockerListDockerRuntimeResponses = {
+export type DockerListRuntimeFindingsResponses = {
     /**
-     * Response Docker-List Docker Runtime
+     * Response Docker-List Runtime Findings
      * Successful Response
      */
     200: Array<DockerBuildTelemetryPublic>;
 };
 
-export type DockerListDockerRuntimeResponse = DockerListDockerRuntimeResponses[keyof DockerListDockerRuntimeResponses];
+export type DockerListRuntimeFindingsResponse = DockerListRuntimeFindingsResponses[keyof DockerListRuntimeFindingsResponses];
 
-export type DockerListDockerFixesData = {
+export type DockerListFixesData = {
     body?: never;
     path: {
         /**
@@ -7190,29 +7177,29 @@ export type DockerListDockerFixesData = {
         target_id: string;
     };
     query?: never;
-    url: '/api/v1/docker-targets/{target_id}/fixes';
+    url: '/api/v1/docker/targets/{target_id}/fixes';
 };
 
-export type DockerListDockerFixesErrors = {
+export type DockerListFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerListDockerFixesError = DockerListDockerFixesErrors[keyof DockerListDockerFixesErrors];
+export type DockerListFixesError = DockerListFixesErrors[keyof DockerListFixesErrors];
 
-export type DockerListDockerFixesResponses = {
+export type DockerListFixesResponses = {
     /**
-     * Response Docker-List Docker Fixes
+     * Response Docker-List Fixes
      * Successful Response
      */
     200: Array<DockerFixPublic>;
 };
 
-export type DockerListDockerFixesResponse = DockerListDockerFixesResponses[keyof DockerListDockerFixesResponses];
+export type DockerListFixesResponse = DockerListFixesResponses[keyof DockerListFixesResponses];
 
-export type DockerTriggerDockerFixGenerationData = {
+export type DockerGenerateFixesData = {
     /**
      * Body
      */
@@ -7229,21 +7216,21 @@ export type DockerTriggerDockerFixGenerationData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/docker-targets/{target_id}/fixes';
+    url: '/api/v1/docker/targets/{target_id}/fixes';
 };
 
-export type DockerTriggerDockerFixGenerationErrors = {
+export type DockerGenerateFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerTriggerDockerFixGenerationError = DockerTriggerDockerFixGenerationErrors[keyof DockerTriggerDockerFixGenerationErrors];
+export type DockerGenerateFixesError = DockerGenerateFixesErrors[keyof DockerGenerateFixesErrors];
 
-export type DockerTriggerDockerFixGenerationResponses = {
+export type DockerGenerateFixesResponses = {
     /**
-     * Response Docker-Trigger Docker Fix Generation
+     * Response Docker-Generate Fixes
      * Successful Response
      */
     202: {
@@ -7251,9 +7238,9 @@ export type DockerTriggerDockerFixGenerationResponses = {
     };
 };
 
-export type DockerTriggerDockerFixGenerationResponse = DockerTriggerDockerFixGenerationResponses[keyof DockerTriggerDockerFixGenerationResponses];
+export type DockerGenerateFixesResponse = DockerGenerateFixesResponses[keyof DockerGenerateFixesResponses];
 
-export type DockerTriggerDockerRuntimeFixGenerationData = {
+export type DockerGenerateRuntimeFixesData = {
     body: DockerRuntimeFixRequest;
     path: {
         /**
@@ -7267,21 +7254,21 @@ export type DockerTriggerDockerRuntimeFixGenerationData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/docker-targets/{target_id}/runtime-fixes';
+    url: '/api/v1/docker/targets/{target_id}/runtime-fixes';
 };
 
-export type DockerTriggerDockerRuntimeFixGenerationErrors = {
+export type DockerGenerateRuntimeFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerTriggerDockerRuntimeFixGenerationError = DockerTriggerDockerRuntimeFixGenerationErrors[keyof DockerTriggerDockerRuntimeFixGenerationErrors];
+export type DockerGenerateRuntimeFixesError = DockerGenerateRuntimeFixesErrors[keyof DockerGenerateRuntimeFixesErrors];
 
-export type DockerTriggerDockerRuntimeFixGenerationResponses = {
+export type DockerGenerateRuntimeFixesResponses = {
     /**
-     * Response Docker-Trigger Docker Runtime Fix Generation
+     * Response Docker-Generate Runtime Fixes
      * Successful Response
      */
     202: {
@@ -7289,9 +7276,9 @@ export type DockerTriggerDockerRuntimeFixGenerationResponses = {
     };
 };
 
-export type DockerTriggerDockerRuntimeFixGenerationResponse = DockerTriggerDockerRuntimeFixGenerationResponses[keyof DockerTriggerDockerRuntimeFixGenerationResponses];
+export type DockerGenerateRuntimeFixesResponse = DockerGenerateRuntimeFixesResponses[keyof DockerGenerateRuntimeFixesResponses];
 
-export type DockerTriggerDockerDeliveryData = {
+export type DockerDeliverFixesData = {
     body?: never;
     path: {
         /**
@@ -7305,21 +7292,21 @@ export type DockerTriggerDockerDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/docker-targets/{target_id}/deliver';
+    url: '/api/v1/docker/targets/{target_id}/deliveries';
 };
 
-export type DockerTriggerDockerDeliveryErrors = {
+export type DockerDeliverFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type DockerTriggerDockerDeliveryError = DockerTriggerDockerDeliveryErrors[keyof DockerTriggerDockerDeliveryErrors];
+export type DockerDeliverFixesError = DockerDeliverFixesErrors[keyof DockerDeliverFixesErrors];
 
-export type DockerTriggerDockerDeliveryResponses = {
+export type DockerDeliverFixesResponses = {
     /**
-     * Response Docker-Trigger Docker Delivery
+     * Response Docker-Deliver Fixes
      * Successful Response
      */
     202: {
@@ -7327,13 +7314,13 @@ export type DockerTriggerDockerDeliveryResponses = {
     };
 };
 
-export type DockerTriggerDockerDeliveryResponse = DockerTriggerDockerDeliveryResponses[keyof DockerTriggerDockerDeliveryResponses];
+export type DockerDeliverFixesResponse = DockerDeliverFixesResponses[keyof DockerDeliverFixesResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/private/users/';
+    url: '/api/v1/private/users';
 };
 
 export type PrivateCreateUserErrors = {

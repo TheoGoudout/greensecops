@@ -524,7 +524,7 @@ export const MOCK_ANALYSIS = {
   id: ID.analysis,
   repo_id: ID.repo,
   workflow_file_id: ID.workflowFile,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
   repo_full_name: "acme/web-app",
   content_hash: "abc123",
   status: "completed" as const,
@@ -593,7 +593,7 @@ export const MOCK_ISSUE_SECURITY = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_RELIABILITY = {
@@ -610,7 +610,7 @@ export const MOCK_ISSUE_RELIABILITY = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_ENERGY = {
@@ -627,7 +627,7 @@ export const MOCK_ISSUE_ENERGY = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_FIX = {
@@ -644,7 +644,7 @@ export const MOCK_ISSUE_WITH_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixReady,
   fix_status: "ready" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_CONTEXT = {
@@ -661,7 +661,7 @@ export const MOCK_ISSUE_WITH_CONTEXT = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_PENDING_FIX = {
@@ -678,7 +678,7 @@ export const MOCK_ISSUE_WITH_PENDING_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixPending,
   fix_status: "pending" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_FAILED_FIX = {
@@ -695,7 +695,7 @@ export const MOCK_ISSUE_WITH_FAILED_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixFailed,
   fix_status: "failed" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_DELIVERED_FIX = {
@@ -712,7 +712,7 @@ export const MOCK_ISSUE_WITH_DELIVERED_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixDelivered,
   fix_status: "delivered" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 // ── Fixes ──────────────────────────────────────────────────────────────
@@ -726,7 +726,7 @@ const SAMPLE_DIFF_PATCH =
 export const MOCK_FIX_READY = {
   id: ID.fixReady,
   workflow_file_id: ID.workflowFile,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
   repo_id: ID.repo,
   pr_id: null,
   llm_provider: "openai" as const,
@@ -756,7 +756,7 @@ export const MOCK_FIX_READY = {
 export const MOCK_FIX_DELIVERED = {
   id: ID.fixDelivered,
   workflow_file_id: ID.workflowFileDeploy,
-  workflow_file_path: ".github/workflows/deploy.yml",
+  file_path: ".github/workflows/deploy.yml",
   repo_id: ID.repo,
   pr_id: "00000000-0000-0000-0000-000000000090",
   llm_provider: "openai" as const,
@@ -786,7 +786,7 @@ export const MOCK_FIX_DELIVERED = {
 export const MOCK_FIX_PENDING = {
   id: ID.fixPending,
   workflow_file_id: ID.workflowFileRelease,
-  workflow_file_path: ".github/workflows/release.yml",
+  file_path: ".github/workflows/release.yml",
   repo_id: ID.repo,
   pr_id: null,
   llm_provider: "openai" as const,
@@ -834,7 +834,7 @@ export const MOCK_FIX_FAILED = {
   message: "Job 'lint' has no timeout-minutes set.",
   line_start: 20,
   line_end: 20,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_FIX_COMMENT_DELIVERED = {
@@ -857,7 +857,7 @@ export const MOCK_FIX_COMMENT_DELIVERED = {
   message: "Job 'deploy' has no timeout-minutes set.",
   line_start: 25,
   line_end: 25,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_FIX_MERGED_PR = {
@@ -880,7 +880,7 @@ export const MOCK_FIX_MERGED_PR = {
   message: "Job 'build' has no timeout-minutes set.",
   line_start: 12,
   line_end: 12,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 // ── Rules ──────────────────────────────────────────────────────────────

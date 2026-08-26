@@ -22,7 +22,7 @@ const MOCK_ANALYSIS = {
   triggered_by: "push",
   created_at: "2024-01-02T10:00:00Z",
   workflow_file_id: "00000000-0000-0000-0000-000000000020",
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 const MOCK_WORKFLOW_FILE = {
@@ -44,13 +44,13 @@ const MOCK_ISSUE = {
   line_end: 5,
   message: "Job 'build' has no timeout-minutes set.",
   context: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 const MOCK_FIX = {
   id: "00000000-0000-0000-0000-000000000050",
   workflow_file_id: MOCK_ANALYSIS.workflow_file_id,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
   repo_id: MOCK_REPO.id,
   llm_provider: "openai",
   llm_model: "gpt-4o-mini",

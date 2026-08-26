@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft, GitPullRequest, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
-import { WorkflowFixesService } from "@/client"
+import { WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { FileViewer } from "@/components/FileViewer"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
@@ -39,14 +39,11 @@ function FixDetail() {
     isError: fixError,
   } = useQuery({
     queryKey: ["fix", fixId],
-    queryFn: () => WorkflowFixesService.getFix({ fixId }),
+    queryFn: () => WorkflowService.getFix({ fixId }),
   })
 
   const deliverMutation = useMutation({
-    mutationFn: () =>
-      WorkflowFixesService.triggerWorkflowDelivery({
-        requestBody: { fix_id: fixId },
-      }),
+    mutationFn: () => WorkflowService.deliverFix({ fixId }),
     onSuccess: () => {
       toast.success("PR creation queued")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
@@ -58,7 +55,7 @@ function FixDetail() {
   })
 
   const rejectMutation = useMutation({
-    mutationFn: () => WorkflowFixesService.rejectFix({ fixId }),
+    mutationFn: () => WorkflowService.rejectFix({ fixId }),
     onSuccess: () => {
       toast.success("Fix rejected")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
@@ -67,7 +64,7 @@ function FixDetail() {
   })
 
   const retryMutation = useMutation({
-    mutationFn: () => WorkflowFixesService.regenerateFailedFix({ fixId }),
+    mutationFn: () => WorkflowService.retryFix({ fixId }),
     onSuccess: () => {
       toast.success("Retrying fix")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
@@ -90,7 +87,7 @@ function FixDetail() {
     )
   }
 
-  const issues = fix?.issues ?? []
+  const findings = fix?.findings ?? []
 
   return (
     <div className="flex flex-col gap-6">
@@ -108,7 +105,7 @@ function FixDetail() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Fix Detail</h1>
             <p className="text-muted-foreground text-sm font-mono">
-              {fix?.workflow_file_path ?? fixId}
+              {fix?.file_path ?? fixId}
             </p>
           </div>
         </div>
@@ -194,35 +191,36 @@ function FixDetail() {
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-4 w-48" />
             </div>
-          ) : issues.length === 0 ? (
+          ) : findings.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Issue details unavailable.
+              Finding details unavailable.
             </p>
           ) : (
             <div className="flex flex-col gap-3">
-              {issues.map((issue) => (
-                <div key={issue.id} className="flex items-start gap-3">
-                  {issue.category && (
+              {findings.map((finding) => (
+                <div key={finding.id} className="flex items-start gap-3">
+                  {finding.category && (
                     <CategoryIcon
-                      category={issue.category}
+                      category={finding.category}
                       className="mt-0.5 shrink-0 text-base"
                     />
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      {issue.severity && (
-                        <SeverityChip severity={issue.severity} />
+                      {finding.severity && (
+                        <SeverityChip severity={finding.severity} />
                       )}
-                      {issue.rule_slug && (
-                        <RuleSlugChip>{issue.rule_slug}</RuleSlugChip>
+                      {finding.rule_slug && (
+                        <RuleSlugChip>{finding.rule_slug}</RuleSlugChip>
                       )}
-                      <span className="text-sm">{issue.message}</span>
+                      <span className="text-sm">{finding.message}</span>
                     </div>
-                    {issue.line_start != null && (
+                    {finding.line_start != null && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Line {issue.line_start}
-                        {issue.line_end && issue.line_end !== issue.line_start
-                          ? `–${issue.line_end}`
+                        Line {finding.line_start}
+                        {finding.line_end &&
+                        finding.line_end !== finding.line_start
+                          ? `–${finding.line_end}`
                           : ""}
                       </p>
                     )}
@@ -243,7 +241,7 @@ function FixDetail() {
 
       {fix?.base_content && (
         <FileViewer
-          path={fix.workflow_file_path ?? ""}
+          path={fix.file_path ?? ""}
           rawContent={fix.base_content}
           grammar="yaml"
           fullContent={fix.full_content ?? undefined}

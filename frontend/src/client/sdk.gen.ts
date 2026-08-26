@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnsibleCreateAnsibleProjectData, AnsibleCreateAnsibleProjectResponse, AnsibleListAnsibleProjectsData, AnsibleListAnsibleProjectsResponse, AnsibleToggleAnsibleProjectData, AnsibleToggleAnsibleProjectResponse, AnsibleDeleteAnsibleProjectData, AnsibleDeleteAnsibleProjectResponse, AnsibleTriggerAnsibleScanData, AnsibleTriggerAnsibleScanResponse, AnsibleListAnsibleScansData, AnsibleListAnsibleScansResponse, AnsibleListAnsibleFindingsData, AnsibleListAnsibleFindingsResponse, AnsibleListAnsibleFilesData, AnsibleListAnsibleFilesResponse, AnsibleListAnsibleFixesData, AnsibleListAnsibleFixesResponse, AnsibleTriggerAnsibleFixGenerationData, AnsibleTriggerAnsibleFixGenerationResponse, AnsibleTriggerAnsibleDeliveryData, AnsibleTriggerAnsibleDeliveryResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutData, BillingCreateCheckoutResponse, BillingCreatePortalResponse, BillingListMyOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListOssApplicationsData, BillingListOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, UtilsVersionResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WorkflowFindingsListIssuesData, WorkflowFindingsListIssuesResponse, WorkflowFindingsGetIssueStatsData, WorkflowFindingsGetIssueStatsResponse, WorkflowFindingsGetIssueData, WorkflowFindingsGetIssueResponse, WorkflowFindingsIgnoreIssueData, WorkflowFindingsIgnoreIssueResponse, WorkflowFindingsUnignoreIssueData, WorkflowFindingsUnignoreIssueResponse, WorkflowFixesListFixesData, WorkflowFixesListFixesResponse, WorkflowFixesListPullRequestsData, WorkflowFixesListPullRequestsResponse, WorkflowFixesGetFixData, WorkflowFixesGetFixResponse, WorkflowFixesRejectFixData, WorkflowFixesRejectFixResponse, WorkflowFixesTriggerFixGenerationForRepoData, WorkflowFixesTriggerFixGenerationForRepoResponse, WorkflowFixesTriggerWorkflowDeliveryData, WorkflowFixesTriggerWorkflowDeliveryResponse, WorkflowFixesTriggerRepoDeliveryData, WorkflowFixesTriggerRepoDeliveryResponse, WorkflowFixesRegenerateFixesForRepoData, WorkflowFixesRegenerateFixesForRepoResponse, WorkflowFixesRegenerateFixesForWorkflowData, WorkflowFixesRegenerateFixesForWorkflowResponse, WorkflowFixesRegenerateFailedFixData, WorkflowFixesRegenerateFailedFixResponse, WorkflowFixesSyncPrStatusesData, WorkflowFixesSyncPrStatusesResponse, WorkflowScansListAnalysesData, WorkflowScansListAnalysesResponse, WorkflowScansGetAnalysisData, WorkflowScansGetAnalysisResponse, WorkflowScansTriggerAnalysisData, WorkflowScansTriggerAnalysisResponse, WorkflowScansReanalyzeForWorkflowData, WorkflowScansReanalyzeForWorkflowResponse, WorkflowScansReanalyzeAllResponse } from './types.gen';
+import type { AnsibleCreateAnsibleProjectData, AnsibleCreateAnsibleProjectResponse, AnsibleListAnsibleProjectsData, AnsibleListAnsibleProjectsResponse, AnsibleToggleAnsibleProjectData, AnsibleToggleAnsibleProjectResponse, AnsibleDeleteAnsibleProjectData, AnsibleDeleteAnsibleProjectResponse, AnsibleTriggerAnsibleScanData, AnsibleTriggerAnsibleScanResponse, AnsibleListAnsibleScansData, AnsibleListAnsibleScansResponse, AnsibleListAnsibleFindingsData, AnsibleListAnsibleFindingsResponse, AnsibleListAnsibleFilesData, AnsibleListAnsibleFilesResponse, AnsibleListAnsibleFixesData, AnsibleListAnsibleFixesResponse, AnsibleTriggerAnsibleFixGenerationData, AnsibleTriggerAnsibleFixGenerationResponse, AnsibleTriggerAnsibleDeliveryData, AnsibleTriggerAnsibleDeliveryResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
 
 export class AnsibleService {
     /**
@@ -286,6 +286,102 @@ export class AuthService {
             }
         });
     }
+
+    /**
+     * Create Token
+     * OAuth2 compatible token login, get an access token for future requests
+     * @param data The data for the request.
+     * @param data.formData
+     * @returns Token Successful Response
+     * @throws ApiError
+     */
+    public static createToken(data: AuthCreateTokenData): CancelablePromise<AuthCreateTokenResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/auth/token',
+            formData: data.formData,
+            mediaType: 'application/x-www-form-urlencoded',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Verify Token
+     * Test access token
+     * @returns UserPublic Successful Response
+     * @throws ApiError
+     */
+    public static verifyToken(): CancelablePromise<AuthVerifyTokenResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/auth/token/verify'
+        });
+    }
+
+    /**
+     * Recover Password
+     * Email a password-reset link.
+     *
+     * The address used to be a path segment, which put it in every access log
+     * and needed URL-encoding nothing was doing. It is a body field now.
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns Message Successful Response
+     * @throws ApiError
+     */
+    public static recoverPassword(data: AuthRecoverPasswordData): CancelablePromise<AuthRecoverPasswordResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/auth/password-recovery',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Reset Password
+     * Reset password
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns Message Successful Response
+     * @throws ApiError
+     */
+    public static resetPassword(data: AuthResetPasswordData): CancelablePromise<AuthResetPasswordResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/auth/password-reset',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Register User
+     * Create new user without the need to be logged in.
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns UserPublic Successful Response
+     * @throws ApiError
+     */
+    public static registerUser(data: AuthRegisterUserData): CancelablePromise<AuthRegisterUserResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/auth/register',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class BadgesService {
@@ -302,7 +398,7 @@ export class BadgesService {
     public static getBadge(data: BadgesGetBadgeData): CancelablePromise<BadgesGetBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/{owner}/{repo}/{branch}.svg',
+            url: '/api/v1/badges/repositories/{owner}/{repo}/{branch}.svg',
             path: {
                 owner: data.owner,
                 repo: data.repo,
@@ -331,7 +427,7 @@ export class BadgesService {
     public static getBadgeJson(data: BadgesGetBadgeJsonData): CancelablePromise<BadgesGetBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/{owner}/{repo}/{branch}.json',
+            url: '/api/v1/badges/repositories/{owner}/{repo}/{branch}.json',
             path: {
                 owner: data.owner,
                 repo: data.repo,
@@ -357,7 +453,7 @@ export class BadgesService {
     public static getTerraformRootBadge(data: BadgesGetTerraformRootBadgeData): CancelablePromise<BadgesGetTerraformRootBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/terraform/{root_id}.svg',
+            url: '/api/v1/badges/terraform-roots/{root_id}.svg',
             path: {
                 root_id: data.rootId
             },
@@ -382,7 +478,7 @@ export class BadgesService {
     public static getTerraformRootBadgeJson(data: BadgesGetTerraformRootBadgeJsonData): CancelablePromise<BadgesGetTerraformRootBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/terraform/{root_id}.json',
+            url: '/api/v1/badges/terraform-roots/{root_id}.json',
             path: {
                 root_id: data.rootId
             },
@@ -455,7 +551,7 @@ export class BadgesService {
     public static getDockerTargetBadge(data: BadgesGetDockerTargetBadgeData): CancelablePromise<BadgesGetDockerTargetBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/docker/{target_id}.svg',
+            url: '/api/v1/badges/docker-targets/{target_id}.svg',
             path: {
                 target_id: data.targetId
             },
@@ -480,7 +576,7 @@ export class BadgesService {
     public static getDockerTargetBadgeJson(data: BadgesGetDockerTargetBadgeJsonData): CancelablePromise<BadgesGetDockerTargetBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/docker/{target_id}.json',
+            url: '/api/v1/badges/docker-targets/{target_id}.json',
             path: {
                 target_id: data.targetId
             },
@@ -571,17 +667,17 @@ export class BillingService {
     }
 
     /**
-     * Create Checkout
+     * Create Checkout Session
      * Start a Stripe Checkout session for ``body.tier``.
      * @param data The data for the request.
      * @param data.requestBody
      * @returns CheckoutSessionPublic Successful Response
      * @throws ApiError
      */
-    public static createCheckout(data: BillingCreateCheckoutData): CancelablePromise<BillingCreateCheckoutResponse> {
+    public static createCheckoutSession(data: BillingCreateCheckoutSessionData): CancelablePromise<BillingCreateCheckoutSessionResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/billing/checkout',
+            url: '/api/v1/billing/checkout-sessions',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -591,27 +687,27 @@ export class BillingService {
     }
 
     /**
-     * Create Portal
+     * Create Portal Session
      * Open the Stripe Customer Portal for card changes and cancellation.
      * @returns CheckoutSessionPublic Successful Response
      * @throws ApiError
      */
-    public static createPortal(): CancelablePromise<BillingCreatePortalResponse> {
+    public static createPortalSession(): CancelablePromise<BillingCreatePortalSessionResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/billing/portal'
+            url: '/api/v1/billing/portal-sessions'
         });
     }
 
     /**
-     * List My Oss Applications
+     * List Oss Applications
      * @returns OssApplicationPublic Successful Response
      * @throws ApiError
      */
-    public static listMyOssApplications(): CancelablePromise<BillingListMyOssApplicationsResponse> {
+    public static listOssApplications(): CancelablePromise<BillingListOssApplicationsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/billing/oss-application'
+            url: '/api/v1/billing/oss-applications'
         });
     }
 
@@ -630,7 +726,7 @@ export class BillingService {
     public static createOssApplication(data: BillingCreateOssApplicationData): CancelablePromise<BillingCreateOssApplicationResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/billing/oss-application',
+            url: '/api/v1/billing/oss-applications',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -640,17 +736,17 @@ export class BillingService {
     }
 
     /**
-     * List Oss Applications
+     * List All Oss Applications
      * The review queue, newest first.
      * @param data The data for the request.
      * @param data.status
      * @returns OssApplicationPublic Successful Response
      * @throws ApiError
      */
-    public static listOssApplications(data: BillingListOssApplicationsData = {}): CancelablePromise<BillingListOssApplicationsResponse> {
+    public static listAllOssApplications(data: BillingListAllOssApplicationsData = {}): CancelablePromise<BillingListAllOssApplicationsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/billing/oss-applications',
+            url: '/api/v1/billing/oss-applications/all',
             query: {
                 status: data.status
             },
@@ -683,46 +779,20 @@ export class BillingService {
             }
         });
     }
-
-    /**
-     * Stripe Webhook
-     * Translate Stripe's events into lifecycle transitions.
-     *
-     * Idempotent by event id: Stripe retries on any non-2xx and redelivers on its
-     * own schedule, and without this a replayed ``invoice.payment_failed`` would
-     * re-send a dunning email while a replayed subscription update would re-run a
-     * transition.
-     * @param data The data for the request.
-     * @param data.stripeSignature
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static stripeWebhook(data: BillingStripeWebhookData = {}): CancelablePromise<BillingStripeWebhookResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/billing/webhook/stripe',
-            headers: {
-                'stripe-signature': data.stripeSignature
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
 }
 
 export class CloudService {
     /**
-     * Create Cloud Account
+     * Create Account
      * @param data The data for the request.
      * @param data.requestBody
      * @returns CloudAccountPublic Successful Response
      * @throws ApiError
      */
-    public static createCloudAccount(data: CloudCreateCloudAccountData): CancelablePromise<CloudCreateCloudAccountResponse> {
+    public static createAccount(data: CloudCreateAccountData): CancelablePromise<CloudCreateAccountResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/cloud-accounts/',
+            url: '/api/v1/cloud/accounts',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -732,7 +802,7 @@ export class CloudService {
     }
 
     /**
-     * List Cloud Accounts
+     * List Accounts
      * List cloud accounts. Omit ``org_id`` for every org the user can access;
      * pass it to scope to one org.
      * @param data The data for the request.
@@ -740,10 +810,10 @@ export class CloudService {
      * @returns CloudAccountPublic Successful Response
      * @throws ApiError
      */
-    public static listCloudAccounts(data: CloudListCloudAccountsData = {}): CancelablePromise<CloudListCloudAccountsResponse> {
+    public static listAccounts(data: CloudListAccountsData = {}): CancelablePromise<CloudListAccountsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/cloud-accounts/',
+            url: '/api/v1/cloud/accounts',
             query: {
                 org_id: data.orgId
             },
@@ -754,23 +824,22 @@ export class CloudService {
     }
 
     /**
-     * Toggle Cloud Account
+     * Update Account
      * @param data The data for the request.
      * @param data.accountId
-     * @param data.enabled
-     * @returns unknown Successful Response
+     * @param data.requestBody
+     * @returns CloudAccountPublic Successful Response
      * @throws ApiError
      */
-    public static toggleCloudAccount(data: CloudToggleCloudAccountData): CancelablePromise<CloudToggleCloudAccountResponse> {
+    public static updateAccount(data: CloudUpdateAccountData): CancelablePromise<CloudUpdateAccountResponse> {
         return __request(OpenAPI, {
             method: 'PATCH',
-            url: '/api/v1/cloud-accounts/{account_id}/toggle',
+            url: '/api/v1/cloud/accounts/{account_id}',
             path: {
                 account_id: data.accountId
             },
-            query: {
-                enabled: data.enabled
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -778,16 +847,16 @@ export class CloudService {
     }
 
     /**
-     * Delete Cloud Account
+     * Delete Account
      * @param data The data for the request.
      * @param data.accountId
      * @returns void Successful Response
      * @throws ApiError
      */
-    public static deleteCloudAccount(data: CloudDeleteCloudAccountData): CancelablePromise<CloudDeleteCloudAccountResponse> {
+    public static deleteAccount(data: CloudDeleteAccountData): CancelablePromise<CloudDeleteAccountResponse> {
         return __request(OpenAPI, {
             method: 'DELETE',
-            url: '/api/v1/cloud-accounts/{account_id}',
+            url: '/api/v1/cloud/accounts/{account_id}',
             path: {
                 account_id: data.accountId
             },
@@ -798,16 +867,16 @@ export class CloudService {
     }
 
     /**
-     * Trigger Cloud Scan
+     * Trigger Scan
      * @param data The data for the request.
      * @param data.accountId
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerCloudScan(data: CloudTriggerCloudScanData): CancelablePromise<CloudTriggerCloudScanResponse> {
+    public static triggerScan(data: CloudTriggerScanData): CancelablePromise<CloudTriggerScanResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/cloud-accounts/{account_id}/scan',
+            url: '/api/v1/cloud/accounts/{account_id}/scans',
             path: {
                 account_id: data.accountId
             },
@@ -818,16 +887,16 @@ export class CloudService {
     }
 
     /**
-     * List Cloud Scans
+     * List Scans
      * @param data The data for the request.
      * @param data.accountId
      * @returns CloudScanPublic Successful Response
      * @throws ApiError
      */
-    public static listCloudScans(data: CloudListCloudScansData): CancelablePromise<CloudListCloudScansResponse> {
+    public static listScans(data: CloudListScansData): CancelablePromise<CloudListScansResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/cloud-accounts/{account_id}/scans',
+            url: '/api/v1/cloud/accounts/{account_id}/scans',
             path: {
                 account_id: data.accountId
             },
@@ -838,17 +907,17 @@ export class CloudService {
     }
 
     /**
-     * List Cloud Findings
+     * List Findings
      * @param data The data for the request.
      * @param data.accountId
      * @param data.includeResolved
      * @returns CloudFindingPublic Successful Response
      * @throws ApiError
      */
-    public static listCloudFindings(data: CloudListCloudFindingsData): CancelablePromise<CloudListCloudFindingsResponse> {
+    public static listFindings(data: CloudListFindingsData): CancelablePromise<CloudListFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/cloud-accounts/{account_id}/findings',
+            url: '/api/v1/cloud/accounts/{account_id}/findings',
             path: {
                 account_id: data.accountId
             },
@@ -864,7 +933,7 @@ export class CloudService {
 
 export class DockerService {
     /**
-     * Create Docker Target
+     * Create Target
      * Register an extra Docker target.
      *
      * Not normally needed: installation sync creates a repository-root target
@@ -875,10 +944,10 @@ export class DockerService {
      * @returns DockerTargetPublic Successful Response
      * @throws ApiError
      */
-    public static createDockerTarget(data: DockerCreateDockerTargetData): CancelablePromise<DockerCreateDockerTargetResponse> {
+    public static createTarget(data: DockerCreateTargetData): CancelablePromise<DockerCreateTargetResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/docker-targets/',
+            url: '/api/v1/docker/targets',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -888,7 +957,7 @@ export class DockerService {
     }
 
     /**
-     * List Docker Targets
+     * List Targets
      * List targets for one repo, or every target the user can see.
      *
      * Dual-mode so the same endpoint powers both the org-wide Infrastructure
@@ -898,10 +967,10 @@ export class DockerService {
      * @returns DockerTargetPublic Successful Response
      * @throws ApiError
      */
-    public static listDockerTargets(data: DockerListDockerTargetsData = {}): CancelablePromise<DockerListDockerTargetsResponse> {
+    public static listTargets(data: DockerListTargetsData = {}): CancelablePromise<DockerListTargetsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/docker-targets/',
+            url: '/api/v1/docker/targets',
             query: {
                 repo_id: data.repoId
             },
@@ -912,19 +981,22 @@ export class DockerService {
     }
 
     /**
-     * Toggle Docker Target
+     * Update Target
      * @param data The data for the request.
      * @param data.targetId
-     * @returns unknown Successful Response
+     * @param data.requestBody
+     * @returns DockerTargetPublic Successful Response
      * @throws ApiError
      */
-    public static toggleDockerTarget(data: DockerToggleDockerTargetData): CancelablePromise<DockerToggleDockerTargetResponse> {
+    public static updateTarget(data: DockerUpdateTargetData): CancelablePromise<DockerUpdateTargetResponse> {
         return __request(OpenAPI, {
             method: 'PATCH',
-            url: '/api/v1/docker-targets/{target_id}/toggle',
+            url: '/api/v1/docker/targets/{target_id}',
             path: {
                 target_id: data.targetId
             },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -932,16 +1004,16 @@ export class DockerService {
     }
 
     /**
-     * Delete Docker Target
+     * Delete Target
      * @param data The data for the request.
      * @param data.targetId
      * @returns void Successful Response
      * @throws ApiError
      */
-    public static deleteDockerTarget(data: DockerDeleteDockerTargetData): CancelablePromise<DockerDeleteDockerTargetResponse> {
+    public static deleteTarget(data: DockerDeleteTargetData): CancelablePromise<DockerDeleteTargetResponse> {
         return __request(OpenAPI, {
             method: 'DELETE',
-            url: '/api/v1/docker-targets/{target_id}',
+            url: '/api/v1/docker/targets/{target_id}',
             path: {
                 target_id: data.targetId
             },
@@ -952,17 +1024,17 @@ export class DockerService {
     }
 
     /**
-     * Trigger Docker Scan
+     * Trigger Scan
      * @param data The data for the request.
      * @param data.targetId
      * @param data.branch
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerDockerScan(data: DockerTriggerDockerScanData): CancelablePromise<DockerTriggerDockerScanResponse> {
+    public static triggerScan(data: DockerTriggerScanData): CancelablePromise<DockerTriggerScanResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/docker-targets/{target_id}/scan',
+            url: '/api/v1/docker/targets/{target_id}/scans',
             path: {
                 target_id: data.targetId
             },
@@ -976,17 +1048,17 @@ export class DockerService {
     }
 
     /**
-     * List Docker Scans
+     * List Scans
      * @param data The data for the request.
      * @param data.targetId
      * @param data.limit
      * @returns DockerScanPublic Successful Response
      * @throws ApiError
      */
-    public static listDockerScans(data: DockerListDockerScansData): CancelablePromise<DockerListDockerScansResponse> {
+    public static listScans(data: DockerListScansData): CancelablePromise<DockerListScansResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/docker-targets/{target_id}/scans',
+            url: '/api/v1/docker/targets/{target_id}/scans',
             path: {
                 target_id: data.targetId
             },
@@ -1000,17 +1072,17 @@ export class DockerService {
     }
 
     /**
-     * List Docker Findings
+     * List Findings
      * @param data The data for the request.
      * @param data.targetId
      * @param data.includeResolved
      * @returns DockerFindingPublic Successful Response
      * @throws ApiError
      */
-    public static listDockerFindings(data: DockerListDockerFindingsData): CancelablePromise<DockerListDockerFindingsResponse> {
+    public static listFindings(data: DockerListFindingsData): CancelablePromise<DockerListFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/docker-targets/{target_id}/findings',
+            url: '/api/v1/docker/targets/{target_id}/findings',
             path: {
                 target_id: data.targetId
             },
@@ -1024,7 +1096,7 @@ export class DockerService {
     }
 
     /**
-     * List Docker Files
+     * List Files
      * Live source of the target's Docker files, fetched from GitHub.
      *
      * Docker files aren't persisted, so this reaches through to GitHub on each
@@ -1035,10 +1107,10 @@ export class DockerService {
      * @returns DockerFilePublic Successful Response
      * @throws ApiError
      */
-    public static listDockerFiles(data: DockerListDockerFilesData): CancelablePromise<DockerListDockerFilesResponse> {
+    public static listFiles(data: DockerListFilesData): CancelablePromise<DockerListFilesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/docker-targets/{target_id}/files',
+            url: '/api/v1/docker/targets/{target_id}/files',
             path: {
                 target_id: data.targetId
             },
@@ -1052,17 +1124,17 @@ export class DockerService {
     }
 
     /**
-     * List Docker Runtime
+     * List Runtime Findings
      * Measured builds for this target, each with the findings it produced.
      * @param data The data for the request.
      * @param data.targetId
      * @returns DockerBuildTelemetryPublic Successful Response
      * @throws ApiError
      */
-    public static listDockerRuntime(data: DockerListDockerRuntimeData): CancelablePromise<DockerListDockerRuntimeResponse> {
+    public static listRuntimeFindings(data: DockerListRuntimeFindingsData): CancelablePromise<DockerListRuntimeFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/docker-targets/{target_id}/runtime',
+            url: '/api/v1/docker/targets/{target_id}/runtime-findings',
             path: {
                 target_id: data.targetId
             },
@@ -1073,16 +1145,16 @@ export class DockerService {
     }
 
     /**
-     * List Docker Fixes
+     * List Fixes
      * @param data The data for the request.
      * @param data.targetId
      * @returns DockerFixPublic Successful Response
      * @throws ApiError
      */
-    public static listDockerFixes(data: DockerListDockerFixesData): CancelablePromise<DockerListDockerFixesResponse> {
+    public static listFixes(data: DockerListFixesData): CancelablePromise<DockerListFixesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/docker-targets/{target_id}/fixes',
+            url: '/api/v1/docker/targets/{target_id}/fixes',
             path: {
                 target_id: data.targetId
             },
@@ -1093,7 +1165,7 @@ export class DockerService {
     }
 
     /**
-     * Trigger Docker Fix Generation
+     * Generate Fixes
      * Generate LLM fixes for a target's open findings, one whole-file fix each.
      * @param data The data for the request.
      * @param data.targetId
@@ -1102,10 +1174,10 @@ export class DockerService {
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static triggerDockerFixGeneration(data: DockerTriggerDockerFixGenerationData): CancelablePromise<DockerTriggerDockerFixGenerationResponse> {
+    public static generateFixes(data: DockerGenerateFixesData): CancelablePromise<DockerGenerateFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/docker-targets/{target_id}/fixes',
+            url: '/api/v1/docker/targets/{target_id}/fixes',
             path: {
                 target_id: data.targetId
             },
@@ -1121,7 +1193,7 @@ export class DockerService {
     }
 
     /**
-     * Trigger Docker Runtime Fix Generation
+     * Generate Runtime Fixes
      * Generate a fix from measured runtime findings.
      *
      * The join back to source is ``DockerBuildTelemetry.dockerfile_path``: without
@@ -1139,10 +1211,10 @@ export class DockerService {
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static triggerDockerRuntimeFixGeneration(data: DockerTriggerDockerRuntimeFixGenerationData): CancelablePromise<DockerTriggerDockerRuntimeFixGenerationResponse> {
+    public static generateRuntimeFixes(data: DockerGenerateRuntimeFixesData): CancelablePromise<DockerGenerateRuntimeFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/docker-targets/{target_id}/runtime-fixes',
+            url: '/api/v1/docker/targets/{target_id}/runtime-fixes',
             path: {
                 target_id: data.targetId
             },
@@ -1158,7 +1230,7 @@ export class DockerService {
     }
 
     /**
-     * Trigger Docker Delivery
+     * Deliver Fixes
      * Deliver the target's ready fixes as a single PR (branch per target).
      * @param data The data for the request.
      * @param data.targetId
@@ -1166,10 +1238,10 @@ export class DockerService {
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerDockerDelivery(data: DockerTriggerDockerDeliveryData): CancelablePromise<DockerTriggerDockerDeliveryResponse> {
+    public static deliverFixes(data: DockerDeliverFixesData): CancelablePromise<DockerDeliverFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/docker-targets/{target_id}/deliver',
+            url: '/api/v1/docker/targets/{target_id}/deliveries',
             path: {
                 target_id: data.targetId
             },
@@ -1265,7 +1337,7 @@ export class InstallationsService {
     public static listInstallations(): CancelablePromise<InstallationsListInstallationsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/installations/'
+            url: '/api/v1/installations'
         });
     }
 
@@ -1287,82 +1359,6 @@ export class InstallationsService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/installations/sync',
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-}
-
-export class LoginService {
-    /**
-     * Login Access Token
-     * OAuth2 compatible token login, get an access token for future requests
-     * @param data The data for the request.
-     * @param data.formData
-     * @returns Token Successful Response
-     * @throws ApiError
-     */
-    public static loginAccessToken(data: LoginLoginAccessTokenData): CancelablePromise<LoginLoginAccessTokenResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/login/access-token',
-            formData: data.formData,
-            mediaType: 'application/x-www-form-urlencoded',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Test Token
-     * Test access token
-     * @returns UserPublic Successful Response
-     * @throws ApiError
-     */
-    public static testToken(): CancelablePromise<LoginTestTokenResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/login/test-token'
-        });
-    }
-
-    /**
-     * Recover Password
-     * Password Recovery
-     * @param data The data for the request.
-     * @param data.email
-     * @returns Message Successful Response
-     * @throws ApiError
-     */
-    public static recoverPassword(data: LoginRecoverPasswordData): CancelablePromise<LoginRecoverPasswordResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/password-recovery/{email}',
-            path: {
-                email: data.email
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Reset Password
-     * Reset password
-     * @param data The data for the request.
-     * @param data.requestBody
-     * @returns Message Successful Response
-     * @throws ApiError
-     */
-    public static resetPassword(data: LoginResetPasswordData): CancelablePromise<LoginResetPasswordResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/reset-password/',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -1395,22 +1391,22 @@ export class OrganizationsService {
     public static listMyOrganizations(): CancelablePromise<OrganizationsListMyOrganizationsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/organizations/'
+            url: '/api/v1/organizations'
         });
     }
 
     /**
-     * Update Org Ai Preferences
+     * Update Organization
      * @param data The data for the request.
      * @param data.orgId
      * @param data.requestBody
      * @returns OrganizationPublic Successful Response
      * @throws ApiError
      */
-    public static updateOrgAiPreferences(data: OrganizationsUpdateOrgAiPreferencesData): CancelablePromise<OrganizationsUpdateOrgAiPreferencesResponse> {
+    public static updateOrganization(data: OrganizationsUpdateOrganizationData): CancelablePromise<OrganizationsUpdateOrganizationResponse> {
         return __request(OpenAPI, {
             method: 'PATCH',
-            url: '/api/v1/organizations/{org_id}/ai-preferences',
+            url: '/api/v1/organizations/{org_id}',
             path: {
                 org_id: data.orgId
             },
@@ -1444,7 +1440,7 @@ export class OverviewService {
     public static getOverview(data: OverviewGetOverviewData = {}): CancelablePromise<OverviewGetOverviewResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/overview/',
+            url: '/api/v1/overview',
             query: {
                 org_id: data.orgId,
                 top_rules_limit: data.topRulesLimit
@@ -1468,7 +1464,7 @@ export class PrivateService {
     public static createUser(data: PrivateCreateUserData): CancelablePromise<PrivateCreateUserResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/private/users/',
+            url: '/api/v1/private/users',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -1492,7 +1488,7 @@ export class RepositoriesService {
     public static listRepositories(data: RepositoriesListRepositoriesData = {}): CancelablePromise<RepositoriesListRepositoriesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/repositories/',
+            url: '/api/v1/repositories',
             query: {
                 org_id: data.orgId,
                 enabled: data.enabled,
@@ -1567,23 +1563,31 @@ export class RepositoriesService {
     }
 
     /**
-     * List Workflow Files
+     * Update Repository
+     * Flip a repository's two switches.
+     *
+     * Both were their own ``PATCH .../toggle``-style endpoint taking ``enabled``
+     * as a *query* parameter and answering with a bespoke dict. They are one
+     * ``PATCH`` of the resource now, answering with the resource; a body naming
+     * only one field leaves the other alone.
+     *
+     * Enabling either is quota-checked, and only when it is actually a
+     * transition — re-enabling something already enabled must not spend quota.
      * @param data The data for the request.
      * @param data.repoId
-     * @param data.branch
-     * @returns WorkflowFilePublic Successful Response
+     * @param data.requestBody
+     * @returns RepositoryPublic Successful Response
      * @throws ApiError
      */
-    public static listWorkflowFiles(data: RepositoriesListWorkflowFilesData): CancelablePromise<RepositoriesListWorkflowFilesResponse> {
+    public static updateRepository(data: RepositoriesUpdateRepositoryData): CancelablePromise<RepositoriesUpdateRepositoryResponse> {
         return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/repositories/{repo_id}/workflow-files',
+            method: 'PATCH',
+            url: '/api/v1/repositories/{repo_id}',
             path: {
                 repo_id: data.repoId
             },
-            query: {
-                branch: data.branch
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -1612,60 +1616,12 @@ export class RepositoriesService {
     public static syncRepositoryWorkflows(data: RepositoriesSyncRepositoryWorkflowsData): CancelablePromise<RepositoriesSyncRepositoryWorkflowsResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/repositories/{repo_id}/sync-workflows',
+            url: '/api/v1/repositories/{repo_id}/workflow-sync',
             path: {
                 repo_id: data.repoId
             },
             query: {
                 branch: data.branch
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Toggle Repository
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.enabled
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static toggleRepository(data: RepositoriesToggleRepositoryData): CancelablePromise<RepositoriesToggleRepositoryResponse> {
-        return __request(OpenAPI, {
-            method: 'PATCH',
-            url: '/api/v1/repositories/{repo_id}/toggle',
-            path: {
-                repo_id: data.repoId
-            },
-            query: {
-                enabled: data.enabled
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Toggle Auto Fix
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.enabled
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static toggleAutoFix(data: RepositoriesToggleAutoFixData): CancelablePromise<RepositoriesToggleAutoFixResponse> {
-        return __request(OpenAPI, {
-            method: 'PATCH',
-            url: '/api/v1/repositories/{repo_id}/auto-fix',
-            path: {
-                repo_id: data.repoId
-            },
-            query: {
-                enabled: data.enabled
             },
             errors: {
                 422: 'Validation Error'
@@ -1703,7 +1659,7 @@ export class RepositoriesService {
     public static integrateAction(data: RepositoriesIntegrateActionData): CancelablePromise<RepositoriesIntegrateActionResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/repositories/{repo_id}/integrate-action',
+            url: '/api/v1/repositories/{repo_id}/action-integration',
             path: {
                 repo_id: data.repoId
             },
@@ -1728,7 +1684,7 @@ export class RulesService {
     public static listRules(data: RulesListRulesData = {}): CancelablePromise<RulesListRulesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/rules/',
+            url: '/api/v1/rules',
             query: {
                 category: data.category,
                 enabled: data.enabled,
@@ -1762,23 +1718,22 @@ export class RulesService {
     }
 
     /**
-     * Toggle Rule
+     * Update Rule
      * @param data The data for the request.
      * @param data.ruleId
-     * @param data.enabled
+     * @param data.requestBody
      * @returns RulePublic Successful Response
      * @throws ApiError
      */
-    public static toggleRule(data: RulesToggleRuleData): CancelablePromise<RulesToggleRuleResponse> {
+    public static updateRule(data: RulesUpdateRuleData): CancelablePromise<RulesUpdateRuleResponse> {
         return __request(OpenAPI, {
             method: 'PATCH',
-            url: '/api/v1/rules/{rule_id}/toggle',
+            url: '/api/v1/rules/{rule_id}',
             path: {
                 rule_id: data.ruleId
             },
-            query: {
-                enabled: data.enabled
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -1786,19 +1741,67 @@ export class RulesService {
     }
 }
 
+export class SystemService {
+    /**
+     * Test Email
+     * Test emails.
+     * @param data The data for the request.
+     * @param data.emailTo
+     * @returns Message Successful Response
+     * @throws ApiError
+     */
+    public static testEmail(data: SystemTestEmailData): CancelablePromise<SystemTestEmailResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/test-email',
+            query: {
+                email_to: data.emailTo
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Health
+     * @returns boolean Successful Response
+     * @throws ApiError
+     */
+    public static health(): CancelablePromise<SystemHealthResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/system/health'
+        });
+    }
+
+    /**
+     * Version
+     * What this API is running, for the dashboard footer.
+     * @returns VersionInfo Successful Response
+     * @throws ApiError
+     */
+    public static version(): CancelablePromise<SystemVersionResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/system/version'
+        });
+    }
+}
+
 export class TelemetryService {
     /**
-     * Ingest Telemetry
+     * Ingest Run
      * @param data The data for the request.
      * @param data.requestBody
      * @param data.authorization
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static ingestTelemetry(data: TelemetryIngestTelemetryData): CancelablePromise<TelemetryIngestTelemetryResponse> {
+    public static ingestRun(data: TelemetryIngestRunData): CancelablePromise<TelemetryIngestRunResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/telemetry/ingest',
+            url: '/api/v1/telemetry/runs',
             headers: {
                 authorization: data.authorization
             },
@@ -1825,7 +1828,7 @@ export class TelemetryService {
     public static ingestDockerBuild(data: TelemetryIngestDockerBuildData): CancelablePromise<TelemetryIngestDockerBuildResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/telemetry/docker-build',
+            url: '/api/v1/telemetry/docker-builds',
             headers: {
                 authorization: data.authorization
             },
@@ -1848,7 +1851,7 @@ export class TelemetryService {
     public static ingestSample(data: TelemetryIngestSampleData): CancelablePromise<TelemetryIngestSampleResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/telemetry/sample',
+            url: '/api/v1/telemetry/samples',
             headers: {
                 authorization: data.authorization
             },
@@ -1861,7 +1864,7 @@ export class TelemetryService {
     }
 
     /**
-     * Get Telemetry Summary
+     * Get Summary
      * Average telemetry plus a per-run breakdown for a repository.
      *
      * Averages are computed over every telemetry run/sample the repo has; the
@@ -1873,10 +1876,10 @@ export class TelemetryService {
      * @returns TelemetrySummaryPublic Successful Response
      * @throws ApiError
      */
-    public static getTelemetrySummary(data: TelemetryGetTelemetrySummaryData): CancelablePromise<TelemetryGetTelemetrySummaryResponse> {
+    public static getSummary(data: TelemetryGetSummaryData): CancelablePromise<TelemetryGetSummaryResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/telemetry/summary/{repo_id}',
+            url: '/api/v1/telemetry/repositories/{repo_id}',
             path: {
                 repo_id: data.repoId
             },
@@ -1891,17 +1894,17 @@ export class TelemetryService {
     }
 
     /**
-     * Get Telemetry Findings
+     * List Findings
      * A repo's runtime findings, for the Issues-page "Runtime" section.
      * @param data The data for the request.
      * @param data.repoId
      * @returns DynamicEnrichmentPublic Successful Response
      * @throws ApiError
      */
-    public static getTelemetryFindings(data: TelemetryGetTelemetryFindingsData): CancelablePromise<TelemetryGetTelemetryFindingsResponse> {
+    public static listFindings(data: TelemetryListFindingsData): CancelablePromise<TelemetryListFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/telemetry/findings/{repo_id}',
+            url: '/api/v1/telemetry/repositories/{repo_id}/findings',
             path: {
                 repo_id: data.repoId
             },
@@ -1912,7 +1915,7 @@ export class TelemetryService {
     }
 
     /**
-     * Analyze Telemetry
+     * Trigger Scan
      * Re-run dynamic analysis over the repo's completed telemetry runs.
      *
      * The CI action collects telemetry during workflow runs; this re-derives
@@ -1923,10 +1926,10 @@ export class TelemetryService {
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static analyzeTelemetry(data: TelemetryAnalyzeTelemetryData): CancelablePromise<TelemetryAnalyzeTelemetryResponse> {
+    public static triggerScan(data: TelemetryTriggerScanData): CancelablePromise<TelemetryTriggerScanResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/telemetry/analyze/{repo_id}',
+            url: '/api/v1/telemetry/repositories/{repo_id}/scans',
             path: {
                 repo_id: data.repoId
             },
@@ -1939,16 +1942,16 @@ export class TelemetryService {
 
 export class TerraformService {
     /**
-     * Create Terraform Root
+     * Create Root
      * @param data The data for the request.
      * @param data.requestBody
      * @returns TerraformRootPublic Successful Response
      * @throws ApiError
      */
-    public static createTerraformRoot(data: TerraformCreateTerraformRootData): CancelablePromise<TerraformCreateTerraformRootResponse> {
+    public static createRoot(data: TerraformCreateRootData): CancelablePromise<TerraformCreateRootResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/terraform-roots/',
+            url: '/api/v1/terraform/roots',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -1958,7 +1961,7 @@ export class TerraformService {
     }
 
     /**
-     * List Terraform Roots
+     * List Roots
      * List Terraform roots. Omit ``repo_id`` for the org-wide Infrastructure
      * page (every root across every repo the user can access); pass it to
      * scope to one repo.
@@ -1967,10 +1970,10 @@ export class TerraformService {
      * @returns TerraformRootPublic Successful Response
      * @throws ApiError
      */
-    public static listTerraformRoots(data: TerraformListTerraformRootsData = {}): CancelablePromise<TerraformListTerraformRootsResponse> {
+    public static listRoots(data: TerraformListRootsData = {}): CancelablePromise<TerraformListRootsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/terraform-roots/',
+            url: '/api/v1/terraform/roots',
             query: {
                 repo_id: data.repoId
             },
@@ -1981,23 +1984,22 @@ export class TerraformService {
     }
 
     /**
-     * Toggle Terraform Root
+     * Update Root
      * @param data The data for the request.
      * @param data.rootId
-     * @param data.enabled
-     * @returns unknown Successful Response
+     * @param data.requestBody
+     * @returns TerraformRootPublic Successful Response
      * @throws ApiError
      */
-    public static toggleTerraformRoot(data: TerraformToggleTerraformRootData): CancelablePromise<TerraformToggleTerraformRootResponse> {
+    public static updateRoot(data: TerraformUpdateRootData): CancelablePromise<TerraformUpdateRootResponse> {
         return __request(OpenAPI, {
             method: 'PATCH',
-            url: '/api/v1/terraform-roots/{root_id}/toggle',
+            url: '/api/v1/terraform/roots/{root_id}',
             path: {
                 root_id: data.rootId
             },
-            query: {
-                enabled: data.enabled
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -2005,16 +2007,16 @@ export class TerraformService {
     }
 
     /**
-     * Delete Terraform Root
+     * Delete Root
      * @param data The data for the request.
      * @param data.rootId
      * @returns void Successful Response
      * @throws ApiError
      */
-    public static deleteTerraformRoot(data: TerraformDeleteTerraformRootData): CancelablePromise<TerraformDeleteTerraformRootResponse> {
+    public static deleteRoot(data: TerraformDeleteRootData): CancelablePromise<TerraformDeleteRootResponse> {
         return __request(OpenAPI, {
             method: 'DELETE',
-            url: '/api/v1/terraform-roots/{root_id}',
+            url: '/api/v1/terraform/roots/{root_id}',
             path: {
                 root_id: data.rootId
             },
@@ -2025,17 +2027,17 @@ export class TerraformService {
     }
 
     /**
-     * Trigger Terraform Scan
+     * Trigger Scan
      * @param data The data for the request.
      * @param data.rootId
      * @param data.branch
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerTerraformScan(data: TerraformTriggerTerraformScanData): CancelablePromise<TerraformTriggerTerraformScanResponse> {
+    public static triggerScan(data: TerraformTriggerScanData): CancelablePromise<TerraformTriggerScanResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/terraform-roots/{root_id}/scan',
+            url: '/api/v1/terraform/roots/{root_id}/scans',
             path: {
                 root_id: data.rootId
             },
@@ -2049,16 +2051,16 @@ export class TerraformService {
     }
 
     /**
-     * List Terraform Scans
+     * List Scans
      * @param data The data for the request.
      * @param data.rootId
      * @returns TerraformScanPublic Successful Response
      * @throws ApiError
      */
-    public static listTerraformScans(data: TerraformListTerraformScansData): CancelablePromise<TerraformListTerraformScansResponse> {
+    public static listScans(data: TerraformListScansData): CancelablePromise<TerraformListScansResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/terraform-roots/{root_id}/scans',
+            url: '/api/v1/terraform/roots/{root_id}/scans',
             path: {
                 root_id: data.rootId
             },
@@ -2069,17 +2071,17 @@ export class TerraformService {
     }
 
     /**
-     * List Terraform Findings
+     * List Findings
      * @param data The data for the request.
      * @param data.rootId
      * @param data.includeResolved
      * @returns TerraformFindingPublic Successful Response
      * @throws ApiError
      */
-    public static listTerraformFindings(data: TerraformListTerraformFindingsData): CancelablePromise<TerraformListTerraformFindingsResponse> {
+    public static listFindings(data: TerraformListFindingsData): CancelablePromise<TerraformListFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/terraform-roots/{root_id}/findings',
+            url: '/api/v1/terraform/roots/{root_id}/findings',
             path: {
                 root_id: data.rootId
             },
@@ -2093,7 +2095,7 @@ export class TerraformService {
     }
 
     /**
-     * List Terraform Files
+     * List Files
      * The root's live ``.tf`` source, fetched from GitHub on demand.
      *
      * Terraform files aren't persisted (unlike WorkflowFile), so this fetches
@@ -2105,10 +2107,10 @@ export class TerraformService {
      * @returns TerraformFilePublic Successful Response
      * @throws ApiError
      */
-    public static listTerraformFiles(data: TerraformListTerraformFilesData): CancelablePromise<TerraformListTerraformFilesResponse> {
+    public static listFiles(data: TerraformListFilesData): CancelablePromise<TerraformListFilesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/terraform-roots/{root_id}/files',
+            url: '/api/v1/terraform/roots/{root_id}/files',
             path: {
                 root_id: data.rootId
             },
@@ -2122,16 +2124,16 @@ export class TerraformService {
     }
 
     /**
-     * List Terraform Fixes
+     * List Fixes
      * @param data The data for the request.
      * @param data.rootId
      * @returns TerraformFixPublic Successful Response
      * @throws ApiError
      */
-    public static listTerraformFixes(data: TerraformListTerraformFixesData): CancelablePromise<TerraformListTerraformFixesResponse> {
+    public static listFixes(data: TerraformListFixesData): CancelablePromise<TerraformListFixesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/terraform-roots/{root_id}/fixes',
+            url: '/api/v1/terraform/roots/{root_id}/fixes',
             path: {
                 root_id: data.rootId
             },
@@ -2142,7 +2144,7 @@ export class TerraformService {
     }
 
     /**
-     * Trigger Terraform Fix Generation
+     * Generate Fixes
      * Generate LLM fixes for a root's open findings, one whole-file fix each.
      * @param data The data for the request.
      * @param data.rootId
@@ -2151,10 +2153,10 @@ export class TerraformService {
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static triggerTerraformFixGeneration(data: TerraformTriggerTerraformFixGenerationData): CancelablePromise<TerraformTriggerTerraformFixGenerationResponse> {
+    public static generateFixes(data: TerraformGenerateFixesData): CancelablePromise<TerraformGenerateFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/terraform-roots/{root_id}/fixes',
+            url: '/api/v1/terraform/roots/{root_id}/fixes',
             path: {
                 root_id: data.rootId
             },
@@ -2170,7 +2172,7 @@ export class TerraformService {
     }
 
     /**
-     * Trigger Terraform Delivery
+     * Deliver Fixes
      * Deliver the root's ready fixes as a single PR (branch per root).
      * @param data The data for the request.
      * @param data.rootId
@@ -2178,10 +2180,10 @@ export class TerraformService {
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerTerraformDelivery(data: TerraformTriggerTerraformDeliveryData): CancelablePromise<TerraformTriggerTerraformDeliveryResponse> {
+    public static deliverFixes(data: TerraformDeliverFixesData): CancelablePromise<TerraformDeliverFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/terraform-roots/{root_id}/deliver',
+            url: '/api/v1/terraform/roots/{root_id}/deliveries',
             path: {
                 root_id: data.rootId
             },
@@ -2208,7 +2210,7 @@ export class UsersService {
     public static readUsers(data: UsersReadUsersData = {}): CancelablePromise<UsersReadUsersResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/users/',
+            url: '/api/v1/users',
             query: {
                 skip: data.skip,
                 limit: data.limit
@@ -2230,7 +2232,7 @@ export class UsersService {
     public static createUser(data: UsersCreateUserData): CancelablePromise<UsersCreateUserResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/users/',
+            url: '/api/v1/users',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -2306,26 +2308,6 @@ export class UsersService {
     }
 
     /**
-     * Register User
-     * Create new user without the need to be logged in.
-     * @param data The data for the request.
-     * @param data.requestBody
-     * @returns UserPublic Successful Response
-     * @throws ApiError
-     */
-    public static registerUser(data: UsersRegisterUserData): CancelablePromise<UsersRegisterUserResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/users/signup',
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
      * Read User By Id
      * Get a specific user by id.
      * @param data The data for the request.
@@ -2392,54 +2374,6 @@ export class UsersService {
     }
 }
 
-export class UtilsService {
-    /**
-     * Test Email
-     * Test emails.
-     * @param data The data for the request.
-     * @param data.emailTo
-     * @returns Message Successful Response
-     * @throws ApiError
-     */
-    public static testEmail(data: UtilsTestEmailData): CancelablePromise<UtilsTestEmailResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/utils/test-email/',
-            query: {
-                email_to: data.emailTo
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Health Check
-     * @returns boolean Successful Response
-     * @throws ApiError
-     */
-    public static healthCheck(): CancelablePromise<UtilsHealthCheckResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/utils/health-check/'
-        });
-    }
-
-    /**
-     * Version
-     * What this API is running, for the dashboard footer.
-     * @returns VersionInfo Successful Response
-     * @throws ApiError
-     */
-    public static version(): CancelablePromise<UtilsVersionResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/utils/version/'
-        });
-    }
-}
-
 export class WebhooksService {
     /**
      * Github Webhook
@@ -2464,13 +2398,184 @@ export class WebhooksService {
             }
         });
     }
+
+    /**
+     * Stripe Webhook
+     * Translate Stripe's events into lifecycle transitions.
+     *
+     * Idempotent by event id: Stripe retries on any non-2xx and redelivers on its
+     * own schedule, and without this a replayed ``invoice.payment_failed`` would
+     * re-send a dunning email while a replayed subscription update would re-run a
+     * transition.
+     * @param data The data for the request.
+     * @param data.stripeSignature
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static stripeWebhook(data: WebhooksStripeWebhookData = {}): CancelablePromise<WebhooksStripeWebhookResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/webhooks/stripe',
+            headers: {
+                'stripe-signature': data.stripeSignature
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
-export class WorkflowFindingsService {
+export class WorkflowService {
     /**
-     * List Issues
+     * List Scans
      * @param data The data for the request.
-     * @param data.analysisId
+     * @param data.repoId
+     * @param data.branch
+     * @param data.grade
+     * @param data.status
+     * @param data.skip
+     * @param data.limit
+     * @returns WorkflowScanPublic Successful Response
+     * @throws ApiError
+     */
+    public static listScans(data: WorkflowListScansData = {}): CancelablePromise<WorkflowListScansResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow/scans',
+            query: {
+                repo_id: data.repoId,
+                branch: data.branch,
+                grade: data.grade,
+                status: data.status,
+                skip: data.skip,
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Scan
+     * @param data The data for the request.
+     * @param data.scanId
+     * @returns WorkflowScanPublic Successful Response
+     * @throws ApiError
+     */
+    public static getScan(data: WorkflowGetScanData): CancelablePromise<WorkflowGetScanResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow/scans/{scan_id}',
+            path: {
+                scan_id: data.scanId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Repository Scan
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.branch
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerRepositoryScan(data: WorkflowTriggerRepositoryScanData): CancelablePromise<WorkflowTriggerRepositoryScanResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow/repositories/{repo_id}/scans',
+            path: {
+                repo_id: data.repoId
+            },
+            query: {
+                branch: data.branch,
+                force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger File Scan
+     * Re-run static analysis for a single workflow file.
+     *
+     * Per-file analog of ``trigger_repository_scan`` (which is repo/branch-wide):
+     * the worker re-fetches and re-evaluates just this file on its own branch,
+     * consistent with the per-file fix and delivery endpoints alongside it.
+     * @param data The data for the request.
+     * @param data.workflowFileId
+     * @param data.force
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerFileScan(data: WorkflowTriggerFileScanData): CancelablePromise<WorkflowTriggerFileScanResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow/files/{workflow_file_id}/scans',
+            path: {
+                workflow_file_id: data.workflowFileId
+            },
+            query: {
+                force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Backfill Scans
+     * Fan out a fresh static analysis across all enabled repositories.
+     *
+     * Same mechanism used automatically when a release ships new rules; exposed
+     * so operators can re-apply rules on demand without a redeploy.
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static backfillScans(): CancelablePromise<WorkflowBackfillScansResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow/scans/backfill'
+        });
+    }
+
+    /**
+     * List Files
+     * @param data The data for the request.
+     * @param data.repoId
+     * @param data.branch
+     * @returns WorkflowFilePublic Successful Response
+     * @throws ApiError
+     */
+    public static listFiles(data: WorkflowListFilesData): CancelablePromise<WorkflowListFilesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow/repositories/{repo_id}/files',
+            path: {
+                repo_id: data.repoId
+            },
+            query: {
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Findings
+     * @param data The data for the request.
+     * @param data.scanId
      * @param data.repoId
      * @param data.branch
      * @param data.category
@@ -2481,15 +2586,15 @@ export class WorkflowFindingsService {
      * @param data.includeIgnored
      * @param data.skip
      * @param data.limit
-     * @returns IssuePublic Successful Response
+     * @returns WorkflowFindingPublic Successful Response
      * @throws ApiError
      */
-    public static listIssues(data: WorkflowFindingsListIssuesData = {}): CancelablePromise<WorkflowFindingsListIssuesResponse> {
+    public static listFindings(data: WorkflowListFindingsData = {}): CancelablePromise<WorkflowListFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/workflow-findings/',
+            url: '/api/v1/workflow/findings',
             query: {
-                analysis_id: data.analysisId,
+                scan_id: data.scanId,
                 repo_id: data.repoId,
                 branch: data.branch,
                 category: data.category,
@@ -2508,24 +2613,24 @@ export class WorkflowFindingsService {
     }
 
     /**
-     * Get Issue Stats
+     * Get Finding Stats
      * Exact open/resolved issue counts by category, aggregated in SQL.
      *
      * Powers the dashboard's stat cards and category health breakdown without
      * the pagination cap a plain ``list_issues`` fetch would hit on a large
      * org — every matching row is summed server-side, never materialized into
-     * a capped page of ``IssuePublic`` objects.
+     * a capped page of ``WorkflowFindingPublic`` objects.
      * @param data The data for the request.
      * @param data.repoId
      * @param data.branch
      * @param data.latestOnly
-     * @returns IssueStatsPublic Successful Response
+     * @returns WorkflowFindingStatsPublic Successful Response
      * @throws ApiError
      */
-    public static getIssueStats(data: WorkflowFindingsGetIssueStatsData = {}): CancelablePromise<WorkflowFindingsGetIssueStatsResponse> {
+    public static getFindingStats(data: WorkflowGetFindingStatsData = {}): CancelablePromise<WorkflowGetFindingStatsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/workflow-findings/stats',
+            url: '/api/v1/workflow/findings/stats',
             query: {
                 repo_id: data.repoId,
                 branch: data.branch,
@@ -2538,18 +2643,18 @@ export class WorkflowFindingsService {
     }
 
     /**
-     * Get Issue
+     * Get Finding
      * @param data The data for the request.
-     * @param data.issueId
-     * @returns IssuePublic Successful Response
+     * @param data.findingId
+     * @returns WorkflowFindingPublic Successful Response
      * @throws ApiError
      */
-    public static getIssue(data: WorkflowFindingsGetIssueData): CancelablePromise<WorkflowFindingsGetIssueResponse> {
+    public static getFinding(data: WorkflowGetFindingData): CancelablePromise<WorkflowGetFindingResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/workflow-findings/{issue_id}',
+            url: '/api/v1/workflow/findings/{finding_id}',
             path: {
-                issue_id: data.issueId
+                finding_id: data.findingId
             },
             errors: {
                 422: 'Validation Error'
@@ -2558,23 +2663,23 @@ export class WorkflowFindingsService {
     }
 
     /**
-     * Ignore Issue
+     * Ignore Finding
      * Mute a violation (false positive / accepted risk).
      *
      * Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
      * which takes precedence over resolve/fix state and drops the issue out of the
      * default (active) issue and fix queries. Idempotent.
      * @param data The data for the request.
-     * @param data.issueId
-     * @returns IssuePublic Successful Response
+     * @param data.findingId
+     * @returns WorkflowFindingPublic Successful Response
      * @throws ApiError
      */
-    public static ignoreIssue(data: WorkflowFindingsIgnoreIssueData): CancelablePromise<WorkflowFindingsIgnoreIssueResponse> {
+    public static ignoreFinding(data: WorkflowIgnoreFindingData): CancelablePromise<WorkflowIgnoreFindingResponse> {
         return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/workflow-findings/{issue_id}/ignore',
+            method: 'PUT',
+            url: '/api/v1/workflow/findings/{finding_id}/ignore',
             path: {
-                issue_id: data.issueId
+                finding_id: data.findingId
             },
             errors: {
                 422: 'Validation Error'
@@ -2583,28 +2688,26 @@ export class WorkflowFindingsService {
     }
 
     /**
-     * Unignore Issue
+     * Unignore Finding
      * Un-mute a previously ignored violation. Idempotent.
      * @param data The data for the request.
-     * @param data.issueId
-     * @returns IssuePublic Successful Response
+     * @param data.findingId
+     * @returns WorkflowFindingPublic Successful Response
      * @throws ApiError
      */
-    public static unignoreIssue(data: WorkflowFindingsUnignoreIssueData): CancelablePromise<WorkflowFindingsUnignoreIssueResponse> {
+    public static unignoreFinding(data: WorkflowUnignoreFindingData): CancelablePromise<WorkflowUnignoreFindingResponse> {
         return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/workflow-findings/{issue_id}/unignore',
+            method: 'DELETE',
+            url: '/api/v1/workflow/findings/{finding_id}/ignore',
             path: {
-                issue_id: data.issueId
+                finding_id: data.findingId
             },
             errors: {
                 422: 'Validation Error'
             }
         });
     }
-}
 
-export class WorkflowFixesService {
     /**
      * List Fixes
      * @param data The data for the request.
@@ -2613,13 +2716,13 @@ export class WorkflowFixesService {
      * @param data.branch
      * @param data.skip
      * @param data.limit
-     * @returns FixPublic Successful Response
+     * @returns WorkflowFixPublic Successful Response
      * @throws ApiError
      */
-    public static listFixes(data: WorkflowFixesListFixesData = {}): CancelablePromise<WorkflowFixesListFixesResponse> {
+    public static listFixes(data: WorkflowListFixesData = {}): CancelablePromise<WorkflowListFixesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/workflow-fixes/',
+            url: '/api/v1/workflow/fixes',
             query: {
                 repo_id: data.repoId,
                 status: data.status,
@@ -2645,10 +2748,10 @@ export class WorkflowFixesService {
      * @returns PullRequestPublic Successful Response
      * @throws ApiError
      */
-    public static listPullRequests(data: WorkflowFixesListPullRequestsData): CancelablePromise<WorkflowFixesListPullRequestsResponse> {
+    public static listPullRequests(data: WorkflowListPullRequestsData): CancelablePromise<WorkflowListPullRequestsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/workflow-fixes/pull-requests/{repo_id}',
+            url: '/api/v1/workflow/repositories/{repo_id}/pull-requests',
             path: {
                 repo_id: data.repoId
             },
@@ -2662,13 +2765,13 @@ export class WorkflowFixesService {
      * Get Fix
      * @param data The data for the request.
      * @param data.fixId
-     * @returns FixPublic Successful Response
+     * @returns WorkflowFixPublic Successful Response
      * @throws ApiError
      */
-    public static getFix(data: WorkflowFixesGetFixData): CancelablePromise<WorkflowFixesGetFixResponse> {
+    public static getFix(data: WorkflowGetFixData): CancelablePromise<WorkflowGetFixResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/workflow-fixes/{fix_id}',
+            url: '/api/v1/workflow/fixes/{fix_id}',
             path: {
                 fix_id: data.fixId
             },
@@ -2685,10 +2788,10 @@ export class WorkflowFixesService {
      * @returns void Successful Response
      * @throws ApiError
      */
-    public static rejectFix(data: WorkflowFixesRejectFixData): CancelablePromise<WorkflowFixesRejectFixResponse> {
+    public static rejectFix(data: WorkflowRejectFixData): CancelablePromise<WorkflowRejectFixResponse> {
         return __request(OpenAPI, {
             method: 'DELETE',
-            url: '/api/v1/workflow-fixes/{fix_id}',
+            url: '/api/v1/workflow/fixes/{fix_id}',
             path: {
                 fix_id: data.fixId
             },
@@ -2699,7 +2802,7 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Trigger Fix Generation For Repo
+     * Generate Repository Fixes
      * Queue one whole-file fix generation per workflow file for issues in a repo.
      *
      * When body.issue_ids is provided, only those issues are processed.
@@ -2712,10 +2815,10 @@ export class WorkflowFixesService {
      * @returns number Successful Response
      * @throws ApiError
      */
-    public static triggerFixGenerationForRepo(data: WorkflowFixesTriggerFixGenerationForRepoData): CancelablePromise<WorkflowFixesTriggerFixGenerationForRepoResponse> {
+    public static generateRepositoryFixes(data: WorkflowGenerateRepositoryFixesData): CancelablePromise<WorkflowGenerateRepositoryFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/generate-for-repo/{repo_id}',
+            url: '/api/v1/workflow/repositories/{repo_id}/fixes',
             path: {
                 repo_id: data.repoId
             },
@@ -2731,25 +2834,30 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Trigger Workflow Delivery
+     * Deliver Fix
      * Deliver one workflow file's fix as a single PR.
      *
      * When force=True, a fix in any status is accepted (not just ready).
+     *
+     * The fix id used to arrive in the body, which left this endpoint no path
+     * parameter to resolve an organization from and so no org role — it ran as
+     * ``Role.user`` while every sibling delivery endpoint was ``org_admin``.
      * @param data The data for the request.
-     * @param data.requestBody
+     * @param data.fixId
      * @param data.force
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerWorkflowDelivery(data: WorkflowFixesTriggerWorkflowDeliveryData): CancelablePromise<WorkflowFixesTriggerWorkflowDeliveryResponse> {
+    public static deliverFix(data: WorkflowDeliverFixData): CancelablePromise<WorkflowDeliverFixResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/deliver-for-workflow',
+            url: '/api/v1/workflow/fixes/{fix_id}/deliveries',
+            path: {
+                fix_id: data.fixId
+            },
             query: {
                 force: data.force
             },
-            body: data.requestBody,
-            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -2757,7 +2865,7 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Trigger Repo Delivery
+     * Deliver Repository Fixes
      * Deliver all ready fixes for a repo as a single multi-file PR.
      *
      * When force=True, fixes in any status are included (not just ready).
@@ -2767,10 +2875,10 @@ export class WorkflowFixesService {
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerRepoDelivery(data: WorkflowFixesTriggerRepoDeliveryData): CancelablePromise<WorkflowFixesTriggerRepoDeliveryResponse> {
+    public static deliverRepositoryFixes(data: WorkflowDeliverRepositoryFixesData): CancelablePromise<WorkflowDeliverRepositoryFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/deliver-for-repo/{repo_id}',
+            url: '/api/v1/workflow/repositories/{repo_id}/deliveries',
             path: {
                 repo_id: data.repoId
             },
@@ -2784,7 +2892,7 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Regenerate Fixes For Repo
+     * Regenerate Repository Fixes
      * Discard a repo's regenerable fixes and re-trigger generation.
      *
      * A fix is regenerable when no worker is processing it and its PR, if any,
@@ -2796,10 +2904,10 @@ export class WorkflowFixesService {
      * @returns number Successful Response
      * @throws ApiError
      */
-    public static regenerateFixesForRepo(data: WorkflowFixesRegenerateFixesForRepoData): CancelablePromise<WorkflowFixesRegenerateFixesForRepoResponse> {
+    public static regenerateRepositoryFixes(data: WorkflowRegenerateRepositoryFixesData): CancelablePromise<WorkflowRegenerateRepositoryFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/regenerate-for-repo/{repo_id}',
+            url: '/api/v1/workflow/repositories/{repo_id}/fixes/regenerate',
             path: {
                 repo_id: data.repoId
             },
@@ -2810,7 +2918,7 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Regenerate Fixes For Workflow
+     * Regenerate Fix
      * Discard one workflow file's fix and re-trigger generation.
      *
      * Rejected while a worker is processing the fix, once its PR was merged
@@ -2821,10 +2929,10 @@ export class WorkflowFixesService {
      * @returns number Successful Response
      * @throws ApiError
      */
-    public static regenerateFixesForWorkflow(data: WorkflowFixesRegenerateFixesForWorkflowData): CancelablePromise<WorkflowFixesRegenerateFixesForWorkflowResponse> {
+    public static regenerateFix(data: WorkflowRegenerateFixData): CancelablePromise<WorkflowRegenerateFixResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/regenerate-for-workflow/{fix_id}',
+            url: '/api/v1/workflow/fixes/{fix_id}/regenerate',
             path: {
                 fix_id: data.fixId
             },
@@ -2835,7 +2943,7 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Regenerate Failed Fix
+     * Retry Fix
      * Retry a failed fix in place (``failed`` -> ``pending``), reusing the row.
      *
      * Unlike ``regenerate-for-workflow`` (which discards the row and creates a new
@@ -2846,10 +2954,10 @@ export class WorkflowFixesService {
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static regenerateFailedFix(data: WorkflowFixesRegenerateFailedFixData): CancelablePromise<WorkflowFixesRegenerateFailedFixResponse> {
+    public static retryFix(data: WorkflowRetryFixData): CancelablePromise<WorkflowRetryFixResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/{fix_id}/regenerate',
+            url: '/api/v1/workflow/fixes/{fix_id}/retry',
             path: {
                 fix_id: data.fixId
             },
@@ -2860,146 +2968,22 @@ export class WorkflowFixesService {
     }
 
     /**
-     * Sync Pr Statuses
+     * Sync Pull Request Statuses
      * @param data The data for the request.
      * @param data.repoId
      * @returns number Successful Response
      * @throws ApiError
      */
-    public static syncPrStatuses(data: WorkflowFixesSyncPrStatusesData): CancelablePromise<WorkflowFixesSyncPrStatusesResponse> {
+    public static syncPullRequestStatuses(data: WorkflowSyncPullRequestStatusesData): CancelablePromise<WorkflowSyncPullRequestStatusesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/workflow-fixes/sync-pr-status/{repo_id}',
+            url: '/api/v1/workflow/repositories/{repo_id}/pull-requests/sync',
             path: {
                 repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'
             }
-        });
-    }
-}
-
-export class WorkflowScansService {
-    /**
-     * List Analyses
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.branch
-     * @param data.grade
-     * @param data.status
-     * @param data.skip
-     * @param data.limit
-     * @returns AnalysisPublic Successful Response
-     * @throws ApiError
-     */
-    public static listAnalyses(data: WorkflowScansListAnalysesData = {}): CancelablePromise<WorkflowScansListAnalysesResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/workflow-scans/',
-            query: {
-                repo_id: data.repoId,
-                branch: data.branch,
-                grade: data.grade,
-                status: data.status,
-                skip: data.skip,
-                limit: data.limit
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Get Analysis
-     * @param data The data for the request.
-     * @param data.analysisId
-     * @returns AnalysisPublic Successful Response
-     * @throws ApiError
-     */
-    public static getAnalysis(data: WorkflowScansGetAnalysisData): CancelablePromise<WorkflowScansGetAnalysisResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/workflow-scans/{analysis_id}',
-            path: {
-                analysis_id: data.analysisId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Trigger Analysis
-     * @param data The data for the request.
-     * @param data.repoId
-     * @param data.branch
-     * @param data.force
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static triggerAnalysis(data: WorkflowScansTriggerAnalysisData): CancelablePromise<WorkflowScansTriggerAnalysisResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/workflow-scans/trigger/{repo_id}',
-            path: {
-                repo_id: data.repoId
-            },
-            query: {
-                branch: data.branch,
-                force: data.force
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Reanalyze For Workflow
-     * Re-run static analysis for a single workflow file.
-     *
-     * Per-workflow analog of ``trigger_analysis`` (which is repo/branch-wide):
-     * the worker re-fetches and re-evaluates just this file on its own branch,
-     * consistent with the per-workflow fix (``regenerate-for-workflow``) and
-     * delivery (``deliver-for-workflow``) endpoints.
-     * @param data The data for the request.
-     * @param data.workflowFileId
-     * @param data.force
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static reanalyzeForWorkflow(data: WorkflowScansReanalyzeForWorkflowData): CancelablePromise<WorkflowScansReanalyzeForWorkflowResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/workflow-scans/reanalyze-for-workflow/{workflow_file_id}',
-            path: {
-                workflow_file_id: data.workflowFileId
-            },
-            query: {
-                force: data.force
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-
-    /**
-     * Reanalyze All
-     * Fan out a fresh static analysis across all enabled repositories.
-     *
-     * Same mechanism used automatically when a release ships new rules; exposed
-     * so operators can re-apply rules on demand without a redeploy.
-     * @returns string Successful Response
-     * @throws ApiError
-     */
-    public static reanalyzeAll(): CancelablePromise<WorkflowScansReanalyzeAllResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/workflow-scans/reanalyze-all'
         });
     }
 }

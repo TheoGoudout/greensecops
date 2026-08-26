@@ -18,7 +18,7 @@ import type {
   TerraformFixPublic,
   TerraformRootPublic,
 } from "@/client"
-import { TerraformService, WorkflowFixesService } from "@/client"
+import { TerraformService, WorkflowService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -53,12 +53,12 @@ function TerraformTab() {
 
   const { data: roots, isLoading } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
-    queryFn: () => TerraformService.listTerraformRoots({ repoId }),
+    queryFn: () => TerraformService.listRoots({ repoId }),
   })
 
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
@@ -138,28 +138,30 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
   >(root.id, isOpen, {
     keyPrefix: "terraform",
     targetLabel: "Terraform root",
-    listFiles: () => TerraformService.listTerraformFiles({ rootId: root.id }),
-    listFindings: () =>
-      TerraformService.listTerraformFindings({ rootId: root.id }),
-    listFixes: () => TerraformService.listTerraformFixes({ rootId: root.id }),
+    listFiles: () => TerraformService.listFiles({ rootId: root.id }),
+    listFindings: () => TerraformService.listFindings({ rootId: root.id }),
+    listFixes: () => TerraformService.listFixes({ rootId: root.id }),
     toggle: (enabled) =>
-      TerraformService.toggleTerraformRoot({ rootId: root.id, enabled }),
-    scan: () => TerraformService.triggerTerraformScan({ rootId: root.id }),
-    remove: () => TerraformService.deleteTerraformRoot({ rootId: root.id }),
+      TerraformService.updateRoot({
+        rootId: root.id,
+        requestBody: { enabled },
+      }),
+    scan: () => TerraformService.triggerScan({ rootId: root.id }),
+    remove: () => TerraformService.deleteRoot({ rootId: root.id }),
     generate: (findingIds) =>
-      TerraformService.triggerTerraformFixGeneration({
+      TerraformService.generateFixes({
         rootId: root.id,
         requestBody: findingIds.length ? { finding_ids: findingIds } : {},
       }),
     deliver: (force) =>
-      TerraformService.triggerTerraformDelivery({ rootId: root.id, force }),
+      TerraformService.deliverFixes({ rootId: root.id, force }),
   })
 
   // Scan history is Terraform-only and loads on its own disclosure, so it stays
   // here rather than in the shared hook.
   const { data: scans } = useQuery({
     queryKey: ["terraform-scans", root.id],
-    queryFn: () => TerraformService.listTerraformScans({ rootId: root.id }),
+    queryFn: () => TerraformService.listScans({ rootId: root.id }),
     enabled: isOpen && historyOpen,
   })
 

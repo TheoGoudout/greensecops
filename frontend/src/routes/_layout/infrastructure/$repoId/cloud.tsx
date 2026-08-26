@@ -58,7 +58,7 @@ function CloudTab() {
 
   const { data: accounts, isLoading: accountsLoading } = useQuery({
     queryKey: ["cloud-accounts", orgId],
-    queryFn: () => CloudService.listCloudAccounts({ orgId }),
+    queryFn: () => CloudService.listAccounts({ orgId }),
     enabled: !!orgId,
   })
 
@@ -68,7 +68,7 @@ function CloudTab() {
       roleArn: string
       regions: string[]
     }) =>
-      CloudService.createCloudAccount({
+      CloudService.createAccount({
         requestBody: {
           org_id: orgId!,
           display_name: vars.displayName,
@@ -93,7 +93,10 @@ function CloudTab() {
 
   const toggleMutation = useMutation({
     mutationFn: (vars: { accountId: string; enabled: boolean }) =>
-      CloudService.toggleCloudAccount(vars),
+      CloudService.updateAccount({
+        accountId: vars.accountId,
+        requestBody: { enabled: vars.enabled },
+      }),
     onSuccess: invalidateAccounts,
     onError: (error) =>
       toast.error("Failed to update account", {
@@ -103,7 +106,7 @@ function CloudTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (accountId: string) =>
-      CloudService.deleteCloudAccount({ accountId }),
+      CloudService.deleteAccount({ accountId }),
     onSuccess: () => {
       toast.success("Cloud account removed")
       invalidateAccounts()
@@ -115,8 +118,7 @@ function CloudTab() {
   })
 
   const scanMutation = useMutation({
-    mutationFn: (accountId: string) =>
-      CloudService.triggerCloudScan({ accountId }),
+    mutationFn: (accountId: string) => CloudService.triggerScan({ accountId }),
     onSuccess: () => {
       toast.success("Scan queued")
       invalidateAccounts()
@@ -301,13 +303,13 @@ function CloudAccountCard({
 
   const { data: findings, isLoading: findingsLoading } = useQuery({
     queryKey: ["cloud-findings", account.id],
-    queryFn: () => CloudService.listCloudFindings({ accountId: account.id }),
+    queryFn: () => CloudService.listFindings({ accountId: account.id }),
     enabled: isOpen,
   })
 
   const { data: scans } = useQuery({
     queryKey: ["cloud-scans", account.id],
-    queryFn: () => CloudService.listCloudScans({ accountId: account.id }),
+    queryFn: () => CloudService.listScans({ accountId: account.id }),
     enabled: isOpen && historyOpen,
   })
 
