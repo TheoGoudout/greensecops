@@ -1325,11 +1325,11 @@ export async function mockFixes(
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
   pullRequests: unknown[] = [],
 ) {
-  // Two globs, because the workflow engine's fix surface is addressed two ways:
-  // by fix (`/workflow/fixes/...`) and by repository
-  // (`/workflow/repositories/{id}/fixes|deliveries|pull-requests`). One glob
-  // over `/workflow/**` would be simpler but would also swallow the scan and
-  // finding routes, which have their own handlers.
+  // The workflow engine's fix surface is addressed two ways — by fix
+  // (`/workflow/fixes/...`) and by repository
+  // (`/workflow/repositories/{id}/fixes|deliveries|pull-requests`) — so one
+  // pattern has to cover both without reaching the scan, finding or file
+  // routes, which have handlers of their own.
   const handler = (route: Route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -1341,7 +1341,7 @@ export async function mockFixes(
       route.fulfill({ status: 202, json: { status: "queued" } })
     } else if (method === "POST" && url.includes("/deliveries")) {
       route.fulfill({ json: { status: "delivering" } })
-    } else if (method === "POST" && url.endsWith("/fixes")) {
+    } else if (method === "POST" && new URL(url).pathname.endsWith("/fixes")) {
       // Repo-wide generation: `POST /workflow/repositories/{id}/fixes`.
       route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
     } else if (method === "DELETE") {
@@ -1356,8 +1356,14 @@ export async function mockFixes(
       route.fulfill({ json: fixes })
     }
   }
-  await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, handler)
-  await page.route("**/api/v1/workflow/repositories/**", handler)
+  // Only the fix-shaped paths. A blanket `**/api/v1/workflow/repositories/**`
+  // also swallows `/repositories/{id}/files`, and because this runs after
+  // mockRepositories it wins — the page then sees an empty workflow-file list
+  // and renders no findings at all, which looks nothing like a routing bug.
+  await page.route(
+    /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries|pull-requests))/,
+    handler,
+  )
 }
 
 export async function mockRules(

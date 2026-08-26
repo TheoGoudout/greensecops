@@ -134,7 +134,7 @@ test.describe("Golden Path — Extended", () => {
     await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
       const method = route.request().method()
       const url = route.request().url()
-      if (method === "POST" && url.endsWith("/fixes")) {
+      if (method === "POST" && new URL(url).pathname.endsWith("/fixes")) {
         batchFixCalled = true
         route.fulfill({
           status: 202,

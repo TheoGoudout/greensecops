@@ -97,7 +97,7 @@ test.describe("Repository Detail", () => {
         const method = route.request().method()
         if (method === "POST" && url.includes("/pull-requests/sync")) {
           route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
-        } else if (method === "POST" && url.endsWith("/fixes")) {
+        } else if (method === "POST" && new URL(url).pathname.endsWith("/fixes")) {
           route.fulfill({
             status: 202,
             json: { queued: findings.length, skipped: 0 },
