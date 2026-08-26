@@ -36,12 +36,22 @@ OPA_BIN = os.environ.get("OPA_BIN", "opa")
 # app.core.rego_metadata is deliberately stdlib-only so it imports cleanly in
 # this environment, which has neither the app nor its dependencies installed.
 sys.path.insert(0, str(ROOT / "backend"))
-from app.core.rego_metadata import severity_rank as severity_rank  # noqa: E402
+from app.core.rego_metadata import (  # noqa: E402
+    domain_violations_expr,
+    severity_rank as severity_rank,
+)
 
 
 def domain_query(domain: str) -> str:
-    """Every violation under ``greensecops.<domain>.<category>.<rule>``."""
-    return f"[v | v := data.greensecops.{domain}[_][_].violations[_]]"
+    """Every violation under ``greensecops.<domain>.<category>.<rule>``.
+
+    The expression is shared with the backend evaluator so the two cannot
+    disagree about which rules an engine is graded against. It is used bare
+    here because ``opa eval -f raw`` prints the value of the expression it is
+    given; the backend has to bind it to a variable first, because
+    ``/v1/query`` answers with bindings rather than a value.
+    """
+    return domain_violations_expr(domain)
 
 
 def run_opa_eval(

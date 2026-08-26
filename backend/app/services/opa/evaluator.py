@@ -1,5 +1,4 @@
 import dataclasses
-import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +7,12 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import httpx
 
 from app.core.config import settings
+from app.core.rego_metadata import (
+    PACKAGES_BINDING,
+    VIOLATIONS_BINDING,
+    domain_packages_expr,
+    domain_violations_expr,
+)
 from app.services.workflow_enrichment import attach_action_metadata
 
 # Re-exported: parsing moved out so scripts/validate_examples.py can share it
@@ -17,8 +22,6 @@ from app.services.yaml_positions import END_LINE_KEY, START_LINE_KEY
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only import
     from _typeshed import DataclassInstance
-
-logger = logging.getLogger(__name__)
 
 # Any of the per-domain violation dataclasses below.
 V = TypeVar("V", bound="DataclassInstance")
@@ -43,10 +46,15 @@ _RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
 def _discover_policy_packages(domain_dir: str) -> list[str]:
     """Enumerate OPA package paths from one domain's shipped Rego rule files.
 
-    Deriving this from the filesystem (rather than a hand-maintained list)
-    guarantees that every rule which is seeded and shown as enabled is also
-    actually evaluated — the two can no longer silently drift apart. The
-    package path returned always mirrors the file's location relative to
+    Evaluation no longer walks this list — a domain query reaches every package
+    OPA has loaded, whether or not this process can see the file. What the list
+    still answers is the question it was introduced for: whether a rule that is
+    seeded and shown as enabled is one the domain query actually grades against.
+    ``tests/services/test_opa_evaluator.py`` asserts exactly that, so a rule
+    filed outside ``<domain>/<category>/`` still fails loudly instead of
+    silently never firing.
+
+    The package path returned always mirrors the file's location relative to
     ``_RULES_DIR``, so it matches that file's own ``package`` declaration.
     """
     search_root = _RULES_DIR / domain_dir
@@ -157,26 +165,36 @@ class CiTelemetryOpaViolation:
     recommendation: str
 
 
-# All registered policy packages to evaluate against, discovered from the
-# shipped Rego rule files so no rule is left unevaluated. Falls back to the
-# core set if the rules directory is unavailable at runtime.
-POLICY_PACKAGES = _discover_policy_packages("ci_workflow") or [
-    "greensecops/ci_workflow/energy/caching_missing",
-    "greensecops/ci_workflow/energy/runner_sizing",
-    "greensecops/ci_workflow/reliability/missing_timeout",
-    "greensecops/ci_workflow/reliability/unpinned_actions",
-    "greensecops/ci_workflow/security/excessive_token_permissions",
-    "greensecops/ci_workflow/security/pr_target_injection",
-    "greensecops/ci_workflow/performance/unnecessary_full_checkout",
-    "greensecops/ci_workflow/maintainability/missing_workflow_description",
-]
+# Every domain's rules live under `greensecops.<domain>.<category>.<rule>`, and
+# the domain is exactly the directory name under `app/rules/` — the same
+# property `RuleDomain(dir_name)` relies on. Naming them here rather than
+# inline keeps the string that selects an engine's rules in one place.
+DOMAIN_CI_WORKFLOW = "ci_workflow"
+DOMAIN_CI_TELEMETRY = "ci_telemetry"
+DOMAIN_IAC_TERRAFORM = "iac_terraform"
+DOMAIN_IAC_ANSIBLE = "iac_ansible"
+DOMAIN_CLOUD_AWS = "cloud_aws"
+DOMAIN_CONTAINER_DOCKER = "container_docker"
+DOMAIN_CONTAINER_RUNTIME = "container_runtime"
 
-IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages("iac_terraform")
-IAC_ANSIBLE_POLICY_PACKAGES = _discover_policy_packages("iac_ansible")
-CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages("cloud_aws")
-CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages("ci_telemetry")
-CONTAINER_DOCKER_POLICY_PACKAGES = _discover_policy_packages("container_docker")
-CONTAINER_RUNTIME_POLICY_PACKAGES = _discover_policy_packages("container_runtime")
+# The packages each domain ships, discovered from the Rego files on disk.
+#
+# These no longer drive evaluation — a domain query grades whatever OPA has
+# loaded, so the backend's own copy of the rules directory is not consulted at
+# scan time and the hand-written fallback list that used to guard an absent
+# one is gone with it. What they still do is let the catalog be checked against
+# the tree: `tests/services/test_opa_evaluator.py` asserts that every shipped
+# rule is one the domain query reaches, which is the drift this discovery was
+# introduced to catch.
+POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CI_WORKFLOW)
+IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_IAC_TERRAFORM)
+# Ansible has rules and CI checks but no backend engine yet, so this pair is
+# discovered and catalogued without an `evaluate_*` of its own.
+IAC_ANSIBLE_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_IAC_ANSIBLE)
+CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CLOUD_AWS)
+CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CI_TELEMETRY)
+CONTAINER_DOCKER_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CONTAINER_DOCKER)
+CONTAINER_RUNTIME_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CONTAINER_RUNTIME)
 
 
 def _attach_positions(violation: OpaViolation, parsed: dict[str, Any]) -> None:
@@ -211,39 +229,68 @@ def _attach_positions(violation: OpaViolation, parsed: dict[str, Any]) -> None:
     violation.line_end = node.get(END_LINE_KEY)
 
 
-async def _evaluate_packages(
-    parsed: dict[str, Any], package_paths: list[str]
-) -> list[dict[str, Any]]:
-    """POST ``parsed`` as OPA input to each package; return raw violation dicts.
+async def _evaluate_domain(parsed: dict[str, Any], domain: str) -> list[dict[str, Any]]:
+    """Evaluate one domain's whole rule set in a single call; return raw dicts.
 
-    Shared by :func:`evaluate_workflow` and :func:`evaluate_terraform` — the
-    HTTP/error-handling shape is identical, only the input document, package
-    list, and the dataclass each raw violation gets mapped into differ.
+    Shared by every ``evaluate_*`` below — the HTTP/error-handling shape is
+    identical, only the input document, the domain, and the dataclass each raw
+    violation gets mapped into differ.
+
+    One request per *domain*, not per rule. The previous shape POSTed the whole
+    input document once per package, sequentially: 43 round trips to grade a
+    cloud snapshot, 61 for a workflow, each re-serializing the same document.
+    ``/v1/query`` evaluates every package under the domain in one pass, so the
+    cost stops scaling with the size of the rule catalog.
+
+    Two details of that endpoint shape this function, and both are ways a
+    refactor here reports a perfect score instead of a failure:
+
+    * It answers with variable *bindings*, not values. The comprehension has to
+      be bound; submitted bare it returns ``{"result": [{}]}``, which is a
+      successful response carrying no violations.
+    * A domain whose policies are not loaded answers *identically* to a
+      spotless document. So the query also asks which packages OPA has for the
+      domain, and an empty inventory is treated as the outage it is.
     """
+    query = (
+        f"{VIOLATIONS_BINDING} = {domain_violations_expr(domain)}; "
+        f"{PACKAGES_BINDING} = {domain_packages_expr(domain)}"
+    )
+    url = f"{settings.OPA_URL}/v1/query"
+    # One request now carries what 61 shared before, so it is given longer
+    # than the old per-package 10s — while the worst case for a whole
+    # domain drops from 61 timeouts to one.
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(url, json={"query": query, "input": parsed})
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPError as exc:
+            # A perfect score must not be reported just because OPA is down:
+            # surface the outage so the analysis is marked failed.
+            raise OpaUnavailableError(
+                f"OPA evaluation failed for {domain}: {exc}"
+            ) from exc
+
+    bindings = data.get("result") or []
+    if not bindings:
+        # An undefined query — every binding failed to resolve. Nothing was
+        # graded, so nothing can be concluded about the document.
+        raise OpaUnavailableError(
+            f"OPA returned no bindings for {domain} — the query did not resolve"
+        )
+
     raw_violations: list[dict[str, Any]] = []
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for package_path in package_paths:
-            url = f"{settings.OPA_URL}/v1/data/{package_path}"
-            try:
-                response = await client.post(url, json={"input": parsed})
-                if response.status_code == 404:
-                    # Policy not loaded yet — skip silently
-                    continue
-                response.raise_for_status()
-                data = response.json()
-            except httpx.HTTPError as exc:
-                # A perfect score must not be reported just because OPA is
-                # down: surface the outage so the analysis is marked failed.
-                raise OpaUnavailableError(
-                    f"OPA evaluation failed for {package_path}: {exc}"
-                ) from exc
-            if "result" not in data:
-                logger.error(
-                    "OPA package %s is undefined — policy not loaded in OPA",
-                    package_path,
-                )
-                continue
-            raw_violations.extend(data["result"].get("violations", []))
+    loaded_packages = 0
+    for binding in bindings:
+        raw_violations.extend(binding.get(VIOLATIONS_BINDING, []))
+        loaded_packages += len(binding.get(PACKAGES_BINDING, []))
+
+    if not loaded_packages:
+        raise OpaUnavailableError(
+            f"OPA has no policies loaded for {domain} — the document was not "
+            "graded against any rule"
+        )
     return raw_violations
 
 
@@ -284,12 +331,12 @@ def _violation(cls: type[V], raw: dict[str, Any], default_category: str) -> V:
 
 async def _evaluate(
     payload: dict[str, Any],
-    packages: list[str],
+    domain: str,
     cls: type[V],
     default_category: str,
 ) -> list[V]:
-    """Evaluate ``payload`` against ``packages`` and map the results to ``cls``."""
-    raw = await _evaluate_packages(payload, packages)
+    """Evaluate ``payload`` against ``domain``'s rules and map results to ``cls``."""
+    raw = await _evaluate_domain(payload, domain)
     return [_violation(cls, v, default_category) for v in raw]
 
 
@@ -311,7 +358,9 @@ async def evaluate_workflow(
         raise WorkflowParseError("Workflow file is not a valid YAML mapping")
     attach_action_metadata(parsed, action_metadata)
 
-    violations = await _evaluate(parsed, POLICY_PACKAGES, OpaViolation, "reliability")
+    violations = await _evaluate(
+        parsed, DOMAIN_CI_WORKFLOW, OpaViolation, "reliability"
+    )
     # Attribution lives here, where the parsed document already is, rather
     # than in the analysis task — which had to re-parse the same bytes.
     for violation in violations:
@@ -330,7 +379,7 @@ async def evaluate_terraform(
     raw string.
     """
     return await _evaluate(
-        parsed_config, IAC_TERRAFORM_POLICY_PACKAGES, TerraformOpaViolation, "security"
+        parsed_config, DOMAIN_IAC_TERRAFORM, TerraformOpaViolation, "security"
     )
 
 
@@ -370,7 +419,7 @@ async def evaluate_docker(
     """
     return await _evaluate(
         merged_document,
-        CONTAINER_DOCKER_POLICY_PACKAGES,
+        DOMAIN_CONTAINER_DOCKER,
         DockerOpaViolation,
         "security",
     )
@@ -389,7 +438,7 @@ async def evaluate_container_runtime(
     """
     return await _evaluate(
         telemetry,
-        CONTAINER_RUNTIME_POLICY_PACKAGES,
+        DOMAIN_CONTAINER_RUNTIME,
         CiTelemetryOpaViolation,
         "energy",
     )
@@ -406,7 +455,7 @@ async def evaluate_ci_telemetry(
     same rule-authoring model, different signal.
     """
     return await _evaluate(
-        telemetry, CI_TELEMETRY_POLICY_PACKAGES, CiTelemetryOpaViolation, "reliability"
+        telemetry, DOMAIN_CI_TELEMETRY, CiTelemetryOpaViolation, "reliability"
     )
 
 
@@ -418,6 +467,4 @@ async def evaluate_cloud(resources: dict[str, Any]) -> list[CloudOpaViolation]:
     normalized/merged across regions, mirroring how ``evaluate_terraform``
     takes an already-merged root config rather than raw files.
     """
-    return await _evaluate(
-        resources, CLOUD_AWS_POLICY_PACKAGES, CloudOpaViolation, "security"
-    )
+    return await _evaluate(resources, DOMAIN_CLOUD_AWS, CloudOpaViolation, "security")

@@ -27,7 +27,8 @@ Rego-rule catalog and one grading model:
 See :doc:`rules/index` for the full rule catalog, and :doc:`rule-authoring` for how to add
 to it — including what each engine's rules can see, and where the collectors run out of
 signal. Each engine's scan/finding lifecycle is documented alongside the source in
-``docs/state-machines.md``.
+``docs/state-machines.md``, and the standing review of the policy engine itself — why
+the rules are Rego, and what would replace OPA — in ``docs/policy-engine-review.md``.
 
 .. toctree::
    :maxdepth: 2
