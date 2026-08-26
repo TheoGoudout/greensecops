@@ -51,6 +51,59 @@ def severity_rank(severity: str) -> int:
     return SEVERITY_ORDER.get(severity, len(SEVERITY_ORDER))
 
 
+# The names the backend binds each expression to when it sends the query to
+# OPA's `/v1/query`. Callers that need the bindings wrap the expressions
+# themselves — see `domain_violations_expr`.
+VIOLATIONS_BINDING = "violations"
+PACKAGES_BINDING = "rules"
+
+
+def domain_violations_expr(domain: str) -> str:
+    """The Rego comprehension collecting every violation one domain can raise.
+
+    ``greensecops.<domain>.<category>.<rule>.violations``, flattened. This is
+    the query shape that lets a whole domain be evaluated in **one** call
+    instead of one call per rule, and it lives here so the backend evaluator
+    and ``scripts/opa_eval.py`` cannot drift apart on which rules an engine is
+    graded against.
+
+    It is deliberately the bare expression, not a complete query, because the
+    two callers submit it over transports with different conventions:
+
+    * ``opa eval -f raw`` evaluates a bare expression and prints its value.
+    * OPA's ``/v1/query`` returns *variable bindings*, so an unbound
+      comprehension evaluates to ``{"result": [{}]}`` — successful, and
+      carrying no violations at all. The backend therefore binds it to
+      ``VIOLATIONS_BINDING`` first.
+
+    That second point is why this returns an expression rather than a query: a
+    single shared string would silently report a clean scan on one of the two.
+
+    Per-domain rather than one cross-domain aggregate, because rules in other
+    domains fire on negations (a ci_workflow rule asking ``not input.name``)
+    that are vacuously true for a Terraform or Docker document.
+    """
+    return f"[v | v := data.greensecops.{domain}[_][_].violations[_]]"
+
+
+def domain_packages_expr(domain: str) -> str:
+    """The names of the rule packages OPA currently has loaded for ``domain``.
+
+    Companion to `domain_violations_expr`, and the reason the backend can send
+    one query instead of two. A domain whose bundle is missing answers a
+    violation query *identically* to a spotless document — both come back as
+    ``{"result": [{"violations": []}]}`` — so the violations alone cannot tell
+    "nothing is wrong" from "nothing was checked". Asking for the inventory in
+    the same query settles it: a loaded domain names its packages, an absent
+    one returns an empty list.
+
+    The names include each rule's ``_test`` package, because the policy server
+    loads the whole rules directory. That makes this an existence check, not a
+    count to reconcile against the files on disk.
+    """
+    return f"[r | data.greensecops.{domain}[_][r]]"
+
+
 def iter_rule_files(rules_dir: Path | None = None) -> Iterator[Path]:
     """Yield every policy ``.rego`` under ``rules_dir``, tests and helpers excluded.
 

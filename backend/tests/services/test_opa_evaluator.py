@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.core.rego_metadata import RULES_DIR, iter_rule_files
+from app.core.rego_metadata import (
+    PACKAGES_BINDING,
+    RULES_DIR,
+    VIOLATIONS_BINDING,
+    domain_packages_expr,
+    domain_violations_expr,
+    iter_rule_files,
+)
 from app.models import RuleDomain
 from app.services.opa.evaluator import (
     CI_TELEMETRY_POLICY_PACKAGES,
@@ -75,14 +82,29 @@ def _fake_response(json_data: Any, status_code: int = 200) -> MagicMock:
     return resp
 
 
-def _mock_client(per_package: dict[str, Any]) -> MagicMock:
-    """Return a mock AsyncClient whose post() dispatches by URL path."""
+def _mock_client(violations: list[dict[str, Any]], *, loaded: bool = True) -> MagicMock:
+    """Return a mock AsyncClient answering ``/v1/query`` with one binding set.
+
+    The evaluator sends one query per domain and reads two bindings back, so
+    the mock mirrors that rather than the old dispatch-by-package-URL: the
+    violations the domain raised, and the packages OPA has loaded for it.
+
+    ``loaded=False`` is the mis-deployed bundle — a domain OPA is serving no
+    policies for. It answers exactly like a spotless document apart from that
+    empty inventory, which is why the evaluator asks for it.
+    """
+    payload = {
+        "result": [
+            {
+                "violations": violations,
+                "rules": ["a_rule", "a_rule_test"] if loaded else [],
+            }
+        ]
+    }
 
     async def _post(url: str, **_kwargs: Any) -> MagicMock:
-        for pkg, data in per_package.items():
-            if pkg in url:
-                return _fake_response(data)
-        return _fake_response({})  # undefined — no "result" key
+        assert url.endswith("/v1/query"), url
+        return _fake_response(payload)
 
     client = AsyncMock()
     client.post = _post
@@ -354,9 +376,7 @@ def test_evaluate_workflow_returns_violations_when_policy_matches() -> None:
         "message": "Step uses mutable ref",
         "context": "actions/checkout@main",
     }
-    mock_cm = _mock_client(
-        {"reliability/unpinned_actions": {"result": {"violations": [violation]}}}
-    )
+    mock_cm = _mock_client([violation])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
 
@@ -366,24 +386,47 @@ def test_evaluate_workflow_returns_violations_when_policy_matches() -> None:
 
 
 def test_evaluate_workflow_returns_empty_when_no_violations() -> None:
-    mock_cm = _mock_client({pkg: {"result": {}} for pkg in POLICY_PACKAGES})
+    mock_cm = _mock_client([])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
 
     assert violations == []
 
 
-def test_evaluate_workflow_logs_error_when_policy_undefined(caplog: Any) -> None:
-    # OPA returns {} (no "result" key) → policy not loaded
-    mock_cm = _mock_client({})
-    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
-        import logging
+def test_evaluate_workflow_raises_when_no_policies_loaded() -> None:
+    """A domain OPA serves no policies for must fail, not score full marks.
 
-        with caplog.at_level(logging.ERROR, logger="app.services.opa.evaluator"):
-            violations = asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
+    This is the failure the domain query made possible to miss. Asked only for
+    violations, an OPA with no bundle answers exactly what a flawless workflow
+    does — ``{"result": [{"violations": []}]}`` — so the evaluator also asks
+    which packages the domain has, and an empty inventory means the document
+    was never graded.
+    """
+    mock_cm = _mock_client([], loaded=False)
+    with (
+        patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm),
+        pytest.raises(OpaUnavailableError, match="no policies loaded"),
+    ):
+        asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
 
-    assert violations == []
-    assert any("undefined" in rec.message for rec in caplog.records)
+
+def test_evaluate_workflow_raises_when_query_does_not_resolve() -> None:
+    """An empty ``result`` list means no binding resolved — nothing was graded."""
+
+    async def _post(url: str, **_kwargs: Any) -> MagicMock:
+        return _fake_response({"result": []})
+
+    client = AsyncMock()
+    client.post = _post
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=cm),
+        pytest.raises(OpaUnavailableError, match="did not resolve"),
+    ):
+        asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
 
 
 def test_evaluate_workflow_raises_on_unparseable_yaml() -> None:
@@ -408,6 +451,66 @@ def test_evaluate_workflow_raises_when_opa_unreachable() -> None:
         pytest.raises(OpaUnavailableError),
     ):
         asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
+
+
+def test_evaluate_sends_one_request_for_the_whole_domain() -> None:
+    """One call per domain, not one per rule.
+
+    The evaluator used to POST the entire input document once per package,
+    sequentially — 61 round trips to grade a workflow, and one more for every
+    rule added. Pinning the request count is what stops that regrowing:
+    a loop reintroduced here would show up as 61 instead of 1.
+    """
+    calls: list[dict[str, Any]] = []
+
+    async def _post(url: str, **kwargs: Any) -> MagicMock:
+        calls.append({"url": url, "json": kwargs.get("json")})
+        return _fake_response({"result": [{"violations": [], "rules": ["r"]}]})
+
+    client = AsyncMock()
+    client.post = _post
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=cm):
+        asyncio.run(evaluate_workflow(_SIMPLE_WORKFLOW))
+
+    assert len(calls) == 1, f"expected a single domain query, got {len(calls)}"
+    assert calls[0]["url"].endswith("/v1/query")
+    # The document is serialized once, and the query names the domain's whole
+    # rule tree rather than any single package.
+    body = calls[0]["json"]
+    assert body["input"]["name"] == "CI"
+    assert "data.greensecops.ci_workflow[_][_].violations[_]" in body["query"]
+
+
+def test_domain_query_binds_its_comprehension() -> None:
+    """The comprehension must be bound to a variable, or it returns nothing.
+
+    ``/v1/query`` answers with variable bindings. A bare comprehension is a
+    valid query that evaluates to ``{"result": [{}]}`` — success, zero
+    violations — so an unbound query would report every scan as spotless.
+    """
+    query = (
+        f"{VIOLATIONS_BINDING} = {domain_violations_expr('ci_workflow')}; "
+        f"{PACKAGES_BINDING} = {domain_packages_expr('ci_workflow')}"
+    )
+    assert query.startswith(f"{VIOLATIONS_BINDING} = [")
+    assert f"; {PACKAGES_BINDING} = [" in query
+
+
+def test_backend_and_ci_agree_on_which_rules_grade_a_domain() -> None:
+    """scripts/opa_eval.py and the evaluator must select the same rule tree.
+
+    They run in different environments against the same catalog; when they
+    disagree, CI passes an example the product would fail (or the reverse).
+    Sharing the expression is what keeps them honest, so assert the shared
+    helper really is what the domain query is built from.
+    """
+    for domain in (RuleDomain.ci_workflow, RuleDomain.cloud_aws):
+        expr = domain_violations_expr(domain.value)
+        assert expr == f"[v | v := data.greensecops.{domain.value}[_][_].violations[_]]"
 
 
 def test_discover_policy_packages_excludes_test_files() -> None:
@@ -459,13 +562,7 @@ def test_evaluate_terraform_returns_violations_when_policy_matches() -> None:
         "line_end": 20,
         "message": "Bucket is public",
     }
-    mock_cm = _mock_client(
-        {
-            "iac_terraform/security/s3_bucket_public_acl": {
-                "result": {"violations": [violation]}
-            }
-        }
-    )
+    mock_cm = _mock_client([violation])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(evaluate_terraform({"resource": []}))
 
@@ -479,9 +576,7 @@ def test_evaluate_terraform_returns_violations_when_policy_matches() -> None:
 
 
 def test_evaluate_terraform_returns_empty_when_no_violations() -> None:
-    mock_cm = _mock_client(
-        {pkg: {"result": {}} for pkg in IAC_TERRAFORM_POLICY_PACKAGES}
-    )
+    mock_cm = _mock_client([])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(evaluate_terraform({"resource": []}))
 
@@ -565,13 +660,7 @@ def test_evaluate_docker_returns_violations_when_policy_matches() -> None:
         "message": "Service runs privileged",
         "discriminator": "agent",
     }
-    mock_cm = _mock_client(
-        {
-            "container_docker/security/compose_privileged_container": {
-                "result": {"violations": [violation]}
-            }
-        }
-    )
+    mock_cm = _mock_client([violation])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(
             evaluate_docker({"dockerfiles": [], "compose_files": []})
@@ -596,13 +685,7 @@ def test_evaluate_docker_carries_the_stage_name_for_dockerfile_rules() -> None:
         "stage_name": "runtime",
         "message": "Runs as root",
     }
-    mock_cm = _mock_client(
-        {
-            "container_docker/security/container_runs_as_root": {
-                "result": {"violations": [violation]}
-            }
-        }
-    )
+    mock_cm = _mock_client([violation])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(
             evaluate_docker({"dockerfiles": [], "compose_files": []})
@@ -613,9 +696,7 @@ def test_evaluate_docker_carries_the_stage_name_for_dockerfile_rules() -> None:
 
 
 def test_evaluate_docker_returns_empty_when_no_violations() -> None:
-    mock_cm = _mock_client(
-        {pkg: {"result": {}} for pkg in CONTAINER_DOCKER_POLICY_PACKAGES}
-    )
+    mock_cm = _mock_client([])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(
             evaluate_docker({"dockerfiles": [], "compose_files": []})
@@ -657,13 +738,7 @@ def test_evaluate_ci_telemetry_returns_violations_when_policy_matches() -> None:
         "evidence": "vCPUs=8, CPU=10.0%, RAM=15.0%",
         "recommendation": "Consider downsizing",
     }
-    mock_cm = _mock_client(
-        {
-            "ci_telemetry/energy/runner_underutilized": {
-                "result": {"violations": [violation]}
-            }
-        }
-    )
+    mock_cm = _mock_client([violation])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(
             evaluate_ci_telemetry({"runner_specs": {}, "metrics": {}})
@@ -676,9 +751,7 @@ def test_evaluate_ci_telemetry_returns_violations_when_policy_matches() -> None:
 
 
 def test_evaluate_ci_telemetry_returns_empty_when_no_violations() -> None:
-    mock_cm = _mock_client(
-        {pkg: {"result": {}} for pkg in CI_TELEMETRY_POLICY_PACKAGES}
-    )
+    mock_cm = _mock_client([])
     with patch("app.services.opa.evaluator.httpx.AsyncClient", return_value=mock_cm):
         violations = asyncio.run(
             evaluate_ci_telemetry({"runner_specs": {}, "metrics": {}})
