@@ -42,7 +42,7 @@ locals {
       container_port    = 8000
       host_port         = 8000
       exposure          = "public"
-      health_check_path = "/api/v1/utils/health-check/"
+      health_check_path = "/api/v1/system/health"
       priority          = 10
       needs_app_env     = true
     }

@@ -46,7 +46,7 @@ test.describe("Admin edge cases", () => {
   test("reanalyze all calls API and shows confirmation", async ({ page }) => {
     let reanalyzeCalled = false
 
-    await page.route("**/api/v1/workflow-scans/reanalyze-all", (route) => {
+    await page.route("**/api/v1/workflow/scans/backfill", (route) => {
       reanalyzeCalled = true
       route.fulfill({ status: 202, json: { status: "queued" } })
     })

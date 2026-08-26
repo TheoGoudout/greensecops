@@ -6,16 +6,16 @@ function setupMinimalMocks(page: import("@playwright/test").Page) {
     mockUserMe(page),
     mockEvents(page),
     mockBilling(page),
-    page.route("**/api/v1/repositories/**", (route) =>
+    page.route("**/api/v1/repositories**", (route) =>
       route.fulfill({ json: [] }),
     ),
-    page.route("**/api/v1/workflow-scans/**", (route) =>
+    page.route("**/api/v1/workflow/scans**", (route) =>
       route.fulfill({ json: [] }),
     ),
-    page.route("**/api/v1/workflow-findings/**", (route) =>
+    page.route("**/api/v1/workflow/findings**", (route) =>
       route.fulfill({ json: [] }),
     ),
-    page.route("**/api/v1/rules/**", (route) => route.fulfill({ json: [] })),
+    page.route("**/api/v1/rules**", (route) => route.fulfill({ json: [] })),
   ])
 }
 

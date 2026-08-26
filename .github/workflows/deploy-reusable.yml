@@ -187,7 +187,7 @@ jobs:
           set -euo pipefail
           backend=$(aws ssm get-parameter --name "${SSM_PREFIX}/config/BACKEND_HOST" \
             --query Parameter.Value --output text)
-          url="${backend}/api/v1/utils/health-check/"
+          url="${backend}/api/v1/system/health"
 
           # The load balancer needs a moment to see the replaced targets as
           # healthy even after the containers report ready.

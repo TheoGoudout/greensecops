@@ -40,7 +40,7 @@ superuser before logging in.
 cd backend && uv run uvicorn app.main:app --port 8000 &   # API
 cp frontend/.env.example frontend/.env
 cd frontend && bun run dev &                               # UI on :5173
-curl -s http://localhost:8000/api/v1/utils/health-check/   # → true
+curl -s http://localhost:8000/api/v1/system/health   # → true
 ```
 
 Celery tasks queue into Redis without a worker running — endpoints that

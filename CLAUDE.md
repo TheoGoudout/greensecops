@@ -79,6 +79,47 @@ Every endpoint declares its caller in the decorator:
 rather than shipping unguarded. `tests/api/test_roles.py` walks `app.routes`
 against the registry to catch anyone reaching for a plain `APIRouter`.
 
+## The URL grammar
+
+One shape covers the whole surface, so an endpoint is predictable from the
+resource it addresses:
+
+- **A path is nouns** — plural, kebab-case, one resource per segment. An action
+  is a POST to the collection it creates (`POST .../scans` starts a scan,
+  `POST .../deliveries` opens a PR). Where something is a genuine RPC with no
+  resource to create, the verb is the *last* segment, never before an id.
+- **A path parameter is named for what it identifies** — `{scan_id}`,
+  `{finding_id}` — and comes before anything scoped to it. These names are not
+  cosmetic: `ORG_RESOLVERS` in `api/router.py` is keyed by them, and an org-role
+  route whose parameter is not in that dict fails at import.
+- **State changes are `PATCH` on the resource** with a JSON body, answering with
+  the resource's own `*Public` schema. No `/toggle` sub-path, no `enabled` query
+  parameter, no ad-hoc `dict[str, str | bool]`.
+- **One tag per engine or top-level resource**, because the tag becomes a service
+  class in the generated client.
+
+Each engine owns one namespace, with the same sub-collections under it:
+
+```
+/{engine}/{targets}                 /terraform/roots, /docker/targets,
+                                    /cloud/accounts, /workflow/files
+/{engine}/{targets}/{id}/scans      GET history, POST to start one
+/{engine}/{targets}/{id}/findings
+/{engine}/{targets}/{id}/files
+/{engine}/{targets}/{id}/fixes      GET them, POST to generate them
+/{engine}/{targets}/{id}/deliveries POST to open a PR for the ready fixes
+/{engine}/scans|findings|fixes      cross-target reads, and single-item actions
+```
+
+An engine fills in only what it has — Cloud has no files or fixes, Docker adds
+`/runtime-findings` — but it never spells a shared concept differently. If a new
+engine needs a word the others do not have, that is the signal to look again.
+
+FastAPI matches in declaration order, so a literal segment must be declared
+before the `{id}` pattern beside it or it is unreachable — and it fails as a 422
+"not a valid UUID", which reads like a client bug. `tests/api/test_roles.py`
+pins the ones that exist today.
+
 ## Changing the API
 
 The frontend and Action clients are generated. After any change to a route or a

@@ -15,7 +15,7 @@ Consumed by:
 - [`tests/workers/tasks/test_terraform_fix_generation.py`](../../workers/tasks/test_terraform_fix_generation.py)
   — the vulnerable file an LLM fix is generated against.
 - [`tests/api/routes/test_terraform.py`](../../api/routes/test_terraform.py) —
-  the `GET /terraform-roots/{id}/files` payload.
+  the `GET /terraform/roots/{root_id}/files` payload.
 
 Each case directory is one Terraform **root module** — several `.tf` files that
 `merge_terraform_configs` folds into a single config, exactly as production

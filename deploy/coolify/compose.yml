@@ -239,7 +239,7 @@ services:
         condition: service_completed_successfully
     environment: *app-env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/health"]
       interval: 10s
       timeout: 5s
       retries: 5

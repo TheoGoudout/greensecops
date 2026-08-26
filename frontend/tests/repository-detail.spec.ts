@@ -46,7 +46,7 @@ test.describe("Repository Detail", () => {
     } = opts
 
     return Promise.all([
-      page.route("**/api/v1/repositories/**", (route) => {
+      page.route("**/api/v1/repositories**", (route) => {
         const url = route.request().url()
         if (url.includes("/sync-workflows")) {
           route.fulfill({
@@ -75,24 +75,24 @@ test.describe("Repository Detail", () => {
           route.fulfill({ json: [repo] })
         }
       }),
-      page.route("**/api/v1/workflow-scans/**", (route) => {
+      page.route("**/api/v1/workflow/scans**", (route) => {
         const url = route.request().url()
         const method = route.request().method()
-        if (method === "POST" && url.includes("/trigger/")) {
+        if (method === "POST" && url.includes("/repositories/")) {
           route.fulfill({
             status: 202,
             json: { status: "queued", repo_id: MOCK_REPO.id },
           })
-        } else if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+        } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
           route.fulfill({ json: analyses[0] })
         } else {
           route.fulfill({ json: analyses })
         }
       }),
-      page.route("**/api/v1/workflow-findings/**", (route) => {
+      page.route("**/api/v1/workflow/findings**", (route) => {
         route.fulfill({ json: issues })
       }),
-      page.route("**/api/v1/workflow-fixes/**", (route) => {
+      page.route("**/api/v1/workflow/fixes**", (route) => {
         const url = route.request().url()
         const method = route.request().method()
         if (method === "POST" && url.includes("/sync-pr-status")) {
@@ -228,7 +228,7 @@ test.describe("Repository Detail", () => {
     page,
   }) => {
     let deliverCalled = false
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/workflow-files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
@@ -238,13 +238,13 @@ test.describe("Repository Detail", () => {
         route.fulfill({ json: MOCK_REPO })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [MOCK_ANALYSIS] })
     })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FIX] })
     })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
+    await page.route("**/api/v1/workflow/fixes**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (method === "POST" && url.includes("deliver-for-repo")) {
@@ -327,7 +327,7 @@ test.describe("Repository Detail", () => {
   test("Integrate action button triggers PR", async ({ page }) => {
     await setupRepoMocks(page)
     // Integrate action lives on the Telemetry tab now.
-    await page.route("**/api/v1/telemetry/**", (route) => {
+    await page.route("**/api/v1/telemetry**", (route) => {
       route.fulfill({ json: { runs: [], average: null } })
     })
 

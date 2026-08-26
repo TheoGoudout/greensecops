@@ -64,7 +64,7 @@ test.describe("Repositories", () => {
 
   test("enable/disable toggle calls API", async ({ page }) => {
     let toggleCalled = false
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/toggle")) {
         toggleCalled = true
@@ -92,7 +92,7 @@ test.describe("Repositories", () => {
     await mockRepositories(page, [MOCK_REPO])
 
     let triggerCalled = false
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       const method = route.request().method()
       if (method === "POST") {
         triggerCalled = true
@@ -134,7 +134,7 @@ test.describe("Repositories", () => {
   })
 
   test("loading skeletons appear while data loads", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", async (route) => {
+    await page.route("**/api/v1/repositories**", async (route) => {
       await new Promise((r) => setTimeout(r, 2000))
       route.fulfill({ json: [] })
     })

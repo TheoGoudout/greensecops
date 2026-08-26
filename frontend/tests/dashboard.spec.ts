@@ -478,7 +478,7 @@ test.describe("Dashboard", () => {
     // Delay /overview/, not /analyses/: it backs the summary cards and gates
     // every section, so it is what governs the dashboard's first paint.
     // Registered after the beforeEach stub, so it wins the route match.
-    await page.route("**/api/v1/overview/**", async (route) => {
+    await page.route("**/api/v1/overview**", async (route) => {
       await new Promise((r) => setTimeout(r, 3000))
       route.fulfill({ json: MOCK_OVERVIEW })
     })

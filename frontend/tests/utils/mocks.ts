@@ -1136,7 +1136,7 @@ export async function mockRepositories(
   page: Page,
   repos: RepositoryPublic[] = [MOCK_REPO],
 ) {
-  await page.route("**/api/v1/repositories/**", (route) => {
+  await page.route("**/api/v1/repositories**", (route) => {
     const url = route.request().url()
     if (url.includes("/sync-workflows")) {
       route.fulfill({
@@ -1173,15 +1173,15 @@ export async function mockRepositories(
 }
 
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
-  await page.route("**/api/v1/workflow-scans/**", (route) => {
+  await page.route("**/api/v1/workflow/scans**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
-    if (method === "POST" && url.includes("/trigger/")) {
+    if (method === "POST" && url.includes("/repositories/")) {
       route.fulfill({
         status: 202,
         json: { status: "queued", repo_id: MOCK_REPO.id },
       })
-    } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
       route.fulfill({ json: analysis })
@@ -1196,9 +1196,9 @@ export async function mockIssues(
   issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
   analyses: Array<{ id: string; repo_id: string }> = [MOCK_ANALYSIS],
 ) {
-  await page.route("**/api/v1/workflow-findings/**", (route) => {
+  await page.route("**/api/v1/workflow/findings**", (route) => {
     const url = route.request().url()
-    if (url.includes("/workflow-findings/stats")) {
+    if (url.includes("/findings/stats")) {
       // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
       // per category, plus a nested per-repo breakdown for the dashboard's
       // star diagram), computed from the same fixture list the dashboard's
@@ -1304,7 +1304,7 @@ export async function mockIssues(
       })
       return
     }
-    if (url.match(/\/workflow-findings\/[0-9a-f-]{36}$/)) {
+    if (url.match(/\/findings\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const issue = issues.find((i) => i.id === id) ?? issues[0]
       route.fulfill({ json: issue })
@@ -1319,7 +1319,7 @@ export async function mockFixes(
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
   pullRequests: unknown[] = [],
 ) {
-  await page.route("**/api/v1/workflow-fixes/**", (route) => {
+  await page.route("**/api/v1/workflow/fixes**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "POST" && url.includes("/sync-pr-status")) {
@@ -1334,7 +1334,7 @@ export async function mockFixes(
       route.fulfill({ status: 204 })
     } else if (url.includes("/pull-requests/")) {
       route.fulfill({ json: pullRequests })
-    } else if (url.match(/\/workflow-fixes\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const fix = fixes.find((f) => f.id === id) ?? fixes[0]
       route.fulfill({ json: fix })
@@ -1348,7 +1348,7 @@ export async function mockRules(
   page: Page,
   rules = [MOCK_RULE_SECURITY, MOCK_RULE_RELIABILITY, MOCK_RULE_DISABLED],
 ) {
-  await page.route("**/api/v1/rules/**", (route) => {
+  await page.route("**/api/v1/rules**", (route) => {
     const url = route.request().url()
     if (url.includes("/toggle")) {
       route.fulfill({ json: { ...rules[0], enabled: !rules[0].enabled } })
@@ -1369,7 +1369,7 @@ export async function mockBilling(
   usage = MOCK_USAGE,
   { plans = MOCK_PLANS, invoices = [] as unknown[] } = {},
 ) {
-  await page.route("**/api/v1/billing/**", (route) => {
+  await page.route("**/api/v1/billing**", (route) => {
     const url = route.request().url()
     // Longest-prefix-ish ordering: /oss-applications must be tested before
     // /oss-application, and /subscription is the fallback.
@@ -1396,7 +1396,7 @@ export async function mockOrganizations(
   orgs = [MOCK_ORG],
   aiProviders = MOCK_AI_PROVIDERS,
 ) {
-  await page.route("**/api/v1/organizations/**", (route) => {
+  await page.route("**/api/v1/organizations**", (route) => {
     const url = route.request().url()
     if (url.includes("/ai-providers")) {
       route.fulfill({ json: aiProviders })
@@ -1412,7 +1412,7 @@ export async function mockInstallations(
   page: Page,
   installations = [MOCK_INSTALLATION],
 ) {
-  await page.route("**/api/v1/installations/**", (route) => {
+  await page.route("**/api/v1/installations**", (route) => {
     route.fulfill({ json: installations })
   })
 }
@@ -1432,7 +1432,7 @@ export async function mockDockerTargets(
     runtimeFixQueued = 1,
   } = {},
 ) {
-  await page.route("**/api/v1/docker-targets/**", (route) => {
+  await page.route("**/api/v1/docker/targets**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "DELETE") {
@@ -1539,7 +1539,7 @@ export async function mockAnsibleProjects(
 }
 
 export async function mockEvents(page: Page) {
-  await page.route("**/api/v1/events/**", (route) => {
+  await page.route("**/api/v1/events**", (route) => {
     route.fulfill({
       status: 200,
       headers: { "Content-Type": "text/event-stream" },
@@ -1768,7 +1768,7 @@ export async function mockOverview(
   page: Page,
   overview: unknown = MOCK_OVERVIEW,
 ) {
-  await page.route("**/api/v1/overview/**", (route) => {
+  await page.route("**/api/v1/overview**", (route) => {
     route.fulfill({ json: overview })
   })
 }

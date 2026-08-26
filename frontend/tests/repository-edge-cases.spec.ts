@@ -26,7 +26,7 @@ test.describe("Repository Edge Cases", () => {
   })
 
   test("external repo shows in repository list", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO_EXTERNAL })
@@ -34,7 +34,7 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: [MOCK_REPO, MOCK_REPO_EXTERNAL] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -45,7 +45,7 @@ test.describe("Repository Edge Cases", () => {
   })
 
   test("external repo detail page loads without crash", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/workflow-files")) {
         route.fulfill({ json: [] })
@@ -55,7 +55,7 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: MOCK_REPO_EXTERNAL })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -66,7 +66,7 @@ test.describe("Repository Edge Cases", () => {
   })
 
   test("disabled repo shows as disabled in list", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO_DISABLED })
@@ -74,7 +74,7 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: [MOCK_REPO_DISABLED] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -87,7 +87,7 @@ test.describe("Repository Edge Cases", () => {
   })
 
   test("repo with no analyses shows no grade", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/workflow-files")) {
         route.fulfill({ json: [] })
@@ -99,7 +99,7 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: [MOCK_REPO_NO_ANALYSES] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -113,7 +113,7 @@ test.describe("Repository Edge Cases", () => {
   test("repo with failed analysis shows failed status in list", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/workflow-files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
@@ -125,9 +125,9 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+      if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS_FAILED })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS_FAILED] })
@@ -142,7 +142,7 @@ test.describe("Repository Edge Cases", () => {
   })
 
   test("repo with pending analysis shows pending status", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/workflow-files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
@@ -154,9 +154,9 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
+      if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_ANALYSIS_PENDING })
       } else {
         route.fulfill({ json: [MOCK_ANALYSIS_PENDING] })
@@ -173,7 +173,7 @@ test.describe("Repository Edge Cases", () => {
   test("enabling a disabled repo calls toggle API", async ({ page }) => {
     let toggleCalled = false
 
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.includes("/toggle")) {
         toggleCalled = true
@@ -186,7 +186,7 @@ test.describe("Repository Edge Cases", () => {
         route.fulfill({ json: [MOCK_REPO_DISABLED] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -201,7 +201,7 @@ test.describe("Repository Edge Cases", () => {
   test("mixed list of enabled, disabled and external repos all render", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({ json: MOCK_REPO })
@@ -211,7 +211,7 @@ test.describe("Repository Edge Cases", () => {
         })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route("**/api/v1/workflow/scans**", (route) => {
       route.fulfill({ json: [] })
     })
 
