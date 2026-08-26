@@ -131,6 +131,48 @@ test.describe("Ansible", () => {
     await request
   })
 
+  test("the engine has its own Infrastructure index", async ({ page }) => {
+    await mockAnsibleProjects(page)
+
+    await page.goto("/infrastructure/ansible")
+
+    // Its own page rather than a section of the Terraform one: the heading is
+    // the engine's, and the register form takes a project, not a root.
+    await expect(page.getByRole("heading", { name: "Ansible" })).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Add project" }),
+    ).toBeVisible()
+    await expect(page.getByText("acme/web-app")).toBeVisible()
+  })
+
+  test("the Ansible index empty state explains the blank path", async ({
+    page,
+  }) => {
+    await mockAnsibleProjects(page, [])
+
+    await page.goto("/infrastructure/ansible")
+
+    // The blank-path case is this engine's alone — a Terraform root must name
+    // a folder — so the empty state is where a reader finds out.
+    await expect(
+      page.getByText("leave the path blank", { exact: false }),
+    ).toBeVisible()
+  })
+
+  test("the Terraform index no longer lists Ansible projects", async ({
+    page,
+  }) => {
+    await mockAnsibleProjects(page)
+    await page.route("**/api/v1/terraform-roots/**", (route) => {
+      route.fulfill({ json: [] })
+    })
+
+    await page.goto("/infrastructure")
+
+    await expect(page.getByRole("heading", { name: "Terraform" })).toBeVisible()
+    await expect(page.getByText("Ansible projects")).toHaveCount(0)
+  })
+
   test("the Infrastructure tab bar offers Ansible", async ({ page }) => {
     await mockAnsibleProjects(page)
 

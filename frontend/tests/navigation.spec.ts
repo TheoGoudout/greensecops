@@ -3,6 +3,7 @@ import {
   MOCK_SUPERUSER,
   MOCK_USER,
   mockAnalyses,
+  mockAnsibleProjects,
   mockBilling,
   mockDockerTargets,
   mockEvents,
@@ -21,6 +22,7 @@ function setupAllMocks(page: import("@playwright/test").Page) {
     mockAnalyses(page, []),
     mockIssues(page, []),
     mockDockerTargets(page, []),
+    mockAnsibleProjects(page, []),
   ])
 }
 
@@ -91,6 +93,8 @@ test.describe("Navigation", () => {
       ["Repositories", /\/repositories/],
       ["Docker", /\/docker$/],
       ["Terraform", /\/infrastructure$/],
+      // Ansible is its own Infrastructure entry, not a tab under Terraform.
+      ["Ansible", /\/infrastructure\/ansible$/],
       ["Rules", /\/rules/],
       // One Badges entry now, with a tab per engine; it lands on the first tab.
       ["Badges", /\/badges\/repositories/],

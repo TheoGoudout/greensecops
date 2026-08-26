@@ -36,6 +36,7 @@ import { Route as LayoutDockerBadgesRouteImport } from './routes/_layout/docker/
 import { Route as LayoutFixesFixIdRouteImport } from './routes/_layout/fixes/$fixId'
 import { Route as LayoutInfrastructureIndexRouteImport } from './routes/_layout/infrastructure/index'
 import { Route as LayoutInfrastructureRepoIdRouteImport } from './routes/_layout/infrastructure/$repoId'
+import { Route as LayoutInfrastructureAnsibleRouteImport } from './routes/_layout/infrastructure/ansible'
 import { Route as LayoutInfrastructureBadgesRouteImport } from './routes/_layout/infrastructure/badges'
 import { Route as LayoutRepositoriesIndexRouteImport } from './routes/_layout/repositories/index'
 import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
@@ -195,6 +196,12 @@ const LayoutInfrastructureRepoIdRoute =
     path: '/$repoId',
     getParentRoute: () => LayoutInfrastructureRoute,
   } as any)
+const LayoutInfrastructureAnsibleRoute =
+  LayoutInfrastructureAnsibleRouteImport.update({
+    id: '/ansible',
+    path: '/ansible',
+    getParentRoute: () => LayoutInfrastructureRoute,
+  } as any)
 const LayoutInfrastructureBadgesRoute =
   LayoutInfrastructureBadgesRouteImport.update({
     id: '/badges',
@@ -335,6 +342,7 @@ export interface FileRoutesByFullPath {
   '/docker/badges': typeof LayoutDockerBadgesRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdRouteWithChildren
+  '/infrastructure/ansible': typeof LayoutInfrastructureAnsibleRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
   '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
@@ -377,6 +385,7 @@ export interface FileRoutesByTo {
   '/badges/terraform': typeof LayoutBadgesTerraformRoute
   '/docker/badges': typeof LayoutDockerBadgesRoute
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
+  '/infrastructure/ansible': typeof LayoutInfrastructureAnsibleRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -426,6 +435,7 @@ export interface FileRoutesById {
   '/_layout/docker/badges': typeof LayoutDockerBadgesRoute
   '/_layout/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/_layout/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdRouteWithChildren
+  '/_layout/infrastructure/ansible': typeof LayoutInfrastructureAnsibleRoute
   '/_layout/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
   '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/docker/badges'
     | '/fixes/$fixId'
     | '/infrastructure/$repoId'
+    | '/infrastructure/ansible'
     | '/infrastructure/badges'
     | '/repositories/$repoId'
     | '/auth/github/app-callback'
@@ -518,6 +529,7 @@ export interface FileRouteTypes {
     | '/badges/terraform'
     | '/docker/badges'
     | '/fixes/$fixId'
+    | '/infrastructure/ansible'
     | '/infrastructure/badges'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
@@ -566,6 +578,7 @@ export interface FileRouteTypes {
     | '/_layout/docker/badges'
     | '/_layout/fixes/$fixId'
     | '/_layout/infrastructure/$repoId'
+    | '/_layout/infrastructure/ansible'
     | '/_layout/infrastructure/badges'
     | '/_layout/repositories/$repoId'
     | '/auth/github/app-callback'
@@ -790,6 +803,13 @@ declare module '@tanstack/react-router' {
       path: '/$repoId'
       fullPath: '/infrastructure/$repoId'
       preLoaderRoute: typeof LayoutInfrastructureRepoIdRouteImport
+      parentRoute: typeof LayoutInfrastructureRoute
+    }
+    '/_layout/infrastructure/ansible': {
+      id: '/_layout/infrastructure/ansible'
+      path: '/ansible'
+      fullPath: '/infrastructure/ansible'
+      preLoaderRoute: typeof LayoutInfrastructureAnsibleRouteImport
       parentRoute: typeof LayoutInfrastructureRoute
     }
     '/_layout/infrastructure/badges': {
@@ -1020,12 +1040,14 @@ const LayoutInfrastructureRepoIdRouteWithChildren =
 
 interface LayoutInfrastructureRouteChildren {
   LayoutInfrastructureRepoIdRoute: typeof LayoutInfrastructureRepoIdRouteWithChildren
+  LayoutInfrastructureAnsibleRoute: typeof LayoutInfrastructureAnsibleRoute
   LayoutInfrastructureBadgesRoute: typeof LayoutInfrastructureBadgesRoute
   LayoutInfrastructureIndexRoute: typeof LayoutInfrastructureIndexRoute
 }
 
 const LayoutInfrastructureRouteChildren: LayoutInfrastructureRouteChildren = {
   LayoutInfrastructureRepoIdRoute: LayoutInfrastructureRepoIdRouteWithChildren,
+  LayoutInfrastructureAnsibleRoute: LayoutInfrastructureAnsibleRoute,
   LayoutInfrastructureBadgesRoute: LayoutInfrastructureBadgesRoute,
   LayoutInfrastructureIndexRoute: LayoutInfrastructureIndexRoute,
 }
