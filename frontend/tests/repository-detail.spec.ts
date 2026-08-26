@@ -252,7 +252,7 @@ test.describe("Repository Detail", () => {
       if (
         method === "POST" &&
         url.includes("/repositories/") &&
-        url.endsWith("/deliveries")
+        new URL(url).pathname.endsWith("/deliveries")
       ) {
         deliverCalled = true
         route.fulfill({ json: { status: "delivering" } })

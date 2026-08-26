@@ -80,7 +80,7 @@ test.describe("Navigation", () => {
     })
     await page.route("**/api/v1/users**", (route) => {
       const url = route.request().url()
-      if (url.endsWith("/me")) {
+      if (new URL(url).pathname.endsWith("/me")) {
         route.fulfill({ json: MOCK_SUPERUSER })
       } else {
         route.fulfill({ json: { data: [MOCK_SUPERUSER], count: 1 } })
