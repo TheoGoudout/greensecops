@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Boxes, GitBranch, Loader2, Plus } from "lucide-react"
+import { GitBranch, Loader2, Plus, ScrollText } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import type { TerraformRootPublic } from "@/client"
-import { RepositoriesService, TerraformService } from "@/client"
+import { AnsibleService, RepositoriesService } from "@/client"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,49 +20,52 @@ import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
 import { apiErrorDetail } from "@/lib/api-error"
 import { worstGrade } from "@/lib/grades"
 
-export const Route = createFileRoute("/_layout/infrastructure/")({
-  component: InfrastructurePage,
+// A static sibling of `$repoId`, the same way `badges` is: the router prefers
+// the literal segment, and `AppSidebar` excludes both names when it reads a
+// repo id out of the path.
+export const Route = createFileRoute("/_layout/infrastructure/ansible")({
+  component: AnsibleIndexPage,
   head: () => ({
-    meta: [{ title: "Infrastructure - GreenSecOps" }],
+    meta: [{ title: "Ansible - GreenSecOps" }],
   }),
 })
 
 interface RepoGroup {
   repoId: string
   repoName: string
-  roots: TerraformRootPublic[]
-  worstGrade: string | null
+  count: number
+  grades: (string | null)[]
 }
 
-function InfrastructurePage() {
+function AnsibleIndexPage() {
   const queryClient = useQueryClient()
   const { openInstallPopup } = useGitHubAppInstall()
   const [selectedRepoId, setSelectedRepoId] = useState<string>("")
   const [newRootPath, setNewRootPath] = useState("")
 
   const {
-    data: roots,
+    data: projects,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["terraform-roots"],
-    queryFn: () => TerraformService.listTerraformRoots({}),
+    queryKey: ["ansible-projects"],
+    queryFn: () => AnsibleService.listAnsibleProjects({}),
   })
 
   const { data: repos } = useQuery({
-    queryKey: ["repositories", "for-terraform-picker"],
+    queryKey: ["repositories", "for-ansible-picker"],
     queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
   })
 
   const createMutation = useMutation({
     mutationFn: (vars: { repoId: string; rootPath: string }) =>
-      TerraformService.createTerraformRoot({
+      AnsibleService.createAnsibleProject({
         requestBody: { repo_id: vars.repoId, root_path: vars.rootPath },
       }),
     onSuccess: () => {
-      toast.success("Terraform root added")
+      toast.success("Ansible project added")
       setNewRootPath("")
-      queryClient.invalidateQueries({ queryKey: ["terraform-roots"] })
+      queryClient.invalidateQueries({ queryKey: ["ansible-projects"] })
     },
     onError: (error) =>
       toast.error("Failed to add", { description: apiErrorDetail(error) }),
@@ -71,39 +73,43 @@ function InfrastructurePage() {
 
   const groups = useMemo<RepoGroup[]>(() => {
     const byRepo = new Map<string, RepoGroup>()
-    for (const root of roots ?? []) {
-      const existing = byRepo.get(root.repo_id)
+    for (const project of projects ?? []) {
+      const existing = byRepo.get(project.repo_id)
       if (existing) {
-        existing.roots.push(root)
+        existing.count += 1
+        existing.grades.push(project.latest_grade ?? null)
       } else {
-        byRepo.set(root.repo_id, {
-          repoId: root.repo_id,
-          repoName: root.repo_full_name ?? root.repo_id,
-          roots: [root],
-          worstGrade: null,
+        byRepo.set(project.repo_id, {
+          repoId: project.repo_id,
+          repoName: project.repo_full_name ?? project.repo_id,
+          count: 1,
+          grades: [project.latest_grade ?? null],
         })
       }
     }
-    const list = [...byRepo.values()]
-    for (const g of list)
-      g.worstGrade = worstGrade(g.roots.map((r) => r.latest_grade))
-    list.sort((a, b) => a.repoName.localeCompare(b.repoName))
-    return list
-  }, [roots])
+    return [...byRepo.values()].sort((a, b) =>
+      a.repoName.localeCompare(b.repoName),
+    )
+  }, [projects])
 
-  function handleAddRoot() {
-    const path = newRootPath.trim()
-    if (!selectedRepoId || !path) return
-    createMutation.mutate({ repoId: selectedRepoId, rootPath: path })
+  function handleAdd() {
+    // Unlike a Terraform root, an Ansible project may sit at the repository
+    // root, where the path is legitimately empty — so only the repo is
+    // required here.
+    if (!selectedRepoId) return
+    createMutation.mutate({
+      repoId: selectedRepoId,
+      rootPath: newRootPath.trim(),
+    })
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Terraform</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Ansible</h1>
           <p className="text-muted-foreground">
-            Terraform roots, cloud posture and fixes, per repository.
+            Playbooks, roles and fixes, per repository.
           </p>
         </div>
         <Button variant="outline" className="gap-2" onClick={openInstallPopup}>
@@ -127,29 +133,27 @@ function InfrastructurePage() {
             </SelectContent>
           </Select>
           <Input
-            placeholder="infra/prod"
+            placeholder="deploy/ansible (blank = repository root)"
             value={newRootPath}
             onChange={(e) => setNewRootPath(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleAddRoot()
+              if (e.key === "Enter") handleAdd()
             }}
-            className="font-mono text-sm max-w-xs"
+            className="font-mono text-sm w-72"
           />
           <Button
             size="sm"
             variant="outline"
             className="gap-2"
-            onClick={handleAddRoot}
-            disabled={
-              !selectedRepoId || !newRootPath.trim() || createMutation.isPending
-            }
+            onClick={handleAdd}
+            disabled={!selectedRepoId || createMutation.isPending}
           >
             {createMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Plus className="h-4 w-4" />
             )}
-            Add root
+            Add project
           </Button>
         </CardContent>
       </Card>
@@ -164,42 +168,41 @@ function InfrastructurePage() {
             </div>
           ) : isError ? (
             <p className="text-sm text-destructive p-6">
-              Failed to load infrastructure.
+              Failed to load Ansible projects.
             </p>
           ) : !groups.length ? (
             <p className="text-sm text-muted-foreground p-6 text-center">
-              No Terraform roots configured. Pick a repository and add a folder
-              path where your Terraform code lives (e.g.{" "}
-              <code className="font-mono">infra</code> or{" "}
-              <code className="font-mono">terraform/prod</code>) to start.
+              No Ansible projects configured. Pick a repository and add the
+              folder holding your playbooks and roles (e.g.{" "}
+              <code className="font-mono">deploy/ansible</code>), or leave the
+              path blank if they live at the repository root.
             </p>
           ) : (
             <>
               <div className="grid grid-cols-[2fr_1fr_1fr] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 <span>Repository</span>
-                <span>Terraform roots</span>
+                <span>Ansible projects</span>
                 <span>Worst grade</span>
               </div>
               <div className="divide-y">
                 {groups.map((group) => (
                   <Link
                     key={group.repoId}
-                    to="/infrastructure/$repoId"
+                    to="/infrastructure/$repoId/ansible"
                     params={{ repoId: group.repoId }}
                     className="grid grid-cols-[2fr_1fr_1fr] items-center px-6 py-4 gap-4 hover:bg-muted/40 transition-colors"
                   >
                     <span className="flex items-center gap-2 min-w-0">
-                      <Boxes className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <ScrollText className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="text-sm font-medium font-mono truncate">
                         {group.repoName}
                       </span>
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      {group.roots.length} root
-                      {group.roots.length !== 1 ? "s" : ""}
+                      {group.count} project{group.count !== 1 ? "s" : ""}
                     </span>
                     <div>
-                      <GradeBadge grade={group.worstGrade} />
+                      <GradeBadge grade={worstGrade(group.grades)} />
                     </div>
                   </Link>
                 ))}

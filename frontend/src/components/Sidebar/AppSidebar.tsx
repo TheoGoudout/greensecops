@@ -7,6 +7,7 @@ import {
   GitBranch,
   LayoutDashboard,
   ListChecks,
+  ScrollText,
   Users,
 } from "lucide-react"
 
@@ -77,8 +78,16 @@ const infraSubItems = [
   // engine, and nesting the same word under itself reads as a broken link.
   // Mirrors the Docker section's Analysis tab.
   { title: "Analysis", segment: "terraform" },
-  { title: "Ansible", segment: "ansible" },
   { title: "Cloud", segment: "cloud" },
+  { title: "PRs", segment: "pull-requests" },
+] as const
+
+// Ansible's own sub-nav. "Analysis" rather than "Ansible" for the same reason
+// Terraform's does it: the parent entry already names the engine. Cloud is
+// absent because cloud posture is Terraform's, not this engine's; PRs is the
+// shared tab, which carries a section per engine.
+const ansibleSubItems = [
+  { title: "Analysis", segment: "ansible" },
   { title: "PRs", segment: "pull-requests" },
 ] as const
 
@@ -97,6 +106,41 @@ function InfraSubNav({ repoId }: { repoId: string }) {
   return (
     <SidebarMenuSub>
       {infraSubItems.map((item) => {
+        const href = `/infrastructure/${repoId}/${item.segment}`
+        const isActive = currentPath.startsWith(href)
+        return (
+          <SidebarMenuSubItem key={item.segment}>
+            <SidebarMenuSubButton asChild isActive={isActive}>
+              <RouterLink
+                to={`/infrastructure/$repoId/${item.segment}`}
+                params={{ repoId }}
+                onClick={handleClick}
+              >
+                {item.title}
+              </RouterLink>
+            </SidebarMenuSubButton>
+          </SidebarMenuSubItem>
+        )
+      })}
+    </SidebarMenuSub>
+  )
+}
+
+function AnsibleSubNav({ repoId }: { repoId: string }) {
+  const { isMobile, setOpenMobile } = useSidebar()
+  const currentPath = useRouterState({
+    select: (s) => s.location.pathname,
+  })
+
+  const handleClick = () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }
+
+  return (
+    <SidebarMenuSub>
+      {ansibleSubItems.map((item) => {
         const href = `/infrastructure/${repoId}/${item.segment}`
         const isActive = currentPath.startsWith(href)
         return (
@@ -170,11 +214,26 @@ export function AppSidebar() {
   const currentRepoId = repoIdMatch?.[1] ?? null
 
   const infraRepoMatch = currentPath.match(
-    /^\/infrastructure\/([^/]+)(?:\/.+)?$/,
+    /^\/infrastructure\/([^/]+)(?:\/([^/]+))?/,
   )
-  // "badges" is a static sibling route, not a repo id.
+  // "badges" and "ansible" are static sibling routes, not repo ids.
   const currentInfraRepoId =
-    infraRepoMatch && infraRepoMatch[1] !== "badges" ? infraRepoMatch[1] : null
+    infraRepoMatch && !["badges", "ansible"].includes(infraRepoMatch[1])
+      ? infraRepoMatch[1]
+      : null
+  // Which engine's tab is open under that repo, so only one sub-nav expands.
+  // `/infrastructure/<repo>` with no tab is Terraform's landing page.
+  const infraTab = currentInfraRepoId
+    ? (infraRepoMatch?.[2] ?? "terraform")
+    : null
+  // The two entries share the `/infrastructure` prefix, so neither can rely on
+  // NavGroup's default prefix match: Ansible owns its own index and the
+  // per-repo `ansible` tab, and Terraform owns everything else in the section.
+  const onAnsibleRoute =
+    currentPath === "/infrastructure/ansible" ||
+    currentPath.startsWith("/infrastructure/ansible/") ||
+    infraTab === "ansible"
+  const onInfraRoute = currentPath.startsWith("/infrastructure")
 
   const dockerRepoMatch = currentPath.match(/^\/docker\/([^/]+)(?:\/.+)?$/)
   // "badges" is a static sibling route, not a repo id.
@@ -205,9 +264,24 @@ export function AppSidebar() {
       icon: Boxes,
       title: "Terraform",
       path: "/infrastructure",
-      children: currentInfraRepoId ? (
-        <InfraSubNav repoId={currentInfraRepoId} />
-      ) : undefined,
+      isActive: onInfraRoute && !onAnsibleRoute,
+      children:
+        currentInfraRepoId && infraTab !== "ansible" ? (
+          <InfraSubNav repoId={currentInfraRepoId} />
+        ) : undefined,
+    },
+    {
+      // Its own entry rather than a tab under Terraform: the two engines share
+      // a dashboard section, not a page, and nesting Ansible under an item
+      // labelled "Terraform" made it unreachable without knowing it was there.
+      icon: ScrollText,
+      title: "Ansible",
+      path: "/infrastructure/ansible",
+      isActive: onAnsibleRoute,
+      children:
+        currentInfraRepoId && infraTab === "ansible" ? (
+          <AnsibleSubNav repoId={currentInfraRepoId} />
+        ) : undefined,
     },
   ]
 

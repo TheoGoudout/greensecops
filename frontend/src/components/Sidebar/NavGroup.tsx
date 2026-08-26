@@ -17,6 +17,16 @@ export type NavItem = {
   title: string
   path: string
   children?: ReactNode
+  /**
+   * Override the default "current path starts with `path`" rule.
+   *
+   * Needed when two entries share a path prefix: Terraform sits at
+   * `/infrastructure` and Ansible at `/infrastructure/ansible`, so the prefix
+   * rule alone lights Terraform up on every Ansible page and never lights up
+   * Ansible on a per-repo tab. The caller knows which engine's tab is open;
+   * NavGroup does not.
+   */
+  isActive?: boolean
 }
 
 interface NavGroupProps {
@@ -42,7 +52,7 @@ export function NavGroup({ label, items }: NavGroupProps) {
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {
-            const isActive = currentPath.startsWith(item.path)
+            const isActive = item.isActive ?? currentPath.startsWith(item.path)
 
             return (
               <SidebarMenuItem key={item.title}>
