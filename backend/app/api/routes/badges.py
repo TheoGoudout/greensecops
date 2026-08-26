@@ -9,6 +9,7 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_PUBLIC
 from app.models import (
+    AnsibleProject,
     DockerTarget,
     Repository,
     ScanStatus,
@@ -223,6 +224,84 @@ def get_terraform_root_badge_json(
     return {
         "schemaVersion": 1,
         "label": "Terraform",
+        "message": grade,
+        "color": color,
+        "cacheSeconds": 300,
+    }
+
+
+def _ansible_project_badge_grade(
+    session: Session, project_id: uuid.UUID
+) -> tuple[AnsibleProject | None, str | None]:
+    project = session.get(AnsibleProject, project_id)
+    if project is None:
+        return None, None
+    latest = latest_completed_scan(project)
+    return project, (latest.grade if latest else None)
+
+
+@router.get(
+    "/ansible/{project_id}.svg",
+    role=Role.guest,
+    limit=LIMIT_PUBLIC,
+    response_class=Response,
+)
+def get_ansible_project_badge(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> Response:
+    project, grade = _ansible_project_badge_grade(session, project_id)
+
+    if project is None or (
+        project.repository
+        and project.repository.is_private
+        and not verify_badge(str(project_id), sig)
+    ):
+        return Response(content=render_unknown_badge(), headers=_CACHE_HEADERS)
+
+    svg = (
+        render_unknown_badge()
+        if grade is None
+        else render_badge(grade, label="Ansible")
+    )
+
+    return Response(content=svg, headers=_CACHE_HEADERS)
+
+
+@router.get("/ansible/{project_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+def get_ansible_project_badge_json(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> dict[str, object]:
+    """Shields.io-compatible JSON endpoint for an Ansible project's badge."""
+    project, grade = _ansible_project_badge_grade(session, project_id)
+
+    if project is None or (
+        project.repository
+        and project.repository.is_private
+        and not verify_badge(str(project_id), sig)
+    ):
+        return {
+            "schemaVersion": 1,
+            "label": "Ansible",
+            "message": "not configured",
+            "color": "lightgrey",
+        }
+
+    if grade is None:
+        return {
+            "schemaVersion": 1,
+            "label": "Ansible",
+            "message": "pending",
+            "color": "lightgrey",
+        }
+
+    color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
+    return {
+        "schemaVersion": 1,
+        "label": "Ansible",
         "message": grade,
         "color": color,
         "cacheSeconds": 300,

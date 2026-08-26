@@ -90,6 +90,30 @@ class TerraformOpaViolation:
 
 
 @dataclass
+class AnsibleOpaViolation:
+    """One `iac_ansible` violation.
+
+    ``task_name`` is both the human locator and what the fingerprint's
+    discriminator keys on, which is why the rules emit the task's own ``name:``
+    rather than a positional index: a task keeps its name when another is
+    inserted above it, so a dismissal survives the edit.
+    """
+
+    rule_slug: str
+    severity: str
+    category: str
+    message: str
+    file_path: str = ""
+    # Empty for a finding about a file rather than a task — a galaxy
+    # requirement, or a credential in a variables file.
+    task_name: str | None = None
+    line_start: int | None = None
+    line_end: int | None = None
+    context: str | None = None
+    discriminator: str | None = None
+
+
+@dataclass
 class DockerOpaViolation:
     rule_slug: str
     severity: str
@@ -307,6 +331,30 @@ async def evaluate_terraform(
     """
     return await _evaluate(
         parsed_config, IAC_TERRAFORM_POLICY_PACKAGES, TerraformOpaViolation, "security"
+    )
+
+
+async def evaluate_ansible(
+    document: dict[str, Any],
+) -> list[AnsibleOpaViolation]:
+    """Evaluate a project's Ansible files against the `iac_ansible` rules.
+
+    The document is an **envelope** — ``{"files": [...]}``, one entry per
+    playbook, task file, variables file or galaxy requirements file — rather
+    than the single merged config Terraform and Docker send. A task file is not
+    mergeable with a playbook, and the envelope is also what keeps the suite
+    silent on foreign input: every Ansible rule opens by iterating
+    ``input.files``, so a document without that key trips nothing. See
+    ``services/ansible/parser.merge_ansible_files``.
+
+    Defaults to ``reliability`` for a rule that names no category, matching what
+    most of the corpus grades.
+    """
+    return await _evaluate(
+        document,
+        IAC_ANSIBLE_POLICY_PACKAGES,
+        AnsibleOpaViolation,
+        "reliability",
     )
 
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    ansible,
     badges,
     billing,
     cloud,
@@ -51,6 +52,7 @@ api_router.include_router(webhooks.router)
 api_router.include_router(badges.router)
 api_router.include_router(telemetry.router)
 api_router.include_router(billing.router)
+api_router.include_router(ansible.router)
 api_router.include_router(terraform.router)
 api_router.include_router(cloud.router)
 api_router.include_router(docker.router)

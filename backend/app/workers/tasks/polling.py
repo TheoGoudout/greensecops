@@ -164,6 +164,14 @@ def _apply_push(
             ScanTrigger.polled_push,
             changed_paths=None,
         )
+        eh.enqueue_ansible_scans(
+            session,
+            repo,
+            data.branch,
+            data.head_sha,
+            ScanTrigger.polled_push,
+            changed_paths=None,
+        )
         enqueued = True
     repo.last_polled_head_sha = data.head_sha
     repo.last_polled_at = now

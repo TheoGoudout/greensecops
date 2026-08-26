@@ -1,5 +1,12 @@
 import type { LucideIcon } from "lucide-react"
-import { Activity, Boxes, Cloud, Container, Workflow } from "lucide-react"
+import {
+  Activity,
+  Boxes,
+  Cloud,
+  Container,
+  ScrollText,
+  Workflow,
+} from "lucide-react"
 import type { Engine, OverviewSection, Severity } from "@/client"
 
 /**
@@ -28,6 +35,12 @@ export const ENGINE_META: Record<
     icon: Boxes,
     label: "Terraform",
     blurb: "Terraform roots, per registered folder",
+    to: "/infrastructure",
+  },
+  ansible: {
+    icon: ScrollText,
+    label: "Ansible",
+    blurb: "Playbooks and roles, per registered project",
     to: "/infrastructure",
   },
   cloud: {

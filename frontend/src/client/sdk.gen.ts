@@ -3,7 +3,196 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutData, BillingCreateCheckoutResponse, BillingCreatePortalResponse, BillingListMyOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListOssApplicationsData, BillingListOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, UtilsVersionResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WorkflowFindingsListIssuesData, WorkflowFindingsListIssuesResponse, WorkflowFindingsGetIssueStatsData, WorkflowFindingsGetIssueStatsResponse, WorkflowFindingsGetIssueData, WorkflowFindingsGetIssueResponse, WorkflowFindingsIgnoreIssueData, WorkflowFindingsIgnoreIssueResponse, WorkflowFindingsUnignoreIssueData, WorkflowFindingsUnignoreIssueResponse, WorkflowFixesListFixesData, WorkflowFixesListFixesResponse, WorkflowFixesListPullRequestsData, WorkflowFixesListPullRequestsResponse, WorkflowFixesGetFixData, WorkflowFixesGetFixResponse, WorkflowFixesRejectFixData, WorkflowFixesRejectFixResponse, WorkflowFixesTriggerFixGenerationForRepoData, WorkflowFixesTriggerFixGenerationForRepoResponse, WorkflowFixesTriggerWorkflowDeliveryData, WorkflowFixesTriggerWorkflowDeliveryResponse, WorkflowFixesTriggerRepoDeliveryData, WorkflowFixesTriggerRepoDeliveryResponse, WorkflowFixesRegenerateFixesForRepoData, WorkflowFixesRegenerateFixesForRepoResponse, WorkflowFixesRegenerateFixesForWorkflowData, WorkflowFixesRegenerateFixesForWorkflowResponse, WorkflowFixesRegenerateFailedFixData, WorkflowFixesRegenerateFailedFixResponse, WorkflowFixesSyncPrStatusesData, WorkflowFixesSyncPrStatusesResponse, WorkflowScansListAnalysesData, WorkflowScansListAnalysesResponse, WorkflowScansGetAnalysisData, WorkflowScansGetAnalysisResponse, WorkflowScansTriggerAnalysisData, WorkflowScansTriggerAnalysisResponse, WorkflowScansReanalyzeForWorkflowData, WorkflowScansReanalyzeForWorkflowResponse, WorkflowScansReanalyzeAllResponse } from './types.gen';
+import type { AnsibleCreateAnsibleProjectData, AnsibleCreateAnsibleProjectResponse, AnsibleListAnsibleProjectsData, AnsibleListAnsibleProjectsResponse, AnsibleToggleAnsibleProjectData, AnsibleToggleAnsibleProjectResponse, AnsibleDeleteAnsibleProjectData, AnsibleDeleteAnsibleProjectResponse, AnsibleTriggerAnsibleScanData, AnsibleTriggerAnsibleScanResponse, AnsibleListAnsibleScansData, AnsibleListAnsibleScansResponse, AnsibleListAnsibleFindingsData, AnsibleListAnsibleFindingsResponse, AnsibleListAnsibleFilesData, AnsibleListAnsibleFilesResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutData, BillingCreateCheckoutResponse, BillingCreatePortalResponse, BillingListMyOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListOssApplicationsData, BillingListOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, BillingStripeWebhookData, BillingStripeWebhookResponse, CloudCreateCloudAccountData, CloudCreateCloudAccountResponse, CloudListCloudAccountsData, CloudListCloudAccountsResponse, CloudToggleCloudAccountData, CloudToggleCloudAccountResponse, CloudDeleteCloudAccountData, CloudDeleteCloudAccountResponse, CloudTriggerCloudScanData, CloudTriggerCloudScanResponse, CloudListCloudScansData, CloudListCloudScansResponse, CloudListCloudFindingsData, CloudListCloudFindingsResponse, DockerCreateDockerTargetData, DockerCreateDockerTargetResponse, DockerListDockerTargetsData, DockerListDockerTargetsResponse, DockerToggleDockerTargetData, DockerToggleDockerTargetResponse, DockerDeleteDockerTargetData, DockerDeleteDockerTargetResponse, DockerTriggerDockerScanData, DockerTriggerDockerScanResponse, DockerListDockerScansData, DockerListDockerScansResponse, DockerListDockerFindingsData, DockerListDockerFindingsResponse, DockerListDockerFilesData, DockerListDockerFilesResponse, DockerListDockerRuntimeData, DockerListDockerRuntimeResponse, DockerListDockerFixesData, DockerListDockerFixesResponse, DockerTriggerDockerFixGenerationData, DockerTriggerDockerFixGenerationResponse, DockerTriggerDockerRuntimeFixGenerationData, DockerTriggerDockerRuntimeFixGenerationResponse, DockerTriggerDockerDeliveryData, DockerTriggerDockerDeliveryResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrgAiPreferencesData, OrganizationsUpdateOrgAiPreferencesResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesListWorkflowFilesData, RepositoriesListWorkflowFilesResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesToggleRepositoryData, RepositoriesToggleRepositoryResponse, RepositoriesToggleAutoFixData, RepositoriesToggleAutoFixResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesToggleRuleData, RulesToggleRuleResponse, TelemetryIngestTelemetryData, TelemetryIngestTelemetryResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetTelemetrySummaryData, TelemetryGetTelemetrySummaryResponse, TelemetryGetTelemetryFindingsData, TelemetryGetTelemetryFindingsResponse, TelemetryAnalyzeTelemetryData, TelemetryAnalyzeTelemetryResponse, TerraformCreateTerraformRootData, TerraformCreateTerraformRootResponse, TerraformListTerraformRootsData, TerraformListTerraformRootsResponse, TerraformToggleTerraformRootData, TerraformToggleTerraformRootResponse, TerraformDeleteTerraformRootData, TerraformDeleteTerraformRootResponse, TerraformTriggerTerraformScanData, TerraformTriggerTerraformScanResponse, TerraformListTerraformScansData, TerraformListTerraformScansResponse, TerraformListTerraformFindingsData, TerraformListTerraformFindingsResponse, TerraformListTerraformFilesData, TerraformListTerraformFilesResponse, TerraformListTerraformFixesData, TerraformListTerraformFixesResponse, TerraformTriggerTerraformFixGenerationData, TerraformTriggerTerraformFixGenerationResponse, TerraformTriggerTerraformDeliveryData, TerraformTriggerTerraformDeliveryResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, UtilsVersionResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WorkflowFindingsListIssuesData, WorkflowFindingsListIssuesResponse, WorkflowFindingsGetIssueStatsData, WorkflowFindingsGetIssueStatsResponse, WorkflowFindingsGetIssueData, WorkflowFindingsGetIssueResponse, WorkflowFindingsIgnoreIssueData, WorkflowFindingsIgnoreIssueResponse, WorkflowFindingsUnignoreIssueData, WorkflowFindingsUnignoreIssueResponse, WorkflowFixesListFixesData, WorkflowFixesListFixesResponse, WorkflowFixesListPullRequestsData, WorkflowFixesListPullRequestsResponse, WorkflowFixesGetFixData, WorkflowFixesGetFixResponse, WorkflowFixesRejectFixData, WorkflowFixesRejectFixResponse, WorkflowFixesTriggerFixGenerationForRepoData, WorkflowFixesTriggerFixGenerationForRepoResponse, WorkflowFixesTriggerWorkflowDeliveryData, WorkflowFixesTriggerWorkflowDeliveryResponse, WorkflowFixesTriggerRepoDeliveryData, WorkflowFixesTriggerRepoDeliveryResponse, WorkflowFixesRegenerateFixesForRepoData, WorkflowFixesRegenerateFixesForRepoResponse, WorkflowFixesRegenerateFixesForWorkflowData, WorkflowFixesRegenerateFixesForWorkflowResponse, WorkflowFixesRegenerateFailedFixData, WorkflowFixesRegenerateFailedFixResponse, WorkflowFixesSyncPrStatusesData, WorkflowFixesSyncPrStatusesResponse, WorkflowScansListAnalysesData, WorkflowScansListAnalysesResponse, WorkflowScansGetAnalysisData, WorkflowScansGetAnalysisResponse, WorkflowScansTriggerAnalysisData, WorkflowScansTriggerAnalysisResponse, WorkflowScansReanalyzeForWorkflowData, WorkflowScansReanalyzeForWorkflowResponse, WorkflowScansReanalyzeAllResponse } from './types.gen';
+
+export class AnsibleService {
+    /**
+     * Create Ansible Project
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns AnsibleProjectPublic Successful Response
+     * @throws ApiError
+     */
+    public static createAnsibleProject(data: AnsibleCreateAnsibleProjectData): CancelablePromise<AnsibleCreateAnsibleProjectResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/ansible-projects/',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Ansible Projects
+     * List Ansible projects. Omit ``repo_id`` for the org-wide Infrastructure
+     * page (every project across every repo the user can access); pass it to
+     * scope to one repo.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns AnsibleProjectPublic Successful Response
+     * @throws ApiError
+     */
+    public static listAnsibleProjects(data: AnsibleListAnsibleProjectsData = {}): CancelablePromise<AnsibleListAnsibleProjectsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible-projects/',
+            query: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Toggle Ansible Project
+     * @param data The data for the request.
+     * @param data.projectId
+     * @param data.enabled
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static toggleAnsibleProject(data: AnsibleToggleAnsibleProjectData): CancelablePromise<AnsibleToggleAnsibleProjectResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/ansible-projects/{project_id}/toggle',
+            path: {
+                project_id: data.projectId
+            },
+            query: {
+                enabled: data.enabled
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Delete Ansible Project
+     * @param data The data for the request.
+     * @param data.projectId
+     * @returns void Successful Response
+     * @throws ApiError
+     */
+    public static deleteAnsibleProject(data: AnsibleDeleteAnsibleProjectData): CancelablePromise<AnsibleDeleteAnsibleProjectResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/ansible-projects/{project_id}',
+            path: {
+                project_id: data.projectId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Ansible Scan
+     * @param data The data for the request.
+     * @param data.projectId
+     * @param data.branch
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerAnsibleScan(data: AnsibleTriggerAnsibleScanData): CancelablePromise<AnsibleTriggerAnsibleScanResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/ansible-projects/{project_id}/scan',
+            path: {
+                project_id: data.projectId
+            },
+            query: {
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Ansible Scans
+     * @param data The data for the request.
+     * @param data.projectId
+     * @returns AnsibleScanPublic Successful Response
+     * @throws ApiError
+     */
+    public static listAnsibleScans(data: AnsibleListAnsibleScansData): CancelablePromise<AnsibleListAnsibleScansResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible-projects/{project_id}/scans',
+            path: {
+                project_id: data.projectId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Ansible Findings
+     * @param data The data for the request.
+     * @param data.projectId
+     * @param data.includeResolved
+     * @returns AnsibleFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static listAnsibleFindings(data: AnsibleListAnsibleFindingsData): CancelablePromise<AnsibleListAnsibleFindingsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible-projects/{project_id}/findings',
+            path: {
+                project_id: data.projectId
+            },
+            query: {
+                include_resolved: data.includeResolved
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Ansible Files
+     * The project's live Ansible source, fetched from GitHub on demand.
+     *
+     * Ansible files aren't persisted (unlike WorkflowFile), so this fetches them
+     * the same way the scan worker does — which lets the UI show source with the
+     * findings annotated inline.
+     *
+     * Each file carries the ``kind`` the classifier assigned it, so the frontend
+     * can label a playbook differently from a variables file without re-deriving
+     * the classification it has no way to compute.
+     * @param data The data for the request.
+     * @param data.projectId
+     * @param data.ref
+     * @returns AnsibleFilePublic Successful Response
+     * @throws ApiError
+     */
+    public static listAnsibleFiles(data: AnsibleListAnsibleFilesData): CancelablePromise<AnsibleListAnsibleFilesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible-projects/{project_id}/files',
+            path: {
+                project_id: data.projectId
+            },
+            query: {
+                ref: data.ref
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+}
 
 export class AuthService {
     /**
@@ -123,6 +312,55 @@ export class BadgesService {
             url: '/api/v1/badges/terraform/{root_id}.json',
             path: {
                 root_id: data.rootId
+            },
+            query: {
+                sig: data.sig
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Ansible Project Badge
+     * @param data The data for the request.
+     * @param data.projectId
+     * @param data.sig
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getAnsibleProjectBadge(data: BadgesGetAnsibleProjectBadgeData): CancelablePromise<BadgesGetAnsibleProjectBadgeResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/badges/ansible/{project_id}.svg',
+            path: {
+                project_id: data.projectId
+            },
+            query: {
+                sig: data.sig
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Ansible Project Badge Json
+     * Shields.io-compatible JSON endpoint for an Ansible project's badge.
+     * @param data The data for the request.
+     * @param data.projectId
+     * @param data.sig
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getAnsibleProjectBadgeJson(data: BadgesGetAnsibleProjectBadgeJsonData): CancelablePromise<BadgesGetAnsibleProjectBadgeJsonResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/badges/ansible/{project_id}.json',
+            path: {
+                project_id: data.projectId
             },
             query: {
                 sig: data.sig

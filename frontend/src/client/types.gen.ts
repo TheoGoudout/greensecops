@@ -29,6 +29,74 @@ export type AnalysisPublic = {
     completed_at?: (string | null);
 };
 
+/**
+ * One Ansible file's live source for a project.
+ *
+ * Ansible files aren't persisted (unlike ``WorkflowFile``); they're fetched
+ * from GitHub on demand, so this carries no id or branch — just the path and
+ * content, mirroring ``TerraformFilePublic``.
+ */
+export type AnsibleFilePublic = {
+    path: string;
+    raw_content: string;
+    kind: string;
+};
+
+export type AnsibleFindingPublic = {
+    id: string;
+    scan_id: string;
+    rule_id: string;
+    rule_slug: string;
+    severity: Severity;
+    category: Category;
+    message: string;
+    context?: (string | null);
+    status: FindingStatus;
+    created_at?: (string | null);
+    resolved_at?: (string | null);
+    resolution_reason?: (FindingResolutionReason | null);
+    fix_id?: (string | null);
+    fix_status?: (FixStatus | null);
+    ansible_project_id: string;
+    file_path: string;
+    line_start?: (number | null);
+    line_end?: (number | null);
+    task_name?: (string | null);
+};
+
+export type AnsibleProjectCreate = {
+    repo_id: string;
+    root_path: string;
+};
+
+export type AnsibleProjectPublic = {
+    id: string;
+    repo_id: string;
+    repo_full_name?: (string | null);
+    root_path: string;
+    enabled: boolean;
+    last_scanned_at?: (string | null);
+    last_scanned_head_sha?: (string | null);
+    latest_score?: (number | null);
+    latest_grade?: (string | null);
+    badge_sig?: (string | null);
+};
+
+export type AnsibleScanPublic = {
+    id: string;
+    status: ScanStatus;
+    triggered_by: ScanTrigger;
+    score?: (number | null);
+    grade?: (string | null);
+    error_message?: (string | null);
+    created_at?: (string | null);
+    completed_at?: (string | null);
+    branch?: (string | null);
+    commit_sha?: (string | null);
+    ansible_project_id: string;
+    file_count?: (number | null);
+};
+
 export type BatchFixRequest = {
     issue_ids?: (Array<(string)> | null);
 };
@@ -358,7 +426,7 @@ export type DynamicEnrichmentPublic = {
  * Not the same axis as :class:`RuleDomain`, which names a Rego package — the
  * mapping is many-to-one and lives in :data:`ENGINE_OF_DOMAIN`.
  */
-export type Engine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry';
+export type Engine = 'workflow' | 'terraform' | 'ansible' | 'docker' | 'cloud' | 'telemetry';
 
 /**
  * How much of what could be scanned actually has been.
@@ -1082,7 +1150,7 @@ export type UsageBreakdownPublic = {
  * so the persisted values stay greppable — ``_ENGINE_MEMBERS_MATCH`` below
  * fails at import if the two ever drift.
  */
-export type UsageEngine = 'workflow' | 'terraform' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
+export type UsageEngine = 'workflow' | 'terraform' | 'ansible' | 'docker' | 'cloud' | 'telemetry' | 'carryover';
 
 /**
  * Which allowance a usage record draws down.
@@ -1208,6 +1276,62 @@ export type WorkflowSyncSummary = {
     skipped_stale?: number;
 };
 
+export type AnsibleCreateAnsibleProjectData = {
+    requestBody: AnsibleProjectCreate;
+};
+
+export type AnsibleCreateAnsibleProjectResponse = (AnsibleProjectPublic);
+
+export type AnsibleListAnsibleProjectsData = {
+    repoId?: (string | null);
+};
+
+export type AnsibleListAnsibleProjectsResponse = (Array<AnsibleProjectPublic>);
+
+export type AnsibleToggleAnsibleProjectData = {
+    enabled: boolean;
+    projectId: string;
+};
+
+export type AnsibleToggleAnsibleProjectResponse = ({
+    [key: string]: (string | boolean);
+});
+
+export type AnsibleDeleteAnsibleProjectData = {
+    projectId: string;
+};
+
+export type AnsibleDeleteAnsibleProjectResponse = (void);
+
+export type AnsibleTriggerAnsibleScanData = {
+    branch?: (string | null);
+    projectId: string;
+};
+
+export type AnsibleTriggerAnsibleScanResponse = ({
+    [key: string]: (string);
+});
+
+export type AnsibleListAnsibleScansData = {
+    projectId: string;
+};
+
+export type AnsibleListAnsibleScansResponse = (Array<AnsibleScanPublic>);
+
+export type AnsibleListAnsibleFindingsData = {
+    includeResolved?: boolean;
+    projectId: string;
+};
+
+export type AnsibleListAnsibleFindingsResponse = (Array<AnsibleFindingPublic>);
+
+export type AnsibleListAnsibleFilesData = {
+    projectId: string;
+    ref?: (string | null);
+};
+
+export type AnsibleListAnsibleFilesResponse = (Array<AnsibleFilePublic>);
+
 export type AuthGithubCallbackData = {
     formData: Body_auth_github_callback;
 };
@@ -1247,6 +1371,22 @@ export type BadgesGetTerraformRootBadgeJsonData = {
 };
 
 export type BadgesGetTerraformRootBadgeJsonResponse = ({
+    [key: string]: unknown;
+});
+
+export type BadgesGetAnsibleProjectBadgeData = {
+    projectId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetAnsibleProjectBadgeResponse = (unknown);
+
+export type BadgesGetAnsibleProjectBadgeJsonData = {
+    projectId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetAnsibleProjectBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 

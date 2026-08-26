@@ -221,9 +221,11 @@ def test_overview_reports_every_engine_under_its_section(
     assert sections == {
         "workflow": "ci",
         "docker": "docker",
-        # Terraform and cloud posture share the Infrastructure section, the way
-        # the Infrastructure page already shows them as sibling tabs.
+        # Terraform, Ansible and cloud posture share the Infrastructure
+        # section, the way the Infrastructure page already shows them as
+        # sibling tabs.
         "terraform": "infra",
+        "ansible": "infra",
         "cloud": "infra",
     }
 

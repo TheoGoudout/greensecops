@@ -9,6 +9,7 @@ from ..enums import FixDeliveryMode, LLMProvider, RepositoryStatus
 from .base import get_datetime_utc
 
 if TYPE_CHECKING:
+    from .ansible import AnsibleProject
     from .docker import DockerTarget
     from .organization import Organization
     from .pull_request import PullRequest
@@ -71,6 +72,9 @@ class Repository(SQLModel, table=True):
         back_populates="repository", cascade_delete=True
     )
     docker_targets: list["DockerTarget"] = Relationship(
+        back_populates="repository", cascade_delete=True
+    )
+    ansible_projects: list["AnsibleProject"] = Relationship(
         back_populates="repository", cascade_delete=True
     )
     terraform_roots: list["TerraformRoot"] = Relationship(

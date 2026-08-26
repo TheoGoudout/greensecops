@@ -10,6 +10,7 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.models import (
+    AnsibleScan,
     CloudScan,
     DockerScan,
     DynamicAnalysisStatus,
@@ -106,7 +107,7 @@ def _sweep_stuck_states_impl() -> dict[str, int]:
         # since the IaC engine landed, but nothing ever fired it, so a worker
         # crash left a DockerScan/TerraformScan/CloudScan queued or running
         # forever. Every scan table is covered here, not just the new one.
-        for model in (DockerScan, TerraformScan, CloudScan):
+        for model in (DockerScan, TerraformScan, AnsibleScan, CloudScan):
             stuck_scans = session.exec(
                 select(model)
                 .where(col(model.status).in_([ScanStatus.queued, ScanStatus.running]))

@@ -147,6 +147,53 @@ def enqueue_terraform_scans(
         )
 
 
+def enqueue_ansible_scans(
+    session: Session,
+    repo: Repository,
+    branch: str,
+    commit_sha: str,
+    trigger: ScanTrigger,
+    changed_paths: set[str] | None,
+) -> None:
+    """Enqueue a scan for every enabled AnsibleProject a push touched.
+
+    Same contract as ``enqueue_terraform_scans``: default branch only, and a
+    ``None`` ``changed_paths`` (new branch, or a force-push whose payload cannot
+    be trusted) rescans every enabled project regardless of path.
+
+    The path filter tolerates a project rooted at ``""`` — the repository root,
+    which prefixes everything — the way the Docker handler does, because an
+    Ansible project registered at the root should match any push.
+    """
+    if branch != repo.default_branch or branch.startswith("greensecops/"):
+        return
+    from app.models import AnsibleProject
+
+    projects = session.exec(
+        select(AnsibleProject)
+        .where(AnsibleProject.repo_id == repo.id)
+        .where(AnsibleProject.enabled == True)  # noqa: E712
+    ).all()
+    for project in projects:
+        if (
+            changed_paths is not None
+            and project.root_path
+            and not any(
+                p == project.root_path or p.startswith(f"{project.root_path}/")
+                for p in changed_paths
+            )
+        ):
+            continue
+        from app.workers.tasks.ansible_analysis import run_ansible_scan
+
+        run_ansible_scan.delay(
+            ansible_project_id=str(project.id),
+            branch=branch,
+            commit_sha=commit_sha,
+            trigger=trigger.value,
+        )
+
+
 def enqueue_docker_scans(
     session: Session,
     repo: Repository,
