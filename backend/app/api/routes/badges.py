@@ -71,7 +71,7 @@ def _avg_grade_for_branch(
 
 
 @router.get(
-    "/{owner}/{repo}/{branch}.svg",
+    "/repositories/{owner}/{repo}/{branch}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -106,7 +106,9 @@ def get_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/{owner}/{repo}/{branch}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get(
+    "/repositories/{owner}/{repo}/{branch}.json", role=Role.guest, limit=LIMIT_PUBLIC
+)
 def get_badge_json(
     owner: str,
     repo: str,
@@ -163,7 +165,7 @@ def _terraform_root_badge_grade(
 
 
 @router.get(
-    "/terraform/{root_id}.svg",
+    "/terraform-roots/{root_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -191,7 +193,7 @@ def get_terraform_root_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/terraform/{root_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/terraform-roots/{root_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_terraform_root_badge_json(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -319,7 +321,7 @@ def _docker_target_badge_grade(
 
 
 @router.get(
-    "/docker/{target_id}.svg",
+    "/docker-targets/{target_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -348,7 +350,7 @@ def get_docker_target_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/docker/{target_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/docker-targets/{target_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_docker_target_badge_json(
     target_id: uuid.UUID,
     session: SessionDep,

@@ -62,7 +62,7 @@ def build_badge_svg_url(owner: str, repo: str, branch: str, *, private: bool) ->
     badge_host = settings.GREENSECOPS_PUBLIC_URL or settings.BACKEND_HOST
     base = (
         f"{badge_host.rstrip('/')}{settings.API_V1_STR}"
-        f"/badges/{owner}/{repo}/{branch}.svg"
+        f"/badges/repositories/{owner}/{repo}/{branch}.svg"
     )
     if not private:
         return base

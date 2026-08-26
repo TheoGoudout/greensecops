@@ -108,7 +108,7 @@ def _latest_scan_order(spec: OverviewSpec) -> list[Any]:
     Rather than silently picking one, each engine keeps the ordering its own
     endpoints already use — so this endpoint's Docker grade always matches what
     ``GET /docker-targets/`` reports, and its CI counts always match
-    ``GET /issues/stats``.
+    ``GET /workflow/findings/stats``.
     """
     order = [col(spec.scan_model.created_at).desc()]
     if spec.scan_orders_by_completed_at:

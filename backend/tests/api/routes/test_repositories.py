@@ -1067,7 +1067,7 @@ def test_integrate_action_badge_url_prefers_greensecops_public_url(
     readme_content = dict(file_changes)["README.md"]
     owner, name = repo_with_install.full_name.split("/", 1)
     assert (
-        f"https://tunnel.ngrok.io{settings.API_V1_STR}/badges/{owner}/{name}/"
+        f"https://tunnel.ngrok.io{settings.API_V1_STR}/badges/repositories/{owner}/{name}/"
         in readme_content
     )
     assert "localhost:8000" not in readme_content

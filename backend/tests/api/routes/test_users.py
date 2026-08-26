@@ -98,7 +98,7 @@ def test_get_existing_user_current_user(client: TestClient, db: Session) -> None
         "username": username,
         "password": password,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}
@@ -322,7 +322,7 @@ def test_register_user(client: TestClient, db: Session) -> None:
     full_name = random_lower_string()
     data = {"email": username, "password": password, "full_name": full_name}
     r = client.post(
-        f"{settings.API_V1_STR}/users/signup",
+        f"{settings.API_V1_STR}/auth/register",
         json=data,
     )
     assert r.status_code == 200
@@ -348,7 +348,7 @@ def test_register_user_already_exists_error(client: TestClient) -> None:
         "full_name": full_name,
     }
     r = client.post(
-        f"{settings.API_V1_STR}/users/signup",
+        f"{settings.API_V1_STR}/auth/register",
         json=data,
     )
     assert r.status_code == 400
@@ -428,7 +428,7 @@ def test_delete_user_me(client: TestClient, db: Session) -> None:
         "username": username,
         "password": password,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}

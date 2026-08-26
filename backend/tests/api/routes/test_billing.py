@@ -178,7 +178,7 @@ def test_checkout_refuses_a_plan_that_cannot_be_bought(
 ) -> None:
     with patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"):
         response = client.post(
-            f"{settings.API_V1_STR}/billing/checkout",
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
             headers=user_headers,
             json={"tier": "open_source"},
         )
@@ -193,7 +193,7 @@ def test_checkout_refuses_the_plan_you_are_already_on(
 ) -> None:
     with patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"):
         response = client.post(
-            f"{settings.API_V1_STR}/billing/checkout",
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
             headers=user_headers,
             json={"tier": "free"},
         )
@@ -212,7 +212,7 @@ def test_checkout_returns_the_stripe_url(
         ) as create,
     ):
         response = client.post(
-            f"{settings.API_V1_STR}/billing/checkout",
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
             headers=user_headers,
             json={"tier": "pro"},
         )
@@ -228,7 +228,7 @@ def test_checkout_503s_when_stripe_is_unconfigured(
     """Self-hosted installs get a clear message, not an SDK stack trace."""
     with patch.object(settings, "STRIPE_SECRET_KEY", None):
         response = client.post(
-            f"{settings.API_V1_STR}/billing/checkout",
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
             headers=user_headers,
             json={"tier": "pro"},
         )
@@ -240,7 +240,7 @@ def test_portal_refuses_without_a_payment_method(
     client: TestClient, user_headers: dict[str, str]
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/billing/portal", headers=user_headers
+        f"{settings.API_V1_STR}/billing/portal-sessions", headers=user_headers
     )
     assert response.status_code == 402
     assert "Choose a plan" in response.json()["detail"]["message"]
@@ -258,7 +258,7 @@ def test_oss_application_can_be_submitted_once(
         "justification": "Public library used by several projects.",
     }
     first = client.post(
-        f"{settings.API_V1_STR}/billing/oss-application",
+        f"{settings.API_V1_STR}/billing/oss-applications",
         headers=user_headers,
         json=body,
     )
@@ -267,7 +267,7 @@ def test_oss_application_can_be_submitted_once(
 
     # A second concurrent application would give reviewers duplicates.
     second = client.post(
-        f"{settings.API_V1_STR}/billing/oss-application",
+        f"{settings.API_V1_STR}/billing/oss-applications",
         headers=user_headers,
         json=body,
     )
@@ -331,8 +331,11 @@ def test_oss_rejection_records_the_reason(
 def test_oss_review_queue_is_superuser_only(
     client: TestClient, user_headers: dict[str, str]
 ) -> None:
+    # The review queue used to be `/oss-applications` while a user's own
+    # applications were `/oss-application` — one letter apart and two different
+    # audiences. The queue is `/oss-applications/all` now.
     response = client.get(
-        f"{settings.API_V1_STR}/billing/oss-applications", headers=user_headers
+        f"{settings.API_V1_STR}/billing/oss-applications/all", headers=user_headers
     )
     assert response.status_code in (401, 403)
 
@@ -381,7 +384,7 @@ def _post_event(client: TestClient, event: dict) -> Any:
         billing.stripe_gateway, "parse_webhook_event", return_value=event
     ):
         return client.post(
-            f"{settings.API_V1_STR}/billing/webhook/stripe",
+            f"{settings.API_V1_STR}/webhooks/stripe",
             content=b"{}",
             headers={"stripe-signature": "t=1,v1=x"},
         )
@@ -697,7 +700,7 @@ def test_an_invalid_signature_is_rejected(client: TestClient) -> None:
         patch.object(settings, "STRIPE_WEBHOOK_SECRET", "whsec_x"),
     ):
         response = client.post(
-            f"{settings.API_V1_STR}/billing/webhook/stripe",
+            f"{settings.API_V1_STR}/webhooks/stripe",
             content=b"{}",
             headers={"stripe-signature": "t=1,v1=bogus"},
         )
@@ -706,7 +709,5 @@ def test_an_invalid_signature_is_rejected(client: TestClient) -> None:
 
 def test_the_webhook_503s_when_stripe_is_unconfigured(client: TestClient) -> None:
     with patch.object(settings, "STRIPE_SECRET_KEY", None):
-        response = client.post(
-            f"{settings.API_V1_STR}/billing/webhook/stripe", content=b"{}"
-        )
+        response = client.post(f"{settings.API_V1_STR}/webhooks/stripe", content=b"{}")
     assert response.status_code == 503

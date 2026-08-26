@@ -75,6 +75,12 @@ logger = logging.getLogger(__name__)
 
 router = RoleRouter(prefix="/billing", tags=["billing"])
 
+# Stripe's webhook belongs beside GitHub's under /webhooks — a caller wiring up
+# a provider looks in one place — but its 200 lines of subscription and invoice
+# handling belong here, with the rest of billing. So it gets its own router,
+# which api/main.py mounts under the webhooks prefix and tag.
+webhook_router = RoleRouter(tags=["webhooks"])
+
 
 # ─── Plan & usage ────────────────────────────────────────────────────────────
 
@@ -226,12 +232,12 @@ def list_invoices(
 
 
 @router.post(
-    "/checkout",
+    "/checkout-sessions",
     role=Role.user,
     limit=LIMIT_EXPENSIVE,
     response_model=CheckoutSessionPublic,
 )
-def create_checkout(
+def create_checkout_session(
     body: CheckoutRequest,
     session: SessionDep,
     current_user: CurrentUser,
@@ -271,12 +277,12 @@ def create_checkout(
 
 
 @router.post(
-    "/portal",
+    "/portal-sessions",
     role=Role.user,
     limit=LIMIT_EXPENSIVE,
     response_model=CheckoutSessionPublic,
 )
-def create_portal(
+def create_portal_session(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> CheckoutSessionPublic:
@@ -297,7 +303,7 @@ def create_portal(
 
 
 @router.post(
-    "/oss-application",
+    "/oss-applications",
     role=Role.user,
     response_model=OssApplicationPublic,
     status_code=201,
@@ -336,9 +342,9 @@ def create_oss_application(
 
 
 @router.get(
-    "/oss-application", role=Role.user, response_model=list[OssApplicationPublic]
+    "/oss-applications", role=Role.user, response_model=list[OssApplicationPublic]
 )
-def list_my_oss_applications(
+def list_oss_applications(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> list[OssApplicationPublic]:
@@ -354,11 +360,11 @@ def list_my_oss_applications(
 
 
 @router.get(
-    "/oss-applications",
+    "/oss-applications/all",
     role=Role.admin,
     response_model=list[OssApplicationPublic],
 )
-def list_oss_applications(
+def list_all_oss_applications(
     session: SessionDep,
     status: OssApplicationStatus | None = None,
 ) -> list[OssApplicationPublic]:
@@ -614,7 +620,7 @@ def _notify(
         logger.exception("Failed to send %s billing email for %s", kind, sub.id)
 
 
-@router.post("/webhook/stripe", role=Role.service, limit=LIMIT_WEBHOOK, status_code=200)
+@webhook_router.post("/stripe", role=Role.service, limit=LIMIT_WEBHOOK, status_code=200)
 async def stripe_webhook(
     request: Request,
     session: SessionDep,

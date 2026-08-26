@@ -142,7 +142,7 @@ def test_svg_badge_unknown_repo_returns_unknown(
 ) -> None:
     # Act — owner and repo that don't exist
     response = client.get(
-        f"{settings.API_V1_STR}/badges/ghost-owner/ghost-repo/main.svg"
+        f"{settings.API_V1_STR}/badges/repositories/ghost-owner/ghost-repo/main.svg"
     )
 
     # Assert
@@ -160,7 +160,7 @@ def test_svg_badge_known_repo_no_analysis(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/nonexistent-branch.svg"
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{repo_name}/nonexistent-branch.svg"
     )
 
     # Assert
@@ -179,7 +179,9 @@ def test_svg_badge_known_repo_with_grade(
     owner, repo_name = repo.full_name.split("/", 1)
 
     # Act
-    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.svg")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{repo_name}/main.svg"
+    )
 
     # Assert
     assert response.status_code == 200
@@ -195,7 +197,7 @@ def test_json_badge_unknown_repo(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/badges/ghost-owner/ghost-repo/main.json"
+        f"{settings.API_V1_STR}/badges/repositories/ghost-owner/ghost-repo/main.json"
     )
 
     # Assert
@@ -214,7 +216,7 @@ def test_json_badge_pending(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/pending-branch.json"
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{repo_name}/pending-branch.json"
     )
 
     # Assert
@@ -233,7 +235,9 @@ def test_json_badge_with_grade(
     owner, repo_name = repo.full_name.split("/", 1)
 
     # Act
-    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{repo_name}/main.json"
+    )
 
     # Assert
     assert response.status_code == 200
@@ -257,7 +261,9 @@ def test_private_svg_without_sig_returns_unknown(
     _add_grade(db, private_repo)
     owner, name = private_repo.full_name.split("/", 1)
 
-    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{name}/main.svg"
+    )
 
     assert response.status_code == 200
     # Grade is hidden without a valid signature.
@@ -275,7 +281,8 @@ def test_private_svg_with_valid_sig_returns_grade(
     sig = sign_badge(repo_badge_message(owner, name, "main"))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg", params={"sig": sig}
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{name}/main.svg",
+        params={"sig": sig},
     )
 
     assert response.status_code == 200
@@ -289,7 +296,7 @@ def test_private_svg_with_wrong_sig_returns_unknown(
     owner, name = private_repo.full_name.split("/", 1)
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/{owner}/{name}/main.svg",
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{name}/main.svg",
         params={"sig": "deadbeef"},
     )
 
@@ -303,7 +310,9 @@ def test_private_json_without_sig_not_configured(
     _add_grade(db, private_repo)
     owner, name = private_repo.full_name.split("/", 1)
 
-    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{name}/main.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{name}/main.json"
+    )
 
     assert response.status_code == 200
     assert response.json()["message"] == "not configured"
@@ -319,7 +328,8 @@ def test_private_json_with_valid_sig_returns_grade(
     sig = sign_badge(repo_badge_message(owner, name, "main"))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/{owner}/{name}/main.json", params={"sig": sig}
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{name}/main.json",
+        params={"sig": sig},
     )
 
     assert response.status_code == 200
@@ -343,7 +353,9 @@ def test_svg_badge_avg_grade_across_workflow_files(
     )
     owner, repo_name = repo.full_name.split("/", 1)
 
-    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.svg")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{repo_name}/main.svg"
+    )
 
     assert response.status_code == 200
     assert b"B" in response.content
@@ -361,7 +373,9 @@ def test_json_badge_avg_grade_across_workflow_files(
     )
     owner, repo_name = repo.full_name.split("/", 1)
 
-    response = client.get(f"{settings.API_V1_STR}/badges/{owner}/{repo_name}/main.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/repositories/{owner}/{repo_name}/main.json"
+    )
 
     assert response.status_code == 200
     body = response.json()

@@ -125,8 +125,8 @@ def _lookup_repo(session: SessionDep, repository: str) -> Repository | None:
     ).first()
 
 
-@router.post("/ingest", role=Role.service, limit=LIMIT_INGEST, status_code=201)
-async def ingest_telemetry(
+@router.post("/runs", role=Role.service, limit=LIMIT_INGEST, status_code=201)
+async def ingest_run(
     payload: TelemetryPayload,
     session: SessionDep,
     claims: GitHubOidcClaims,
@@ -182,7 +182,7 @@ async def ingest_telemetry(
     return {"status": "accepted", "telemetry_run_id": str(run.id)}
 
 
-@router.post("/docker-build", role=Role.service, limit=LIMIT_INGEST, status_code=201)
+@router.post("/docker-builds", role=Role.service, limit=LIMIT_INGEST, status_code=201)
 async def ingest_docker_build(
     payload: DockerBuildPayload,
     session: SessionDep,
@@ -235,7 +235,7 @@ async def ingest_docker_build(
     return {"status": "accepted", "telemetry_id": str(telemetry.id)}
 
 
-@router.post("/sample", role=Role.service, limit=LIMIT_INGEST, status_code=200)
+@router.post("/samples", role=Role.service, limit=LIMIT_INGEST, status_code=200)
 async def ingest_sample(
     payload: SamplePayload,
     session: SessionDep,
@@ -289,9 +289,11 @@ def _enrichments_by_run(
 
 
 @router.get(
-    "/summary/{repo_id}", role=Role.org_member, response_model=TelemetrySummaryPublic
+    "/repositories/{repo_id}",
+    role=Role.org_member,
+    response_model=TelemetrySummaryPublic,
 )
-def get_telemetry_summary(
+def get_summary(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -323,11 +325,11 @@ def get_telemetry_summary(
 
 
 @router.get(
-    "/findings/{repo_id}",
+    "/repositories/{repo_id}/findings",
     role=Role.org_member,
     response_model=list[DynamicEnrichmentPublic],
 )
-def get_telemetry_findings(
+def list_findings(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -353,9 +355,12 @@ def get_telemetry_findings(
 
 
 @router.post(
-    "/analyze/{repo_id}", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/repositories/{repo_id}/scans",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def analyze_telemetry(
+def trigger_scan(
     repo_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

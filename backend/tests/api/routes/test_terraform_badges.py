@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/badges/terraform/{root_id} endpoints."""
+"""Tests for the /api/v1/badges/terraform-roots/{root_id} endpoints."""
 
 import uuid
 
@@ -99,7 +99,9 @@ def _add_completed_scan(db: Session, root: TerraformRoot, grade: str) -> None:
 
 
 def test_svg_badge_unknown_root_returns_unknown(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/badges/terraform/{uuid.uuid4()}.svg")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/terraform-roots/{uuid.uuid4()}.svg"
+    )
 
     assert response.status_code == 200
     assert "image/svg+xml" in response.headers.get("content-type", "")
@@ -107,7 +109,7 @@ def test_svg_badge_unknown_root_returns_unknown(client: TestClient) -> None:
 
 
 def test_svg_badge_known_root_no_scan(client: TestClient, root: TerraformRoot) -> None:
-    response = client.get(f"{settings.API_V1_STR}/badges/terraform/{root.id}.svg")
+    response = client.get(f"{settings.API_V1_STR}/badges/terraform-roots/{root.id}.svg")
 
     assert response.status_code == 200
     assert b"?" in response.content
@@ -118,7 +120,7 @@ def test_svg_badge_known_root_with_grade(
 ) -> None:
     _add_completed_scan(db, root, "A+")
 
-    response = client.get(f"{settings.API_V1_STR}/badges/terraform/{root.id}.svg")
+    response = client.get(f"{settings.API_V1_STR}/badges/terraform-roots/{root.id}.svg")
 
     assert response.status_code == 200
     assert b"A+" in response.content
@@ -128,7 +130,9 @@ def test_svg_badge_known_root_with_grade(
 
 
 def test_json_badge_unknown_root(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/badges/terraform/{uuid.uuid4()}.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/terraform-roots/{uuid.uuid4()}.json"
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -136,7 +140,9 @@ def test_json_badge_unknown_root(client: TestClient) -> None:
 
 
 def test_json_badge_pending(client: TestClient, root: TerraformRoot) -> None:
-    response = client.get(f"{settings.API_V1_STR}/badges/terraform/{root.id}.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/terraform-roots/{root.id}.json"
+    )
 
     assert response.status_code == 200
     assert response.json()["message"] == "pending"
@@ -147,7 +153,9 @@ def test_json_badge_with_grade(
 ) -> None:
     _add_completed_scan(db, root, "A+")
 
-    response = client.get(f"{settings.API_V1_STR}/badges/terraform/{root.id}.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/terraform-roots/{root.id}.json"
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -164,7 +172,7 @@ def test_private_svg_without_sig_returns_unknown(
     _add_completed_scan(db, private_root, "A+")
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.svg"
+        f"{settings.API_V1_STR}/badges/terraform-roots/{private_root.id}.svg"
     )
 
     assert response.status_code == 200
@@ -181,7 +189,7 @@ def test_private_svg_with_valid_sig_returns_grade(
     sig = sign_badge(str(private_root.id))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.svg",
+        f"{settings.API_V1_STR}/badges/terraform-roots/{private_root.id}.svg",
         params={"sig": sig},
     )
 
@@ -195,7 +203,7 @@ def test_private_svg_with_wrong_sig_returns_unknown(
     _add_completed_scan(db, private_root, "A+")
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.svg",
+        f"{settings.API_V1_STR}/badges/terraform-roots/{private_root.id}.svg",
         params={"sig": "deadbeef"},
     )
 
@@ -209,7 +217,7 @@ def test_private_json_without_sig_not_configured(
     _add_completed_scan(db, private_root, "A+")
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.json"
+        f"{settings.API_V1_STR}/badges/terraform-roots/{private_root.id}.json"
     )
 
     assert response.status_code == 200
@@ -225,7 +233,7 @@ def test_private_json_with_valid_sig_returns_grade(
     sig = sign_badge(str(private_root.id))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/terraform/{private_root.id}.json",
+        f"{settings.API_V1_STR}/badges/terraform-roots/{private_root.id}.json",
         params={"sig": sig},
     )
 

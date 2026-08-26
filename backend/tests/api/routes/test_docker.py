@@ -246,7 +246,7 @@ def test_another_tenants_target_is_404_not_403(
     db.commit()
 
     login = client.post(
-        f"{settings.API_V1_STR}/login/access-token",
+        f"{settings.API_V1_STR}/auth/token",
         data={"username": email, "password": "password12345"},
     )
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
@@ -474,7 +474,9 @@ def test_list_files_reports_a_github_failure_as_502(
 def test_public_target_badge_needs_no_signature(
     client: TestClient, target: DockerTarget, completed_scan: DockerScan
 ) -> None:
-    response = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.svg")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/docker-targets/{target.id}.svg"
+    )
     assert response.status_code == 200
     assert "Docker" in response.text
     assert "B" in response.text
@@ -491,13 +493,15 @@ def test_private_target_badge_requires_a_valid_signature(
     db.add(repo)
     db.commit()
 
-    unsigned = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.json")
+    unsigned = client.get(
+        f"{settings.API_V1_STR}/badges/docker-targets/{target.id}.json"
+    )
     assert unsigned.json()["message"] == "not configured"
 
     from app.services.badge_signing import sign_badge
 
     signed = client.get(
-        f"{settings.API_V1_STR}/badges/docker/{target.id}.json",
+        f"{settings.API_V1_STR}/badges/docker-targets/{target.id}.json",
         params={"sig": sign_badge(str(target.id))},
     )
     assert signed.json()["message"] == "B"
@@ -506,7 +510,9 @@ def test_private_target_badge_requires_a_valid_signature(
 def test_unknown_target_badge_is_indistinguishable_from_unauthorized(
     client: TestClient,
 ) -> None:
-    response = client.get(f"{settings.API_V1_STR}/badges/docker/{uuid.uuid4()}.json")
+    response = client.get(
+        f"{settings.API_V1_STR}/badges/docker-targets/{uuid.uuid4()}.json"
+    )
     assert response.json()["message"] == "not configured"
 
 

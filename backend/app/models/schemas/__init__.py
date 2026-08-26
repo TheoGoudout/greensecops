@@ -105,6 +105,7 @@ from .terraform import (
 from .user import (
     Message,
     NewPassword,
+    PasswordRecovery,
     Token,
     TokenPayload,
     UserPublic,
@@ -168,6 +169,7 @@ __all__ = [
     "WorkflowFindingStatsPublic",
     "Message",
     "NewPassword",
+    "PasswordRecovery",
     "OrganizationUpdate",
     "OrganizationPublic",
     "OssApplicationCreate",

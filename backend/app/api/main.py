@@ -2,23 +2,22 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     ansible,
+    auth,
     badges,
     billing,
     cloud,
     docker,
     events,
-    github_oauth,
     installations,
-    login,
     organizations,
     overview,
     private,
     repositories,
     rules,
+    system,
     telemetry,
     terraform,
     users,
-    utils,
     webhooks,
     workflow_findings,
     workflow_fixes,
@@ -27,10 +26,9 @@ from app.api.routes import (
 from app.core.config import settings
 
 api_router = APIRouter()
-api_router.include_router(login.router)
+api_router.include_router(auth.router)
 api_router.include_router(users.router)
-api_router.include_router(utils.router)
-api_router.include_router(github_oauth.router)
+api_router.include_router(system.router)
 api_router.include_router(installations.router)
 api_router.include_router(organizations.router)
 api_router.include_router(repositories.router)
@@ -45,6 +43,9 @@ for _module in (workflow_scans, workflow_findings, workflow_fixes):
     api_router.include_router(_module.router, prefix="/workflow", tags=["workflow"])
 api_router.include_router(rules.router)
 api_router.include_router(webhooks.router)
+# Stripe's handler lives in routes/billing.py with the rest of billing; it is
+# mounted here so both providers answer under /webhooks with the same tag.
+api_router.include_router(billing.webhook_router, prefix="/webhooks")
 api_router.include_router(badges.router)
 api_router.include_router(telemetry.router)
 api_router.include_router(billing.router)
