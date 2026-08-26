@@ -1,19 +1,35 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, Loader2, Play, Trash2 } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronRight,
+  GitPullRequest,
+  Loader2,
+  Play,
+  Trash2,
+  Wand2,
+  Zap,
+} from "lucide-react"
 import { useMemo, useState } from "react"
-import { toast } from "sonner"
-import type { AnsibleFindingPublic, AnsibleProjectPublic } from "@/client"
-import { AnsibleService } from "@/client"
-import { AnsibleFindingRow } from "@/components/AnsibleFindingRow"
+import type {
+  AnsibleFilePublic,
+  AnsibleFindingPublic,
+  AnsibleFixPublic,
+  AnsibleProjectPublic,
+  PullRequestPublic,
+} from "@/client"
+import { AnsibleService, WorkflowFixesService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
+import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { apiErrorDetail } from "@/lib/api-error"
+import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { ansibleFixBranch } from "@/lib/delivery"
 import { formatDateTime } from "@/lib/format"
+import { fixStatusColor } from "@/lib/status-colors"
 
 export const Route = createFileRoute("/_layout/infrastructure/$repoId/ansible")(
   {
@@ -24,6 +40,9 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId/ansible")(
   },
 )
 
+// Fix statuses a worker is actively processing — used to disable actions.
+const IN_FLIGHT = new Set(["pending", "generating", "delivering"])
+
 function AnsibleTab() {
   const { repoId } = Route.useParams()
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -32,6 +51,17 @@ function AnsibleTab() {
     queryKey: ["ansible-projects", "repo", repoId],
     queryFn: () => AnsibleService.listAnsibleProjects({ repoId }),
   })
+
+  const { data: pullRequests } = useQuery({
+    queryKey: ["pull-requests", "repo", repoId],
+    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+  })
+
+  const prByBranch = useMemo(() => {
+    const map = new Map<string, PullRequestPublic>()
+    for (const pr of pullRequests ?? []) map.set(pr.pr_branch, pr)
+    return map
+  }, [pullRequests])
 
   if (isLoading) {
     return <Skeleton className="h-40 w-full" />
@@ -57,8 +87,8 @@ function AnsibleTab() {
         <ProjectCard
           key={project.id}
           project={project}
-          repoId={repoId}
           isOpen={open.has(project.id)}
+          existingPr={prByBranch.get(ansibleFixBranch(project.id))}
           onToggleOpen={() =>
             setOpen((prev) => {
               const next = new Set(prev)
@@ -76,69 +106,52 @@ function AnsibleTab() {
 
 /**
  * One registered project: its grade, its actions, and — once expanded — its
- * source with findings annotated inline.
- *
- * Deliberately not built on `useEngineTarget`: that hook's contract includes
- * fix generation and delivery, which this engine does not have endpoints for
- * yet. It adopts the hook when those land, rather than passing stubs for half
- * of it now.
+ * source with findings annotated inline and any generated fix diffed against it.
  */
 function ProjectCard({
   project,
-  repoId,
   isOpen,
+  existingPr,
   onToggleOpen,
 }: {
   project: AnsibleProjectPublic
-  repoId: string
   isOpen: boolean
+  existingPr: PullRequestPublic | undefined
   onToggleOpen: () => void
 }) {
-  const queryClient = useQueryClient()
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: ["ansible-projects", "repo", repoId],
-    })
-
-  const { data: files } = useQuery({
-    queryKey: ["ansible-files", project.id],
-    queryFn: () => AnsibleService.listAnsibleFiles({ projectId: project.id }),
-    enabled: isOpen,
-  })
-
-  const { data: findings } = useQuery({
-    queryKey: ["ansible-findings", project.id],
-    queryFn: () =>
+  const {
+    files,
+    filesLoading,
+    findings,
+    fixes,
+    toggleMutation,
+    scanMutation,
+    deleteMutation,
+    generateMutation,
+    deliverMutation,
+  } = useEngineTarget<
+    AnsibleFilePublic,
+    AnsibleFindingPublic,
+    AnsibleFixPublic
+  >(project.id, isOpen, {
+    keyPrefix: "ansible",
+    targetLabel: "Ansible project",
+    listFiles: () => AnsibleService.listAnsibleFiles({ projectId: project.id }),
+    listFindings: () =>
       AnsibleService.listAnsibleFindings({ projectId: project.id }),
-    enabled: isOpen,
-  })
-
-  const scan = useMutation({
-    mutationFn: () =>
-      AnsibleService.triggerAnsibleScan({ projectId: project.id }),
-    onSuccess: () => {
-      toast.success("Scan queued")
-      invalidate()
-    },
-    onError: (error: Error) => toast.error(apiErrorDetail(error)),
-  })
-
-  const toggle = useMutation({
-    mutationFn: (enabled: boolean) =>
+    listFixes: () => AnsibleService.listAnsibleFixes({ projectId: project.id }),
+    toggle: (enabled) =>
       AnsibleService.toggleAnsibleProject({ projectId: project.id, enabled }),
-    onSuccess: invalidate,
-    onError: (error: Error) => toast.error(apiErrorDetail(error)),
-  })
-
-  const remove = useMutation({
-    mutationFn: () =>
+    scan: () => AnsibleService.triggerAnsibleScan({ projectId: project.id }),
+    remove: () =>
       AnsibleService.deleteAnsibleProject({ projectId: project.id }),
-    onSuccess: () => {
-      toast.success("Ansible project removed")
-      invalidate()
-    },
-    onError: (error: Error) => toast.error(apiErrorDetail(error)),
+    generate: (findingIds) =>
+      AnsibleService.triggerAnsibleFixGeneration({
+        projectId: project.id,
+        requestBody: findingIds.length ? { finding_ids: findingIds } : {},
+      }),
+    deliver: (force) =>
+      AnsibleService.triggerAnsibleDelivery({ projectId: project.id, force }),
   })
 
   const findingsByFile = useMemo(() => {
@@ -151,94 +164,237 @@ function ProjectCard({
     return map
   }, [findings])
 
-  const openFindings = (findings ?? []).length
+  const fixByFile = useMemo(() => {
+    const map = new Map<string, AnsibleFixPublic>()
+    for (const fix of fixes ?? []) map.set(fix.file_path, fix)
+    return map
+  }, [fixes])
+
+  const openFindingCount = (findings ?? []).filter(
+    (f) => f.status !== "ignored" && f.status !== "resolved",
+  ).length
+  const hasReadyFix = (fixes ?? []).some((f) => f.status === "ready")
+  const prState = existingPr?.pr_state
+  const deliverLabel =
+    prState === "closed" ? "Reopen PR" : existingPr ? "Update PR" : "Create PR"
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
-        <button
-          type="button"
-          className="flex min-w-0 items-center gap-2 text-left"
-          onClick={onToggleOpen}
-        >
-          {isOpen ? (
-            <ChevronDown className="size-4 shrink-0" />
-          ) : (
-            <ChevronRight className="size-4 shrink-0" />
-          )}
-          <CardTitle className="truncate">{project.root_path || "/"}</CardTitle>
-          {project.latest_grade && <GradeBadge grade={project.latest_grade} />}
-        </button>
-
-        <div className="flex items-center gap-2">
-          {project.last_scanned_at && (
-            <span className="text-xs text-muted-foreground">
-              scanned {formatDateTime(project.last_scanned_at)}
+      <CardHeader className="pb-2 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 min-w-0">
+          <CardTitle className="text-sm font-mono flex flex-wrap items-center gap-2 min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={onToggleOpen}
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              aria-expanded={isOpen}
+              title={isOpen ? "Collapse project" : "Expand project"}
+            >
+              {isOpen ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </button>
+            {/* "" is a legal root_path meaning the repository root. */}
+            <span className="truncate min-w-0 flex-1">
+              {project.root_path || "/"}
             </span>
-          )}
-          <Switch
-            checked={project.enabled}
-            onCheckedChange={(enabled) => toggle.mutate(enabled)}
-            aria-label="Enable scanning for this project"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!project.enabled || scan.isPending}
-            onClick={() => scan.mutate()}
-          >
-            {scan.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Play className="size-4" />
-            )}
-            Scan
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={remove.isPending}
-            onClick={() => remove.mutate()}
-            aria-label="Remove this project"
-          >
-            <Trash2 className="size-4" />
-          </Button>
+            <GradeBadge
+              grade={project.latest_grade ?? null}
+              className="shrink-0"
+            />
+          </CardTitle>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={project.enabled}
+                onCheckedChange={(enabled) => toggleMutation.mutate(enabled)}
+                disabled={toggleMutation.isPending}
+                aria-label="Enable scanning for this project"
+              />
+              <span className="text-xs text-muted-foreground">
+                {project.enabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs gap-1.5"
+              onClick={() => scanMutation.mutate()}
+              disabled={!project.enabled || scanMutation.isPending}
+              title={
+                project.enabled
+                  ? "Scan this project now"
+                  : "Enable this project to scan"
+              }
+            >
+              {scanMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+              Scan now
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Remove Ansible project "${project.root_path || "/"}"? This deletes its scan history, findings and fixes.`,
+                  )
+                ) {
+                  deleteMutation.mutate()
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              aria-label="Remove this project"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+              Remove
+            </Button>
+          </div>
         </div>
+        {project.last_scanned_at && (
+          <p className="text-xs text-muted-foreground">
+            Last scanned {formatDateTime(project.last_scanned_at)}
+          </p>
+        )}
       </CardHeader>
 
       {isOpen && (
-        <CardContent className="flex flex-col gap-4">
-          {openFindings > 0 && (
-            <div className="flex flex-col gap-1">
-              {(findings ?? []).map((finding) => (
-                <AnsibleFindingRow key={finding.id} finding={finding} />
-              ))}
-            </div>
-          )}
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {openFindingCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5"
+                onClick={() => generateMutation.mutate([])}
+                disabled={!project.enabled || generateMutation.isPending}
+              >
+                {generateMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Zap className="h-3 w-3" />
+                )}
+                Generate all fixes
+              </Button>
+            )}
+            {hasReadyFix && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5"
+                onClick={() => deliverMutation.mutate(prState === "closed")}
+                disabled={!project.enabled || deliverMutation.isPending}
+              >
+                {deliverMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <GitPullRequest className="h-3 w-3" />
+                )}
+                {deliverLabel}
+              </Button>
+            )}
+          </div>
 
-          {files?.map((file) => (
-            <FileViewer
-              key={file.path}
-              path={file.path}
-              rawContent={file.raw_content}
-              // Every kind this engine reads is YAML — playbooks, task files,
-              // variables and galaxy requirements alike — so the classifier's
-              // `kind` labels the file rather than picking a grammar.
-              grammar="yaml"
-              annotations={(findingsByFile.get(file.path) ?? []).map((f) => ({
-                id: f.id,
-                severity: f.severity,
-                rule_slug: f.rule_slug,
-                message: f.message,
-                line_start: f.line_start,
-              }))}
-            />
-          ))}
-
-          {files?.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+          {filesLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : !files?.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
               No Ansible files found under this path.
+              {!project.last_scanned_at && " Run a scan to fetch this project."}
             </p>
+          ) : (
+            files.map((file) => {
+              const fileFindings = findingsByFile.get(file.path) ?? []
+              const fileFix = fixByFile.get(file.path)
+              const showFix =
+                fileFix?.status === "ready" || fileFix?.status === "delivered"
+              const fixInFlight = fileFix
+                ? IN_FLIGHT.has(fileFix.status)
+                : false
+              const openIds = fileFindings
+                .filter(
+                  (f) => f.status !== "ignored" && f.status !== "resolved",
+                )
+                .map((f) => f.id)
+              return (
+                <div key={file.path} className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {/* The classifier's label: a playbook reads differently
+                          from a vars file, and the path alone doesn't say. */}
+                      <StatusPill
+                        colorClass="bg-muted text-muted-foreground"
+                        className="shrink-0"
+                      >
+                        {file.kind}
+                      </StatusPill>
+                      {fileFix && (
+                        <StatusPill
+                          colorClass={fixStatusColor(fileFix.status)}
+                          className="capitalize shrink-0"
+                        >
+                          {fileFix.status}
+                        </StatusPill>
+                      )}
+                      {fileFix?.pr_url && (
+                        <a
+                          href={fileFix.pr_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0"
+                        >
+                          <GitPullRequest className="h-3 w-3" />
+                          View PR
+                        </a>
+                      )}
+                    </div>
+                    {openIds.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={() => generateMutation.mutate(openIds)}
+                        disabled={
+                          !project.enabled ||
+                          fixInFlight ||
+                          generateMutation.isPending
+                        }
+                      >
+                        {fixInFlight ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3 w-3" />
+                        )}
+                        {fixInFlight ? "Generating…" : "Generate fix"}
+                      </Button>
+                    )}
+                  </div>
+                  <FileViewer
+                    path={file.path}
+                    // Every kind this engine reads is YAML — playbooks, task
+                    // files, variables and galaxy requirements alike — so the
+                    // classifier's `kind` labels the file rather than picking
+                    // a grammar.
+                    grammar="yaml"
+                    rawContent={file.raw_content}
+                    fullContent={
+                      showFix ? (fileFix?.full_content ?? undefined) : undefined
+                    }
+                    annotations={fileFindings}
+                  />
+                </div>
+              )
+            })
           )}
         </CardContent>
       )}

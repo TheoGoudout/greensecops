@@ -55,14 +55,21 @@ def generate_file_fix(
     findings: list[Any],
     fetch_files: Callable[..., Any],
     build_prompt: Callable[[str, str, list[Any]], tuple[str, str]],
-    validate: Callable[[str, str], str | None],
+    validate: Callable[[str, str, str], str | None],
 ) -> dict[str, object]:
     """Run one LLM call rewriting ``file_path`` to fix ``findings``.
 
-    ``validate`` returns an error message when the rewrite is unusable (it no
-    longer parses as what it claims to be) or ``None`` when it is fine. That
-    gate matters: delivery pushes this content to a real branch, so an
-    unparseable rewrite would break the user's build.
+    ``validate`` receives ``(file_path, original_content, patched_content)``
+    and returns an error message when the rewrite is unusable or ``None`` when
+    it is fine. That gate matters: delivery pushes this content to a real
+    branch, so an unparseable rewrite would break the user's build.
+
+    It takes the original as well as the rewrite because a "still parses?"
+    check is not enough for every engine. Ansible carries values that must
+    survive byte-identical — Jinja expressions, ``!vault`` tags — and losing
+    one produces a file that parses perfectly and does the wrong thing, so its
+    guard has to diff the two. The original is fetched here rather than by the
+    caller, so a closure in the task could not capture it.
     """
     with Session(engine) as session:
         target = session.get(spec.target_model, target_id)
@@ -124,7 +131,7 @@ def generate_file_fix(
             generation_error = MISSING_CONTENT_ERROR
         else:
             full_content = restore_trailing_whitespace(source.content, full_content)
-            generation_error = validate(file_path, full_content)
+            generation_error = validate(file_path, source.content, full_content)
             if generation_error:
                 logger.warning(
                     "LLM full_content for %s does not re-parse; discarding", file_path

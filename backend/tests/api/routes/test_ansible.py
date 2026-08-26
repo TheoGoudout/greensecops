@@ -236,9 +236,7 @@ def test_delete_project_cascades_scans(
         db.exec(select(AnsibleProject).where(AnsibleProject.id == project_id)).first()
         is None
     )
-    assert (
-        db.exec(select(AnsibleScan).where(AnsibleScan.id == scan_id)).first() is None
-    )
+    assert db.exec(select(AnsibleScan).where(AnsibleScan.id == scan_id)).first() is None
 
 
 def test_unknown_project_is_not_found(
@@ -262,9 +260,7 @@ def test_trigger_scan_queues_the_task(
     superuser_token_headers: dict[str, str],
     project: AnsibleProject,
 ) -> None:
-    with patch(
-        "app.api.routes.ansible.run_ansible_scan.delay"
-    ) as delayed:
+    with patch("app.api.routes.ansible.run_ansible_scan.delay") as delayed:
         response = client.post(
             f"{settings.API_V1_STR}/ansible-projects/{project.id}/scan",
             headers=superuser_token_headers,
@@ -429,3 +425,194 @@ def test_list_files_surfaces_a_github_failure_as_502(
             headers=superuser_token_headers,
         )
     assert response.status_code == 502
+
+
+# ─── Fix generation and delivery ─────────────────────────────────────────────
+
+
+def _open_finding(
+    db: Session,
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    rule: Rule,
+    file_path: str,
+) -> AnsibleFinding:
+    finding = AnsibleFinding(
+        scan_id=completed_scan.id,
+        ansible_project_id=project.id,
+        rule_id=rule.id,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=Severity.high,
+        category=Category.security,
+        message="m",
+        file_path=file_path,
+        task_name="Log in to ECR",
+        line_start=4,
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+def test_generate_fixes_queues_one_task_per_file(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    seeded_ansible_rule: Rule,
+) -> None:
+    """Two findings in one file are one rewrite; a third in another is a second.
+
+    The whole file is rewritten in a single LLM call, so grouping by path is
+    what keeps the cost proportional to files rather than findings.
+    """
+    _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+    _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+    _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "playbooks/site.yml"
+    )
+
+    with patch("app.api.routes.ansible.run_ansible_fix_generation.delay") as delayed:
+        response = client.post(
+            f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "queued", "queued": 2}
+    assert delayed.call_count == 2
+
+
+def test_generate_fixes_can_be_narrowed_to_specific_findings(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    seeded_ansible_rule: Rule,
+) -> None:
+    wanted = _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+    _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "playbooks/site.yml"
+    )
+
+    with patch("app.api.routes.ansible.run_ansible_fix_generation.delay") as delayed:
+        response = client.post(
+            f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+            headers=superuser_token_headers,
+            json={"finding_ids": [str(wanted.id)]},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+    assert delayed.call_args.kwargs["finding_ids"] == [str(wanted.id)]
+
+
+def test_generate_fixes_with_nothing_open_queues_nothing(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    project: AnsibleProject,
+) -> None:
+    response = client.post(
+        f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 202
+    assert response.json() == {"status": "no_findings", "queued": 0}
+
+
+def test_resolved_findings_are_not_regenerated(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    seeded_ansible_rule: Rule,
+) -> None:
+    from datetime import datetime, timezone
+
+    finding = _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+    finding.resolved_at = datetime.now(timezone.utc)
+    db.add(finding)
+    db.commit()
+
+    response = client.post(
+        f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+        headers=superuser_token_headers,
+    )
+    assert response.json() == {"status": "no_findings", "queued": 0}
+
+
+def test_list_fixes_returns_the_projects_fixes(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    project: AnsibleProject,
+) -> None:
+    from app.models import AnsibleFix, FixStatus, LLMProvider
+
+    db.add(
+        AnsibleFix(
+            ansible_project_id=project.id,
+            file_path="roles/a/tasks/main.yml",
+            llm_provider=LLMProvider.openai,
+            llm_model="gpt-4o-mini",
+            status=FixStatus.ready,
+            full_content="---\n- name: t\n  ansible.builtin.ping:\n",
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["file_path"] == "roles/a/tasks/main.yml"
+    assert body[0]["status"] == "ready"
+
+
+def test_deliver_queues_the_task_and_reports_the_branch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    project: AnsibleProject,
+) -> None:
+    from app.services.delivery_pr import ansible_fix_branch
+
+    with patch("app.api.routes.ansible.deliver_ansible_fixes.delay") as delayed:
+        response = client.post(
+            f"{settings.API_V1_STR}/ansible-projects/{project.id}/deliver",
+            headers=superuser_token_headers,
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "queued"
+    # The caller gets the branch up front so the UI can link to it before the
+    # worker has run.
+    assert body["pr_branch"] == ansible_fix_branch(project.id)
+    delayed.assert_called_once_with(ansible_project_id=str(project.id), force=False)
+
+
+def test_fix_endpoints_reject_an_unknown_project(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    unknown = uuid.uuid4()
+    for method, suffix in [("post", "fixes"), ("get", "fixes"), ("post", "deliver")]:
+        response = getattr(client, method)(
+            f"{settings.API_V1_STR}/ansible-projects/{unknown}/{suffix}",
+            headers=superuser_token_headers,
+        )
+        assert response.status_code == 404, (method, suffix)

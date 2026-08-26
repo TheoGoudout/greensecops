@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest"
 import type { FixPublic, PullRequestPublic } from "@/client"
 import {
+  ansibleFixBranch,
   deliverAction,
+  dockerFixBranch,
   labelForBranch,
   repoFixBranch,
+  tfFixBranch,
   workflowFixBranch,
 } from "@/lib/delivery"
 
@@ -37,6 +40,30 @@ describe("workflowFixBranch / repoFixBranch", () => {
     expect(repoFixBranch("87654321-aaaa-bbbb-cccc-000000000000")).toBe(
       "greensecops/fixes-87654321",
     )
+  })
+})
+
+describe("engine fix branches", () => {
+  const id = "12345678-aaaa-bbbb-cccc-000000000000"
+
+  it("mints one branch per engine target from the id prefix", () => {
+    expect(tfFixBranch(id)).toBe("greensecops/terraform-12345678")
+    expect(dockerFixBranch(id)).toBe("greensecops/docker-12345678")
+    expect(ansibleFixBranch(id)).toBe("greensecops/ansible-12345678")
+  })
+
+  it("gives every engine a distinct prefix", () => {
+    // The Infrastructure PRs tab tells a Terraform PR from a Docker or Ansible
+    // one by branch name alone, so a shared prefix would mis-attribute PRs
+    // rather than merely look untidy.
+    const branches = [
+      tfFixBranch(id),
+      dockerFixBranch(id),
+      ansibleFixBranch(id),
+      workflowFixBranch(id),
+      repoFixBranch(id),
+    ]
+    expect(new Set(branches).size).toBe(branches.length)
   })
 })
 

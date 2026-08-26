@@ -350,6 +350,150 @@ export const AnsibleFindingPublicSchema = {
     title: 'AnsibleFindingPublic'
 } as const;
 
+export const AnsibleFixGenerateRequestSchema = {
+    properties: {
+        finding_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string',
+                        format: 'uuid'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finding Ids'
+        }
+    },
+    type: 'object',
+    title: 'AnsibleFixGenerateRequest'
+} as const;
+
+export const AnsibleFixPublicSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        file_path: {
+            type: 'string',
+            title: 'File Path'
+        },
+        pr_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Id'
+        },
+        llm_provider: {
+            '$ref': '#/components/schemas/LLMProvider'
+        },
+        llm_model: {
+            type: 'string',
+            title: 'Llm Model'
+        },
+        status: {
+            '$ref': '#/components/schemas/FixStatus'
+        },
+        full_content: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Content'
+        },
+        error_message: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Message'
+        },
+        pr_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Url'
+        },
+        pr_branch: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Pr Branch'
+        },
+        pr_state: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PullRequestState'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        created_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Created At'
+        },
+        delivered_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Delivered At'
+        },
+        ansible_project_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Ansible Project Id'
+        }
+    },
+    type: 'object',
+    required: ['id', 'file_path', 'llm_provider', 'llm_model', 'status', 'ansible_project_id'],
+    title: 'AnsibleFixPublic'
+} as const;
+
 export const AnsibleProjectCreateSchema = {
     properties: {
         repo_id: {
