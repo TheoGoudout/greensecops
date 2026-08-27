@@ -42,10 +42,11 @@ test.describe("Docker", () => {
 
     await page.goto("/docker")
 
+    // Targets are registered by hand now, so the empty state explains the add
+    // form rather than promising one per synced repository. Matched on the
+    // leading sentence: the rest of the copy is broken up by an inline <code>.
     await expect(
-      page.getByText(
-        "No Docker targets yet. One is created automatically for every repository the GitHub App syncs.",
-      ),
+      page.getByText("No Docker targets configured."),
     ).toBeVisible()
   })
 
