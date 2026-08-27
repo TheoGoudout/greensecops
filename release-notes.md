@@ -31,6 +31,7 @@
 
 ### Upgrades
 
+* ⬆ bump the docker group across 4 directories with 2 updates. PR [#251](https://github.com/TheoGoudout/greensecops/pull/251) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump python from 3.14.6-slim to 3.14.7-slim in /backend in the python group across 1 directory. PR [#234](https://github.com/TheoGoudout/greensecops/pull/234) by [@dependabot[bot]](https://github.com/apps/dependabot).
 
 ### Internal
