@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/badges/cloud-accounts/{account_id} endpoints."""
+"""Tests for the /api/v1/badges/cloud/{account_id} endpoints."""
 
 import uuid
 
@@ -61,7 +61,7 @@ def _add_completed_scan(db: Session, account: CloudAccount, grade: str) -> None:
 
 def test_svg_badge_unknown_account_returns_unknown(client: TestClient) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{uuid.uuid4()}.svg"
+        f"{settings.API_V1_STR}/badges/cloud/{uuid.uuid4()}.svg"
     )
 
     assert response.status_code == 200
@@ -76,7 +76,7 @@ def test_svg_badge_without_sig_returns_unknown(
     _add_completed_scan(db, account, "A+")
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{account.id}.svg"
+        f"{settings.API_V1_STR}/badges/cloud/{account.id}.svg"
     )
 
     assert response.status_code == 200
@@ -93,7 +93,7 @@ def test_svg_badge_with_valid_sig_returns_grade(
     sig = sign_badge(str(account.id))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{account.id}.svg",
+        f"{settings.API_V1_STR}/badges/cloud/{account.id}.svg",
         params={"sig": sig},
     )
 
@@ -107,7 +107,7 @@ def test_svg_badge_with_wrong_sig_returns_unknown(
     _add_completed_scan(db, account, "A+")
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{account.id}.svg",
+        f"{settings.API_V1_STR}/badges/cloud/{account.id}.svg",
         params={"sig": "deadbeef"},
     )
 
@@ -120,7 +120,7 @@ def test_svg_badge_with_wrong_sig_returns_unknown(
 
 def test_json_badge_unknown_account(client: TestClient) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{uuid.uuid4()}.json"
+        f"{settings.API_V1_STR}/badges/cloud/{uuid.uuid4()}.json"
     )
 
     assert response.status_code == 200
@@ -133,7 +133,7 @@ def test_json_badge_without_sig_not_configured(
     _add_completed_scan(db, account, "A+")
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{account.id}.json"
+        f"{settings.API_V1_STR}/badges/cloud/{account.id}.json"
     )
 
     assert response.status_code == 200
@@ -149,7 +149,7 @@ def test_json_badge_with_valid_sig_returns_grade(
     sig = sign_badge(str(account.id))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{account.id}.json",
+        f"{settings.API_V1_STR}/badges/cloud/{account.id}.json",
         params={"sig": sig},
     )
 
@@ -167,7 +167,7 @@ def test_json_badge_pending_with_valid_sig(
     sig = sign_badge(str(account.id))
 
     response = client.get(
-        f"{settings.API_V1_STR}/badges/cloud-accounts/{account.id}.json",
+        f"{settings.API_V1_STR}/badges/cloud/{account.id}.json",
         params={"sig": sig},
     )
 

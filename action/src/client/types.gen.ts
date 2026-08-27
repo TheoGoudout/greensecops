@@ -7100,7 +7100,7 @@ export type BadgesGetCloudAccountBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/cloud-accounts/{account_id}.svg';
+    url: '/api/v1/badges/cloud/{account_id}.svg';
 };
 
 export type BadgesGetCloudAccountBadgeErrors = {
@@ -7133,7 +7133,7 @@ export type BadgesGetCloudAccountBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/cloud-accounts/{account_id}.json';
+    url: '/api/v1/badges/cloud/{account_id}.json';
 };
 
 export type BadgesGetCloudAccountBadgeJsonErrors = {

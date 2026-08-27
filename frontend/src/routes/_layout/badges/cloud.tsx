@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_layout/badges/cloud")({
 
 function toEntry(account: CloudAccountPublic): BadgeEntry {
   const svgUrl = signedBadgeUrl(
-    `${BADGE_API_BASE}/api/v1/badges/cloud-accounts/${account.id}.svg`,
+    `${BADGE_API_BASE}/api/v1/badges/cloud/${account.id}.svg`,
     account.badge_sig,
   )
   return {

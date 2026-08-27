@@ -401,7 +401,7 @@ def _cloud_account_badge_grade(
 
 
 @router.get(
-    "/cloud-accounts/{account_id}.svg",
+    "/cloud/{account_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -425,7 +425,7 @@ def get_cloud_account_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/cloud-accounts/{account_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/cloud/{account_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_cloud_account_badge_json(
     account_id: uuid.UUID,
     session: SessionDep,
