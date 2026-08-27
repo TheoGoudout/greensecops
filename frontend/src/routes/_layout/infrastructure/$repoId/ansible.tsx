@@ -18,7 +18,7 @@ import type {
   AnsibleProjectPublic,
   PullRequestPublic,
 } from "@/client"
-import { AnsibleService, WorkflowFixesService } from "@/client"
+import { AnsibleService, WorkflowService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -54,7 +54,7 @@ function AnsibleTab() {
 
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
