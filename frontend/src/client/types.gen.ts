@@ -83,6 +83,7 @@ export type AnsibleProjectPublic = {
     last_scanned_head_sha?: (string | null);
     latest_score?: (number | null);
     latest_grade?: (string | null);
+    latest_scan_status?: (ScanStatus | null);
     badge_sig?: (string | null);
 };
 
@@ -186,6 +187,7 @@ export type CloudAccountPublic = {
     last_synced_at?: (string | null);
     latest_score?: (number | null);
     latest_grade?: (string | null);
+    latest_scan_status?: (ScanStatus | null);
     created_at?: (string | null);
 };
 
@@ -387,6 +389,7 @@ export type DockerTargetPublic = {
     last_scanned_head_sha?: (string | null);
     latest_score?: (number | null);
     latest_grade?: (string | null);
+    latest_scan_status?: (ScanStatus | null);
     badge_sig?: (string | null);
 };
 
@@ -1083,6 +1086,7 @@ export type TerraformRootPublic = {
     last_scanned_head_sha?: (string | null);
     latest_score?: (number | null);
     latest_grade?: (string | null);
+    latest_scan_status?: (ScanStatus | null);
     badge_sig?: (string | null);
 };
 

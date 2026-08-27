@@ -21,6 +21,7 @@ import type {
 import { TerraformService, WorkflowService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
+import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
 import { TerraformFindingRow } from "@/components/TerraformFindingRow"
 import { Button } from "@/components/ui/button"
@@ -215,6 +216,7 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
             />
           </CardTitle>
           <div className="flex items-center gap-3 shrink-0">
+            <ScanRunningBadge status={root.latest_scan_status} />
             <div className="flex items-center gap-2">
               <Switch
                 checked={root.enabled}

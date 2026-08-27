@@ -8,6 +8,7 @@ from sqlmodel import Field, SQLModel
 from ..enums import (
     CloudAccountStatus,
     CloudProvider,
+    ScanStatus,
 )
 from .base import (
     FindingPublicBase,
@@ -35,6 +36,7 @@ class CloudAccountPublic(SQLModel):
     # Populated from the account's latest scan, mirroring TerraformRootPublic.
     latest_score: float | None = None
     latest_grade: str | None = None
+    latest_scan_status: ScanStatus | None = None
     created_at: datetime | None = None
 
 

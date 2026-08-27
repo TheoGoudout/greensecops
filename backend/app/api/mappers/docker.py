@@ -26,7 +26,7 @@ from app.models import (
 )
 from app.services.badge_signing import sign_badge
 
-from .base import latest_completed_scan, to_public
+from .base import latest_completed_scan, latest_scan_status, to_public
 
 
 def to_docker_target_public(target: DockerTarget) -> DockerTargetPublic:
@@ -44,6 +44,7 @@ def to_docker_target_public(target: DockerTarget) -> DockerTargetPublic:
         repo_full_name=target.repository.full_name if target.repository else None,
         latest_score=latest.score if latest else None,
         latest_grade=latest.grade if latest else None,
+        latest_scan_status=latest_scan_status(target),
         badge_sig=badge_sig,
     )
 

@@ -7,7 +7,7 @@ from app.models import (
     CloudScanPublic,
 )
 
-from .base import latest_completed_scan, to_public
+from .base import latest_completed_scan, latest_scan_status, to_public
 
 
 def to_cloud_account_public(account: CloudAccount) -> CloudAccountPublic:
@@ -19,6 +19,7 @@ def to_cloud_account_public(account: CloudAccount) -> CloudAccountPublic:
         regions=[r for r in account.regions.split(",") if r],
         latest_score=latest.score if latest else None,
         latest_grade=latest.grade if latest else None,
+        latest_scan_status=latest_scan_status(account),
     )
 
 

@@ -243,6 +243,7 @@ export type AnsibleProjectPublic = {
      * Latest Grade
      */
     latest_grade?: string | null;
+    latest_scan_status?: ScanStatus | null;
     /**
      * Badge Sig
      */
@@ -512,6 +513,7 @@ export type CloudAccountPublic = {
      * Latest Grade
      */
     latest_grade?: string | null;
+    latest_scan_status?: ScanStatus | null;
     /**
      * Created At
      */
@@ -1056,6 +1058,7 @@ export type DockerTargetPublic = {
      * Latest Grade
      */
     latest_grade?: string | null;
+    latest_scan_status?: ScanStatus | null;
     /**
      * Badge Sig
      */
@@ -2627,6 +2630,7 @@ export type TerraformRootPublic = {
      * Latest Grade
      */
     latest_grade?: string | null;
+    latest_scan_status?: ScanStatus | null;
     /**
      * Badge Sig
      */

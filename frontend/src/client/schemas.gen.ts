@@ -458,6 +458,16 @@ export const AnsibleProjectPublicSchema = {
             ],
             title: 'Latest Grade'
         },
+        latest_scan_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ScanStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
         badge_sig: {
             anyOf: [
                 {
@@ -973,6 +983,16 @@ export const CloudAccountPublicSchema = {
                 }
             ],
             title: 'Latest Grade'
+        },
+        latest_scan_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ScanStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         created_at: {
             anyOf: [
@@ -2079,6 +2099,16 @@ export const DockerTargetPublicSchema = {
                 }
             ],
             title: 'Latest Grade'
+        },
+        latest_scan_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ScanStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         badge_sig: {
             anyOf: [
@@ -4828,6 +4858,16 @@ export const TerraformRootPublicSchema = {
                 }
             ],
             title: 'Latest Grade'
+        },
+        latest_scan_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ScanStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         badge_sig: {
             anyOf: [

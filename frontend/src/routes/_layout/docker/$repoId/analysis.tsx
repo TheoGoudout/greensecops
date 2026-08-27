@@ -20,6 +20,7 @@ import { DockerService, WorkflowService } from "@/client"
 import { DockerFindingRow } from "@/components/DockerFindingRow"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
+import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -222,6 +223,7 @@ function TargetCard({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <ScanRunningBadge status={target.latest_scan_status} />
           <GradeBadge grade={target.latest_grade ?? null} />
           <Switch
             checked={target.enabled}

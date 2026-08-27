@@ -10,7 +10,7 @@ from app.models import (
 )
 from app.services.badge_signing import sign_badge
 
-from .base import latest_completed_scan, to_public
+from .base import latest_completed_scan, latest_scan_status, to_public
 
 
 def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
@@ -27,6 +27,7 @@ def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
         repo_full_name=root.repository.full_name if root.repository else None,
         latest_score=latest.score if latest else None,
         latest_grade=latest.grade if latest else None,
+        latest_scan_status=latest_scan_status(root),
         badge_sig=badge_sig,
     )
 
