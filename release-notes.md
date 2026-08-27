@@ -20,6 +20,7 @@
 
 ### Fixes
 
+* fix(rules): break terraform-block tie by file, not line alone. PR [#258](https://github.com/TheoGoudout/greensecops/pull/258) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(deploy): stop staging serving an image older than its dashboard. PR [#247](https://github.com/TheoGoudout/greensecops/pull/247) by [@TheoGoudout](https://github.com/TheoGoudout).
 * 🐛 Make workflow-file storage a sync step, not an analysis by-product. PR [#242](https://github.com/TheoGoudout/greensecops/pull/242) by [@TheoGoudout](https://github.com/TheoGoudout).
 * Fix the false positives, dedup bugs and coverage gaps found by the Rego rule audit. PR [#239](https://github.com/TheoGoudout/greensecops/pull/239) by [@TheoGoudout](https://github.com/TheoGoudout).
