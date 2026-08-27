@@ -392,7 +392,7 @@ test.describe("Dashboard", () => {
     const issueB = {
       ...MOCK_ISSUE_ENERGY,
       id: "00000000-0000-0000-0000-000000000202",
-      analysis_id: analysisB.id,
+      scan_id: analysisB.id,
     }
 
     await mockRepositories(page, [MOCK_REPO, repoB])
@@ -432,7 +432,7 @@ test.describe("Dashboard", () => {
     const issueB = {
       ...MOCK_ISSUE_ENERGY,
       id: "00000000-0000-0000-0000-000000000202",
-      analysis_id: analysisB.id,
+      scan_id: analysisB.id,
     }
 
     await mockRepositories(page, [MOCK_REPO, repoB])
@@ -478,7 +478,7 @@ test.describe("Dashboard", () => {
     // Delay /overview/, not /analyses/: it backs the summary cards and gates
     // every section, so it is what governs the dashboard's first paint.
     // Registered after the beforeEach stub, so it wins the route match.
-    await page.route("**/api/v1/overview/**", async (route) => {
+    await page.route("**/api/v1/overview**", async (route) => {
       await new Promise((r) => setTimeout(r, 3000))
       route.fulfill({ json: MOCK_OVERVIEW })
     })

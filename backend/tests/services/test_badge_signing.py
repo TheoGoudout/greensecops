@@ -64,6 +64,6 @@ def test_build_url_signs_only_private() -> None:
     public = build_badge_svg_url("owner", "repo", "main", private=False)
     private = build_badge_svg_url("owner", "repo", "main", private=True)
 
-    assert public.endswith("/badges/owner/repo/main.svg")
+    assert public.endswith("/badges/repositories/owner/repo/main.svg")
     assert "?sig=" not in public
     assert f"?sig={sign_badge(repo_badge_message('owner', 'repo', 'main'))}" in private

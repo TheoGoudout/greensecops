@@ -10,7 +10,7 @@ from app.core.config import settings
 
 
 def test_health_check(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/utils/health-check/")
+    response = client.get(f"{settings.API_V1_STR}/system/health")
     assert response.status_code == 200
     assert response.json() is True
 
@@ -18,14 +18,14 @@ def test_health_check(client: TestClient) -> None:
 def test_health_check_returns_a_bare_boolean(client: TestClient) -> None:
     """The container HEALTHCHECK and deploy-reusable.yml's smoke test both
     depend on this shape, so widening it into an object is a breaking change
-    dressed up as an improvement. /utils/version/ exists so nobody needs to."""
-    response = client.get(f"{settings.API_V1_STR}/utils/health-check/")
+    dressed up as an improvement. /system/version exists so nobody needs to."""
+    response = client.get(f"{settings.API_V1_STR}/system/health")
     assert isinstance(response.json(), bool)
 
 
 def test_version_is_public(client: TestClient) -> None:
     """No credentials: the dashboard footer reads this before anyone signs in."""
-    response = client.get(f"{settings.API_V1_STR}/utils/version/")
+    response = client.get(f"{settings.API_V1_STR}/system/version")
     assert response.status_code == 200
 
     body = response.json()
@@ -48,9 +48,9 @@ def test_version_matches_the_root_version_file() -> None:
 def test_test_email_sends(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    with patch("app.api.routes.utils.send_email") as mock_send:
+    with patch("app.api.routes.system.send_email") as mock_send:
         response = client.post(
-            f"{settings.API_V1_STR}/utils/test-email/",
+            f"{settings.API_V1_STR}/system/test-email",
             params={"email_to": "test@example.com"},
             headers=superuser_token_headers,
         )

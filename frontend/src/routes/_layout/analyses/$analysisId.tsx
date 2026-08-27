@@ -2,13 +2,8 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { AlertCircle, ArrowLeft, ExternalLink, Wand2 } from "lucide-react"
 import { toast } from "sonner"
-import type { Category, IssuePublic } from "@/client"
-import {
-  RepositoriesService,
-  WorkflowFindingsService,
-  WorkflowFixesService,
-  WorkflowScansService,
-} from "@/client"
+import type { Category, WorkflowFindingPublic } from "@/client"
+import { RepositoriesService, WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { GradeBadge } from "@/components/GradeBadge"
 import { SeverityChip } from "@/components/SeverityChip"
@@ -26,11 +21,11 @@ export const Route = createFileRoute("/_layout/analyses/$analysisId")({
 })
 
 function groupByCategory(
-  issues: IssuePublic[],
-): Record<Category, IssuePublic[]> {
+  issues: WorkflowFindingPublic[],
+): Record<Category, WorkflowFindingPublic[]> {
   const groups = Object.fromEntries(
-    ISSUE_CATEGORIES.map((c) => [c, [] as IssuePublic[]]),
-  ) as Record<Category, IssuePublic[]>
+    ISSUE_CATEGORIES.map((c) => [c, [] as WorkflowFindingPublic[]]),
+  ) as Record<Category, WorkflowFindingPublic[]>
   for (const issue of issues) {
     groups[issue.category].push(issue)
   }
@@ -45,14 +40,14 @@ function AnalysisDetail() {
     isLoading: analysisLoading,
     isError: analysisError,
   } = useQuery({
-    queryKey: ["analysis", analysisId],
-    queryFn: () => WorkflowScansService.getAnalysis({ analysisId }),
+    queryKey: ["scan", analysisId],
+    queryFn: () => WorkflowService.getScan({ scanId: analysisId }),
   })
 
   const { data: issues, isLoading: issuesLoading } = useQuery({
-    queryKey: ["issues", analysisId],
+    queryKey: ["findings", analysisId],
     queryFn: () =>
-      WorkflowFindingsService.listIssues({ analysisId, limit: 500 }),
+      WorkflowService.listFindings({ scanId: analysisId, limit: 500 }),
     enabled: !!analysisId,
   })
 
@@ -66,7 +61,7 @@ function AnalysisDetail() {
 
   const fixMutation = useMutation({
     mutationFn: () =>
-      WorkflowFixesService.triggerFixGenerationForRepo({
+      WorkflowService.generateRepositoryFixes({
         repoId: analysis!.repo_id,
         force: true,
         requestBody: issues?.length
@@ -168,7 +163,7 @@ function AnalysisDetail() {
                   Workflow file
                 </p>
                 <p className="text-xs font-mono text-muted-foreground truncate">
-                  {analysis.workflow_file_path ?? "—"}
+                  {analysis.file_path ?? "—"}
                 </p>
               </div>
             </div>
@@ -208,9 +203,9 @@ function AnalysisDetail() {
                   {grouped![cat].map((issue) => {
                     const githubUrl =
                       analysis?.repo_full_name &&
-                      analysis?.workflow_file_path &&
+                      analysis?.file_path &&
                       issue.line_start != null
-                        ? `https://github.com/${analysis.repo_full_name}/blob/${analysis?.branch ?? "main"}/${analysis.workflow_file_path}#L${issue.line_start}${issue.line_end && issue.line_end !== issue.line_start ? `-L${issue.line_end}` : ""}`
+                        ? `https://github.com/${analysis.repo_full_name}/blob/${analysis?.branch ?? "main"}/${analysis.file_path}#L${issue.line_start}${issue.line_end && issue.line_end !== issue.line_start ? `-L${issue.line_end}` : ""}`
                         : null
 
                     return (

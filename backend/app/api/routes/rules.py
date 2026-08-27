@@ -5,12 +5,12 @@ from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.router import Role, RoleRouter
-from app.models import Category, Rule, RulePublic
+from app.models import Category, Rule, RulePublic, RuleUpdate
 
 router = RoleRouter(prefix="/rules", tags=["rules"])
 
 
-@router.get("/", role=Role.user, response_model=list[RulePublic])
+@router.get("", role=Role.user, response_model=list[RulePublic])
 def list_rules(
     session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
@@ -44,20 +44,17 @@ def get_rule(
     return rule
 
 
-@router.patch(
-    "/{rule_id}/toggle",
-    role=Role.admin,
-    response_model=RulePublic,
-)
-def toggle_rule(
+@router.patch("/{rule_id}", role=Role.admin, response_model=RulePublic)
+def update_rule(
     rule_id: uuid.UUID,
+    body: RuleUpdate,
     session: SessionDep,
-    enabled: bool,
 ) -> Rule:
     rule = session.get(Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
-    rule.enabled = enabled
+    if body.enabled is not None:
+        rule.enabled = body.enabled
     session.add(rule)
     session.commit()
     session.refresh(rule)

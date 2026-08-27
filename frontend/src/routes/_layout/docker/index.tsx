@@ -36,7 +36,7 @@ function DockerPage() {
     isError,
   } = useQuery({
     queryKey: ["docker-targets"],
-    queryFn: () => DockerService.listDockerTargets({}),
+    queryFn: () => DockerService.listTargets({}),
   })
 
   const groups = useMemo<RepoGroup[]>(() => {

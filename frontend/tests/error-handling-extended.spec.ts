@@ -14,21 +14,27 @@ test.describe("Error Handling — Extended", () => {
     await mockEvents(page)
     await mockBilling(page)
     await mockRules(page)
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      route.fulfill({ json: [] })
-    })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
   })
 
   test("fix detail 404 shows error state", async ({ page }) => {
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      route.fulfill({ status: 404, json: { detail: "Fix not found" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ status: 404, json: { detail: "Fix not found" } })
+      },
+    )
 
     await page.goto("/fixes/00000000-0000-0000-0000-999999999999")
 
@@ -39,7 +45,7 @@ test.describe("Error Handling — Extended", () => {
   })
 
   test("repository detail 404 does not crash the app", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ status: 404, json: { detail: "Repository not found" } })
     })
 
@@ -53,7 +59,7 @@ test.describe("Error Handling — Extended", () => {
   test("SSE endpoint returning 500 does not crash the app", async ({
     page,
   }) => {
-    await page.route("**/api/v1/events/**", (route) => {
+    await page.route("**/api/v1/events**", (route) => {
       route.fulfill({
         status: 500,
         headers: { "Content-Type": "text/event-stream" },
@@ -61,7 +67,7 @@ test.describe("Error Handling — Extended", () => {
       })
     })
 
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ json: [MOCK_REPO] })
     })
 
@@ -74,9 +80,11 @@ test.describe("Error Handling — Extended", () => {
   test("fix list API 500 shows empty or error state without crashing", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -86,15 +94,21 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
-      route.fulfill({ json: [] })
-    })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      route.fulfill({ status: 500, json: { detail: "Internal error" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ status: 500, json: { detail: "Internal error" } })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
@@ -107,9 +121,11 @@ test.describe("Error Handling — Extended", () => {
   })
 
   test("analyses API 500 shows empty state not crash", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -119,9 +135,12 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      route.fulfill({ status: 500, json: { detail: "Internal error" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ status: 500, json: { detail: "Internal error" } })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
@@ -134,7 +153,7 @@ test.describe("Error Handling — Extended", () => {
   })
 
   test("rules API 500 shows empty state not crash", async ({ page }) => {
-    await page.route("**/api/v1/rules/**", (route) => {
+    await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
 
@@ -147,7 +166,7 @@ test.describe("Error Handling — Extended", () => {
   test("network timeout on analyses shows retry or empty state", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
       if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -160,16 +179,19 @@ test.describe("Error Handling — Extended", () => {
     // Delay the workflow-files fetch so the loading skeleton is observable
     // (the static-analysis tab keys its skeleton off workflow files).
     await page.route(
-      "**/api/v1/repositories/*/workflow-files*",
+      "**/api/v1/workflow/repositories/*/files*",
       async (route) => {
         await new Promise((r) => setTimeout(r, 3000))
         route.fulfill({ json: [] })
       },
     )
-    await page.route("**/api/v1/workflow-scans/**", async (route) => {
-      await new Promise((r) => setTimeout(r, 3000))
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      async (route) => {
+        await new Promise((r) => setTimeout(r, 3000))
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 

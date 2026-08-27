@@ -30,7 +30,7 @@ test.describe("Repository Detail", () => {
     opts: {
       repo?: typeof MOCK_REPO
       analyses?: unknown[]
-      issues?: unknown[]
+      findings?: unknown[]
       fixes?: unknown[]
       workflowFiles?: unknown[]
       pullRequests?: unknown[]
@@ -39,16 +39,20 @@ test.describe("Repository Detail", () => {
     const {
       repo = MOCK_REPO,
       analyses = [MOCK_ANALYSIS],
-      issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
+      findings = [
+        MOCK_ISSUE_SECURITY,
+        MOCK_ISSUE_RELIABILITY,
+        MOCK_ISSUE_ENERGY,
+      ],
       fixes = [],
       workflowFiles = [MOCK_WORKFLOW_FILE],
       pullRequests = [],
     } = opts
 
     return Promise.all([
-      page.route("**/api/v1/repositories/**", (route) => {
+      page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
         const url = route.request().url()
-        if (url.includes("/sync-workflows")) {
+        if (url.includes("/workflow-sync")) {
           route.fulfill({
             json: {
               branch: "main",
@@ -61,9 +65,9 @@ test.describe("Repository Detail", () => {
               skipped_stale: 0,
             },
           })
-        } else if (url.includes("/workflow-files")) {
+        } else if (url.includes("/files")) {
           route.fulfill({ json: workflowFiles })
-        } else if (url.includes("/integrate-action")) {
+        } else if (url.includes("/action-integration")) {
           route.fulfill({
             json: { pr_url: "https://github.com/acme/web-app/pull/99" },
           })
@@ -75,45 +79,54 @@ test.describe("Repository Detail", () => {
           route.fulfill({ json: [repo] })
         }
       }),
-      page.route("**/api/v1/workflow-scans/**", (route) => {
-        const url = route.request().url()
-        const method = route.request().method()
-        if (method === "POST" && url.includes("/trigger/")) {
-          route.fulfill({
-            status: 202,
-            json: { status: "queued", repo_id: MOCK_REPO.id },
-          })
-        } else if (url.match(/\/analyses\/[0-9a-f-]{36}$/)) {
-          route.fulfill({ json: analyses[0] })
-        } else {
-          route.fulfill({ json: analyses })
-        }
+      page.route(
+        /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+        (route) => {
+          const url = route.request().url()
+          const method = route.request().method()
+          if (method === "POST" && url.includes("/repositories/")) {
+            route.fulfill({
+              status: 202,
+              json: { status: "queued", repo_id: MOCK_REPO.id },
+            })
+          } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
+            route.fulfill({ json: analyses[0] })
+          } else {
+            route.fulfill({ json: analyses })
+          }
+        },
+      ),
+      page.route("**/api/v1/workflow/findings**", (route) => {
+        route.fulfill({ json: findings })
       }),
-      page.route("**/api/v1/workflow-findings/**", (route) => {
-        route.fulfill({ json: issues })
-      }),
-      page.route("**/api/v1/workflow-fixes/**", (route) => {
-        const url = route.request().url()
-        const method = route.request().method()
-        if (method === "POST" && url.includes("/sync-pr-status")) {
-          route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
-        } else if (method === "POST" && url.includes("for-repo")) {
-          route.fulfill({
-            status: 202,
-            json: { queued: issues.length, skipped: 0 },
-          })
-        } else if (method === "POST" && url.includes("/deliver")) {
-          route.fulfill({ json: { status: "delivering" } })
-        } else if (url.includes("/pull-requests/")) {
-          route.fulfill({ json: pullRequests })
-        } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
-          const id = url.split("/").pop()
-          const fix = fixes.find((f: any) => f.id === id) ?? fixes[0]
-          route.fulfill({ json: fix })
-        } else {
-          route.fulfill({ json: fixes })
-        }
-      }),
+      page.route(
+        /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries|pull-requests))/,
+        (route) => {
+          const url = route.request().url()
+          const method = route.request().method()
+          if (method === "POST" && url.includes("/pull-requests/sync")) {
+            route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
+          } else if (
+            method === "POST" &&
+            new URL(url).pathname.endsWith("/fixes")
+          ) {
+            route.fulfill({
+              status: 202,
+              json: { queued: findings.length, skipped: 0 },
+            })
+          } else if (method === "POST" && url.includes("/deliveries")) {
+            route.fulfill({ json: { status: "delivering" } })
+          } else if (url.includes("/pull-requests")) {
+            route.fulfill({ json: pullRequests })
+          } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
+            const id = url.split("/").pop()
+            const fix = fixes.find((f: any) => f.id === id) ?? fixes[0]
+            route.fulfill({ json: fix })
+          } else {
+            route.fulfill({ json: fixes })
+          }
+        },
+      ),
     ])
   }
 
@@ -199,8 +212,8 @@ test.describe("Repository Detail", () => {
   })
 
   test("Fix selected button queues fixes", async ({ page }) => {
-    const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
-    await setupRepoMocks(page, { issues })
+    const findings = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
+    await setupRepoMocks(page, { findings })
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
@@ -215,7 +228,7 @@ test.describe("Repository Detail", () => {
     page,
   }) => {
     await setupRepoMocks(page, {
-      issues: [MOCK_ISSUE_WITH_FIX],
+      findings: [MOCK_ISSUE_WITH_FIX],
       fixes: [MOCK_FIX_READY],
     })
 
@@ -228,9 +241,11 @@ test.describe("Repository Detail", () => {
     page,
   }) => {
     let deliverCalled = false
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -238,24 +253,34 @@ test.describe("Repository Detail", () => {
         route.fulfill({ json: MOCK_REPO })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      route.fulfill({ json: [MOCK_ANALYSIS] })
-    })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [MOCK_ANALYSIS] })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FIX] })
     })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      const url = route.request().url()
-      const method = route.request().method()
-      if (method === "POST" && url.includes("deliver-for-repo")) {
-        deliverCalled = true
-        route.fulfill({ json: { status: "delivering" } })
-      } else if (url.includes("/pull-requests/")) {
-        route.fulfill({ json: [] })
-      } else {
-        route.fulfill({ json: [MOCK_FIX_READY] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries|pull-requests))/,
+      (route) => {
+        const url = route.request().url()
+        const method = route.request().method()
+        if (
+          method === "POST" &&
+          url.includes("/repositories/") &&
+          new URL(url).pathname.endsWith("/deliveries")
+        ) {
+          deliverCalled = true
+          route.fulfill({ json: { status: "delivering" } })
+        } else if (url.includes("/pull-requests")) {
+          route.fulfill({ json: [] })
+        } else {
+          route.fulfill({ json: [MOCK_FIX_READY] })
+        }
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
@@ -327,7 +352,7 @@ test.describe("Repository Detail", () => {
   test("Integrate action button triggers PR", async ({ page }) => {
     await setupRepoMocks(page)
     // Integrate action lives on the Telemetry tab now.
-    await page.route("**/api/v1/telemetry/**", (route) => {
+    await page.route("**/api/v1/telemetry**", (route) => {
       route.fulfill({ json: { runs: [], average: null } })
     })
 

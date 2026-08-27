@@ -20,7 +20,7 @@ function DockerScansTab() {
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
-    queryFn: () => DockerService.listDockerTargets({ repoId }),
+    queryFn: () => DockerService.listTargets({ repoId }),
   })
 
   if (isLoading) {
@@ -54,7 +54,7 @@ function DockerScansTab() {
 function TargetScanHistory({ target }: { target: DockerTargetPublic }) {
   const { data: scans, isLoading } = useQuery({
     queryKey: ["docker-scans", target.id],
-    queryFn: () => DockerService.listDockerScans({ targetId: target.id }),
+    queryFn: () => DockerService.listScans({ targetId: target.id }),
   })
 
   return (

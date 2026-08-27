@@ -19,7 +19,7 @@ function DockerPullRequestsTab() {
   const { repoId } = Route.useParams()
   const { data: targets } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
-    queryFn: () => DockerService.listDockerTargets({ repoId }),
+    queryFn: () => DockerService.listTargets({ repoId }),
   })
 
   return (
@@ -30,7 +30,7 @@ function DockerPullRequestsTab() {
       targets={targets}
       branchForTarget={dockerFixBranch}
       deliver={({ targetId, force }) =>
-        DockerService.triggerDockerDelivery({ targetId, force })
+        DockerService.deliverFixes({ targetId, force })
       }
     />
   )

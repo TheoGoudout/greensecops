@@ -12,7 +12,6 @@ from app.api.deps import (
 )
 from app.api.router import Role, RoleRouter
 from app.core.config import settings
-from app.core.rate_limit import LIMIT_AUTH
 from app.core.security import get_password_hash, verify_password
 from app.models import (
     Message,
@@ -20,7 +19,6 @@ from app.models import (
     User,
     UserCreate,
     UserPublic,
-    UserRegister,
     UsersPublic,
     UserUpdate,
     UserUpdateMe,
@@ -31,7 +29,7 @@ router = RoleRouter(prefix="/users", tags=["users"])
 
 
 @router.get(
-    "/",
+    "",
     role=Role.admin,
     response_model=UsersPublic,
 )
@@ -52,7 +50,7 @@ def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     return UsersPublic(data=users_public, count=count)
 
 
-@router.post("/", role=Role.admin, response_model=UserPublic)
+@router.post("", role=Role.admin, response_model=UserPublic)
 def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     """
     Create new user.
@@ -140,25 +138,6 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     session.delete(current_user)
     session.commit()
     return Message(message="User deleted successfully")
-
-
-@router.post("/signup", role=Role.guest, limit=LIMIT_AUTH, response_model=UserPublic)
-def register_user(
-    session: SessionDep,
-    user_in: UserRegister,
-) -> Any:
-    """
-    Create new user without the need to be logged in.
-    """
-    user = crud.get_user_by_email(session=session, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system",
-        )
-    user_create = UserCreate.model_validate(user_in)
-    user = crud.create_user(session=session, user_create=user_create)
-    return user
 
 
 @router.get("/{user_id}", role=Role.user, response_model=UserPublic)

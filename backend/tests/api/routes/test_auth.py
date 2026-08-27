@@ -18,7 +18,7 @@ def test_get_access_token(client: TestClient) -> None:
         "username": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     tokens = r.json()
     assert r.status_code == 200
     assert "access_token" in tokens
@@ -30,7 +30,7 @@ def test_get_access_token_incorrect_password(client: TestClient) -> None:
         "username": settings.FIRST_SUPERUSER,
         "password": "incorrect",
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     assert r.status_code == 400
 
 
@@ -38,7 +38,7 @@ def test_use_access_token(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     r = client.post(
-        f"{settings.API_V1_STR}/login/test-token",
+        f"{settings.API_V1_STR}/auth/token/verify",
         headers=superuser_token_headers,
     )
     result = r.json()
@@ -55,8 +55,9 @@ def test_recovery_password(
     ):
         email = "test@example.com"
         r = client.post(
-            f"{settings.API_V1_STR}/password-recovery/{email}",
+            f"{settings.API_V1_STR}/auth/password-recovery",
             headers=normal_user_token_headers,
+            json={"email": email},
         )
         assert r.status_code == 200
         assert r.json() == {
@@ -69,8 +70,9 @@ def test_recovery_password_user_not_exits(
 ) -> None:
     email = "jVgQr@example.com"
     r = client.post(
-        f"{settings.API_V1_STR}/password-recovery/{email}",
+        f"{settings.API_V1_STR}/auth/password-recovery",
         headers=normal_user_token_headers,
+        json={"email": email},
     )
     # Should return 200 with generic message to prevent email enumeration attacks
     assert r.status_code == 200
@@ -97,7 +99,7 @@ def test_reset_password(client: TestClient, db: Session) -> None:
     data = {"new_password": new_password, "token": token}
 
     r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+        f"{settings.API_V1_STR}/auth/password-reset",
         headers=headers,
         json=data,
     )
@@ -115,7 +117,7 @@ def test_reset_password_invalid_token(
 ) -> None:
     data = {"new_password": "changethis", "token": "invalid"}
     r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+        f"{settings.API_V1_STR}/auth/password-reset",
         headers=superuser_token_headers,
         json=data,
     )
@@ -146,7 +148,7 @@ def test_login_with_bcrypt_password_upgrades_to_argon2(
     assert user.hashed_password.startswith("$2")
 
     login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     assert r.status_code == 200
     tokens = r.json()
     assert "access_token" in tokens
@@ -180,7 +182,7 @@ def test_login_with_argon2_password_keeps_hash(client: TestClient, db: Session) 
     original_hash = user.hashed_password
 
     login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     assert r.status_code == 200
     tokens = r.json()
     assert "access_token" in tokens
@@ -201,7 +203,7 @@ def test_login_inactive_user_returns_400(client: TestClient, db: Session) -> Non
     db.commit()
 
     r = client.post(
-        f"{settings.API_V1_STR}/login/access-token",
+        f"{settings.API_V1_STR}/auth/token",
         data={"username": email, "password": password},
     )
     assert r.status_code == 400
@@ -210,7 +212,7 @@ def test_login_inactive_user_returns_400(client: TestClient, db: Session) -> Non
 def test_reset_password_nonexistent_email_returns_400(client: TestClient) -> None:
     token = generate_password_reset_token(email="ghost-user@example.com")
     r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+        f"{settings.API_V1_STR}/auth/password-reset",
         json={"token": token, "new_password": "newpassword123"},
     )
     assert r.status_code == 400
@@ -229,7 +231,7 @@ def test_reset_password_inactive_user_returns_400(
 
     token = generate_password_reset_token(email=email)
     r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+        f"{settings.API_V1_STR}/auth/password-reset",
         json={"token": token, "new_password": "newpassword456"},
     )
     assert r.status_code == 400

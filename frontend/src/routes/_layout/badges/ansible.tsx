@@ -37,7 +37,7 @@ function AnsibleBadges() {
   return (
     <BadgePage
       queryKey={["ansible-projects"]}
-      queryFn={() => AnsibleService.listAnsibleProjects({})}
+      queryFn={() => AnsibleService.listProjects({})}
       toEntry={toEntry}
       subject="Ansible projects"
     />

@@ -164,11 +164,11 @@ function TelemetryPage() {
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ["telemetry", "summary", repoId],
-    queryFn: () => TelemetryService.getTelemetrySummary({ repoId, limit: 200 }),
+    queryFn: () => TelemetryService.getSummary({ repoId, limit: 200 }),
   })
 
   const analyzeMutation = useMutation({
-    mutationFn: () => TelemetryService.analyzeTelemetry({ repoId }),
+    mutationFn: () => TelemetryService.triggerScan({ repoId }),
     onSuccess: (data) => {
       const runs = (data as { runs?: number })?.runs ?? 0
       toast.success(

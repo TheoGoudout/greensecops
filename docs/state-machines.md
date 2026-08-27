@@ -176,8 +176,8 @@ terminal); dynamic analysis is a formal machine (§6).
 **Still open:** the broker-queue window *before* the worker picks the task up is
 still SSE-only (a per-row `queued` would need a parent "analysis run" entity);
 in-place row-reuse on `retry` awaits a per-row worker — today users re-run via
-the repo-level `POST /analyses/trigger/{repo_id}` or, for a single workflow
-file, `POST /analyses/reanalyze-for-workflow/{workflow_file_id}` (the worker
+the repo-level `POST /workflow/repositories/{repo_id}/scans` or, for a single
+workflow file, `POST /workflow/files/{workflow_file_id}/scans` (the worker
 already accepts a `workflow_file_id` and scopes the run to that file's own
 branch), and the `retry-transient-analyses` beat re-runs transient failures at
 repo/branch scope with fresh rows (it deliberately does **not** fire `retry` on
@@ -449,7 +449,7 @@ through to PR delivery).
 
 ## 6. Dynamic analysis (runtime telemetry) — `TelemetryMachine`
 
-The companion Action posts runtime telemetry to `/telemetry/ingest`. `phase`
+The companion Action posts runtime telemetry to `/telemetry/runs`. `phase`
 (`started` / `completed`) is an ingest *category* — the two are separate rows —
 so the dynamic-analysis lifecycle is a **separate** `dynamic_status` column
 (migration `0032`) driven by `TelemetryMachine`. A `completed`-phase row is

@@ -101,7 +101,13 @@ def test_role_argument_is_mandatory() -> None:
 def test_org_param_prefers_a_known_resolver() -> None:
     assert _org_param("/{repo_id}/branches") == "repo_id"
     assert _org_param("/oss-applications/{application_id}") is None
-    assert set(ORG_RESOLVERS) >= {"org_id", "repo_id", "fix_id", "issue_id"}
+    assert set(ORG_RESOLVERS) >= {
+        "org_id",
+        "repo_id",
+        "fix_id",
+        "finding_id",
+        "scan_id",
+    }
 
 
 # ─── Org role hierarchy, end to end ───────────────────────────────────────────
@@ -175,10 +181,10 @@ def outsider(client: TestClient, db: Session) -> _Member:
 
 
 def _toggle(client: TestClient, repo: Repository, headers: dict[str, str]):
-    """PATCH /repositories/{repo_id}/toggle — declared role=Role.org_admin."""
+    """PATCH /repositories/{repo_id} — declared role=Role.org_admin."""
     return client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/toggle",
-        params={"enabled": True},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"enabled": True},
         headers=headers,
     )
 
@@ -299,14 +305,15 @@ def test_malformed_resource_id_is_a_404_not_a_500(
 ) -> None:
     response = client.patch(
         f"{settings.API_V1_STR}/repositories/not-a-uuid/toggle",
-        params={"enabled": True},
+        json={"enabled": True},
         headers=outsider.headers,
     )
     assert response.status_code in (404, 422)
 
 
 def test_put_routes_also_require_a_role() -> None:
-    """No endpoint uses PUT today; the override still has to behave."""
+    """``PUT /workflow/findings/{finding_id}/ignore`` is the only PUT today;
+    the override still has to behave for any other."""
     router = RoleRouter()
 
     @router.put("/thing", role=Role.admin)
@@ -328,3 +335,34 @@ def test_plain_apirouter_is_not_a_role_router() -> None:
     assert len(router.routes) == 1
     key = f"{_unguarded_endpoint.__module__}._unguarded_endpoint"
     assert key not in ROUTE_ROLES
+
+
+# ─── Literal segments must out-rank the {id} patterns beside them ─────────────
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/workflow/findings/stats",
+        "/repositories/external",
+        "/organizations/ai-providers",
+        "/billing/plans",
+    ],
+)
+def test_literal_segment_wins_over_a_sibling_id_pattern(
+    client: TestClient, superuser_token_headers: dict[str, str], path: str
+) -> None:
+    """Each of these sits beside a ``/{some_id}`` route on the same prefix.
+
+    FastAPI matches in declaration order, so a literal declared *after* its
+    sibling pattern is swallowed by it and answers 422 "not a valid UUID" —
+    which reads like a client bug rather than a routing one. Nothing else
+    guards the ordering, and re-homing routes is exactly what disturbs it.
+    """
+    response = client.get(
+        f"{settings.API_V1_STR}{path}", headers=superuser_token_headers
+    )
+    assert response.status_code != 422, (
+        f"{path} was parsed as an id — its literal route is declared after the "
+        "sibling {id} route and is unreachable"
+    )

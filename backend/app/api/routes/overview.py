@@ -40,9 +40,9 @@ from app.models import (
     EngineFreshnessStat,
     EngineOverview,
     EngineScoreStat,
+    FindingCategoryStat,
     FixStatus,
     GradeStat,
-    IssueCategoryStat,
     OverviewPublic,
     OverviewTotals,
     Repository,
@@ -108,7 +108,7 @@ def _latest_scan_order(spec: OverviewSpec) -> list[Any]:
     Rather than silently picking one, each engine keeps the ordering its own
     endpoints already use — so this endpoint's Docker grade always matches what
     ``GET /docker-targets/`` reports, and its CI counts always match
-    ``GET /issues/stats``.
+    ``GET /workflow/findings/stats``.
     """
     order = [col(spec.scan_model.created_at).desc()]
     if spec.scan_orders_by_completed_at:
@@ -340,7 +340,7 @@ def _findings(
             for severity, counts in by_severity.items()
         ],
         by_category=[
-            IssueCategoryStat(
+            FindingCategoryStat(
                 category=category,
                 open=counts[0],
                 resolved=counts[1],
@@ -490,7 +490,7 @@ def _totals(engines: list[EngineOverview]) -> OverviewTotals:
             for severity, counts in by_severity.items()
         ],
         by_category=[
-            IssueCategoryStat(
+            FindingCategoryStat(
                 category=category,
                 open=counts[0],
                 resolved=counts[1],
@@ -505,7 +505,7 @@ def _totals(engines: list[EngineOverview]) -> OverviewTotals:
 # ─── Route ────────────────────────────────────────────────────────────────────
 
 
-@router.get("/", role=Role.user, response_model=OverviewPublic)
+@router.get("", role=Role.user, response_model=OverviewPublic)
 def get_overview(
     session: SessionDep,
     current_user: CurrentUser,

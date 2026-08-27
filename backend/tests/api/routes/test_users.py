@@ -46,7 +46,7 @@ def test_create_user_new_email(
         password = random_lower_string()
         data = {"email": username, "password": password}
         r = client.post(
-            f"{settings.API_V1_STR}/users/",
+            f"{settings.API_V1_STR}/users",
             headers=superuser_token_headers,
             json=data,
         )
@@ -98,7 +98,7 @@ def test_get_existing_user_current_user(client: TestClient, db: Session) -> None
         "username": username,
         "password": password,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}
@@ -153,7 +153,7 @@ def test_create_user_existing_username(
     crud.create_user(session=db, user_create=user_in)
     data = {"email": username, "password": password}
     r = client.post(
-        f"{settings.API_V1_STR}/users/",
+        f"{settings.API_V1_STR}/users",
         headers=superuser_token_headers,
         json=data,
     )
@@ -169,7 +169,7 @@ def test_create_user_by_normal_user(
     password = random_lower_string()
     data = {"email": username, "password": password}
     r = client.post(
-        f"{settings.API_V1_STR}/users/",
+        f"{settings.API_V1_STR}/users",
         headers=normal_user_token_headers,
         json=data,
     )
@@ -189,7 +189,7 @@ def test_retrieve_users(
     user_in2 = UserCreate(email=username2, password=password2)
     crud.create_user(session=db, user_create=user_in2)
 
-    r = client.get(f"{settings.API_V1_STR}/users/", headers=superuser_token_headers)
+    r = client.get(f"{settings.API_V1_STR}/users", headers=superuser_token_headers)
     all_users = r.json()
 
     assert len(all_users["data"]) > 1
@@ -322,7 +322,7 @@ def test_register_user(client: TestClient, db: Session) -> None:
     full_name = random_lower_string()
     data = {"email": username, "password": password, "full_name": full_name}
     r = client.post(
-        f"{settings.API_V1_STR}/users/signup",
+        f"{settings.API_V1_STR}/auth/register",
         json=data,
     )
     assert r.status_code == 200
@@ -348,7 +348,7 @@ def test_register_user_already_exists_error(client: TestClient) -> None:
         "full_name": full_name,
     }
     r = client.post(
-        f"{settings.API_V1_STR}/users/signup",
+        f"{settings.API_V1_STR}/auth/register",
         json=data,
     )
     assert r.status_code == 400
@@ -428,7 +428,7 @@ def test_delete_user_me(client: TestClient, db: Session) -> None:
         "username": username,
         "password": password,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/auth/token", data=login_data)
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}

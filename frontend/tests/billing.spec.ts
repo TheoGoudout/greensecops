@@ -179,7 +179,7 @@ test.describe("Billing", () => {
     const held = new Promise<void>((resolve) => {
       release = resolve
     })
-    await page.route("**/api/v1/billing/**", async (route) => {
+    await page.route("**/api/v1/billing**", async (route) => {
       await held
       route.fulfill({ json: MOCK_SUBSCRIPTION })
     })

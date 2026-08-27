@@ -25,7 +25,7 @@ function DockerRuntimeTab() {
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
-    queryFn: () => DockerService.listDockerTargets({ repoId }),
+    queryFn: () => DockerService.listTargets({ repoId }),
   })
 
   const toggleOpen = (id: string) =>
@@ -89,13 +89,13 @@ function RuntimeTargetCard({
   // many targets and each card is a separate query.
   const { data: builds, isLoading } = useQuery({
     queryKey: ["docker-runtime", target.id],
-    queryFn: () => DockerService.listDockerRuntime({ targetId: target.id }),
+    queryFn: () => DockerService.listRuntimeFindings({ targetId: target.id }),
     enabled: isOpen,
   })
 
   const fixMutation = useMutation({
     mutationFn: (enrichmentIds: string[]) =>
-      DockerService.triggerDockerRuntimeFixGeneration({
+      DockerService.generateRuntimeFixes({
         targetId: target.id,
         requestBody: { enrichment_ids: enrichmentIds },
       }),

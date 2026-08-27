@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/cloud-accounts/ endpoints."""
+"""Tests for the /api/v1/cloud/accounts/ endpoints."""
 
 import uuid
 from unittest.mock import patch
@@ -80,14 +80,14 @@ def completed_scan(db: Session, cloud_account: CloudAccount) -> CloudScan:
     return scan
 
 
-# ─── POST /cloud-accounts/ ──────────────────────────────────────────────────
+# ─── POST /cloud/accounts/ ──────────────────────────────────────────────────
 
 
 def test_create_cloud_account(
     client: TestClient, superuser_token_headers: dict[str, str], org: Organization
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/cloud-accounts/",
+        f"{settings.API_V1_STR}/cloud/accounts/",
         headers=superuser_token_headers,
         json={
             "org_id": str(org.id),
@@ -111,7 +111,7 @@ def test_create_cloud_account_generates_unique_external_ids(
 ) -> None:
     def _create() -> str:
         response = client.post(
-            f"{settings.API_V1_STR}/cloud-accounts/",
+            f"{settings.API_V1_STR}/cloud/accounts/",
             headers=superuser_token_headers,
             json={
                 "org_id": str(org.id),
@@ -125,7 +125,7 @@ def test_create_cloud_account_generates_unique_external_ids(
     assert _create() != _create()
 
 
-# ─── GET /cloud-accounts/ ───────────────────────────────────────────────────
+# ─── GET /cloud/accounts/ ───────────────────────────────────────────────────
 
 
 def test_list_cloud_accounts(
@@ -135,7 +135,7 @@ def test_list_cloud_accounts(
     cloud_account: CloudAccount,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/cloud-accounts/",
+        f"{settings.API_V1_STR}/cloud/accounts/",
         headers=superuser_token_headers,
         params={"org_id": str(org.id)},
     )
@@ -153,7 +153,7 @@ def test_list_cloud_accounts_includes_latest_grade(
     completed_scan: CloudScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/cloud-accounts/",
+        f"{settings.API_V1_STR}/cloud/accounts/",
         headers=superuser_token_headers,
         params={"org_id": str(org.id)},
     )
@@ -201,7 +201,7 @@ def test_list_cloud_accounts_without_org_id_scoped_to_user_orgs(
     db.refresh(other_account)
 
     response = client.get(
-        f"{settings.API_V1_STR}/cloud-accounts/", headers=normal_user_token_headers
+        f"{settings.API_V1_STR}/cloud/accounts/", headers=normal_user_token_headers
     )
 
     assert response.status_code == 200
@@ -210,7 +210,7 @@ def test_list_cloud_accounts_without_org_id_scoped_to_user_orgs(
     assert str(other_account.id) not in ids
 
 
-# ─── PATCH /cloud-accounts/{id}/toggle ──────────────────────────────────────
+# ─── PATCH /cloud/accounts/{id} ──────────────────────────────────────
 
 
 def test_disable_cloud_account(
@@ -219,12 +219,14 @@ def test_disable_cloud_account(
     cloud_account: CloudAccount,
 ) -> None:
     response = client.patch(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/toggle",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}",
         headers=superuser_token_headers,
-        params={"enabled": "false"},
+        json={"enabled": False},
     )
     assert response.status_code == 200
-    assert response.json()["enabled"] is False
+    # A cloud account is a state machine, so the resource reports its status
+    # rather than the lossy `enabled` bool the toggle endpoint used to echo.
+    assert response.json()["status"] == "disabled"
 
 
 def test_enable_cloud_account_requires_it_be_disabled_first(
@@ -236,9 +238,9 @@ def test_enable_cloud_account_requires_it_be_disabled_first(
     # "enable" event is only legal from disabled (re-verify before scans
     # resume), so enabling it directly is illegal.
     response = client.patch(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/toggle",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}",
         headers=superuser_token_headers,
-        params={"enabled": "true"},
+        json={"enabled": True},
     )
     assert response.status_code == 409
 
@@ -254,15 +256,15 @@ def test_enable_disabled_cloud_account(
     db.commit()
 
     response = client.patch(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/toggle",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}",
         headers=superuser_token_headers,
-        params={"enabled": "true"},
+        json={"enabled": True},
     )
     assert response.status_code == 200
-    assert response.json()["enabled"] is True
+    assert response.json()["status"] == "pending_verification"
 
 
-# ─── DELETE /cloud-accounts/{id} ────────────────────────────────────────────
+# ─── DELETE /cloud/accounts/{id} ────────────────────────────────────────────
 
 
 def test_delete_cloud_account_cascades_scans(
@@ -275,7 +277,7 @@ def test_delete_cloud_account_cascades_scans(
     account_id = cloud_account.id
     scan_id = completed_scan.id
     response = client.delete(
-        f"{settings.API_V1_STR}/cloud-accounts/{account_id}",
+        f"{settings.API_V1_STR}/cloud/accounts/{account_id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 204
@@ -286,7 +288,7 @@ def test_delete_cloud_account_cascades_scans(
     assert db.exec(select(CloudScan).where(CloudScan.id == scan_id)).first() is None
 
 
-# ─── POST /cloud-accounts/{id}/scan ─────────────────────────────────────────
+# ─── POST /cloud/accounts/{id}/scans ─────────────────────────────────────────
 
 
 def test_trigger_cloud_scan(
@@ -296,7 +298,7 @@ def test_trigger_cloud_scan(
 ) -> None:
     with patch("app.workers.tasks.cloud_scan.run_cloud_scan.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/scan",
+            f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}/scans",
             headers=superuser_token_headers,
         )
 
@@ -317,13 +319,13 @@ def test_trigger_cloud_scan_disabled_account_rejected(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/scan",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
 
 
-# ─── GET /cloud-accounts/{id}/scans ─────────────────────────────────────────
+# ─── GET /cloud/accounts/{id}/scans ─────────────────────────────────────────
 
 
 def test_list_cloud_scans(
@@ -333,7 +335,7 @@ def test_list_cloud_scans(
     completed_scan: CloudScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/scans",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -344,7 +346,7 @@ def test_list_cloud_scans(
     assert body[0]["resource_count"] == 5
 
 
-# ─── GET /cloud-accounts/{id}/findings ──────────────────────────────────────
+# ─── GET /cloud/accounts/{id}/findings ──────────────────────────────────────
 
 
 def test_list_cloud_findings_excludes_resolved_by_default(
@@ -388,7 +390,7 @@ def test_list_cloud_findings_excludes_resolved_by_default(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/findings",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}/findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -426,7 +428,7 @@ def test_list_cloud_findings_include_resolved(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/cloud-accounts/{cloud_account.id}/findings",
+        f"{settings.API_V1_STR}/cloud/accounts/{cloud_account.id}/findings",
         headers=superuser_token_headers,
         params={"include_resolved": "true"},
     )

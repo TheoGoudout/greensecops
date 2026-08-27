@@ -210,7 +210,7 @@ pre-commit hook and a CI job — fails if any of them drift:
 | `action/package.json` | the published GitHub Action's own version |
 | `backend/pyproject.toml` | the `app` package |
 | `docs/pyproject.toml` | the docs workspace member |
-| `backend/app/__version__.py` | what `FastAPI(version=)` and `/api/v1/utils/version/` report |
+| `backend/app/__version__.py` | what `FastAPI(version=)` and `/api/v1/system/version` report |
 | `frontend/src/client/core/OpenAPI.ts` | generated from the schema, which carries `info.version` |
 
 Never edit these by hand. `scripts/bump_version.py` writes all of them and
@@ -256,7 +256,7 @@ also shows the short commit and an environment badge, because staging runs
 `main` — which is almost always ahead of the last release, so the version alone
 would not distinguish two staging builds.
 
-The API reports its own version at `/api/v1/utils/version/`, and the footer
+The API reports its own version at `/api/v1/system/version`, and the footer
 flags a mismatch. That matters because the dashboard and the API are promoted
 through different platforms (Cloudflare Workers and Coolify), so a half-finished
 promotion is otherwise invisible until it surfaces as a confusing error.

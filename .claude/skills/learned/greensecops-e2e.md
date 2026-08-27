@@ -90,7 +90,7 @@ Playwright docker service reads `.env` directly via `env_file: .env`.
 ## API mocking pattern (golden-path tests)
 
 ```typescript
-await page.route("**/api/v1/repositories/**", (route) => {
+await page.route("**/api/v1/repositories**", (route) => {
   route.fulfill({ json: MOCK_DATA })
 })
 ```

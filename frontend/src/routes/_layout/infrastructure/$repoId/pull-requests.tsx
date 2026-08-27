@@ -31,12 +31,12 @@ function InfrastructurePullRequestsTab() {
 
   const { data: roots } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
-    queryFn: () => TerraformService.listTerraformRoots({ repoId }),
+    queryFn: () => TerraformService.listRoots({ repoId }),
   })
 
   const { data: projects } = useQuery({
     queryKey: ["ansible-projects", "repo", repoId],
-    queryFn: () => AnsibleService.listAnsibleProjects({ repoId }),
+    queryFn: () => AnsibleService.listProjects({ repoId }),
   })
 
   return (
@@ -50,10 +50,7 @@ function InfrastructurePullRequestsTab() {
           targets={roots}
           branchForTarget={tfFixBranch}
           deliver={({ targetId, force }) =>
-            TerraformService.triggerTerraformDelivery({
-              rootId: targetId,
-              force,
-            })
+            TerraformService.deliverFixes({ rootId: targetId, force })
           }
         />
       </section>
@@ -68,7 +65,7 @@ function InfrastructurePullRequestsTab() {
           branchForTarget={ansibleFixBranch}
           sourceTabLabel="Ansible"
           deliver={({ targetId, force }) =>
-            AnsibleService.triggerAnsibleDelivery({
+            AnsibleService.deliverFixes({
               projectId: targetId,
               force,
             })

@@ -1,4 +1,4 @@
-"""Tests for /api/v1/telemetry/ingest and /api/v1/telemetry/sample endpoints."""
+"""Tests for /api/v1/telemetry/runs and /api/v1/telemetry/samples endpoints."""
 
 import json
 import uuid
@@ -101,7 +101,7 @@ def test_ingest_creates_run(client: TestClient, db: Session, repo: Repository) -
     _override_oidc(_oidc_claims(repo.full_name, run_id=2001))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=_ingest_payload(run_id=2001),
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -128,7 +128,7 @@ def test_ingest_completed_enqueues_dynamic_analysis(
     _override_oidc(_oidc_claims(repo.full_name, run_id=2101))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=_ingest_payload(run_id=2101, phase="completed"),
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -146,7 +146,7 @@ def test_ingest_started_does_not_enqueue_dynamic_analysis(
     _override_oidc(_oidc_claims(repo.full_name, run_id=2102))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=_ingest_payload(run_id=2102, phase="started"),
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -161,7 +161,7 @@ def test_ingest_unknown_repo_accepted_silently(client: TestClient) -> None:
     _override_oidc(_oidc_claims("ghost/ghost-repo", run_id=3001))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=_ingest_payload(run_id=3001),
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -179,12 +179,12 @@ def test_ingest_duplicate_run_phase_ignored(
     payload = _ingest_payload(run_id=4001, phase="started")
     try:
         first = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=payload,
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
         second = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=payload,
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -210,12 +210,12 @@ def test_ingest_started_and_completed_both_stored(
     _override_oidc(_oidc_claims(repo.full_name, run_id=5001))
     try:
         client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=_ingest_payload(run_id=5001, phase="started"),
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
         client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json=_ingest_payload(run_id=5001, phase="completed"),
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -233,7 +233,7 @@ def test_ingest_started_and_completed_both_stored(
 
 def test_ingest_missing_oidc_returns_401(client: TestClient) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/telemetry/ingest",
+        f"{settings.API_V1_STR}/telemetry/runs",
         json=_ingest_payload(run_id=9001),
     )
     assert response.status_code == 401
@@ -243,7 +243,7 @@ def test_ingest_invalid_payload_returns_422(client: TestClient) -> None:
     _override_oidc(_oidc_claims("owner/repo"))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/ingest",
+            f"{settings.API_V1_STR}/telemetry/runs",
             json={"workflow_run_id": "not-an-int"},
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -261,7 +261,7 @@ def test_sample_stores_metrics(
     _override_oidc(_oidc_claims(repo.full_name, run_id=6001))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/sample",
+            f"{settings.API_V1_STR}/telemetry/samples",
             json={
                 "workflow_run_id": 6001,
                 "cpu_percent": 33.5,
@@ -298,7 +298,7 @@ def test_sample_stores_top_processes_as_json(
     ]
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/sample",
+            f"{settings.API_V1_STR}/telemetry/samples",
             json={
                 "workflow_run_id": 6002,
                 "cpu_percent": 12.0,
@@ -325,7 +325,7 @@ def test_sample_omits_top_processes_when_absent(
     _override_oidc(_oidc_claims(repo.full_name, run_id=6003))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/sample",
+            f"{settings.API_V1_STR}/telemetry/samples",
             json={"workflow_run_id": 6003, "cpu_percent": 12.0},
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -346,7 +346,7 @@ def test_sample_unknown_repo_returns_ok(client: TestClient) -> None:
     _override_oidc(_oidc_claims("ghost/repo", run_id=7001))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/sample",
+            f"{settings.API_V1_STR}/telemetry/samples",
             json={"workflow_run_id": 7001, "cpu_percent": 10.0},
             headers={"Authorization": "Bearer mock-oidc-token"},
         )
@@ -359,7 +359,7 @@ def test_sample_unknown_repo_returns_ok(client: TestClient) -> None:
 
 def test_sample_missing_oidc_returns_401(client: TestClient) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/telemetry/sample",
+        f"{settings.API_V1_STR}/telemetry/samples",
         json={"workflow_run_id": 8001},
     )
     assert response.status_code == 401
@@ -372,7 +372,7 @@ def test_sample_multiple_inserts_no_dedup(
     try:
         for _ in range(3):
             client.post(
-                f"{settings.API_V1_STR}/telemetry/sample",
+                f"{settings.API_V1_STR}/telemetry/samples",
                 json={"workflow_run_id": 9001, "cpu_percent": 50.0},
                 headers={"Authorization": "Bearer mock-oidc-token"},
             )
@@ -456,7 +456,7 @@ def test_summary_computes_averages_and_runs(
     _seed_enrichment(db, repo, run)
 
     response = client.get(
-        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}",
         headers=superuser_token_headers,
     )
 
@@ -483,7 +483,7 @@ def test_summary_empty_repo(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -503,7 +503,7 @@ def test_summary_pagination(
         _seed_run(db, repo, 11000 + i)
 
     response = client.get(
-        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}?limit=2&skip=0",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}?limit=2&skip=0",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -522,7 +522,7 @@ def test_summary_foreign_repo_returns_404(
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
     response = client.get(
-        f"{settings.API_V1_STR}/telemetry/summary/{repo.id}",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}",
         headers=headers,
     )
     assert response.status_code == 404
@@ -547,7 +547,7 @@ def test_findings_returns_enrichments(
     headers = authentication_token_from_email(client=client, email=user.email, db=db)
 
     response = client.get(
-        f"{settings.API_V1_STR}/telemetry/findings/{repo.id}",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}/findings",
         headers=headers,
     )
     assert response.status_code == 200
@@ -573,7 +573,7 @@ def test_analyze_enqueues_completed_runs(
     _seed_run(db, repo, 13003, phase=TelemetryPhase.started)  # not enqueued
 
     response = client.post(
-        f"{settings.API_V1_STR}/telemetry/analyze/{repo.id}",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}/scans",
         headers=superuser_token_headers,
     )
 
@@ -593,13 +593,13 @@ def test_analyze_inaccessible_repo_returns_403(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/telemetry/analyze/{repo.id}",
+        f"{settings.API_V1_STR}/telemetry/repositories/{repo.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
 
 
-# ─── POST /telemetry/docker-build ─────────────────────────────────────────────
+# ─── POST /telemetry/docker-builds ─────────────────────────────────────────────
 
 
 def test_ingest_docker_build_persists_and_queues(
@@ -614,7 +614,7 @@ def test_ingest_docker_build_persists_and_queues(
             "run_docker_telemetry_analysis.delay"
         ) as delay:
             response = client.post(
-                f"{settings.API_V1_STR}/telemetry/docker-build",
+                f"{settings.API_V1_STR}/telemetry/docker-builds",
                 json={
                     "workflow_run_id": 12345678901,
                     "image_ref": "sha256:abc",
@@ -652,7 +652,7 @@ def test_ingest_docker_build_ignores_unregistered_repos(
     _override_oidc(_oidc_claims("someone/not-registered"))
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/telemetry/docker-build",
+            f"{settings.API_V1_STR}/telemetry/docker-builds",
             json={"workflow_run_id": 1},
         )
     finally:
@@ -665,7 +665,7 @@ def test_ingest_docker_build_requires_oidc(client: TestClient) -> None:
     # The repository comes from the token claims, never the body — an
     # unauthenticated post must not be able to attribute telemetry to a repo.
     response = client.post(
-        f"{settings.API_V1_STR}/telemetry/docker-build",
+        f"{settings.API_V1_STR}/telemetry/docker-builds",
         json={"workflow_run_id": 1},
     )
     assert response.status_code in (401, 403)
@@ -695,7 +695,7 @@ def test_observed_builds_is_counted_server_side_not_taken_from_the_client(
         ) as delay:
             for run_id in (5001, 5002, 5003):
                 client.post(
-                    f"{settings.API_V1_STR}/telemetry/docker-build",
+                    f"{settings.API_V1_STR}/telemetry/docker-builds",
                     json={**body, "workflow_run_id": run_id},
                 )
     finally:
@@ -718,7 +718,7 @@ def test_observed_builds_counts_each_dockerfile_separately(
         ) as delay:
             for path in ("api/Dockerfile", "api/Dockerfile", "web/Dockerfile"):
                 client.post(
-                    f"{settings.API_V1_STR}/telemetry/docker-build",
+                    f"{settings.API_V1_STR}/telemetry/docker-builds",
                     json={
                         "workflow_run_id": 6001,
                         "dockerfile_path": path,

@@ -32,7 +32,7 @@ greensecops_services:
     command: fastapi run --workers 4 app/main.py
     container_port: 8000
     host_port: 8000
-    health_check: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+    health_check: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/health"]
     needs_app_env: true
     # Four uvicorn workers, each holding its own copy of the application.
     mem_limit: 1536m

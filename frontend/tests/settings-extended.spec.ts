@@ -26,7 +26,7 @@ test.describe("Settings — Integrations tab", () => {
 
   test("no GitHub linked shows message", async ({ page }) => {
     await mockUserMe(page, { ...MOCK_USER, github_username: null })
-    await page.route("**/api/v1/installations/**", (route) => {
+    await page.route("**/api/v1/installations**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -38,7 +38,7 @@ test.describe("Settings — Integrations tab", () => {
 
   test("connected GitHub username is visible", async ({ page }) => {
     await mockUserMe(page, { ...MOCK_SUPERUSER, github_username: "octocat" })
-    await page.route("**/api/v1/installations/**", (route) => {
+    await page.route("**/api/v1/installations**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -50,7 +50,7 @@ test.describe("Settings — Integrations tab", () => {
 
   test("organizations list when installations exist", async ({ page }) => {
     await mockUserMe(page, MOCK_SUPERUSER)
-    await page.route("**/api/v1/installations/**", (route) => {
+    await page.route("**/api/v1/installations**", (route) => {
       route.fulfill({
         json: [
           MOCK_INSTALLATION,
@@ -72,7 +72,7 @@ test.describe("Settings — Integrations tab", () => {
 
   test("empty state — no installations", async ({ page }) => {
     await mockUserMe(page, MOCK_SUPERUSER)
-    await page.route("**/api/v1/installations/**", (route) => {
+    await page.route("**/api/v1/installations**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -95,7 +95,7 @@ test.describe("Settings — AI tab", () => {
   })
 
   test("no organizations shows message", async ({ page }) => {
-    await page.route("**/api/v1/organizations/**", (route) => {
+    await page.route("**/api/v1/organizations**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -106,7 +106,7 @@ test.describe("Settings — AI tab", () => {
   })
 
   test("org AI card shows provider selector", async ({ page }) => {
-    await page.route("**/api/v1/organizations/**", (route) => {
+    await page.route("**/api/v1/organizations**", (route) => {
       const url = route.request().url()
       if (url.includes("/ai-providers")) {
         route.fulfill({ json: MOCK_AI_PROVIDERS })
@@ -127,7 +127,7 @@ test.describe("Settings — AI tab", () => {
 
   test("save preferences calls API and shows toast", async ({ page }) => {
     let patchCalled = false
-    await page.route("**/api/v1/organizations/**", (route) => {
+    await page.route("**/api/v1/organizations**", (route) => {
       const url = route.request().url()
       const method = route.request().method()
       if (url.includes("/ai-providers")) {

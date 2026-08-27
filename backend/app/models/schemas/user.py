@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 
+from pydantic import EmailStr
 from sqlmodel import Field, SQLModel
 
 from ..db import UserBase
@@ -47,6 +48,16 @@ class Token(SQLModel):
 
 class TokenPayload(SQLModel):
     sub: str | None = None
+
+
+class PasswordRecovery(SQLModel):
+    """The address to send a reset link to.
+
+    A body rather than a path segment: an email in a URL lands in every access
+    log and needs percent-encoding that callers were not doing.
+    """
+
+    email: EmailStr
 
 
 class NewPassword(SQLModel):

@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test"
+import type { Page, Route } from "@playwright/test"
 import type {
   BillingSubscriptionPublic,
   DockerBuildTelemetryPublic,
@@ -524,7 +524,7 @@ export const MOCK_ANALYSIS = {
   id: ID.analysis,
   repo_id: ID.repo,
   workflow_file_id: ID.workflowFile,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
   repo_full_name: "acme/web-app",
   content_hash: "abc123",
   status: "completed" as const,
@@ -581,7 +581,7 @@ export const MOCK_ANALYSIS_GRADE_F = {
 // ── Issues ─────────────────────────────────────────────────────────────
 export const MOCK_ISSUE_SECURITY = {
   id: ID.issueSecurity,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleSecurity,
   rule_slug: "excessive_token_permissions",
   severity: "critical" as const,
@@ -593,12 +593,12 @@ export const MOCK_ISSUE_SECURITY = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_RELIABILITY = {
   id: ID.issueReliability,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -610,12 +610,12 @@ export const MOCK_ISSUE_RELIABILITY = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_ENERGY = {
   id: ID.issueEnergy,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: "00000000-0000-0000-0000-000000000063",
   rule_slug: "caching_missing",
   severity: "medium" as const,
@@ -627,12 +627,12 @@ export const MOCK_ISSUE_ENERGY = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_FIX = {
   id: ID.issueWithFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -644,12 +644,12 @@ export const MOCK_ISSUE_WITH_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixReady,
   fix_status: "ready" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_CONTEXT = {
   id: ID.issueWithContext,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -661,12 +661,12 @@ export const MOCK_ISSUE_WITH_CONTEXT = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: null,
   fix_status: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_PENDING_FIX = {
   id: ID.issueWithPendingFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleSecurity,
   rule_slug: "excessive_token_permissions",
   severity: "critical" as const,
@@ -678,12 +678,12 @@ export const MOCK_ISSUE_WITH_PENDING_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixPending,
   fix_status: "pending" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_FAILED_FIX = {
   id: ID.issueWithFailedFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -695,12 +695,12 @@ export const MOCK_ISSUE_WITH_FAILED_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixFailed,
   fix_status: "failed" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_ISSUE_WITH_DELIVERED_FIX = {
   id: ID.issueWithDeliveredFix,
-  analysis_id: ID.analysis,
+  scan_id: ID.analysis,
   rule_id: ID.ruleReliability,
   rule_slug: "missing_timeout",
   severity: "high" as const,
@@ -712,7 +712,7 @@ export const MOCK_ISSUE_WITH_DELIVERED_FIX = {
   created_at: "2024-01-02T10:01:00Z",
   fix_id: ID.fixDelivered,
   fix_status: "delivered" as const,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 // ── Fixes ──────────────────────────────────────────────────────────────
@@ -726,7 +726,7 @@ const SAMPLE_DIFF_PATCH =
 export const MOCK_FIX_READY = {
   id: ID.fixReady,
   workflow_file_id: ID.workflowFile,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
   repo_id: ID.repo,
   pr_id: null,
   llm_provider: "openai" as const,
@@ -740,7 +740,7 @@ export const MOCK_FIX_READY = {
   pr_state: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
-  issues: [
+  findings: [
     {
       id: ID.issueWithFix,
       rule_slug: "missing_timeout",
@@ -756,7 +756,7 @@ export const MOCK_FIX_READY = {
 export const MOCK_FIX_DELIVERED = {
   id: ID.fixDelivered,
   workflow_file_id: ID.workflowFileDeploy,
-  workflow_file_path: ".github/workflows/deploy.yml",
+  file_path: ".github/workflows/deploy.yml",
   repo_id: ID.repo,
   pr_id: "00000000-0000-0000-0000-000000000090",
   llm_provider: "openai" as const,
@@ -770,7 +770,7 @@ export const MOCK_FIX_DELIVERED = {
   pr_state: "open",
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: "2024-01-02T10:03:00Z",
-  issues: [
+  findings: [
     {
       id: ID.issueReliability,
       rule_slug: "missing_timeout",
@@ -786,7 +786,7 @@ export const MOCK_FIX_DELIVERED = {
 export const MOCK_FIX_PENDING = {
   id: ID.fixPending,
   workflow_file_id: ID.workflowFileRelease,
-  workflow_file_path: ".github/workflows/release.yml",
+  file_path: ".github/workflows/release.yml",
   repo_id: ID.repo,
   pr_id: null,
   llm_provider: "openai" as const,
@@ -800,7 +800,7 @@ export const MOCK_FIX_PENDING = {
   pr_state: null,
   created_at: "2024-01-02T10:02:00Z",
   delivered_at: null,
-  issues: [
+  findings: [
     {
       id: ID.issueSecurity,
       rule_slug: "excessive_token_permissions",
@@ -834,7 +834,7 @@ export const MOCK_FIX_FAILED = {
   message: "Job 'lint' has no timeout-minutes set.",
   line_start: 20,
   line_end: 20,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_FIX_COMMENT_DELIVERED = {
@@ -857,7 +857,7 @@ export const MOCK_FIX_COMMENT_DELIVERED = {
   message: "Job 'deploy' has no timeout-minutes set.",
   line_start: 25,
   line_end: 25,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 export const MOCK_FIX_MERGED_PR = {
@@ -880,7 +880,7 @@ export const MOCK_FIX_MERGED_PR = {
   message: "Job 'build' has no timeout-minutes set.",
   line_start: 12,
   line_end: 12,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 // ── Rules ──────────────────────────────────────────────────────────────
@@ -1136,9 +1136,20 @@ export async function mockRepositories(
   page: Page,
   repos: RepositoryPublic[] = [MOCK_REPO],
 ) {
-  await page.route("**/api/v1/repositories/**", (route) => {
+  // `/workflow-files` moved to `/workflow/repositories/{id}/files`, so it needs
+  // its own glob rather than riding along under `/repositories`.
+  await page.route("**/api/v1/workflow/repositories/*/files*", (route) => {
+    route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
+  })
+  await page.route("**/api/v1/repositories**", (route) => {
     const url = route.request().url()
-    if (url.includes("/sync-workflows")) {
+    const method = route.request().method()
+    // PATCH first: it addresses `/repositories/{id}`, which the by-id GET
+    // branch below would otherwise answer with an unchanged repo.
+    if (method === "PATCH") {
+      const repo = repos[0]
+      route.fulfill({ json: { ...repo, enabled: !repo.enabled } })
+    } else if (url.includes("/workflow-sync")) {
       route.fulfill({
         json: {
           branch: "main",
@@ -1151,16 +1162,11 @@ export async function mockRepositories(
           skipped_stale: 0,
         },
       })
-    } else if (url.includes("/workflow-files")) {
-      route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
     } else if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const repo = repos.find((r) => r.id === id) ?? repos[0]
       route.fulfill({ json: repo })
-    } else if (url.includes("/toggle")) {
-      const repo = repos[0]
-      route.fulfill({ json: { ...repo, enabled: !repo.enabled } })
-    } else if (url.includes("/integrate-action")) {
+    } else if (url.includes("/action-integration")) {
       route.fulfill({
         json: { pr_url: "https://github.com/acme/web-app/pull/99" },
       })
@@ -1173,22 +1179,25 @@ export async function mockRepositories(
 }
 
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
-  await page.route("**/api/v1/workflow-scans/**", (route) => {
-    const url = route.request().url()
-    const method = route.request().method()
-    if (method === "POST" && url.includes("/trigger/")) {
-      route.fulfill({
-        status: 202,
-        json: { status: "queued", repo_id: MOCK_REPO.id },
-      })
-    } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
-      const id = url.split("/").pop()
-      const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
-      route.fulfill({ json: analysis })
-    } else {
-      route.fulfill({ json: analyses })
-    }
-  })
+  await page.route(
+    /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+    (route) => {
+      const url = route.request().url()
+      const method = route.request().method()
+      if (method === "POST" && url.includes("/repositories/")) {
+        route.fulfill({
+          status: 202,
+          json: { status: "queued", repo_id: MOCK_REPO.id },
+        })
+      } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
+        const id = url.split("/").pop()
+        const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
+        route.fulfill({ json: analysis })
+      } else {
+        route.fulfill({ json: analyses })
+      }
+    },
+  )
 }
 
 export async function mockIssues(
@@ -1196,9 +1205,9 @@ export async function mockIssues(
   issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
   analyses: Array<{ id: string; repo_id: string }> = [MOCK_ANALYSIS],
 ) {
-  await page.route("**/api/v1/workflow-findings/**", (route) => {
+  await page.route("**/api/v1/workflow/findings**", (route) => {
     const url = route.request().url()
-    if (url.includes("/workflow-findings/stats")) {
+    if (url.includes("/findings/stats")) {
       // Mirrors the backend's SQL-aggregated shape (open/resolved/critical_open
       // per category, plus a nested per-repo breakdown for the dashboard's
       // star diagram), computed from the same fixture list the dashboard's
@@ -1216,7 +1225,7 @@ export async function mockIssues(
       const byRepo = new Map<string, Map<string, RepoCategoryBucket>>()
       const analysisToRepo = new Map(analyses.map((a) => [a.id, a.repo_id]))
       for (const i of active as Array<{
-        analysis_id: string
+        scan_id: string
         category: string
         severity: string
         resolved_at?: string | null
@@ -1232,7 +1241,7 @@ export async function mockIssues(
           entry.open += 1
           if (i.severity === "critical") entry.critical_open += 1
 
-          const repoId = analysisToRepo.get(i.analysis_id)
+          const repoId = analysisToRepo.get(i.scan_id)
           if (repoId) {
             const categories =
               byRepo.get(repoId) ?? new Map<string, RepoCategoryBucket>()
@@ -1304,7 +1313,7 @@ export async function mockIssues(
       })
       return
     }
-    if (url.match(/\/workflow-findings\/[0-9a-f-]{36}$/)) {
+    if (url.match(/\/findings\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const issue = issues.find((i) => i.id === id) ?? issues[0]
       route.fulfill({ json: issue })
@@ -1319,38 +1328,55 @@ export async function mockFixes(
   fixes = [MOCK_FIX_READY, MOCK_FIX_DELIVERED],
   pullRequests: unknown[] = [],
 ) {
-  await page.route("**/api/v1/workflow-fixes/**", (route) => {
+  // The workflow engine's fix surface is addressed two ways — by fix
+  // (`/workflow/fixes/...`) and by repository
+  // (`/workflow/repositories/{id}/fixes|deliveries|pull-requests`) — so one
+  // pattern has to cover both without reaching the scan, finding or file
+  // routes, which have handlers of their own.
+  const handler = (route: Route) => {
     const url = route.request().url()
     const method = route.request().method()
-    if (method === "POST" && url.includes("/sync-pr-status")) {
+    if (method === "POST" && url.includes("/pull-requests/sync")) {
       route.fulfill({ json: { synced: 0, updated: 0, relinked: 0 } })
     } else if (method === "POST" && url.includes("/regenerate")) {
       route.fulfill({ status: 202, json: { status: "queued" } })
-    } else if (method === "POST" && url.includes("/generate")) {
-      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
-    } else if (method === "POST" && url.includes("/deliver")) {
+    } else if (method === "POST" && url.includes("/retry")) {
+      route.fulfill({ status: 202, json: { status: "queued" } })
+    } else if (method === "POST" && url.includes("/deliveries")) {
       route.fulfill({ json: { status: "delivering" } })
+    } else if (method === "POST" && new URL(url).pathname.endsWith("/fixes")) {
+      // Repo-wide generation: `POST /workflow/repositories/{id}/fixes`.
+      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
     } else if (method === "DELETE") {
       route.fulfill({ status: 204 })
-    } else if (url.includes("/pull-requests/")) {
+    } else if (url.includes("/pull-requests")) {
       route.fulfill({ json: pullRequests })
-    } else if (url.match(/\/workflow-fixes\/[0-9a-f-]{36}$/)) {
+    } else if (url.match(/\/fixes\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
       const fix = fixes.find((f) => f.id === id) ?? fixes[0]
       route.fulfill({ json: fix })
     } else {
       route.fulfill({ json: fixes })
     }
-  })
+  }
+  // Only the fix-shaped paths. A blanket `**/api/v1/workflow/repositories/**`
+  // also swallows `/repositories/{id}/files`, and because this runs after
+  // mockRepositories it wins — the page then sees an empty workflow-file list
+  // and renders no findings at all, which looks nothing like a routing bug.
+  await page.route(
+    /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries|pull-requests))/,
+    handler,
+  )
 }
 
 export async function mockRules(
   page: Page,
   rules = [MOCK_RULE_SECURITY, MOCK_RULE_RELIABILITY, MOCK_RULE_DISABLED],
 ) {
-  await page.route("**/api/v1/rules/**", (route) => {
+  await page.route("**/api/v1/rules**", (route) => {
     const url = route.request().url()
-    if (url.includes("/toggle")) {
+    const method = route.request().method()
+    if (method === "PATCH") {
       route.fulfill({ json: { ...rules[0], enabled: !rules[0].enabled } })
     } else if (url.match(/\/rules\/[0-9a-f-]{36}$/)) {
       const id = url.split("/").pop()
@@ -1369,7 +1395,7 @@ export async function mockBilling(
   usage = MOCK_USAGE,
   { plans = MOCK_PLANS, invoices = [] as unknown[] } = {},
 ) {
-  await page.route("**/api/v1/billing/**", (route) => {
+  await page.route("**/api/v1/billing**", (route) => {
     const url = route.request().url()
     // Longest-prefix-ish ordering: /oss-applications must be tested before
     // /oss-application, and /subscription is the fallback.
@@ -1396,7 +1422,7 @@ export async function mockOrganizations(
   orgs = [MOCK_ORG],
   aiProviders = MOCK_AI_PROVIDERS,
 ) {
-  await page.route("**/api/v1/organizations/**", (route) => {
+  await page.route("**/api/v1/organizations**", (route) => {
     const url = route.request().url()
     if (url.includes("/ai-providers")) {
       route.fulfill({ json: aiProviders })
@@ -1412,7 +1438,7 @@ export async function mockInstallations(
   page: Page,
   installations = [MOCK_INSTALLATION],
 ) {
-  await page.route("**/api/v1/installations/**", (route) => {
+  await page.route("**/api/v1/installations**", (route) => {
     route.fulfill({ json: installations })
   })
 }
@@ -1432,12 +1458,12 @@ export async function mockDockerTargets(
     runtimeFixQueued = 1,
   } = {},
 ) {
-  await page.route("**/api/v1/docker-targets/**", (route) => {
+  await page.route("**/api/v1/docker/targets**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "DELETE") {
       route.fulfill({ status: 204 })
-    } else if (method === "PATCH" && url.includes("/toggle")) {
+    } else if (method === "PATCH") {
       route.fulfill({ json: { id: targets[0].id, enabled: false } })
     } else if (method === "POST" && url.includes("/scan")) {
       route.fulfill({
@@ -1494,15 +1520,13 @@ export async function mockAnsibleProjects(
     scans = [MOCK_ANSIBLE_SCAN],
   } = {},
 ) {
-  await page.route("**/api/v1/ansible-projects/**", (route) => {
+  await page.route("**/api/v1/ansible/projects**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "DELETE") {
       route.fulfill({ status: 204 })
-    } else if (method === "PATCH" && url.includes("/toggle")) {
-      route.fulfill({
-        json: { ansible_project_id: projects[0].id, enabled: false },
-      })
+    } else if (method === "PATCH") {
+      route.fulfill({ json: { ...projects[0], enabled: false } })
     } else if (method === "POST" && url.includes("/scan")) {
       route.fulfill({
         status: 202,
@@ -1539,7 +1563,7 @@ export async function mockAnsibleProjects(
 }
 
 export async function mockEvents(page: Page) {
-  await page.route("**/api/v1/events/**", (route) => {
+  await page.route("**/api/v1/events**", (route) => {
     route.fulfill({
       status: 200,
       headers: { "Content-Type": "text/event-stream" },
@@ -1768,7 +1792,7 @@ export async function mockOverview(
   page: Page,
   overview: unknown = MOCK_OVERVIEW,
 ) {
-  await page.route("**/api/v1/overview/**", (route) => {
+  await page.route("**/api/v1/overview**", (route) => {
     route.fulfill({ json: overview })
   })
 }

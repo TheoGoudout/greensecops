@@ -72,15 +72,15 @@ test.describe("Navigation", () => {
   test("sidebar links navigate correctly", async ({ page }) => {
     await mockUserMe(page, MOCK_SUPERUSER)
     await setupAllMocks(page)
-    await page.route("**/api/v1/installations/**", (route) => {
+    await page.route("**/api/v1/installations**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/organizations/**", (route) => {
+    await page.route("**/api/v1/organizations**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/users/**", (route) => {
+    await page.route("**/api/v1/users**", (route) => {
       const url = route.request().url()
-      if (url.endsWith("/me")) {
+      if (new URL(url).pathname.endsWith("/me")) {
         route.fulfill({ json: MOCK_SUPERUSER })
       } else {
         route.fulfill({ json: { data: [MOCK_SUPERUSER], count: 1 } })

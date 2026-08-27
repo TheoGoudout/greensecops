@@ -15,7 +15,7 @@ from ..enums import (
 class DynamicEnrichmentPublic(SQLModel):
     """A runtime-telemetry finding, exposed for the frontend.
 
-    Deliberately thinner than ``IssuePublic``: enrichments carry no severity,
+    Deliberately thinner than ``WorkflowFindingPublic``: enrichments carry no severity,
     category, status/lifecycle, line numbers, or fix linkage, so they are
     presented as their own "Runtime findings" class rather than merged into the
     static issue list.

@@ -141,7 +141,7 @@ test.describe("Billing Tiers", () => {
   test("upgrade button calls checkout", async ({ page }) => {
     let checkoutCalled = false
 
-    await page.route("**/api/v1/billing/**", (route) => {
+    await page.route("**/api/v1/billing**", (route) => {
       const url = route.request().url()
       if (route.request().method() === "POST" && url.includes("/checkout")) {
         checkoutCalled = true

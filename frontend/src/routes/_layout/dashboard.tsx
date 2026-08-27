@@ -18,8 +18,7 @@ import {
   BillingService,
   OverviewService,
   RepositoriesService,
-  WorkflowFindingsService,
-  WorkflowScansService,
+  WorkflowService,
 } from "@/client"
 import { CategoryHealthRadar } from "@/components/CategoryHealthRadar"
 import { WidgetPagination } from "@/components/Common/WidgetPagination"
@@ -108,15 +107,15 @@ function Dashboard() {
   })
 
   const { data: analyses, isLoading: analysesLoading } = useQuery({
-    queryKey: ["analyses", "recent"],
-    queryFn: () => WorkflowScansService.listAnalyses({ limit: 200 }),
+    queryKey: ["scans", "recent"],
+    queryFn: () => WorkflowService.listScans({ limit: 200 }),
   })
 
   // Per-repo category breakdown for the CI radar. /overview/ aggregates per
   // engine, not per repo, so this stays the source for that one widget.
   const { data: issueStats, isLoading: issueStatsLoading } = useQuery({
-    queryKey: ["issues", "stats"],
-    queryFn: () => WorkflowFindingsService.getIssueStats(),
+    queryKey: ["findings", "stats"],
+    queryFn: () => WorkflowService.getFindingStats(),
   })
 
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({

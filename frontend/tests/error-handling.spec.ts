@@ -6,16 +6,19 @@ test.describe("Error Handling", () => {
     await mockUserMe(page, MOCK_USER)
     await mockEvents(page)
     await mockBilling(page)
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
-      route.fulfill({ json: [] })
-    })
-    await page.route("**/api/v1/rules/**", (route) => {
+    await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -28,21 +31,27 @@ test.describe("Error Handling", () => {
     await mockUserMe(page, MOCK_USER)
     await mockEvents(page)
     await mockBilling(page)
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/rules/**", (route) => {
+    await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      route.fulfill({ status: 404, json: { detail: "Not found" } })
-    })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ status: 404, json: { detail: "Not found" } })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto("/analyses/00000000-0000-0000-0000-999999999999")
 
@@ -55,16 +64,19 @@ test.describe("Error Handling", () => {
     await mockUserMe(page, MOCK_USER)
     await mockEvents(page)
     await mockBilling(page)
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
-      route.fulfill({ json: [] })
-    })
-    await page.route("**/api/v1/rules/**", (route) => {
+    await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -89,7 +101,7 @@ test.describe("Error Handling", () => {
     await mockEvents(page)
     await mockBilling(page)
     const repoId = "00000000-0000-0000-0000-000000000001"
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route("**/api/v1/repositories**", (route) => {
       const url = route.request().url()
       if (url.match(/\/repositories\/[0-9a-f-]{36}$/)) {
         route.fulfill({
@@ -109,18 +121,24 @@ test.describe("Error Handling", () => {
         route.fulfill({ json: [] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
+    await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/rules/**", (route) => {
-      route.fulfill({ json: [] })
-    })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/repositories/${repoId}/static-analysis`)
 

@@ -16,10 +16,10 @@ function invalidateAnalysisQueries(
   repoId: string,
   analysisId?: string | null,
 ) {
-  qc.invalidateQueries({ queryKey: ["analyses", "recent"] })
-  qc.invalidateQueries({ queryKey: ["analyses", repoId] })
+  qc.invalidateQueries({ queryKey: ["scans", "recent"] })
+  qc.invalidateQueries({ queryKey: ["scans", repoId] })
   if (analysisId) {
-    qc.invalidateQueries({ queryKey: ["analysis", analysisId] })
+    qc.invalidateQueries({ queryKey: ["scan", analysisId] })
   }
 }
 
@@ -28,10 +28,10 @@ function invalidateIssueQueries(
   repoId: string,
   analysisId?: string | null,
 ) {
-  qc.invalidateQueries({ queryKey: ["issues", "open"] })
-  qc.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
+  qc.invalidateQueries({ queryKey: ["findings", "open"] })
+  qc.invalidateQueries({ queryKey: ["findings", "repo", repoId] })
   if (analysisId) {
-    qc.invalidateQueries({ queryKey: ["issues", analysisId] })
+    qc.invalidateQueries({ queryKey: ["findings", analysisId] })
   }
 }
 

@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_layout/badges/repositories")({
 function toEntry(repo: RepositoryPublic): BadgeEntry {
   const [owner, name] = repo.full_name.split("/")
   const svgUrl = signedBadgeUrl(
-    `${BADGE_API_BASE}/api/v1/badges/${owner}/${name}/${repo.default_branch}.svg`,
+    `${BADGE_API_BASE}/api/v1/badges/repositories/${owner}/${name}/${repo.default_branch}.svg`,
     repo.badge_sig,
   )
   return {

@@ -36,7 +36,7 @@ function OrgAICard({ org }: { org: OrganizationPublic }) {
 
   const mutation = useMutation({
     mutationFn: () =>
-      OrganizationsService.updateOrgAiPreferences({
+      OrganizationsService.updateOrganization({
         orgId: org.id,
         requestBody: {
           default_llm_provider: provider,

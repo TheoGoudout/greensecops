@@ -24,7 +24,7 @@ test.describe("Badges", () => {
 
   test("shows badge cards for repos", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO, MOCK_REPO_DISABLED])
-    await page.route("**/api/v1/badges/**", (route) => {
+    await page.route("**/api/v1/badges**", (route) => {
       route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
@@ -46,7 +46,7 @@ test.describe("Badges", () => {
 
   test("badge card shows markdown snippet", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO])
-    await page.route("**/api/v1/badges/**", (route) => {
+    await page.route("**/api/v1/badges**", (route) => {
       route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
@@ -63,7 +63,7 @@ test.describe("Badges", () => {
 
   test("copy markdown button changes to Copied", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO])
-    await page.route("**/api/v1/badges/**", (route) => {
+    await page.route("**/api/v1/badges**", (route) => {
       route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
@@ -110,13 +110,15 @@ test.describe("Badges", () => {
 
     await expect(page).toHaveURL(/\/badges\/docker/)
     await expect(
-      page.getByText(`/api/v1/badges/docker/${MOCK_DOCKER_TARGET.id}.svg`),
+      page.getByText(
+        `/api/v1/badges/docker-targets/${MOCK_DOCKER_TARGET.id}.svg`,
+      ),
     ).toBeVisible()
   })
 
   test("terraform tab shows its own empty state", async ({ page }) => {
     await mockReposRoute(page, [MOCK_REPO])
-    await page.route("**/api/v1/terraform-roots/**", (route) => {
+    await page.route("**/api/v1/terraform/roots**", (route) => {
       route.fulfill({ json: [] })
     })
 
@@ -129,7 +131,7 @@ test.describe("Badges", () => {
     // Both lived in the sidebar for a release, so bookmarks and older PR
     // bodies point at them.
     await mockReposRoute(page, [MOCK_REPO])
-    await page.route("**/api/v1/terraform-roots/**", (route) => {
+    await page.route("**/api/v1/terraform/roots**", (route) => {
       route.fulfill({ json: [] })
     })
     await mockDockerTargets(page)
@@ -146,7 +148,7 @@ async function mockReposRoute(
   page: import("@playwright/test").Page,
   repos: unknown[],
 ) {
-  await page.route("**/api/v1/repositories/**", (route) => {
+  await page.route("**/api/v1/repositories**", (route) => {
     route.fulfill({ json: repos })
   })
 }

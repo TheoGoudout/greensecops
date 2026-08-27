@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Bell, BellOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { type IssuePublic, WorkflowFindingsService } from "@/client"
+import { type WorkflowFindingPublic, WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
@@ -12,7 +12,7 @@ import { apiErrorDetail } from "@/lib/api-error"
 import { findingStatusColor, findingStatusLabel } from "@/lib/status-colors"
 
 interface IssueRowProps {
-  issue: IssuePublic
+  issue: WorkflowFindingPublic
   repoId: string
   checked?: boolean
   onCheckedChange?: () => void
@@ -34,12 +34,12 @@ export function IssueRow({
   const muteMutation = useMutation({
     mutationFn: () =>
       ignored
-        ? WorkflowFindingsService.unignoreIssue({ issueId: issue.id })
-        : WorkflowFindingsService.ignoreIssue({ issueId: issue.id }),
+        ? WorkflowService.unignoreFinding({ findingId: issue.id })
+        : WorkflowService.ignoreFinding({ findingId: issue.id }),
     onSuccess: () => {
       toast.success(ignored ? "Issue unignored" : "Issue ignored")
-      queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
-      queryClient.invalidateQueries({ queryKey: ["issues", "open"] })
+      queryClient.invalidateQueries({ queryKey: ["findings", "repo", repoId] })
+      queryClient.invalidateQueries({ queryKey: ["findings", "open"] })
     },
     onError: (error) =>
       toast.error(

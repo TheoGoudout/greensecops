@@ -7,7 +7,7 @@ Postgres does not index foreign keys automatically — so each answer meant a
 sequential scan plus a sort.
 
 That was already being paid for on every dashboard load by the ``latest_only``
-subquery in ``GET /issues/stats``, and the new ``GET /overview/`` makes it
+subquery in ``GET /workflow/findings/stats``, and the new ``GET /overview`` makes it
 sharper still: its coverage query runs a ``row_number() OVER (PARTITION BY
 <target_fk> ORDER BY <recency>)`` over each of the four scan tables, which is
 exactly the access pattern these indexes serve.

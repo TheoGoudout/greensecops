@@ -115,7 +115,7 @@ def test_list_my_organizations_with_membership(
     assert str(org.id) in org_ids
 
 
-# ─── PATCH /organizations/{org_id}/ai-preferences ────────────────────────────
+# ─── PATCH /organizations/{org_id} ────────────────────────────
 
 
 def test_update_org_ai_preferences_as_member(
@@ -137,7 +137,7 @@ def test_update_org_ai_preferences_as_member(
         db.commit()
 
     response = client.patch(
-        f"{ORG_URL}/{org.id}/ai-preferences",
+        f"{ORG_URL}/{org.id}",
         json={"default_llm_provider": "openai", "default_llm_model": "gpt-4o"},
         headers=normal_user_token_headers,
     )
@@ -161,7 +161,7 @@ def test_update_org_ai_preferences_non_member_forbidden(
     db.refresh(other_org)
 
     response = client.patch(
-        f"{ORG_URL}/{other_org.id}/ai-preferences",
+        f"{ORG_URL}/{other_org.id}",
         json={"default_llm_provider": "openai", "default_llm_model": "gpt-4o"},
         headers=normal_user_token_headers,
     )
@@ -178,7 +178,7 @@ def test_update_org_ai_preferences_not_found(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.patch(
-        f"{ORG_URL}/{uuid.uuid4()}/ai-preferences",
+        f"{ORG_URL}/{uuid.uuid4()}",
         json={"default_llm_provider": "openai", "default_llm_model": "gpt-4o"},
         headers=superuser_token_headers,
     )
@@ -199,7 +199,7 @@ def test_update_org_ai_preferences_superuser_any_org(
     db.refresh(other_org)
 
     response = client.patch(
-        f"{ORG_URL}/{other_org.id}/ai-preferences",
+        f"{ORG_URL}/{other_org.id}",
         json={
             "default_llm_provider": "anthropic",
             "default_llm_model": "claude-sonnet",

@@ -4,9 +4,9 @@ import { GitPullRequest, Loader2, RefreshCw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
-  type FixPublic,
   type PullRequestPublic,
-  WorkflowFixesService,
+  type WorkflowFixPublic,
+  WorkflowService,
 } from "@/client"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
@@ -61,18 +61,18 @@ function PullRequestsPage() {
 
   const { data: pullRequests, isLoading } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
   })
 
   // The fix set lets us name the workflow behind each PR branch and drive the
   // per-PR Update/Reopen (redeliver) action.
   const { data: fixes } = useQuery({
     queryKey: ["fixes", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listFixes({ repoId, limit: 100 }),
+    queryFn: () => WorkflowService.listFixes({ repoId, limit: 100 }),
   })
 
   const fixByBranch = useMemo(() => {
-    const map = new Map<string, FixPublic>()
+    const map = new Map<string, WorkflowFixPublic>()
     for (const fix of fixes ?? []) {
       map.set(workflowFixBranch(fix.workflow_file_id), fix)
     }
@@ -82,7 +82,7 @@ function PullRequestsPage() {
   const repoBranch = repoFixBranch(repoId)
 
   const syncMutation = useMutation({
-    mutationFn: () => WorkflowFixesService.syncPrStatuses({ repoId }),
+    mutationFn: () => WorkflowService.syncPullRequestStatuses({ repoId }),
     onSuccess: (data: Record<string, number>) => {
       if (data.updated > 0 || data.relinked > 0) {
         queryClient.invalidateQueries({
@@ -94,9 +94,9 @@ function PullRequestsPage() {
 
   const deliverWorkflowMutation = useMutation({
     mutationFn: (vars: { fixId: string; force: boolean }) =>
-      WorkflowFixesService.triggerWorkflowDelivery({
+      WorkflowService.deliverFix({
+        fixId: vars.fixId,
         force: vars.force,
-        requestBody: { fix_id: vars.fixId },
       }),
     onSuccess: () => {
       toast.success("Pull request update queued")
@@ -113,7 +113,7 @@ function PullRequestsPage() {
 
   const deliverRepoMutation = useMutation({
     mutationFn: (vars: { force: boolean }) =>
-      WorkflowFixesService.triggerRepoDelivery({ repoId, force: vars.force }),
+      WorkflowService.deliverRepositoryFixes({ repoId, force: vars.force }),
     onSuccess: () => {
       toast.success("Pull request update queued")
       queryClient.invalidateQueries({
@@ -258,10 +258,9 @@ function PullRequestsPage() {
                       ? "All workflows"
                       : pr.pr_branch === INTEGRATE_ACTION_BRANCH
                         ? "Integrate action"
-                        : fixByBranch.get(pr.pr_branch)?.workflow_file_path
+                        : fixByBranch.get(pr.pr_branch)?.file_path
                           ? workflowLabel(
-                              fixByBranch.get(pr.pr_branch)!
-                                .workflow_file_path ?? "",
+                              fixByBranch.get(pr.pr_branch)!.file_path ?? "",
                             )
                           : null
                   const mergeable = mergeableIndicator(pr.mergeable_state)

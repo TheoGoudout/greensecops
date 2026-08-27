@@ -54,4 +54,4 @@ class CloudFindingPublic(FindingPublicBase):
 # The cross-engine dashboard overview. Everything below is an *aggregate* view
 # of the shapes the bases above describe — no row of any of these is persisted.
 # It lives here, after the last per-engine block, because it reuses
-# ``IssueCategoryStat`` from the CI block and the engine enums from all four.
+# ``FindingCategoryStat`` from the CI block and the engine enums from all four.

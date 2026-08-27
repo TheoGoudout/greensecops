@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { FixPublic, PullRequestPublic } from "@/client"
+import type { PullRequestPublic, WorkflowFixPublic } from "@/client"
 import {
   ansibleFixBranch,
   deliverAction,
@@ -21,7 +21,9 @@ function makePr(overrides: Partial<PullRequestPublic> = {}): PullRequestPublic {
   }
 }
 
-function makeFix(overrides: Partial<FixPublic> = {}): FixPublic {
+function makeFix(
+  overrides: Partial<WorkflowFixPublic> = {},
+): WorkflowFixPublic {
   return {
     id: "fix-1",
     workflow_file_id: "12345678-aaaa-bbbb-cccc-000000000000",
@@ -29,7 +31,7 @@ function makeFix(overrides: Partial<FixPublic> = {}): FixPublic {
     llm_model: "claude",
     status: "ready",
     ...overrides,
-  } as FixPublic
+  } as WorkflowFixPublic
 }
 
 describe("workflowFixBranch / repoFixBranch", () => {

@@ -360,7 +360,7 @@ def test_generate_fix_queued_for_realistic_workflow_issue(
     """generate-for-repo with a single issue id queues one whole-file fix task."""
     with patch("app.api.routes.workflow_fixes.run_fix_generation.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/generate-for-repo/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/fixes",
             headers=superuser_token_headers,
             json={"issue_ids": [str(issue.id)]},
         )
@@ -424,7 +424,7 @@ def test_pr_sync_marks_merged_for_realistic_workflow_fix(
     fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_gh
     try:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow-fixes/sync-pr-status/{repo.id}",
+            f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/pull-requests/sync",
             headers=superuser_token_headers,
         )
     finally:

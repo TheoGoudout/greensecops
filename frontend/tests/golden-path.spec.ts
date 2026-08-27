@@ -22,7 +22,7 @@ const MOCK_ANALYSIS = {
   triggered_by: "push",
   created_at: "2024-01-02T10:00:00Z",
   workflow_file_id: "00000000-0000-0000-0000-000000000020",
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 const MOCK_WORKFLOW_FILE = {
@@ -35,7 +35,7 @@ const MOCK_WORKFLOW_FILE = {
 
 const MOCK_ISSUE = {
   id: "00000000-0000-0000-0000-000000000030",
-  analysis_id: MOCK_ANALYSIS.id,
+  scan_id: MOCK_ANALYSIS.id,
   rule_id: "00000000-0000-0000-0000-000000000040",
   rule_slug: "missing_timeout",
   severity: "high",
@@ -44,13 +44,13 @@ const MOCK_ISSUE = {
   line_end: 5,
   message: "Job 'build' has no timeout-minutes set.",
   context: null,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
 }
 
 const MOCK_FIX = {
   id: "00000000-0000-0000-0000-000000000050",
   workflow_file_id: MOCK_ANALYSIS.workflow_file_id,
-  workflow_file_path: ".github/workflows/ci.yml",
+  file_path: ".github/workflows/ci.yml",
   repo_id: MOCK_REPO.id,
   llm_provider: "openai",
   llm_model: "gpt-4o-mini",
@@ -58,7 +58,7 @@ const MOCK_FIX = {
   full_content: "name: CI\non: push\njobs:\n  build:\n    timeout-minutes: 30",
   pr_url: null,
   created_at: "2024-01-02T10:01:00Z",
-  issues: [
+  findings: [
     {
       id: MOCK_ISSUE.id,
       rule_slug: MOCK_ISSUE.rule_slug,
@@ -75,9 +75,11 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   test.beforeEach(async ({ page }) => {
     // The generated API client returns arrays directly for list endpoints
     // (not the { data: [...], count: N } envelope).
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -88,31 +90,37 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      const url = route.request().url()
-      if (url.match(/\/workflow-scans\/[0-9a-f-]{36}/)) {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      } else {
-        route.fulfill({ json: [MOCK_ANALYSIS] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        const url = route.request().url()
+        if (url.match(/\/scans\/[0-9a-f-]{36}/)) {
+          route.fulfill({ json: MOCK_ANALYSIS })
+        } else {
+          route.fulfill({ json: [MOCK_ANALYSIS] })
+        }
+      },
+    )
 
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       const url = route.request().url()
-      if (url.match(/\/workflow-findings\/[0-9a-f-]{36}/)) {
+      if (url.match(/\/findings\/[0-9a-f-]{36}/)) {
         route.fulfill({ json: MOCK_ISSUE })
       } else {
         route.fulfill({ json: [MOCK_ISSUE] })
       }
     })
 
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      route.fulfill({ json: [MOCK_FIX] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [MOCK_FIX] })
+      },
+    )
 
     // The dashboard's summary and its three engine sections all read
     // /overview/; without it they would fall through to the live API.
-    await page.route("**/api/v1/overview/**", (route) => {
+    await page.route("**/api/v1/overview**", (route) => {
       route.fulfill({ json: MOCK_OVERVIEW })
     })
   })
@@ -163,7 +171,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   test("fix rejection updates status via API", async ({ page }) => {
     let rejectCalled = false
     await page.route(
-      `**/api/v1/workflow-fixes/${MOCK_FIX.id}/reject`,
+      `**/api/v1/workflow/fixes/${MOCK_FIX.id}/reject`,
       (route) => {
         rejectCalled = true
         route.fulfill({ json: { ...MOCK_FIX, status: "rejected" } })

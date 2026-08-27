@@ -61,7 +61,7 @@ class FindingPublicBase(SQLModel):
 
 class FixablePublicBase(FindingPublicBase):
     """A finding an engine can generate a fix for — mirrors
-    ``IssuePublic.fix_id``/``fix_status``. Cloud findings have no fix pipeline,
+    ``WorkflowFindingPublic.fix_id``/``fix_status``. Cloud findings have no fix pipeline,
     so they stay on the plain base."""
 
     fix_id: uuid.UUID | None = None
@@ -116,3 +116,14 @@ class ScanTargetPublicBase(SQLModel):
     latest_score: float | None = None
     latest_grade: str | None = None
     badge_sig: str | None = None
+
+
+class ScanTargetUpdate(SQLModel):
+    """The mutable part of a registered scan target.
+
+    Every engine enables and disables its target the same way, so one body
+    serves all of them rather than three identical copies. Optional so a
+    ``PATCH`` that omits the field leaves it alone.
+    """
+
+    enabled: bool | None = None

@@ -10,7 +10,7 @@ Enforcement happens at **two** points, and both are necessary:
    the gate that actually holds.
 
 The second one exists because the first one cannot be trusted on its own. A
-single ``POST /analyses/trigger/{repo}`` fans out to one analysis *per workflow
+single ``POST /workflow/repositories/{repo_id}/scans`` fans out to one analysis *per workflow
 file*, so a pre-check for "1" let a user at 49/50 create twenty. Worse, most
 analyses are never triggered through the API at all — they come from push
 webhooks, from polling external repos, and from installation sync, none of

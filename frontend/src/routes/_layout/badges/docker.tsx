@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_layout/badges/docker")({
 
 function toEntry(target: DockerTargetPublic): BadgeEntry {
   const svgUrl = signedBadgeUrl(
-    `${BADGE_API_BASE}/api/v1/badges/docker/${target.id}.svg`,
+    `${BADGE_API_BASE}/api/v1/badges/docker-targets/${target.id}.svg`,
     target.badge_sig,
   )
   // A root-path target covers the whole repo, so the repo name says it all —
@@ -35,7 +35,7 @@ function DockerBadges() {
   return (
     <BadgePage
       queryKey={["docker-targets"]}
-      queryFn={() => DockerService.listDockerTargets({})}
+      queryFn={() => DockerService.listTargets({})}
       toEntry={toEntry}
       subject="Docker targets"
     />

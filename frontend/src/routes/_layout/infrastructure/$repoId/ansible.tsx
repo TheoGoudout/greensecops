@@ -18,7 +18,7 @@ import type {
   AnsibleProjectPublic,
   PullRequestPublic,
 } from "@/client"
-import { AnsibleService, WorkflowFixesService } from "@/client"
+import { AnsibleService, WorkflowService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -49,12 +49,12 @@ function AnsibleTab() {
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ["ansible-projects", "repo", repoId],
-    queryFn: () => AnsibleService.listAnsibleProjects({ repoId }),
+    queryFn: () => AnsibleService.listProjects({ repoId }),
   })
 
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
@@ -136,22 +136,23 @@ function ProjectCard({
   >(project.id, isOpen, {
     keyPrefix: "ansible",
     targetLabel: "Ansible project",
-    listFiles: () => AnsibleService.listAnsibleFiles({ projectId: project.id }),
-    listFindings: () =>
-      AnsibleService.listAnsibleFindings({ projectId: project.id }),
-    listFixes: () => AnsibleService.listAnsibleFixes({ projectId: project.id }),
+    listFiles: () => AnsibleService.listFiles({ projectId: project.id }),
+    listFindings: () => AnsibleService.listFindings({ projectId: project.id }),
+    listFixes: () => AnsibleService.listFixes({ projectId: project.id }),
     toggle: (enabled) =>
-      AnsibleService.toggleAnsibleProject({ projectId: project.id, enabled }),
-    scan: () => AnsibleService.triggerAnsibleScan({ projectId: project.id }),
-    remove: () =>
-      AnsibleService.deleteAnsibleProject({ projectId: project.id }),
+      AnsibleService.updateProject({
+        projectId: project.id,
+        requestBody: { enabled },
+      }),
+    scan: () => AnsibleService.triggerScan({ projectId: project.id }),
+    remove: () => AnsibleService.deleteProject({ projectId: project.id }),
     generate: (findingIds) =>
-      AnsibleService.triggerAnsibleFixGeneration({
+      AnsibleService.generateFixes({
         projectId: project.id,
         requestBody: findingIds.length ? { finding_ids: findingIds } : {},
       }),
     deliver: (force) =>
-      AnsibleService.triggerAnsibleDelivery({ projectId: project.id, force }),
+      AnsibleService.deliverFixes({ projectId: project.id, force }),
   })
 
   const findingsByFile = useMemo(() => {

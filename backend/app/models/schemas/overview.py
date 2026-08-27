@@ -12,7 +12,7 @@ from ..enums import (
     Severity,
 )
 from .workflow import (
-    IssueCategoryStat,
+    FindingCategoryStat,
 )
 
 
@@ -96,7 +96,7 @@ class EngineFindingStat(SQLModel):
     resolved: int
     critical_open: int
     by_severity: list[SeverityStat]
-    by_category: list[IssueCategoryStat]
+    by_category: list[FindingCategoryStat]
 
 
 class EngineFixPipelineStat(SQLModel):
@@ -147,7 +147,7 @@ class OverviewTotals(SQLModel):
     avg_score: float | None
     grade: str | None
     by_severity: list[SeverityStat]
-    by_category: list[IssueCategoryStat]
+    by_category: list[FindingCategoryStat]
     engines_with_data: int
 
 

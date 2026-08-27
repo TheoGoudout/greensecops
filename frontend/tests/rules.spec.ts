@@ -48,7 +48,7 @@ test.describe("Rules", () => {
     await mockUserMe(page, MOCK_SUPERUSER)
 
     const apiCalls: string[] = []
-    await page.route("**/api/v1/rules/**", (route) => {
+    await page.route("**/api/v1/rules**", (route) => {
       apiCalls.push(route.request().url())
       route.fulfill({ json: [MOCK_RULE_SECURITY] })
     })
@@ -71,9 +71,9 @@ test.describe("Rules", () => {
     await mockUserMe(page, MOCK_SUPERUSER)
 
     let toggleCalled = false
-    await page.route("**/api/v1/rules/**", (route) => {
-      const url = route.request().url()
-      if (url.includes("/toggle")) {
+    await page.route("**/api/v1/rules**", (route) => {
+      const method = route.request().method()
+      if (method === "PATCH") {
         toggleCalled = true
         route.fulfill({
           json: { ...MOCK_RULE_SECURITY, enabled: false },
@@ -126,7 +126,7 @@ async function mockRulesRoute(
   page: import("@playwright/test").Page,
   rules: unknown[],
 ) {
-  await page.route("**/api/v1/rules/**", (route) => {
+  await page.route("**/api/v1/rules**", (route) => {
     route.fulfill({ json: rules })
   })
 }

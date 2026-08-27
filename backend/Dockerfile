@@ -77,6 +77,6 @@ WORKDIR /app/backend/
 # with `inspect ping`, celery-beat with a schedule-file check, and prestart with
 # `disable: true` because a one-shot migration job has no steady state.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -fsS http://localhost:8000/api/v1/utils/health-check/ || exit 1
+    CMD curl -fsS http://localhost:8000/api/v1/system/health || exit 1
 
 CMD ["fastapi", "run", "--workers", "4", "app/main.py"]

@@ -23,9 +23,11 @@ test.describe("Golden Path — Extended", () => {
   test("repos → trigger → analysis detail → issues → generate fix", async ({
     page,
   }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -37,37 +39,43 @@ test.describe("Golden Path — Extended", () => {
     })
 
     let analysisTriggered = false
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      const method = route.request().method()
-      const url = route.request().url()
-      if (method === "POST" && url.includes("/trigger/")) {
-        analysisTriggered = true
-        route.fulfill({
-          status: 202,
-          json: { status: "queued", repo_id: MOCK_REPO.id },
-        })
-      } else if (url.match(/\/workflow-scans\/[0-9a-f-]{36}$/)) {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      } else {
-        route.fulfill({ json: [MOCK_ANALYSIS] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        const method = route.request().method()
+        const url = route.request().url()
+        if (method === "POST" && url.includes("/repositories/")) {
+          analysisTriggered = true
+          route.fulfill({
+            status: 202,
+            json: { status: "queued", repo_id: MOCK_REPO.id },
+          })
+        } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
+          route.fulfill({ json: MOCK_ANALYSIS })
+        } else {
+          route.fulfill({ json: [MOCK_ANALYSIS] })
+        }
+      },
+    )
 
     let fixGenerated = false
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY],
       })
     })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      const method = route.request().method()
-      if (method === "POST") {
-        fixGenerated = true
-        route.fulfill({ status: 202, json: { status: "queued" } })
-      } else {
-        route.fulfill({ json: [] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        const method = route.request().method()
+        if (method === "POST") {
+          fixGenerated = true
+          route.fulfill({ status: 202, json: { status: "queued" } })
+        } else {
+          route.fulfill({ json: [] })
+        }
+      },
+    )
 
     await page.goto("/repositories")
     await expect(page.getByText("acme/web-app")).toBeVisible()
@@ -105,9 +113,11 @@ test.describe("Golden Path — Extended", () => {
   })
 
   test("repo detail: batch fix + workflow PR delivery", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
       } else if (url.includes("/branches")) {
         route.fulfill({ json: ["main"] })
@@ -117,31 +127,37 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      route.fulfill({ json: [MOCK_ANALYSIS] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [MOCK_ANALYSIS] })
+      },
+    )
 
     const issues = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: issues })
     })
 
     let batchFixCalled = false
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      const method = route.request().method()
-      const url = route.request().url()
-      if (method === "POST" && url.includes("generate-for-repo")) {
-        batchFixCalled = true
-        route.fulfill({
-          status: 202,
-          json: { queued: 2, skipped: 0 },
-        })
-      } else if (method === "POST") {
-        route.fulfill({ json: { status: "delivering" } })
-      } else {
-        route.fulfill({ json: [MOCK_FIX_READY] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        const method = route.request().method()
+        const url = route.request().url()
+        if (method === "POST" && new URL(url).pathname.endsWith("/fixes")) {
+          batchFixCalled = true
+          route.fulfill({
+            status: 202,
+            json: { queued: 2, skipped: 0 },
+          })
+        } else if (method === "POST") {
+          route.fulfill({ json: { status: "delivering" } })
+        } else {
+          route.fulfill({ json: [MOCK_FIX_READY] })
+        }
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
@@ -156,11 +172,13 @@ test.describe("Golden Path — Extended", () => {
   })
 
   test("repo detail: integrate action flow", async ({ page }) => {
-    await page.route("**/api/v1/repositories/**", (route) => {
+    await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
-      if (url.includes("/workflow-files")) {
+      if (url.includes("/pull-requests")) {
+        route.fulfill({ json: [] })
+      } else if (url.includes("/files")) {
         route.fulfill({ json: [MOCK_WORKFLOW_FILE] })
-      } else if (url.includes("/integrate-action")) {
+      } else if (url.includes("/action-integration")) {
         route.fulfill({
           json: { pr_url: "https://github.com/acme/web-app/pull/99" },
         })
@@ -172,16 +190,22 @@ test.describe("Golden Path — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route("**/api/v1/workflow-scans/**", (route) => {
-      route.fulfill({ json: [MOCK_ANALYSIS] })
-    })
-    await page.route("**/api/v1/workflow-findings/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [MOCK_ANALYSIS] })
+      },
+    )
+    await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route("**/api/v1/workflow-fixes/**", (route) => {
-      route.fulfill({ json: [] })
-    })
-    await page.route("**/api/v1/telemetry/**", (route) => {
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
+    await page.route("**/api/v1/telemetry**", (route) => {
       route.fulfill({ json: { runs: [], average: null } })
     })
 

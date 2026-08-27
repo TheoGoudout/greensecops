@@ -24,8 +24,8 @@ from app.core.rate_limit import (
 )
 from app.core.rate_limit import limiter as app_limiter
 
-LOGIN_URL = f"{settings.API_V1_STR}/login/access-token"
-HEALTH_URL = f"{settings.API_V1_STR}/utils/health-check/"
+LOGIN_URL = f"{settings.API_V1_STR}/auth/token"
+HEALTH_URL = f"{settings.API_V1_STR}/system/health"
 # Declares no limit= of its own, so it rides settings.RATE_LIMIT_DEFAULT, and
 # it touches no database, so hammering it stays cheap.
 UNLIMITED_ROUTE_URL = f"{settings.API_V1_STR}/events/signals"

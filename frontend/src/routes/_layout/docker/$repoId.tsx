@@ -27,7 +27,7 @@ function DockerRepoLayout() {
 
   const { data: targets } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
-    queryFn: () => DockerService.listDockerTargets({ repoId }),
+    queryFn: () => DockerService.listTargets({ repoId }),
   })
 
   return (

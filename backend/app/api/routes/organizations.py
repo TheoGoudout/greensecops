@@ -9,8 +9,8 @@ from app.models import (
     AIProviderInfo,
     AIProvidersPublic,
     Organization,
-    OrganizationAIUpdate,
     OrganizationPublic,
+    OrganizationUpdate,
     OrgMember,
 )
 from app.services.llm.catalog import _KEY_MAP, load_provider_catalog
@@ -44,7 +44,7 @@ def list_ai_providers(
     )
 
 
-@router.get("/", role=Role.user, response_model=list[OrganizationPublic])
+@router.get("", role=Role.user, response_model=list[OrganizationPublic])
 def list_my_organizations(
     session: SessionDep,
     current_user: CurrentUser,
@@ -68,12 +68,10 @@ def list_my_organizations(
     ]
 
 
-@router.patch(
-    "/{org_id}/ai-preferences", role=Role.org_admin, response_model=OrganizationPublic
-)
-def update_org_ai_preferences(
+@router.patch("/{org_id}", role=Role.org_admin, response_model=OrganizationPublic)
+def update_organization(
     org_id: uuid.UUID,
-    body: OrganizationAIUpdate,
+    body: OrganizationUpdate,
     session: SessionDep,
 ) -> OrganizationPublic:
     # Membership and rank are enforced by role=Role.org_admin before this runs;

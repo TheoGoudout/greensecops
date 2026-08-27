@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/terraform-roots/ endpoints."""
+"""Tests for the /api/v1/terraform/roots/ endpoints."""
 
 import uuid
 from pathlib import Path
@@ -91,14 +91,14 @@ def completed_scan(db: Session, terraform_root: TerraformRoot) -> TerraformScan:
     return scan
 
 
-# ─── POST /terraform-roots/ ────────────────────────────────────────────────────
+# ─── POST /terraform/roots/ ────────────────────────────────────────────────────
 
 
 def test_create_terraform_root(
     client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": "infra/prod"},
     )
@@ -113,7 +113,7 @@ def test_create_terraform_root_normalizes_slashes(
     client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": "/infra/prod/"},
     )
@@ -125,7 +125,7 @@ def test_create_terraform_root_rejects_empty_path(
     client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": "///"},
     )
@@ -139,14 +139,14 @@ def test_create_terraform_root_duplicate_conflicts(
     terraform_root: TerraformRoot,
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": terraform_root.root_path},
     )
     assert response.status_code == 409
 
 
-# ─── GET /terraform-roots/ ──────────────────────────────────────────────────────
+# ─── GET /terraform/roots/ ──────────────────────────────────────────────────────
 
 
 def test_list_terraform_roots(
@@ -156,7 +156,7 @@ def test_list_terraform_roots(
     terraform_root: TerraformRoot,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -174,7 +174,7 @@ def test_list_terraform_roots_includes_latest_grade(
     completed_scan: TerraformScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -190,7 +190,7 @@ def test_list_terraform_roots_includes_repo_full_name(
     terraform_root: TerraformRoot,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -206,7 +206,7 @@ def test_list_terraform_roots_without_repo_id_is_org_wide(
 ) -> None:
     # No repo_id filter — the org-wide Infrastructure page's default query.
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/",
+        f"{settings.API_V1_STR}/terraform/roots/",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -259,7 +259,7 @@ def test_list_terraform_roots_without_repo_id_scoped_to_user_orgs(
     db.refresh(other_root)
 
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/", headers=normal_user_token_headers
+        f"{settings.API_V1_STR}/terraform/roots/", headers=normal_user_token_headers
     )
 
     assert response.status_code == 200
@@ -268,7 +268,7 @@ def test_list_terraform_roots_without_repo_id_scoped_to_user_orgs(
     assert str(other_root.id) not in ids
 
 
-# ─── PATCH /terraform-roots/{id}/toggle ────────────────────────────────────────
+# ─── PATCH /terraform/roots/{id} ────────────────────────────────────────
 
 
 def test_toggle_terraform_root(
@@ -277,15 +277,15 @@ def test_toggle_terraform_root(
     terraform_root: TerraformRoot,
 ) -> None:
     response = client.patch(
-        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/toggle",
+        f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}",
         headers=superuser_token_headers,
-        params={"enabled": "false"},
+        json={"enabled": False},
     )
     assert response.status_code == 200
     assert response.json()["enabled"] is False
 
 
-# ─── DELETE /terraform-roots/{id} ───────────────────────────────────────────────
+# ─── DELETE /terraform/roots/{id} ───────────────────────────────────────────────
 
 
 def test_delete_terraform_root_cascades_scans(
@@ -298,7 +298,7 @@ def test_delete_terraform_root_cascades_scans(
     root_id = terraform_root.id
     scan_id = completed_scan.id
     response = client.delete(
-        f"{settings.API_V1_STR}/terraform-roots/{root_id}",
+        f"{settings.API_V1_STR}/terraform/roots/{root_id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 204
@@ -315,7 +315,7 @@ def test_delete_terraform_root_cascades_scans(
     )
 
 
-# ─── POST /terraform-roots/{id}/scan ────────────────────────────────────────────
+# ─── POST /terraform/roots/{id}/scans ────────────────────────────────────────────
 
 
 def test_trigger_terraform_scan(
@@ -327,7 +327,7 @@ def test_trigger_terraform_scan(
         "app.workers.tasks.terraform_analysis.run_terraform_scan.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/scan",
+            f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/scans",
             headers=superuser_token_headers,
         )
 
@@ -348,13 +348,13 @@ def test_trigger_terraform_scan_disabled_root_rejected(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/scan",
+        f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
 
 
-# ─── GET /terraform-roots/{id}/scans ────────────────────────────────────────────
+# ─── GET /terraform/roots/{id}/scans ────────────────────────────────────────────
 
 
 def test_list_terraform_scans(
@@ -364,7 +364,7 @@ def test_list_terraform_scans(
     completed_scan: TerraformScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/scans",
+        f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -374,7 +374,7 @@ def test_list_terraform_scans(
     assert body[0]["grade"] == "B"
 
 
-# ─── GET /terraform-roots/{id}/findings ─────────────────────────────────────────
+# ─── GET /terraform/roots/{id}/findings ─────────────────────────────────────────
 
 
 def test_list_terraform_findings_excludes_resolved_by_default(
@@ -415,7 +415,7 @@ def test_list_terraform_findings_excludes_resolved_by_default(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/findings",
+        f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -451,7 +451,7 @@ def test_list_terraform_findings_include_resolved(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/findings",
+        f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/findings",
         headers=superuser_token_headers,
         params={"include_resolved": "true"},
     )
@@ -459,7 +459,7 @@ def test_list_terraform_findings_include_resolved(
     assert len(response.json()) == 1
 
 
-# ─── GET /terraform-roots/{id}/files ────────────────────────────────────────────
+# ─── GET /terraform/roots/{id}/files ────────────────────────────────────────────
 
 
 def test_list_terraform_files(
@@ -479,7 +479,7 @@ def test_list_terraform_files(
     ]
     with patch("app.api.routes.terraform._fetch_terraform_files", return_value=fetched):
         response = client.get(
-            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/files",
+            f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/files",
             headers=superuser_token_headers,
         )
     assert response.status_code == 200
@@ -499,13 +499,13 @@ def test_list_terraform_files_github_failure_is_502(
         side_effect=RuntimeError("boom"),
     ):
         response = client.get(
-            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/files",
+            f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/files",
             headers=superuser_token_headers,
         )
     assert response.status_code == 502
 
 
-# ─── POST/GET /terraform-roots/{id}/fixes ───────────────────────────────────────
+# ─── POST/GET /terraform/roots/{id}/fixes ───────────────────────────────────────
 
 
 def _make_open_finding(
@@ -556,7 +556,7 @@ def test_trigger_terraform_fix_generation_creates_pending_fix(
         "app.api.routes.terraform.run_terraform_fix_generation.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/fixes",
+            f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/fixes",
             headers=superuser_token_headers,
             json={},
         )
@@ -593,7 +593,7 @@ def test_list_terraform_fixes(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/fixes",
+        f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/fixes",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -610,7 +610,7 @@ def test_trigger_terraform_delivery_queues_task(
 ) -> None:
     with patch("app.api.routes.terraform.deliver_terraform_fixes.delay") as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/terraform-roots/{terraform_root.id}/deliver",
+            f"{settings.API_V1_STR}/terraform/roots/{terraform_root.id}/deliveries",
             headers=superuser_token_headers,
         )
     assert response.status_code == 202

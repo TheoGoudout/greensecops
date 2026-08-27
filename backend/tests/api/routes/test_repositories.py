@@ -69,7 +69,7 @@ def test_list_repositories_empty(
 
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/",
+        f"{settings.API_V1_STR}/repositories",
         params={"org_id": str(fresh_org.id)},
         headers=superuser_token_headers,
     )
@@ -89,7 +89,7 @@ def test_list_repositories_with_data(
 ) -> None:
     # Act
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/",
+        f"{settings.API_V1_STR}/repositories",
         params={"org_id": str(org.id)},
         headers=superuser_token_headers,
     )
@@ -131,7 +131,7 @@ def test_list_repositories_filter_by_enabled(
 
     # Act — only enabled
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/",
+        f"{settings.API_V1_STR}/repositories",
         params={"org_id": str(org.id), "enabled": "true"},
         headers=superuser_token_headers,
     )
@@ -180,7 +180,7 @@ def test_get_repository_not_found(
     assert response.json()["detail"] == "Repository not found"
 
 
-# ─── PATCH /repositories/{id}/toggle ─────────────────────────────────────────
+# ─── PATCH /repositories/{id} ─────────────────────────────────────────
 
 
 def test_toggle_repository_enable(
@@ -203,8 +203,8 @@ def test_toggle_repository_enable(
 
     # Act
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/toggle",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"enabled": True},
         headers=superuser_token_headers,
     )
 
@@ -212,7 +212,7 @@ def test_toggle_repository_enable(
     assert response.status_code == 200
     body = response.json()
     assert body["enabled"] is True
-    assert body["repo_id"] == str(repo.id)
+    assert body["id"] == str(repo.id)
 
     db.refresh(repo)
     assert repo.enabled is True
@@ -226,8 +226,8 @@ def test_toggle_repository_disable(
 ) -> None:
     # Act
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/toggle",
-        params={"enabled": "false"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"enabled": False},
         headers=superuser_token_headers,
     )
 
@@ -246,8 +246,8 @@ def test_toggle_repository_not_found(
 ) -> None:
     # Act
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}/toggle",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}",
+        json={"enabled": True},
         headers=superuser_token_headers,
     )
 
@@ -291,8 +291,8 @@ def test_toggle_repository_enable_blocks_over_repo_quota(
 
     # Act — enabling a 4th repo exceeds the free tier's cap of 3
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{extra_repo.id}/toggle",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{extra_repo.id}",
+        json={"enabled": True},
         headers=headers,
     )
 
@@ -332,8 +332,8 @@ def test_toggle_repository_disable_never_blocked_by_quota(
     db.refresh(over_cap_repo)
 
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{over_cap_repo.id}/toggle",
-        params={"enabled": "false"},
+        f"{settings.API_V1_STR}/repositories/{over_cap_repo.id}",
+        json={"enabled": False},
         headers=headers,
     )
 
@@ -374,8 +374,8 @@ def test_toggle_auto_fix_blocked_on_free_tier(
     repo = _auto_fix_repo(db, org)
 
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"auto_fix_enabled": True},
         headers=headers,
     )
 
@@ -403,8 +403,8 @@ def test_toggle_auto_fix_allowed_on_paid_tier(
     repo = _auto_fix_repo(db, org)
 
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"auto_fix_enabled": True},
         headers=headers,
     )
 
@@ -428,8 +428,8 @@ def test_toggle_auto_fix_superuser_bypasses_gate(
     repo = _auto_fix_repo(db, org)
 
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"auto_fix_enabled": True},
         headers=superuser_token_headers,
     )
 
@@ -456,8 +456,8 @@ def test_toggle_auto_fix_disable_never_blocked(
     db.commit()
 
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
-        params={"enabled": "false"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"auto_fix_enabled": False},
         headers=headers,
     )
 
@@ -501,7 +501,7 @@ def test_list_repositories_scoped_to_user_orgs(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/", headers=normal_user_token_headers
+        f"{settings.API_V1_STR}/repositories", headers=normal_user_token_headers
     )
 
     assert response.status_code == 200
@@ -534,8 +534,8 @@ def test_toggle_repository_cross_org_returns_404(
     _other_org, other_repo = _make_org_with_repo(db, "toggleforbidden")
 
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{other_repo.id}/toggle",
-        params={"enabled": "false"},
+        f"{settings.API_V1_STR}/repositories/{other_repo.id}",
+        json={"enabled": False},
         headers=normal_user_token_headers,
     )
 
@@ -589,7 +589,7 @@ def test_list_repositories_grade_null_without_analyses(
 ) -> None:
     # Arrange — repo exists but has no completed analyses
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/",
+        f"{settings.API_V1_STR}/repositories",
         params={"org_id": str(org.id)},
         headers=superuser_token_headers,
     )
@@ -615,7 +615,7 @@ def test_list_repositories_grade_populated(
     _make_completed_analysis(db, repo, wf2, score=60.0, grade="C")
 
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/",
+        f"{settings.API_V1_STR}/repositories",
         params={"org_id": str(org.id)},
         headers=superuser_token_headers,
     )
@@ -704,7 +704,7 @@ def test_list_external_repositories_returns_external_only(
     assert str(normal_repo.id) not in ids
 
 
-# ─── GET /repositories/{id}/workflow-files ───────────────────────────────────
+# ─── GET /workflow/repositories/{id}/files ───────────────────────────────────
 
 
 def test_list_workflow_files_empty(
@@ -714,7 +714,7 @@ def test_list_workflow_files_empty(
 ) -> None:
     # Arrange — repo has no workflow files
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/files",
         headers=superuser_token_headers,
     )
 
@@ -740,7 +740,7 @@ def test_list_workflow_files_returns_files(
     db.refresh(wf)
 
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/files",
         headers=superuser_token_headers,
     )
 
@@ -777,7 +777,7 @@ def test_list_workflow_files_excludes_soft_deleted(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files",
+        f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/files",
         headers=superuser_token_headers,
     )
 
@@ -818,7 +818,7 @@ def test_list_workflow_files_not_found(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}/workflow-files",
+        f"{settings.API_V1_STR}/workflow/repositories/{uuid.uuid4()}/files",
         headers=superuser_token_headers,
     )
 
@@ -864,7 +864,7 @@ def test_inject_action_already_present_detected_with_pinned_ref() -> None:
     assert modified is False
 
 
-# ─── POST /repositories/{id}/integrate-action ───────────────────────────────
+# ─── POST /repositories/{id}/action-integration ───────────────────────────────
 
 
 def test_integrate_action_no_workflow_files(
@@ -873,7 +873,7 @@ def test_integrate_action_no_workflow_files(
     repo: Repository,
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/integrate-action",
+        f"{settings.API_V1_STR}/repositories/{repo.id}/action-integration",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
@@ -906,7 +906,7 @@ def test_integrate_action_no_installation(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/repositories/{repo_no_install.id}/integrate-action",
+        f"{settings.API_V1_STR}/repositories/{repo_no_install.id}/action-integration",
         headers=superuser_token_headers,
     )
     assert response.status_code == 400
@@ -972,7 +972,7 @@ def test_integrate_action_already_present(
             ),
         ):
             response = client.post(
-                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
+                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/action-integration",
                 headers=superuser_token_headers,
             )
     finally:
@@ -1055,7 +1055,7 @@ def test_integrate_action_badge_url_prefers_greensecops_public_url(
             ),
         ):
             response = client.post(
-                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/integrate-action",
+                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/action-integration",
                 headers=superuser_token_headers,
             )
     finally:
@@ -1067,7 +1067,7 @@ def test_integrate_action_badge_url_prefers_greensecops_public_url(
     readme_content = dict(file_changes)["README.md"]
     owner, name = repo_with_install.full_name.split("/", 1)
     assert (
-        f"https://tunnel.ngrok.io{settings.API_V1_STR}/badges/{owner}/{name}/"
+        f"https://tunnel.ngrok.io{settings.API_V1_STR}/badges/repositories/{owner}/{name}/"
         in readme_content
     )
     assert "localhost:8000" not in readme_content
@@ -1083,15 +1083,15 @@ def test_toggle_auto_fix_enable(
     db: Session,
 ) -> None:
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{repo.id}/auto-fix",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{repo.id}",
+        json={"auto_fix_enabled": True},
         headers=superuser_token_headers,
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["auto_fix_enabled"] is True
-    assert body["repo_id"] == str(repo.id)
+    assert body["id"] == str(repo.id)
 
     db.refresh(repo)
     assert repo.auto_fix_enabled is True
@@ -1102,8 +1102,8 @@ def test_toggle_auto_fix_not_found(
     superuser_token_headers: dict[str, str],
 ) -> None:
     response = client.patch(
-        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}/auto-fix",
-        params={"enabled": "true"},
+        f"{settings.API_V1_STR}/repositories/{uuid.uuid4()}",
+        json={"auto_fix_enabled": True},
         headers=superuser_token_headers,
     )
 
@@ -1215,7 +1215,7 @@ def test_list_workflow_files_scoped_to_branch(
     db.add(feature_wf)
     db.commit()
 
-    url = f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-files"
+    url = f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/files"
     default_listing = client.get(url, headers=superuser_token_headers)
     assert default_listing.status_code == 200
     paths = [wf["path"] for wf in default_listing.json()]
@@ -1230,11 +1230,11 @@ def test_list_workflow_files_scoped_to_branch(
     assert feature_listing.json()[0]["branch"] == "feature"
 
 
-# ─── POST /repositories/{id}/sync-workflows ──────────────────────────────────
+# ─── POST /repositories/{id}/workflow-sync ──────────────────────────────────
 
 
 def _sync_url(repo: Repository) -> str:
-    return f"{settings.API_V1_STR}/repositories/{repo.id}/sync-workflows"
+    return f"{settings.API_V1_STR}/repositories/{repo.id}/workflow-sync"
 
 
 def _scan_lock(*, acquired: bool):

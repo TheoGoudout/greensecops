@@ -13,15 +13,13 @@ import {
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
-  type AnalysisPublic,
-  type FixPublic,
   type FixStatus,
-  type IssuePublic,
   type PullRequestPublic,
   RepositoriesService,
-  WorkflowFindingsService,
-  WorkflowFixesService,
-  WorkflowScansService,
+  type WorkflowFindingPublic,
+  type WorkflowFixPublic,
+  type WorkflowScanPublic,
+  WorkflowService,
 } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -59,7 +57,7 @@ const IN_FLIGHT_STATUSES: FixStatus[] = ["pending", "generating", "delivering"]
 // Mirrors the backend eligibility rules: a fix a worker is processing cannot
 // be regenerated out from under it, and merged code changes are already
 // applied.
-const isRegenerable = (fix: FixPublic) =>
+const isRegenerable = (fix: WorkflowFixPublic) =>
   !IN_FLIGHT_STATUSES.includes(fix.status) && fix.pr_state !== "merged"
 
 function StaticAnalysisPage() {
@@ -90,9 +88,9 @@ function StaticAnalysisPage() {
   >(new Map())
 
   const invalidateStatic = () => {
-    queryClient.invalidateQueries({ queryKey: ["issues", "repo", repoId] })
+    queryClient.invalidateQueries({ queryKey: ["findings", "repo", repoId] })
     queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
-    queryClient.invalidateQueries({ queryKey: ["analyses", repoId] })
+    queryClient.invalidateQueries({ queryKey: ["scans", repoId] })
     // A sync adds, removes and rewrites workflow files, so the list itself is
     // stale after one — not just the findings hanging off it.
     queryClient.invalidateQueries({ queryKey: ["workflow-files", repoId] })
@@ -101,16 +99,16 @@ function StaticAnalysisPage() {
   const { data: workflowFiles, isLoading: wfLoading } = useQuery({
     queryKey: ["workflow-files", repoId, { branch }],
     queryFn: () =>
-      RepositoriesService.listWorkflowFiles({
+      WorkflowService.listFiles({
         repoId,
         branch: branch || undefined,
       }),
   })
 
   const { data: issues } = useQuery({
-    queryKey: ["issues", "repo", repoId, { unfixed, branch, showIgnored }],
+    queryKey: ["findings", "repo", repoId, { unfixed, branch, showIgnored }],
     queryFn: () =>
-      WorkflowFindingsService.listIssues({
+      WorkflowService.listFindings({
         repoId,
         branch: branch || undefined,
         unfixed: unfixed || undefined,
@@ -122,7 +120,7 @@ function StaticAnalysisPage() {
   const { data: fixes } = useQuery({
     queryKey: ["fixes", "repo", repoId, branch],
     queryFn: () =>
-      WorkflowFixesService.listFixes({
+      WorkflowService.listFixes({
         repoId,
         branch: branch || undefined,
         limit: 100,
@@ -130,9 +128,9 @@ function StaticAnalysisPage() {
   })
 
   const { data: analyses } = useQuery({
-    queryKey: ["analyses", repoId, branch],
+    queryKey: ["scans", repoId, branch],
     queryFn: () =>
-      WorkflowScansService.listAnalyses({
+      WorkflowService.listScans({
         repoId,
         branch: branch || undefined,
         limit: 100,
@@ -141,7 +139,7 @@ function StaticAnalysisPage() {
 
   const { data: pullRequests } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
-    queryFn: () => WorkflowFixesService.listPullRequests({ repoId }),
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
   })
 
   const prByBranch = useMemo(() => {
@@ -151,9 +149,9 @@ function StaticAnalysisPage() {
   }, [pullRequests])
 
   const issuesByPath = useMemo(() => {
-    const map = new Map<string, IssuePublic[]>()
+    const map = new Map<string, WorkflowFindingPublic[]>()
     for (const issue of issues ?? []) {
-      const path = issue.workflow_file_path ?? ""
+      const path = issue.file_path ?? ""
       const list = map.get(path) ?? []
       list.push(issue)
       map.set(path, list)
@@ -169,16 +167,16 @@ function StaticAnalysisPage() {
   }, [issues])
 
   const fixByPath = useMemo(() => {
-    const map = new Map<string, FixPublic>()
-    for (const fix of fixes ?? []) map.set(fix.workflow_file_path ?? "", fix)
+    const map = new Map<string, WorkflowFixPublic>()
+    for (const fix of fixes ?? []) map.set(fix.file_path ?? "", fix)
     return map
   }, [fixes])
 
   // Latest analysis per workflow file drives the per-card grade / status.
   const latestAnalysisByPath = useMemo(() => {
-    const map = new Map<string, AnalysisPublic>()
+    const map = new Map<string, WorkflowScanPublic>()
     for (const a of analyses ?? []) {
-      const path = a.workflow_file_path ?? ""
+      const path = a.file_path ?? ""
       const prev = map.get(path)
       if (
         !prev ||
@@ -219,7 +217,7 @@ function StaticAnalysisPage() {
 
   const wfFixMutation = useMutation({
     mutationFn: (vars: { issueIds: string[] }) =>
-      WorkflowFixesService.triggerFixGenerationForRepo({
+      WorkflowService.generateRepositoryFixes({
         repoId,
         force: true,
         requestBody: { issue_ids: vars.issueIds },
@@ -235,8 +233,7 @@ function StaticAnalysisPage() {
   })
 
   const regenerateWorkflowMutation = useMutation({
-    mutationFn: (fixId: string) =>
-      WorkflowFixesService.regenerateFixesForWorkflow({ fixId }),
+    mutationFn: (fixId: string) => WorkflowService.regenerateFix({ fixId }),
     onSuccess: () => {
       toast.success("Fix queued for regeneration")
       invalidateStatic()
@@ -249,7 +246,7 @@ function StaticAnalysisPage() {
 
   const batchFixMutation = useMutation({
     mutationFn: () =>
-      WorkflowFixesService.triggerFixGenerationForRepo({
+      WorkflowService.generateRepositoryFixes({
         repoId,
         force: true,
         requestBody:
@@ -268,7 +265,7 @@ function StaticAnalysisPage() {
   })
 
   const regenerateRepoMutation = useMutation({
-    mutationFn: () => WorkflowFixesService.regenerateFixesForRepo({ repoId }),
+    mutationFn: () => WorkflowService.regenerateRepositoryFixes({ repoId }),
     onSuccess: () => {
       toast.success("All fixes queued for regeneration")
       invalidateStatic()
@@ -283,7 +280,7 @@ function StaticAnalysisPage() {
   // it lives on the tab it acts on.
   const triggerMutation = useMutation({
     mutationFn: () =>
-      WorkflowScansService.triggerAnalysis({
+      WorkflowService.triggerRepositoryScan({
         repoId,
         branch: branch || undefined,
       }),
@@ -332,7 +329,7 @@ function StaticAnalysisPage() {
 
   const analyzeWorkflowMutation = useMutation({
     mutationFn: (workflowFileId: string) =>
-      WorkflowScansService.reanalyzeForWorkflow({
+      WorkflowService.triggerFileScan({
         workflowFileId,
         force: true,
       }),
@@ -348,9 +345,9 @@ function StaticAnalysisPage() {
 
   const deliverWorkflowMutation = useMutation({
     mutationFn: (vars: { fixId: string; force: boolean }) =>
-      WorkflowFixesService.triggerWorkflowDelivery({
+      WorkflowService.deliverFix({
+        fixId: vars.fixId,
         force: vars.force,
-        requestBody: { fix_id: vars.fixId },
       }),
     onSuccess: () => {
       toast.success("Workflow PR queued")
@@ -367,7 +364,7 @@ function StaticAnalysisPage() {
 
   const deliverRepoMutation = useMutation({
     mutationFn: (vars: { force: boolean }) =>
-      WorkflowFixesService.triggerRepoDelivery({ repoId, force: vars.force }),
+      WorkflowService.deliverRepositoryFixes({ repoId, force: vars.force }),
     onSuccess: () => {
       toast.success("Repo-wide PR queued")
       queryClient.invalidateQueries({ queryKey: ["fixes", "repo", repoId] })
@@ -600,9 +597,7 @@ function StaticAnalysisPage() {
                           {a.branch ?? "—"}
                         </span>
                         <span className="text-xs font-mono text-muted-foreground truncate">
-                          {a.workflow_file_path
-                            ? a.workflow_file_path.split("/").pop()
-                            : "—"}
+                          {a.file_path ? a.file_path.split("/").pop() : "—"}
                         </span>
                         <span className="text-xs text-muted-foreground capitalize">
                           {a.triggered_by.replace(/_/g, " ")}

@@ -22,7 +22,7 @@ class OrganizationPublic(SQLModel):
     created_at: datetime | None = None
 
 
-class OrganizationAIUpdate(SQLModel):
+class OrganizationUpdate(SQLModel):
     default_llm_provider: LLMProvider | None = None
     default_llm_model: str | None = None
 
