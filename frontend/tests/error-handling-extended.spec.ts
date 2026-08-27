@@ -17,18 +17,24 @@ test.describe("Error Handling — Extended", () => {
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
   })
 
   test("fix detail 404 shows error state", async ({ page }) => {
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ status: 404, json: { detail: "Fix not found" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ status: 404, json: { detail: "Fix not found" } })
+      },
+    )
 
     await page.goto("/fixes/00000000-0000-0000-0000-999999999999")
 
@@ -88,15 +94,21 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ status: 500, json: { detail: "Internal error" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ status: 500, json: { detail: "Internal error" } })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
 
@@ -123,9 +135,12 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [MOCK_REPO] })
       }
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ status: 500, json: { detail: "Internal error" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ status: 500, json: { detail: "Internal error" } })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 
@@ -170,10 +185,13 @@ test.describe("Error Handling — Extended", () => {
         route.fulfill({ json: [] })
       },
     )
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, async (route) => {
-      await new Promise((r) => setTimeout(r, 3000))
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      async (route) => {
+        await new Promise((r) => setTimeout(r, 3000))
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/repositories/${MOCK_REPO.id}`)
 

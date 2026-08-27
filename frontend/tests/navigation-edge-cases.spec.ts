@@ -99,9 +99,12 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
     await mockUserMe(page, MOCK_SUPERUSER)
     await setupAllMocks(page)
 
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: MOCK_ANALYSIS })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: MOCK_ANALYSIS })
+      },
+    )
 
     await page.goto(`/analyses/${MOCK_ANALYSIS.id}`)
 

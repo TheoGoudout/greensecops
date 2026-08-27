@@ -25,9 +25,12 @@ test.describe("Issue Filters and Display", () => {
     await mockRules(page)
     await mockRepositories(page)
     await mockFixes(page, [])
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [MOCK_ANALYSIS] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [MOCK_ANALYSIS] })
+      },
+    )
   })
 
   test("all issues shown when no filter applied", async ({ page }) => {
@@ -171,14 +174,17 @@ test.describe("Issue Filters and Display", () => {
   })
 
   test("analysis detail shows issues grouped by workflow", async ({ page }) => {
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      const url = route.request().url()
-      if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      } else {
-        route.fulfill({ json: [MOCK_ANALYSIS] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        const url = route.request().url()
+        if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
+          route.fulfill({ json: MOCK_ANALYSIS })
+        } else {
+          route.fulfill({ json: [MOCK_ANALYSIS] })
+        }
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY],

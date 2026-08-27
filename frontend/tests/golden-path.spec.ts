@@ -90,14 +90,17 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      const url = route.request().url()
-      if (url.match(/\/scans\/[0-9a-f-]{36}/)) {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      } else {
-        route.fulfill({ json: [MOCK_ANALYSIS] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        const url = route.request().url()
+        if (url.match(/\/scans\/[0-9a-f-]{36}/)) {
+          route.fulfill({ json: MOCK_ANALYSIS })
+        } else {
+          route.fulfill({ json: [MOCK_ANALYSIS] })
+        }
+      },
+    )
 
     await page.route("**/api/v1/workflow/findings**", (route) => {
       const url = route.request().url()
@@ -108,9 +111,12 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       }
     })
 
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ json: [MOCK_FIX] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [MOCK_FIX] })
+      },
+    )
 
     // The dashboard's summary and its three engine sections all read
     // /overview/; without it they would fall through to the live API.

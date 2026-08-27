@@ -5355,7 +5355,7 @@ export type BadgesGetAnsibleProjectBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/ansible/{project_id}.svg';
+    url: '/api/v1/badges/ansible-projects/{project_id}.svg';
 };
 
 export type BadgesGetAnsibleProjectBadgeErrors = {
@@ -5388,7 +5388,7 @@ export type BadgesGetAnsibleProjectBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/ansible/{project_id}.json';
+    url: '/api/v1/badges/ansible-projects/{project_id}.json';
 };
 
 export type BadgesGetAnsibleProjectBadgeJsonErrors = {
@@ -5917,7 +5917,7 @@ export type BillingReviewOssApplicationResponses = {
 
 export type BillingReviewOssApplicationResponse = BillingReviewOssApplicationResponses[keyof BillingReviewOssApplicationResponses];
 
-export type AnsibleListAnsibleProjectsData = {
+export type AnsibleListProjectsData = {
     body?: never;
     path?: never;
     query?: {
@@ -5926,92 +5926,54 @@ export type AnsibleListAnsibleProjectsData = {
          */
         repo_id?: string | null;
     };
-    url: '/api/v1/ansible-projects/';
+    url: '/api/v1/ansible/projects';
 };
 
-export type AnsibleListAnsibleProjectsErrors = {
+export type AnsibleListProjectsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleListAnsibleProjectsError = AnsibleListAnsibleProjectsErrors[keyof AnsibleListAnsibleProjectsErrors];
+export type AnsibleListProjectsError = AnsibleListProjectsErrors[keyof AnsibleListProjectsErrors];
 
-export type AnsibleListAnsibleProjectsResponses = {
+export type AnsibleListProjectsResponses = {
     /**
-     * Response Ansible-List Ansible Projects
+     * Response Ansible-List Projects
      * Successful Response
      */
     200: Array<AnsibleProjectPublic>;
 };
 
-export type AnsibleListAnsibleProjectsResponse = AnsibleListAnsibleProjectsResponses[keyof AnsibleListAnsibleProjectsResponses];
+export type AnsibleListProjectsResponse = AnsibleListProjectsResponses[keyof AnsibleListProjectsResponses];
 
-export type AnsibleCreateAnsibleProjectData = {
+export type AnsibleCreateProjectData = {
     body: AnsibleProjectCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/ansible-projects/';
+    url: '/api/v1/ansible/projects';
 };
 
-export type AnsibleCreateAnsibleProjectErrors = {
+export type AnsibleCreateProjectErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleCreateAnsibleProjectError = AnsibleCreateAnsibleProjectErrors[keyof AnsibleCreateAnsibleProjectErrors];
+export type AnsibleCreateProjectError = AnsibleCreateProjectErrors[keyof AnsibleCreateProjectErrors];
 
-export type AnsibleCreateAnsibleProjectResponses = {
+export type AnsibleCreateProjectResponses = {
     /**
      * Successful Response
      */
     201: AnsibleProjectPublic;
 };
 
-export type AnsibleCreateAnsibleProjectResponse = AnsibleCreateAnsibleProjectResponses[keyof AnsibleCreateAnsibleProjectResponses];
+export type AnsibleCreateProjectResponse = AnsibleCreateProjectResponses[keyof AnsibleCreateProjectResponses];
 
-export type AnsibleToggleAnsibleProjectData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query: {
-        /**
-         * Enabled
-         */
-        enabled: boolean;
-    };
-    url: '/api/v1/ansible-projects/{project_id}/toggle';
-};
-
-export type AnsibleToggleAnsibleProjectErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleToggleAnsibleProjectError = AnsibleToggleAnsibleProjectErrors[keyof AnsibleToggleAnsibleProjectErrors];
-
-export type AnsibleToggleAnsibleProjectResponses = {
-    /**
-     * Response Ansible-Toggle Ansible Project
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | boolean;
-    };
-};
-
-export type AnsibleToggleAnsibleProjectResponse = AnsibleToggleAnsibleProjectResponses[keyof AnsibleToggleAnsibleProjectResponses];
-
-export type AnsibleDeleteAnsibleProjectData = {
+export type AnsibleDeleteProjectData = {
     body?: never;
     path: {
         /**
@@ -6020,28 +5982,89 @@ export type AnsibleDeleteAnsibleProjectData = {
         project_id: string;
     };
     query?: never;
-    url: '/api/v1/ansible-projects/{project_id}';
+    url: '/api/v1/ansible/projects/{project_id}';
 };
 
-export type AnsibleDeleteAnsibleProjectErrors = {
+export type AnsibleDeleteProjectErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleDeleteAnsibleProjectError = AnsibleDeleteAnsibleProjectErrors[keyof AnsibleDeleteAnsibleProjectErrors];
+export type AnsibleDeleteProjectError = AnsibleDeleteProjectErrors[keyof AnsibleDeleteProjectErrors];
 
-export type AnsibleDeleteAnsibleProjectResponses = {
+export type AnsibleDeleteProjectResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type AnsibleDeleteAnsibleProjectResponse = AnsibleDeleteAnsibleProjectResponses[keyof AnsibleDeleteAnsibleProjectResponses];
+export type AnsibleDeleteProjectResponse = AnsibleDeleteProjectResponses[keyof AnsibleDeleteProjectResponses];
 
-export type AnsibleTriggerAnsibleScanData = {
+export type AnsibleUpdateProjectData = {
+    body: ScanTargetUpdate;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/projects/{project_id}';
+};
+
+export type AnsibleUpdateProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleUpdateProjectError = AnsibleUpdateProjectErrors[keyof AnsibleUpdateProjectErrors];
+
+export type AnsibleUpdateProjectResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnsibleProjectPublic;
+};
+
+export type AnsibleUpdateProjectResponse = AnsibleUpdateProjectResponses[keyof AnsibleUpdateProjectResponses];
+
+export type AnsibleListScansData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/projects/{project_id}/scans';
+};
+
+export type AnsibleListScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListScansError = AnsibleListScansErrors[keyof AnsibleListScansErrors];
+
+export type AnsibleListScansResponses = {
+    /**
+     * Response Ansible-List Scans
+     * Successful Response
+     */
+    200: Array<AnsibleScanPublic>;
+};
+
+export type AnsibleListScansResponse = AnsibleListScansResponses[keyof AnsibleListScansResponses];
+
+export type AnsibleTriggerScanData = {
     body?: never;
     path: {
         /**
@@ -6055,21 +6078,21 @@ export type AnsibleTriggerAnsibleScanData = {
          */
         branch?: string | null;
     };
-    url: '/api/v1/ansible-projects/{project_id}/scan';
+    url: '/api/v1/ansible/projects/{project_id}/scans';
 };
 
-export type AnsibleTriggerAnsibleScanErrors = {
+export type AnsibleTriggerScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleTriggerAnsibleScanError = AnsibleTriggerAnsibleScanErrors[keyof AnsibleTriggerAnsibleScanErrors];
+export type AnsibleTriggerScanError = AnsibleTriggerScanErrors[keyof AnsibleTriggerScanErrors];
 
-export type AnsibleTriggerAnsibleScanResponses = {
+export type AnsibleTriggerScanResponses = {
     /**
-     * Response Ansible-Trigger Ansible Scan
+     * Response Ansible-Trigger Scan
      * Successful Response
      */
     202: {
@@ -6077,40 +6100,9 @@ export type AnsibleTriggerAnsibleScanResponses = {
     };
 };
 
-export type AnsibleTriggerAnsibleScanResponse = AnsibleTriggerAnsibleScanResponses[keyof AnsibleTriggerAnsibleScanResponses];
+export type AnsibleTriggerScanResponse = AnsibleTriggerScanResponses[keyof AnsibleTriggerScanResponses];
 
-export type AnsibleListAnsibleScansData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/v1/ansible-projects/{project_id}/scans';
-};
-
-export type AnsibleListAnsibleScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleListAnsibleScansError = AnsibleListAnsibleScansErrors[keyof AnsibleListAnsibleScansErrors];
-
-export type AnsibleListAnsibleScansResponses = {
-    /**
-     * Response Ansible-List Ansible Scans
-     * Successful Response
-     */
-    200: Array<AnsibleScanPublic>;
-};
-
-export type AnsibleListAnsibleScansResponse = AnsibleListAnsibleScansResponses[keyof AnsibleListAnsibleScansResponses];
-
-export type AnsibleListAnsibleFindingsData = {
+export type AnsibleListFindingsData = {
     body?: never;
     path: {
         /**
@@ -6124,29 +6116,29 @@ export type AnsibleListAnsibleFindingsData = {
          */
         include_resolved?: boolean;
     };
-    url: '/api/v1/ansible-projects/{project_id}/findings';
+    url: '/api/v1/ansible/projects/{project_id}/findings';
 };
 
-export type AnsibleListAnsibleFindingsErrors = {
+export type AnsibleListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleListAnsibleFindingsError = AnsibleListAnsibleFindingsErrors[keyof AnsibleListAnsibleFindingsErrors];
+export type AnsibleListFindingsError = AnsibleListFindingsErrors[keyof AnsibleListFindingsErrors];
 
-export type AnsibleListAnsibleFindingsResponses = {
+export type AnsibleListFindingsResponses = {
     /**
-     * Response Ansible-List Ansible Findings
+     * Response Ansible-List Findings
      * Successful Response
      */
     200: Array<AnsibleFindingPublic>;
 };
 
-export type AnsibleListAnsibleFindingsResponse = AnsibleListAnsibleFindingsResponses[keyof AnsibleListAnsibleFindingsResponses];
+export type AnsibleListFindingsResponse = AnsibleListFindingsResponses[keyof AnsibleListFindingsResponses];
 
-export type AnsibleListAnsibleFilesData = {
+export type AnsibleListFilesData = {
     body?: never;
     path: {
         /**
@@ -6160,29 +6152,29 @@ export type AnsibleListAnsibleFilesData = {
          */
         ref?: string | null;
     };
-    url: '/api/v1/ansible-projects/{project_id}/files';
+    url: '/api/v1/ansible/projects/{project_id}/files';
 };
 
-export type AnsibleListAnsibleFilesErrors = {
+export type AnsibleListFilesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleListAnsibleFilesError = AnsibleListAnsibleFilesErrors[keyof AnsibleListAnsibleFilesErrors];
+export type AnsibleListFilesError = AnsibleListFilesErrors[keyof AnsibleListFilesErrors];
 
-export type AnsibleListAnsibleFilesResponses = {
+export type AnsibleListFilesResponses = {
     /**
-     * Response Ansible-List Ansible Files
+     * Response Ansible-List Files
      * Successful Response
      */
     200: Array<AnsibleFilePublic>;
 };
 
-export type AnsibleListAnsibleFilesResponse = AnsibleListAnsibleFilesResponses[keyof AnsibleListAnsibleFilesResponses];
+export type AnsibleListFilesResponse = AnsibleListFilesResponses[keyof AnsibleListFilesResponses];
 
-export type AnsibleListAnsibleFixesData = {
+export type AnsibleListFixesData = {
     body?: never;
     path: {
         /**
@@ -6191,29 +6183,29 @@ export type AnsibleListAnsibleFixesData = {
         project_id: string;
     };
     query?: never;
-    url: '/api/v1/ansible-projects/{project_id}/fixes';
+    url: '/api/v1/ansible/projects/{project_id}/fixes';
 };
 
-export type AnsibleListAnsibleFixesErrors = {
+export type AnsibleListFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleListAnsibleFixesError = AnsibleListAnsibleFixesErrors[keyof AnsibleListAnsibleFixesErrors];
+export type AnsibleListFixesError = AnsibleListFixesErrors[keyof AnsibleListFixesErrors];
 
-export type AnsibleListAnsibleFixesResponses = {
+export type AnsibleListFixesResponses = {
     /**
-     * Response Ansible-List Ansible Fixes
+     * Response Ansible-List Fixes
      * Successful Response
      */
     200: Array<AnsibleFixPublic>;
 };
 
-export type AnsibleListAnsibleFixesResponse = AnsibleListAnsibleFixesResponses[keyof AnsibleListAnsibleFixesResponses];
+export type AnsibleListFixesResponse = AnsibleListFixesResponses[keyof AnsibleListFixesResponses];
 
-export type AnsibleTriggerAnsibleFixGenerationData = {
+export type AnsibleGenerateFixesData = {
     /**
      * Body
      */
@@ -6230,21 +6222,21 @@ export type AnsibleTriggerAnsibleFixGenerationData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/ansible-projects/{project_id}/fixes';
+    url: '/api/v1/ansible/projects/{project_id}/fixes';
 };
 
-export type AnsibleTriggerAnsibleFixGenerationErrors = {
+export type AnsibleGenerateFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleTriggerAnsibleFixGenerationError = AnsibleTriggerAnsibleFixGenerationErrors[keyof AnsibleTriggerAnsibleFixGenerationErrors];
+export type AnsibleGenerateFixesError = AnsibleGenerateFixesErrors[keyof AnsibleGenerateFixesErrors];
 
-export type AnsibleTriggerAnsibleFixGenerationResponses = {
+export type AnsibleGenerateFixesResponses = {
     /**
-     * Response Ansible-Trigger Ansible Fix Generation
+     * Response Ansible-Generate Fixes
      * Successful Response
      */
     202: {
@@ -6252,9 +6244,9 @@ export type AnsibleTriggerAnsibleFixGenerationResponses = {
     };
 };
 
-export type AnsibleTriggerAnsibleFixGenerationResponse = AnsibleTriggerAnsibleFixGenerationResponses[keyof AnsibleTriggerAnsibleFixGenerationResponses];
+export type AnsibleGenerateFixesResponse = AnsibleGenerateFixesResponses[keyof AnsibleGenerateFixesResponses];
 
-export type AnsibleTriggerAnsibleDeliveryData = {
+export type AnsibleDeliverFixesData = {
     body?: never;
     path: {
         /**
@@ -6268,21 +6260,21 @@ export type AnsibleTriggerAnsibleDeliveryData = {
          */
         force?: boolean;
     };
-    url: '/api/v1/ansible-projects/{project_id}/deliver';
+    url: '/api/v1/ansible/projects/{project_id}/deliveries';
 };
 
-export type AnsibleTriggerAnsibleDeliveryErrors = {
+export type AnsibleDeliverFixesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleTriggerAnsibleDeliveryError = AnsibleTriggerAnsibleDeliveryErrors[keyof AnsibleTriggerAnsibleDeliveryErrors];
+export type AnsibleDeliverFixesError = AnsibleDeliverFixesErrors[keyof AnsibleDeliverFixesErrors];
 
-export type AnsibleTriggerAnsibleDeliveryResponses = {
+export type AnsibleDeliverFixesResponses = {
     /**
-     * Response Ansible-Trigger Ansible Delivery
+     * Response Ansible-Deliver Fixes
      * Successful Response
      */
     202: {
@@ -6290,7 +6282,7 @@ export type AnsibleTriggerAnsibleDeliveryResponses = {
     };
 };
 
-export type AnsibleTriggerAnsibleDeliveryResponse = AnsibleTriggerAnsibleDeliveryResponses[keyof AnsibleTriggerAnsibleDeliveryResponses];
+export type AnsibleDeliverFixesResponse = AnsibleDeliverFixesResponses[keyof AnsibleDeliverFixesResponses];
 
 export type TerraformListRootsData = {
     body?: never;

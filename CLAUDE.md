@@ -102,7 +102,8 @@ Each engine owns one namespace, with the same sub-collections under it:
 
 ```
 /{engine}/{targets}                 /terraform/roots, /docker/targets,
-                                    /cloud/accounts, /workflow/files
+                                    /cloud/accounts, /workflow/files,
+                                    /ansible/projects
 /{engine}/{targets}/{id}/scans      GET history, POST to start one
 /{engine}/{targets}/{id}/findings
 /{engine}/{targets}/{id}/files

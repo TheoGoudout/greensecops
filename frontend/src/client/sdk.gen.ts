@@ -3,20 +3,20 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnsibleCreateAnsibleProjectData, AnsibleCreateAnsibleProjectResponse, AnsibleListAnsibleProjectsData, AnsibleListAnsibleProjectsResponse, AnsibleToggleAnsibleProjectData, AnsibleToggleAnsibleProjectResponse, AnsibleDeleteAnsibleProjectData, AnsibleDeleteAnsibleProjectResponse, AnsibleTriggerAnsibleScanData, AnsibleTriggerAnsibleScanResponse, AnsibleListAnsibleScansData, AnsibleListAnsibleScansResponse, AnsibleListAnsibleFindingsData, AnsibleListAnsibleFindingsResponse, AnsibleListAnsibleFilesData, AnsibleListAnsibleFilesResponse, AnsibleListAnsibleFixesData, AnsibleListAnsibleFixesResponse, AnsibleTriggerAnsibleFixGenerationData, AnsibleTriggerAnsibleFixGenerationResponse, AnsibleTriggerAnsibleDeliveryData, AnsibleTriggerAnsibleDeliveryResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
+import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
 
 export class AnsibleService {
     /**
-     * Create Ansible Project
+     * Create Project
      * @param data The data for the request.
      * @param data.requestBody
      * @returns AnsibleProjectPublic Successful Response
      * @throws ApiError
      */
-    public static createAnsibleProject(data: AnsibleCreateAnsibleProjectData): CancelablePromise<AnsibleCreateAnsibleProjectResponse> {
+    public static createProject(data: AnsibleCreateProjectData): CancelablePromise<AnsibleCreateProjectResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/ansible-projects/',
+            url: '/api/v1/ansible/projects',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -26,7 +26,7 @@ export class AnsibleService {
     }
 
     /**
-     * List Ansible Projects
+     * List Projects
      * List Ansible projects. Omit ``repo_id`` for the org-wide Infrastructure
      * page (every project across every repo the user can access); pass it to
      * scope to one repo.
@@ -35,10 +35,10 @@ export class AnsibleService {
      * @returns AnsibleProjectPublic Successful Response
      * @throws ApiError
      */
-    public static listAnsibleProjects(data: AnsibleListAnsibleProjectsData = {}): CancelablePromise<AnsibleListAnsibleProjectsResponse> {
+    public static listProjects(data: AnsibleListProjectsData = {}): CancelablePromise<AnsibleListProjectsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/ansible-projects/',
+            url: '/api/v1/ansible/projects',
             query: {
                 repo_id: data.repoId
             },
@@ -49,23 +49,22 @@ export class AnsibleService {
     }
 
     /**
-     * Toggle Ansible Project
+     * Update Project
      * @param data The data for the request.
      * @param data.projectId
-     * @param data.enabled
-     * @returns unknown Successful Response
+     * @param data.requestBody
+     * @returns AnsibleProjectPublic Successful Response
      * @throws ApiError
      */
-    public static toggleAnsibleProject(data: AnsibleToggleAnsibleProjectData): CancelablePromise<AnsibleToggleAnsibleProjectResponse> {
+    public static updateProject(data: AnsibleUpdateProjectData): CancelablePromise<AnsibleUpdateProjectResponse> {
         return __request(OpenAPI, {
             method: 'PATCH',
-            url: '/api/v1/ansible-projects/{project_id}/toggle',
+            url: '/api/v1/ansible/projects/{project_id}',
             path: {
                 project_id: data.projectId
             },
-            query: {
-                enabled: data.enabled
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -73,16 +72,16 @@ export class AnsibleService {
     }
 
     /**
-     * Delete Ansible Project
+     * Delete Project
      * @param data The data for the request.
      * @param data.projectId
      * @returns void Successful Response
      * @throws ApiError
      */
-    public static deleteAnsibleProject(data: AnsibleDeleteAnsibleProjectData): CancelablePromise<AnsibleDeleteAnsibleProjectResponse> {
+    public static deleteProject(data: AnsibleDeleteProjectData): CancelablePromise<AnsibleDeleteProjectResponse> {
         return __request(OpenAPI, {
             method: 'DELETE',
-            url: '/api/v1/ansible-projects/{project_id}',
+            url: '/api/v1/ansible/projects/{project_id}',
             path: {
                 project_id: data.projectId
             },
@@ -93,17 +92,17 @@ export class AnsibleService {
     }
 
     /**
-     * Trigger Ansible Scan
+     * Trigger Scan
      * @param data The data for the request.
      * @param data.projectId
      * @param data.branch
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerAnsibleScan(data: AnsibleTriggerAnsibleScanData): CancelablePromise<AnsibleTriggerAnsibleScanResponse> {
+    public static triggerScan(data: AnsibleTriggerScanData): CancelablePromise<AnsibleTriggerScanResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/ansible-projects/{project_id}/scan',
+            url: '/api/v1/ansible/projects/{project_id}/scans',
             path: {
                 project_id: data.projectId
             },
@@ -117,16 +116,16 @@ export class AnsibleService {
     }
 
     /**
-     * List Ansible Scans
+     * List Scans
      * @param data The data for the request.
      * @param data.projectId
      * @returns AnsibleScanPublic Successful Response
      * @throws ApiError
      */
-    public static listAnsibleScans(data: AnsibleListAnsibleScansData): CancelablePromise<AnsibleListAnsibleScansResponse> {
+    public static listScans(data: AnsibleListScansData): CancelablePromise<AnsibleListScansResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/ansible-projects/{project_id}/scans',
+            url: '/api/v1/ansible/projects/{project_id}/scans',
             path: {
                 project_id: data.projectId
             },
@@ -137,17 +136,17 @@ export class AnsibleService {
     }
 
     /**
-     * List Ansible Findings
+     * List Findings
      * @param data The data for the request.
      * @param data.projectId
      * @param data.includeResolved
      * @returns AnsibleFindingPublic Successful Response
      * @throws ApiError
      */
-    public static listAnsibleFindings(data: AnsibleListAnsibleFindingsData): CancelablePromise<AnsibleListAnsibleFindingsResponse> {
+    public static listFindings(data: AnsibleListFindingsData): CancelablePromise<AnsibleListFindingsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/ansible-projects/{project_id}/findings',
+            url: '/api/v1/ansible/projects/{project_id}/findings',
             path: {
                 project_id: data.projectId
             },
@@ -161,7 +160,7 @@ export class AnsibleService {
     }
 
     /**
-     * List Ansible Files
+     * List Files
      * The project's live Ansible source, fetched from GitHub on demand.
      *
      * Ansible files aren't persisted (unlike WorkflowFile), so this fetches them
@@ -177,10 +176,10 @@ export class AnsibleService {
      * @returns AnsibleFilePublic Successful Response
      * @throws ApiError
      */
-    public static listAnsibleFiles(data: AnsibleListAnsibleFilesData): CancelablePromise<AnsibleListAnsibleFilesResponse> {
+    public static listFiles(data: AnsibleListFilesData): CancelablePromise<AnsibleListFilesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/ansible-projects/{project_id}/files',
+            url: '/api/v1/ansible/projects/{project_id}/files',
             path: {
                 project_id: data.projectId
             },
@@ -194,16 +193,16 @@ export class AnsibleService {
     }
 
     /**
-     * List Ansible Fixes
+     * List Fixes
      * @param data The data for the request.
      * @param data.projectId
      * @returns AnsibleFixPublic Successful Response
      * @throws ApiError
      */
-    public static listAnsibleFixes(data: AnsibleListAnsibleFixesData): CancelablePromise<AnsibleListAnsibleFixesResponse> {
+    public static listFixes(data: AnsibleListFixesData): CancelablePromise<AnsibleListFixesResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/ansible-projects/{project_id}/fixes',
+            url: '/api/v1/ansible/projects/{project_id}/fixes',
             path: {
                 project_id: data.projectId
             },
@@ -214,7 +213,7 @@ export class AnsibleService {
     }
 
     /**
-     * Trigger Ansible Fix Generation
+     * Generate Fixes
      * Generate LLM fixes for a project's open findings, one whole-file fix each.
      * @param data The data for the request.
      * @param data.projectId
@@ -223,10 +222,10 @@ export class AnsibleService {
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static triggerAnsibleFixGeneration(data: AnsibleTriggerAnsibleFixGenerationData): CancelablePromise<AnsibleTriggerAnsibleFixGenerationResponse> {
+    public static generateFixes(data: AnsibleGenerateFixesData): CancelablePromise<AnsibleGenerateFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/ansible-projects/{project_id}/fixes',
+            url: '/api/v1/ansible/projects/{project_id}/fixes',
             path: {
                 project_id: data.projectId
             },
@@ -242,7 +241,7 @@ export class AnsibleService {
     }
 
     /**
-     * Trigger Ansible Delivery
+     * Deliver Fixes
      * Deliver the project's ready fixes as a single PR (branch per project).
      * @param data The data for the request.
      * @param data.projectId
@@ -250,10 +249,10 @@ export class AnsibleService {
      * @returns string Successful Response
      * @throws ApiError
      */
-    public static triggerAnsibleDelivery(data: AnsibleTriggerAnsibleDeliveryData): CancelablePromise<AnsibleTriggerAnsibleDeliveryResponse> {
+    public static deliverFixes(data: AnsibleDeliverFixesData): CancelablePromise<AnsibleDeliverFixesResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/v1/ansible-projects/{project_id}/deliver',
+            url: '/api/v1/ansible/projects/{project_id}/deliveries',
             path: {
                 project_id: data.projectId
             },
@@ -502,7 +501,7 @@ export class BadgesService {
     public static getAnsibleProjectBadge(data: BadgesGetAnsibleProjectBadgeData): CancelablePromise<BadgesGetAnsibleProjectBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/ansible/{project_id}.svg',
+            url: '/api/v1/badges/ansible-projects/{project_id}.svg',
             path: {
                 project_id: data.projectId
             },
@@ -527,7 +526,7 @@ export class BadgesService {
     public static getAnsibleProjectBadgeJson(data: BadgesGetAnsibleProjectBadgeJsonData): CancelablePromise<BadgesGetAnsibleProjectBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/ansible/{project_id}.json',
+            url: '/api/v1/badges/ansible-projects/{project_id}.json',
             path: {
                 project_id: data.projectId
             },

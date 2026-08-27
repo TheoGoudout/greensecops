@@ -1179,22 +1179,25 @@ export async function mockRepositories(
 }
 
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
-  await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-    const url = route.request().url()
-    const method = route.request().method()
-    if (method === "POST" && url.includes("/repositories/")) {
-      route.fulfill({
-        status: 202,
-        json: { status: "queued", repo_id: MOCK_REPO.id },
-      })
-    } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
-      const id = url.split("/").pop()
-      const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
-      route.fulfill({ json: analysis })
-    } else {
-      route.fulfill({ json: analyses })
-    }
-  })
+  await page.route(
+    /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+    (route) => {
+      const url = route.request().url()
+      const method = route.request().method()
+      if (method === "POST" && url.includes("/repositories/")) {
+        route.fulfill({
+          status: 202,
+          json: { status: "queued", repo_id: MOCK_REPO.id },
+        })
+      } else if (url.match(/\/scans\/[0-9a-f-]{36}$/)) {
+        const id = url.split("/").pop()
+        const analysis = analyses.find((a) => a.id === id) ?? analyses[0]
+        route.fulfill({ json: analysis })
+      } else {
+        route.fulfill({ json: analyses })
+      }
+    },
+  )
 }
 
 export async function mockIssues(
@@ -1517,15 +1520,13 @@ export async function mockAnsibleProjects(
     scans = [MOCK_ANSIBLE_SCAN],
   } = {},
 ) {
-  await page.route("**/api/v1/ansible-projects/**", (route) => {
+  await page.route("**/api/v1/ansible/projects**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
     if (method === "DELETE") {
       route.fulfill({ status: 204 })
-    } else if (method === "PATCH" && url.includes("/toggle")) {
-      route.fulfill({
-        json: { ansible_project_id: projects[0].id, enabled: false },
-      })
+    } else if (method === "PATCH") {
+      route.fulfill({ json: { ...projects[0], enabled: false } })
     } else if (method === "POST" && url.includes("/scan")) {
       route.fulfill({
         status: 202,

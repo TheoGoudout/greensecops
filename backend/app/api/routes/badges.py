@@ -243,7 +243,7 @@ def _ansible_project_badge_grade(
 
 
 @router.get(
-    "/ansible/{project_id}.svg",
+    "/ansible-projects/{project_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -271,7 +271,7 @@ def get_ansible_project_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/ansible/{project_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/ansible-projects/{project_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_ansible_project_badge_json(
     project_id: uuid.UUID,
     session: SessionDep,

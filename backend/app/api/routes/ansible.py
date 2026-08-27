@@ -33,6 +33,7 @@ from app.models import (
     AnsibleScan,
     AnsibleScanPublic,
     Repository,
+    ScanTargetUpdate,
     UsageEngine,
 )
 from app.services.ansible.discovery import classify_ansible_file
@@ -49,7 +50,7 @@ from app.workers.tasks.fix_generation import resolve_llm_provider
 # is keyed by path-parameter *name*, and those two are already taken by Docker
 # and Terraform. Reusing one would resolve this engine's role checks against
 # the wrong table.
-router = RoleRouter(prefix="/ansible-projects", tags=["ansible"])
+router = RoleRouter(prefix="/ansible", tags=["ansible"])
 
 
 class AnsibleFixGenerateRequest(BaseModel):
@@ -59,8 +60,10 @@ class AnsibleFixGenerateRequest(BaseModel):
     finding_ids: list[uuid.UUID] | None = None
 
 
-@router.post("/", role=Role.user, response_model=AnsibleProjectPublic, status_code=201)
-def create_ansible_project(
+@router.post(
+    "/projects", role=Role.user, response_model=AnsibleProjectPublic, status_code=201
+)
+def create_project(
     project_in: AnsibleProjectCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -92,8 +95,8 @@ def create_ansible_project(
     return to_ansible_project_public(project)
 
 
-@router.get("/", role=Role.user, response_model=list[AnsibleProjectPublic])
-def list_ansible_projects(
+@router.get("/projects", role=Role.user, response_model=list[AnsibleProjectPublic])
+def list_projects(
     session: SessionDep,
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
@@ -115,22 +118,26 @@ def list_ansible_projects(
     return [to_ansible_project_public(p) for p in projects]
 
 
-@router.patch("/{project_id}/toggle", role=Role.org_admin)
-def toggle_ansible_project(
+@router.patch(
+    "/projects/{project_id}", role=Role.org_admin, response_model=AnsibleProjectPublic
+)
+def update_project(
     project_id: uuid.UUID,
+    body: ScanTargetUpdate,
     session: SessionDep,
     current_user: CurrentUser,
-    enabled: bool,
-) -> dict[str, str | bool]:
+) -> AnsibleProjectPublic:
     project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    project.enabled = enabled
+    if body.enabled is not None:
+        project.enabled = body.enabled
     session.add(project)
     session.commit()
-    return {"ansible_project_id": str(project_id), "enabled": enabled}
+    session.refresh(project)
+    return to_ansible_project_public(project)
 
 
-@router.delete("/{project_id}", role=Role.org_admin, status_code=204)
-def delete_ansible_project(
+@router.delete("/projects/{project_id}", role=Role.org_admin, status_code=204)
+def delete_project(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -143,12 +150,12 @@ def delete_ansible_project(
 
 
 @router.post(
-    "/{project_id}/scan",
+    "/projects/{project_id}/scans",
     role=Role.org_admin,
     limit=LIMIT_EXPENSIVE,
     status_code=202,
 )
-def trigger_ansible_scan(
+def trigger_scan(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -178,11 +185,11 @@ def trigger_ansible_scan(
 
 
 @router.get(
-    "/{project_id}/scans",
+    "/projects/{project_id}/scans",
     role=Role.org_member,
     response_model=list[AnsibleScanPublic],
 )
-def list_ansible_scans(
+def list_scans(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -198,11 +205,11 @@ def list_ansible_scans(
 
 
 @router.get(
-    "/{project_id}/findings",
+    "/projects/{project_id}/findings",
     role=Role.org_member,
     response_model=list[AnsibleFindingPublic],
 )
-def list_ansible_findings(
+def list_findings(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -223,11 +230,11 @@ def list_ansible_findings(
 
 
 @router.get(
-    "/{project_id}/files",
+    "/projects/{project_id}/files",
     role=Role.org_member,
     response_model=list[AnsibleFilePublic],
 )
-def list_ansible_files(
+def list_files(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -267,9 +274,11 @@ def list_ansible_files(
 
 
 @router.get(
-    "/{project_id}/fixes", role=Role.org_member, response_model=list[AnsibleFixPublic]
+    "/projects/{project_id}/fixes",
+    role=Role.org_member,
+    response_model=list[AnsibleFixPublic],
 )
-def list_ansible_fixes(
+def list_fixes(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -284,9 +293,12 @@ def list_ansible_fixes(
 
 
 @router.post(
-    "/{project_id}/fixes", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/projects/{project_id}/fixes",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_ansible_fix_generation(
+def generate_fixes(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
@@ -353,9 +365,12 @@ def trigger_ansible_fix_generation(
 
 
 @router.post(
-    "/{project_id}/deliver", role=Role.org_admin, limit=LIMIT_EXPENSIVE, status_code=202
+    "/projects/{project_id}/deliveries",
+    role=Role.org_admin,
+    limit=LIMIT_EXPENSIVE,
+    status_code=202,
 )
-def trigger_ansible_delivery(
+def deliver_fixes(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,

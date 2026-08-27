@@ -93,18 +93,21 @@ test.describe("Repositories", () => {
     await mockRepositories(page, [MOCK_REPO])
 
     let triggerCalled = false
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      const method = route.request().method()
-      if (method === "POST") {
-        triggerCalled = true
-        route.fulfill({
-          status: 202,
-          json: { status: "queued", repo_id: MOCK_REPO.id },
-        })
-      } else {
-        route.fulfill({ json: [] })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        const method = route.request().method()
+        if (method === "POST") {
+          triggerCalled = true
+          route.fulfill({
+            status: 202,
+            json: { status: "queued", repo_id: MOCK_REPO.id },
+          })
+        } else {
+          route.fulfill({ json: [] })
+        }
+      },
+    )
 
     await page.goto("/repositories")
 

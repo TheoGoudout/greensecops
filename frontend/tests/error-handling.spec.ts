@@ -9,9 +9,12 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/repositories**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
@@ -34,15 +37,21 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ status: 404, json: { detail: "Not found" } })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ status: 404, json: { detail: "Not found" } })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto("/analyses/00000000-0000-0000-0000-999999999999")
 
@@ -58,9 +67,12 @@ test.describe("Error Handling", () => {
     await page.route("**/api/v1/repositories**", (route) => {
       route.fulfill({ json: [] })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
@@ -109,18 +121,24 @@ test.describe("Error Handling", () => {
         route.fulfill({ json: [] })
       }
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
     await page.route("**/api/v1/rules**", (route) => {
       route.fulfill({ json: [] })
     })
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ status: 500, json: { detail: "Internal error" } })
     })
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/repositories/${repoId}/static-analysis`)
 

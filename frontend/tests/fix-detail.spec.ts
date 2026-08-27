@@ -23,9 +23,12 @@ test.describe("Fix Detail", () => {
   test("shows fix metadata: status badge, issue info, LLM model", async ({
     page,
   }) => {
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ json: MOCK_FIX_READY })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: MOCK_FIX_READY })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FIX })
     })
@@ -39,9 +42,12 @@ test.describe("Fix Detail", () => {
   })
 
   test("ready fix shows Reject and Create PR buttons", async ({ page }) => {
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ json: MOCK_FIX_READY })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: MOCK_FIX_READY })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FIX })
     })
@@ -54,14 +60,17 @@ test.describe("Fix Detail", () => {
 
   test("reject calls API and shows toast", async ({ page }) => {
     let deleteCalled = false
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      if (route.request().method() === "DELETE") {
-        deleteCalled = true
-        route.fulfill({ status: 204 })
-      } else {
-        route.fulfill({ json: MOCK_FIX_READY })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        if (route.request().method() === "DELETE") {
+          deleteCalled = true
+          route.fulfill({ status: 204 })
+        } else {
+          route.fulfill({ json: MOCK_FIX_READY })
+        }
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FIX })
     })
@@ -75,9 +84,12 @@ test.describe("Fix Detail", () => {
   })
 
   test("delivered fix shows View PR link", async ({ page }) => {
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({ json: MOCK_FIX_DELIVERED })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({ json: MOCK_FIX_DELIVERED })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_RELIABILITY })
     })

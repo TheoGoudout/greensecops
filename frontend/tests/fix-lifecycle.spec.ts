@@ -28,25 +28,31 @@ function setupFixDetailMocks(
     mockBilling(page),
     mockRules(page),
     mockRepositories(page),
-    page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      const url = route.request().url()
-      const method = route.request().method()
-      if (method === "POST" && url.includes("/retry")) {
-        route.fulfill({ status: 202, json: { status: "queued" } })
-      } else if (method === "POST" && url.includes("/deliveries")) {
-        route.fulfill({ json: { status: "delivering" } })
-      } else if (method === "DELETE") {
-        route.fulfill({ json: { ...(fix as object), status: "rejected" } })
-      } else {
-        route.fulfill({ json: fix })
-      }
-    }),
+    page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        const url = route.request().url()
+        const method = route.request().method()
+        if (method === "POST" && url.includes("/retry")) {
+          route.fulfill({ status: 202, json: { status: "queued" } })
+        } else if (method === "POST" && url.includes("/deliveries")) {
+          route.fulfill({ json: { status: "delivering" } })
+        } else if (method === "DELETE") {
+          route.fulfill({ json: { ...(fix as object), status: "rejected" } })
+        } else {
+          route.fulfill({ json: fix })
+        }
+      },
+    ),
     page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: issue })
     }),
-    page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    }),
+    page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    ),
   ])
 }
 
@@ -144,22 +150,28 @@ test.describe("Fix Lifecycle — Actions", () => {
     await mockRules(page)
     await mockRepositories(page)
 
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      const url = route.request().url()
-      const method = route.request().method()
-      if (method === "POST" && url.includes("/deliver")) {
-        deliverCalled = true
-        route.fulfill({ json: { ...MOCK_FIX_READY, status: "delivered" } })
-      } else {
-        route.fulfill({ json: MOCK_FIX_READY })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        const url = route.request().url()
+        const method = route.request().method()
+        if (method === "POST" && url.includes("/deliver")) {
+          deliverCalled = true
+          route.fulfill({ json: { ...MOCK_FIX_READY, status: "delivered" } })
+        } else {
+          route.fulfill({ json: MOCK_FIX_READY })
+        }
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FIX })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/fixes/${MOCK_FIX_READY.id}`)
     await expect(page.getByText("ready")).toBeVisible()
@@ -182,22 +194,28 @@ test.describe("Fix Lifecycle — Actions", () => {
     await mockRules(page)
     await mockRepositories(page)
 
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      const url = route.request().url()
-      const method = route.request().method()
-      if (method === "POST" && url.includes("/retry")) {
-        retryCalled = true
-        route.fulfill({ status: 202, json: { status: "queued" } })
-      } else {
-        route.fulfill({ json: MOCK_FIX_FAILED })
-      }
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        const url = route.request().url()
+        const method = route.request().method()
+        if (method === "POST" && url.includes("/retry")) {
+          retryCalled = true
+          route.fulfill({ status: 202, json: { status: "queued" } })
+        } else {
+          route.fulfill({ json: MOCK_FIX_FAILED })
+        }
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: MOCK_ISSUE_WITH_FAILED_FIX })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/fixes/${MOCK_FIX_FAILED.id}`)
     await expect(page.getByText("failed")).toBeVisible()
@@ -216,16 +234,19 @@ test.describe("Fix Lifecycle — Actions", () => {
     await mockRules(page)
     await mockRepositories(page)
 
-    await page.route(/\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/, (route) => {
-      route.fulfill({
-        json: [
-          MOCK_FIX_PENDING,
-          MOCK_FIX_READY,
-          MOCK_FIX_DELIVERED,
-          MOCK_FIX_FAILED,
-        ],
-      })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(fixes|repositories\/[^/]+\/(fixes|deliveries))/,
+      (route) => {
+        route.fulfill({
+          json: [
+            MOCK_FIX_PENDING,
+            MOCK_FIX_READY,
+            MOCK_FIX_DELIVERED,
+            MOCK_FIX_FAILED,
+          ],
+        })
+      },
+    )
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({
         json: [
@@ -236,9 +257,12 @@ test.describe("Fix Lifecycle — Actions", () => {
         ],
       })
     })
-    await page.route(/\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/, (route) => {
-      route.fulfill({ json: [] })
-    })
+    await page.route(
+      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+      (route) => {
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(
       `/repositories/${MOCK_ISSUE_WITH_FIX.scan_id.replace("analysis", "repo")}/static-analysis`,

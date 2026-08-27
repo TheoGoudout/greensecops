@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/ansible-projects/ endpoints."""
+"""Tests for the /api/v1/ansible endpoints."""
 
 import uuid
 from dataclasses import dataclass
@@ -103,14 +103,14 @@ def completed_scan(db: Session, project: AnsibleProject) -> AnsibleScan:
     return scan
 
 
-# ─── POST /ansible-projects/ ─────────────────────────────────────────────────
+# ─── POST /ansible/projects ─────────────────────────────────────────────────
 
 
 def test_create_project(
     client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/",
+        f"{settings.API_V1_STR}/ansible/projects",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": "infra/prod"},
     )
@@ -125,7 +125,7 @@ def test_create_project_normalizes_slashes(
     client: TestClient, superuser_token_headers: dict[str, str], repo: Repository
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/",
+        f"{settings.API_V1_STR}/ansible/projects",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": "/infra/prod/"},
     )
@@ -139,7 +139,7 @@ def test_an_empty_root_path_means_the_repository_root(
     # Unlike a Terraform root, an Ansible project frequently *is* the whole
     # repository, with playbooks/ and roles/ at the top level.
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/",
+        f"{settings.API_V1_STR}/ansible/projects",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": ""},
     )
@@ -154,14 +154,14 @@ def test_duplicate_project_path_conflicts(
     project: AnsibleProject,
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/",
+        f"{settings.API_V1_STR}/ansible/projects",
         headers=superuser_token_headers,
         json={"repo_id": str(repo.id), "root_path": project.root_path},
     )
     assert response.status_code == 409
 
 
-# ─── GET /ansible-projects/ ──────────────────────────────────────────────────
+# ─── GET /ansible/projects ──────────────────────────────────────────────────
 
 
 def test_list_projects_scoped_to_one_repo(
@@ -171,7 +171,7 @@ def test_list_projects_scoped_to_one_repo(
     project: AnsibleProject,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/",
+        f"{settings.API_V1_STR}/ansible/projects",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -187,7 +187,7 @@ def test_list_projects_reports_the_latest_grade(
     completed_scan: AnsibleScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/",
+        f"{settings.API_V1_STR}/ansible/projects",
         headers=superuser_token_headers,
         params={"repo_id": str(repo.id)},
     )
@@ -196,21 +196,22 @@ def test_list_projects_reports_the_latest_grade(
     assert body["latest_score"] == 72.0
 
 
-# ─── PATCH /toggle, DELETE ───────────────────────────────────────────────────
+# ─── PATCH the project, DELETE ───────────────────────────────────────────────
 
 
-def test_toggle_project(
+def test_update_project_sets_enabled(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     project: AnsibleProject,
     db: Session,
 ) -> None:
     response = client.patch(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/toggle",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}",
         headers=superuser_token_headers,
-        params={"enabled": False},
+        json={"enabled": False},
     )
     assert response.status_code == 200
+    assert response.json()["enabled"] is False
     db.refresh(project)
     assert project.enabled is False
 
@@ -225,7 +226,7 @@ def test_delete_project_cascades_scans(
     project_id = project.id
     scan_id = completed_scan.id
     response = client.delete(
-        f"{settings.API_V1_STR}/ansible-projects/{project_id}",
+        f"{settings.API_V1_STR}/ansible/projects/{project_id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 204
@@ -243,7 +244,7 @@ def test_unknown_project_is_not_found(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/{uuid.uuid4()}/findings",
+        f"{settings.API_V1_STR}/ansible/projects/{uuid.uuid4()}/findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
@@ -262,7 +263,7 @@ def test_trigger_scan_queues_the_task(
 ) -> None:
     with patch("app.api.routes.ansible.run_ansible_scan.delay") as delayed:
         response = client.post(
-            f"{settings.API_V1_STR}/ansible-projects/{project.id}/scan",
+            f"{settings.API_V1_STR}/ansible/projects/{project.id}/scans",
             headers=superuser_token_headers,
         )
     assert response.status_code == 202
@@ -281,7 +282,7 @@ def test_scanning_a_disabled_project_is_refused(
     db.add(project)
     db.commit()
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/scan",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 403
@@ -297,7 +298,7 @@ def test_list_scans(
     completed_scan: AnsibleScan,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/scans",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/scans",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -336,7 +337,7 @@ def test_list_findings_orders_by_file_then_line(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/findings",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/findings",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -375,13 +376,13 @@ def test_resolved_findings_are_hidden_by_default(
     db.commit()
 
     hidden = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/findings",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/findings",
         headers=superuser_token_headers,
     )
     assert hidden.json() == []
 
     shown = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/findings",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/findings",
         headers=superuser_token_headers,
         params={"include_resolved": True},
     )
@@ -401,7 +402,7 @@ def test_list_files_reports_each_file_s_kind(
         return_value=[FakeAnsibleFile("playbooks/site.yml", _PLAYBOOK)],
     ):
         response = client.get(
-            f"{settings.API_V1_STR}/ansible-projects/{project.id}/files",
+            f"{settings.API_V1_STR}/ansible/projects/{project.id}/files",
             headers=superuser_token_headers,
         )
     assert response.status_code == 200
@@ -421,7 +422,7 @@ def test_list_files_surfaces_a_github_failure_as_502(
         side_effect=RuntimeError("GitHub is down"),
     ):
         response = client.get(
-            f"{settings.API_V1_STR}/ansible-projects/{project.id}/files",
+            f"{settings.API_V1_STR}/ansible/projects/{project.id}/files",
             headers=superuser_token_headers,
         )
     assert response.status_code == 502
@@ -480,7 +481,7 @@ def test_generate_fixes_queues_one_task_per_file(
 
     with patch("app.api.routes.ansible.run_ansible_fix_generation.delay") as delayed:
         response = client.post(
-            f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+            f"{settings.API_V1_STR}/ansible/projects/{project.id}/fixes",
             headers=superuser_token_headers,
         )
 
@@ -506,7 +507,7 @@ def test_generate_fixes_can_be_narrowed_to_specific_findings(
 
     with patch("app.api.routes.ansible.run_ansible_fix_generation.delay") as delayed:
         response = client.post(
-            f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+            f"{settings.API_V1_STR}/ansible/projects/{project.id}/fixes",
             headers=superuser_token_headers,
             json={"finding_ids": [str(wanted.id)]},
         )
@@ -522,7 +523,7 @@ def test_generate_fixes_with_nothing_open_queues_nothing(
     project: AnsibleProject,
 ) -> None:
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/fixes",
         headers=superuser_token_headers,
     )
     assert response.status_code == 202
@@ -547,7 +548,7 @@ def test_resolved_findings_are_not_regenerated(
     db.commit()
 
     response = client.post(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/fixes",
         headers=superuser_token_headers,
     )
     assert response.json() == {"status": "no_findings", "queued": 0}
@@ -574,7 +575,7 @@ def test_list_fixes_returns_the_projects_fixes(
     db.commit()
 
     response = client.get(
-        f"{settings.API_V1_STR}/ansible-projects/{project.id}/fixes",
+        f"{settings.API_V1_STR}/ansible/projects/{project.id}/fixes",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -593,7 +594,7 @@ def test_deliver_queues_the_task_and_reports_the_branch(
 
     with patch("app.api.routes.ansible.deliver_ansible_fixes.delay") as delayed:
         response = client.post(
-            f"{settings.API_V1_STR}/ansible-projects/{project.id}/deliver",
+            f"{settings.API_V1_STR}/ansible/projects/{project.id}/deliveries",
             headers=superuser_token_headers,
         )
 
@@ -612,7 +613,7 @@ def test_fix_endpoints_reject_an_unknown_project(
     unknown = uuid.uuid4()
     for method, suffix in [("post", "fixes"), ("get", "fixes"), ("post", "deliver")]:
         response = getattr(client, method)(
-            f"{settings.API_V1_STR}/ansible-projects/{unknown}/{suffix}",
+            f"{settings.API_V1_STR}/ansible/projects/{unknown}/{suffix}",
             headers=superuser_token_headers,
         )
         assert response.status_code == 404, (method, suffix)

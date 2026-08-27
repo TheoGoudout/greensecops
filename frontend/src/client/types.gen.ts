@@ -1346,84 +1346,82 @@ export type WorkflowSyncSummary = {
     skipped_stale?: number;
 };
 
-export type AnsibleCreateAnsibleProjectData = {
+export type AnsibleCreateProjectData = {
     requestBody: AnsibleProjectCreate;
 };
 
-export type AnsibleCreateAnsibleProjectResponse = (AnsibleProjectPublic);
+export type AnsibleCreateProjectResponse = (AnsibleProjectPublic);
 
-export type AnsibleListAnsibleProjectsData = {
+export type AnsibleListProjectsData = {
     repoId?: (string | null);
 };
 
-export type AnsibleListAnsibleProjectsResponse = (Array<AnsibleProjectPublic>);
+export type AnsibleListProjectsResponse = (Array<AnsibleProjectPublic>);
 
-export type AnsibleToggleAnsibleProjectData = {
-    enabled: boolean;
+export type AnsibleUpdateProjectData = {
+    projectId: string;
+    requestBody: ScanTargetUpdate;
+};
+
+export type AnsibleUpdateProjectResponse = (AnsibleProjectPublic);
+
+export type AnsibleDeleteProjectData = {
     projectId: string;
 };
 
-export type AnsibleToggleAnsibleProjectResponse = ({
-    [key: string]: (string | boolean);
-});
+export type AnsibleDeleteProjectResponse = (void);
 
-export type AnsibleDeleteAnsibleProjectData = {
-    projectId: string;
-};
-
-export type AnsibleDeleteAnsibleProjectResponse = (void);
-
-export type AnsibleTriggerAnsibleScanData = {
+export type AnsibleTriggerScanData = {
     branch?: (string | null);
     projectId: string;
 };
 
-export type AnsibleTriggerAnsibleScanResponse = ({
+export type AnsibleTriggerScanResponse = ({
     [key: string]: (string);
 });
 
-export type AnsibleListAnsibleScansData = {
+export type AnsibleListScansData = {
     projectId: string;
 };
 
-export type AnsibleListAnsibleScansResponse = (Array<AnsibleScanPublic>);
+export type AnsibleListScansResponse = (Array<AnsibleScanPublic>);
 
-export type AnsibleListAnsibleFindingsData = {
+export type AnsibleListFindingsData = {
     includeResolved?: boolean;
     projectId: string;
 };
 
-export type AnsibleListAnsibleFindingsResponse = (Array<AnsibleFindingPublic>);
+export type AnsibleListFindingsResponse = (Array<AnsibleFindingPublic>);
 
-export type AnsibleListAnsibleFilesData = {
+export type AnsibleListFilesData = {
     projectId: string;
     ref?: (string | null);
 };
 
-export type AnsibleListAnsibleFilesResponse = (Array<AnsibleFilePublic>);
+export type AnsibleListFilesResponse = (Array<AnsibleFilePublic>);
 
-export type AnsibleListAnsibleFixesData = {
+export type AnsibleListFixesData = {
     projectId: string;
 };
 
-export type AnsibleListAnsibleFixesResponse = (Array<AnsibleFixPublic>);
+export type AnsibleListFixesResponse = (Array<AnsibleFixPublic>);
 
-export type AnsibleTriggerAnsibleFixGenerationData = {
+export type AnsibleGenerateFixesData = {
     force?: boolean;
     projectId: string;
     requestBody?: (AnsibleFixGenerateRequest | null);
 };
 
-export type AnsibleTriggerAnsibleFixGenerationResponse = ({
+export type AnsibleGenerateFixesResponse = ({
     [key: string]: (string | number);
 });
 
-export type AnsibleTriggerAnsibleDeliveryData = {
+export type AnsibleDeliverFixesData = {
     force?: boolean;
     projectId: string;
 };
 
-export type AnsibleTriggerAnsibleDeliveryResponse = ({
+export type AnsibleDeliverFixesResponse = ({
     [key: string]: (string);
 });
 

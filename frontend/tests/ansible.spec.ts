@@ -20,7 +20,7 @@ test.describe("Ansible", () => {
     await mockFixes(page, [], [MOCK_PR_OPEN])
     // The Ansible tab lives under Infrastructure, whose sibling tab loads
     // Terraform roots; without this the page hangs on a real request.
-    await page.route("**/api/v1/terraform-roots/**", (route) => {
+    await page.route("**/api/v1/terraform/roots**", (route) => {
       route.fulfill({ json: [] })
     })
   })
@@ -93,7 +93,7 @@ test.describe("Ansible", () => {
       (r) =>
         r
           .url()
-          .includes(`/ansible-projects/${MOCK_ANSIBLE_PROJECT.id}/fixes`) &&
+          .includes(`/ansible/projects/${MOCK_ANSIBLE_PROJECT.id}/fixes`) &&
         r.method() === "POST",
     )
     await page.getByRole("button", { name: "Generate all fixes" }).click()
@@ -110,7 +110,7 @@ test.describe("Ansible", () => {
       (r) =>
         r
           .url()
-          .includes(`/ansible-projects/${MOCK_ANSIBLE_PROJECT.id}/deliver`) &&
+          .includes(`/ansible/projects/${MOCK_ANSIBLE_PROJECT.id}/deliveries`) &&
         r.method() === "POST",
     )
     // No PR exists on this project's branch yet, so the button offers to make
@@ -163,7 +163,7 @@ test.describe("Ansible", () => {
     page,
   }) => {
     await mockAnsibleProjects(page)
-    await page.route("**/api/v1/terraform-roots/**", (route) => {
+    await page.route("**/api/v1/terraform/roots**", (route) => {
       route.fulfill({ json: [] })
     })
 

@@ -36,7 +36,7 @@ function InfrastructurePullRequestsTab() {
 
   const { data: projects } = useQuery({
     queryKey: ["ansible-projects", "repo", repoId],
-    queryFn: () => AnsibleService.listAnsibleProjects({ repoId }),
+    queryFn: () => AnsibleService.listProjects({ repoId }),
   })
 
   return (
@@ -65,7 +65,7 @@ function InfrastructurePullRequestsTab() {
           branchForTarget={ansibleFixBranch}
           sourceTabLabel="Ansible"
           deliver={({ targetId, force }) =>
-            AnsibleService.triggerAnsibleDelivery({
+            AnsibleService.deliverFixes({
               projectId: targetId,
               force,
             })

@@ -49,7 +49,7 @@ function AnsibleIndexPage() {
     isError,
   } = useQuery({
     queryKey: ["ansible-projects"],
-    queryFn: () => AnsibleService.listAnsibleProjects({}),
+    queryFn: () => AnsibleService.listProjects({}),
   })
 
   const { data: repos } = useQuery({
@@ -59,7 +59,7 @@ function AnsibleIndexPage() {
 
   const createMutation = useMutation({
     mutationFn: (vars: { repoId: string; rootPath: string }) =>
-      AnsibleService.createAnsibleProject({
+      AnsibleService.createProject({
         requestBody: { repo_id: vars.repoId, root_path: vars.rootPath },
       }),
     onSuccess: () => {
