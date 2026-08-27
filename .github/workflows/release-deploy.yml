@@ -284,11 +284,11 @@ jobs:
     # until Coolify reports `finished`, so this ordering is real.
     needs: [verify, coolify]
     uses: ./.github/workflows/pages-reusable.yml
+    # See pages.yml: a caller's permissions cap every job in the called
+    # workflow, so api-gate's declaration has to be granted here too.
     permissions:
       contents: read
-      # See pages.yml: api-gate declares actions: read, and a caller's
-      # permissions cap every job in the called workflow.
-      actions: read
+      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       environment: production
     secrets:
