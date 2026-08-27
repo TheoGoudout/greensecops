@@ -4125,85 +4125,108 @@ export type OverviewGetOverviewResponses = {
 
 export type OverviewGetOverviewResponse = OverviewGetOverviewResponses[keyof OverviewGetOverviewResponses];
 
-export type EventsGetSseSignalsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/events/signals';
-};
-
-export type EventsGetSseSignalsResponses = {
-    /**
-     * Response Events-Get Sse Signals
-     * Successful Response
-     */
-    200: Array<SseSignal>;
-};
-
-export type EventsGetSseSignalsResponse = EventsGetSseSignalsResponses[keyof EventsGetSseSignalsResponses];
-
-export type EventsGetSseEventSchemaData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/events/schema';
-};
-
-export type EventsGetSseEventSchemaResponses = {
-    /**
-     * Successful Response
-     */
-    200: SseEventPublic;
-};
-
-export type EventsGetSseEventSchemaResponse = EventsGetSseEventSchemaResponses[keyof EventsGetSseEventSchemaResponses];
-
-export type EventsCreateSseTicketData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/events/ticket';
-};
-
-export type EventsCreateSseTicketResponses = {
-    /**
-     * Response Events-Create Sse Ticket
-     * Successful Response
-     */
-    200: {
-        [key: string]: string | number;
-    };
-};
-
-export type EventsCreateSseTicketResponse = EventsCreateSseTicketResponses[keyof EventsCreateSseTicketResponses];
-
-export type EventsStreamEventsData = {
+export type RulesListRulesData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Ticket
+         * Category
          */
-        ticket?: string | null;
+        category?: Category | null;
+        /**
+         * Enabled
+         */
+        enabled?: boolean | null;
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
     };
-    url: '/api/v1/events/stream';
+    url: '/api/v1/rules';
 };
 
-export type EventsStreamEventsErrors = {
+export type RulesListRulesErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type EventsStreamEventsError = EventsStreamEventsErrors[keyof EventsStreamEventsErrors];
+export type RulesListRulesError = RulesListRulesErrors[keyof RulesListRulesErrors];
 
-export type EventsStreamEventsResponses = {
+export type RulesListRulesResponses = {
+    /**
+     * Response Rules-List Rules
+     * Successful Response
+     */
+    200: Array<RulePublic>;
+};
+
+export type RulesListRulesResponse = RulesListRulesResponses[keyof RulesListRulesResponses];
+
+export type RulesGetRuleData = {
+    body?: never;
+    path: {
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/v1/rules/{rule_id}';
+};
+
+export type RulesGetRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RulesGetRuleError = RulesGetRuleErrors[keyof RulesGetRuleErrors];
+
+export type RulesGetRuleResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: RulePublic;
 };
+
+export type RulesGetRuleResponse = RulesGetRuleResponses[keyof RulesGetRuleResponses];
+
+export type RulesUpdateRuleData = {
+    body: RuleUpdate;
+    path: {
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/v1/rules/{rule_id}';
+};
+
+export type RulesUpdateRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RulesUpdateRuleError = RulesUpdateRuleErrors[keyof RulesUpdateRuleErrors];
+
+export type RulesUpdateRuleResponses = {
+    /**
+     * Successful Response
+     */
+    200: RulePublic;
+};
+
+export type RulesUpdateRuleResponse = RulesUpdateRuleResponses[keyof RulesUpdateRuleResponses];
 
 export type WorkflowListScansData = {
     body?: never;
@@ -5004,184 +5027,1396 @@ export type WorkflowSyncPullRequestStatusesResponses = {
 
 export type WorkflowSyncPullRequestStatusesResponse = WorkflowSyncPullRequestStatusesResponses[keyof WorkflowSyncPullRequestStatusesResponses];
 
-export type RulesListRulesData = {
+export type DockerListTargetsData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Category
+         * Repo Id
          */
-        category?: Category | null;
+        repo_id?: string | null;
+    };
+    url: '/api/v1/docker/targets';
+};
+
+export type DockerListTargetsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListTargetsError = DockerListTargetsErrors[keyof DockerListTargetsErrors];
+
+export type DockerListTargetsResponses = {
+    /**
+     * Response Docker-List Targets
+     * Successful Response
+     */
+    200: Array<DockerTargetPublic>;
+};
+
+export type DockerListTargetsResponse = DockerListTargetsResponses[keyof DockerListTargetsResponses];
+
+export type DockerCreateTargetData = {
+    body: DockerTargetCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/docker/targets';
+};
+
+export type DockerCreateTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerCreateTargetError = DockerCreateTargetErrors[keyof DockerCreateTargetErrors];
+
+export type DockerCreateTargetResponses = {
+    /**
+     * Successful Response
+     */
+    201: DockerTargetPublic;
+};
+
+export type DockerCreateTargetResponse = DockerCreateTargetResponses[keyof DockerCreateTargetResponses];
+
+export type DockerDeleteTargetData = {
+    body?: never;
+    path: {
         /**
-         * Enabled
+         * Target Id
          */
-        enabled?: boolean | null;
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/targets/{target_id}';
+};
+
+export type DockerDeleteTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerDeleteTargetError = DockerDeleteTargetErrors[keyof DockerDeleteTargetErrors];
+
+export type DockerDeleteTargetResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DockerDeleteTargetResponse = DockerDeleteTargetResponses[keyof DockerDeleteTargetResponses];
+
+export type DockerUpdateTargetData = {
+    body: ScanTargetUpdate;
+    path: {
         /**
-         * Skip
+         * Target Id
          */
-        skip?: number;
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/targets/{target_id}';
+};
+
+export type DockerUpdateTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerUpdateTargetError = DockerUpdateTargetErrors[keyof DockerUpdateTargetErrors];
+
+export type DockerUpdateTargetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DockerTargetPublic;
+};
+
+export type DockerUpdateTargetResponse = DockerUpdateTargetResponses[keyof DockerUpdateTargetResponses];
+
+export type DockerListScansData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
         /**
          * Limit
          */
         limit?: number;
     };
-    url: '/api/v1/rules';
+    url: '/api/v1/docker/targets/{target_id}/scans';
 };
 
-export type RulesListRulesErrors = {
+export type DockerListScansErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type RulesListRulesError = RulesListRulesErrors[keyof RulesListRulesErrors];
+export type DockerListScansError = DockerListScansErrors[keyof DockerListScansErrors];
 
-export type RulesListRulesResponses = {
+export type DockerListScansResponses = {
     /**
-     * Response Rules-List Rules
+     * Response Docker-List Scans
      * Successful Response
      */
-    200: Array<RulePublic>;
+    200: Array<DockerScanPublic>;
 };
 
-export type RulesListRulesResponse = RulesListRulesResponses[keyof RulesListRulesResponses];
+export type DockerListScansResponse = DockerListScansResponses[keyof DockerListScansResponses];
 
-export type RulesGetRuleData = {
+export type DockerTriggerScanData = {
     body?: never;
     path: {
         /**
-         * Rule Id
+         * Target Id
          */
-        rule_id: string;
+        target_id: string;
     };
-    query?: never;
-    url: '/api/v1/rules/{rule_id}';
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/docker/targets/{target_id}/scans';
 };
 
-export type RulesGetRuleErrors = {
+export type DockerTriggerScanErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type RulesGetRuleError = RulesGetRuleErrors[keyof RulesGetRuleErrors];
+export type DockerTriggerScanError = DockerTriggerScanErrors[keyof DockerTriggerScanErrors];
 
-export type RulesGetRuleResponses = {
+export type DockerTriggerScanResponses = {
     /**
+     * Response Docker-Trigger Scan
      * Successful Response
      */
-    200: RulePublic;
-};
-
-export type RulesGetRuleResponse = RulesGetRuleResponses[keyof RulesGetRuleResponses];
-
-export type RulesUpdateRuleData = {
-    body: RuleUpdate;
-    path: {
-        /**
-         * Rule Id
-         */
-        rule_id: string;
-    };
-    query?: never;
-    url: '/api/v1/rules/{rule_id}';
-};
-
-export type RulesUpdateRuleErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RulesUpdateRuleError = RulesUpdateRuleErrors[keyof RulesUpdateRuleErrors];
-
-export type RulesUpdateRuleResponses = {
-    /**
-     * Successful Response
-     */
-    200: RulePublic;
-};
-
-export type RulesUpdateRuleResponse = RulesUpdateRuleResponses[keyof RulesUpdateRuleResponses];
-
-export type WebhooksGithubWebhookData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Hub-Signature-256
-         */
-        'x-hub-signature-256'?: string | null;
-        /**
-         * X-Github-Event
-         */
-        'x-github-event'?: string | null;
-        /**
-         * X-Github-Delivery
-         */
-        'x-github-delivery'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/webhooks/github';
-};
-
-export type WebhooksGithubWebhookErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type WebhooksGithubWebhookError = WebhooksGithubWebhookErrors[keyof WebhooksGithubWebhookErrors];
-
-export type WebhooksGithubWebhookResponses = {
-    /**
-     * Response Webhooks-Github Webhook
-     * Successful Response
-     */
-    200: {
+    202: {
         [key: string]: string;
     };
 };
 
-export type WebhooksGithubWebhookResponse = WebhooksGithubWebhookResponses[keyof WebhooksGithubWebhookResponses];
+export type DockerTriggerScanResponse = DockerTriggerScanResponses[keyof DockerTriggerScanResponses];
 
-export type WebhooksStripeWebhookData = {
+export type DockerListFindingsData = {
     body?: never;
-    headers?: {
+    path: {
         /**
-         * Stripe-Signature
+         * Target Id
          */
-        'stripe-signature'?: string | null;
+        target_id: string;
     };
-    path?: never;
-    query?: never;
-    url: '/api/v1/webhooks/stripe';
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/docker/targets/{target_id}/findings';
 };
 
-export type WebhooksStripeWebhookErrors = {
+export type DockerListFindingsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type WebhooksStripeWebhookError = WebhooksStripeWebhookErrors[keyof WebhooksStripeWebhookErrors];
+export type DockerListFindingsError = DockerListFindingsErrors[keyof DockerListFindingsErrors];
 
-export type WebhooksStripeWebhookResponses = {
+export type DockerListFindingsResponses = {
     /**
-     * Response Webhooks-Stripe Webhook
+     * Response Docker-List Findings
      * Successful Response
      */
-    200: {
+    200: Array<DockerFindingPublic>;
+};
+
+export type DockerListFindingsResponse = DockerListFindingsResponses[keyof DockerListFindingsResponses];
+
+export type DockerListFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Ref
+         */
+        ref?: string | null;
+    };
+    url: '/api/v1/docker/targets/{target_id}/files';
+};
+
+export type DockerListFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListFilesError = DockerListFilesErrors[keyof DockerListFilesErrors];
+
+export type DockerListFilesResponses = {
+    /**
+     * Response Docker-List Files
+     * Successful Response
+     */
+    200: Array<DockerFilePublic>;
+};
+
+export type DockerListFilesResponse = DockerListFilesResponses[keyof DockerListFilesResponses];
+
+export type DockerListRuntimeFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/targets/{target_id}/runtime-findings';
+};
+
+export type DockerListRuntimeFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListRuntimeFindingsError = DockerListRuntimeFindingsErrors[keyof DockerListRuntimeFindingsErrors];
+
+export type DockerListRuntimeFindingsResponses = {
+    /**
+     * Response Docker-List Runtime Findings
+     * Successful Response
+     */
+    200: Array<DockerBuildTelemetryPublic>;
+};
+
+export type DockerListRuntimeFindingsResponse = DockerListRuntimeFindingsResponses[keyof DockerListRuntimeFindingsResponses];
+
+export type DockerListFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/targets/{target_id}/fixes';
+};
+
+export type DockerListFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListFixesError = DockerListFixesErrors[keyof DockerListFixesErrors];
+
+export type DockerListFixesResponses = {
+    /**
+     * Response Docker-List Fixes
+     * Successful Response
+     */
+    200: Array<DockerFixPublic>;
+};
+
+export type DockerListFixesResponse = DockerListFixesResponses[keyof DockerListFixesResponses];
+
+export type DockerGenerateFixesData = {
+    /**
+     * Body
+     */
+    body?: DockerFixGenerateRequest | null;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker/targets/{target_id}/fixes';
+};
+
+export type DockerGenerateFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerGenerateFixesError = DockerGenerateFixesErrors[keyof DockerGenerateFixesErrors];
+
+export type DockerGenerateFixesResponses = {
+    /**
+     * Response Docker-Generate Fixes
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type DockerGenerateFixesResponse = DockerGenerateFixesResponses[keyof DockerGenerateFixesResponses];
+
+export type DockerGenerateRuntimeFixesData = {
+    body: DockerRuntimeFixRequest;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker/targets/{target_id}/runtime-fixes';
+};
+
+export type DockerGenerateRuntimeFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerGenerateRuntimeFixesError = DockerGenerateRuntimeFixesErrors[keyof DockerGenerateRuntimeFixesErrors];
+
+export type DockerGenerateRuntimeFixesResponses = {
+    /**
+     * Response Docker-Generate Runtime Fixes
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type DockerGenerateRuntimeFixesResponse = DockerGenerateRuntimeFixesResponses[keyof DockerGenerateRuntimeFixesResponses];
+
+export type DockerDeliverFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Target Id
+         */
+        target_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/docker/targets/{target_id}/deliveries';
+};
+
+export type DockerDeliverFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerDeliverFixesError = DockerDeliverFixesErrors[keyof DockerDeliverFixesErrors];
+
+export type DockerDeliverFixesResponses = {
+    /**
+     * Response Docker-Deliver Fixes
+     * Successful Response
+     */
+    202: {
         [key: string]: string;
     };
 };
 
-export type WebhooksStripeWebhookResponse = WebhooksStripeWebhookResponses[keyof WebhooksStripeWebhookResponses];
+export type DockerDeliverFixesResponse = DockerDeliverFixesResponses[keyof DockerDeliverFixesResponses];
+
+export type TerraformListRootsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Repo Id
+         */
+        repo_id?: string | null;
+    };
+    url: '/api/v1/terraform/roots';
+};
+
+export type TerraformListRootsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListRootsError = TerraformListRootsErrors[keyof TerraformListRootsErrors];
+
+export type TerraformListRootsResponses = {
+    /**
+     * Response Terraform-List Roots
+     * Successful Response
+     */
+    200: Array<TerraformRootPublic>;
+};
+
+export type TerraformListRootsResponse = TerraformListRootsResponses[keyof TerraformListRootsResponses];
+
+export type TerraformCreateRootData = {
+    body: TerraformRootCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/terraform/roots';
+};
+
+export type TerraformCreateRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformCreateRootError = TerraformCreateRootErrors[keyof TerraformCreateRootErrors];
+
+export type TerraformCreateRootResponses = {
+    /**
+     * Successful Response
+     */
+    201: TerraformRootPublic;
+};
+
+export type TerraformCreateRootResponse = TerraformCreateRootResponses[keyof TerraformCreateRootResponses];
+
+export type TerraformDeleteRootData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/roots/{root_id}';
+};
+
+export type TerraformDeleteRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformDeleteRootError = TerraformDeleteRootErrors[keyof TerraformDeleteRootErrors];
+
+export type TerraformDeleteRootResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type TerraformDeleteRootResponse = TerraformDeleteRootResponses[keyof TerraformDeleteRootResponses];
+
+export type TerraformUpdateRootData = {
+    body: ScanTargetUpdate;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/roots/{root_id}';
+};
+
+export type TerraformUpdateRootErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformUpdateRootError = TerraformUpdateRootErrors[keyof TerraformUpdateRootErrors];
+
+export type TerraformUpdateRootResponses = {
+    /**
+     * Successful Response
+     */
+    200: TerraformRootPublic;
+};
+
+export type TerraformUpdateRootResponse = TerraformUpdateRootResponses[keyof TerraformUpdateRootResponses];
+
+export type TerraformListScansData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/roots/{root_id}/scans';
+};
+
+export type TerraformListScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListScansError = TerraformListScansErrors[keyof TerraformListScansErrors];
+
+export type TerraformListScansResponses = {
+    /**
+     * Response Terraform-List Scans
+     * Successful Response
+     */
+    200: Array<TerraformScanPublic>;
+};
+
+export type TerraformListScansResponse = TerraformListScansResponses[keyof TerraformListScansResponses];
+
+export type TerraformTriggerScanData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/terraform/roots/{root_id}/scans';
+};
+
+export type TerraformTriggerScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformTriggerScanError = TerraformTriggerScanErrors[keyof TerraformTriggerScanErrors];
+
+export type TerraformTriggerScanResponses = {
+    /**
+     * Response Terraform-Trigger Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type TerraformTriggerScanResponse = TerraformTriggerScanResponses[keyof TerraformTriggerScanResponses];
+
+export type TerraformListFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/terraform/roots/{root_id}/findings';
+};
+
+export type TerraformListFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListFindingsError = TerraformListFindingsErrors[keyof TerraformListFindingsErrors];
+
+export type TerraformListFindingsResponses = {
+    /**
+     * Response Terraform-List Findings
+     * Successful Response
+     */
+    200: Array<TerraformFindingPublic>;
+};
+
+export type TerraformListFindingsResponse = TerraformListFindingsResponses[keyof TerraformListFindingsResponses];
+
+export type TerraformListFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Ref
+         */
+        ref?: string | null;
+    };
+    url: '/api/v1/terraform/roots/{root_id}/files';
+};
+
+export type TerraformListFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListFilesError = TerraformListFilesErrors[keyof TerraformListFilesErrors];
+
+export type TerraformListFilesResponses = {
+    /**
+     * Response Terraform-List Files
+     * Successful Response
+     */
+    200: Array<TerraformFilePublic>;
+};
+
+export type TerraformListFilesResponse = TerraformListFilesResponses[keyof TerraformListFilesResponses];
+
+export type TerraformListFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/roots/{root_id}/fixes';
+};
+
+export type TerraformListFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListFixesError = TerraformListFixesErrors[keyof TerraformListFixesErrors];
+
+export type TerraformListFixesResponses = {
+    /**
+     * Response Terraform-List Fixes
+     * Successful Response
+     */
+    200: Array<TerraformFixPublic>;
+};
+
+export type TerraformListFixesResponse = TerraformListFixesResponses[keyof TerraformListFixesResponses];
+
+export type TerraformGenerateFixesData = {
+    /**
+     * Body
+     */
+    body?: TerraformFixGenerateRequest | null;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/terraform/roots/{root_id}/fixes';
+};
+
+export type TerraformGenerateFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformGenerateFixesError = TerraformGenerateFixesErrors[keyof TerraformGenerateFixesErrors];
+
+export type TerraformGenerateFixesResponses = {
+    /**
+     * Response Terraform-Generate Fixes
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type TerraformGenerateFixesResponse = TerraformGenerateFixesResponses[keyof TerraformGenerateFixesResponses];
+
+export type TerraformDeliverFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Root Id
+         */
+        root_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/terraform/roots/{root_id}/deliveries';
+};
+
+export type TerraformDeliverFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformDeliverFixesError = TerraformDeliverFixesErrors[keyof TerraformDeliverFixesErrors];
+
+export type TerraformDeliverFixesResponses = {
+    /**
+     * Response Terraform-Deliver Fixes
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type TerraformDeliverFixesResponse = TerraformDeliverFixesResponses[keyof TerraformDeliverFixesResponses];
+
+export type CloudListAccountsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Org Id
+         */
+        org_id?: string | null;
+    };
+    url: '/api/v1/cloud/accounts';
+};
+
+export type CloudListAccountsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListAccountsError = CloudListAccountsErrors[keyof CloudListAccountsErrors];
+
+export type CloudListAccountsResponses = {
+    /**
+     * Response Cloud-List Accounts
+     * Successful Response
+     */
+    200: Array<CloudAccountPublic>;
+};
+
+export type CloudListAccountsResponse = CloudListAccountsResponses[keyof CloudListAccountsResponses];
+
+export type CloudCreateAccountData = {
+    body: CloudAccountCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/cloud/accounts';
+};
+
+export type CloudCreateAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudCreateAccountError = CloudCreateAccountErrors[keyof CloudCreateAccountErrors];
+
+export type CloudCreateAccountResponses = {
+    /**
+     * Successful Response
+     */
+    201: CloudAccountPublic;
+};
+
+export type CloudCreateAccountResponse = CloudCreateAccountResponses[keyof CloudCreateAccountResponses];
+
+export type CloudDeleteAccountData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/accounts/{account_id}';
+};
+
+export type CloudDeleteAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudDeleteAccountError = CloudDeleteAccountErrors[keyof CloudDeleteAccountErrors];
+
+export type CloudDeleteAccountResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type CloudDeleteAccountResponse = CloudDeleteAccountResponses[keyof CloudDeleteAccountResponses];
+
+export type CloudUpdateAccountData = {
+    body: ScanTargetUpdate;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/accounts/{account_id}';
+};
+
+export type CloudUpdateAccountErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudUpdateAccountError = CloudUpdateAccountErrors[keyof CloudUpdateAccountErrors];
+
+export type CloudUpdateAccountResponses = {
+    /**
+     * Successful Response
+     */
+    200: CloudAccountPublic;
+};
+
+export type CloudUpdateAccountResponse = CloudUpdateAccountResponses[keyof CloudUpdateAccountResponses];
+
+export type CloudListScansData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/accounts/{account_id}/scans';
+};
+
+export type CloudListScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListScansError = CloudListScansErrors[keyof CloudListScansErrors];
+
+export type CloudListScansResponses = {
+    /**
+     * Response Cloud-List Scans
+     * Successful Response
+     */
+    200: Array<CloudScanPublic>;
+};
+
+export type CloudListScansResponse = CloudListScansResponses[keyof CloudListScansResponses];
+
+export type CloudTriggerScanData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/accounts/{account_id}/scans';
+};
+
+export type CloudTriggerScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudTriggerScanError = CloudTriggerScanErrors[keyof CloudTriggerScanErrors];
+
+export type CloudTriggerScanResponses = {
+    /**
+     * Response Cloud-Trigger Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type CloudTriggerScanResponse = CloudTriggerScanResponses[keyof CloudTriggerScanResponses];
+
+export type CloudListFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/cloud/accounts/{account_id}/findings';
+};
+
+export type CloudListFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudListFindingsError = CloudListFindingsErrors[keyof CloudListFindingsErrors];
+
+export type CloudListFindingsResponses = {
+    /**
+     * Response Cloud-List Findings
+     * Successful Response
+     */
+    200: Array<CloudFindingPublic>;
+};
+
+export type CloudListFindingsResponse = CloudListFindingsResponses[keyof CloudListFindingsResponses];
+
+export type AnsibleListProjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Repo Id
+         */
+        repo_id?: string | null;
+    };
+    url: '/api/v1/ansible/projects';
+};
+
+export type AnsibleListProjectsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListProjectsError = AnsibleListProjectsErrors[keyof AnsibleListProjectsErrors];
+
+export type AnsibleListProjectsResponses = {
+    /**
+     * Response Ansible-List Projects
+     * Successful Response
+     */
+    200: Array<AnsibleProjectPublic>;
+};
+
+export type AnsibleListProjectsResponse = AnsibleListProjectsResponses[keyof AnsibleListProjectsResponses];
+
+export type AnsibleCreateProjectData = {
+    body: AnsibleProjectCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/ansible/projects';
+};
+
+export type AnsibleCreateProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleCreateProjectError = AnsibleCreateProjectErrors[keyof AnsibleCreateProjectErrors];
+
+export type AnsibleCreateProjectResponses = {
+    /**
+     * Successful Response
+     */
+    201: AnsibleProjectPublic;
+};
+
+export type AnsibleCreateProjectResponse = AnsibleCreateProjectResponses[keyof AnsibleCreateProjectResponses];
+
+export type AnsibleDeleteProjectData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/projects/{project_id}';
+};
+
+export type AnsibleDeleteProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleDeleteProjectError = AnsibleDeleteProjectErrors[keyof AnsibleDeleteProjectErrors];
+
+export type AnsibleDeleteProjectResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type AnsibleDeleteProjectResponse = AnsibleDeleteProjectResponses[keyof AnsibleDeleteProjectResponses];
+
+export type AnsibleUpdateProjectData = {
+    body: ScanTargetUpdate;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/projects/{project_id}';
+};
+
+export type AnsibleUpdateProjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleUpdateProjectError = AnsibleUpdateProjectErrors[keyof AnsibleUpdateProjectErrors];
+
+export type AnsibleUpdateProjectResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnsibleProjectPublic;
+};
+
+export type AnsibleUpdateProjectResponse = AnsibleUpdateProjectResponses[keyof AnsibleUpdateProjectResponses];
+
+export type AnsibleListScansData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/projects/{project_id}/scans';
+};
+
+export type AnsibleListScansErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListScansError = AnsibleListScansErrors[keyof AnsibleListScansErrors];
+
+export type AnsibleListScansResponses = {
+    /**
+     * Response Ansible-List Scans
+     * Successful Response
+     */
+    200: Array<AnsibleScanPublic>;
+};
+
+export type AnsibleListScansResponse = AnsibleListScansResponses[keyof AnsibleListScansResponses];
+
+export type AnsibleTriggerScanData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/ansible/projects/{project_id}/scans';
+};
+
+export type AnsibleTriggerScanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleTriggerScanError = AnsibleTriggerScanErrors[keyof AnsibleTriggerScanErrors];
+
+export type AnsibleTriggerScanResponses = {
+    /**
+     * Response Ansible-Trigger Scan
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type AnsibleTriggerScanResponse = AnsibleTriggerScanResponses[keyof AnsibleTriggerScanResponses];
+
+export type AnsibleListFindingsData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Include Resolved
+         */
+        include_resolved?: boolean;
+    };
+    url: '/api/v1/ansible/projects/{project_id}/findings';
+};
+
+export type AnsibleListFindingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListFindingsError = AnsibleListFindingsErrors[keyof AnsibleListFindingsErrors];
+
+export type AnsibleListFindingsResponses = {
+    /**
+     * Response Ansible-List Findings
+     * Successful Response
+     */
+    200: Array<AnsibleFindingPublic>;
+};
+
+export type AnsibleListFindingsResponse = AnsibleListFindingsResponses[keyof AnsibleListFindingsResponses];
+
+export type AnsibleListFilesData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Ref
+         */
+        ref?: string | null;
+    };
+    url: '/api/v1/ansible/projects/{project_id}/files';
+};
+
+export type AnsibleListFilesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListFilesError = AnsibleListFilesErrors[keyof AnsibleListFilesErrors];
+
+export type AnsibleListFilesResponses = {
+    /**
+     * Response Ansible-List Files
+     * Successful Response
+     */
+    200: Array<AnsibleFilePublic>;
+};
+
+export type AnsibleListFilesResponse = AnsibleListFilesResponses[keyof AnsibleListFilesResponses];
+
+export type AnsibleListFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/projects/{project_id}/fixes';
+};
+
+export type AnsibleListFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListFixesError = AnsibleListFixesErrors[keyof AnsibleListFixesErrors];
+
+export type AnsibleListFixesResponses = {
+    /**
+     * Response Ansible-List Fixes
+     * Successful Response
+     */
+    200: Array<AnsibleFixPublic>;
+};
+
+export type AnsibleListFixesResponse = AnsibleListFixesResponses[keyof AnsibleListFixesResponses];
+
+export type AnsibleGenerateFixesData = {
+    /**
+     * Body
+     */
+    body?: AnsibleFixGenerateRequest | null;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/ansible/projects/{project_id}/fixes';
+};
+
+export type AnsibleGenerateFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleGenerateFixesError = AnsibleGenerateFixesErrors[keyof AnsibleGenerateFixesErrors];
+
+export type AnsibleGenerateFixesResponses = {
+    /**
+     * Response Ansible-Generate Fixes
+     * Successful Response
+     */
+    202: {
+        [key: string]: string | number;
+    };
+};
+
+export type AnsibleGenerateFixesResponse = AnsibleGenerateFixesResponses[keyof AnsibleGenerateFixesResponses];
+
+export type AnsibleDeliverFixesData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: {
+        /**
+         * Force
+         */
+        force?: boolean;
+    };
+    url: '/api/v1/ansible/projects/{project_id}/deliveries';
+};
+
+export type AnsibleDeliverFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleDeliverFixesError = AnsibleDeliverFixesErrors[keyof AnsibleDeliverFixesErrors];
+
+export type AnsibleDeliverFixesResponses = {
+    /**
+     * Response Ansible-Deliver Fixes
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type AnsibleDeliverFixesResponse = AnsibleDeliverFixesResponses[keyof AnsibleDeliverFixesResponses];
 
 export type BadgesGetBadgeData = {
     body?: never;
@@ -5917,1396 +7152,161 @@ export type BillingReviewOssApplicationResponses = {
 
 export type BillingReviewOssApplicationResponse = BillingReviewOssApplicationResponses[keyof BillingReviewOssApplicationResponses];
 
-export type AnsibleListProjectsData = {
+export type WebhooksGithubWebhookData = {
     body?: never;
-    path?: never;
-    query?: {
+    headers?: {
         /**
-         * Repo Id
+         * X-Hub-Signature-256
          */
-        repo_id?: string | null;
+        'x-hub-signature-256'?: string | null;
+        /**
+         * X-Github-Event
+         */
+        'x-github-event'?: string | null;
+        /**
+         * X-Github-Delivery
+         */
+        'x-github-delivery'?: string | null;
     };
-    url: '/api/v1/ansible/projects';
-};
-
-export type AnsibleListProjectsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleListProjectsError = AnsibleListProjectsErrors[keyof AnsibleListProjectsErrors];
-
-export type AnsibleListProjectsResponses = {
-    /**
-     * Response Ansible-List Projects
-     * Successful Response
-     */
-    200: Array<AnsibleProjectPublic>;
-};
-
-export type AnsibleListProjectsResponse = AnsibleListProjectsResponses[keyof AnsibleListProjectsResponses];
-
-export type AnsibleCreateProjectData = {
-    body: AnsibleProjectCreate;
     path?: never;
     query?: never;
-    url: '/api/v1/ansible/projects';
+    url: '/api/v1/webhooks/github';
 };
 
-export type AnsibleCreateProjectErrors = {
+export type WebhooksGithubWebhookErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleCreateProjectError = AnsibleCreateProjectErrors[keyof AnsibleCreateProjectErrors];
+export type WebhooksGithubWebhookError = WebhooksGithubWebhookErrors[keyof WebhooksGithubWebhookErrors];
 
-export type AnsibleCreateProjectResponses = {
+export type WebhooksGithubWebhookResponses = {
     /**
+     * Response Webhooks-Github Webhook
      * Successful Response
      */
-    201: AnsibleProjectPublic;
-};
-
-export type AnsibleCreateProjectResponse = AnsibleCreateProjectResponses[keyof AnsibleCreateProjectResponses];
-
-export type AnsibleDeleteProjectData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/v1/ansible/projects/{project_id}';
-};
-
-export type AnsibleDeleteProjectErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleDeleteProjectError = AnsibleDeleteProjectErrors[keyof AnsibleDeleteProjectErrors];
-
-export type AnsibleDeleteProjectResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type AnsibleDeleteProjectResponse = AnsibleDeleteProjectResponses[keyof AnsibleDeleteProjectResponses];
-
-export type AnsibleUpdateProjectData = {
-    body: ScanTargetUpdate;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/v1/ansible/projects/{project_id}';
-};
-
-export type AnsibleUpdateProjectErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleUpdateProjectError = AnsibleUpdateProjectErrors[keyof AnsibleUpdateProjectErrors];
-
-export type AnsibleUpdateProjectResponses = {
-    /**
-     * Successful Response
-     */
-    200: AnsibleProjectPublic;
-};
-
-export type AnsibleUpdateProjectResponse = AnsibleUpdateProjectResponses[keyof AnsibleUpdateProjectResponses];
-
-export type AnsibleListScansData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/v1/ansible/projects/{project_id}/scans';
-};
-
-export type AnsibleListScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleListScansError = AnsibleListScansErrors[keyof AnsibleListScansErrors];
-
-export type AnsibleListScansResponses = {
-    /**
-     * Response Ansible-List Scans
-     * Successful Response
-     */
-    200: Array<AnsibleScanPublic>;
-};
-
-export type AnsibleListScansResponse = AnsibleListScansResponses[keyof AnsibleListScansResponses];
-
-export type AnsibleTriggerScanData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: {
-        /**
-         * Branch
-         */
-        branch?: string | null;
-    };
-    url: '/api/v1/ansible/projects/{project_id}/scans';
-};
-
-export type AnsibleTriggerScanErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleTriggerScanError = AnsibleTriggerScanErrors[keyof AnsibleTriggerScanErrors];
-
-export type AnsibleTriggerScanResponses = {
-    /**
-     * Response Ansible-Trigger Scan
-     * Successful Response
-     */
-    202: {
+    200: {
         [key: string]: string;
     };
 };
 
-export type AnsibleTriggerScanResponse = AnsibleTriggerScanResponses[keyof AnsibleTriggerScanResponses];
+export type WebhooksGithubWebhookResponse = WebhooksGithubWebhookResponses[keyof WebhooksGithubWebhookResponses];
 
-export type AnsibleListFindingsData = {
+export type WebhooksStripeWebhookData = {
     body?: never;
-    path: {
+    headers?: {
         /**
-         * Project Id
+         * Stripe-Signature
          */
-        project_id: string;
+        'stripe-signature'?: string | null;
     };
-    query?: {
-        /**
-         * Include Resolved
-         */
-        include_resolved?: boolean;
-    };
-    url: '/api/v1/ansible/projects/{project_id}/findings';
-};
-
-export type AnsibleListFindingsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleListFindingsError = AnsibleListFindingsErrors[keyof AnsibleListFindingsErrors];
-
-export type AnsibleListFindingsResponses = {
-    /**
-     * Response Ansible-List Findings
-     * Successful Response
-     */
-    200: Array<AnsibleFindingPublic>;
-};
-
-export type AnsibleListFindingsResponse = AnsibleListFindingsResponses[keyof AnsibleListFindingsResponses];
-
-export type AnsibleListFilesData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: {
-        /**
-         * Ref
-         */
-        ref?: string | null;
-    };
-    url: '/api/v1/ansible/projects/{project_id}/files';
-};
-
-export type AnsibleListFilesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleListFilesError = AnsibleListFilesErrors[keyof AnsibleListFilesErrors];
-
-export type AnsibleListFilesResponses = {
-    /**
-     * Response Ansible-List Files
-     * Successful Response
-     */
-    200: Array<AnsibleFilePublic>;
-};
-
-export type AnsibleListFilesResponse = AnsibleListFilesResponses[keyof AnsibleListFilesResponses];
-
-export type AnsibleListFixesData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
+    path?: never;
     query?: never;
-    url: '/api/v1/ansible/projects/{project_id}/fixes';
+    url: '/api/v1/webhooks/stripe';
 };
 
-export type AnsibleListFixesErrors = {
+export type WebhooksStripeWebhookErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type AnsibleListFixesError = AnsibleListFixesErrors[keyof AnsibleListFixesErrors];
+export type WebhooksStripeWebhookError = WebhooksStripeWebhookErrors[keyof WebhooksStripeWebhookErrors];
 
-export type AnsibleListFixesResponses = {
+export type WebhooksStripeWebhookResponses = {
     /**
-     * Response Ansible-List Fixes
+     * Response Webhooks-Stripe Webhook
      * Successful Response
      */
-    200: Array<AnsibleFixPublic>;
-};
-
-export type AnsibleListFixesResponse = AnsibleListFixesResponses[keyof AnsibleListFixesResponses];
-
-export type AnsibleGenerateFixesData = {
-    /**
-     * Body
-     */
-    body?: AnsibleFixGenerateRequest | null;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
+    200: {
+        [key: string]: string;
     };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/ansible/projects/{project_id}/fixes';
 };
 
-export type AnsibleGenerateFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
+export type WebhooksStripeWebhookResponse = WebhooksStripeWebhookResponses[keyof WebhooksStripeWebhookResponses];
+
+export type EventsGetSseSignalsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/events/signals';
 };
 
-export type AnsibleGenerateFixesError = AnsibleGenerateFixesErrors[keyof AnsibleGenerateFixesErrors];
-
-export type AnsibleGenerateFixesResponses = {
+export type EventsGetSseSignalsResponses = {
     /**
-     * Response Ansible-Generate Fixes
+     * Response Events-Get Sse Signals
      * Successful Response
      */
-    202: {
+    200: Array<SseSignal>;
+};
+
+export type EventsGetSseSignalsResponse = EventsGetSseSignalsResponses[keyof EventsGetSseSignalsResponses];
+
+export type EventsGetSseEventSchemaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/events/schema';
+};
+
+export type EventsGetSseEventSchemaResponses = {
+    /**
+     * Successful Response
+     */
+    200: SseEventPublic;
+};
+
+export type EventsGetSseEventSchemaResponse = EventsGetSseEventSchemaResponses[keyof EventsGetSseEventSchemaResponses];
+
+export type EventsCreateSseTicketData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/events/ticket';
+};
+
+export type EventsCreateSseTicketResponses = {
+    /**
+     * Response Events-Create Sse Ticket
+     * Successful Response
+     */
+    200: {
         [key: string]: string | number;
     };
 };
 
-export type AnsibleGenerateFixesResponse = AnsibleGenerateFixesResponses[keyof AnsibleGenerateFixesResponses];
+export type EventsCreateSseTicketResponse = EventsCreateSseTicketResponses[keyof EventsCreateSseTicketResponses];
 
-export type AnsibleDeliverFixesData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/ansible/projects/{project_id}/deliveries';
-};
-
-export type AnsibleDeliverFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AnsibleDeliverFixesError = AnsibleDeliverFixesErrors[keyof AnsibleDeliverFixesErrors];
-
-export type AnsibleDeliverFixesResponses = {
-    /**
-     * Response Ansible-Deliver Fixes
-     * Successful Response
-     */
-    202: {
-        [key: string]: string;
-    };
-};
-
-export type AnsibleDeliverFixesResponse = AnsibleDeliverFixesResponses[keyof AnsibleDeliverFixesResponses];
-
-export type TerraformListRootsData = {
+export type EventsStreamEventsData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Repo Id
+         * Ticket
          */
-        repo_id?: string | null;
+        ticket?: string | null;
     };
-    url: '/api/v1/terraform/roots';
+    url: '/api/v1/events/stream';
 };
 
-export type TerraformListRootsErrors = {
+export type EventsStreamEventsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type TerraformListRootsError = TerraformListRootsErrors[keyof TerraformListRootsErrors];
+export type EventsStreamEventsError = EventsStreamEventsErrors[keyof EventsStreamEventsErrors];
 
-export type TerraformListRootsResponses = {
-    /**
-     * Response Terraform-List Roots
-     * Successful Response
-     */
-    200: Array<TerraformRootPublic>;
-};
-
-export type TerraformListRootsResponse = TerraformListRootsResponses[keyof TerraformListRootsResponses];
-
-export type TerraformCreateRootData = {
-    body: TerraformRootCreate;
-    path?: never;
-    query?: never;
-    url: '/api/v1/terraform/roots';
-};
-
-export type TerraformCreateRootErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformCreateRootError = TerraformCreateRootErrors[keyof TerraformCreateRootErrors];
-
-export type TerraformCreateRootResponses = {
+export type EventsStreamEventsResponses = {
     /**
      * Successful Response
      */
-    201: TerraformRootPublic;
+    200: unknown;
 };
-
-export type TerraformCreateRootResponse = TerraformCreateRootResponses[keyof TerraformCreateRootResponses];
-
-export type TerraformDeleteRootData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: never;
-    url: '/api/v1/terraform/roots/{root_id}';
-};
-
-export type TerraformDeleteRootErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformDeleteRootError = TerraformDeleteRootErrors[keyof TerraformDeleteRootErrors];
-
-export type TerraformDeleteRootResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type TerraformDeleteRootResponse = TerraformDeleteRootResponses[keyof TerraformDeleteRootResponses];
-
-export type TerraformUpdateRootData = {
-    body: ScanTargetUpdate;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: never;
-    url: '/api/v1/terraform/roots/{root_id}';
-};
-
-export type TerraformUpdateRootErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformUpdateRootError = TerraformUpdateRootErrors[keyof TerraformUpdateRootErrors];
-
-export type TerraformUpdateRootResponses = {
-    /**
-     * Successful Response
-     */
-    200: TerraformRootPublic;
-};
-
-export type TerraformUpdateRootResponse = TerraformUpdateRootResponses[keyof TerraformUpdateRootResponses];
-
-export type TerraformListScansData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: never;
-    url: '/api/v1/terraform/roots/{root_id}/scans';
-};
-
-export type TerraformListScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformListScansError = TerraformListScansErrors[keyof TerraformListScansErrors];
-
-export type TerraformListScansResponses = {
-    /**
-     * Response Terraform-List Scans
-     * Successful Response
-     */
-    200: Array<TerraformScanPublic>;
-};
-
-export type TerraformListScansResponse = TerraformListScansResponses[keyof TerraformListScansResponses];
-
-export type TerraformTriggerScanData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: {
-        /**
-         * Branch
-         */
-        branch?: string | null;
-    };
-    url: '/api/v1/terraform/roots/{root_id}/scans';
-};
-
-export type TerraformTriggerScanErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformTriggerScanError = TerraformTriggerScanErrors[keyof TerraformTriggerScanErrors];
-
-export type TerraformTriggerScanResponses = {
-    /**
-     * Response Terraform-Trigger Scan
-     * Successful Response
-     */
-    202: {
-        [key: string]: string;
-    };
-};
-
-export type TerraformTriggerScanResponse = TerraformTriggerScanResponses[keyof TerraformTriggerScanResponses];
-
-export type TerraformListFindingsData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: {
-        /**
-         * Include Resolved
-         */
-        include_resolved?: boolean;
-    };
-    url: '/api/v1/terraform/roots/{root_id}/findings';
-};
-
-export type TerraformListFindingsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformListFindingsError = TerraformListFindingsErrors[keyof TerraformListFindingsErrors];
-
-export type TerraformListFindingsResponses = {
-    /**
-     * Response Terraform-List Findings
-     * Successful Response
-     */
-    200: Array<TerraformFindingPublic>;
-};
-
-export type TerraformListFindingsResponse = TerraformListFindingsResponses[keyof TerraformListFindingsResponses];
-
-export type TerraformListFilesData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: {
-        /**
-         * Ref
-         */
-        ref?: string | null;
-    };
-    url: '/api/v1/terraform/roots/{root_id}/files';
-};
-
-export type TerraformListFilesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformListFilesError = TerraformListFilesErrors[keyof TerraformListFilesErrors];
-
-export type TerraformListFilesResponses = {
-    /**
-     * Response Terraform-List Files
-     * Successful Response
-     */
-    200: Array<TerraformFilePublic>;
-};
-
-export type TerraformListFilesResponse = TerraformListFilesResponses[keyof TerraformListFilesResponses];
-
-export type TerraformListFixesData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: never;
-    url: '/api/v1/terraform/roots/{root_id}/fixes';
-};
-
-export type TerraformListFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformListFixesError = TerraformListFixesErrors[keyof TerraformListFixesErrors];
-
-export type TerraformListFixesResponses = {
-    /**
-     * Response Terraform-List Fixes
-     * Successful Response
-     */
-    200: Array<TerraformFixPublic>;
-};
-
-export type TerraformListFixesResponse = TerraformListFixesResponses[keyof TerraformListFixesResponses];
-
-export type TerraformGenerateFixesData = {
-    /**
-     * Body
-     */
-    body?: TerraformFixGenerateRequest | null;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/terraform/roots/{root_id}/fixes';
-};
-
-export type TerraformGenerateFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformGenerateFixesError = TerraformGenerateFixesErrors[keyof TerraformGenerateFixesErrors];
-
-export type TerraformGenerateFixesResponses = {
-    /**
-     * Response Terraform-Generate Fixes
-     * Successful Response
-     */
-    202: {
-        [key: string]: string | number;
-    };
-};
-
-export type TerraformGenerateFixesResponse = TerraformGenerateFixesResponses[keyof TerraformGenerateFixesResponses];
-
-export type TerraformDeliverFixesData = {
-    body?: never;
-    path: {
-        /**
-         * Root Id
-         */
-        root_id: string;
-    };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/terraform/roots/{root_id}/deliveries';
-};
-
-export type TerraformDeliverFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type TerraformDeliverFixesError = TerraformDeliverFixesErrors[keyof TerraformDeliverFixesErrors];
-
-export type TerraformDeliverFixesResponses = {
-    /**
-     * Response Terraform-Deliver Fixes
-     * Successful Response
-     */
-    202: {
-        [key: string]: string;
-    };
-};
-
-export type TerraformDeliverFixesResponse = TerraformDeliverFixesResponses[keyof TerraformDeliverFixesResponses];
-
-export type CloudListAccountsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Org Id
-         */
-        org_id?: string | null;
-    };
-    url: '/api/v1/cloud/accounts';
-};
-
-export type CloudListAccountsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudListAccountsError = CloudListAccountsErrors[keyof CloudListAccountsErrors];
-
-export type CloudListAccountsResponses = {
-    /**
-     * Response Cloud-List Accounts
-     * Successful Response
-     */
-    200: Array<CloudAccountPublic>;
-};
-
-export type CloudListAccountsResponse = CloudListAccountsResponses[keyof CloudListAccountsResponses];
-
-export type CloudCreateAccountData = {
-    body: CloudAccountCreate;
-    path?: never;
-    query?: never;
-    url: '/api/v1/cloud/accounts';
-};
-
-export type CloudCreateAccountErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudCreateAccountError = CloudCreateAccountErrors[keyof CloudCreateAccountErrors];
-
-export type CloudCreateAccountResponses = {
-    /**
-     * Successful Response
-     */
-    201: CloudAccountPublic;
-};
-
-export type CloudCreateAccountResponse = CloudCreateAccountResponses[keyof CloudCreateAccountResponses];
-
-export type CloudDeleteAccountData = {
-    body?: never;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query?: never;
-    url: '/api/v1/cloud/accounts/{account_id}';
-};
-
-export type CloudDeleteAccountErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudDeleteAccountError = CloudDeleteAccountErrors[keyof CloudDeleteAccountErrors];
-
-export type CloudDeleteAccountResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type CloudDeleteAccountResponse = CloudDeleteAccountResponses[keyof CloudDeleteAccountResponses];
-
-export type CloudUpdateAccountData = {
-    body: ScanTargetUpdate;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query?: never;
-    url: '/api/v1/cloud/accounts/{account_id}';
-};
-
-export type CloudUpdateAccountErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudUpdateAccountError = CloudUpdateAccountErrors[keyof CloudUpdateAccountErrors];
-
-export type CloudUpdateAccountResponses = {
-    /**
-     * Successful Response
-     */
-    200: CloudAccountPublic;
-};
-
-export type CloudUpdateAccountResponse = CloudUpdateAccountResponses[keyof CloudUpdateAccountResponses];
-
-export type CloudListScansData = {
-    body?: never;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query?: never;
-    url: '/api/v1/cloud/accounts/{account_id}/scans';
-};
-
-export type CloudListScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudListScansError = CloudListScansErrors[keyof CloudListScansErrors];
-
-export type CloudListScansResponses = {
-    /**
-     * Response Cloud-List Scans
-     * Successful Response
-     */
-    200: Array<CloudScanPublic>;
-};
-
-export type CloudListScansResponse = CloudListScansResponses[keyof CloudListScansResponses];
-
-export type CloudTriggerScanData = {
-    body?: never;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query?: never;
-    url: '/api/v1/cloud/accounts/{account_id}/scans';
-};
-
-export type CloudTriggerScanErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudTriggerScanError = CloudTriggerScanErrors[keyof CloudTriggerScanErrors];
-
-export type CloudTriggerScanResponses = {
-    /**
-     * Response Cloud-Trigger Scan
-     * Successful Response
-     */
-    202: {
-        [key: string]: string;
-    };
-};
-
-export type CloudTriggerScanResponse = CloudTriggerScanResponses[keyof CloudTriggerScanResponses];
-
-export type CloudListFindingsData = {
-    body?: never;
-    path: {
-        /**
-         * Account Id
-         */
-        account_id: string;
-    };
-    query?: {
-        /**
-         * Include Resolved
-         */
-        include_resolved?: boolean;
-    };
-    url: '/api/v1/cloud/accounts/{account_id}/findings';
-};
-
-export type CloudListFindingsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CloudListFindingsError = CloudListFindingsErrors[keyof CloudListFindingsErrors];
-
-export type CloudListFindingsResponses = {
-    /**
-     * Response Cloud-List Findings
-     * Successful Response
-     */
-    200: Array<CloudFindingPublic>;
-};
-
-export type CloudListFindingsResponse = CloudListFindingsResponses[keyof CloudListFindingsResponses];
-
-export type DockerListTargetsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Repo Id
-         */
-        repo_id?: string | null;
-    };
-    url: '/api/v1/docker/targets';
-};
-
-export type DockerListTargetsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerListTargetsError = DockerListTargetsErrors[keyof DockerListTargetsErrors];
-
-export type DockerListTargetsResponses = {
-    /**
-     * Response Docker-List Targets
-     * Successful Response
-     */
-    200: Array<DockerTargetPublic>;
-};
-
-export type DockerListTargetsResponse = DockerListTargetsResponses[keyof DockerListTargetsResponses];
-
-export type DockerCreateTargetData = {
-    body: DockerTargetCreate;
-    path?: never;
-    query?: never;
-    url: '/api/v1/docker/targets';
-};
-
-export type DockerCreateTargetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerCreateTargetError = DockerCreateTargetErrors[keyof DockerCreateTargetErrors];
-
-export type DockerCreateTargetResponses = {
-    /**
-     * Successful Response
-     */
-    201: DockerTargetPublic;
-};
-
-export type DockerCreateTargetResponse = DockerCreateTargetResponses[keyof DockerCreateTargetResponses];
-
-export type DockerDeleteTargetData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: never;
-    url: '/api/v1/docker/targets/{target_id}';
-};
-
-export type DockerDeleteTargetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerDeleteTargetError = DockerDeleteTargetErrors[keyof DockerDeleteTargetErrors];
-
-export type DockerDeleteTargetResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DockerDeleteTargetResponse = DockerDeleteTargetResponses[keyof DockerDeleteTargetResponses];
-
-export type DockerUpdateTargetData = {
-    body: ScanTargetUpdate;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: never;
-    url: '/api/v1/docker/targets/{target_id}';
-};
-
-export type DockerUpdateTargetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerUpdateTargetError = DockerUpdateTargetErrors[keyof DockerUpdateTargetErrors];
-
-export type DockerUpdateTargetResponses = {
-    /**
-     * Successful Response
-     */
-    200: DockerTargetPublic;
-};
-
-export type DockerUpdateTargetResponse = DockerUpdateTargetResponses[keyof DockerUpdateTargetResponses];
-
-export type DockerListScansData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Limit
-         */
-        limit?: number;
-    };
-    url: '/api/v1/docker/targets/{target_id}/scans';
-};
-
-export type DockerListScansErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerListScansError = DockerListScansErrors[keyof DockerListScansErrors];
-
-export type DockerListScansResponses = {
-    /**
-     * Response Docker-List Scans
-     * Successful Response
-     */
-    200: Array<DockerScanPublic>;
-};
-
-export type DockerListScansResponse = DockerListScansResponses[keyof DockerListScansResponses];
-
-export type DockerTriggerScanData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Branch
-         */
-        branch?: string | null;
-    };
-    url: '/api/v1/docker/targets/{target_id}/scans';
-};
-
-export type DockerTriggerScanErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerTriggerScanError = DockerTriggerScanErrors[keyof DockerTriggerScanErrors];
-
-export type DockerTriggerScanResponses = {
-    /**
-     * Response Docker-Trigger Scan
-     * Successful Response
-     */
-    202: {
-        [key: string]: string;
-    };
-};
-
-export type DockerTriggerScanResponse = DockerTriggerScanResponses[keyof DockerTriggerScanResponses];
-
-export type DockerListFindingsData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Include Resolved
-         */
-        include_resolved?: boolean;
-    };
-    url: '/api/v1/docker/targets/{target_id}/findings';
-};
-
-export type DockerListFindingsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerListFindingsError = DockerListFindingsErrors[keyof DockerListFindingsErrors];
-
-export type DockerListFindingsResponses = {
-    /**
-     * Response Docker-List Findings
-     * Successful Response
-     */
-    200: Array<DockerFindingPublic>;
-};
-
-export type DockerListFindingsResponse = DockerListFindingsResponses[keyof DockerListFindingsResponses];
-
-export type DockerListFilesData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Ref
-         */
-        ref?: string | null;
-    };
-    url: '/api/v1/docker/targets/{target_id}/files';
-};
-
-export type DockerListFilesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerListFilesError = DockerListFilesErrors[keyof DockerListFilesErrors];
-
-export type DockerListFilesResponses = {
-    /**
-     * Response Docker-List Files
-     * Successful Response
-     */
-    200: Array<DockerFilePublic>;
-};
-
-export type DockerListFilesResponse = DockerListFilesResponses[keyof DockerListFilesResponses];
-
-export type DockerListRuntimeFindingsData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: never;
-    url: '/api/v1/docker/targets/{target_id}/runtime-findings';
-};
-
-export type DockerListRuntimeFindingsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerListRuntimeFindingsError = DockerListRuntimeFindingsErrors[keyof DockerListRuntimeFindingsErrors];
-
-export type DockerListRuntimeFindingsResponses = {
-    /**
-     * Response Docker-List Runtime Findings
-     * Successful Response
-     */
-    200: Array<DockerBuildTelemetryPublic>;
-};
-
-export type DockerListRuntimeFindingsResponse = DockerListRuntimeFindingsResponses[keyof DockerListRuntimeFindingsResponses];
-
-export type DockerListFixesData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: never;
-    url: '/api/v1/docker/targets/{target_id}/fixes';
-};
-
-export type DockerListFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerListFixesError = DockerListFixesErrors[keyof DockerListFixesErrors];
-
-export type DockerListFixesResponses = {
-    /**
-     * Response Docker-List Fixes
-     * Successful Response
-     */
-    200: Array<DockerFixPublic>;
-};
-
-export type DockerListFixesResponse = DockerListFixesResponses[keyof DockerListFixesResponses];
-
-export type DockerGenerateFixesData = {
-    /**
-     * Body
-     */
-    body?: DockerFixGenerateRequest | null;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/docker/targets/{target_id}/fixes';
-};
-
-export type DockerGenerateFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerGenerateFixesError = DockerGenerateFixesErrors[keyof DockerGenerateFixesErrors];
-
-export type DockerGenerateFixesResponses = {
-    /**
-     * Response Docker-Generate Fixes
-     * Successful Response
-     */
-    202: {
-        [key: string]: string | number;
-    };
-};
-
-export type DockerGenerateFixesResponse = DockerGenerateFixesResponses[keyof DockerGenerateFixesResponses];
-
-export type DockerGenerateRuntimeFixesData = {
-    body: DockerRuntimeFixRequest;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/docker/targets/{target_id}/runtime-fixes';
-};
-
-export type DockerGenerateRuntimeFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerGenerateRuntimeFixesError = DockerGenerateRuntimeFixesErrors[keyof DockerGenerateRuntimeFixesErrors];
-
-export type DockerGenerateRuntimeFixesResponses = {
-    /**
-     * Response Docker-Generate Runtime Fixes
-     * Successful Response
-     */
-    202: {
-        [key: string]: string | number;
-    };
-};
-
-export type DockerGenerateRuntimeFixesResponse = DockerGenerateRuntimeFixesResponses[keyof DockerGenerateRuntimeFixesResponses];
-
-export type DockerDeliverFixesData = {
-    body?: never;
-    path: {
-        /**
-         * Target Id
-         */
-        target_id: string;
-    };
-    query?: {
-        /**
-         * Force
-         */
-        force?: boolean;
-    };
-    url: '/api/v1/docker/targets/{target_id}/deliveries';
-};
-
-export type DockerDeliverFixesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DockerDeliverFixesError = DockerDeliverFixesErrors[keyof DockerDeliverFixesErrors];
-
-export type DockerDeliverFixesResponses = {
-    /**
-     * Response Docker-Deliver Fixes
-     * Successful Response
-     */
-    202: {
-        [key: string]: string;
-    };
-};
-
-export type DockerDeliverFixesResponse = DockerDeliverFixesResponses[keyof DockerDeliverFixesResponses];
 
 export type PrivateCreateUserData = {
     body: PrivateUserCreate;
