@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.rate_limit import LIMIT_PUBLIC
 from app.models import (
     AnsibleProject,
+    CloudAccount,
     DockerTarget,
     Repository,
     ScanStatus,
@@ -383,6 +384,76 @@ def get_docker_target_badge_json(
     return {
         "schemaVersion": 1,
         "label": "Docker",
+        "message": grade,
+        "color": color,
+        "cacheSeconds": 300,
+    }
+
+
+def _cloud_account_badge_grade(
+    session: Session, account_id: uuid.UUID
+) -> tuple[CloudAccount | None, str | None]:
+    account = session.get(CloudAccount, account_id)
+    if account is None:
+        return None, None
+    latest = latest_completed_scan(account)
+    return account, (latest.grade if latest else None)
+
+
+@router.get(
+    "/cloud/{account_id}.svg",
+    role=Role.guest,
+    limit=LIMIT_PUBLIC,
+    response_class=Response,
+)
+def get_cloud_account_badge(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> Response:
+    account, grade = _cloud_account_badge_grade(session, account_id)
+
+    # Unlike a repo-backed target, a cloud account has no public counterpart to
+    # fall back to — a signature is always required, not just for private ones.
+    if account is None or not verify_badge(str(account_id), sig):
+        return Response(content=render_unknown_badge(), headers=_CACHE_HEADERS)
+
+    svg = (
+        render_unknown_badge() if grade is None else render_badge(grade, label="Cloud")
+    )
+
+    return Response(content=svg, headers=_CACHE_HEADERS)
+
+
+@router.get("/cloud/{account_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+def get_cloud_account_badge_json(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    sig: str | None = None,
+) -> dict[str, object]:
+    """Shields.io-compatible JSON endpoint for a cloud account's badge."""
+    account, grade = _cloud_account_badge_grade(session, account_id)
+
+    if account is None or not verify_badge(str(account_id), sig):
+        return {
+            "schemaVersion": 1,
+            "label": "Cloud",
+            "message": "not configured",
+            "color": "lightgrey",
+        }
+
+    if grade is None:
+        return {
+            "schemaVersion": 1,
+            "label": "Cloud",
+            "message": "pending",
+            "color": "lightgrey",
+        }
+
+    color = _GRADE_COLORS.get(grade, "#9CA3AF").lstrip("#")
+    return {
+        "schemaVersion": 1,
+        "label": "Cloud",
         "message": grade,
         "color": color,
         "cacheSeconds": 300,

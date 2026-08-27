@@ -27,6 +27,7 @@ import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 import { Route as LayoutBadgesIndexRouteImport } from './routes/_layout/badges/index'
 import { Route as LayoutBadgesAnsibleRouteImport } from './routes/_layout/badges/ansible'
+import { Route as LayoutBadgesCloudRouteImport } from './routes/_layout/badges/cloud'
 import { Route as LayoutBadgesDockerRouteImport } from './routes/_layout/badges/docker'
 import { Route as LayoutBadgesRepositoriesRouteImport } from './routes/_layout/badges/repositories'
 import { Route as LayoutBadgesTerraformRouteImport } from './routes/_layout/badges/terraform'
@@ -146,6 +147,11 @@ const LayoutBadgesIndexRoute = LayoutBadgesIndexRouteImport.update({
 const LayoutBadgesAnsibleRoute = LayoutBadgesAnsibleRouteImport.update({
   id: '/ansible',
   path: '/ansible',
+  getParentRoute: () => LayoutBadgesRoute,
+} as any)
+const LayoutBadgesCloudRoute = LayoutBadgesCloudRouteImport.update({
+  id: '/cloud',
+  path: '/cloud',
   getParentRoute: () => LayoutBadgesRoute,
 } as any)
 const LayoutBadgesDockerRoute = LayoutBadgesDockerRouteImport.update({
@@ -335,6 +341,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof LayoutSettingsRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/badges/ansible': typeof LayoutBadgesAnsibleRoute
+  '/badges/cloud': typeof LayoutBadgesCloudRoute
   '/badges/docker': typeof LayoutBadgesDockerRoute
   '/badges/repositories': typeof LayoutBadgesRepositoriesRoute
   '/badges/terraform': typeof LayoutBadgesTerraformRoute
@@ -380,6 +387,7 @@ export interface FileRoutesByTo {
   '/': typeof LayoutIndexRoute
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/badges/ansible': typeof LayoutBadgesAnsibleRoute
+  '/badges/cloud': typeof LayoutBadgesCloudRoute
   '/badges/docker': typeof LayoutBadgesDockerRoute
   '/badges/repositories': typeof LayoutBadgesRepositoriesRoute
   '/badges/terraform': typeof LayoutBadgesTerraformRoute
@@ -428,6 +436,7 @@ export interface FileRoutesById {
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/_layout/badges/ansible': typeof LayoutBadgesAnsibleRoute
+  '/_layout/badges/cloud': typeof LayoutBadgesCloudRoute
   '/_layout/badges/docker': typeof LayoutBadgesDockerRoute
   '/_layout/badges/repositories': typeof LayoutBadgesRepositoriesRoute
   '/_layout/badges/terraform': typeof LayoutBadgesTerraformRoute
@@ -479,6 +488,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/analyses/$analysisId'
     | '/badges/ansible'
+    | '/badges/cloud'
     | '/badges/docker'
     | '/badges/repositories'
     | '/badges/terraform'
@@ -524,6 +534,7 @@ export interface FileRouteTypes {
     | '/'
     | '/analyses/$analysisId'
     | '/badges/ansible'
+    | '/badges/cloud'
     | '/badges/docker'
     | '/badges/repositories'
     | '/badges/terraform'
@@ -571,6 +582,7 @@ export interface FileRouteTypes {
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
     | '/_layout/badges/ansible'
+    | '/_layout/badges/cloud'
     | '/_layout/badges/docker'
     | '/_layout/badges/repositories'
     | '/_layout/badges/terraform'
@@ -740,6 +752,13 @@ declare module '@tanstack/react-router' {
       path: '/ansible'
       fullPath: '/badges/ansible'
       preLoaderRoute: typeof LayoutBadgesAnsibleRouteImport
+      parentRoute: typeof LayoutBadgesRoute
+    }
+    '/_layout/badges/cloud': {
+      id: '/_layout/badges/cloud'
+      path: '/cloud'
+      fullPath: '/badges/cloud'
+      preLoaderRoute: typeof LayoutBadgesCloudRouteImport
       parentRoute: typeof LayoutBadgesRoute
     }
     '/_layout/badges/docker': {
@@ -957,6 +976,7 @@ declare module '@tanstack/react-router' {
 
 interface LayoutBadgesRouteChildren {
   LayoutBadgesAnsibleRoute: typeof LayoutBadgesAnsibleRoute
+  LayoutBadgesCloudRoute: typeof LayoutBadgesCloudRoute
   LayoutBadgesDockerRoute: typeof LayoutBadgesDockerRoute
   LayoutBadgesRepositoriesRoute: typeof LayoutBadgesRepositoriesRoute
   LayoutBadgesTerraformRoute: typeof LayoutBadgesTerraformRoute
@@ -965,6 +985,7 @@ interface LayoutBadgesRouteChildren {
 
 const LayoutBadgesRouteChildren: LayoutBadgesRouteChildren = {
   LayoutBadgesAnsibleRoute: LayoutBadgesAnsibleRoute,
+  LayoutBadgesCloudRoute: LayoutBadgesCloudRoute,
   LayoutBadgesDockerRoute: LayoutBadgesDockerRoute,
   LayoutBadgesRepositoriesRoute: LayoutBadgesRepositoriesRoute,
   LayoutBadgesTerraformRoute: LayoutBadgesTerraformRoute,

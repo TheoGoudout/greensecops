@@ -37,6 +37,10 @@ class CloudAccountPublic(SQLModel):
     latest_score: float | None = None
     latest_grade: str | None = None
     latest_scan_status: ScanStatus | None = None
+    # Unlike a Terraform root or Docker target, a cloud account has no public
+    # repo to inherit visibility from — an AWS account's posture is sensitive
+    # regardless, so this is always set, never conditional on a privacy flag.
+    badge_sig: str | None = None
     created_at: datetime | None = None
 
 

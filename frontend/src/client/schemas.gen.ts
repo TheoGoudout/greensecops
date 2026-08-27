@@ -994,6 +994,17 @@ export const CloudAccountPublicSchema = {
                 }
             ]
         },
+        badge_sig: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Badge Sig'
+        },
         created_at: {
             anyOf: [
                 {

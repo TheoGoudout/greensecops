@@ -188,6 +188,7 @@ export type CloudAccountPublic = {
     latest_score?: (number | null);
     latest_grade?: (string | null);
     latest_scan_status?: (ScanStatus | null);
+    badge_sig?: (string | null);
     created_at?: (string | null);
 };
 
@@ -1544,6 +1545,22 @@ export type BadgesGetDockerTargetBadgeJsonData = {
 };
 
 export type BadgesGetDockerTargetBadgeJsonResponse = ({
+    [key: string]: unknown;
+});
+
+export type BadgesGetCloudAccountBadgeData = {
+    accountId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetCloudAccountBadgeResponse = (unknown);
+
+export type BadgesGetCloudAccountBadgeJsonData = {
+    accountId: string;
+    sig?: (string | null);
+};
+
+export type BadgesGetCloudAccountBadgeJsonResponse = ({
     [key: string]: unknown;
 });
 
