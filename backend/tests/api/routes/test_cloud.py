@@ -65,6 +65,30 @@ def seeded_cloud_rule(db: Session) -> Rule:
 
 
 @pytest.fixture()
+def cloud_finding(
+    db: Session,
+    cloud_account: CloudAccount,
+    completed_scan: CloudScan,
+    seeded_cloud_rule: Rule,
+) -> CloudFinding:
+    finding = CloudFinding(
+        scan_id=completed_scan.id,
+        cloud_account_id=cloud_account.id,
+        rule_id=seeded_cloud_rule.id,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=Severity.high,
+        category=Category.security,
+        message="open finding",
+        resource_type="aws_s3_bucket",
+        resource_id="acme-data",
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+@pytest.fixture()
 def completed_scan(db: Session, cloud_account: CloudAccount) -> CloudScan:
     scan = CloudScan(
         cloud_account_id=cloud_account.id,
@@ -434,3 +458,64 @@ def test_list_cloud_findings_include_resolved(
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+# ─── GET/PUT/DELETE /cloud/findings/{cloud_finding_id} ────────────────────────
+
+
+def test_get_cloud_finding(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    cloud_finding: CloudFinding,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(cloud_finding.id)
+
+
+def test_ignore_and_unignore_cloud_finding(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    cloud_finding: CloudFinding,
+) -> None:
+    resp = client.put(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+    db.refresh(cloud_finding)
+    assert cloud_finding.status is FindingStatus.ignored
+
+    # Idempotent.
+    resp = client.put(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+
+    resp = client.delete(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "open"
+    db.refresh(cloud_finding)
+    assert cloud_finding.status is FindingStatus.open
+
+
+def test_ignore_cloud_finding_wrong_tenant_is_404(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    cloud_finding: CloudFinding,
+) -> None:
+    resp = client.put(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+        headers=normal_user_token_headers,
+    )
+    assert resp.status_code == 404

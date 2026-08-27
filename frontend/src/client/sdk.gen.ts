@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
+import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleGetFindingData, AnsibleGetFindingResponse, AnsibleIgnoreFindingData, AnsibleIgnoreFindingResponse, AnsibleUnignoreFindingData, AnsibleUnignoreFindingResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, CloudGetFindingData, CloudGetFindingResponse, CloudIgnoreFindingData, CloudIgnoreFindingResponse, CloudUnignoreFindingData, CloudUnignoreFindingResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerGetFindingData, DockerGetFindingResponse, DockerIgnoreFindingData, DockerIgnoreFindingResponse, DockerUnignoreFindingData, DockerUnignoreFindingResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformGetFindingData, TerraformGetFindingResponse, TerraformIgnoreFindingData, TerraformIgnoreFindingResponse, TerraformUnignoreFindingData, TerraformUnignoreFindingResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
 
 export class AnsibleService {
     /**
@@ -152,6 +152,66 @@ export class AnsibleService {
             },
             query: {
                 include_resolved: data.includeResolved
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Finding
+     * @param data The data for the request.
+     * @param data.ansibleFindingId
+     * @returns AnsibleFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static getFinding(data: AnsibleGetFindingData): CancelablePromise<AnsibleGetFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible/findings/{ansible_finding_id}',
+            path: {
+                ansible_finding_id: data.ansibleFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Ignore Finding
+     * @param data The data for the request.
+     * @param data.ansibleFindingId
+     * @returns AnsibleFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static ignoreFinding(data: AnsibleIgnoreFindingData): CancelablePromise<AnsibleIgnoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/ansible/findings/{ansible_finding_id}/ignore',
+            path: {
+                ansible_finding_id: data.ansibleFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Unignore Finding
+     * @param data The data for the request.
+     * @param data.ansibleFindingId
+     * @returns AnsibleFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static unignoreFinding(data: AnsibleUnignoreFindingData): CancelablePromise<AnsibleUnignoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/ansible/findings/{ansible_finding_id}/ignore',
+            path: {
+                ansible_finding_id: data.ansibleFindingId
             },
             errors: {
                 422: 'Validation Error'
@@ -928,6 +988,66 @@ export class CloudService {
             }
         });
     }
+
+    /**
+     * Get Finding
+     * @param data The data for the request.
+     * @param data.cloudFindingId
+     * @returns CloudFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static getFinding(data: CloudGetFindingData): CancelablePromise<CloudGetFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/cloud/findings/{cloud_finding_id}',
+            path: {
+                cloud_finding_id: data.cloudFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Ignore Finding
+     * @param data The data for the request.
+     * @param data.cloudFindingId
+     * @returns CloudFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static ignoreFinding(data: CloudIgnoreFindingData): CancelablePromise<CloudIgnoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/cloud/findings/{cloud_finding_id}/ignore',
+            path: {
+                cloud_finding_id: data.cloudFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Unignore Finding
+     * @param data The data for the request.
+     * @param data.cloudFindingId
+     * @returns CloudFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static unignoreFinding(data: CloudUnignoreFindingData): CancelablePromise<CloudUnignoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/cloud/findings/{cloud_finding_id}/ignore',
+            path: {
+                cloud_finding_id: data.cloudFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class DockerService {
@@ -1087,6 +1207,66 @@ export class DockerService {
             },
             query: {
                 include_resolved: data.includeResolved
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Finding
+     * @param data The data for the request.
+     * @param data.dockerFindingId
+     * @returns DockerFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static getFinding(data: DockerGetFindingData): CancelablePromise<DockerGetFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/docker/findings/{docker_finding_id}',
+            path: {
+                docker_finding_id: data.dockerFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Ignore Finding
+     * @param data The data for the request.
+     * @param data.dockerFindingId
+     * @returns DockerFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static ignoreFinding(data: DockerIgnoreFindingData): CancelablePromise<DockerIgnoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/docker/findings/{docker_finding_id}/ignore',
+            path: {
+                docker_finding_id: data.dockerFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Unignore Finding
+     * @param data The data for the request.
+     * @param data.dockerFindingId
+     * @returns DockerFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static unignoreFinding(data: DockerUnignoreFindingData): CancelablePromise<DockerUnignoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/docker/findings/{docker_finding_id}/ignore',
+            path: {
+                docker_finding_id: data.dockerFindingId
             },
             errors: {
                 422: 'Validation Error'
@@ -2086,6 +2266,66 @@ export class TerraformService {
             },
             query: {
                 include_resolved: data.includeResolved
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Finding
+     * @param data The data for the request.
+     * @param data.terraformFindingId
+     * @returns TerraformFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static getFinding(data: TerraformGetFindingData): CancelablePromise<TerraformGetFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/terraform/findings/{terraform_finding_id}',
+            path: {
+                terraform_finding_id: data.terraformFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Ignore Finding
+     * @param data The data for the request.
+     * @param data.terraformFindingId
+     * @returns TerraformFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static ignoreFinding(data: TerraformIgnoreFindingData): CancelablePromise<TerraformIgnoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/terraform/findings/{terraform_finding_id}/ignore',
+            path: {
+                terraform_finding_id: data.terraformFindingId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Unignore Finding
+     * @param data The data for the request.
+     * @param data.terraformFindingId
+     * @returns TerraformFindingPublic Successful Response
+     * @throws ApiError
+     */
+    public static unignoreFinding(data: TerraformUnignoreFindingData): CancelablePromise<TerraformUnignoreFindingResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/terraform/findings/{terraform_finding_id}/ignore',
+            path: {
+                terraform_finding_id: data.terraformFindingId
             },
             errors: {
                 422: 'Validation Error'

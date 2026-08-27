@@ -5253,6 +5253,96 @@ export type DockerListFindingsResponses = {
 
 export type DockerListFindingsResponse = DockerListFindingsResponses[keyof DockerListFindingsResponses];
 
+export type DockerGetFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Docker Finding Id
+         */
+        docker_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/findings/{docker_finding_id}';
+};
+
+export type DockerGetFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerGetFindingError = DockerGetFindingErrors[keyof DockerGetFindingErrors];
+
+export type DockerGetFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: DockerFindingPublic;
+};
+
+export type DockerGetFindingResponse = DockerGetFindingResponses[keyof DockerGetFindingResponses];
+
+export type DockerUnignoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Docker Finding Id
+         */
+        docker_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/findings/{docker_finding_id}/ignore';
+};
+
+export type DockerUnignoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerUnignoreFindingError = DockerUnignoreFindingErrors[keyof DockerUnignoreFindingErrors];
+
+export type DockerUnignoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: DockerFindingPublic;
+};
+
+export type DockerUnignoreFindingResponse = DockerUnignoreFindingResponses[keyof DockerUnignoreFindingResponses];
+
+export type DockerIgnoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Docker Finding Id
+         */
+        docker_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/docker/findings/{docker_finding_id}/ignore';
+};
+
+export type DockerIgnoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerIgnoreFindingError = DockerIgnoreFindingErrors[keyof DockerIgnoreFindingErrors];
+
+export type DockerIgnoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: DockerFindingPublic;
+};
+
+export type DockerIgnoreFindingResponse = DockerIgnoreFindingResponses[keyof DockerIgnoreFindingResponses];
+
 export type DockerListFilesData = {
     body?: never;
     path: {
@@ -5689,6 +5779,96 @@ export type TerraformListFindingsResponses = {
 
 export type TerraformListFindingsResponse = TerraformListFindingsResponses[keyof TerraformListFindingsResponses];
 
+export type TerraformGetFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Terraform Finding Id
+         */
+        terraform_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/findings/{terraform_finding_id}';
+};
+
+export type TerraformGetFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformGetFindingError = TerraformGetFindingErrors[keyof TerraformGetFindingErrors];
+
+export type TerraformGetFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: TerraformFindingPublic;
+};
+
+export type TerraformGetFindingResponse = TerraformGetFindingResponses[keyof TerraformGetFindingResponses];
+
+export type TerraformUnignoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Terraform Finding Id
+         */
+        terraform_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/findings/{terraform_finding_id}/ignore';
+};
+
+export type TerraformUnignoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformUnignoreFindingError = TerraformUnignoreFindingErrors[keyof TerraformUnignoreFindingErrors];
+
+export type TerraformUnignoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: TerraformFindingPublic;
+};
+
+export type TerraformUnignoreFindingResponse = TerraformUnignoreFindingResponses[keyof TerraformUnignoreFindingResponses];
+
+export type TerraformIgnoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Terraform Finding Id
+         */
+        terraform_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/terraform/findings/{terraform_finding_id}/ignore';
+};
+
+export type TerraformIgnoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformIgnoreFindingError = TerraformIgnoreFindingErrors[keyof TerraformIgnoreFindingErrors];
+
+export type TerraformIgnoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: TerraformFindingPublic;
+};
+
+export type TerraformIgnoreFindingResponse = TerraformIgnoreFindingResponses[keyof TerraformIgnoreFindingResponses];
+
 export type TerraformListFilesData = {
     body?: never;
     path: {
@@ -6051,6 +6231,96 @@ export type CloudListFindingsResponses = {
 
 export type CloudListFindingsResponse = CloudListFindingsResponses[keyof CloudListFindingsResponses];
 
+export type CloudGetFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Cloud Finding Id
+         */
+        cloud_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/findings/{cloud_finding_id}';
+};
+
+export type CloudGetFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudGetFindingError = CloudGetFindingErrors[keyof CloudGetFindingErrors];
+
+export type CloudGetFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: CloudFindingPublic;
+};
+
+export type CloudGetFindingResponse = CloudGetFindingResponses[keyof CloudGetFindingResponses];
+
+export type CloudUnignoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Cloud Finding Id
+         */
+        cloud_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/findings/{cloud_finding_id}/ignore';
+};
+
+export type CloudUnignoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudUnignoreFindingError = CloudUnignoreFindingErrors[keyof CloudUnignoreFindingErrors];
+
+export type CloudUnignoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: CloudFindingPublic;
+};
+
+export type CloudUnignoreFindingResponse = CloudUnignoreFindingResponses[keyof CloudUnignoreFindingResponses];
+
+export type CloudIgnoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Cloud Finding Id
+         */
+        cloud_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/cloud/findings/{cloud_finding_id}/ignore';
+};
+
+export type CloudIgnoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CloudIgnoreFindingError = CloudIgnoreFindingErrors[keyof CloudIgnoreFindingErrors];
+
+export type CloudIgnoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: CloudFindingPublic;
+};
+
+export type CloudIgnoreFindingResponse = CloudIgnoreFindingResponses[keyof CloudIgnoreFindingResponses];
+
 export type AnsibleListProjectsData = {
     body?: never;
     path?: never;
@@ -6271,6 +6541,96 @@ export type AnsibleListFindingsResponses = {
 };
 
 export type AnsibleListFindingsResponse = AnsibleListFindingsResponses[keyof AnsibleListFindingsResponses];
+
+export type AnsibleGetFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Ansible Finding Id
+         */
+        ansible_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/findings/{ansible_finding_id}';
+};
+
+export type AnsibleGetFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleGetFindingError = AnsibleGetFindingErrors[keyof AnsibleGetFindingErrors];
+
+export type AnsibleGetFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnsibleFindingPublic;
+};
+
+export type AnsibleGetFindingResponse = AnsibleGetFindingResponses[keyof AnsibleGetFindingResponses];
+
+export type AnsibleUnignoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Ansible Finding Id
+         */
+        ansible_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/findings/{ansible_finding_id}/ignore';
+};
+
+export type AnsibleUnignoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleUnignoreFindingError = AnsibleUnignoreFindingErrors[keyof AnsibleUnignoreFindingErrors];
+
+export type AnsibleUnignoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnsibleFindingPublic;
+};
+
+export type AnsibleUnignoreFindingResponse = AnsibleUnignoreFindingResponses[keyof AnsibleUnignoreFindingResponses];
+
+export type AnsibleIgnoreFindingData = {
+    body?: never;
+    path: {
+        /**
+         * Ansible Finding Id
+         */
+        ansible_finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ansible/findings/{ansible_finding_id}/ignore';
+};
+
+export type AnsibleIgnoreFindingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleIgnoreFindingError = AnsibleIgnoreFindingErrors[keyof AnsibleIgnoreFindingErrors];
+
+export type AnsibleIgnoreFindingResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnsibleFindingPublic;
+};
+
+export type AnsibleIgnoreFindingResponse = AnsibleIgnoreFindingResponses[keyof AnsibleIgnoreFindingResponses];
 
 export type AnsibleListFilesData = {
     body?: never;

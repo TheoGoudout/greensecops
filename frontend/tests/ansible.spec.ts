@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import {
+  MOCK_ANSIBLE_FINDING,
   MOCK_ANSIBLE_PROJECT,
   MOCK_PR_OPEN,
   MOCK_REPO,
@@ -92,6 +93,47 @@ test.describe("Ansible", () => {
     await expect(
       page.getByText("Collection community.docker is not pinned"),
     ).toHaveCount(2)
+  })
+
+  test("ignoring and unignoring a finding round-trips its status", async ({
+    page,
+  }) => {
+    await mockAnsibleProjects(page)
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/ansible`)
+    await page.getByTitle("Expand project").first().click()
+
+    const ignoreRequest = page.waitForRequest(
+      (r) =>
+        r
+          .url()
+          .includes(`/ansible/findings/${MOCK_ANSIBLE_FINDING.id}/ignore`) &&
+        r.method() === "PUT",
+    )
+    await page.getByRole("button", { name: "Ignore" }).first().click()
+    await ignoreRequest
+
+    await expect(
+      page.getByText("ignored", { exact: true }).first(),
+    ).toBeVisible()
+    const unignoreButton = page
+      .getByRole("button", { name: "Unignore" })
+      .first()
+    await expect(unignoreButton).toBeVisible()
+
+    const unignoreRequest = page.waitForRequest(
+      (r) =>
+        r
+          .url()
+          .includes(`/ansible/findings/${MOCK_ANSIBLE_FINDING.id}/ignore`) &&
+        r.method() === "DELETE",
+    )
+    await unignoreButton.click()
+    await unignoreRequest
+
+    await expect(
+      page.getByRole("button", { name: "Ignore" }).first(),
+    ).toBeVisible()
   })
 
   test("generating fixes for the whole project queues the task", async ({

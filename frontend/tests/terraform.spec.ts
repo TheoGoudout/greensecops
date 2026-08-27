@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import {
   MOCK_PR_OPEN,
   MOCK_REPO,
+  MOCK_TERRAFORM_FINDING,
   MOCK_TERRAFORM_ROOT,
   mockBilling,
   mockEvents,
@@ -77,6 +78,49 @@ test.describe("Terraform", () => {
     )
     await page.getByRole("button", { name: "Generate all fixes" }).click()
     await request
+  })
+
+  test("ignoring and unignoring a finding round-trips its status", async ({
+    page,
+  }) => {
+    await mockTerraformRoots(page)
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+    await page.getByTitle("Expand root").first().click()
+
+    const ignoreRequest = page.waitForRequest(
+      (r) =>
+        r
+          .url()
+          .includes(
+            `/terraform/findings/${MOCK_TERRAFORM_FINDING.id}/ignore`,
+          ) && r.method() === "PUT",
+    )
+    await page.getByRole("button", { name: "Ignore" }).first().click()
+    await ignoreRequest
+
+    await expect(
+      page.getByText("ignored", { exact: true }).first(),
+    ).toBeVisible()
+    const unignoreButton = page
+      .getByRole("button", { name: "Unignore" })
+      .first()
+    await expect(unignoreButton).toBeVisible()
+
+    const unignoreRequest = page.waitForRequest(
+      (r) =>
+        r
+          .url()
+          .includes(
+            `/terraform/findings/${MOCK_TERRAFORM_FINDING.id}/ignore`,
+          ) && r.method() === "DELETE",
+    )
+    await unignoreButton.click()
+    await unignoreRequest
+
+    await expect(
+      page.getByRole("button", { name: "Ignore" }).first(),
+    ).toBeVisible()
   })
 
   test("scanning a root queues a scan", async ({ page }) => {

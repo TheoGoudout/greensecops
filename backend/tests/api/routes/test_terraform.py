@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import (
     Category,
+    FindingStatus,
     FixStatus,
     LLMProvider,
     Organization,
@@ -74,6 +75,30 @@ def seeded_terraform_rule(db: Session) -> Rule:
     rule = db.exec(select(Rule).where(Rule.domain == RuleDomain.iac_terraform)).first()
     assert rule is not None
     return rule
+
+
+@pytest.fixture()
+def terraform_finding(
+    db: Session,
+    terraform_root: TerraformRoot,
+    completed_scan: TerraformScan,
+    seeded_terraform_rule: Rule,
+) -> TerraformFinding:
+    finding = TerraformFinding(
+        scan_id=completed_scan.id,
+        terraform_root_id=terraform_root.id,
+        rule_id=seeded_terraform_rule.id,
+        resource_address="aws_s3_bucket.data",
+        file_path="main.tf",
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=Severity.high,
+        category=Category.security,
+        message="open finding",
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
 
 
 @pytest.fixture()
@@ -619,3 +644,75 @@ def test_trigger_terraform_delivery_queues_task(
     assert body["pr_branch"].startswith("greensecops/terraform-")
     mock_delay.assert_called_once()
     assert mock_delay.call_args.kwargs["terraform_root_id"] == str(terraform_root.id)
+
+
+# ─── GET/PUT/DELETE /terraform/findings/{terraform_finding_id} ────────────────
+
+
+def test_get_terraform_finding(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    terraform_finding: TerraformFinding,
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(terraform_finding.id)
+
+
+def test_ignore_and_unignore_terraform_finding(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    terraform_finding: TerraformFinding,
+) -> None:
+    resp = client.put(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+    db.refresh(terraform_finding)
+    assert terraform_finding.status is FindingStatus.ignored
+
+    # Idempotent: ignoring an already-ignored finding is a no-op, not an error.
+    resp = client.put(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+
+    resp = client.delete(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "open"
+    db.refresh(terraform_finding)
+    assert terraform_finding.status is FindingStatus.open
+
+    # Idempotent the other way too.
+    resp = client.delete(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "open"
+
+
+def test_ignore_terraform_finding_wrong_tenant_is_404(
+    client: TestClient,
+    db: Session,
+    normal_user_token_headers: dict[str, str],
+    terraform_finding: TerraformFinding,
+) -> None:
+    # normal_user_token_headers belongs to no org at all here, so the finding's
+    # org membership check must fail the same way a missing finding would.
+    resp = client.put(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+        headers=normal_user_token_headers,
+    )
+    assert resp.status_code == 404
