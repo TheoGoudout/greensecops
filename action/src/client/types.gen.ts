@@ -515,6 +515,10 @@ export type CloudAccountPublic = {
     latest_grade?: string | null;
     latest_scan_status?: ScanStatus | null;
     /**
+     * Badge Sig
+     */
+    badge_sig?: string | null;
+    /**
      * Created At
      */
     created_at?: string | null;
@@ -7081,6 +7085,77 @@ export type BadgesGetDockerTargetBadgeJsonResponses = {
 };
 
 export type BadgesGetDockerTargetBadgeJsonResponse = BadgesGetDockerTargetBadgeJsonResponses[keyof BadgesGetDockerTargetBadgeJsonResponses];
+
+export type BadgesGetCloudAccountBadgeData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/cloud-accounts/{account_id}.svg';
+};
+
+export type BadgesGetCloudAccountBadgeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetCloudAccountBadgeError = BadgesGetCloudAccountBadgeErrors[keyof BadgesGetCloudAccountBadgeErrors];
+
+export type BadgesGetCloudAccountBadgeResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type BadgesGetCloudAccountBadgeJsonData = {
+    body?: never;
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: {
+        /**
+         * Sig
+         */
+        sig?: string | null;
+    };
+    url: '/api/v1/badges/cloud-accounts/{account_id}.json';
+};
+
+export type BadgesGetCloudAccountBadgeJsonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BadgesGetCloudAccountBadgeJsonError = BadgesGetCloudAccountBadgeJsonErrors[keyof BadgesGetCloudAccountBadgeJsonErrors];
+
+export type BadgesGetCloudAccountBadgeJsonResponses = {
+    /**
+     * Response Badges-Get Cloud Account Badge Json
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type BadgesGetCloudAccountBadgeJsonResponse = BadgesGetCloudAccountBadgeJsonResponses[keyof BadgesGetCloudAccountBadgeJsonResponses];
 
 export type TelemetryIngestRunData = {
     body: TelemetryPayload;

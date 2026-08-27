@@ -16,6 +16,7 @@ const NAV: readonly TabNavItem[] = [
   { label: "Terraform", to: "/badges/terraform" },
   { label: "Ansible", to: "/badges/ansible" },
   { label: "Docker", to: "/badges/docker" },
+  { label: "Cloud", to: "/badges/cloud" },
 ]
 
 function BadgesLayout() {
