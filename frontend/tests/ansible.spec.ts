@@ -229,13 +229,25 @@ test.describe("Ansible", () => {
     await expect(page.getByText("Ansible projects")).toHaveCount(0)
   })
 
-  test("the Infrastructure tab bar offers Ansible", async ({ page }) => {
+  test("the Infrastructure tab bar keeps Terraform and Ansible separate", async ({
+    page,
+  }) => {
     await mockAnsibleProjects(page)
 
     await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+    const terraformTabs = page.locator("nav.border-b")
+    await expect(
+      terraformTabs.getByRole("link", { name: "Ansible" }),
+    ).toHaveCount(0)
 
-    const tabs = page.locator("nav.border-b")
-    await expect(tabs.getByRole("link", { name: "Ansible" })).toBeVisible()
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/ansible`)
+    const ansibleTabs = page.locator("nav.border-b")
+    await expect(
+      ansibleTabs.getByRole("link", { name: "Analysis" }),
+    ).toBeVisible()
+    await expect(ansibleTabs.getByRole("link", { name: "Cloud" })).toHaveCount(
+      0,
+    )
   })
 
   test("the PRs tab carries Terraform and Ansible sections", async ({
