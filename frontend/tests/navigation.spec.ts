@@ -35,7 +35,7 @@ test.describe("Navigation", () => {
 
     for (const label of [
       "Dashboard",
-      "Repositories",
+      "Workflows",
       "Docker",
       "Terraform",
       "Rules",
@@ -90,7 +90,8 @@ test.describe("Navigation", () => {
     await page.goto("/dashboard")
 
     const navLinks: Array<[string, RegExp]> = [
-      ["Repositories", /\/repositories/],
+      // The CI/CD entry is labelled "Workflows"; its route is still /repositories.
+      ["Workflows", /\/repositories/],
       ["Docker", /\/docker$/],
       ["Terraform", /\/infrastructure$/],
       // Ansible is its own Infrastructure entry, not a tab under Terraform.
