@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { RepoPageHeader } from "@/components/Common/RepoPageHeader"
 import { TabNav, type TabNavItem } from "@/components/Common/TabNav"
 import { useRepository } from "@/hooks/useRepository"
@@ -10,16 +10,32 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId")({
   }),
 })
 
-const NAV: readonly TabNavItem[] = [
+// Two disjoint tab sets, mirroring AppSidebar's own infraSubItems /
+// ansibleSubItems split: Terraform and Ansible are different engines that
+// happen to share this URL prefix, not tabs of one page, so neither list
+// names the other. Cloud posture is Terraform's, not Ansible's, for the same
+// reason the sidebar excludes it there.
+const NAV_TERRAFORM: readonly TabNavItem[] = [
   { label: "Analysis", to: "/infrastructure/$repoId/terraform" },
-  { label: "Ansible", to: "/infrastructure/$repoId/ansible" },
   { label: "Cloud", to: "/infrastructure/$repoId/cloud" },
+  { label: "PRs", to: "/infrastructure/$repoId/pull-requests" },
+]
+
+const NAV_ANSIBLE: readonly TabNavItem[] = [
+  { label: "Analysis", to: "/infrastructure/$repoId/ansible" },
   { label: "PRs", to: "/infrastructure/$repoId/pull-requests" },
 ]
 
 function InfrastructureRepoLayout() {
   const { repoId } = Route.useParams()
   const { repo, isLoading } = useRepository(repoId)
+  const currentPath = useRouterState({ select: (s) => s.location.pathname })
+
+  // The PRs page is shared cross-engine (see pull-requests.tsx), so it falls
+  // under Terraform's tab set by default — same as AppSidebar's own
+  // onAnsibleRoute check, which only lights up Ansible for its own segment.
+  const onAnsible = currentPath.startsWith(`/infrastructure/${repoId}/ansible`)
+  const nav = onAnsible ? NAV_ANSIBLE : NAV_TERRAFORM
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,7 +45,7 @@ function InfrastructureRepoLayout() {
         isLoading={isLoading}
         isPrivate={repo?.is_private}
       />
-      <TabNav items={NAV} params={{ repoId }} />
+      <TabNav items={nav} params={{ repoId }} />
       <Outlet />
     </div>
   )
