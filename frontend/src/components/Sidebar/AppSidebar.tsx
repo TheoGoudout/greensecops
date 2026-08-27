@@ -248,8 +248,11 @@ export function AppSidebar() {
 
   const analysisItems: NavItem[] = [
     {
+      // "Workflows" for coherence with the other groups, each named for what
+      // they scan (Terraform roots, Docker targets) rather than the repo
+      // that hosts them — the CI/CD engine's unit is a workflow file.
       icon: GitBranch,
-      title: "Repositories",
+      title: "Workflows",
       path: "/repositories",
       children: currentRepoId ? (
         <RepoSubNav repoId={currentRepoId} />

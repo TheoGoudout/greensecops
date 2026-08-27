@@ -115,7 +115,7 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
     }
   })
 
-  test("sidebar Repositories link navigates to /repositories", async ({
+  test("sidebar Workflows link navigates to /repositories", async ({
     page,
   }) => {
     await mockUserMe(page, MOCK_USER)
@@ -124,7 +124,7 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
     await page.goto("/dashboard")
 
     await page
-      .getByRole("link", { name: /repositories/i })
+      .getByRole("link", { name: /workflows/i })
       .first()
       .click()
 
