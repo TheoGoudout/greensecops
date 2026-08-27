@@ -46,3 +46,14 @@ def latest_completed_scan(container: Any) -> Any:
         key=lambda s: s.created_at or 0,
         default=None,
     )
+
+
+def latest_scan_status(container: Any) -> ScanStatus | None:
+    """The status of a target's most recent scan, whatever its outcome.
+
+    Unlike :func:`latest_completed_scan`, this looks at every scan — it is what
+    lets the UI show a target is currently ``running`` rather than only ever
+    reporting its last *good* grade.
+    """
+    latest = max(container.scans, key=lambda s: s.created_at or 0, default=None)
+    return latest.status if latest else None

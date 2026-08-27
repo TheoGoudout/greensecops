@@ -181,6 +181,36 @@ def test_list_terraform_roots_includes_latest_grade(
     body = response.json()
     assert body[0]["latest_score"] == 72.0
     assert body[0]["latest_grade"] == "B"
+    assert body[0]["latest_scan_status"] == "completed"
+
+
+def test_list_terraform_roots_reports_running_scan_status(
+    db: Session,
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    terraform_root: TerraformRoot,
+    completed_scan: TerraformScan,
+) -> None:
+    """A running scan must not be masked by an earlier completed one's grade."""
+    running = TerraformScan(
+        terraform_root_id=terraform_root.id,
+        status=ScanStatus.running,
+        triggered_by=ScanTrigger.manual,
+    )
+    db.add(running)
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform/roots/",
+        headers=superuser_token_headers,
+        params={"repo_id": str(repo.id)},
+    )
+    body = response.json()
+    # The grade still reflects the last *completed* scan...
+    assert body[0]["latest_grade"] == "B"
+    # ...but the status reflects the one in flight.
+    assert body[0]["latest_scan_status"] == "running"
 
 
 def test_list_terraform_roots_includes_repo_full_name(

@@ -16,6 +16,7 @@ import type { CloudAccountPublic } from "@/client"
 import { CloudService } from "@/client"
 import { CloudFindingRow } from "@/components/CloudFindingRow"
 import { GradeBadge } from "@/components/GradeBadge"
+import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -348,6 +349,7 @@ function CloudAccountCard({
             />
           </CardTitle>
           <div className="flex items-center gap-3 shrink-0">
+            <ScanRunningBadge status={account.latest_scan_status} />
             <div className="flex items-center gap-2">
               <Switch
                 checked={enabled}

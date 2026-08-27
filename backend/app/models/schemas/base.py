@@ -115,6 +115,10 @@ class ScanTargetPublicBase(SQLModel):
     last_scanned_head_sha: str | None = None
     latest_score: float | None = None
     latest_grade: str | None = None
+    # The most recent scan's status regardless of outcome — unlike
+    # `latest_grade`, which only ever reflects a *completed* scan — so the UI
+    # can show a target is currently being scanned.
+    latest_scan_status: ScanStatus | None = None
     badge_sig: str | None = None
 
 
