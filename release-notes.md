@@ -2,6 +2,10 @@
 
 ## Latest Changes
 
+### Breaking Changes
+
+* ♻️ Restructure the API onto one URL grammar. PR [#248](https://github.com/TheoGoudout/greensecops/pull/248) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ### Security Fixes
 
 * Import the remaining importable zizmor audits. PR [#238](https://github.com/TheoGoudout/greensecops/pull/238) by [@TheoGoudout](https://github.com/TheoGoudout).
