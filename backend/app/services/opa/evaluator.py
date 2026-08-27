@@ -188,8 +188,6 @@ DOMAIN_CONTAINER_RUNTIME = "container_runtime"
 # introduced to catch.
 POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CI_WORKFLOW)
 IAC_TERRAFORM_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_IAC_TERRAFORM)
-# Ansible has rules and CI checks but no backend engine yet, so this pair is
-# discovered and catalogued without an `evaluate_*` of its own.
 IAC_ANSIBLE_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_IAC_ANSIBLE)
 CLOUD_AWS_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CLOUD_AWS)
 CI_TELEMETRY_POLICY_PACKAGES = _discover_policy_packages(DOMAIN_CI_TELEMETRY)
@@ -400,10 +398,7 @@ async def evaluate_ansible(
     most of the corpus grades.
     """
     return await _evaluate(
-        document,
-        IAC_ANSIBLE_POLICY_PACKAGES,
-        AnsibleOpaViolation,
-        "reliability",
+        document, DOMAIN_IAC_ANSIBLE, AnsibleOpaViolation, "reliability"
     )
 
 
