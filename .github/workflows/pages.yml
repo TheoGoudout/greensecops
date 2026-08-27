@@ -81,6 +81,12 @@ jobs:
     uses: ./.github/workflows/pages-reusable.yml
     permissions:
       contents: read
+      # api-gate reads this commit's workflow runs to find the images.yml run
+      # it waits on. A caller's permissions are the ceiling for every job in
+      # the called workflow, and they are validated statically before any
+      # `if:` is evaluated — so this is needed on every caller, not only the
+      # staging one whose api-gate step actually does anything.
+      actions: read
     with:
       environment: staging
     secrets:
@@ -93,6 +99,12 @@ jobs:
     uses: ./.github/workflows/pages-reusable.yml
     permissions:
       contents: read
+      # api-gate reads this commit's workflow runs to find the images.yml run
+      # it waits on. A caller's permissions are the ceiling for every job in
+      # the called workflow, and they are validated statically before any
+      # `if:` is evaluated — so this is needed on every caller, not only the
+      # staging one whose api-gate step actually does anything.
+      actions: read
     with:
       environment: production
     secrets:
@@ -105,6 +117,12 @@ jobs:
     uses: ./.github/workflows/pages-reusable.yml
     permissions:
       contents: read
+      # api-gate reads this commit's workflow runs to find the images.yml run
+      # it waits on. A caller's permissions are the ceiling for every job in
+      # the called workflow, and they are validated statically before any
+      # `if:` is evaluated — so this is needed on every caller, not only the
+      # staging one whose api-gate step actually does anything.
+      actions: read
     with:
       # Previews build against staging — its variables, its Worker, its
       # noindex headers — so an unreviewed branch can never resolve to the

@@ -286,6 +286,9 @@ jobs:
     uses: ./.github/workflows/pages-reusable.yml
     permissions:
       contents: read
+      # See pages.yml: api-gate declares actions: read, and a caller's
+      # permissions cap every job in the called workflow.
+      actions: read
     with:
       environment: production
     secrets:
