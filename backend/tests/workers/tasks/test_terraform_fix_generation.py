@@ -249,3 +249,45 @@ def test_file_missing_from_fetch_marks_fix_failed(
     assert result["status"] == "failed"
     db.refresh(fix)
     assert fix.status == FixStatus.failed
+
+
+class _CapturingProvider:
+    """Stands in for a real provider so the prompt is genuinely built.
+
+    The other tests patch ``_generate``, which skips prompt building entirely —
+    and prompt building is where the findings, detached by then from the task's
+    closed session, get read.
+    """
+
+    def __init__(self, content: str, captured: dict[str, str]) -> None:
+        self._content = content
+        self._captured = captured
+
+    async def generate(self, system_prompt: str, user_prompt: str) -> FakeLLMResponse:
+        self._captured["system"] = system_prompt
+        self._captured["user"] = user_prompt
+        return FakeLLMResponse(content=self._content)
+
+
+def test_prompt_reads_findings_that_outlived_their_session(
+    db: Session, root: TerraformRoot, scan: TerraformScan, rule: Rule
+) -> None:
+    """The task's session closes before the prompt is built, so the findings
+    reach it detached. ``finding.rule.slug`` must still resolve — a lazy load
+    at that point raises DetachedInstanceError and fails the fix."""
+    rule_slug = rule.slug
+    finding = _finding(db, root, scan, rule)
+    _pending_fix(db, root)
+    captured: dict[str, str] = {}
+    llm_content = f"<full_content>\n{VALID_HCL}</full_content>\n<unfixed>\n</unfixed>"
+    with (
+        _patch_fetch([FakeFile("s3.tf", VULNERABLE_HCL)]),
+        patch(
+            "app.services.llm.catalog.get_provider",
+            return_value=_CapturingProvider(llm_content, captured),
+        ),
+    ):
+        result = run_terraform_fix_generation([str(finding.id)])
+
+    assert result["status"] == FixStatus.ready.value
+    assert f"rule: {rule_slug}" in captured["user"]

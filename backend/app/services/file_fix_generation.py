@@ -18,6 +18,7 @@ import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.core.db import engine
@@ -38,6 +39,24 @@ logger = logging.getLogger(__name__)
 
 MISSING_CONTENT_ERROR = "LLM response missing file content"
 FILE_NOT_FOUND_ERROR = "File no longer present in the target"
+
+
+def load_findings(session: Session, model: Any, finding_ids: list[str]) -> list[Any]:
+    """Load one file's findings, with their rule already attached.
+
+    Each task hands these rows to ``generate_file_fix`` after its own session
+    has closed, so they arrive detached: an attribute the prompt builder reaches
+    for that was not loaded here raises ``DetachedInstanceError`` instead of
+    emitting a query. ``rule`` is the one relationship the prompts read
+    (``finding.rule.slug``), so it is loaded up front.
+
+    Ids that no longer resolve are dropped rather than failing the batch.
+    """
+    loaded = [
+        session.get(model, uuid.UUID(fid), options=[selectinload(model.rule)])
+        for fid in finding_ids
+    ]
+    return [f for f in loaded if f is not None]
 
 
 def _fail(session: Session, fix: Any, message: str) -> dict[str, object]:

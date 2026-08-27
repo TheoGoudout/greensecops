@@ -11,7 +11,7 @@ from app.services.engines import DOCKER_ENGINE
 from app.services.file_fix_generation import (
     MISSING_CONTENT_ERROR as MISSING_CONTENT_ERROR,  # re-exported for callers/tests
 )
-from app.services.file_fix_generation import generate_file_fix
+from app.services.file_fix_generation import generate_file_fix, load_findings
 from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
 from app.workers.celery_app import celery_app
 
@@ -80,8 +80,7 @@ def run_docker_fix_generation(
     finding to read them off.
     """
     with Session(engine) as session:
-        loaded = [session.get(DockerFinding, uuid.UUID(fid)) for fid in finding_ids]
-        findings = [f for f in loaded if f is not None]
+        findings = load_findings(session, DockerFinding, finding_ids)
         enrichments = _load_enrichments(session, enrichment_ids)
         if not findings and not enrichments:
             return {"status": "error", "detail": "no_findings_found"}

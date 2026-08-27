@@ -1,12 +1,10 @@
-import uuid
-
 from sqlmodel import Session
 
 from app.core.db import engine
 from app.models import AnsibleFinding
 from app.services.ansible.fix_guard import validate_ansible_fix
 from app.services.engines import ANSIBLE_ENGINE
-from app.services.file_fix_generation import generate_file_fix
+from app.services.file_fix_generation import generate_file_fix, load_findings
 from app.services.github.fetch import fetch_ansible_files as _fetch_ansible_files
 from app.workers.celery_app import celery_app
 
@@ -44,8 +42,7 @@ def run_ansible_fix_generation(
     project (the route groups by file path).
     """
     with Session(engine) as session:
-        loaded = [session.get(AnsibleFinding, uuid.UUID(fid)) for fid in finding_ids]
-        findings = [f for f in loaded if f is not None]
+        findings = load_findings(session, AnsibleFinding, finding_ids)
         if not findings:
             return {"status": "error", "detail": "no_findings_found"}
         target_id = findings[0].ansible_project_id
