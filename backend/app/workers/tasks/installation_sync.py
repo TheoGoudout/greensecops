@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app import crud
 from app.core.config import settings
 from app.core.db import engine
-from app.models import DockerTarget, WorkflowScan
+from app.models import WorkflowScan
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import GitHubAppClient, InstallationRepo
@@ -46,7 +46,6 @@ def _sync_installation_repositories_impl(
             ).first()
             if has_analysis is None:
                 never_analyzed.append(str(db_repo.id))
-            _ensure_default_docker_target(session, db_repo.id)
 
     # Kick off an initial analysis for repos that have never been analyzed —
     # otherwise a fresh installation shows nothing until a push arrives.
@@ -116,30 +115,6 @@ def sync_installation_repositories(
     org_id: str,
 ) -> dict[str, str | int]:
     return _sync_installation_repositories_impl(installation_id, org_id)
-
-
-def _ensure_default_docker_target(session: Session, repo_id: uuid.UUID) -> None:
-    """Create the repository-root DockerTarget if the repo has none.
-
-    Docker deliberately diverges from Terraform here. A TerraformRoot must be
-    registered by hand because only the user knows which directories are
-    roots; Docker files announce themselves by filename, so requiring the same
-    ceremony would mean a fresh installation shows no container findings until
-    someone thinks to configure one. Creating the root-path target at sync
-    time is what makes findings appear on day one.
-
-    Idempotent, and scoped to "has no targets at all" rather than "has no
-    root target": a user who narrowed their setup to specific subdirectories
-    must not have the repo-wide target silently reinstated on the next sync.
-    """
-
-    existing = session.exec(
-        select(DockerTarget.id).where(DockerTarget.repo_id == repo_id).limit(1)
-    ).first()
-    if existing is not None:
-        return
-    session.add(DockerTarget(repo_id=repo_id, root_path=""))
-    session.commit()
 
 
 def _fetch_installation_repositories(installation_id: int) -> list[InstallationRepo]:

@@ -24,13 +24,13 @@ if TYPE_CHECKING:
 class DockerTarget(ScanTargetMixin, table=True):
     """A folder in a repo whose Dockerfiles and Compose files are scanned.
 
-    Mirrors ``TerraformRoot``, with one deliberate difference: a target is
-    created automatically at the repository root during installation sync
-    rather than registered by hand. Docker files are discoverable by filename
-    alone, so requiring the user to declare where they live — as the Terraform
-    engine does — would throw away the one activation advantage this engine
-    has. Extra targets can still be added for monorepos that want each
-    sub-project graded separately.
+    Mirrors ``TerraformRoot``: registered by hand via ``POST /docker/targets``,
+    not created automatically at install time. Unlike a Terraform root, a
+    Docker target's Dockerfile/Compose files are read directly from its
+    ``root_path`` only — no recursive walk into subdirectories, since a
+    Dockerfile in a nested build-context folder does not belong to this
+    target's root the way a submodule's ``.tf`` files belong to a Terraform
+    root.
     """
 
     __tablename__ = "docker_target"
