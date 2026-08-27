@@ -79,8 +79,13 @@ jobs:
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
     uses: ./.github/workflows/pages-reusable.yml
+    # A caller's permissions are the ceiling for every job in the called
+    # workflow, and GitHub validates them statically across all of them before
+    # any `if:` is evaluated — so api-gate's `actions: read` is needed on every
+    # caller, not only the staging one whose api-gate step does any work.
     permissions:
       contents: read
+      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       environment: staging
     secrets:
@@ -91,8 +96,13 @@ jobs:
     name: Production
     if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
     uses: ./.github/workflows/pages-reusable.yml
+    # A caller's permissions are the ceiling for every job in the called
+    # workflow, and GitHub validates them statically across all of them before
+    # any `if:` is evaluated — so api-gate's `actions: read` is needed on every
+    # caller, not only the staging one whose api-gate step does any work.
     permissions:
       contents: read
+      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       environment: production
     secrets:
@@ -103,8 +113,13 @@ jobs:
     name: Preview
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/pages-reusable.yml
+    # A caller's permissions are the ceiling for every job in the called
+    # workflow, and GitHub validates them statically across all of them before
+    # any `if:` is evaluated — so api-gate's `actions: read` is needed on every
+    # caller, not only the staging one whose api-gate step does any work.
     permissions:
       contents: read
+      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       # Previews build against staging — its variables, its Worker, its
       # noindex headers — so an unreviewed branch can never resolve to the
