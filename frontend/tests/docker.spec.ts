@@ -151,9 +151,7 @@ test.describe("Docker", () => {
 
     await expect(page.getByRole("heading", { name: "Badges" })).toBeVisible()
     await expect(
-      page.getByText(
-        `/api/v1/badges/docker/${MOCK_DOCKER_TARGET.id}.svg`,
-      ),
+      page.getByText(`/api/v1/badges/docker/${MOCK_DOCKER_TARGET.id}.svg`),
     ).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Copy Markdown" }).first(),
