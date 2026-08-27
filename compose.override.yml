@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Variable not set}
 
   adminer:
-    image: adminer:5.5.1
+    image: adminer:6.0.1
     restart: always
     # Unauthenticated DB admin UI — localhost only.
     ports:
@@ -113,7 +113,7 @@ services:
     environment: *backend-required-env
 
   flower:
-    image: mher/flower:2.0.1
+    image: mher/flower:2.1.0
     restart: always
     # Unauthenticated Celery dashboard — localhost only.
     ports:
