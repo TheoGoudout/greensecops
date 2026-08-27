@@ -12,10 +12,15 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
-    labels:
-      - "internal"
-      - "dependencies"
-      - "github_actions"
+    # Only labels that already exist in the repository. A name listed here that
+    # has no label behind it is skipped and draws a "could not be found" comment
+    # on every pull request the entry opens — which is what `github_actions` was
+    # doing on #254, and `pre-commit` and `terraform` on the two entries below.
+    # Rather than mint three ecosystem labels nothing reads (the ecosystem is in
+    # the title and the diff), every entry now carries the same two that are
+    # load-bearing: `dependencies`, and the `internal` that the check-labels
+    # gate requires exactly one of. See .github/labeler.yml.
+    labels: [dependencies, internal]
     groups:
       github-actions:
         patterns:
@@ -158,10 +163,7 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
-    labels:
-      - "internal"
-      - "dependencies"
-      - "pre-commit"
+    labels: [dependencies, internal]
     groups:
       pre-commit:
         patterns:
@@ -177,10 +179,7 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
-    labels:
-      - "internal"
-      - "dependencies"
-      - "terraform"
+    labels: [dependencies, internal]
     groups:
       terraform:
         patterns:
