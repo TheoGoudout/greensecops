@@ -19,6 +19,7 @@ import type {
   PullRequestPublic,
 } from "@/client"
 import { AnsibleService, WorkflowService } from "@/client"
+import { AnsibleFindingRow } from "@/components/AnsibleFindingRow"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -393,6 +394,17 @@ function ProjectCard({
                     }
                     annotations={fileFindings}
                   />
+                  {/* The viewer annotates findings inline, but a rule that
+                      fires on the file as a whole (or past its last line) has
+                      no line to hang off — listing them keeps every finding
+                      readable. */}
+                  {fileFindings.length > 0 && (
+                    <div className="rounded-md border divide-y">
+                      {fileFindings.map((finding) => (
+                        <AnsibleFindingRow key={finding.id} finding={finding} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })

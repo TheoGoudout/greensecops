@@ -58,12 +58,21 @@ test.describe("Ansible", () => {
     await page.goto(`/infrastructure/${MOCK_REPO.id}/ansible`)
     await page.getByTitle("Expand project").first().click()
 
-    await expect(page.getByText("roles/docker/tasks/main.yml")).toBeVisible()
+    await expect(
+      page.getByText("roles/docker/tasks/main.yml").first(),
+    ).toBeVisible()
     // The classifier's kind is surfaced as a chip.
     await expect(page.getByText("tasks", { exact: true })).toBeVisible()
+    // The finding shows up twice by design: annotated inline by FileViewer
+    // and again in the AnsibleFindingRow list below it.
+    await expect(
+      page.getByText("Shell command interpolates", { exact: false }).first(),
+    ).toBeVisible()
     await expect(
       page.getByText("Shell command interpolates", { exact: false }),
-    ).toBeVisible()
+    ).toHaveCount(2)
+    // The finding's task name is part of the subtitle.
+    await expect(page.getByText("Log in to ECR").first()).toBeVisible()
   })
 
   test("a file-level finding is still shown when it names no line", async ({
@@ -75,10 +84,14 @@ test.describe("Ansible", () => {
     await page.getByTitle("Expand project").first().click()
 
     // galaxy_requirement_unpinned carries no task and no line; FileViewer
-    // groups those separately rather than dropping them.
+    // groups those separately rather than dropping them. It also shows up a
+    // second time in the AnsibleFindingRow list below, same as every finding.
+    await expect(
+      page.getByText("Collection community.docker is not pinned").first(),
+    ).toBeVisible()
     await expect(
       page.getByText("Collection community.docker is not pinned"),
-    ).toBeVisible()
+    ).toHaveCount(2)
   })
 
   test("generating fixes for the whole project queues the task", async ({
