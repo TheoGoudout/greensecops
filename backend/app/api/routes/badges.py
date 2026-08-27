@@ -165,7 +165,7 @@ def _terraform_root_badge_grade(
 
 
 @router.get(
-    "/terraform-roots/{root_id}.svg",
+    "/terraform/{root_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -193,7 +193,7 @@ def get_terraform_root_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/terraform-roots/{root_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/terraform/{root_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_terraform_root_badge_json(
     root_id: uuid.UUID,
     session: SessionDep,
@@ -243,7 +243,7 @@ def _ansible_project_badge_grade(
 
 
 @router.get(
-    "/ansible-projects/{project_id}.svg",
+    "/ansible/{project_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -271,7 +271,7 @@ def get_ansible_project_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/ansible-projects/{project_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/ansible/{project_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_ansible_project_badge_json(
     project_id: uuid.UUID,
     session: SessionDep,
@@ -321,7 +321,7 @@ def _docker_target_badge_grade(
 
 
 @router.get(
-    "/docker-targets/{target_id}.svg",
+    "/docker/{target_id}.svg",
     role=Role.guest,
     limit=LIMIT_PUBLIC,
     response_class=Response,
@@ -350,7 +350,7 @@ def get_docker_target_badge(
     return Response(content=svg, headers=_CACHE_HEADERS)
 
 
-@router.get("/docker-targets/{target_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
+@router.get("/docker/{target_id}.json", role=Role.guest, limit=LIMIT_PUBLIC)
 def get_docker_target_badge_json(
     target_id: uuid.UUID,
     session: SessionDep,

@@ -6883,7 +6883,7 @@ export type BadgesGetTerraformRootBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/terraform-roots/{root_id}.svg';
+    url: '/api/v1/badges/terraform/{root_id}.svg';
 };
 
 export type BadgesGetTerraformRootBadgeErrors = {
@@ -6916,7 +6916,7 @@ export type BadgesGetTerraformRootBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/terraform-roots/{root_id}.json';
+    url: '/api/v1/badges/terraform/{root_id}.json';
 };
 
 export type BadgesGetTerraformRootBadgeJsonErrors = {
@@ -6954,7 +6954,7 @@ export type BadgesGetAnsibleProjectBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/ansible-projects/{project_id}.svg';
+    url: '/api/v1/badges/ansible/{project_id}.svg';
 };
 
 export type BadgesGetAnsibleProjectBadgeErrors = {
@@ -6987,7 +6987,7 @@ export type BadgesGetAnsibleProjectBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/ansible-projects/{project_id}.json';
+    url: '/api/v1/badges/ansible/{project_id}.json';
 };
 
 export type BadgesGetAnsibleProjectBadgeJsonErrors = {
@@ -7025,7 +7025,7 @@ export type BadgesGetDockerTargetBadgeData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/docker-targets/{target_id}.svg';
+    url: '/api/v1/badges/docker/{target_id}.svg';
 };
 
 export type BadgesGetDockerTargetBadgeErrors = {
@@ -7058,7 +7058,7 @@ export type BadgesGetDockerTargetBadgeJsonData = {
          */
         sig?: string | null;
     };
-    url: '/api/v1/badges/docker-targets/{target_id}.json';
+    url: '/api/v1/badges/docker/{target_id}.json';
 };
 
 export type BadgesGetDockerTargetBadgeJsonErrors = {
