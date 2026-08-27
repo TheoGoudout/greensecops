@@ -512,7 +512,7 @@ export class BadgesService {
     public static getTerraformRootBadge(data: BadgesGetTerraformRootBadgeData): CancelablePromise<BadgesGetTerraformRootBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/terraform-roots/{root_id}.svg',
+            url: '/api/v1/badges/terraform/{root_id}.svg',
             path: {
                 root_id: data.rootId
             },
@@ -537,7 +537,7 @@ export class BadgesService {
     public static getTerraformRootBadgeJson(data: BadgesGetTerraformRootBadgeJsonData): CancelablePromise<BadgesGetTerraformRootBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/terraform-roots/{root_id}.json',
+            url: '/api/v1/badges/terraform/{root_id}.json',
             path: {
                 root_id: data.rootId
             },
@@ -561,7 +561,7 @@ export class BadgesService {
     public static getAnsibleProjectBadge(data: BadgesGetAnsibleProjectBadgeData): CancelablePromise<BadgesGetAnsibleProjectBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/ansible-projects/{project_id}.svg',
+            url: '/api/v1/badges/ansible/{project_id}.svg',
             path: {
                 project_id: data.projectId
             },
@@ -586,7 +586,7 @@ export class BadgesService {
     public static getAnsibleProjectBadgeJson(data: BadgesGetAnsibleProjectBadgeJsonData): CancelablePromise<BadgesGetAnsibleProjectBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/ansible-projects/{project_id}.json',
+            url: '/api/v1/badges/ansible/{project_id}.json',
             path: {
                 project_id: data.projectId
             },
@@ -610,7 +610,7 @@ export class BadgesService {
     public static getDockerTargetBadge(data: BadgesGetDockerTargetBadgeData): CancelablePromise<BadgesGetDockerTargetBadgeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/docker-targets/{target_id}.svg',
+            url: '/api/v1/badges/docker/{target_id}.svg',
             path: {
                 target_id: data.targetId
             },
@@ -635,7 +635,7 @@ export class BadgesService {
     public static getDockerTargetBadgeJson(data: BadgesGetDockerTargetBadgeJsonData): CancelablePromise<BadgesGetDockerTargetBadgeJsonResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/badges/docker-targets/{target_id}.json',
+            url: '/api/v1/badges/docker/{target_id}.json',
             path: {
                 target_id: data.targetId
             },

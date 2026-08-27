@@ -476,7 +476,7 @@ def test_public_target_badge_needs_no_signature(
     client: TestClient, target: DockerTarget, completed_scan: DockerScan
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/badges/docker-targets/{target.id}.svg"
+        f"{settings.API_V1_STR}/badges/docker/{target.id}.svg"
     )
     assert response.status_code == 200
     assert "Docker" in response.text
@@ -495,14 +495,14 @@ def test_private_target_badge_requires_a_valid_signature(
     db.commit()
 
     unsigned = client.get(
-        f"{settings.API_V1_STR}/badges/docker-targets/{target.id}.json"
+        f"{settings.API_V1_STR}/badges/docker/{target.id}.json"
     )
     assert unsigned.json()["message"] == "not configured"
 
     from app.services.badge_signing import sign_badge
 
     signed = client.get(
-        f"{settings.API_V1_STR}/badges/docker-targets/{target.id}.json",
+        f"{settings.API_V1_STR}/badges/docker/{target.id}.json",
         params={"sig": sign_badge(str(target.id))},
     )
     assert signed.json()["message"] == "B"
@@ -512,7 +512,7 @@ def test_unknown_target_badge_is_indistinguishable_from_unauthorized(
     client: TestClient,
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/badges/docker-targets/{uuid.uuid4()}.json"
+        f"{settings.API_V1_STR}/badges/docker/{uuid.uuid4()}.json"
     )
     assert response.json()["message"] == "not configured"
 

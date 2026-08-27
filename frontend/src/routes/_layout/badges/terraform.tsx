@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_layout/badges/terraform")({
 
 function toEntry(root: TerraformRootPublic): BadgeEntry {
   const svgUrl = signedBadgeUrl(
-    `${BADGE_API_BASE}/api/v1/badges/terraform-roots/${root.id}.svg`,
+    `${BADGE_API_BASE}/api/v1/badges/terraform/${root.id}.svg`,
     root.badge_sig,
   )
   return {
