@@ -13,6 +13,7 @@
 
 ### Features
 
+* feat(badges): add signed grade badges for Cloud accounts. PR [#262](https://github.com/TheoGoudout/greensecops/pull/262) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(scans): show a running badge on in-flight target scans. PR [#261](https://github.com/TheoGoudout/greensecops/pull/261) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(ansible): give Ansible its own Infrastructure nav entry. PR [#246](https://github.com/TheoGoudout/greensecops/pull/246) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(ansible): generate and deliver LLM fixes for Ansible findings. PR [#244](https://github.com/TheoGoudout/greensecops/pull/244) by [@TheoGoudout](https://github.com/TheoGoudout).
