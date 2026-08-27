@@ -111,7 +111,7 @@ test.describe("Badges", () => {
     await expect(page).toHaveURL(/\/badges\/docker/)
     await expect(
       page.getByText(
-        `/api/v1/badges/docker-targets/${MOCK_DOCKER_TARGET.id}.svg`,
+        `/api/v1/badges/docker/${MOCK_DOCKER_TARGET.id}.svg`,
       ),
     ).toBeVisible()
   })
