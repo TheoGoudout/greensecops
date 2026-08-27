@@ -196,3 +196,69 @@ def list_findings(
         query = query.where(col(CloudFinding.resolved_at).is_(None))
     findings = session.exec(query.order_by(col(CloudFinding.created_at).desc())).all()
     return [to_cloud_finding_public(f) for f in findings]
+
+
+def _get_finding_for_user(
+    finding_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
+) -> CloudFinding:
+    """Load a cloud finding the user may see, or 404.
+
+    Cloud isn't in ``EngineSpec`` (no files, no fixes, no repository — see
+    ``services/engines.py``), so this stays a standalone mirror of
+    ``engine_routes.get_finding_for_user`` rather than sharing its body.
+    """
+    finding = get_or_404(
+        session, CloudFinding, finding_id, detail="Cloud finding not found"
+    )
+    _get_account_for_user(finding.cloud_account_id, session, current_user)
+    return finding
+
+
+@router.get(
+    "/findings/{cloud_finding_id}",
+    role=Role.org_member,
+    response_model=CloudFindingPublic,
+)
+def get_finding(
+    cloud_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> CloudFindingPublic:
+    finding = _get_finding_for_user(cloud_finding_id, session, current_user)
+    return to_cloud_finding_public(finding)
+
+
+@router.put(
+    "/findings/{cloud_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=CloudFindingPublic,
+)
+def ignore_finding(
+    cloud_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> CloudFindingPublic:
+    finding = _get_finding_for_user(cloud_finding_id, session, current_user)
+    if sm.try_advance(finding, sm.FindingMachine, "ignore"):
+        session.add(finding)
+        session.commit()
+        session.refresh(finding)
+    return to_cloud_finding_public(finding)
+
+
+@router.delete(
+    "/findings/{cloud_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=CloudFindingPublic,
+)
+def unignore_finding(
+    cloud_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> CloudFindingPublic:
+    finding = _get_finding_for_user(cloud_finding_id, session, current_user)
+    if sm.try_advance(finding, sm.FindingMachine, "unignore"):
+        session.add(finding)
+        session.commit()
+        session.refresh(finding)
+    return to_cloud_finding_public(finding)

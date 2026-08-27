@@ -12,7 +12,13 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.engine_routes import get_target_for_user, prepare_pending_fix
+from app.api.engine_routes import (
+    get_finding_for_user,
+    get_target_for_user,
+    ignore_finding_for_user,
+    prepare_pending_fix,
+    unignore_finding_for_user,
+)
 from app.api.mappers import (
     to_docker_build_telemetry_public,
     to_docker_finding_public,
@@ -228,6 +234,54 @@ def list_findings(
         query.order_by(col(DockerFinding.file_path), col(DockerFinding.line_start))
     ).all()
     return [to_docker_finding_public(f) for f in findings]
+
+
+@router.get(
+    "/findings/{docker_finding_id}",
+    role=Role.org_member,
+    response_model=DockerFindingPublic,
+)
+def get_finding(
+    docker_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DockerFindingPublic:
+    finding = get_finding_for_user(
+        DOCKER_ENGINE, docker_finding_id, session, current_user
+    )
+    return to_docker_finding_public(finding)
+
+
+@router.put(
+    "/findings/{docker_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=DockerFindingPublic,
+)
+def ignore_finding(
+    docker_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DockerFindingPublic:
+    finding = ignore_finding_for_user(
+        DOCKER_ENGINE, docker_finding_id, session, current_user
+    )
+    return to_docker_finding_public(finding)
+
+
+@router.delete(
+    "/findings/{docker_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=DockerFindingPublic,
+)
+def unignore_finding(
+    docker_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DockerFindingPublic:
+    finding = unignore_finding_for_user(
+        DOCKER_ENGINE, docker_finding_id, session, current_user
+    )
+    return to_docker_finding_public(finding)
 
 
 @router.get(

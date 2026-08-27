@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import {
+  MOCK_DOCKER_FINDING,
   MOCK_DOCKER_PR,
   MOCK_DOCKER_RUNTIME_BUILD_UNATTRIBUTED,
   MOCK_DOCKER_TARGET,
@@ -75,6 +76,43 @@ test.describe("Docker", () => {
         .first(),
     ).toBeVisible()
     await expect(page.getByText("unpinned-base-image")).toHaveCount(2)
+  })
+
+  test("ignoring and unignoring a finding round-trips its status", async ({
+    page,
+  }) => {
+    await mockDockerTargets(page)
+
+    await page.goto(`/docker/${MOCK_REPO.id}/analysis`)
+    await page.getByLabel("Expand target").first().click()
+
+    const ignoreRequest = page.waitForRequest(
+      (r) =>
+        r.url().includes(`/docker/findings/${MOCK_DOCKER_FINDING.id}/ignore`) &&
+        r.method() === "PUT",
+    )
+    await page.getByRole("button", { name: "Ignore" }).first().click()
+    await ignoreRequest
+
+    await expect(
+      page.getByText("ignored", { exact: true }).first(),
+    ).toBeVisible()
+    const unignoreButton = page
+      .getByRole("button", { name: "Unignore" })
+      .first()
+    await expect(unignoreButton).toBeVisible()
+
+    const unignoreRequest = page.waitForRequest(
+      (r) =>
+        r.url().includes(`/docker/findings/${MOCK_DOCKER_FINDING.id}/ignore`) &&
+        r.method() === "DELETE",
+    )
+    await unignoreButton.click()
+    await unignoreRequest
+
+    await expect(
+      page.getByRole("button", { name: "Ignore" }).first(),
+    ).toBeVisible()
   })
 
   test("PRs tab lists only Docker PRs", async ({ page }) => {

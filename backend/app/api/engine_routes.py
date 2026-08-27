@@ -41,6 +41,58 @@ def get_target_for_user(
     return target
 
 
+def get_finding_for_user(
+    spec: EngineSpec,
+    finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    """Load a finding the user may see, or 404.
+
+    Authorizes through the finding's own target (Terraform root / Docker
+    target / Ansible project) rather than a direct org lookup, mirroring
+    ``get_target_for_user`` — the finding carries its target id denormalized
+    (see ``EngineSpec.target_id_field``), so no join back through the scan is
+    needed the way Workflow's ``_authorize_issue`` requires.
+    """
+    detail = f"{spec.label} finding not found"
+    finding = get_or_404(session, spec.finding_model, finding_id, detail=detail)
+    get_target_for_user(
+        spec, getattr(finding, spec.target_id_field), session, current_user
+    )
+    return finding
+
+
+def ignore_finding_for_user(
+    spec: EngineSpec,
+    finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    """Mute a violation (false positive / accepted risk). Idempotent."""
+    finding = get_finding_for_user(spec, finding_id, session, current_user)
+    if sm.try_advance(finding, sm.FindingMachine, "ignore"):
+        session.add(finding)
+        session.commit()
+        session.refresh(finding)
+    return finding
+
+
+def unignore_finding_for_user(
+    spec: EngineSpec,
+    finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    """Un-mute a previously ignored violation. Idempotent."""
+    finding = get_finding_for_user(spec, finding_id, session, current_user)
+    if sm.try_advance(finding, sm.FindingMachine, "unignore"):
+        session.add(finding)
+        session.commit()
+        session.refresh(finding)
+    return finding
+
+
 def prepare_pending_fix(
     spec: EngineSpec,
     session: SessionDep,

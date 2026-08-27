@@ -37,13 +37,17 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.rate_limit import NO_RATE_LIMIT, rate_limit_dependency
 from app.models import (
+    AnsibleFinding,
     AnsibleProject,
     CloudAccount,
+    CloudFinding,
+    DockerFinding,
     DockerTarget,
     Organization,
     OrgMember,
     OrgRole,
     Repository,
+    TerraformFinding,
     TerraformRoot,
     WorkflowFile,
     WorkflowFinding,
@@ -171,6 +175,44 @@ def _org_of_terraform_root(session: Session, root_id: uuid.UUID) -> uuid.UUID | 
     return _org_of_repo(session, root.repo_id) if root else None
 
 
+# "finding_id" is already claimed by Workflow above — a bare "finding_id" here
+# would resolve a Terraform/Docker/Ansible/Cloud finding's uuid against the
+# WorkflowFinding table, since this dict is keyed by parameter name alone.
+# Each engine's own finding routes must use one of these prefixed names.
+def _org_of_terraform_finding(
+    session: Session, terraform_finding_id: uuid.UUID
+) -> uuid.UUID | None:
+    finding = session.get(TerraformFinding, terraform_finding_id)
+    return (
+        _org_of_terraform_root(session, finding.terraform_root_id) if finding else None
+    )
+
+
+def _org_of_docker_finding(
+    session: Session, docker_finding_id: uuid.UUID
+) -> uuid.UUID | None:
+    finding = session.get(DockerFinding, docker_finding_id)
+    return _org_of_docker_target(session, finding.docker_target_id) if finding else None
+
+
+def _org_of_ansible_finding(
+    session: Session, ansible_finding_id: uuid.UUID
+) -> uuid.UUID | None:
+    finding = session.get(AnsibleFinding, ansible_finding_id)
+    return (
+        _org_of_ansible_project(session, finding.ansible_project_id)
+        if finding
+        else None
+    )
+
+
+def _org_of_cloud_finding(
+    session: Session, cloud_finding_id: uuid.UUID
+) -> uuid.UUID | None:
+    finding = session.get(CloudFinding, cloud_finding_id)
+    return _org_of_cloud_account(session, finding.cloud_account_id) if finding else None
+
+
 def _org_of_organization(session: Session, org_id: uuid.UUID) -> uuid.UUID | None:
     return org_id if session.get(Organization, org_id) else None
 
@@ -202,6 +244,16 @@ ORG_RESOLVERS: dict[str, OrgResolver] = {
     # parameter, so an engine reusing "target_id" or "root_id" would have its
     # role checks resolved against another engine's table.
     "project_id": OrgResolver(_org_of_ansible_project, "Ansible project not found"),
+    "terraform_finding_id": OrgResolver(
+        _org_of_terraform_finding, "Terraform finding not found"
+    ),
+    "docker_finding_id": OrgResolver(
+        _org_of_docker_finding, "Docker finding not found"
+    ),
+    "ansible_finding_id": OrgResolver(
+        _org_of_ansible_finding, "Ansible finding not found"
+    ),
+    "cloud_finding_id": OrgResolver(_org_of_cloud_finding, "Cloud finding not found"),
 }
 
 _PATH_PARAM_RE = re.compile(r"\{([^}:]+)")

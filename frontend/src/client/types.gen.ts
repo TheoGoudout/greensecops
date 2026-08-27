@@ -1393,6 +1393,24 @@ export type AnsibleListFindingsData = {
 
 export type AnsibleListFindingsResponse = (Array<AnsibleFindingPublic>);
 
+export type AnsibleGetFindingData = {
+    ansibleFindingId: string;
+};
+
+export type AnsibleGetFindingResponse = (AnsibleFindingPublic);
+
+export type AnsibleIgnoreFindingData = {
+    ansibleFindingId: string;
+};
+
+export type AnsibleIgnoreFindingResponse = (AnsibleFindingPublic);
+
+export type AnsibleUnignoreFindingData = {
+    ansibleFindingId: string;
+};
+
+export type AnsibleUnignoreFindingResponse = (AnsibleFindingPublic);
+
 export type AnsibleListFilesData = {
     projectId: string;
     ref?: (string | null);
@@ -1612,6 +1630,24 @@ export type CloudListFindingsData = {
 
 export type CloudListFindingsResponse = (Array<CloudFindingPublic>);
 
+export type CloudGetFindingData = {
+    cloudFindingId: string;
+};
+
+export type CloudGetFindingResponse = (CloudFindingPublic);
+
+export type CloudIgnoreFindingData = {
+    cloudFindingId: string;
+};
+
+export type CloudIgnoreFindingResponse = (CloudFindingPublic);
+
+export type CloudUnignoreFindingData = {
+    cloudFindingId: string;
+};
+
+export type CloudUnignoreFindingResponse = (CloudFindingPublic);
+
 export type DockerCreateTargetData = {
     requestBody: DockerTargetCreate;
 };
@@ -1659,6 +1695,24 @@ export type DockerListFindingsData = {
 };
 
 export type DockerListFindingsResponse = (Array<DockerFindingPublic>);
+
+export type DockerGetFindingData = {
+    dockerFindingId: string;
+};
+
+export type DockerGetFindingResponse = (DockerFindingPublic);
+
+export type DockerIgnoreFindingData = {
+    dockerFindingId: string;
+};
+
+export type DockerIgnoreFindingResponse = (DockerFindingPublic);
+
+export type DockerUnignoreFindingData = {
+    dockerFindingId: string;
+};
+
+export type DockerUnignoreFindingResponse = (DockerFindingPublic);
 
 export type DockerListFilesData = {
     ref?: (string | null);
@@ -1937,6 +1991,24 @@ export type TerraformListFindingsData = {
 };
 
 export type TerraformListFindingsResponse = (Array<TerraformFindingPublic>);
+
+export type TerraformGetFindingData = {
+    terraformFindingId: string;
+};
+
+export type TerraformGetFindingResponse = (TerraformFindingPublic);
+
+export type TerraformIgnoreFindingData = {
+    terraformFindingId: string;
+};
+
+export type TerraformIgnoreFindingResponse = (TerraformFindingPublic);
+
+export type TerraformUnignoreFindingData = {
+    terraformFindingId: string;
+};
+
+export type TerraformUnignoreFindingResponse = (TerraformFindingPublic);
 
 export type TerraformListFilesData = {
     ref?: (string | null);

@@ -88,6 +88,9 @@ const ID = {
   terraformScan: "0000c010-0000-0000-0000-000000000010",
   terraformFinding: "0000c020-0000-0000-0000-000000000020",
   terraformFix: "0000c030-0000-0000-0000-000000000030",
+  cloudAccount: "0000d001-0000-0000-0000-000000000001",
+  cloudScan: "0000d010-0000-0000-0000-000000000010",
+  cloudFinding: "0000d020-0000-0000-0000-000000000020",
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -500,16 +503,60 @@ export const MOCK_TERRAFORM_SCAN = {
   completed_at: "2024-01-02T10:00:30Z",
 }
 
+/**
+ * Deep-copies each finding so a test that mutates its status (via the ignore
+ * lifecycle below) never leaks into the shared `MOCK_*_FINDING` module
+ * constants other tests reuse — those defaults are singletons, and mutating
+ * one in place would make test outcomes depend on run order.
+ */
+function cloneFindings<T extends { id: string; status: string }>(
+  findings: T[],
+): T[] {
+  return findings.map((f) => ({ ...f }))
+}
+
+/**
+ * GET/PUT/DELETE `/{engine}/findings/{id}(/ignore)?` — shared across
+ * Terraform, Docker, Ansible and Cloud. Mutates ``findings`` in place so a
+ * subsequent list refetch (after the mutation's `invalidateQueries`) reflects
+ * the new status, the way the real API does — caller must pass an array
+ * already cloned via `cloneFindings`, not a shared mock constant directly.
+ */
+function mockFindingLifecycle(
+  page: Page,
+  engine: string,
+  findings: Array<{ id: string; status: string }>,
+) {
+  return page.route(`**/api/v1/${engine}/findings/**`, (route) => {
+    const url = route.request().url()
+    const method = route.request().method()
+    const id = url.match(/\/findings\/([^/]+)/)?.[1]
+    const finding = findings.find((f) => f.id === id)
+    if (!finding) {
+      route.fulfill({ status: 404, json: { detail: "not found" } })
+      return
+    }
+    if (url.endsWith("/ignore") && method === "PUT") {
+      finding.status = "ignored"
+    } else if (url.endsWith("/ignore") && method === "DELETE") {
+      finding.status = "open"
+    }
+    route.fulfill({ json: finding })
+  })
+}
+
 export async function mockTerraformRoots(
   page: Page,
   roots: Array<{ id: string; repo_id: string }> = [MOCK_TERRAFORM_ROOT],
   {
     files = [MOCK_TERRAFORM_FILE],
-    findings = [MOCK_TERRAFORM_FINDING],
+    findings: findingsIn = [MOCK_TERRAFORM_FINDING],
     fixes = [MOCK_TERRAFORM_FIX],
     scans = [MOCK_TERRAFORM_SCAN],
   } = {},
 ) {
+  const findings = cloneFindings(findingsIn)
+  await mockFindingLifecycle(page, "terraform", findings)
   await page.route("**/api/v1/terraform/roots**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -538,6 +585,89 @@ export async function mockTerraformRoots(
       const repoId = new URL(url).searchParams.get("repo_id")
       route.fulfill({
         json: repoId ? roots.filter((r) => r.repo_id === repoId) : roots,
+      })
+    }
+  })
+}
+
+// ── Cloud (accounts, findings, scans) ──────────────────────────────────
+export const MOCK_CLOUD_ACCOUNT = {
+  id: ID.cloudAccount,
+  org_id: ID.org,
+  provider: "aws" as const,
+  display_name: "prod",
+  role_arn: "arn:aws:iam::123456789012:role/greensecops",
+  external_id: "ext-abc123",
+  regions: ["us-east-1"],
+  status: "connected" as const,
+  last_synced_at: "2024-01-02T10:00:00Z",
+  latest_score: 72,
+  latest_grade: "C",
+  created_at: "2024-01-01T00:00:00Z",
+}
+
+export const MOCK_CLOUD_FINDING = {
+  id: ID.cloudFinding,
+  scan_id: ID.cloudScan,
+  rule_id: ID.ruleSecurity,
+  rule_slug: "s3_bucket_public_read",
+  severity: "critical" as const,
+  category: "security" as const,
+  message: "S3 bucket acme-data allows public read access.",
+  context: null,
+  status: "open" as const,
+  created_at: "2024-01-02T10:00:00Z",
+  resolved_at: null,
+  resolution_reason: null,
+  cloud_account_id: ID.cloudAccount,
+  resource_type: "aws_s3_bucket",
+  resource_id: "acme-data",
+  region: "us-east-1",
+}
+
+export const MOCK_CLOUD_SCAN = {
+  id: ID.cloudScan,
+  cloud_account_id: ID.cloudAccount,
+  status: "completed" as const,
+  triggered_by: "manual" as const,
+  resource_count: 42,
+  score: 72,
+  grade: "C",
+  error_message: null,
+  created_at: "2024-01-02T10:00:00Z",
+  completed_at: "2024-01-02T10:00:30Z",
+}
+
+export async function mockCloudAccounts(
+  page: Page,
+  accounts: Array<{ id: string; org_id: string }> = [MOCK_CLOUD_ACCOUNT],
+  {
+    findings: findingsIn = [MOCK_CLOUD_FINDING],
+    scans = [MOCK_CLOUD_SCAN],
+  } = {},
+) {
+  const findings = cloneFindings(findingsIn)
+  await mockFindingLifecycle(page, "cloud", findings)
+  await page.route("**/api/v1/cloud/accounts**", (route) => {
+    const url = route.request().url()
+    const method = route.request().method()
+    if (method === "DELETE") {
+      route.fulfill({ status: 204 })
+    } else if (method === "PATCH") {
+      route.fulfill({ json: { ...accounts[0], status: "disabled" } })
+    } else if (method === "POST" && url.includes("/scan")) {
+      route.fulfill({
+        status: 202,
+        json: { status: "queued", cloud_account_id: accounts[0].id },
+      })
+    } else if (url.includes("/findings")) {
+      route.fulfill({ json: findings })
+    } else if (url.includes("/scans")) {
+      route.fulfill({ json: url.includes(accounts[0].id) ? scans : [] })
+    } else {
+      const orgId = new URL(url).searchParams.get("org_id")
+      route.fulfill({
+        json: orgId ? accounts.filter((a) => a.org_id === orgId) : accounts,
       })
     }
   })
@@ -1579,13 +1709,15 @@ export async function mockDockerTargets(
   ],
   {
     files = [MOCK_DOCKER_FILE],
-    findings = [MOCK_DOCKER_FINDING],
+    findings: findingsIn = [MOCK_DOCKER_FINDING],
     fixes = [MOCK_DOCKER_FIX],
     scans = [MOCK_DOCKER_SCAN, MOCK_DOCKER_SCAN_FAILED],
     runtime = [MOCK_DOCKER_RUNTIME_BUILD],
     runtimeFixQueued = 1,
   } = {},
 ) {
+  const findings = cloneFindings(findingsIn)
+  await mockFindingLifecycle(page, "docker", findings)
   await page.route("**/api/v1/docker/targets**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -1643,11 +1775,16 @@ export async function mockAnsibleProjects(
   ],
   {
     files = [MOCK_ANSIBLE_FILE],
-    findings = [MOCK_ANSIBLE_FINDING, MOCK_ANSIBLE_FINDING_FILE_LEVEL],
+    findings: findingsIn = [
+      MOCK_ANSIBLE_FINDING,
+      MOCK_ANSIBLE_FINDING_FILE_LEVEL,
+    ],
     fixes = [MOCK_ANSIBLE_FIX],
     scans = [MOCK_ANSIBLE_SCAN],
   } = {},
 ) {
+  const findings = cloneFindings(findingsIn)
+  await mockFindingLifecycle(page, "ansible", findings)
   await page.route("**/api/v1/ansible/projects**", (route) => {
     const url = route.request().url()
     const method = route.request().method()

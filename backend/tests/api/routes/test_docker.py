@@ -16,6 +16,7 @@ from app.models import (
     DockerFinding,
     DockerScan,
     DockerTarget,
+    FindingStatus,
     Organization,
     OrgMember,
     OrgRole,
@@ -936,3 +937,76 @@ def test_runtime_fix_rejects_enrichments_from_another_repo(
     assert response.status_code == 202
     assert response.json()["queued"] == 0
     queued.assert_not_called()
+
+
+# ─── GET/PUT/DELETE /docker/findings/{docker_finding_id} ──────────────────────
+
+
+def test_get_docker_finding(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    finding = _add_finding(db, target, completed_scan, seeded_docker_rule)
+    response = client.get(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(finding.id)
+
+
+def test_ignore_and_unignore_docker_finding(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    finding = _add_finding(db, target, completed_scan, seeded_docker_rule)
+
+    resp = client.put(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+    db.refresh(finding)
+    assert finding.status is FindingStatus.ignored
+
+    # Idempotent.
+    resp = client.put(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+
+    resp = client.delete(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "open"
+    db.refresh(finding)
+    assert finding.status is FindingStatus.open
+
+
+def test_ignore_docker_finding_wrong_tenant_is_404(
+    client: TestClient,
+    db: Session,
+    normal_user_token_headers: dict[str, str],
+    target: DockerTarget,
+    completed_scan: DockerScan,
+    seeded_docker_rule: Rule,
+) -> None:
+    finding = _add_finding(db, target, completed_scan, seeded_docker_rule)
+    resp = client.put(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+        headers=normal_user_token_headers,
+    )
+    assert resp.status_code == 404

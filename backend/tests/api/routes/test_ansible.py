@@ -14,6 +14,7 @@ from app.models import (
     AnsibleProject,
     AnsibleScan,
     Category,
+    FindingStatus,
     Organization,
     Repository,
     Rule,
@@ -617,3 +618,82 @@ def test_fix_endpoints_reject_an_unknown_project(
             headers=superuser_token_headers,
         )
         assert response.status_code == 404, (method, suffix)
+
+
+# ─── GET/PUT/DELETE /ansible/findings/{ansible_finding_id} ────────────────────
+
+
+def test_get_ansible_finding(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    seeded_ansible_rule: Rule,
+) -> None:
+    finding = _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+    response = client.get(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(finding.id)
+
+
+def test_ignore_and_unignore_ansible_finding(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    seeded_ansible_rule: Rule,
+) -> None:
+    finding = _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+
+    resp = client.put(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+    db.refresh(finding)
+    assert finding.status is FindingStatus.ignored
+
+    # Idempotent.
+    resp = client.put(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ignored"
+
+    resp = client.delete(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+        headers=superuser_token_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "open"
+    db.refresh(finding)
+    assert finding.status is FindingStatus.open
+
+
+def test_ignore_ansible_finding_wrong_tenant_is_404(
+    client: TestClient,
+    db: Session,
+    normal_user_token_headers: dict[str, str],
+    project: AnsibleProject,
+    completed_scan: AnsibleScan,
+    seeded_ansible_rule: Rule,
+) -> None:
+    finding = _open_finding(
+        db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
+    )
+    resp = client.put(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+        headers=normal_user_token_headers,
+    )
+    assert resp.status_code == 404

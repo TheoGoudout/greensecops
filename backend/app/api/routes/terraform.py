@@ -12,7 +12,13 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.engine_routes import get_target_for_user, prepare_pending_fix
+from app.api.engine_routes import (
+    get_finding_for_user,
+    get_target_for_user,
+    ignore_finding_for_user,
+    prepare_pending_fix,
+    unignore_finding_for_user,
+)
 from app.api.mappers import (
     to_terraform_finding_public,
     to_terraform_fix_public,
@@ -217,6 +223,54 @@ def list_findings(
         query.order_by(col(TerraformFinding.created_at).desc())
     ).all()
     return [to_terraform_finding_public(f) for f in findings]
+
+
+@router.get(
+    "/findings/{terraform_finding_id}",
+    role=Role.org_member,
+    response_model=TerraformFindingPublic,
+)
+def get_finding(
+    terraform_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> TerraformFindingPublic:
+    finding = get_finding_for_user(
+        TERRAFORM_ENGINE, terraform_finding_id, session, current_user
+    )
+    return to_terraform_finding_public(finding)
+
+
+@router.put(
+    "/findings/{terraform_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=TerraformFindingPublic,
+)
+def ignore_finding(
+    terraform_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> TerraformFindingPublic:
+    finding = ignore_finding_for_user(
+        TERRAFORM_ENGINE, terraform_finding_id, session, current_user
+    )
+    return to_terraform_finding_public(finding)
+
+
+@router.delete(
+    "/findings/{terraform_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=TerraformFindingPublic,
+)
+def unignore_finding(
+    terraform_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> TerraformFindingPublic:
+    finding = unignore_finding_for_user(
+        TERRAFORM_ENGINE, terraform_finding_id, session, current_user
+    )
+    return to_terraform_finding_public(finding)
 
 
 @router.get(

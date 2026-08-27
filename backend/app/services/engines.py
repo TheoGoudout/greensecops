@@ -46,6 +46,11 @@ from typing import Any
 from sqlalchemy import and_
 from sqlmodel import col
 
+from app.api.mappers import (
+    to_ansible_finding_public,
+    to_docker_finding_public,
+    to_terraform_finding_public,
+)
 from app.models import (
     AnsibleFinding,
     AnsibleFix,
@@ -97,6 +102,9 @@ class EngineSpec:
     # Column on the fix/finding rows pointing back at that target.
     target_id_field: str
     finding_model: type[Any]
+    # ORM -> Public-schema mapper for one finding, used by the single-finding
+    # GET/ignore/unignore routes shared in api/engine_routes.py.
+    finding_mapper: Callable[[Any], Any]
     fix_model: type[Any]
     scan_model: type[Any]
     # Which rules apply. Many-to-one with Engine in general (see
@@ -173,6 +181,7 @@ TERRAFORM_ENGINE = EngineSpec(
     target_model=TerraformRoot,
     target_id_field="terraform_root_id",
     finding_model=TerraformFinding,
+    finding_mapper=to_terraform_finding_public,
     fix_model=TerraformFix,
     scan_model=TerraformScan,
     rule_domain=RuleDomain.iac_terraform,
@@ -191,6 +200,7 @@ DOCKER_ENGINE = EngineSpec(
     target_model=DockerTarget,
     target_id_field="docker_target_id",
     finding_model=DockerFinding,
+    finding_mapper=to_docker_finding_public,
     fix_model=DockerFix,
     scan_model=DockerScan,
     rule_domain=RuleDomain.container_docker,
@@ -216,6 +226,7 @@ ANSIBLE_ENGINE = EngineSpec(
     target_model=AnsibleProject,
     target_id_field="ansible_project_id",
     finding_model=AnsibleFinding,
+    finding_mapper=to_ansible_finding_public,
     fix_model=AnsibleFix,
     scan_model=AnsibleScan,
     rule_domain=RuleDomain.iac_ansible,

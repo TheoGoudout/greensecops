@@ -12,7 +12,13 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.engine_routes import get_target_for_user, prepare_pending_fix
+from app.api.engine_routes import (
+    get_finding_for_user,
+    get_target_for_user,
+    ignore_finding_for_user,
+    prepare_pending_fix,
+    unignore_finding_for_user,
+)
 from app.api.mappers import (
     to_ansible_finding_public,
     to_ansible_fix_public,
@@ -227,6 +233,54 @@ def list_findings(
         query.order_by(col(AnsibleFinding.file_path), col(AnsibleFinding.line_start))
     ).all()
     return [to_ansible_finding_public(f) for f in findings]
+
+
+@router.get(
+    "/findings/{ansible_finding_id}",
+    role=Role.org_member,
+    response_model=AnsibleFindingPublic,
+)
+def get_finding(
+    ansible_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> AnsibleFindingPublic:
+    finding = get_finding_for_user(
+        ANSIBLE_ENGINE, ansible_finding_id, session, current_user
+    )
+    return to_ansible_finding_public(finding)
+
+
+@router.put(
+    "/findings/{ansible_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=AnsibleFindingPublic,
+)
+def ignore_finding(
+    ansible_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> AnsibleFindingPublic:
+    finding = ignore_finding_for_user(
+        ANSIBLE_ENGINE, ansible_finding_id, session, current_user
+    )
+    return to_ansible_finding_public(finding)
+
+
+@router.delete(
+    "/findings/{ansible_finding_id}/ignore",
+    role=Role.org_admin,
+    response_model=AnsibleFindingPublic,
+)
+def unignore_finding(
+    ansible_finding_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> AnsibleFindingPublic:
+    finding = unignore_finding_for_user(
+        ANSIBLE_ENGINE, ansible_finding_id, session, current_user
+    )
+    return to_ansible_finding_public(finding)
 
 
 @router.get(
