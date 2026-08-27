@@ -1,11 +1,9 @@
-import uuid
-
 from sqlmodel import Session
 
 from app.core.db import engine
 from app.models import TerraformFinding
 from app.services.engines import TERRAFORM_ENGINE
-from app.services.file_fix_generation import generate_file_fix
+from app.services.file_fix_generation import generate_file_fix, load_findings
 from app.services.github.fetch import fetch_terraform_files as _fetch_terraform_files
 from app.services.terraform.hcl_parser import parse_terraform_content
 from app.workers.celery_app import celery_app
@@ -52,8 +50,7 @@ def run_terraform_fix_generation(
     one root (the route groups by file path).
     """
     with Session(engine) as session:
-        loaded = [session.get(TerraformFinding, uuid.UUID(fid)) for fid in finding_ids]
-        findings = [f for f in loaded if f is not None]
+        findings = load_findings(session, TerraformFinding, finding_ids)
         if not findings:
             return {"status": "error", "detail": "no_findings_found"}
         target_id = findings[0].terraform_root_id

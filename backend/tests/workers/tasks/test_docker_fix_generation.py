@@ -260,3 +260,51 @@ def test_without_a_pending_row_the_task_is_a_no_op(
 def test_unknown_finding_ids_are_an_error() -> None:
     result = run_docker_fix_generation([str(uuid.uuid4())])
     assert result == {"status": "error", "detail": "no_findings_found"}
+
+
+class _CapturingProvider:
+    """Stands in for a real provider so the prompt is genuinely built.
+
+    Every other test here patches ``_generate``, which skips prompt building
+    entirely — and prompt building is the seam where the findings, by then
+    detached from the task's closed session, get read.
+    """
+
+    def __init__(self, content: str, captured: dict[str, str]) -> None:
+        self._content = content
+        self._captured = captured
+
+    async def generate(self, system_prompt: str, user_prompt: str) -> FakeLLMResponse:
+        self._captured["system"] = system_prompt
+        self._captured["user"] = user_prompt
+        return FakeLLMResponse(content=self._content)
+
+
+def test_prompt_reads_findings_that_outlived_their_session(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    """The task's session closes before the prompt is built, so the findings
+    reach it detached. ``finding.rule.slug`` must still resolve — a lazy load
+    at that point raises DetachedInstanceError and fails the fix."""
+    rule_slug = rule.slug
+    finding = _finding(db, target, rule, "Dockerfile")
+    _pending_fix(db, target, "Dockerfile")
+    captured: dict[str, str] = {}
+    llm_content = (
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>"
+    )
+    with (
+        patch(
+            "app.workers.tasks.docker_fix_generation._fetch_docker_files",
+            return_value=[FakeDockerFile(path="Dockerfile", content=_DOCKERFILE)],
+        ),
+        patch(
+            "app.services.llm.catalog.get_provider",
+            return_value=_CapturingProvider(llm_content, captured),
+        ),
+    ):
+        result = run_docker_fix_generation([str(finding.id)])
+
+    assert result["status"] == FixStatus.ready.value
+    assert f"rule: {rule_slug}" in captured["user"]
+    assert "runs as root" in captured["user"]
