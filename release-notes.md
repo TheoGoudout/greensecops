@@ -37,6 +37,7 @@
 
 ### Internal
 
+* ⬆ bump the github-actions group across 1 directory with 3 updates. PR [#254](https://github.com/TheoGoudout/greensecops/pull/254) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * 🐛 Grant the pages callers the actions:read that api-gate declares. PR [#257](https://github.com/TheoGoudout/greensecops/pull/257) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump the docker-compose group with 2 updates. PR [#249](https://github.com/TheoGoudout/greensecops/pull/249) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the npm-packages group with 8 updates. PR [#253](https://github.com/TheoGoudout/greensecops/pull/253) by [@dependabot[bot]](https://github.com/apps/dependabot).
