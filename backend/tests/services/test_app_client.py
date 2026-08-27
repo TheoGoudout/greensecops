@@ -466,3 +466,66 @@ def test_fetch_terraform_files_stops_at_depth_cap() -> None:
 
     # depth 0 (root) + 2 more levels = 3 calls; the 4th (over the cap) never happens.
     assert len(calls) == 3
+
+
+# ─── fetch_docker_files ───────────────────────────────────────────────────────
+
+
+def test_fetch_docker_files_reads_root_only_not_subdirectories() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    tree = {
+        "app": [
+            _content_file("app/Dockerfile", content="FROM alpine"),
+            _content_file("app/compose.yml", content="services: {}"),
+            _content_file("app/README.md"),
+            _content_file("app/nested", is_dir=True),
+        ],
+    }
+    repo = MagicMock()
+    repo.get_contents.side_effect = lambda path, ref=None: tree[path]
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with patch("app.services.github.app_client.Github", return_value=gh):
+        result = asyncio.run(client.fetch_docker_files(None, "acme/app", "app"))
+
+    assert {f.path for f in result} == {"app/Dockerfile", "app/compose.yml"}
+    # Only the root path was ever listed — a Dockerfile in "app/nested" is a
+    # different target's, not this one's.
+    repo.get_contents.assert_called_once_with("app")
+
+
+def test_fetch_docker_files_missing_root_returns_empty() -> None:
+    client = GitHubAppClient(redis_client=AsyncMock())
+    repo = MagicMock()
+    repo.get_contents.side_effect = GithubException(404, {}, None)
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with patch("app.services.github.app_client.Github", return_value=gh):
+        result = asyncio.run(
+            client.fetch_docker_files(None, "acme/app", "does-not-exist")
+        )
+
+    assert result == []
+
+
+def test_fetch_docker_files_stops_at_file_cap() -> None:
+    from app.services.github import app_client as app_client_module
+
+    client = GitHubAppClient(redis_client=AsyncMock())
+    many_files = [
+        _content_file(f"app/f{i}.Dockerfile", content="FROM alpine") for i in range(10)
+    ]
+    repo = MagicMock()
+    repo.get_contents.return_value = many_files
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+
+    with (
+        patch("app.services.github.app_client.Github", return_value=gh),
+        patch.object(app_client_module, "_DOCKER_MAX_FILES", 3),
+    ):
+        result = asyncio.run(client.fetch_docker_files(None, "acme/app", "app"))
+
+    assert len(result) == 3

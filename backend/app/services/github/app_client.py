@@ -74,12 +74,11 @@ _TERRAFORM_EXTENSIONS = (".tf", ".tf.json")
 # never meant to be committed, and if it is, never worth scanning.
 _TERRAFORM_SKIP_DIRS = {".terraform", ".git"}
 
-# Same guard rails for Docker. Vendored dependency trees routinely contain
-# hundreds of third-party Dockerfiles that are not this repository's to fix,
-# and walking them would blow the file budget before reaching the real ones.
+# Docker reads a target's root_path non-recursively — unlike Terraform and
+# Ansible, a nested Dockerfile belongs to a monorepo's own sub-target, not
+# this one, so there is no subdirectory to walk into. The cap still guards
+# against a root with an implausible number of Dockerfile/Compose siblings.
 _DOCKER_MAX_FILES = 200
-_DOCKER_MAX_DEPTH = 12
-_DOCKER_SKIP_DIRS = {".git", "node_modules", "vendor", "dist", "build", ".venv"}
 
 # Ansible classification needs the file's *content*, not just its name, so this
 # walk decodes every YAML file under the root before deciding. That is a real
@@ -574,7 +573,12 @@ class GitHubAppClient:
         root_path: str,
         ref: str | None = None,
     ) -> list[DockerFileContent]:
-        """Recursively fetch Dockerfiles and Compose files under ``root_path``.
+        """Fetch Dockerfiles and Compose files directly under ``root_path``.
+
+        Non-recursive, unlike Terraform/Ansible: a Dockerfile in a
+        subdirectory belongs to its own target (a monorepo registers each
+        sub-project's root separately, see ``DockerTarget``), not to this
+        one's tree.
 
         Which filenames count is decided by
         ``services.docker.merge.classify_docker_file`` rather than a suffix
@@ -595,44 +599,34 @@ class GitHubAppClient:
             repo = gh.get_repo(full_name)
             results: list[DockerFileContent] = []
 
-            def _walk(path: str, depth: int) -> None:
-                if depth > _DOCKER_MAX_DEPTH or len(results) >= _DOCKER_MAX_FILES:
-                    return
-                try:
-                    contents = (
-                        repo.get_contents(path, ref=ref)
-                        if ref
-                        else repo.get_contents(path)
-                    )
-                except GithubException as exc:
-                    if exc.status == 404:
-                        return
-                    raise
-                if not isinstance(contents, list):
-                    contents = [contents]
-                for cf in contents:
-                    if len(results) >= _DOCKER_MAX_FILES:
-                        return
-                    if cf.type == "dir":
-                        if cf.name in _DOCKER_SKIP_DIRS or cf.name.startswith("."):
-                            continue
-                        _walk(cf.path, depth + 1)
-                    elif classify_docker_file(cf.name) is not None:
-                        decoded = cf.decoded_content.decode("utf-8", errors="replace")
-                        results.append(
-                            DockerFileContent(
-                                path=cf.path,
-                                content=decoded,
-                                content_hash=hashlib.sha256(
-                                    decoded.encode()
-                                ).hexdigest(),
-                                sha=cf.sha,
-                            )
+            try:
+                # A target rooted at "" is the repository root; PyGithub wants
+                # "" for that, which is what an empty root_path already is.
+                contents = (
+                    repo.get_contents(root_path, ref=ref)
+                    if ref
+                    else repo.get_contents(root_path)
+                )
+            except GithubException as exc:
+                if exc.status == 404:
+                    return results
+                raise
+            if not isinstance(contents, list):
+                contents = [contents]
+            for cf in contents:
+                if len(results) >= _DOCKER_MAX_FILES:
+                    break
+                if cf.type != "dir" and classify_docker_file(cf.name) is not None:
+                    decoded = cf.decoded_content.decode("utf-8", errors="replace")
+                    results.append(
+                        DockerFileContent(
+                            path=cf.path,
+                            content=decoded,
+                            content_hash=hashlib.sha256(decoded.encode()).hexdigest(),
+                            sha=cf.sha,
                         )
+                    )
 
-            # A target rooted at "" is the repository root; PyGithub wants ""
-            # for that, which is what an empty root_path already is.
-            _walk(root_path, 0)
             return results
 
         return await asyncio.to_thread(_fetch)

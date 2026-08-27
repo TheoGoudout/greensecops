@@ -64,7 +64,9 @@ def classify_docker_file(path: str) -> str | None:
     Recognises ``Dockerfile``, ``Dockerfile.prod``, ``prod.Dockerfile``,
     ``Containerfile``, ``compose.yml``, ``compose.override.yaml`` and
     ``docker-compose.test.yml``. Matching is case-insensitive on the filename
-    only — the directory is irrelevant, since a target is scanned recursively.
+    only — ``path`` may still carry a directory, since a merged document's
+    entries keep their full path even though a single target's fetch itself
+    is non-recursive (see ``GitHubAppClient.fetch_docker_files``).
     """
     name = PurePosixPath(path).name
     if not name:
