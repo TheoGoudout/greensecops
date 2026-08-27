@@ -35,6 +35,7 @@
 
 ### Internal
 
+* ⬆ bump the npm-packages group with 8 updates. PR [#253](https://github.com/TheoGoudout/greensecops/pull/253) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ update pwdlib[argon2,bcrypt] requirement from >=0.3.0 to >=0.3.1. PR [#256](https://github.com/TheoGoudout/greensecops/pull/256) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the npm-packages group with 8 updates. PR [#235](https://github.com/TheoGoudout/greensecops/pull/235) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump pydantic-settings from 2.14.2 to 2.15.0 in the python-packages group across 1 directory. PR [#232](https://github.com/TheoGoudout/greensecops/pull/232) by [@dependabot[bot]](https://github.com/apps/dependabot).
