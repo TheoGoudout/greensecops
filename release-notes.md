@@ -41,6 +41,7 @@
 
 ### Internal
 
+* chore(frontend): rename CI/CD sidebar item from Repositories to Workflows. PR [#270](https://github.com/TheoGoudout/greensecops/pull/270) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(ci): disable build-tool caching ahead of the Pages publish step. PR [#266](https://github.com/TheoGoudout/greensecops/pull/266) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ Bump vite from 8.2.1 to 8.2.2 in the npm-packages group. PR [#264](https://github.com/TheoGoudout/greensecops/pull/264) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the github-actions group across 1 directory with 3 updates. PR [#254](https://github.com/TheoGoudout/greensecops/pull/254) by [@dependabot[bot]](https://github.com/apps/dependabot).
