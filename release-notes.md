@@ -35,6 +35,7 @@
 
 ### Internal
 
+* 🐛 Grant the pages callers the actions:read that api-gate declares. PR [#257](https://github.com/TheoGoudout/greensecops/pull/257) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump the docker-compose group with 2 updates. PR [#249](https://github.com/TheoGoudout/greensecops/pull/249) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the npm-packages group with 8 updates. PR [#253](https://github.com/TheoGoudout/greensecops/pull/253) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ update pwdlib[argon2,bcrypt] requirement from >=0.3.0 to >=0.3.1. PR [#256](https://github.com/TheoGoudout/greensecops/pull/256) by [@dependabot[bot]](https://github.com/apps/dependabot).
