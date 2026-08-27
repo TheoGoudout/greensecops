@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* fix(fixes): load a finding's rule before its session closes. PR [#271](https://github.com/TheoGoudout/greensecops/pull/271) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(frontend): split Infrastructure tab nav by engine. PR [#268](https://github.com/TheoGoudout/greensecops/pull/268) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(rules): break terraform-block tie by file, not line alone. PR [#258](https://github.com/TheoGoudout/greensecops/pull/258) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(deploy): stop staging serving an image older than its dashboard. PR [#247](https://github.com/TheoGoudout/greensecops/pull/247) by [@TheoGoudout](https://github.com/TheoGoudout).
