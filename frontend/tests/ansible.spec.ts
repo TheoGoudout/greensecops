@@ -110,8 +110,9 @@ test.describe("Ansible", () => {
       (r) =>
         r
           .url()
-          .includes(`/ansible/projects/${MOCK_ANSIBLE_PROJECT.id}/deliveries`) &&
-        r.method() === "POST",
+          .includes(
+            `/ansible/projects/${MOCK_ANSIBLE_PROJECT.id}/deliveries`,
+          ) && r.method() === "POST",
     )
     // No PR exists on this project's branch yet, so the button offers to make
     // one rather than to update or reopen.
