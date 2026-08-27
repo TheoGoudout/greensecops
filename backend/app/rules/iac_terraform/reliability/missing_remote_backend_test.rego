@@ -13,8 +13,10 @@ _terraform(blocks) := {
 	"provider": [{"aws": {"region": "eu-west-1"}}],
 }
 
-_block(attrs, line) := object.union(
-	{"__tf_file": "versions.tf", "__start_line__": line, "__end_line__": line + 6},
+_block(attrs, line) := _block_in_file(attrs, line, "versions.tf")
+
+_block_in_file(attrs, line, file) := object.union(
+	{"__tf_file": file, "__start_line__": line, "__end_line__": line + 6},
 	attrs,
 )
 
@@ -88,4 +90,21 @@ test_no_violation_for_a_child_module_pinning_providers if {
 test_no_violation_for_an_empty_terraform_list if {
 	violations := missing_remote_backend.violations with input as _terraform([])
 	count(violations) == 0
+}
+
+# __start_line__ is per-file, so two blocks from different files routinely
+# share it (most .tf files open their terraform block at line 1). Before the
+# tie-break included __tf_file, this made _first_terraform_block a complete
+# rule with two valid outputs — an eval_conflict_error (500) at query time,
+# not a wrong answer. Asserting a single, deterministic winner is the
+# regression coverage for that production incident.
+test_one_finding_when_two_blocks_tie_on_start_line_across_files if {
+	violations := missing_remote_backend.violations with input as _terraform([
+		_block_in_file({"required_version": ">= 1.9"}, 1, "main.tf"),
+		_block_in_file({"required_providers": [{"aws": {"source": "hashicorp/aws"}}]}, 1, "versions.tf"),
+	])
+	count(violations) == 1
+	some v in violations
+	v.file_path == "main.tf"
+	v.line_start == 1
 }

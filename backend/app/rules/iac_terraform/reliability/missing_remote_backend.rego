@@ -57,11 +57,20 @@ _is_root_module if {
 # Fires once per module, not once per terraform block. The finding is about
 # the configuration as a whole, so it reports against the first block that
 # gives it a file and a line to point at.
+#
+# `__start_line__` is per-file, so two blocks from different `.tf` files
+# routinely tie on it (most files open their `terraform {}` block at line 1).
+# Sorting by `[__tf_file, __start_line__]` instead of the line alone breaks
+# that tie deterministically — Rego compares arrays lexicographically. Without
+# this, `min()` on the line alone let two candidates both satisfy the
+# equality check, and a complete rule producing two different `block` values
+# for one query is an `eval_conflict_error` (500 from OPA).
 _first_terraform_block := block if {
 	some block in input.terraform
-	block.__start_line__ == min({line |
+	key := [object.get(block, "__tf_file", ""), object.get(block, "__start_line__", 0)]
+	key == min({candidate_key |
 		some candidate in input.terraform
-		line := candidate.__start_line__
+		candidate_key := [object.get(candidate, "__tf_file", ""), object.get(candidate, "__start_line__", 0)]
 	})
 }
 
