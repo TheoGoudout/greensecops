@@ -22,6 +22,7 @@ import { TerraformService, WorkflowService } from "@/client"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { StatusPill } from "@/components/StatusPill"
+import { TerraformFindingRow } from "@/components/TerraformFindingRow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -384,6 +385,20 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
                     }
                     annotations={fileFindings}
                   />
+                  {/* The viewer annotates findings inline, but a rule that
+                      fires on the module as a whole (or past its last line)
+                      has no line to hang off — listing them keeps every
+                      finding readable. */}
+                  {fileFindings.length > 0 && (
+                    <div className="rounded-md border divide-y">
+                      {fileFindings.map((finding) => (
+                        <TerraformFindingRow
+                          key={finding.id}
+                          finding={finding}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })

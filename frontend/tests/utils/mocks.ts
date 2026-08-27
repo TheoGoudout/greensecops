@@ -82,6 +82,12 @@ const ID = {
   ansibleFinding: "0000b020-0000-0000-0000-000000000020",
   ansibleFindingFileLevel: "0000b021-0000-0000-0000-000000000021",
   ansibleFix: "0000b030-0000-0000-0000-000000000030",
+  // Same rule as the Docker/Ansible ids above: tfFixBranch() slices the first
+  // 8 characters, so a shared prefix would collide branch names.
+  terraformRoot: "0000c001-0000-0000-0000-000000000001",
+  terraformScan: "0000c010-0000-0000-0000-000000000010",
+  terraformFinding: "0000c020-0000-0000-0000-000000000020",
+  terraformFix: "0000c030-0000-0000-0000-000000000030",
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -413,6 +419,128 @@ export const MOCK_ANSIBLE_SCAN = {
   failure_kind: null,
   created_at: "2024-01-02T10:00:00Z",
   completed_at: "2024-01-02T10:00:30Z",
+}
+
+// ── Terraform (roots, files, findings, fixes, scans) ───────────────────
+const TERRAFORM_RAW_CONTENT =
+  'terraform {\n  required_version = ">= 1.9"\n}\n\nresource "aws_s3_bucket" "data" {\n  bucket = "acme-data"\n}\n'
+
+export const MOCK_TERRAFORM_ROOT = {
+  id: ID.terraformRoot,
+  repo_id: ID.repo,
+  repo_full_name: "acme/web-app",
+  root_path: "deploy/terraform",
+  enabled: true,
+  last_scanned_at: "2024-01-02T10:00:00Z",
+  last_scanned_head_sha: "abc1234",
+  latest_score: 72,
+  latest_grade: "C",
+  badge_sig: "sig-terraform-root",
+}
+
+export const MOCK_TERRAFORM_FILE = {
+  path: "deploy/terraform/main.tf",
+  raw_content: TERRAFORM_RAW_CONTENT,
+}
+
+export const MOCK_TERRAFORM_FINDING = {
+  id: ID.terraformFinding,
+  scan_id: ID.terraformScan,
+  terraform_root_id: ID.terraformRoot,
+  rule_id: ID.ruleReliability,
+  rule_slug: "missing_remote_backend",
+  file_path: "deploy/terraform/main.tf",
+  resource_address: "terraform",
+  line_start: 1,
+  line_end: 3,
+  module_path: null,
+  terraform_address: null,
+  severity: "high" as const,
+  category: "reliability" as const,
+  message: "The root module declares no backend or cloud block.",
+  context: null,
+  status: "open" as const,
+  fix_id: null,
+  fix_status: null,
+  created_at: "2024-01-02T10:00:00Z",
+  resolved_at: null,
+}
+
+export const MOCK_TERRAFORM_FIX = {
+  id: ID.terraformFix,
+  terraform_root_id: ID.terraformRoot,
+  file_path: "deploy/terraform/main.tf",
+  pr_id: null,
+  llm_provider: "openai" as const,
+  llm_model: "gpt-4o",
+  status: "ready" as const,
+  full_content: TERRAFORM_RAW_CONTENT.replace(
+    'required_version = ">= 1.9"',
+    'required_version = ">= 1.9"\n\n  backend "s3" {\n    bucket = "acme-tfstate"\n    key    = "prod/terraform.tfstate"\n  }',
+  ),
+  error_message: null,
+  pr_url: null,
+  pr_branch: null,
+  pr_state: null,
+  created_at: "2024-01-02T10:02:00Z",
+  delivered_at: null,
+}
+
+export const MOCK_TERRAFORM_SCAN = {
+  id: ID.terraformScan,
+  terraform_root_id: ID.terraformRoot,
+  status: "completed" as const,
+  triggered_by: "manual" as const,
+  branch: "main",
+  commit_sha: "abc1234",
+  score: 72,
+  grade: "C",
+  error_message: null,
+  created_at: "2024-01-02T10:00:00Z",
+  completed_at: "2024-01-02T10:00:30Z",
+}
+
+export async function mockTerraformRoots(
+  page: Page,
+  roots: Array<{ id: string; repo_id: string }> = [MOCK_TERRAFORM_ROOT],
+  {
+    files = [MOCK_TERRAFORM_FILE],
+    findings = [MOCK_TERRAFORM_FINDING],
+    fixes = [MOCK_TERRAFORM_FIX],
+    scans = [MOCK_TERRAFORM_SCAN],
+  } = {},
+) {
+  await page.route("**/api/v1/terraform/roots**", (route) => {
+    const url = route.request().url()
+    const method = route.request().method()
+    if (method === "DELETE") {
+      route.fulfill({ status: 204 })
+    } else if (method === "PATCH") {
+      route.fulfill({ json: { ...roots[0], enabled: false } })
+    } else if (method === "POST" && url.includes("/scan")) {
+      route.fulfill({
+        status: 202,
+        json: { status: "queued", terraform_root_id: roots[0].id },
+      })
+    } else if (method === "POST" && url.includes("/fixes")) {
+      route.fulfill({ status: 202, json: { status: "queued", queued: 1 } })
+    } else if (method === "POST" && url.includes("/deliver")) {
+      route.fulfill({ status: 202, json: { status: "queued" } })
+    } else if (url.includes("/files")) {
+      route.fulfill({ json: files })
+    } else if (url.includes("/findings")) {
+      route.fulfill({ json: findings })
+    } else if (url.includes("/fixes")) {
+      route.fulfill({ json: fixes })
+    } else if (url.includes("/scans")) {
+      route.fulfill({ json: url.includes(roots[0].id) ? scans : [] })
+    } else {
+      const repoId = new URL(url).searchParams.get("repo_id")
+      route.fulfill({
+        json: repoId ? roots.filter((r) => r.repo_id === repoId) : roots,
+      })
+    }
+  })
 }
 
 export const MOCK_DOCKER_SCAN = {
