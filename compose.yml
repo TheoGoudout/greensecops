@@ -38,6 +38,12 @@ services:
     mem_limit: 1g
     mem_reservation: 256m
     cpu_shares: 2048
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -62,6 +68,12 @@ services:
     mem_limit: 512m
     mem_reservation: 64m
     cpu_shares: 2048
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -79,6 +91,12 @@ services:
     mem_limit: 1536m
     mem_reservation: 512m
     cpu_shares: 1024
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     depends_on:
       db:
         condition: service_healthy
@@ -180,6 +198,12 @@ services:
     mem_limit: 512m
     mem_reservation: 128m
     cpu_shares: 1024
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -208,6 +232,12 @@ services:
     mem_limit: 3g
     mem_reservation: 768m
     cpu_shares: 512
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -236,6 +266,12 @@ services:
     mem_limit: 512m
     mem_reservation: 128m
     cpu_shares: 256
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -266,6 +302,12 @@ services:
     mem_limit: 512m
     mem_reservation: 128m
     cpu_shares: 1024
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     healthcheck:
       test: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\": \"GET\", \"url\": \"http://localhost:8181/health\"}).status_code == 200; true"]
       interval: 10s
@@ -287,6 +329,12 @@ services:
     mem_limit: 128m
     mem_reservation: 32m
     cpu_shares: 256
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
@@ -313,6 +361,12 @@ services:
     mem_limit: 128m
     mem_reservation: 32m
     cpu_shares: 256
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
@@ -338,6 +392,12 @@ services:
     mem_limit: 128m
     mem_reservation: 32m
     cpu_shares: 256
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
