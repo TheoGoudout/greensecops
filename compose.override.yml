@@ -21,6 +21,16 @@ services:
     # Unauthenticated DB admin UI — localhost only.
     ports:
       - "127.0.0.1:8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     depends_on:
       db:
         condition: service_healthy
@@ -118,6 +128,16 @@ services:
     # Unauthenticated Celery dashboard — localhost only.
     ports:
       - "127.0.0.1:5555:5555"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     depends_on:
       redis:
         condition: service_healthy
@@ -147,9 +167,25 @@ services:
     # only `latest` and `master`, both of which float. A digest is the only
     # fixed reference available for this image.
     image: schickling/mailcatcher@sha256:55ed289525a565f7587b138a423705267eb34eda1ec8d35acd6dc7966a933e84
+    restart: always
     ports:
       - "1080:1080"
       - "1025:1025"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:1080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   frontend:
     restart: "no"
@@ -234,14 +270,22 @@ services:
       dockerfile: frontend/Dockerfile.playwright
       args:
         - VITE_API_URL=http://backend:8000
-    ipc: host
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      options:
+        max-size: "10m"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     depends_on:
       backend:
         condition: service_healthy
-      # mailcatcher declares no health check, so service_started is the
-      # strongest condition available for it.
       mailcatcher:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env
     environment:
