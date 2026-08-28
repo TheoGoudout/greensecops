@@ -33,9 +33,8 @@ COPY ./frontend /app/frontend
 
 ARG VITE_API_URL
 
-# No USER here, deliberately. This image is a local/CI test harness: it is never
-# published and never deployed. `docker compose run --rm playwright` bind-mounts
-# ./frontend/blob-report and ./frontend/test-results from the host, and Docker
-# creates missing bind-mount sources owned by root — an unprivileged uid could
-# not write the reports the run exists to produce. container_runs_as_root is a
-# real finding on a shipped image; this one is not shipped.
+RUN groupadd --system --gid 10001 appuser && \
+    useradd --system --uid 10001 --gid appuser --shell /usr/sbin/nologin appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
