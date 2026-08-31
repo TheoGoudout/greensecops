@@ -138,6 +138,32 @@ test.describe("Billing Tiers", () => {
     ).toBeVisible()
   })
 
+  test("plan buttons name the direction they move the account", async ({
+    page,
+  }) => {
+    await mockBilling(
+      page,
+      MOCK_SUBSCRIPTION_PRO,
+      MOCK_TIER_LIMITS_PRO,
+      MOCK_USAGE_PRO,
+    )
+
+    await page.goto("/billing")
+
+    // On Pro: Ultimate is up the ladder, Starter is down it. Calling both
+    // "Upgrade to" is what this asserts against — it told a Pro subscriber
+    // that dropping to Starter was an upgrade.
+    await expect(
+      page.getByRole("button", { name: "Upgrade to Ultimate" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Downgrade to Starter" }),
+    ).toBeVisible()
+    // Free and Open Source are not purchasable, so neither offers a button at
+    // all and neither needs a direction.
+    await expect(page.getByRole("button", { name: /to Free$/ })).toHaveCount(0)
+  })
+
   test("upgrade button calls checkout", async ({ page }) => {
     let checkoutCalled = false
 
