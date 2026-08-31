@@ -306,6 +306,74 @@ test.describe("Repository Detail", () => {
     await expect(page.getByText("open").first()).toBeVisible()
   })
 
+  test("PRs tab lists only the workflow engine's PRs", async ({ page }) => {
+    // The PR list endpoint is repo-wide — every engine's tab reads the same
+    // rows — so this tab has to narrow to its own branches. It did not, and
+    // Terraform, Docker and Ansible fix PRs showed up here with no workflow
+    // name and no working Update button.
+    await setupRepoMocks(page, {
+      fixes: [MOCK_FIX_DELIVERED],
+      pullRequests: [
+        MOCK_PR_OPEN,
+        {
+          ...MOCK_PR_OPEN,
+          id: "00000000-0000-0000-0000-000000000091",
+          pr_branch: "greensecops/terraform-00000000",
+          pr_url: "https://github.com/acme/web-app/pull/43",
+        },
+        {
+          ...MOCK_PR_OPEN,
+          id: "00000000-0000-0000-0000-000000000092",
+          pr_branch: "greensecops/docker-00000000",
+          pr_url: "https://github.com/acme/web-app/pull/44",
+        },
+        {
+          ...MOCK_PR_OPEN,
+          id: "00000000-0000-0000-0000-000000000093",
+          pr_branch: "greensecops/ansible-00000000",
+          pr_url: "https://github.com/acme/web-app/pull/45",
+        },
+      ],
+    })
+
+    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+
+    await expect(page.getByText("acme/web-app/pull/42")).toBeVisible()
+    await expect(page.getByText("acme/web-app/pull/43")).toHaveCount(0)
+    await expect(page.getByText("acme/web-app/pull/44")).toHaveCount(0)
+    await expect(page.getByText("acme/web-app/pull/45")).toHaveCount(0)
+  })
+
+  test("PRs tab keeps the repo-wide and integrate-action branches", async ({
+    page,
+  }) => {
+    // The workflow engine owns three branch shapes, not one prefix: the
+    // per-file fix branch, the repo-wide batch branch, and the fixed
+    // "Integrate action" branch. Narrowing this tab must keep all three.
+    await setupRepoMocks(page, {
+      fixes: [],
+      pullRequests: [
+        {
+          ...MOCK_PR_OPEN,
+          id: "00000000-0000-0000-0000-000000000094",
+          pr_branch: `greensecops/fixes-${MOCK_REPO.id.slice(0, 8)}`,
+          pr_url: "https://github.com/acme/web-app/pull/46",
+        },
+        {
+          ...MOCK_PR_OPEN,
+          id: "00000000-0000-0000-0000-000000000095",
+          pr_branch: "greensecops/integrate-action",
+          pr_url: "https://github.com/acme/web-app/pull/47",
+        },
+      ],
+    })
+
+    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+
+    await expect(page.getByText("All workflows")).toBeVisible()
+    await expect(page.getByText("Integrate action")).toBeVisible()
+  })
+
   test("PRs tab empty state", async ({ page }) => {
     await setupRepoMocks(page, { fixes: [], pullRequests: [] })
 

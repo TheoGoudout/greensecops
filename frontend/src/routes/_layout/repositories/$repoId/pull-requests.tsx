@@ -23,6 +23,7 @@ import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
 import {
   INTEGRATE_ACTION_BRANCH,
+  isWorkflowBranch,
   repoFixBranch,
   workflowFixBranch,
 } from "@/lib/delivery"
@@ -133,11 +134,13 @@ function PullRequestsPage() {
 
   const sorted = useMemo(() => {
     const key = sortBy === "created" ? "created_at" : "updated_at"
-    return [...(pullRequests ?? [])].sort(
-      (a, b) =>
-        new Date(b[key] ?? b.created_at ?? 0).getTime() -
-        new Date(a[key] ?? a.created_at ?? 0).getTime(),
-    )
+    return (pullRequests ?? [])
+      .filter((pr) => isWorkflowBranch(pr.pr_branch))
+      .sort(
+        (a, b) =>
+          new Date(b[key] ?? b.created_at ?? 0).getTime() -
+          new Date(a[key] ?? a.created_at ?? 0).getTime(),
+      )
   }, [pullRequests, sortBy])
 
   const filtered = useMemo(() => {

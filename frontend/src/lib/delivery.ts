@@ -38,6 +38,29 @@ export function ansibleFixBranch(ansibleProjectId: string): string {
 // integrate_action).
 export const INTEGRATE_ACTION_BRANCH = "greensecops/integrate-action"
 
+// The two branch shapes the CI-workflow engine mints: one per workflow file
+// (`fixes-wf-<id>`) and one per repo-wide batch (`fixes-<id>`).
+const WORKFLOW_FIX_BRANCH_RE = /^greensecops\/fixes-(wf-)?[0-9a-f]{8}$/
+
+/**
+ * Whether a PR branch carries CI-workflow work rather than another engine's.
+ *
+ * The PR list endpoint is repo-wide — every engine's tab reads the same rows
+ * and narrows them itself — so the Workflows tab has to say which branches are
+ * its own or it lists Terraform, Docker and Ansible fix PRs too. It cannot use
+ * a single prefix the way the other tabs do, because the workflow engine owns
+ * three branch shapes rather than one.
+ *
+ * Stated as an allow-list on purpose: a new engine's prefix is then excluded
+ * by default, where a deny-list of the other engines would leak it in until
+ * someone remembered to extend it.
+ */
+export function isWorkflowBranch(branch: string): boolean {
+  return (
+    branch === INTEGRATE_ACTION_BRANCH || WORKFLOW_FIX_BRANCH_RE.test(branch)
+  )
+}
+
 // A ready fix never carries pr_id/pr_state (it never had a PR through the
 // Fix record), so whether a PR already exists for its branch must come from
 // the real PullRequest rows, not from the fix itself.
