@@ -338,11 +338,27 @@ def test_full_fix_generation_flags_llm_reported_unfixed_issue(
     assert stored_fix is not None
     assert stored_fix.status == FixStatus.ready
 
-    from app.services.delivery_pr import issues_info_for_fixes
+    from app.services.delivery_pr import issues_info_for_fixes, manual_work_for_fixes
 
     infos = issues_info_for_fixes([stored_fix])
     assert all(i.message != unfixed_issue.message for i in infos)
     assert any(i.message == issue.message for i in infos)
+
+    # The other half: the unfixed issue is named, with the generator's reason,
+    # rather than disappearing from the PR body entirely.
+    manual = manual_work_for_fixes([stored_fix])
+    assert [i.message for i in manual] == [unfixed_issue.message]
+    assert manual[0].note == "requires external cloud IAM/OIDC trust setup"
+
+    # And the commit message counts the same one issue the body lists as fixed.
+    # It used to count both, so the commit claimed a fix the body never showed.
+    from app.workers.tasks.fix_delivery import _fix_commit_message
+
+    n_fixed = len([f for f in stored_fix.findings if not f.needs_manual_work])
+    assert n_fixed == 1
+    assert _fix_commit_message(n_fixed, workflow_file.path) == (
+        f"Fixing 1 issue in {workflow_file.path}"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

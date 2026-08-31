@@ -13,7 +13,7 @@ from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.models import PullRequest, WorkflowFile, WorkflowFix
-from app.services.pr_body import IssueInfo, build_pr_body
+from app.services.pr_body import IssueInfo, ManualWorkInfo, build_pr_body
 from app.services.state_machines import DELIVERED_FIX_STATUSES
 
 # Matches the single-file fix branch ``greensecops/fixes-wf-<workflow_file_id[:8]>``
@@ -85,6 +85,31 @@ def issues_info_for_fixes(fixes: list[WorkflowFix]) -> list[IssueInfo]:
     ]
 
 
+def manual_work_for_fixes(fixes: list[WorkflowFix]) -> list[ManualWorkInfo]:
+    """The other half of :func:`issues_info_for_fixes`: what was left unfixed.
+
+    These issues were excluded from the "fixed" table but named nowhere else,
+    so the PR simply did not mention them — while the commit message beside it
+    still counted them among the fixes. Listing them, with the generator's own
+    reason, is what makes the two agree.
+    """
+    return [
+        ManualWorkInfo(
+            rule_slug=issue.rule.slug if issue.rule else "finding",
+            rule_title=issue.rule.title if issue.rule else "Finding",
+            category=issue.category.value if issue.category else "unknown",
+            severity=issue.severity.value if issue.severity else "unknown",
+            message=issue.message or "",
+            workflow_path=fix.workflow_file.path if fix.workflow_file else "unknown",
+            line_start=issue.line_start,
+            note=issue.manual_work_note,
+        )
+        for fix in fixes
+        for issue in fix.findings
+        if issue.needs_manual_work
+    ]
+
+
 def build_delivery_pr_body(
     session: Session,
     repo_id: uuid.UUID,
@@ -120,4 +145,9 @@ def build_delivery_pr_body(
         bot_handle=settings.GITHUB_BOT_HANDLE,
         app_name=settings.PROJECT_NAME,
         app_url=settings.MARKETING_URL,
+        manual_work=manual_work_for_fixes(body_fixes),
+        # The static-analysis tab is where an issue's "Needs manual work" badge
+        # and the generator's note are shown, so it is the page that answers
+        # "what do I have to do about this one".
+        review_url=f"{settings.FRONTEND_HOST}/repositories/{repo_id}/static-analysis",
     )

@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.services.github.fix_delivery import FixDeliveryResult
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
+from tests.fixtures.factories import make_finding, make_rule, make_scan
 
 _FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
 
@@ -284,3 +285,80 @@ def test_unforced_redelivery_keeps_externally_modified(db: Session) -> None:
     assert pr.pr_state == PullRequestState.open
     # Only a *forced* delivery clears the user-edit flag.
     assert pr.externally_modified is True
+
+
+def test_commit_message_counts_only_the_issues_the_diff_resolves(
+    db: Session,
+) -> None:
+    """The commit and the PR body have to agree on what was fixed.
+
+    The body already excluded `needs_manual_work` findings from its "fixed"
+    table, but the commit counted every finding on the fix — so a PR fixing two
+    of three issues shipped a commit claiming three.
+    """
+    repo, fix = _build_ready_fix(db)
+    wf = db.get(WorkflowFile, fix.workflow_file_id)
+    assert wf is not None
+
+    scan = make_scan(db, repo, wf)
+    rule = make_rule(db)
+    for needs_manual in (False, False, True):
+        finding = make_finding(
+            db, scan, rule, workflow_file=wf, needs_manual_work=needs_manual
+        )
+        finding.fix_id = fix.id
+        db.add(finding)
+    db.commit()
+
+    with patch(
+        "app.workers.tasks.fix_delivery._deliver_batch",
+        new=AsyncMock(
+            return_value=FixDeliveryResult(
+                pr_url=f"https://github.com/{repo.full_name}/pull/11"
+            )
+        ),
+    ) as mock_deliver:
+        result = deliver_fixes_batch(
+            fix_ids=[str(fix.id)],
+            repo_id=str(repo.id),
+            pr_branch=f"greensecops/fixes-{uuid.uuid4().hex[:8]}",
+            pr_title="t",
+            pr_body="b",
+        )
+
+    assert result == {"status": "ok"}
+    messages = mock_deliver.await_args.kwargs["commit_messages"]
+    assert messages[wf.path] == f"Fixing 2 issues in {wf.path}"
+
+
+def test_commit_message_when_the_rewrite_resolved_nothing(db: Session) -> None:
+    """Every finding unfixable: say so rather than claiming "0 issues"."""
+    repo, fix = _build_ready_fix(db)
+    wf = db.get(WorkflowFile, fix.workflow_file_id)
+    assert wf is not None
+
+    scan = make_scan(db, repo, wf)
+    rule = make_rule(db)
+    finding = make_finding(db, scan, rule, workflow_file=wf, needs_manual_work=True)
+    finding.fix_id = fix.id
+    db.add(finding)
+    db.commit()
+
+    with patch(
+        "app.workers.tasks.fix_delivery._deliver_batch",
+        new=AsyncMock(
+            return_value=FixDeliveryResult(
+                pr_url=f"https://github.com/{repo.full_name}/pull/12"
+            )
+        ),
+    ) as mock_deliver:
+        deliver_fixes_batch(
+            fix_ids=[str(fix.id)],
+            repo_id=str(repo.id),
+            pr_branch=f"greensecops/fixes-{uuid.uuid4().hex[:8]}",
+            pr_title="t",
+            pr_body="b",
+        )
+
+    messages = mock_deliver.await_args.kwargs["commit_messages"]
+    assert messages[wf.path] == f"Updating {wf.path} (no issues resolved automatically)"
