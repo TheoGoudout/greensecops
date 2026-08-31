@@ -201,11 +201,13 @@ function PaymentStateBanner({
 function PlanCard({
   plan,
   isCurrent,
+  isDowngrade,
   onSelect,
   pending,
 }: {
   plan: PlanPublic
   isCurrent: boolean
+  isDowngrade: boolean
   onSelect: (tier: UserTier) => void
   pending: boolean
 }) {
@@ -250,7 +252,7 @@ function PlanCard({
             disabled={pending}
             onClick={() => onSelect(plan.tier)}
           >
-            Upgrade to {plan.name}
+            {isDowngrade ? "Downgrade" : "Upgrade"} to {plan.name}
           </Button>
         ) : null}
       </CardContent>
@@ -437,11 +439,18 @@ function Billing() {
   const effectiveTier = subscription?.effective_tier ?? currentTier
   const billingEnabled = subscription?.billing_enabled ?? false
   const currentPlan = plans?.find((p) => p.tier === currentTier)
+  // Which direction a plan card's button moves the account, by price. Price is
+  // the ladder the catalog already orders the plans by, and the only plans that
+  // render a button are the purchasable ones, so this never has to rank the two
+  // $0 plans against each other — Free and Open Source both show no button.
+  // Falling back to 0 means "everything is an upgrade", which is what an
+  // account whose tier is missing from the catalog should see.
+  const currentPriceCents = currentPlan?.price_cents ?? 0
   // A plan the user bought but is not currently getting, because payment
   // lapsed. Worth naming explicitly rather than silently showing the lower one.
   const isDowngraded = effectiveTier !== currentTier
 
-  const handleUpgrade = (tier: UserTier) => {
+  const handleSelectPlan = (tier: UserTier) => {
     checkout.mutate(tier)
     queryClient.invalidateQueries({ queryKey: ["billing"] })
   }
@@ -584,7 +593,8 @@ function Billing() {
                 key={plan.tier}
                 plan={plan}
                 isCurrent={plan.tier === currentTier}
-                onSelect={handleUpgrade}
+                isDowngrade={plan.price_cents < currentPriceCents}
+                onSelect={handleSelectPlan}
                 pending={checkout.isPending}
               />
             ))}
