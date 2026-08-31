@@ -65,8 +65,20 @@ WORKDIR /app/
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/backend /app/backend
 
-# Run as an unprivileged user rather than root.
-RUN useradd --create-home --uid 1000 appuser
+# Run as an unprivileged user rather than root. The uid and gid are pinned
+# because deploy/ansible chowns the host side of celery-beat's bind mount to
+# them — a bind mount keeps the host's ownership, so the two have to agree.
+RUN groupadd --gid 1000 appuser \
+    && useradd --create-home --uid 1000 --gid 1000 appuser
+
+# celery-beat's PersistentScheduler writes its cursor here, and both deployments
+# mount storage over it. Creating the directory owned by appuser is what makes
+# that writable: Docker seeds an empty named volume from the image path it
+# covers, ownership included, and without the directory in the image it seeds
+# one owned by root that the unprivileged process cannot write to. That was
+# `PermissionError: '/var/lib/celery/celerybeat-schedule'` at every beat start.
+RUN install --directory --owner=appuser --group=appuser --mode=0750 /var/lib/celery
+
 USER appuser
 
 WORKDIR /app/backend/

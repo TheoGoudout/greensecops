@@ -16,7 +16,9 @@ That is exactly the kind of drift a comment cannot prevent, so this checks it:
   and a divergence would mean the anchor was accidentally broken, and
 * every variable the Coolify compose reads without a default is either named in
   the README's configuration block or recorded here as optional,
-* and every service running a pre-built image pulls it every deploy.
+* every service running a pre-built image pulls it every deploy,
+* and every directory a backend service mounts a named volume over is created
+  in ``backend/Dockerfile`` before it drops privileges.
 
 The third check exists because the first two cannot see the other half of the
 loop. Naming a variable in the compose file only asks Coolify for it; something
@@ -123,6 +125,48 @@ def _stale_image_services(coolify: dict) -> list[str]:
         if "${TAG" in (service.get("image") or "")
         and service.get("pull_policy") != "always"
     ]
+
+
+def _unprepared_volume_targets(coolify: dict) -> list[tuple[str, str]]:
+    """Backend volume mount points the image does not create before ``USER``.
+
+    Docker seeds an empty named volume from whatever the image has at the path
+    the volume covers — ownership included. When the image has nothing there it
+    seeds a directory owned by root instead, and the backend image has dropped
+    to appuser long before any of these services runs, so the mount lands
+    read-only in practice.
+
+    That is not a hypothetical: celery-beat's ``PersistentScheduler`` died with
+    ``PermissionError: '/var/lib/celery/celerybeat-schedule'`` on every start
+    until the Dockerfile created that directory. Nothing else caught it, because
+    a compose file mounting a volume and an image preparing the path are two
+    files that never mention each other.
+    """
+    dockerfile = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    # Only what is created *before* the USER instruction counts: a RUN after it
+    # executes unprivileged and could not chown the directory anyway. Comments
+    # are dropped because the one explaining why a directory is created names
+    # the very path this looks for, which would let the explanation outlive the
+    # instruction and still satisfy the check.
+    instructions, _, _ = dockerfile.partition("\nUSER ")
+    prepared = "\n".join(
+        line for line in instructions.splitlines() if not line.lstrip().startswith("#")
+    )
+
+    unprepared: list[tuple[str, str]] = []
+    for name, service in sorted((coolify.get("services") or {}).items()):
+        if "greensecops-backend" not in (service.get("image") or ""):
+            continue
+        for volume in service.get("volumes") or []:
+            source, _, rest = str(volume).partition(":")
+            # A bind mount carries the host's ownership, so the image cannot
+            # decide it; deploy/ansible chowns those host paths instead.
+            if source.startswith((".", "/")):
+                continue
+            target = rest.split(":", 1)[0]
+            if target and target not in prepared:
+                unprepared.append((name, target))
+    return unprepared
 
 
 def _declared(service: dict) -> set[str]:
@@ -233,6 +277,18 @@ def main() -> int:
             + "\n".join(f"      - {name}" for name in unpulled)
             + "\n    That is how staging served a backend one commit behind "
             "its dashboard. Add `pull_policy: always` to each."
+        )
+
+    unprepared = _unprepared_volume_targets(coolify)
+    if unprepared:
+        errors.append(
+            f"{len(unprepared)} backend volume mount point(s) are not created "
+            "in backend/Dockerfile before it drops to appuser, so Docker seeds "
+            "the named volume with a root-owned directory the container cannot "
+            "write to:\n"
+            + "\n".join(f"      - {name}: {target}" for name, target in unprepared)
+            + "\n    Add an `install --directory --owner=appuser` for each to "
+            "backend/Dockerfile, above its USER instruction."
         )
 
     stale = sorted(set(OPTIONAL) - _undefaulted_references(coolify_text))
