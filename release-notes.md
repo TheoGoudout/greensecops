@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* fix(deploy): let celery-beat write its schedule as an unprivileged user. PR [#291](https://github.com/TheoGoudout/greensecops/pull/291) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(fixes): load a finding's rule before its session closes. PR [#271](https://github.com/TheoGoudout/greensecops/pull/271) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(frontend): split Infrastructure tab nav by engine. PR [#268](https://github.com/TheoGoudout/greensecops/pull/268) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(rules): break terraform-block tie by file, not line alone. PR [#258](https://github.com/TheoGoudout/greensecops/pull/258) by [@TheoGoudout](https://github.com/TheoGoudout).
