@@ -3,8 +3,8 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: root
-    group: root
+    owner: "{{ greensecops_service_state_directory_owners[item] | default('root') }}"
+    group: "{{ greensecops_service_state_directory_owners[item] | default('root') }}"
     mode: "0750"
   become: true
   loop: "{{ _service_volumes + (greensecops_self_hosted_data_tier | ternary(greensecops_service_state_directories, [])) }}"

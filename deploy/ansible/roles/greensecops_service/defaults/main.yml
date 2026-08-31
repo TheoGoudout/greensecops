@@ -15,3 +15,15 @@ greensecops_service_state_directories:
   - /var/lib/greensecops/postgres
   - /var/lib/greensecops/redis
   - /var/lib/greensecops/celery
+
+# Who owns a bind-mounted directory, for the ones root must not keep. A bind
+# mount carries the host's ownership into the container, unlike a named volume,
+# so the writer's uid decides this and the image cannot.
+#
+# Only celery-beat is listed. The postgres and redis images start as root and
+# chown their own data directory before dropping privileges; the backend image
+# has already dropped to uid 1000 by the time beat opens its schedule file, so
+# a root-owned directory is a PermissionError it cannot recover from. The uid
+# and gid match the appuser that backend/Dockerfile creates.
+greensecops_service_state_directory_owners:
+  /var/lib/greensecops/celery: "1000"
