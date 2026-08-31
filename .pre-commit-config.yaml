@@ -29,6 +29,28 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
         exclude: ^backend/tests/fixtures/terraform/.*\.tf$
+      # The pair that keeps .github/scripts/ honest: a step invokes its script
+      # directly, so one that lost its executable bit fails on the runner and
+      # nowhere else. .github/scripts/lib/ is sourced rather than run and so has
+      # neither shebang nor bit — which is exactly what these two allow.
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+  # Shell linting. Every multi-line step body in .github/workflows/ is a file
+  # under .github/scripts/ (see its README), which is what makes this possible
+  # at all — shell inside a YAML string is invisible to every linter there is.
+  #
+  # Run at the default severity rather than a relaxed one: the point of moving
+  # the shell out was to hold it to the same bar as the rest of the tree, and
+  # the whole repository came back clean on the first run bar one deliberate
+  # exception in landing/entrypoint.sh.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        # -x, so a `source .github/scripts/lib/coolify.sh` is followed into the
+        # library instead of reported as an unreadable path.
+        args: [--external-sources]
 
   # Type checking. Both of these were effectively unenforced: the backend hook
   # lived in backend/.pre-commit-config.yaml at the `pre-push` stage, which the
