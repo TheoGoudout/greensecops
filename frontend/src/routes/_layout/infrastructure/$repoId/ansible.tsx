@@ -123,7 +123,7 @@ function ProjectCard({
 }) {
   const {
     files,
-    filesLoading,
+    isLoading,
     findings,
     fixes,
     toggleMutation,
@@ -309,7 +309,7 @@ function ProjectCard({
             )}
           </div>
 
-          {filesLoading ? (
+          {isLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : !files?.length ? (
             <p className="text-sm text-muted-foreground py-4 text-center">

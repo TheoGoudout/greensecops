@@ -77,6 +77,29 @@ test.describe("Docker", () => {
     await expect(page.getByText("unpinned-base-image")).toHaveCount(2)
   })
 
+  test("expanding a target shows a loading state, not an empty card", async ({
+    page,
+  }) => {
+    await mockDockerTargets(page)
+    // Hold the findings back so the gap the bug lived in stays open. The files
+    // query resolves first, and the card used to render its file rows straight
+    // away with no findings and no fix under them — which reads as "there is
+    // nothing in here" rather than "this is still loading".
+    await page.route("**/api/v1/docker/targets/**findings**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      route.fulfill({ json: [] })
+    })
+
+    await page.goto(`/docker/${MOCK_REPO.id}/analysis`)
+    await page.getByLabel("Expand target").first().click()
+
+    const skeleton = page.locator('[data-slot="skeleton"]').first()
+    await expect(skeleton).toBeVisible()
+    // And it is a loading state, not a permanent element: it goes once the
+    // slowest of the three queries lands.
+    await expect(skeleton).toBeHidden({ timeout: 15_000 })
+  })
+
   test("ignoring and unignoring a finding round-trips its status", async ({
     page,
   }) => {

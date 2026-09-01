@@ -125,6 +125,7 @@ function TargetCard({
 }) {
   const {
     files,
+    isLoading,
     findings,
     fixes,
     toggleMutation,
@@ -287,6 +288,8 @@ function TargetCard({
               )}
             </div>
           )}
+
+          {isLoading && <Skeleton className="h-40 w-full" />}
 
           {(files ?? []).map((file: DockerFilePublic) => {
             const fileFindings = findingsByFile.get(file.path) ?? []
