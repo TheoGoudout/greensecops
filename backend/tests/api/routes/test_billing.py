@@ -27,8 +27,10 @@ from app.models import (
     SubscriptionStatus,
     UsageEngine,
     UsageMeter,
+    User,
     UserTier,
 )
+from app.services.billing import stripe_gateway
 from app.services.billing.lifecycle import get_or_create_subscription
 from tests.utils.billing import (
     make_subscription,
@@ -208,7 +210,9 @@ def test_checkout_returns_the_stripe_url(
         patch.object(
             billing.stripe_gateway,
             "create_checkout_session",
-            return_value="https://checkout.stripe.com/c/pay/xyz",
+            return_value=stripe_gateway.CheckoutSession(
+                url="https://checkout.stripe.com/c/pay/xyz"
+            ),
         ) as create,
     ):
         response = client.post(
@@ -711,3 +715,79 @@ def test_the_webhook_503s_when_stripe_is_unconfigured(client: TestClient) -> Non
     with patch.object(settings, "STRIPE_SECRET_KEY", None):
         response = client.post(f"{settings.API_V1_STR}/webhooks/stripe", content=b"{}")
     assert response.status_code == 503
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# A customer deleted in the Stripe dashboard
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_customer_deleted_detaches_the_ids_and_returns_to_free(
+    client: TestClient, db: Session
+) -> None:
+    """A customer deleted in Stripe must not leave a dead id on the account.
+
+    While it stayed, Checkout refused every plan — the account could not
+    subscribe to anything, with no way back from our side.
+    """
+    customer = f"cus_{uuid.uuid4().hex[:12]}"
+    sub = _subscribed(db, customer)
+
+    # The event object *is* the customer, so the id to match on is its own.
+    _post_event(client, _event("customer.deleted", {"id": customer}))
+
+    db.refresh(sub)
+    assert sub.stripe_customer_id is None
+    # The subscription id goes too: deleting a customer cancels its
+    # subscriptions, so keeping it would leave a second dead reference.
+    assert sub.stripe_subscription_id is None
+    assert sub.tier == UserTier.free
+    assert sub.status == SubscriptionStatus.canceled
+
+
+def test_customer_deleted_for_an_unknown_customer_is_not_an_error(
+    client: TestClient,
+) -> None:
+    response = _post_event(
+        client, _event("customer.deleted", {"id": f"cus_{uuid.uuid4().hex[:12]}"})
+    )
+    assert response.status_code == 200
+
+
+def test_checkout_recovers_when_stripe_rejects_a_deleted_customer(
+    client: TestClient, db: Session, user_headers: dict[str, str]
+) -> None:
+    """An account already carrying a dead customer id can still subscribe.
+
+    The webhook above only helps for deletions from now on — an account broken
+    before it existed never receives that event. Checkout retrying without the
+    rejected id is what repairs those, and clearing the column is what stops
+    every later attempt from rediscovering the same dead id.
+    """
+    user = db.exec(select(User).where(User.email == settings.EMAIL_TEST_USER)).one()
+    sub = get_or_create_subscription(db, user)
+    sub.stripe_customer_id = f"cus_{uuid.uuid4().hex[:12]}"
+    db.add(sub)
+    db.commit()
+
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(
+            billing.stripe_gateway,
+            "create_checkout_session",
+            return_value=stripe_gateway.CheckoutSession(
+                url="https://checkout.stripe.com/c/pay/new",
+                customer_id_rejected=True,
+            ),
+        ),
+    ):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
+            headers=user_headers,
+            json={"tier": "pro"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["url"] == "https://checkout.stripe.com/c/pay/new"
+    db.refresh(sub)
+    assert sub.stripe_customer_id is None
