@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* feat(repositories): report every engine's average grade, not just CI's. PR [#305](https://github.com/TheoGoudout/greensecops/pull/305) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(docker): resolve verified base-image digests for the pinning fix. PR [#304](https://github.com/TheoGoudout/greensecops/pull/304) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(engines): show a loading state while an expanded target is still fetching. PR [#303](https://github.com/TheoGoudout/greensecops/pull/303) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(billing): let an account subscribe again after its Stripe customer is deleted. PR [#302](https://github.com/TheoGoudout/greensecops/pull/302) by [@TheoGoudout](https://github.com/TheoGoudout).
