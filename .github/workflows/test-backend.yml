@@ -4,10 +4,16 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-backend.yml'
   pull_request:
     types:
       - opened
       - synchronize
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-backend.yml'
 
 permissions: {}
 
@@ -61,6 +67,7 @@ jobs:
         working-directory: backend
       - run: docker compose down -v --remove-orphans
       - name: Store coverage files
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-html
