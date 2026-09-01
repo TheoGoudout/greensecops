@@ -48,6 +48,7 @@
 
 ### Internal
 
+* ci: move the workflows' embedded shell into .github/scripts/, checked by shellcheck. PR [#295](https://github.com/TheoGoudout/greensecops/pull/295) by [@TheoGoudout](https://github.com/TheoGoudout).
 * chore(frontend): rename CI/CD sidebar item from Repositories to Workflows. PR [#270](https://github.com/TheoGoudout/greensecops/pull/270) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(ci): disable build-tool caching ahead of the Pages publish step. PR [#266](https://github.com/TheoGoudout/greensecops/pull/266) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ Bump vite from 8.2.1 to 8.2.2 in the npm-packages group. PR [#264](https://github.com/TheoGoudout/greensecops/pull/264) by [@dependabot[bot]](https://github.com/apps/dependabot).
