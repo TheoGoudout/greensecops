@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import Annotated
 
@@ -488,24 +489,80 @@ async def _inject_badge_via_llm(
     return result.content
 
 
-def _badge_only_added(original: str, modified: str) -> bool:
-    """Return True if modified differs from original only by pure insertions (no deletes/replaces)."""
-    import difflib
+def _significant_lines(content: str) -> list[str]:
+    """``content`` as lines, with blank lines dropped and spacing collapsed.
 
-    orig_lines = original.splitlines(keepends=True)
-    mod_lines = modified.splitlines(keepends=True)
-    for tag, _i1, _i2, _j1, _j2 in difflib.SequenceMatcher(
-        None, orig_lines, mod_lines
-    ).get_opcodes():
-        if tag in ("equal", "insert"):
-            continue
+    What a badge insertion is allowed to change, and nothing more: how many
+    blank lines surround it, and how much space separates it from a badge it
+    now sits beside.
+    """
+    return [" ".join(line.split()) for line in content.splitlines() if line.strip()]
+
+
+def _badge_only_added(original: str, modified: str, badge_markdown: str) -> bool:
+    """Whether ``modified`` is ``original`` with nothing added but the badge.
+
+    This used to demand a *pure line insertion* — any replaced line failed it.
+    But a README's badges are usually one row on one line, and adding a badge
+    to a row is a change to that line, so the check structurally rejected the
+    one placement the prompt asks the model for. Every good answer was thrown
+    away and the fallback below ran instead, dropping the badge on a line of
+    its own above the row it was meant to join.
+
+    So the question asked here is the one that actually matters: take the badge
+    back out, and is what remains the README we started with? A line the model
+    reflowed, a paragraph it rewrote or a section it dropped all fail that,
+    while the badge joining a row passes.
+    """
+    if badge_markdown not in modified:
         return False
-    return True
+    return _significant_lines(modified.replace(badge_markdown, "", 1)) == (
+        _significant_lines(original)
+    )
+
+
+# A markdown image, optionally wrapped in a link — the two shapes a badge is
+# written in. Used to recognise a line that is *only* badges.
+_IMAGE_MD_RE = re.compile(r"\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)|!\[[^\]]*\]\([^)]*\)")
+
+
+def _is_badge_line(line: str) -> bool:
+    """Whether ``line`` holds badges and nothing else.
+
+    Deliberately strict about the "nothing else": a line of prose that happens
+    to contain an inline image is not a badge row, and appending to it would
+    put the badge in the middle of a sentence.
+    """
+    stripped = line.strip()
+    if not stripped or not _IMAGE_MD_RE.search(stripped):
+        return False
+    return not _IMAGE_MD_RE.sub("", stripped).strip()
 
 
 def _insert_badge_simple(readme_content: str, badge_markdown: str) -> str:
-    """Insert badge after the first top-level heading, or prepend to the file."""
-    import re
+    """Place the badge with the README's other badges, or after its heading.
+
+    The fallback for when the LLM is unavailable or answered with something
+    that changed more than the badge. It used to go straight to "after the
+    first heading", which put the badge on its own line directly above the
+    row of badges it belonged in — the placement this fix exists to correct.
+    So it looks for that row first.
+    """
+    lines = readme_content.splitlines()
+    run_start = next((i for i, line in enumerate(lines) if _is_badge_line(line)), None)
+    if run_start is not None:
+        run_end = run_start
+        while run_end + 1 < len(lines) and _is_badge_line(lines[run_end + 1]):
+            run_end += 1
+        if run_start == run_end:
+            # One line of badges: this is a row, so join it.
+            lines[run_end] = f"{lines[run_end].rstrip()} {badge_markdown}"
+        else:
+            # Badges stacked one per line: keep the shape and add another.
+            lines.insert(run_end + 1, badge_markdown)
+        # splitlines() drops the trailing newline; put back whatever was there.
+        trailing = "\n" if readme_content.endswith("\n") else ""
+        return "\n".join(lines) + trailing
 
     match = re.search(r"^(#[^\n]*\n)", readme_content, re.MULTILINE)
     if match:
@@ -601,7 +658,7 @@ async def integrate_action(
             if (
                 new_readme
                 and badge_url in new_readme
-                and _badge_only_added(readme_content, new_readme)
+                and _badge_only_added(readme_content, new_readme, badge_markdown)
             ):
                 file_changes.append((readme_file.path, new_readme))
             else:
