@@ -212,4 +212,98 @@ test.describe("Billing Tiers", () => {
     await upgrade.click()
     await expect.poll(() => checkoutCalled).toBe(true)
   })
+
+  /**
+   * An account that already pays for a plan has that subscription changed
+   * rather than a second one opened beside it, so the answer carries no URL to
+   * navigate to — it says what the plan is now, and when.
+   */
+  function mockPlanChange(
+    page: import("@playwright/test").Page,
+    answer: Record<string, unknown>,
+    subscription: typeof MOCK_SUBSCRIPTION = MOCK_SUBSCRIPTION,
+  ) {
+    return page.route("**/api/v1/billing**", (route) => {
+      const url = route.request().url()
+      if (route.request().method() === "POST" && url.includes("/checkout")) {
+        route.fulfill({ json: answer })
+      } else if (url.includes("/limits")) {
+        route.fulfill({ json: MOCK_TIER_LIMITS })
+      } else if (url.includes("/usage")) {
+        route.fulfill({ json: MOCK_USAGE })
+      } else if (url.includes("/plans")) {
+        route.fulfill({
+          json: [
+            {
+              tier: "starter",
+              name: "Starter",
+              price_cents: 1900,
+              price_display: "$19/mo",
+              tagline: "Small teams.",
+              limits: { analyses: 1000, fixes: 100, repos: 10 },
+              auto_fix: true,
+              public_repos_only: false,
+              is_purchasable: true,
+              features: [],
+            },
+            {
+              tier: "pro",
+              name: "Pro",
+              price_cents: 7900,
+              price_display: "$79/mo",
+              tagline: "Growing teams.",
+              limits: { analyses: 10000, fixes: 1000, repos: 100 },
+              auto_fix: true,
+              public_repos_only: false,
+              is_purchasable: true,
+              features: [],
+            },
+          ],
+        })
+      } else if (
+        url.includes("/invoices") ||
+        url.includes("/oss-application")
+      ) {
+        route.fulfill({ json: [] })
+      } else {
+        route.fulfill({ json: subscription })
+      }
+    })
+  }
+
+  test("an in-place upgrade is reported instead of navigating away", async ({
+    page,
+  }) => {
+    await mockPlanChange(page, {
+      url: null,
+      tier: "pro",
+      effective_at: null,
+    })
+
+    await page.goto("/billing")
+    await page.getByRole("button", { name: "Upgrade to Pro" }).click()
+
+    await expect(page.getByText(/Upgraded to Pro/)).toBeVisible()
+    // Still on our own page: there was no payment page to send anyone to.
+    await expect(page).toHaveURL(/\/billing/)
+  })
+
+  test("a scheduled downgrade says when the cheaper plan starts", async ({
+    page,
+  }) => {
+    // The plan already paid for runs to the end of the period, so the toast
+    // must not imply the smaller one is live now.
+    await mockPlanChange(
+      page,
+      { url: null, tier: "starter", effective_at: "2026-10-01T00:00:00Z" },
+      // Starter is only a *downgrade* from somewhere above it.
+      MOCK_SUBSCRIPTION_PRO,
+    )
+
+    await page.goto("/billing")
+    await page.getByRole("button", { name: "Downgrade to Starter" }).click()
+
+    await expect(page.getByText(/Switching to Starter on/)).toBeVisible()
+    await expect(page.getByText(/Upgraded to/)).toHaveCount(0)
+  })
 })

@@ -776,10 +776,10 @@ export class BillingService {
 
     /**
      * Create Checkout Session
-     * Start a Stripe Checkout session for ``body.tier``.
+     * Buy ``body.tier``: a Checkout session, or a change to the live one.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns CheckoutSessionPublic Successful Response
+     * @returns PlanChangePublic Successful Response
      * @throws ApiError
      */
     public static createCheckoutSession(data: BillingCreateCheckoutSessionData): CancelablePromise<BillingCreateCheckoutSessionResponse> {

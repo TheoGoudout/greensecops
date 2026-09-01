@@ -9,6 +9,7 @@ vocabulary is translated into our lifecycle.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable, Generator
 from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import patch
@@ -224,6 +225,191 @@ def test_checkout_returns_the_stripe_url(
     assert response.json()["url"].startswith("https://checkout.stripe.com/")
     # Our subscription id rides along so the webhook can match the result back.
     assert create.call_args.kwargs["client_reference_id"]
+
+
+def _test_user_subscription(db: Session) -> Any:
+    user = db.exec(select(User).where(User.email == settings.EMAIL_TEST_USER)).one()
+    return get_or_create_subscription(db, user)
+
+
+@pytest.fixture
+def subscribe(
+    db: Session,
+    user_headers: dict[str, str],  # noqa: ARG001 — the account must exist first
+) -> Generator[Callable[[UserTier], None], None, None]:
+    """Put the ``user_headers`` account on a live Stripe subscription.
+
+    Restored on teardown: ``db`` is session-scoped, so a subscription left
+    attached to a Stripe customer follows the test user into every later test
+    — including the ones asserting that this account has no payment method.
+    """
+    sub = _test_user_subscription(db)
+    before = (
+        sub.tier,
+        sub.status,
+        sub.stripe_subscription_id,
+        sub.stripe_customer_id,
+    )
+
+    def _subscribe(tier: UserTier) -> None:
+        sub.tier = tier
+        sub.status = SubscriptionStatus.active
+        sub.stripe_subscription_id = "sub_123"
+        sub.stripe_customer_id = "cus_123"
+        db.add(sub)
+        db.commit()
+
+    yield _subscribe
+
+    (
+        sub.tier,
+        sub.status,
+        sub.stripe_subscription_id,
+        sub.stripe_customer_id,
+    ) = before
+    db.add(sub)
+    db.commit()
+
+
+def test_upgrading_changes_the_subscription_instead_of_opening_a_second_one(
+    client: TestClient,
+    user_headers: dict[str, str],
+    subscribe: Callable[[UserTier], None],
+) -> None:
+    """The account was being billed twice.
+
+    An already-subscribed customer sent to Checkout gets a *second* Stripe
+    subscription beside the first, and whichever ``customer.subscription.*``
+    event landed last decided the tier. A customer who has one changes it.
+    """
+    subscribe(UserTier.starter)
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(billing.stripe_gateway, "create_checkout_session") as checkout,
+        patch.object(
+            billing.stripe_gateway,
+            "change_subscription_plan",
+            return_value=stripe_gateway.PlanChange(tier=UserTier.pro),
+        ) as change,
+    ):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
+            headers=user_headers,
+            json={"tier": "pro"},
+        )
+
+    assert response.status_code == 200
+    checkout.assert_not_called()
+    assert change.call_args.kwargs == {
+        "subscription_id": "sub_123",
+        "tier": UserTier.pro,
+        # Pro costs more than Starter, so the change is an upgrade: it starts
+        # now with the unused remainder credited.
+        "immediate": True,
+    }
+    body = response.json()
+    assert body["url"] is None
+    assert body["tier"] == "pro"
+    # No date: an upgrade is live immediately.
+    assert body["effective_at"] is None
+
+
+def test_downgrading_defers_the_cheaper_plan_to_the_renewal(
+    client: TestClient,
+    user_headers: dict[str, str],
+    subscribe: Callable[[UserTier], None],
+) -> None:
+    subscribe(UserTier.pro)
+    renewal = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(
+            billing.stripe_gateway,
+            "change_subscription_plan",
+            return_value=stripe_gateway.PlanChange(
+                tier=UserTier.starter, effective_at=renewal
+            ),
+        ) as change,
+    ):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
+            headers=user_headers,
+            json={"tier": "starter"},
+        )
+
+    assert response.status_code == 200
+    assert change.call_args.kwargs["immediate"] is False
+    assert response.json()["effective_at"].startswith("2026-10-01")
+
+
+def test_the_tier_is_not_written_until_stripe_says_so(
+    client: TestClient,
+    user_headers: dict[str, str],
+    db: Session,
+    subscribe: Callable[[UserTier], None],
+) -> None:
+    """A scheduled downgrade must not take the plan away early.
+
+    ``customer.subscription.updated`` is the one authority on what Stripe is
+    actually billing, and for a deferred change it will not say the new tier
+    until the scheduled phase starts. Writing it here would drop the account to
+    Starter limits the moment they asked, having paid for Pro.
+    """
+    subscribe(UserTier.pro)
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(
+            billing.stripe_gateway,
+            "change_subscription_plan",
+            return_value=stripe_gateway.PlanChange(
+                tier=UserTier.starter,
+                effective_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+            ),
+        ),
+    ):
+        client.post(
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
+            headers=user_headers,
+            json={"tier": "starter"},
+        )
+
+    sub = _test_user_subscription(db)
+    db.refresh(sub)
+    assert sub.tier == UserTier.pro
+
+
+def test_a_canceled_subscription_goes_back_through_checkout(
+    client: TestClient,
+    user_headers: dict[str, str],
+    db: Session,
+    subscribe: Callable[[UserTier], None],
+) -> None:
+    """There is nothing left to modify — the id in the column is spent."""
+    subscribe(UserTier.starter)
+    sub = _test_user_subscription(db)
+    sub.status = SubscriptionStatus.canceled
+    db.add(sub)
+    db.commit()
+
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(
+            billing.stripe_gateway,
+            "create_checkout_session",
+            return_value=stripe_gateway.CheckoutSession(url="https://checkout/x"),
+        ) as checkout,
+        patch.object(billing.stripe_gateway, "change_subscription_plan") as change,
+    ):
+        response = client.post(
+            f"{settings.API_V1_STR}/billing/checkout-sessions",
+            headers=user_headers,
+            json={"tier": "pro"},
+        )
+
+    assert response.status_code == 200
+    change.assert_not_called()
+    checkout.assert_called_once()
+    assert response.json()["url"] == "https://checkout/x"
 
 
 def test_checkout_503s_when_stripe_is_unconfigured(

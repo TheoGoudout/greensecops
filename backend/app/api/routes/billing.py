@@ -45,6 +45,7 @@ from app.models import (
     OssApplicationPublic,
     OssApplicationReview,
     OssApplicationStatus,
+    PlanChangePublic,
     PlanLimitsPublic,
     PlanPublic,
     SubscriptionStatus,
@@ -231,18 +232,55 @@ def list_invoices(
 # ─── Checkout & portal ───────────────────────────────────────────────────────
 
 
+def _has_live_subscription(sub: BillingSubscription) -> bool:
+    """Whether Stripe already bills this account on a subscription we can edit.
+
+    Only these two statuses: a ``canceled`` or ``incomplete`` subscription id
+    still sits in the column, and modifying either fails — those accounts need
+    a fresh Checkout, which is what they got before any of this existed.
+    """
+    return bool(sub.stripe_subscription_id) and sub.status in (
+        SubscriptionStatus.active,
+        SubscriptionStatus.trialing,
+    )
+
+
+def _change_plan(sub: BillingSubscription, tier: UserTier) -> PlanChangePublic:
+    """Move an existing subscription to ``tier`` rather than selling a new one.
+
+    Sending an already-subscribed customer to Checkout opened a *second*
+    Stripe subscription alongside the first: the account was billed twice, and
+    whichever ``customer.subscription.*`` event landed last decided the tier.
+    A customer who already has a subscription changes it.
+
+    Direction is decided by price, the same comparison the billing page's
+    button label uses, so "Upgrade" in the UI and "charge the difference now"
+    here can never disagree about which way a change is going.
+    """
+    immediate = get_plan(tier).price_cents > get_plan(sub.tier).price_cents
+    change = stripe_gateway.change_subscription_plan(
+        subscription_id=str(sub.stripe_subscription_id),
+        tier=tier,
+        immediate=immediate,
+    )
+    # The tier itself is not written here: the ``customer.subscription.updated``
+    # webhook is the one authority on what Stripe is actually billing, and for
+    # a downgrade it will not say so until the scheduled phase starts.
+    return PlanChangePublic(tier=change.tier, effective_at=change.effective_at)
+
+
 @router.post(
     "/checkout-sessions",
     role=Role.user,
     limit=LIMIT_EXPENSIVE,
-    response_model=CheckoutSessionPublic,
+    response_model=PlanChangePublic,
 )
 def create_checkout_session(
     body: CheckoutRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> CheckoutSessionPublic:
-    """Start a Stripe Checkout session for ``body.tier``."""
+) -> PlanChangePublic:
+    """Buy ``body.tier``: a Checkout session, or a change to the live one."""
     plan = get_plan(body.tier)
     if not plan.is_purchasable:
         # Free is the default state, and open_source is granted by review — a
@@ -262,6 +300,9 @@ def create_checkout_session(
     ):
         raise errors.payment_required(f"You are already on the {plan.name} plan.")
 
+    if _has_live_subscription(sub):
+        return _change_plan(sub, body.tier)
+
     checkout = stripe_gateway.create_checkout_session(
         tier=body.tier,
         customer_id=sub.stripe_customer_id,
@@ -280,7 +321,7 @@ def create_checkout_session(
         # repair path for an account already broken before the
         # ``customer.deleted`` handler below existed — that event is long gone.
         _forget_stripe_customer(session, sub)
-    return CheckoutSessionPublic(url=checkout.url)
+    return PlanChangePublic(url=checkout.url)
 
 
 @router.post(

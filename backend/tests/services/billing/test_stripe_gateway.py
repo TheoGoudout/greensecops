@@ -258,3 +258,126 @@ def test_checkout_does_not_retry_on_an_unrelated_stripe_error() -> None:
             cancel_url="https://app/no",
         )
     assert fake.checkout.Session.create.call_count == 1
+
+
+# ─── Changing an existing subscription's plan ────────────────────────────────
+
+
+def _stripe_client(subscription: dict) -> MagicMock:
+    client = MagicMock()
+    client.Subscription.retrieve.return_value = subscription
+    return client
+
+
+SUBSCRIPTION = {
+    "id": "sub_123",
+    "items": {"data": [{"id": "si_1", "price": {"id": "price_starter"}}]},
+}
+
+# One period, ending in the middle of 2026 — the moment a deferred change lands.
+PERIOD_END = 1_780_000_000
+SCHEDULE = {
+    "id": "sub_sched_1",
+    "phases": [
+        {
+            "items": [{"price": "price_pro"}],
+            "start_date": 1_777_000_000,
+            "end_date": PERIOD_END,
+        }
+    ],
+}
+
+
+def _prices() -> object:
+    return patch.multiple(
+        settings,
+        STRIPE_SECRET_KEY="sk_test_x",
+        STRIPE_PRICE_STARTER="price_starter",
+        STRIPE_PRICE_PRO="price_pro",
+    )
+
+
+def test_an_upgrade_swaps_the_price_and_invoices_the_difference() -> None:
+    """The point of the whole exercise.
+
+    ``always_invoice`` credits the unused remainder of the plan being left and
+    bills only the balance, so the first payment on the new plan is the
+    difference rather than a second full price.
+    """
+    client = _stripe_client(SUBSCRIPTION)
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        change = stripe_gateway.change_subscription_plan(
+            subscription_id="sub_123", tier=UserTier.pro, immediate=True
+        )
+
+    client.Subscription.modify.assert_called_once_with(
+        "sub_123",
+        items=[{"id": "si_1", "price": "price_pro"}],
+        proration_behavior="always_invoice",
+    )
+    # No second subscription was opened, which is the bug this replaces.
+    client.checkout.Session.create.assert_not_called()
+    assert change.tier == UserTier.pro
+    assert change.is_immediate
+
+
+def test_a_downgrade_starts_at_the_renewal_and_not_before() -> None:
+    """A downgrade taking effect now would forfeit time already paid for."""
+    client = _stripe_client(SUBSCRIPTION)
+    client.SubscriptionSchedule.create.return_value = SCHEDULE
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        change = stripe_gateway.change_subscription_plan(
+            subscription_id="sub_123", tier=UserTier.starter, immediate=False
+        )
+
+    # Nothing about the live subscription changes; only what follows it.
+    client.Subscription.modify.assert_not_called()
+    phases = client.SubscriptionSchedule.modify.call_args.kwargs["phases"]
+    # The plan already paid for runs to the end of the period it was bought for.
+    assert phases[0]["items"] == [{"price": "price_pro", "quantity": 1}]
+    assert phases[0]["end_date"] == PERIOD_END
+    assert phases[1]["items"] == [{"price": "price_starter", "quantity": 1}]
+    assert (
+        client.SubscriptionSchedule.modify.call_args.kwargs["end_behavior"] == "release"
+    )
+    assert change.tier == UserTier.starter
+    assert not change.is_immediate
+    assert change.effective_at is not None
+    assert change.effective_at.timestamp() == PERIOD_END
+
+
+def test_a_second_downgrade_edits_the_schedule_already_standing() -> None:
+    """Stripe refuses a second schedule, and the user would be stuck."""
+    client = _stripe_client({**SUBSCRIPTION, "schedule": "sub_sched_1"})
+    client.SubscriptionSchedule.retrieve.return_value = SCHEDULE
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        stripe_gateway.change_subscription_plan(
+            subscription_id="sub_123", tier=UserTier.starter, immediate=False
+        )
+
+    client.SubscriptionSchedule.create.assert_not_called()
+    client.SubscriptionSchedule.retrieve.assert_called_once_with("sub_sched_1")
+    client.SubscriptionSchedule.modify.assert_called_once()
+
+
+def test_an_expanded_schedule_object_is_accepted_too() -> None:
+    """Stripe returns the schedule as an id or an object depending on expansion."""
+    client = _stripe_client({**SUBSCRIPTION, "schedule": {"id": "sub_sched_1"}})
+    client.SubscriptionSchedule.retrieve.return_value = SCHEDULE
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        stripe_gateway.change_subscription_plan(
+            subscription_id="sub_123", tier=UserTier.starter, immediate=False
+        )
+
+    client.SubscriptionSchedule.retrieve.assert_called_once_with("sub_sched_1")
+
+
+def test_changing_to_an_unpurchasable_plan_raises_a_clear_503() -> None:
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        pytest.raises(HTTPException) as exc,
+    ):
+        stripe_gateway.change_subscription_plan(
+            subscription_id="sub_123", tier=UserTier.free, immediate=True
+        )
+    assert exc.value.status_code == 503

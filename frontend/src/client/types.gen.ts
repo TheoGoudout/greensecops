@@ -708,6 +708,25 @@ export type PasswordRecovery = {
 };
 
 /**
+ * Where a plan purchase went — a payment page, or the plan itself.
+ *
+ * An account with no live subscription is sent to Stripe Checkout and gets a
+ * ``url`` to visit. An account that already has one changes that
+ * subscription in place instead, so there is no page: ``tier`` is what it is
+ * now on and ``effective_at`` when, which is ``None`` for an upgrade
+ * (immediately) and the renewal date for a downgrade, since a downgrade
+ * leaves the plan already paid for running to the end of the period.
+ *
+ * Exactly one side is ever filled in, and ``url`` is the one to check: a
+ * client that has a URL should navigate, and otherwise report the change.
+ */
+export type PlanChangePublic = {
+    url?: (string | null);
+    tier?: (UserTier | null);
+    effective_at?: (string | null);
+};
+
+/**
  * ``None`` means unlimited, at every layer up to the UI.
  */
 export type PlanLimitsPublic = {
@@ -1594,7 +1613,7 @@ export type BillingCreateCheckoutSessionData = {
     requestBody: CheckoutRequest;
 };
 
-export type BillingCreateCheckoutSessionResponse = (CheckoutSessionPublic);
+export type BillingCreateCheckoutSessionResponse = (PlanChangePublic);
 
 export type BillingCreatePortalSessionResponse = (CheckoutSessionPublic);
 
