@@ -1,9 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
-export const Route = createFileRoute("/_layout/repositories/$repoId/")({
+export const Route = createFileRoute("/_layout/workflows/$repoId/")({
   beforeLoad: ({ params }) => {
     throw redirect({
-      to: "/repositories/$repoId/static-analysis",
+      to: "/workflows/$repoId/static-analysis",
       params: { repoId: params.repoId },
     })
   },

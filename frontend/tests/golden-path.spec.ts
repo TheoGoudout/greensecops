@@ -126,8 +126,8 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   })
 
   test("repositories page loads and shows repository", async ({ page }) => {
-    await page.goto("/repositories")
-    await expect(page).toHaveURL("/repositories")
+    await page.goto("/workflows")
+    await expect(page).toHaveURL("/workflows")
     await expect(page.getByText("acme/web-app")).toBeVisible()
   })
 
@@ -153,9 +153,9 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
   test("repo issues page loads and shows issue with severity", async ({
     page,
   }) => {
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
     await expect(page).toHaveURL(
-      new RegExp(`/repositories/${MOCK_REPO.id}/static-analysis`),
+      new RegExp(`/workflows/${MOCK_REPO.id}/static-analysis`),
     )
     await expect(page.getByText("missing_timeout").first()).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -178,7 +178,7 @@ test.describe("Golden path: repository → analysis → issue → fix", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
     await expect(page.getByText("missing_timeout").first()).toBeVisible()
     expect(rejectCalled).toBe(false)
   })

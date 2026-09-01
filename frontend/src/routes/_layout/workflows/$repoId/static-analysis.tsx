@@ -41,10 +41,10 @@ import {
   scanStatusLabel,
 } from "@/lib/status-colors"
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
-import { Route as RepoRoute } from "@/routes/_layout/repositories/$repoId"
+import { Route as RepoRoute } from "@/routes/_layout/workflows/$repoId"
 
 export const Route = createFileRoute(
-  "/_layout/repositories/$repoId/static-analysis",
+  "/_layout/workflows/$repoId/static-analysis",
 )({
   component: StaticAnalysisPage,
   head: () => ({

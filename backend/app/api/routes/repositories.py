@@ -587,7 +587,7 @@ async def integrate_action(
         readme_content = readme_file.decoded_content.decode("utf-8")
         owner, name = repo.full_name.split("/", 1)
         badge_url = build_badge_svg_url(owner, name, branch, private=repo.is_private)
-        link_url = f"{settings.FRONTEND_HOST}/repositories/{repo_id}"
+        link_url = f"{settings.FRONTEND_HOST}/workflows/{repo_id}"
         badge_markdown = f"[![{app_name}]({badge_url})]({link_url})"
 
         if badge_url not in readme_content:

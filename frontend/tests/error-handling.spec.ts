@@ -140,7 +140,7 @@ test.describe("Error Handling", () => {
       },
     )
 
-    await page.goto(`/repositories/${repoId}/static-analysis`)
+    await page.goto(`/workflows/${repoId}/static-analysis`)
 
     await expect(page.getByText("No workflow files found")).toBeVisible({
       timeout: 15000,

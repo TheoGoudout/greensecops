@@ -53,13 +53,13 @@ function RepoSubNav({ repoId }: { repoId: string }) {
   return (
     <SidebarMenuSub>
       {repoSubItems.map((item) => {
-        const href = `/repositories/${repoId}/${item.segment}`
+        const href = `/workflows/${repoId}/${item.segment}`
         const isActive = currentPath.startsWith(href)
         return (
           <SidebarMenuSubItem key={item.segment}>
             <SidebarMenuSubButton asChild isActive={isActive}>
               <RouterLink
-                to={`/repositories/$repoId/${item.segment}`}
+                to={`/workflows/$repoId/${item.segment}`}
                 params={{ repoId }}
                 onClick={handleClick}
               >
@@ -210,7 +210,7 @@ export function AppSidebar() {
     select: (s) => s.location.pathname,
   })
 
-  const repoIdMatch = currentPath.match(/^\/repositories\/([^/]+)\/.+$/)
+  const repoIdMatch = currentPath.match(/^\/workflows\/([^/]+)\/.+$/)
   const currentRepoId = repoIdMatch?.[1] ?? null
 
   const infraRepoMatch = currentPath.match(
@@ -253,7 +253,7 @@ export function AppSidebar() {
       // that hosts them — the CI/CD engine's unit is a workflow file.
       icon: GitBranch,
       title: "Workflows",
-      path: "/repositories",
+      path: "/workflows",
       children: currentRepoId ? (
         <RepoSubNav repoId={currentRepoId} />
       ) : undefined,

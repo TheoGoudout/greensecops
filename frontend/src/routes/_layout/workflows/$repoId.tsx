@@ -14,13 +14,13 @@ import {
 } from "@/components/ui/select"
 import { useRepository } from "@/hooks/useRepository"
 
-export const Route = createFileRoute("/_layout/repositories/$repoId")({
+export const Route = createFileRoute("/_layout/workflows/$repoId")({
   component: RepositoryLayout,
   validateSearch: (search: Record<string, unknown>): { branch?: string } => ({
     branch: typeof search.branch === "string" ? search.branch : undefined,
   }),
   head: () => ({
-    meta: [{ title: "Repository - GreenSecOps" }],
+    meta: [{ title: "Workflows - GreenSecOps" }],
   }),
 })
 
@@ -28,17 +28,17 @@ const NAV: readonly TabNavItem[] = [
   {
     label: "Static analysis",
     shortLabel: "Static",
-    to: "/repositories/$repoId/static-analysis",
+    to: "/workflows/$repoId/static-analysis",
   },
   {
     label: "Telemetry analysis",
     shortLabel: "Telemetry",
-    to: "/repositories/$repoId/telemetry",
+    to: "/workflows/$repoId/telemetry",
   },
   {
     label: "PRs",
     shortLabel: "PRs",
-    to: "/repositories/$repoId/pull-requests",
+    to: "/workflows/$repoId/pull-requests",
   },
 ]
 
@@ -66,7 +66,7 @@ function RepositoryLayout() {
   return (
     <div className="flex flex-col gap-6">
       <RepoPageHeader
-        backTo="/repositories"
+        backTo="/workflows"
         fullName={repo?.full_name}
         isLoading={isLoading}
         isPrivate={repo?.is_private}
