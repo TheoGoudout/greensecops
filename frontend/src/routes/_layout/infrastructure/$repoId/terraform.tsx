@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
 import { tfFixBranch } from "@/lib/delivery"
 import { formatDateTime } from "@/lib/format"
+import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import {
   fixStatusColor,
   scanStatusColor,
@@ -56,6 +57,13 @@ function TerraformTab() {
   const { data: roots, isLoading } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
     queryFn: () => TerraformService.listRoots({ repoId }),
+    // Follow a running scan to its end. The list carries every root's grade and
+    // scan status, so re-asking for it is what turns "queued" into a result
+    // without a page reload — and it stops the moment nothing is running.
+    refetchInterval: (query) =>
+      pollWhileScanning(
+        (query.state.data ?? []).map((root) => root.latest_scan_status),
+      ),
   })
 
   const { data: pullRequests } = useQuery({
@@ -137,27 +145,32 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
     TerraformFilePublic,
     TerraformFindingPublic,
     TerraformFixPublic
-  >(root.id, isOpen, {
-    keyPrefix: "terraform",
-    targetLabel: "Terraform root",
-    listFiles: () => TerraformService.listFiles({ rootId: root.id }),
-    listFindings: () => TerraformService.listFindings({ rootId: root.id }),
-    listFixes: () => TerraformService.listFixes({ rootId: root.id }),
-    toggle: (enabled) =>
-      TerraformService.updateRoot({
-        rootId: root.id,
-        requestBody: { enabled },
-      }),
-    scan: () => TerraformService.triggerScan({ rootId: root.id }),
-    remove: () => TerraformService.deleteRoot({ rootId: root.id }),
-    generate: (findingIds) =>
-      TerraformService.generateFixes({
-        rootId: root.id,
-        requestBody: findingIds.length ? { finding_ids: findingIds } : {},
-      }),
-    deliver: (force) =>
-      TerraformService.deliverFixes({ rootId: root.id, force }),
-  })
+  >(
+    root.id,
+    isOpen,
+    {
+      keyPrefix: "terraform",
+      targetLabel: "Terraform root",
+      listFiles: () => TerraformService.listFiles({ rootId: root.id }),
+      listFindings: () => TerraformService.listFindings({ rootId: root.id }),
+      listFixes: () => TerraformService.listFixes({ rootId: root.id }),
+      toggle: (enabled) =>
+        TerraformService.updateRoot({
+          rootId: root.id,
+          requestBody: { enabled },
+        }),
+      scan: () => TerraformService.triggerScan({ rootId: root.id }),
+      remove: () => TerraformService.deleteRoot({ rootId: root.id }),
+      generate: (findingIds) =>
+        TerraformService.generateFixes({
+          rootId: root.id,
+          requestBody: findingIds.length ? { finding_ids: findingIds } : {},
+        }),
+      deliver: (force) =>
+        TerraformService.deliverFixes({ rootId: root.id, force }),
+    },
+    isScanInFlight(root.latest_scan_status),
+  )
 
   // Scan history is Terraform-only and loads on its own disclosure, so it stays
   // here rather than in the shared hook.

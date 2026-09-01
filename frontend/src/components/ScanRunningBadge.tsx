@@ -1,9 +1,8 @@
 import { Loader2 } from "lucide-react"
 import type { ScanStatus } from "@/client"
 import { StatusPill } from "@/components/StatusPill"
+import { isScanInFlight } from "@/lib/scan-polling"
 import { scanStatusColor, scanStatusLabel } from "@/lib/status-colors"
-
-const IN_FLIGHT = new Set<ScanStatus>(["queued", "running"])
 
 /**
  * Badge shown on a target card while its latest scan hasn't finished yet.
@@ -16,7 +15,7 @@ export function ScanRunningBadge({
 }: {
   status: ScanStatus | null | undefined
 }) {
-  if (!status || !IN_FLIGHT.has(status)) return null
+  if (!isScanInFlight(status)) return null
   return (
     <StatusPill
       colorClass={scanStatusColor(status)}

@@ -59,6 +59,44 @@ test.describe("Docker", () => {
     await expect(page.getByText("services/api")).toBeVisible()
   })
 
+  test("a running scan refreshes itself without a reload", async ({ page }) => {
+    // These engines publish no live events, and the only refresh that ever
+    // happened was the invalidate fired when the *trigger* request returned —
+    // which is before the worker has done anything. So a card showed "queued"
+    // and sat there until the page was reloaded.
+    await mockDockerTargets(page, [MOCK_DOCKER_TARGET])
+    // Registered after the shared mocks so it wins: Playwright matches routes
+    // last-registered-first. A regex rather than a glob because `?` is a
+    // single-character wildcard in Playwright's glob syntax, not a literal.
+    let scanning = true
+    let served = 0
+    await page.route(/\/api\/v1\/docker\/targets\?repo_id=/, (route) => {
+      served += 1
+      route.fulfill({
+        json: [
+          {
+            ...MOCK_DOCKER_TARGET,
+            latest_scan_status: scanning ? "running" : "completed",
+            // A grade only ever reflects a *completed* scan.
+            latest_grade: scanning ? null : "B",
+          },
+        ],
+      })
+    })
+
+    await page.goto(`/docker/${MOCK_REPO.id}/analysis`)
+    await expect(page.getByText("running").first()).toBeVisible()
+
+    // The scan finishes server-side. Nothing tells the browser; only the poll
+    // can notice, and there is no navigation or reload from here on.
+    const before = served
+    scanning = false
+
+    await expect(page.getByText("running")).toHaveCount(0, { timeout: 20_000 })
+    await expect(page.getByText("B", { exact: true }).first()).toBeVisible()
+    expect(served).toBeGreaterThan(before)
+  })
+
   test("the repo header shows the Docker average, not the worst target", async ({
     page,
   }) => {
