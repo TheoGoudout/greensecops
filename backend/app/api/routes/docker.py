@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from typing import Any
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -7,16 +8,19 @@ from sqlmodel import col, select
 
 from app.api.deps import (
     CurrentUser,
+    GitHubOidcClaims,
     SessionDep,
     authorize_repo,
     get_or_404,
     user_org_ids,
 )
 from app.api.engine_routes import (
+    enabled_targets_for_claims,
     get_finding_for_user,
     get_target_for_user,
     ignore_finding_for_user,
     prepare_pending_fix,
+    sarif_for_claims,
     unignore_finding_for_user,
 )
 from app.api.mappers import (
@@ -28,7 +32,7 @@ from app.api.mappers import (
     to_docker_target_public,
 )
 from app.api.router import Role, RoleRouter
-from app.core.rate_limit import LIMIT_EXPENSIVE
+from app.core.rate_limit import LIMIT_EXPENSIVE, LIMIT_INGEST
 from app.models import (
     DockerBuildEnrichment,
     DockerBuildTelemetry,
@@ -44,6 +48,7 @@ from app.models import (
     DockerTarget,
     DockerTargetCreate,
     DockerTargetPublic,
+    Engine,
     Repository,
     Rule,
     ScanTargetUpdate,
@@ -642,3 +647,59 @@ def deliver_fixes(
         # Returned so the UI can match this target against an already-open PR.
         "pr_branch": docker_fix_branch(target.id),
     }
+
+
+@router.get("/sarif", role=Role.service, limit=LIMIT_INGEST)
+def get_sarif(
+    session: SessionDep,
+    claims: GitHubOidcClaims,
+) -> dict[str, Any]:
+    """This repository's open Docker findings as a SARIF 2.1.0 log.
+
+    For a workflow that runs ``upload-sarif`` on its own runner, so a team can
+    read GreenSecOps findings in the security tab and on the PR diff alongside
+    whatever else they scan with — the same findings, in the format GitHub
+    reads, without installing the App.
+
+    Authenticated by the run's GitHub OIDC token: the repository comes from the
+    signed claim, so no id is needed and none would be honoured.
+    """
+    return sarif_for_claims(Engine.docker, session, claims)
+
+
+@router.post("/scans", role=Role.service, limit=LIMIT_EXPENSIVE, status_code=202)
+def trigger_scans_for_code_scanning(
+    session: SessionDep,
+    claims: GitHubOidcClaims,
+    branch: str | None = None,
+) -> dict[str, str]:
+    """Re-scan every enabled Docker target in the calling repository.
+
+    The first half of the Code Scanning flow: a workflow asks for fresh
+    analysis and then fetches ``GET /docker/sarif``. Without it a team using
+    the workflows rather than the App would only ever publish whatever the last
+    scan found — nothing at all, on a repository the App has never touched.
+
+    Authenticated by the run's GitHub OIDC token, so the repository is the one
+    the token was minted for and cannot be chosen by the caller. Quota is
+    charged to the org's billing owner, exactly as a dashboard-triggered scan
+    is; there is no user to attribute it to.
+    """
+    repo, targets = enabled_targets_for_claims(DOCKER_ENGINE, session, claims)
+    if not targets:
+        return {"status": "no_targets", "queued": "0"}
+    enforce_quota(
+        session,
+        None,
+        repo.org_id,
+        "analyses",
+        requested=len(targets),
+        engine=UsageEngine.docker,
+    )
+    for target in targets:
+        run_docker_scan.delay(
+            docker_target_id=str(target.id),
+            branch=branch or "",
+            trigger="code_scanning",
+        )
+    return {"status": "queued", "queued": str(len(targets))}

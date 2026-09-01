@@ -888,7 +888,7 @@ export type ScanTargetUpdate = {
     enabled?: (boolean | null);
 };
 
-export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
+export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release' | 'code_scanning';
 
 /**
  * How bad a rule violation is. Shared by every engine's findings.
@@ -1462,6 +1462,23 @@ export type AnsibleDeliverFixesResponse = ({
     [key: string]: (string);
 });
 
+export type AnsibleGetSarifData = {
+    authorization?: (string | null);
+};
+
+export type AnsibleGetSarifResponse = ({
+    [key: string]: unknown;
+});
+
+export type AnsibleTriggerScansForCodeScanningData = {
+    authorization?: (string | null);
+    branch?: (string | null);
+};
+
+export type AnsibleTriggerScansForCodeScanningResponse = ({
+    [key: string]: (string);
+});
+
 export type AuthGithubCallbackData = {
     formData: Body_auth_github_callback;
 };
@@ -1797,6 +1814,23 @@ export type DockerDeliverFixesResponse = ({
     [key: string]: (string);
 });
 
+export type DockerGetSarifData = {
+    authorization?: (string | null);
+};
+
+export type DockerGetSarifResponse = ({
+    [key: string]: unknown;
+});
+
+export type DockerTriggerScansForCodeScanningData = {
+    authorization?: (string | null);
+    branch?: (string | null);
+};
+
+export type DockerTriggerScansForCodeScanningResponse = ({
+    [key: string]: (string);
+});
+
 export type EventsGetSseSignalsResponse = (Array<SSESignal>);
 
 export type EventsGetSseEventSchemaResponse = (SSEEventPublic);
@@ -2077,6 +2111,23 @@ export type TerraformDeliverFixesResponse = ({
     [key: string]: (string);
 });
 
+export type TerraformGetSarifData = {
+    authorization?: (string | null);
+};
+
+export type TerraformGetSarifResponse = ({
+    [key: string]: unknown;
+});
+
+export type TerraformTriggerScansForCodeScanningData = {
+    authorization?: (string | null);
+    branch?: (string | null);
+};
+
+export type TerraformTriggerScansForCodeScanningResponse = ({
+    [key: string]: (string);
+});
+
 export type UsersReadUsersData = {
     limit?: number;
     skip?: number;
@@ -2154,6 +2205,15 @@ export type WorkflowListScansData = {
 
 export type WorkflowListScansResponse = (Array<WorkflowScanPublic>);
 
+export type WorkflowTriggerScansForCodeScanningData = {
+    authorization?: (string | null);
+    branch?: (string | null);
+};
+
+export type WorkflowTriggerScansForCodeScanningResponse = ({
+    [key: string]: (string);
+});
+
 export type WorkflowGetScanData = {
     scanId: string;
 };
@@ -2189,6 +2249,14 @@ export type WorkflowListFilesData = {
 };
 
 export type WorkflowListFilesResponse = (Array<WorkflowFilePublic>);
+
+export type WorkflowGetSarifData = {
+    authorization?: (string | null);
+};
+
+export type WorkflowGetSarifResponse = ({
+    [key: string]: unknown;
+});
 
 export type WorkflowListFindingsData = {
     branch?: (string | null);

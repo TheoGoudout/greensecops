@@ -14,14 +14,16 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlmodel import select
+from fastapi import HTTPException
+from sqlmodel import Session, select
 
 from app.api.deps import CurrentUser, SessionDep, authorize_repo, get_or_404
-from app.models import LLMProvider, Repository, UsageEngine, UsageMeter
+from app.models import Engine, LLMProvider, Repository, UsageEngine, UsageMeter
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
 from app.services.billing import usage as billing_usage
 from app.services.engines import EngineSpec
+from app.services.sarif_report import sarif_for_repository
 
 
 def get_target_for_user(
@@ -174,3 +176,71 @@ def _charge_fix(
         source_id=fix_id,
         commit=False,
     )
+
+
+# ─── SARIF, for GitHub Code Scanning ─────────────────────────────────────────
+
+
+def repo_from_oidc_claims(session: Session, claims: dict[str, Any]) -> Repository:
+    """The repository a GitHub Actions OIDC token was minted for.
+
+    The caller is a workflow run, not a person, so the repository is taken from
+    the signed token rather than from a path parameter — a run cannot ask for
+    another repository's findings, because it cannot mint a claim naming one.
+    That is the whole authorization story for these endpoints, and it is why
+    they carry no id in the path.
+    """
+    full_name = str(claims.get("repository", ""))
+    repo = session.exec(
+        select(Repository).where(Repository.full_name == full_name)
+    ).first()
+    if repo is None:
+        # 404 rather than 403: from the runner's side the difference between
+        # "not registered" and "not yours" is not a distinction we can make —
+        # the token proves the repository, so an unknown one is simply absent.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"{full_name or 'This repository'} is not registered with "
+                "GreenSecOps. Add it from the dashboard first."
+            ),
+        )
+    return repo
+
+
+def sarif_for_claims(
+    engine: Engine, session: SessionDep, claims: dict[str, Any]
+) -> dict[str, Any]:
+    """One engine's open findings for the calling repository, as SARIF.
+
+    Shared by the four file engines' ``GET /{engine}/sarif`` routes. Those stay
+    one function each so their operation ids — and therefore the generated
+    clients' method names — say which engine they fetch.
+    """
+    return sarif_for_repository(session, repo_from_oidc_claims(session, claims), engine)
+
+
+def enabled_targets_for_claims(
+    spec: EngineSpec, session: SessionDep, claims: dict[str, Any]
+) -> tuple[Repository, list[Any]]:
+    """The calling repository and the targets of ``spec`` it has switched on.
+
+    The scan half of the Code Scanning flow. A workflow run asks for its own
+    repository to be re-analysed and then fetches the SARIF; without this a
+    team using the workflows instead of the App would publish only whatever the
+    last scan happened to find, and on a repository that has never been scanned
+    that is nothing at all.
+
+    A disabled target stays disabled: the switch means "do not spend analyses
+    on this", and a run coming in over OIDC is not a reason to override the
+    decision someone made in the dashboard.
+    """
+    repo = repo_from_oidc_claims(session, claims)
+    targets = list(
+        session.exec(
+            select(spec.target_model)
+            .where(spec.target_model.repo_id == repo.id)
+            .where(spec.target_model.enabled.is_(True))
+        ).all()
+    )
+    return repo, targets

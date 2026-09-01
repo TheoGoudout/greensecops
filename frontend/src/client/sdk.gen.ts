@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleGetFindingData, AnsibleGetFindingResponse, AnsibleIgnoreFindingData, AnsibleIgnoreFindingResponse, AnsibleUnignoreFindingData, AnsibleUnignoreFindingResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BadgesGetCloudAccountBadgeData, BadgesGetCloudAccountBadgeResponse, BadgesGetCloudAccountBadgeJsonData, BadgesGetCloudAccountBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, CloudGetFindingData, CloudGetFindingResponse, CloudIgnoreFindingData, CloudIgnoreFindingResponse, CloudUnignoreFindingData, CloudUnignoreFindingResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerGetFindingData, DockerGetFindingResponse, DockerIgnoreFindingData, DockerIgnoreFindingResponse, DockerUnignoreFindingData, DockerUnignoreFindingResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformGetFindingData, TerraformGetFindingResponse, TerraformIgnoreFindingData, TerraformIgnoreFindingResponse, TerraformUnignoreFindingData, TerraformUnignoreFindingResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
+import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleGetFindingData, AnsibleGetFindingResponse, AnsibleIgnoreFindingData, AnsibleIgnoreFindingResponse, AnsibleUnignoreFindingData, AnsibleUnignoreFindingResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AnsibleGetSarifData, AnsibleGetSarifResponse, AnsibleTriggerScansForCodeScanningData, AnsibleTriggerScansForCodeScanningResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BadgesGetCloudAccountBadgeData, BadgesGetCloudAccountBadgeResponse, BadgesGetCloudAccountBadgeJsonData, BadgesGetCloudAccountBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, CloudGetFindingData, CloudGetFindingResponse, CloudIgnoreFindingData, CloudIgnoreFindingResponse, CloudUnignoreFindingData, CloudUnignoreFindingResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerGetFindingData, DockerGetFindingResponse, DockerIgnoreFindingData, DockerIgnoreFindingResponse, DockerUnignoreFindingData, DockerUnignoreFindingResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, DockerGetSarifData, DockerGetSarifResponse, DockerTriggerScansForCodeScanningData, DockerTriggerScansForCodeScanningResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformGetFindingData, TerraformGetFindingResponse, TerraformIgnoreFindingData, TerraformIgnoreFindingResponse, TerraformUnignoreFindingData, TerraformUnignoreFindingResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, TerraformGetSarifData, TerraformGetSarifResponse, TerraformTriggerScansForCodeScanningData, TerraformTriggerScansForCodeScanningResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowTriggerScansForCodeScanningData, WorkflowTriggerScansForCodeScanningResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowGetSarifData, WorkflowGetSarifResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
 
 export class AnsibleService {
     /**
@@ -318,6 +318,70 @@ export class AnsibleService {
             },
             query: {
                 force: data.force
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Sarif
+     * This repository's open Ansible findings as a SARIF 2.1.0 log.
+     *
+     * For a workflow that runs ``upload-sarif`` on its own runner, so a team can
+     * read GreenSecOps findings in the security tab and on the PR diff alongside
+     * whatever else they scan with — the same findings, in the format GitHub
+     * reads, without installing the App.
+     *
+     * Authenticated by the run's GitHub OIDC token: the repository comes from the
+     * signed claim, so no id is needed and none would be honoured.
+     * @param data The data for the request.
+     * @param data.authorization
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getSarif(data: AnsibleGetSarifData = {}): CancelablePromise<AnsibleGetSarifResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible/sarif',
+            headers: {
+                authorization: data.authorization
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Scans For Code Scanning
+     * Re-scan every enabled Ansible target in the calling repository.
+     *
+     * The first half of the Code Scanning flow: a workflow asks for fresh
+     * analysis and then fetches ``GET /ansible/sarif``. Without it a team using
+     * the workflows rather than the App would only ever publish whatever the last
+     * scan found — nothing at all, on a repository the App has never touched.
+     *
+     * Authenticated by the run's GitHub OIDC token, so the repository is the one
+     * the token was minted for and cannot be chosen by the caller. Quota is
+     * charged to the org's billing owner, exactly as a dashboard-triggered scan
+     * is; there is no user to attribute it to.
+     * @param data The data for the request.
+     * @param data.branch
+     * @param data.authorization
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerScansForCodeScanning(data: AnsibleTriggerScansForCodeScanningData = {}): CancelablePromise<AnsibleTriggerScansForCodeScanningResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/ansible/scans',
+            headers: {
+                authorization: data.authorization
+            },
+            query: {
+                branch: data.branch
             },
             errors: {
                 422: 'Validation Error'
@@ -1481,6 +1545,70 @@ export class DockerService {
             }
         });
     }
+
+    /**
+     * Get Sarif
+     * This repository's open Docker findings as a SARIF 2.1.0 log.
+     *
+     * For a workflow that runs ``upload-sarif`` on its own runner, so a team can
+     * read GreenSecOps findings in the security tab and on the PR diff alongside
+     * whatever else they scan with — the same findings, in the format GitHub
+     * reads, without installing the App.
+     *
+     * Authenticated by the run's GitHub OIDC token: the repository comes from the
+     * signed claim, so no id is needed and none would be honoured.
+     * @param data The data for the request.
+     * @param data.authorization
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getSarif(data: DockerGetSarifData = {}): CancelablePromise<DockerGetSarifResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/docker/sarif',
+            headers: {
+                authorization: data.authorization
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Scans For Code Scanning
+     * Re-scan every enabled Docker target in the calling repository.
+     *
+     * The first half of the Code Scanning flow: a workflow asks for fresh
+     * analysis and then fetches ``GET /docker/sarif``. Without it a team using
+     * the workflows rather than the App would only ever publish whatever the last
+     * scan found — nothing at all, on a repository the App has never touched.
+     *
+     * Authenticated by the run's GitHub OIDC token, so the repository is the one
+     * the token was minted for and cannot be chosen by the caller. Quota is
+     * charged to the org's billing owner, exactly as a dashboard-triggered scan
+     * is; there is no user to attribute it to.
+     * @param data The data for the request.
+     * @param data.branch
+     * @param data.authorization
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerScansForCodeScanning(data: DockerTriggerScansForCodeScanningData = {}): CancelablePromise<DockerTriggerScansForCodeScanningResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/docker/scans',
+            headers: {
+                authorization: data.authorization
+            },
+            query: {
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class EventsService {
@@ -2483,6 +2611,70 @@ export class TerraformService {
             }
         });
     }
+
+    /**
+     * Get Sarif
+     * This repository's open Terraform findings as a SARIF 2.1.0 log.
+     *
+     * For a workflow that runs ``upload-sarif`` on its own runner, so a team can
+     * read GreenSecOps findings in the security tab and on the PR diff alongside
+     * whatever else they scan with — the same findings, in the format GitHub
+     * reads, without installing the App.
+     *
+     * Authenticated by the run's GitHub OIDC token: the repository comes from the
+     * signed claim, so no id is needed and none would be honoured.
+     * @param data The data for the request.
+     * @param data.authorization
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getSarif(data: TerraformGetSarifData = {}): CancelablePromise<TerraformGetSarifResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/terraform/sarif',
+            headers: {
+                authorization: data.authorization
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Trigger Scans For Code Scanning
+     * Re-scan every enabled Terraform target in the calling repository.
+     *
+     * The first half of the Code Scanning flow: a workflow asks for fresh
+     * analysis and then fetches ``GET /terraform/sarif``. Without it a team using
+     * the workflows rather than the App would only ever publish whatever the last
+     * scan found — nothing at all, on a repository the App has never touched.
+     *
+     * Authenticated by the run's GitHub OIDC token, so the repository is the one
+     * the token was minted for and cannot be chosen by the caller. Quota is
+     * charged to the org's billing owner, exactly as a dashboard-triggered scan
+     * is; there is no user to attribute it to.
+     * @param data The data for the request.
+     * @param data.branch
+     * @param data.authorization
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerScansForCodeScanning(data: TerraformTriggerScansForCodeScanningData = {}): CancelablePromise<TerraformTriggerScansForCodeScanningResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/terraform/scans',
+            headers: {
+                authorization: data.authorization
+            },
+            query: {
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class UsersService {
@@ -2746,6 +2938,45 @@ export class WorkflowService {
     }
 
     /**
+     * Trigger Scans For Code Scanning
+     * Re-scan the calling repository's workflow files.
+     *
+     * The first half of the Code Scanning flow: a workflow asks for fresh
+     * analysis and then fetches ``GET /workflow/sarif``. Without it a team using
+     * the workflows rather than the App would only ever publish whatever the last
+     * scan found — nothing at all, on a repository the App has never touched.
+     *
+     * Repo-level rather than a fan-out over targets, unlike the other three
+     * engines: the CI engine's own worker discovers the workflow files from
+     * GitHub, so handing it a list built from our rows would scan a stale set.
+     *
+     * Authenticated by the run's GitHub OIDC token, so the repository is the one
+     * the token was minted for. Quota is charged to the org's billing owner,
+     * exactly as a dashboard-triggered scan is; there is no user to attribute it
+     * to, and the worker re-checks the allowance before doing the work.
+     * @param data The data for the request.
+     * @param data.branch
+     * @param data.authorization
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static triggerScansForCodeScanning(data: WorkflowTriggerScansForCodeScanningData = {}): CancelablePromise<WorkflowTriggerScansForCodeScanningResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/workflow/scans',
+            headers: {
+                authorization: data.authorization
+            },
+            query: {
+                branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
      * Get Scan
      * @param data The data for the request.
      * @param data.scanId
@@ -2853,6 +3084,35 @@ export class WorkflowService {
             },
             query: {
                 branch: data.branch
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * Get Sarif
+     * This repository's open CI-workflow findings as a SARIF 2.1.0 log.
+     *
+     * For a workflow that runs ``upload-sarif`` on its own runner, so a team can
+     * read GreenSecOps findings in the security tab and on the PR diff alongside
+     * whatever else they scan with — the same findings, in the format GitHub
+     * reads, without installing the App.
+     *
+     * Authenticated by the run's GitHub OIDC token: the repository comes from the
+     * signed claim, so no id is needed and none would be honoured.
+     * @param data The data for the request.
+     * @param data.authorization
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getSarif(data: WorkflowGetSarifData = {}): CancelablePromise<WorkflowGetSarifResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/workflow/sarif',
+            headers: {
+                authorization: data.authorization
             },
             errors: {
                 422: 'Validation Error'

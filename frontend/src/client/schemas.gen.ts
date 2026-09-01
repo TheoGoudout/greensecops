@@ -4185,7 +4185,7 @@ serves all of them rather than three identical copies. Optional so a
 
 export const ScanTriggerSchema = {
     type: 'string',
-    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release'],
+    enum: ['webhook_push', 'webhook_workflow_run', 'polled_push', 'manual', 'scheduled', 'release', 'code_scanning'],
     title: 'ScanTrigger'
 } as const;
 

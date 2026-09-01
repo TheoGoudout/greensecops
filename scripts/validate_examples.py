@@ -136,6 +136,22 @@ def check_canonical_examples() -> list[str]:
             f"{insecure.name}: expected to still trip {sorted(INSECURE_EXPECTED)}, "
             f"but {sorted(missing)} did not fire"
         )
+
+    # The Code Scanning workflows are handed to customers to paste into their
+    # own repositories, where this product will then grade them. Shipping one
+    # that trips our own rules would be the loudest possible way to be wrong,
+    # so they are held to the same bar as the reference workflow.
+    for example in sorted((EXAMPLES_DIR / "code-scanning").glob("*.yml")):
+        tripped_here = run_opa_eval(
+            _parse_yaml(example.read_text(encoding="utf-8")),
+            "data.aggregate.all_violations",
+            with_aggregate=True,
+        )
+        if tripped_here:
+            errors.append(
+                f"code-scanning/{example.name}: shipped to customers, so it must "
+                f"be violation-free, but tripped {slugs(tripped_here)}"
+            )
     return errors
 
 

@@ -1,0 +1,90 @@
+# GreenSecOps CI workflows findings, in GitHub Code Scanning.
+#
+# Fetches this repository's open CI workflows findings as SARIF and uploads them, so
+# they appear in the Security tab and inline on pull requests alongside whatever
+# else the repository scans with.
+#
+# The repository is identified by the run's own OIDC token, not by anything the
+# workflow passes: a run can only ever ask for its own findings. Nothing is
+# stored in the repository — no API key, no token, no secret of any kind.
+#
+# The repository must already be registered with GreenSecOps; the analysis
+# itself runs there, and this workflow only publishes what it found in
+# GitHub Actions workflow files.
+name: GreenSecOps (workflow)
+
+on:
+  # Only the files this engine grades. A README edit cannot change these
+  # findings, and running anyway is CI compute spent for no possible result.
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/workflows/workflow.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/workflows/workflow.yml"
+  # Findings also change when a re-scan runs rather than when the code is
+  # pushed, so a daily run keeps the Security tab current between commits.
+  schedule:
+    - cron: "0 6 * * *"
+
+# One run per branch: a second push supersedes the first, and publishing the
+# older result afterwards would show findings the branch no longer has.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default: the job below opts into exactly what it needs.
+permissions: {}
+
+jobs:
+  report:
+    name: Report CI workflows findings
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Mint the OIDC token that proves which repository this run belongs to.
+      id-token: write
+      # Upload the SARIF results.
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Keep the token out of .git/config, where every later step — including
+          # anything a dependency runs — could read it.
+          persist-credentials: false
+
+      - name: Scan and fetch CI workflows findings as SARIF
+        env:
+          # Your GreenSecOps instance. The hosted service is the default.
+          GREENSECOPS_URL: ${{ vars.GREENSECOPS_URL || 'https://api.greensecops.com' }}
+        run: |
+          # The OIDC token is what proves which repository this run is. It is
+          # minted per run and expires with it, so nothing has to be stored.
+          token=$(curl -sS --fail-with-body --retry 3 --retry-connrefused \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=greensecops" | jq -r .value)
+
+          # Ask for fresh analysis, then wait for the workers to finish it.
+          # Analysis is asynchronous, so the report below is the previous scan's
+          # until this one lands.
+          curl -sS --fail-with-body --retry 3 --retry-connrefused -X POST \
+            -H "Authorization: Bearer $token" \
+            "$GREENSECOPS_URL/api/v1/workflow/scans"
+          sleep 60
+
+          curl -sS --fail-with-body --retry 3 --retry-connrefused \
+            -H "Authorization: Bearer $token" \
+            "$GREENSECOPS_URL/api/v1/workflow/sarif" > greensecops-workflow.sarif
+
+      - name: Upload to Code Scanning
+        uses: github/codeql-action/upload-sarif@a35ac6e6798d72df5475948b28efb89edc2e19ca # v4.37.9
+        with:
+          sarif_file: greensecops-workflow.sarif
+          # One category per engine, so each engine's alerts are tracked
+          # separately — uploading a second engine's results under the same
+          # category would close the first engine's alerts as "fixed".
+          category: greensecops-workflow
