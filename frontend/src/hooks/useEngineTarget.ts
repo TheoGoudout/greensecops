@@ -44,7 +44,20 @@ type Mutation<TArgs> = UseMutationResult<unknown, Error, TArgs>
 
 export interface EngineTargetState<TFile, TFinding, TFix> {
   files: TFile[] | undefined
-  filesLoading: boolean
+  /**
+   * Whether *any* of the three queries behind an expanded card is still in
+   * flight.
+   *
+   * All three, not just the files one: the files list resolves first and the
+   * card rendered its rows immediately, so an expanded target showed a list of
+   * file names with no findings and no fix under them — which reads as "there
+   * is nothing in here" rather than "this is still loading". The findings and
+   * fixes then appeared a moment later, having looked absent.
+   *
+   * A collapsed card is not loading: the queries are `enabled: isOpen`, and a
+   * disabled query is pending but not fetching, which `isLoading` excludes.
+   */
+  isLoading: boolean
   findings: TFinding[] | undefined
   fixes: TFix[] | undefined
   invalidate: () => void
@@ -92,12 +105,12 @@ export function useEngineTarget<TFile, TFinding, TFix>(
     queryFn: calls.listFiles,
     enabled: isOpen,
   })
-  const { data: findings } = useQuery({
+  const { data: findings, isLoading: findingsLoading } = useQuery({
     queryKey: [`${keyPrefix}-findings`, targetId],
     queryFn: calls.listFindings,
     enabled: isOpen,
   })
-  const { data: fixes } = useQuery({
+  const { data: fixes, isLoading: fixesLoading } = useQuery({
     queryKey: [`${keyPrefix}-fixes`, targetId],
     queryFn: calls.listFixes,
     enabled: isOpen,
@@ -117,7 +130,7 @@ export function useEngineTarget<TFile, TFinding, TFix>(
 
   return {
     files,
-    filesLoading,
+    isLoading: filesLoading || findingsLoading || fixesLoading,
     findings,
     fixes,
     invalidate,
