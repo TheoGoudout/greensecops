@@ -36,6 +36,7 @@
 
 ### Refactors
 
+* refactor(frontend): name the CI-workflow engine's pages Workflows everywhere. PR [#296](https://github.com/TheoGoudout/greensecops/pull/296) by [@TheoGoudout](https://github.com/TheoGoudout).
 * refactor(badges): simplify Terraform/Ansible/Docker badge URLs. PR [#267](https://github.com/TheoGoudout/greensecops/pull/267) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⚡️ Evaluate a whole rule domain in one OPA query. PR [#245](https://github.com/TheoGoudout/greensecops/pull/245) by [@TheoGoudout](https://github.com/TheoGoudout).
 * refactor: one vocabulary, one engine registry, one scan pipeline. PR [#240](https://github.com/TheoGoudout/greensecops/pull/240) by [@TheoGoudout](https://github.com/TheoGoudout).
