@@ -13,6 +13,7 @@
 
 ### Features
 
+* feat(delivery): rebase the fix branch instead of piling onto it. PR [#314](https://github.com/TheoGoudout/greensecops/pull/314) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(sarif): publish findings to GitHub Code Scanning. PR [#311](https://github.com/TheoGoudout/greensecops/pull/311) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(billing): prorate an upgrade, defer a downgrade to the renewal. PR [#310](https://github.com/TheoGoudout/greensecops/pull/310) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(telemetry): make the "Integrate action" PR trackable, and link to it. PR [#308](https://github.com/TheoGoudout/greensecops/pull/308) by [@TheoGoudout](https://github.com/TheoGoudout).
