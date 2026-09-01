@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.services.pr_body import IssueInfo, build_pr_body
+from app.services.pr_body import IssueInfo, ManualWorkInfo, build_pr_body
 
 
 @pytest.fixture()
@@ -305,3 +305,80 @@ def test_build_pr_body_single_workflow_still_wraps_in_details(
     assert "<details" in body
     assert ".github/workflows/ci.yml" in body
     assert "(1 issue)" in body
+
+
+def test_build_pr_body_omits_manual_work_section_when_nothing_is_unfixed(
+    single_issue: IssueInfo,
+) -> None:
+    body = build_pr_body(
+        issues=[single_issue],
+        fix_ids=["fix-id-1"],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    assert "Needs Manual Work" not in body
+
+
+def test_build_pr_body_lists_unfixed_issues_with_the_generator_note(
+    single_issue: IssueInfo,
+) -> None:
+    """An issue the generator could not fix is named, not silently dropped.
+
+    It was excluded from the "fixed" table and mentioned nowhere else, so the
+    PR body showed no trace of it while the commit message still counted it.
+    """
+    body = build_pr_body(
+        issues=[single_issue],
+        fix_ids=["fix-id-1"],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+        manual_work=[
+            ManualWorkInfo(
+                rule_slug="self-hosted-runner-public-trigger",
+                rule_title="Self-hosted Runner On Public Trigger",
+                category="security",
+                severity="critical",
+                message="Self-hosted runner reachable from a fork PR",
+                workflow_path=".github/workflows/ci.yml",
+                note="Moving to a hosted runner changes where your builds run.",
+            )
+        ],
+        review_url="https://app.example.com/repositories/abc/static-analysis",
+    )
+
+    assert "## Needs Manual Work" in body
+    assert "Self-hosted Runner On Public Trigger" in body
+    assert "Moving to a hosted runner changes where your builds run." in body
+    # The link that answers "so what do I do about it".
+    assert "https://app.example.com/repositories/abc/static-analysis" in body
+    # Still separate from what the PR did change.
+    assert body.index("## Issues Fixed") < body.index("## Needs Manual Work")
+    assert body.index("## Needs Manual Work") < body.index("## How to Interact")
+
+
+def test_build_pr_body_manual_work_falls_back_when_the_generator_gave_no_note() -> None:
+    body = build_pr_body(
+        issues=[],
+        fix_ids=[],
+        wiki_base_url="https://wiki.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+        manual_work=[
+            ManualWorkInfo(
+                rule_slug="missing-timeout",
+                rule_title="Missing Timeout",
+                category="reliability",
+                severity="medium",
+                message="Job has no timeout",
+                workflow_path=".github/workflows/ci.yml",
+                note=None,
+            )
+        ],
+    )
+
+    assert "could not resolve this within the file" in body
+    # No review_url given: the section still renders, just without the link.
+    assert "Review these issues in context" not in body

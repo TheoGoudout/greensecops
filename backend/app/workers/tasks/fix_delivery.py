@@ -33,6 +33,19 @@ from app.workers.tasks.static_analysis import run_static_analysis
 logger = logging.getLogger(__name__)
 
 
+def _fix_commit_message(n_issues: int, path: str) -> str:
+    """The commit subject for one workflow file's rewrite.
+
+    ``n_issues`` counts only what the diff resolves. Zero is reachable — the
+    generator can return a rewrite whose every finding it also reported as
+    unfixable — and "Fixing 0 issues" would be a worse claim than the one this
+    change exists to correct, so that case says what it is instead.
+    """
+    if n_issues == 0:
+        return f"Updating {path} (no issues resolved automatically)"
+    return f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {path}"
+
+
 @celery_app.task(name="fix_delivery.deliver_batch", bind=True, max_retries=3)
 def deliver_fixes_batch(
     self: object,  # noqa: ARG001
@@ -154,10 +167,12 @@ def deliver_fixes_batch(
             # remains the fallback for fixes generated before base_content
             # existed, and while an older worker is still creating them.
             expected_base_contents[wf.path] = fix.base_content or wf.raw_content
-            n_issues = len(fix.findings)
-            commit_messages[wf.path] = (
-                f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {wf.path}"
-            )
+            # Only what this diff actually resolves. Counting every finding on
+            # the fix meant a commit claiming issues the PR body had already
+            # excluded as `needs_manual_work` — the commit and the description
+            # disagreed about the same change.
+            n_issues = len([f for f in fix.findings if not f.needs_manual_work])
+            commit_messages[wf.path] = _fix_commit_message(n_issues, wf.path)
             deliverable.append(fix)
         session.commit()
 
