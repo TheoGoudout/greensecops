@@ -1,9 +1,10 @@
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlmodel import Session
 
 from app.core.db import engine
-from app.models import DockerBuildEnrichment, DockerFinding
+from app.models import DockerBuildEnrichment, DockerFinding, DockerTarget, Repository
 from app.services.docker.compose_parser import parse_compose_content
 from app.services.docker.dockerfile_parser import parse_dockerfile_content
 from app.services.docker.merge import COMPOSE, classify_docker_file
@@ -14,6 +15,9 @@ from app.services.file_fix_generation import (
 from app.services.file_fix_generation import generate_file_fix, load_findings
 from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
 from app.workers.celery_app import celery_app
+
+if TYPE_CHECKING:
+    from app.services.llm.docker_fix_prompt import RepositoryFacts
 
 INVALID_DOCKERFILE_ERROR = "LLM returned an unparseable Dockerfile"
 INVALID_COMPOSE_ERROR = "LLM returned invalid Compose YAML"
@@ -59,6 +63,30 @@ def _load_enrichments(
     return [e for e in loaded if e is not None]
 
 
+def _repository_facts(
+    session: Session, target_id: uuid.UUID
+) -> "RepositoryFacts | None":
+    """The repository a Docker target belongs to, as prompt facts.
+
+    ``missing_oci_labels`` asks for a label pointing at "the repository URL",
+    and the prompt had no repository in it — so the model reached for the URL
+    in the rule's own example and every fixed image claimed to come from
+    ``github.com/example/app``.
+
+    ``None`` when the target or its repository has gone: a missing fact must
+    leave the label unwritten, never guessed.
+    """
+    from app.services.llm.docker_fix_prompt import RepositoryFacts
+
+    target = session.get(DockerTarget, target_id)
+    if target is None:
+        return None
+    repo = session.get(Repository, target.repo_id)
+    if repo is None:
+        return None
+    return RepositoryFacts.from_full_name(repo.full_name)
+
+
 @celery_app.task(name="docker_fix_generation.run", bind=True, max_retries=3)
 def run_docker_fix_generation(
     self: object,  # noqa: ARG001
@@ -97,6 +125,11 @@ def run_docker_fix_generation(
         else:
             return {"status": "error", "detail": "no_target_for_runtime_fix"}
 
+        # Read inside the session that is still open: `generate_file_fix` opens
+        # its own and hands `build_prompt` only the file, so the repository has
+        # to be captured here or the prompt cannot name it.
+        repository = _repository_facts(session, target_id)
+
     def build_prompt(
         path: str, content: str, group: list[DockerFinding]
     ) -> tuple[str, str]:
@@ -108,6 +141,7 @@ def run_docker_fix_generation(
             findings=group,
             kind=classify_docker_file(path) or "dockerfile",
             runtime_findings=enrichments,
+            repository=repository,
         )
 
     return generate_file_fix(
