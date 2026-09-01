@@ -29,6 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: ${{ vars.ACTION_PUBLIC_REPO != '' }}
+    # On the three `secrets-outside-env` suppressions below. ACTION_PUBLIC_REPO_TOKEN
+    # is a cross-repository push token for the public mirror, not a credential for
+    # any environment this repository owns — `staging` and `production` are the AWS
+    # and Cloudflare estates, and binding this job to either would claim a mirror
+    # push is a deploy to them. The equivalent fencing here is the trigger: `main`
+    # pushes under action/ and published releases only, so a branch cannot reach the
+    # token. Giving it an environment of its own is the tightening if the mirror ever
+    # gains protection rules worth enforcing.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,14 +53,14 @@ jobs:
 
       - name: Push action/ subtree to the public repo
         env:
-          TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
+          TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }} # zizmor: ignore[secrets-outside-env]
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
         run: .github/scripts/sync-action-repo/push-subtree.sh
 
       - name: Build and commit dist/ in the public repo
         id: build_dist
         env:
-          GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }} # zizmor: ignore[secrets-outside-env]
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
           SHA: ${{ github.sha }}
         run: .github/scripts/sync-action-repo/build-dist.sh
@@ -60,7 +68,7 @@ jobs:
       - name: Tag and release on the public repo
         if: github.event_name == 'release'
         env:
-          GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }} # zizmor: ignore[secrets-outside-env]
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
           TAG: ${{ github.event.release.tag_name }}
           PRERELEASE: ${{ github.event.release.prerelease }}
