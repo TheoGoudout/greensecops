@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* fix(github): pin the telemetry action to a real SHA when its tag is absent. PR [#307](https://github.com/TheoGoudout/greensecops/pull/307) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(repositories): report every engine's average grade, not just CI's. PR [#305](https://github.com/TheoGoudout/greensecops/pull/305) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(docker): resolve verified base-image digests for the pinning fix. PR [#304](https://github.com/TheoGoudout/greensecops/pull/304) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(engines): show a loading state while an expanded target is still fetching. PR [#303](https://github.com/TheoGoudout/greensecops/pull/303) by [@TheoGoudout](https://github.com/TheoGoudout).
