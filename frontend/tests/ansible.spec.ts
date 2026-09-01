@@ -187,6 +187,44 @@ test.describe("Ansible", () => {
     await request
   })
 
+  test("a quota refusal says what the quota is", async ({ page }) => {
+    // A quota 402 arrives as an *object* carrying a sentence naming what was
+    // used, the cap, when it resets and what to do next. The toast helper read
+    // only a plain-string detail, so it showed the generic title and nothing
+    // else — the most useful message the API sends was the one message these
+    // buttons could not show.
+    await mockAnsibleProjects(page)
+    // Registered last so it wins: Playwright matches routes last-first.
+    await page.route(
+      (url) =>
+        url.pathname.includes("/ansible/projects") &&
+        url.pathname.endsWith("/scans"),
+      (route) => {
+        if (route.request().method() !== "POST") return route.fallback()
+        route.fulfill({
+          status: 402,
+          json: {
+            detail: {
+              code: "quota_exceeded",
+              message:
+                "You have used all 100 analyses on the Free plan this period.",
+              meter: "analyses",
+              tier: "free",
+            },
+          },
+        })
+      },
+    )
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/ansible`)
+    await page.getByRole("button", { name: "Scan now" }).first().click()
+
+    await expect(page.getByText("Could not queue scan")).toBeVisible()
+    await expect(
+      page.getByText("You have used all 100 analyses on the Free plan"),
+    ).toBeVisible()
+  })
+
   test("the engine has its own Infrastructure index", async ({ page }) => {
     await mockAnsibleProjects(page)
 
