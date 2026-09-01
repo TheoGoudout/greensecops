@@ -13,6 +13,7 @@
 
 ### Features
 
+* feat(sarif): publish findings to GitHub Code Scanning. PR [#311](https://github.com/TheoGoudout/greensecops/pull/311) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(billing): prorate an upgrade, defer a downgrade to the renewal. PR [#310](https://github.com/TheoGoudout/greensecops/pull/310) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(telemetry): make the "Integrate action" PR trackable, and link to it. PR [#308](https://github.com/TheoGoudout/greensecops/pull/308) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(badges): add signed grade badges for Cloud accounts. PR [#262](https://github.com/TheoGoudout/greensecops/pull/262) by [@TheoGoudout](https://github.com/TheoGoudout).
