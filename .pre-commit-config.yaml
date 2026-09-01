@@ -29,12 +29,15 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
         exclude: ^backend/tests/fixtures/terraform/.*\.tf$
-      # The pair that keeps .github/scripts/ honest: a step invokes its script
-      # directly, so one that lost its executable bit fails on the runner and
-      # nowhere else. .github/scripts/lib/ is sourced rather than run and so has
-      # neither shebang nor bit — which is exactly what these two allow.
       - id: check-executables-have-shebangs
+      # Scoped to .github/scripts/, where it is load-bearing: a step invokes
+      # its script directly, so one that lost its executable bit fails on the
+      # runner and nowhere else. Everywhere else in the tree a shebang is
+      # documentation — those scripts are run as `bash x.sh` or `uv run ...` —
+      # and .github/scripts/lib/ is sourced rather than run, so it carries
+      # neither shebang nor bit.
       - id: check-shebang-scripts-are-executable
+        files: ^\.github/scripts/
 
   # Shell linting. Every multi-line step body in .github/workflows/ is a file
   # under .github/scripts/ (see its README), which is what makes this possible
@@ -224,6 +227,18 @@ repos:
         entry: python3 scripts/validate_landing_defaults.py
         language: system
         files: ^(landing/entrypoint\.sh|deploy/cloudflare/env/production\.env|scripts/validate_landing_defaults\.py)$
+        pass_filenames: false
+
+      # Shell inside a YAML string is invisible to every linter there is, so
+      # every multi-line step body lives in .github/scripts/ instead — which is
+      # what the shellcheck hook above is able to see. This is what keeps that
+      # true: a workflow that grows an inline block again, a script nothing
+      # calls, or a step naming a script that is not there, all fail here.
+      - id: workflow-scripts
+        name: Check the workflows carry no embedded scripts
+        entry: python3 scripts/validate_workflow_scripts.py
+        language: system
+        files: ^(\.github/(workflows/.*\.ya?ml|scripts/.*)|action/\.github/workflows/.*\.ya?ml|scripts/validate_workflow_scripts\.py)$
         pass_filenames: false
 
       # The project's own rule suite, run against the project's own

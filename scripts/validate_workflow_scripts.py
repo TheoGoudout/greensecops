@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Check that no workflow carries an embedded script, and that .github/scripts/ agrees with them.
+
+Shell inside a YAML string is invisible to every linter there is. Moving each
+step body into .github/scripts/ is what lets the shellcheck hook see it at all
+— so the convention has to hold, or it decays one pull request at a time. This
+is the guard that stops that, in the style of the other drift checks beside it.
+
+Four things are asserted:
+
+1. No workflow has a multi-line ``run:``. A ``script:`` block (actions/
+   github-script) is allowed only as a one-line ``require(...)`` loader.
+2. Every ``.github/scripts/`` path a workflow names exists on disk.
+3. Every script under ``.github/scripts/`` is named by some workflow — which
+   catches the orphan a workflow edit leaves behind.
+4. Every `.sh` outside `lib/` starts with the shebang the README asks for.
+
+``.github/scripts/lib/`` is exempt from (3) and (4): it is sourced by other
+scripts rather than invoked by a step, so no workflow names it and it carries
+no shebang.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / ".github" / "scripts"
+WORKFLOW_DIRS = (
+    ROOT / ".github" / "workflows",
+    ROOT / "action" / ".github" / "workflows",
+)
+
+# A step body written as a YAML block scalar: `run: |`, `run: >-`, and so on.
+BLOCK = re.compile(r"^(\s*)(run|script):\s*[|>][+-]?\s*$")
+# Any .github/scripts/ path mentioned anywhere in a workflow.
+REFERENCE = re.compile(r"\.github/scripts/[\w./-]+")
+# The one shape of `script:` block that is allowed to survive: a loader.
+LOADER = re.compile(r"require\(.*\)")
+
+SHEBANG = "#!/usr/bin/env bash"
+
+
+def workflows() -> list[Path]:
+    return sorted(p for d in WORKFLOW_DIRS if d.is_dir() for p in d.glob("*.yml"))
+
+
+def block_body(lines: list[str], start: int, indent: int) -> tuple[list[str], int]:
+    """The lines of the block opened at `start`, and the index after it."""
+    body, i = [], start + 1
+    while i < len(lines):
+        line = lines[i]
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
+            break
+        body.append(line)
+        i += 1
+    return [b for b in body if b.strip()], i
+
+
+def main() -> int:
+    errors: list[str] = []
+    referenced: set[Path] = set()
+
+    for wf in workflows():
+        rel = wf.relative_to(ROOT)
+        lines = wf.read_text().split("\n")
+        i = 0
+        while i < len(lines):
+            match = BLOCK.match(lines[i])
+            if not match:
+                i += 1
+                continue
+            indent, key = len(match.group(1)), match.group(2)
+            body, i = block_body(lines, i, indent)
+            if key == "run":
+                errors.append(
+                    f"{rel}:{i - len(body)}: a multi-line `run:` block of {len(body)} line(s). "
+                    f"Move it to .github/scripts/{wf.stem}/<step>.sh and call it from here — "
+                    f"see .github/scripts/README.md."
+                )
+            elif len(body) != 1 or not LOADER.search(body[0]):
+                errors.append(
+                    f"{rel}:{i - len(body)}: a multi-line `script:` block. The only body a "
+                    f"github-script step may carry is a one-line require() of a file under "
+                    f".github/scripts/."
+                )
+
+        for path in REFERENCE.findall(wf.read_text()):
+            target = ROOT / path
+            referenced.add(target)
+            if not target.exists():
+                errors.append(f"{rel}: names {path}, which does not exist.")
+
+    for script in sorted(SCRIPTS.rglob("*")):
+        if not script.is_file() or script.name == "README.md":
+            continue
+        rel = script.relative_to(ROOT)
+        if SCRIPTS / "lib" in script.parents:
+            continue
+        if script not in referenced:
+            errors.append(f"{rel}: no workflow calls this. Delete it, or wire it up.")
+        first = script.read_text().split("\n", 1)[0]
+        if script.suffix == ".sh" and first != SHEBANG:
+            errors.append(f"{rel}: starts with {first!r}, expected {SHEBANG!r}.")
+
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
