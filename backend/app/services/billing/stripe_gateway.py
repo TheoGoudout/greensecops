@@ -16,6 +16,7 @@ Stripe API concern as making a request.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 import stripe
@@ -72,6 +73,33 @@ def tier_for_price(price_id: str) -> UserTier | None:
     return None
 
 
+def _is_missing_customer(exc: stripe.StripeError) -> bool:
+    """Whether ``exc`` is Stripe rejecting the ``customer`` we sent as gone.
+
+    Narrow on purpose: only a ``resource_missing`` naming the ``customer``
+    parameter means the id is stale. Any other invalid-request — a bad price, a
+    malformed URL — is a real error that must keep propagating.
+    """
+    return (
+        isinstance(exc, stripe.InvalidRequestError)
+        and getattr(exc, "code", None) == "resource_missing"
+        and getattr(exc, "param", None) == "customer"
+    )
+
+
+@dataclass(frozen=True)
+class CheckoutSession:
+    """A started Checkout session, and whether the customer id was rejected.
+
+    ``customer_id_rejected`` is how the caller learns its stored
+    ``stripe_customer_id`` no longer exists, so it can clear the column instead
+    of failing the same way on the next attempt.
+    """
+
+    url: str
+    customer_id_rejected: bool = False
+
+
 def create_checkout_session(
     *,
     tier: UserTier,
@@ -80,12 +108,18 @@ def create_checkout_session(
     client_reference_id: str,
     success_url: str,
     cancel_url: str,
-) -> str:
+) -> CheckoutSession:
     """Start a Checkout session for ``tier`` and return its redirect URL.
 
     ``client_reference_id`` carries our subscription id through Stripe and back
     on ``checkout.session.completed``, which is how the resulting subscription
     is matched to an account that may not have had a customer id yet.
+
+    A customer deleted in the Stripe dashboard leaves our ``stripe_customer_id``
+    pointing at nothing, and Stripe rejects the session outright — which left
+    the account unable to buy any plan at all, with no way back from our side.
+    So a rejected customer id is retried once as a fresh customer, and reported
+    to the caller so the dead id can be cleared.
     """
     price_id = price_id_for(tier)
     if price_id is None:
@@ -106,8 +140,23 @@ def create_checkout_session(
         params["customer"] = customer_id
     elif customer_email:
         params["customer_email"] = customer_email
-    session = client.checkout.Session.create(**params)
-    return str(session["url"])
+
+    try:
+        session = client.checkout.Session.create(**params)
+    except stripe.StripeError as exc:
+        if not (customer_id and _is_missing_customer(exc)):
+            raise
+        logger.warning(
+            "Stripe customer %s no longer exists; starting checkout without it",
+            customer_id,
+        )
+        params.pop("customer")
+        if customer_email:
+            params["customer_email"] = customer_email
+        session = client.checkout.Session.create(**params)
+        return CheckoutSession(url=str(session["url"]), customer_id_rejected=True)
+
+    return CheckoutSession(url=str(session["url"]))
 
 
 def create_portal_session(*, customer_id: str, return_url: str) -> str:

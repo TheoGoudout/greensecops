@@ -262,7 +262,7 @@ def create_checkout_session(
     ):
         raise errors.payment_required(f"You are already on the {plan.name} plan.")
 
-    url = stripe_gateway.create_checkout_session(
+    checkout = stripe_gateway.create_checkout_session(
         tier=body.tier,
         customer_id=sub.stripe_customer_id,
         customer_email=current_user.email,
@@ -273,7 +273,14 @@ def create_checkout_session(
         success_url=f"{errors.billing_url()}?checkout=success",
         cancel_url=f"{errors.billing_url()}?checkout=cancelled",
     )
-    return CheckoutSessionPublic(url=url)
+    if checkout.customer_id_rejected:
+        # The stored customer was deleted in Stripe. Drop it now rather than
+        # leaving every future checkout to rediscover the same dead id; the
+        # completed session will attach the new one. This is also the only
+        # repair path for an account already broken before the
+        # ``customer.deleted`` handler below existed — that event is long gone.
+        _forget_stripe_customer(session, sub)
+    return CheckoutSessionPublic(url=checkout.url)
 
 
 @router.post(
@@ -490,6 +497,21 @@ def _first_legal(
     return False
 
 
+def _forget_stripe_customer(session: Session, sub: BillingSubscription) -> None:
+    """Detach a Stripe customer that no longer exists from ``sub``.
+
+    Both ids go: deleting a customer in Stripe cancels its subscriptions too, so
+    a retained subscription id would be just as dead as the customer id — and a
+    stale customer id is what makes Checkout refuse the account entirely.
+    Clearing it lets the next checkout mint a fresh customer, which
+    ``checkout.session.completed`` then attaches.
+    """
+    sub.stripe_customer_id = None
+    sub.stripe_subscription_id = None
+    session.add(sub)
+    session.commit()
+
+
 def _handle_subscription_upsert(session: Session, data: dict[str, Any]) -> None:
     """Apply ``customer.subscription.created|updated``.
 
@@ -665,6 +687,19 @@ async def stripe_webhook(
             apply_tier(session, sub, UserTier.free)
             session.commit()
             _notify(session, sub, "subscription_canceled")
+
+    elif event_type == "customer.deleted":
+        # The event object *is* the customer, so its own id is the customer id
+        # — there is no `customer` field to read here.
+        sub = _sub_by_stripe_ids(session, data.get("id"), None)
+        if sub is not None:
+            # Deleting a customer cancels its subscriptions, so the account is
+            # back on Free whether or not the subscription.deleted event has
+            # arrived yet. `transition` no-ops when already there, which is what
+            # makes the two events safe in either order.
+            transition(session, sub, "subscription_deleted")
+            apply_tier(session, sub, UserTier.free)
+            _forget_stripe_customer(session, sub)
 
     elif event_type == "checkout.session.completed":
         customer_id = data.get("customer", "")

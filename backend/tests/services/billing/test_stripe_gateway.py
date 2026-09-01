@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+import stripe
 from fastapi import HTTPException
 
 from app.core.config import settings
@@ -120,7 +121,7 @@ def test_checkout_passes_the_client_reference_through() -> None:
         patch.object(settings, "STRIPE_PRICE_PRO", "price_pro"),
         patch.object(stripe_gateway, "_client", return_value=fake),
     ):
-        url = stripe_gateway.create_checkout_session(
+        checkout = stripe_gateway.create_checkout_session(
             tier=UserTier.pro,
             customer_id=None,
             customer_email="a@example.com",
@@ -128,7 +129,8 @@ def test_checkout_passes_the_client_reference_through() -> None:
             success_url="https://app/ok",
             cancel_url="https://app/no",
         )
-    assert url == "https://checkout/x"
+    assert checkout.url == "https://checkout/x"
+    assert checkout.customer_id_rejected is False
     params = fake.checkout.Session.create.call_args.kwargs
     assert params["client_reference_id"] == "sub-uuid"
     assert params["mode"] == "subscription"
@@ -197,3 +199,62 @@ def test_a_bad_signature_is_a_400_not_a_500() -> None:
     ):
         stripe_gateway.parse_webhook_event(b'{"a":1}', "t=1,v1=nonsense")
     assert exc.value.status_code == 400
+
+
+def test_checkout_retries_without_a_customer_stripe_says_is_gone() -> None:
+    """A customer deleted in the dashboard must not block every future purchase.
+
+    Stripe refuses the session outright when the `customer` we send no longer
+    exists, which left the account unable to buy any plan at all.
+    """
+    fake = MagicMock()
+    fake.checkout.Session.create.side_effect = [
+        stripe.InvalidRequestError(
+            "No such customer: cus_gone", param="customer", code="resource_missing"
+        ),
+        {"url": "https://checkout/recovered"},
+    ]
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(settings, "STRIPE_PRICE_PRO", "price_pro"),
+        patch.object(stripe_gateway, "_client", return_value=fake),
+    ):
+        checkout = stripe_gateway.create_checkout_session(
+            tier=UserTier.pro,
+            customer_id="cus_gone",
+            customer_email="a@example.com",
+            client_reference_id="sub-uuid",
+            success_url="https://app/ok",
+            cancel_url="https://app/no",
+        )
+
+    assert checkout.url == "https://checkout/recovered"
+    # Reported so the caller can clear the dead id rather than rediscovering it.
+    assert checkout.customer_id_rejected is True
+    retry = fake.checkout.Session.create.call_args.kwargs
+    assert "customer" not in retry
+    # The email takes its place, so Stripe mints a fresh customer.
+    assert retry["customer_email"] == "a@example.com"
+
+
+def test_checkout_does_not_retry_on_an_unrelated_stripe_error() -> None:
+    """Only a missing *customer* is recoverable; a bad price is a real error."""
+    fake = MagicMock()
+    fake.checkout.Session.create.side_effect = stripe.InvalidRequestError(
+        "No such price: price_pro", param="line_items[0][price]", code="resource_missing"
+    )
+    with (
+        patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
+        patch.object(settings, "STRIPE_PRICE_PRO", "price_pro"),
+        patch.object(stripe_gateway, "_client", return_value=fake),
+        pytest.raises(stripe.InvalidRequestError),
+    ):
+        stripe_gateway.create_checkout_session(
+            tier=UserTier.pro,
+            customer_id="cus_ok",
+            customer_email="a@example.com",
+            client_reference_id="sub-uuid",
+            success_url="https://app/ok",
+            cancel_url="https://app/no",
+        )
+    assert fake.checkout.Session.create.call_count == 1
