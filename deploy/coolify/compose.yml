@@ -139,7 +139,7 @@ services:
       # browser discarded every answer.
       #
       # CI writes all three from deploy/cloudflare/env/<environment>.env — see
-      # scripts/coolify_env_sync.sh — so on this deployment they are filled in
+      # .github/scripts/shared/coolify-env-sync.sh — so on this deployment they are filled in
       # rather than typed. The marking is for a fork, a resource CI has not
       # reached yet, and anyone running this file by hand.
       - FRONTEND_HOST=${FRONTEND_HOST:?}

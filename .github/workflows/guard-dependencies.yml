@@ -1,7 +1,11 @@
 name: Guard Dependencies
 
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] -- This workflow only reads context.payload metadata, never checks out PR code
+  # zizmor: ignore[dangerous-triggers] -- the checkout below is pinned to the
+  # base branch, so the only code this job runs is code already on main. PR
+  # code is never fetched, never built and never executed; the job reads
+  # context.payload metadata and nothing from the head ref.
+  pull_request_target:
     branches: [main]
     paths:
       - pyproject.toml
@@ -18,37 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Base branch only — see the note on the trigger. Needed because the
+      # check below is a file in this repository rather than a script inlined
+      # here, and github-script can only require what is on disk.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
       - name: Check if author is org member or allowed bot
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const pr = context.payload.pull_request;
-            const author = pr.user.login;
-            const assoc = pr.author_association;
-
-            const botAllowlist = new Set(['dependabot[bot]']);
-            const orgAuthorAssociations = new Set(['MEMBER', 'OWNER']);
-
-            const allowed =
-              botAllowlist.has(author) ||
-              (assoc != null && orgAuthorAssociations.has(assoc));
-
-            if (!allowed) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body: `This PR modifies dependency files (\`pyproject.toml\` or \`uv.lock\`), which is restricted to members of the **${context.repo.owner}** organization on GitHub.\n\nIf you need a dependency change, please [open a discussion](https://github.com/${context.repo.owner}/${context.repo.repo}/discussions/new) describing what you need and why.\n\nClosing this PR automatically.`
-              });
-
-              await github.rest.pulls.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.payload.pull_request.number,
-                state: 'closed'
-              });
-
-              core.setFailed('Dependency changes are restricted to organization members.');
-            } else {
-              console.log(`Author ${author} (author_association=${assoc}) is allowed to make dependency changes.`);
-            }
+            await require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/guard-dependencies/check-author.cjs`)({github, context, core})

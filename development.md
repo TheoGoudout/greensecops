@@ -123,6 +123,21 @@ When you install it, it runs right before making a commit in git. This way it en
 
 You can find a file `.pre-commit-config.yaml` with configurations at the root of the project, holding workspace-wide hooks (file hygiene, OpenAPI client generation, deployment-config checks, commit message linting). `prek` also auto-discovers a `.pre-commit-config.yaml` in each of `backend/`, `docs/`, `frontend/`, `action/`, and `landing/` and runs their project-specific lint/format/typecheck hooks alongside it — no extra wiring needed, and each of those can also be run standalone from inside its own directory.
 
+#### Hooks for the workflows' shell
+
+Every multi-line step body in `.github/workflows/` lives in `.github/scripts/`
+instead — shell inside a YAML string is invisible to every linter there is.
+Two hooks keep that true:
+
+* `shellcheck` lints every `.sh` in the repository, at ShellCheck's default
+  severity. It needs nothing installed: the hook brings its own binary.
+* `workflow-scripts` runs `scripts/validate_workflow_scripts.py`, which fails
+  if a workflow grows an inline `run:` block again, if a step names a script
+  that is not there, or if a script nothing calls is left behind.
+
+See [.github/scripts/README.md](.github/scripts/README.md) for the conventions
+an extracted script follows.
+
 #### Hooks for the AWS deployment config
 
 Four hooks cover `deploy/`, and only run when you touch it:

@@ -154,58 +154,7 @@ jobs:
         id: resolve
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-        run: |
-          set -euo pipefail
-
-          file="deploy/cloudflare/env/${ENVIRONMENT}.env"
-          if [ ! -f "${file}" ]; then
-            echo "::error::${file} does not exist. Every environment pages.yml can dispatch needs one."
-            exit 1
-          fi
-          set -a
-          # shellcheck source=/dev/null  # the path is an input, not a literal
-          . "./${file}"
-          set +a
-
-          missing=0
-
-          # Check one resolved value and publish it as a job output.
-          #
-          # Nothing downstream would fail on an empty one: GitHub renders an
-          # unset variable as the empty string, envsubst substitutes it happily,
-          # and a dashboard built with VITE_API_URL="" resolves every API call
-          # against its own Worker — which answers 200 with index.html because
-          # of not_found_handling, so the client parses HTML as JSON at runtime.
-          # A green build publishing a site broken only at runtime is the thing
-          # to prevent, so the check happens here or nowhere.
-          emit() {
-            # A bare https:// means DOMAIN was empty; a leading dot means the
-            # subdomain label was; a trailing dot means the domain was and the
-            # label was not. Those are the three shapes a half-filled file makes.
-            case "$2" in
-              ""|https://|https://.*|https://*.|*CHANGEME*)
-                echo "::error::$1 is unset, incomplete or still CHANGEME for ${ENVIRONMENT}. Set it in ${file}."
-                missing=1
-                ;;
-            esac
-            echo "$1=$2" >> "$GITHUB_OUTPUT"
-          }
-
-          # The same derivation as deploy/terraform/locals.tf:294, so a hostname
-          # means the same thing on both deployment paths.
-          emit app-url "https://${APP_SUBDOMAIN:-}.${DOMAIN:-}"
-          emit api-url "https://${API_SUBDOMAIN:-}.${DOMAIN:-}"
-          emit docs-url "https://${DOCS_SUBDOMAIN:-}.${DOMAIN:-}"
-          emit marketing-url "https://${DOMAIN:-}"
-
-          emit github-app-name "${GITHUB_APP_NAME:-}"
-          emit github-client-id "${GITHUB_CLIENT_ID:-}"
-          emit support-email "${SUPPORT_EMAIL:-}"
-          emit sales-email "${SALES_EMAIL:-}"
-          emit legal-email "${LEGAL_EMAIL:-}"
-          emit privacy-email "${PRIVACY_EMAIL:-}"
-
-          exit "${missing}"
+        run: .github/scripts/pages-reusable/resolve-urls.sh
 
       - name: Summarise
         env:
@@ -214,17 +163,7 @@ jobs:
           API_URL: ${{ steps.resolve.outputs.api-url }}
           DOCS_URL: ${{ steps.resolve.outputs.docs-url }}
           MARKETING_URL: ${{ steps.resolve.outputs.marketing-url }}
-        run: |
-          {
-            echo "## ${ENVIRONMENT}"
-            echo
-            echo "| Surface | URL |"
-            echo "|---|---|"
-            echo "| Landing | ${MARKETING_URL} |"
-            echo "| Dashboard | ${APP_URL} |"
-            echo "| API | ${API_URL} |"
-            echo "| Documentation | ${DOCS_URL} |"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: .github/scripts/pages-reusable/summarise.sh
 
   landing:
     name: Landing page (${{ inputs.environment }})
@@ -251,12 +190,6 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq gettext-base
 
       - name: Substitute the site's URLs and contact addresses
-        # landing/entrypoint.sh does this at container start-up. There is no
-        # container here, so the same substitution happens at build time from
-        # the same variable list — keep the two in step. entrypoint.sh's
-        # hardcoded defaults are the production values, which is why
-        # scripts/validate_landing_defaults.py asserts they still match
-        # deploy/cloudflare/env/production.env.
         env:
           APP_URL: ${{ needs.config.outputs.app-url }}
           DOCS_URL: ${{ needs.config.outputs.docs-url }}
@@ -265,35 +198,11 @@ jobs:
           SALES_EMAIL: ${{ needs.config.outputs.sales-email }}
           LEGAL_EMAIL: ${{ needs.config.outputs.legal-email }}
           PRIVACY_EMAIL: ${{ needs.config.outputs.privacy-email }}
-        run: |
-          set -euo pipefail
-          mkdir -p landing/dist
-          cp -r landing/assets landing/dist/
-          for f in landing/*.html; do
-            envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' \
-              < "$f" > "landing/dist/$(basename "$f")"
-          done
-          # Reproduces `error_page 404 /index.html` from landing/nginx.conf.
-          # landing/wrangler.jsonc sets not_found_handling to "404-page", which
-          # serves this file — with a real 404 status — for anything unmatched.
-          # The extensionless paths the site links to need no rule: Workers'
-          # default html_handling resolves /pricing to pricing.html, which is
-          # the rest of nginx's `try_files $uri $uri.html`.
-          cp landing/dist/index.html landing/dist/404.html
-          cp deploy/cloudflare/landing/_headers landing/dist/_headers
+        run: .github/scripts/pages-reusable/build-landing.sh
 
       - name: Keep this copy out of search results
-        # Staging and previews serve the same copy as production. Left alone
-        # they would be indexed and compete with it — there is no robots.txt in
-        # the repository, so nothing else prevents that. Both mechanisms are
-        # written because they catch different crawlers: robots.txt stops the
-        # ones that check before fetching, X-Robots-Tag stops the ones that do
-        # not check at all.
         if: inputs.environment != 'production'
-        run: |
-          set -euo pipefail
-          printf '\n/*\n  X-Robots-Tag: noindex, nofollow\n' >> landing/dist/_headers
-          printf 'User-agent: *\nDisallow: /\n' > landing/dist/robots.txt
+        run: .github/scripts/shared/noindex.sh landing/dist
 
       - name: Validate the Worker configuration
         # Only where nothing else will validate it. A configured account runs
@@ -334,16 +243,7 @@ jobs:
         env:
           STDOUT: ${{ steps.preview-upload.outputs.command-output }}
           STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
-        run: |
-          set -euo pipefail
-          # wrangler reports the version preview URL on one stream or the other
-          # depending on how it detects the terminal, so search both.
-          url=$(printf '%s\n%s\n' "${STDOUT}" "${STDERR}" \
-            | grep -Eom1 'https://[a-z0-9.-]+\.workers\.dev' || true)
-          if [ -z "${url}" ]; then
-            echo "::warning::No preview URL in the wrangler output for landing."
-          fi
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/shared/extract-preview-url.sh "landing"
 
       - name: Publish
         if: ${{ !inputs.preview && env.HAS_CLOUDFLARE == 'true' }}
@@ -444,10 +344,7 @@ jobs:
 
       - name: Keep this copy out of search results
         if: inputs.environment != 'production'
-        run: |
-          set -euo pipefail
-          printf '\n/*\n  X-Robots-Tag: noindex, nofollow\n' >> frontend/dist/_headers
-          printf 'User-agent: *\nDisallow: /\n' > frontend/dist/robots.txt
+        run: .github/scripts/shared/noindex.sh frontend/dist
 
       - name: Validate the Worker configuration
         if: env.HAS_CLOUDFLARE != 'true'
@@ -476,14 +373,7 @@ jobs:
         env:
           STDOUT: ${{ steps.preview-upload.outputs.command-output }}
           STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
-        run: |
-          set -euo pipefail
-          url=$(printf '%s\n%s\n' "${STDOUT}" "${STDERR}" \
-            | grep -Eom1 'https://[a-z0-9.-]+\.workers\.dev' || true)
-          if [ -z "${url}" ]; then
-            echo "::warning::No preview URL in the wrangler output for the dashboard."
-          fi
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/shared/extract-preview-url.sh "the dashboard"
 
       - name: Publish
         if: ${{ !inputs.preview && env.HAS_CLOUDFLARE == 'true' }}
@@ -519,24 +409,16 @@ jobs:
           enable-cache: false
 
       - name: Build
-        # -W matches docs/Dockerfile: a malformed rule METADATA block should
-        # fail the build, not ship a broken page. This is the only place the
-        # documentation is built in CI, so it is also the only gate on that.
         env:
           DOCS_BASE_URL: ${{ needs.config.outputs.docs-url }}
-        run: |
-          uv sync --package docs
-          uv run sphinx-build -b html -W docs docs/_build/html
+        run: .github/scripts/pages-reusable/build-docs.sh
 
       - name: Add the response headers
         run: cp deploy/cloudflare/docs/_headers docs/_build/html/_headers
 
       - name: Keep this copy out of search results
         if: inputs.environment != 'production'
-        run: |
-          set -euo pipefail
-          printf '\n/*\n  X-Robots-Tag: noindex, nofollow\n' >> docs/_build/html/_headers
-          printf 'User-agent: *\nDisallow: /\n' > docs/_build/html/robots.txt
+        run: .github/scripts/shared/noindex.sh docs/_build/html
 
       - name: Validate the Worker configuration
         if: env.HAS_CLOUDFLARE != 'true'
@@ -565,14 +447,7 @@ jobs:
         env:
           STDOUT: ${{ steps.preview-upload.outputs.command-output }}
           STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
-        run: |
-          set -euo pipefail
-          url=$(printf '%s\n%s\n' "${STDOUT}" "${STDERR}" \
-            | grep -Eom1 'https://[a-z0-9.-]+\.workers\.dev' || true)
-          if [ -z "${url}" ]; then
-            echo "::warning::No preview URL in the wrangler output for the documentation."
-          fi
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/shared/extract-preview-url.sh "the documentation"
 
       - name: Publish
         if: ${{ !inputs.preview && env.HAS_CLOUDFLARE == 'true' }}
@@ -596,109 +471,21 @@ jobs:
     timeout-minutes: 40
 
     permissions:
+      contents: read
       # To read this commit's workflow runs.
       actions: read
 
     steps:
-      # The dashboard ships a *generated* OpenAPI client, so publishing it
-      # before the API that serves that contract is the one mismatch direction
-      # that actually breaks: a client calling endpoints the server has not
-      # shipped. release-deploy.yml sequences production for exactly this
-      # reason; this is staging's equivalent.
-      #
-      # The API deploy is the last job of images.yml, so waiting for that run to
-      # finish is waiting for the API. A commit that changed nothing images.yml
-      # watches has no run at all, and publishes immediately.
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Wait for this commit's API deploy
         if: ${{ inputs.environment == 'staging' && !inputs.preview }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          status=""; conclusion=""; url=""
-
-          # Sets the three above from the newest images.yml run for this commit,
-          # and returns non-zero if the API could not be read. That distinction
-          # matters: a failed call must not be mistaken for "no run exists",
-          # which would publish the dashboard on an API error.
-          #
-          # Pipe-separated rather than space-separated, because `read` with the
-          # default IFS collapses runs of whitespace — an in-progress run, whose
-          # conclusion is empty, would shift its URL into the conclusion field
-          # and be read as a failure. `.workflow_runs // []` keeps a malformed
-          # response an empty list rather than a jq error.
-          poll() {
-            local out
-            if ! out=$(gh api "repos/${REPO}/actions/runs?head_sha=${SHA}&per_page=100" \
-              --jq '(.workflow_runs // [])
-                    | map(select(.path == ".github/workflows/images.yml"))
-                    | sort_by(.run_started_at)
-                    | last
-                    | "\(.status // "")|\(.conclusion // "")|\(.html_url // "")"' 2>&1); then
-              echo "  Could not list this commit's runs: ${out}"
-              return 1
-            fi
-            IFS='|' read -r status conclusion url <<< "${out}"
-          }
-
-          # No run is ambiguous for a short window: a workflow filtered out by
-          # its `paths:` produces no run at all, which looks exactly like one
-          # that has not been created yet. Both this workflow and images.yml are
-          # started by the same push, so give the latter a grace period to
-          # appear before concluding it never will.
-          read_once=false
-          for attempt in $(seq 1 9); do
-            if poll; then
-              read_once=true
-              if [ -n "${status}" ]; then
-                break
-              fi
-              echo "  No images run for ${SHA} yet (${attempt}/9)."
-            fi
-            sleep 10
-          done
-
-          # An API that never answered is not the same as a commit with no run,
-          # and concluding the latter from the former would publish the
-          # dashboard on an outage. Only silence that was actually *read* counts
-          # as absence.
-          if [ "${read_once}" != "true" ]; then
-            echo "::error::Could not read this commit's workflow runs at all, so whether the staging API deployed is unknown. Refusing to publish the dashboard."
-            exit 1
-          fi
-
-          if [ -z "${status}" ]; then
-            echo "::notice::No images.yml run for ${SHA} — the API is unchanged by this commit, so there is nothing to wait for."
-            exit 0
-          fi
-
-          echo "Waiting on ${url}"
-
-          # 120 x 20s = 40 minutes, which covers four image builds, two manifest
-          # merges and a Coolify rollout with room to spare. Capped rather than
-          # left to the job timeout so the failure names the run. A read that
-          # fails is retried rather than fatal — the run is very likely still
-          # going, and the cap is what stops this waiting forever.
-          for attempt in $(seq 1 120); do
-            if [ "${status}" = "completed" ]; then
-              break
-            fi
-            echo "  ${status} (${attempt}/120)"
-            sleep 20
-            poll || true
-          done
-
-          if [ "${status}" != "completed" ]; then
-            echo "::error::${url} was still '${status}' after 40 minutes. The dashboard has NOT been published — it would have gone out ahead of the API."
-            exit 1
-          fi
-
-          if [ "${conclusion}" != "success" ]; then
-            echo "::error::${url} finished '${conclusion}', so the staging API is not on ${SHA}. Refusing to publish a dashboard ahead of it — fix that run, then re-run this one."
-            exit 1
-          fi
-
-          echo "Staging API is on ${SHA} ✅"
+        run: .github/scripts/pages-reusable/wait-for-api-deploy.sh

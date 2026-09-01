@@ -22,6 +22,8 @@
 
 ### Fixes
 
+* fix(tests): anchor the usage-ledger period window to now, not to August 2026. PR [#297](https://github.com/TheoGoudout/greensecops/pull/297) by [@TheoGoudout](https://github.com/TheoGoudout).
+* fix(fixes): make the commit message and the PR body agree on what was fixed. PR [#294](https://github.com/TheoGoudout/greensecops/pull/294) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(workflow): list only the workflow engine's PRs on its PRs tab. PR [#293](https://github.com/TheoGoudout/greensecops/pull/293) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(billing): say "Downgrade to" on a plan below the current one. PR [#292](https://github.com/TheoGoudout/greensecops/pull/292) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(deploy): let celery-beat write its schedule as an unprivileged user. PR [#291](https://github.com/TheoGoudout/greensecops/pull/291) by [@TheoGoudout](https://github.com/TheoGoudout).
@@ -34,6 +36,7 @@
 
 ### Refactors
 
+* refactor(frontend): name the CI-workflow engine's pages Workflows everywhere. PR [#296](https://github.com/TheoGoudout/greensecops/pull/296) by [@TheoGoudout](https://github.com/TheoGoudout).
 * refactor(badges): simplify Terraform/Ansible/Docker badge URLs. PR [#267](https://github.com/TheoGoudout/greensecops/pull/267) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⚡️ Evaluate a whole rule domain in one OPA query. PR [#245](https://github.com/TheoGoudout/greensecops/pull/245) by [@TheoGoudout](https://github.com/TheoGoudout).
 * refactor: one vocabulary, one engine registry, one scan pipeline. PR [#240](https://github.com/TheoGoudout/greensecops/pull/240) by [@TheoGoudout](https://github.com/TheoGoudout).
@@ -45,6 +48,7 @@
 
 ### Internal
 
+* ci: move the workflows' embedded shell into .github/scripts/, checked by shellcheck. PR [#295](https://github.com/TheoGoudout/greensecops/pull/295) by [@TheoGoudout](https://github.com/TheoGoudout).
 * chore(frontend): rename CI/CD sidebar item from Repositories to Workflows. PR [#270](https://github.com/TheoGoudout/greensecops/pull/270) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(ci): disable build-tool caching ahead of the Pages publish step. PR [#266](https://github.com/TheoGoudout/greensecops/pull/266) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ Bump vite from 8.2.1 to 8.2.2 in the npm-packages group. PR [#264](https://github.com/TheoGoudout/greensecops/pull/264) by [@dependabot[bot]](https://github.com/apps/dependabot).
