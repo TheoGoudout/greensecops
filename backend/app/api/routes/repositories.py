@@ -30,6 +30,7 @@ from app.models import (
     WorkflowSyncSummary,
 )
 from app.services.badge_signing import build_badge_svg_url
+from app.services.engine_scores import repo_engine_grades
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.scan_support import scan_lock
@@ -238,7 +239,10 @@ def get_repository(
 ) -> RepositoryPublic:
     repo = _get_repo_for_user(repo_id, session, current_user)
     avg_score, grade, _ = _compute_repo_grade(session, repo_id)
-    return to_repo_public(repo, avg_score, grade)
+    # Every engine's own average, so the Docker and Infrastructure headers show
+    # their engine's grade rather than the CI one or the worst of their targets'.
+    engine_grades = repo_engine_grades(session, [repo_id]).get(repo_id, {})
+    return to_repo_public(repo, avg_score, grade, engine_grades)
 
 
 @router.post("/{repo_id}/workflow-sync", role=Role.org_admin, limit=LIMIT_EXPENSIVE)

@@ -36,7 +36,9 @@ export function RepoPageHeader({
   below?: ReactNode
 }) {
   return (
-    <div className="flex items-center gap-3">
+    // Named so a test can ask what *the header* shows, rather than matching a
+    // grade letter that also appears on every target card below it.
+    <div className="flex items-center gap-3" data-testid="repo-page-header">
       <Link
         to={backTo}
         className="text-muted-foreground hover:text-foreground transition-colors"

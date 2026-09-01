@@ -1893,6 +1893,26 @@ export type RepoCategoryStat = {
 };
 
 /**
+ * RepoEngineGrade
+ * One engine's average grade for a repository.
+ *
+ * Only engines that have actually scored the repo appear. An engine that has
+ * never run has no entry, which is a different statement from a bad grade and
+ * is what lets a page render "—" rather than an invented letter.
+ */
+export type RepoEngineGrade = {
+    engine: Engine;
+    /**
+     * Score
+     */
+    score: number;
+    /**
+     * Grade
+     */
+    grade: string;
+};
+
+/**
  * RepoFindingStats
  * Per-repo finding breakdown — powers the dashboard's category health star
  * diagram. Only populated on the unscoped (all-repos) stats call;
@@ -1981,6 +2001,10 @@ export type RepositoryPublic = {
      * Grade
      */
     grade?: string | null;
+    /**
+     * Engine Grades
+     */
+    engine_grades?: Array<RepoEngineGrade>;
 };
 
 /**
