@@ -49,6 +49,11 @@ class ScanTrigger(str, enum.Enum):
     manual = "manual"
     scheduled = "scheduled"
     release = "release"
+    # Asked for by a GitHub Actions run over OIDC, to publish the result to
+    # Code Scanning. Distinct from ``manual`` because nobody clicked anything,
+    # and from ``scheduled`` because it is the repository's own schedule rather
+    # than ours — which is what a reader of the scan history needs to know.
+    code_scanning = "code_scanning"
 
 
 class Severity(str, enum.Enum):

@@ -2296,7 +2296,7 @@ export type ScanTargetUpdate = {
 /**
  * ScanTrigger
  */
-export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release';
+export type ScanTrigger = 'webhook_push' | 'webhook_workflow_run' | 'polled_push' | 'manual' | 'scheduled' | 'release' | 'code_scanning';
 
 /**
  * Severity
@@ -4337,6 +4337,45 @@ export type WorkflowListScansResponses = {
 
 export type WorkflowListScansResponse = WorkflowListScansResponses[keyof WorkflowListScansResponses];
 
+export type WorkflowTriggerScansForCodeScanningData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/workflow/scans';
+};
+
+export type WorkflowTriggerScansForCodeScanningErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type WorkflowTriggerScansForCodeScanningError = WorkflowTriggerScansForCodeScanningErrors[keyof WorkflowTriggerScansForCodeScanningErrors];
+
+export type WorkflowTriggerScansForCodeScanningResponses = {
+    /**
+     * Response Workflow-Trigger Scans For Code Scanning
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type WorkflowTriggerScansForCodeScanningResponse = WorkflowTriggerScansForCodeScanningResponses[keyof WorkflowTriggerScansForCodeScanningResponses];
+
 export type WorkflowGetScanData = {
     body?: never;
     path: {
@@ -4501,6 +4540,40 @@ export type WorkflowListFilesResponses = {
 };
 
 export type WorkflowListFilesResponse = WorkflowListFilesResponses[keyof WorkflowListFilesResponses];
+
+export type WorkflowGetSarifData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/workflow/sarif';
+};
+
+export type WorkflowGetSarifErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type WorkflowGetSarifError = WorkflowGetSarifErrors[keyof WorkflowGetSarifErrors];
+
+export type WorkflowGetSarifResponses = {
+    /**
+     * Response Workflow-Get Sarif
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type WorkflowGetSarifResponse = WorkflowGetSarifResponses[keyof WorkflowGetSarifResponses];
 
 export type WorkflowListFindingsData = {
     body?: never;
@@ -5616,6 +5689,79 @@ export type DockerDeliverFixesResponses = {
 
 export type DockerDeliverFixesResponse = DockerDeliverFixesResponses[keyof DockerDeliverFixesResponses];
 
+export type DockerGetSarifData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/docker/sarif';
+};
+
+export type DockerGetSarifErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerGetSarifError = DockerGetSarifErrors[keyof DockerGetSarifErrors];
+
+export type DockerGetSarifResponses = {
+    /**
+     * Response Docker-Get Sarif
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type DockerGetSarifResponse = DockerGetSarifResponses[keyof DockerGetSarifResponses];
+
+export type DockerTriggerScansForCodeScanningData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/docker/scans';
+};
+
+export type DockerTriggerScansForCodeScanningErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerTriggerScansForCodeScanningError = DockerTriggerScansForCodeScanningErrors[keyof DockerTriggerScansForCodeScanningErrors];
+
+export type DockerTriggerScansForCodeScanningResponses = {
+    /**
+     * Response Docker-Trigger Scans For Code Scanning
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type DockerTriggerScansForCodeScanningResponse = DockerTriggerScansForCodeScanningResponses[keyof DockerTriggerScansForCodeScanningResponses];
+
 export type TerraformListRootsData = {
     body?: never;
     path?: never;
@@ -6072,6 +6218,79 @@ export type TerraformDeliverFixesResponses = {
 };
 
 export type TerraformDeliverFixesResponse = TerraformDeliverFixesResponses[keyof TerraformDeliverFixesResponses];
+
+export type TerraformGetSarifData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/terraform/sarif';
+};
+
+export type TerraformGetSarifErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformGetSarifError = TerraformGetSarifErrors[keyof TerraformGetSarifErrors];
+
+export type TerraformGetSarifResponses = {
+    /**
+     * Response Terraform-Get Sarif
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type TerraformGetSarifResponse = TerraformGetSarifResponses[keyof TerraformGetSarifResponses];
+
+export type TerraformTriggerScansForCodeScanningData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/terraform/scans';
+};
+
+export type TerraformTriggerScansForCodeScanningErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformTriggerScansForCodeScanningError = TerraformTriggerScansForCodeScanningErrors[keyof TerraformTriggerScansForCodeScanningErrors];
+
+export type TerraformTriggerScansForCodeScanningResponses = {
+    /**
+     * Response Terraform-Trigger Scans For Code Scanning
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type TerraformTriggerScansForCodeScanningResponse = TerraformTriggerScansForCodeScanningResponses[keyof TerraformTriggerScansForCodeScanningResponses];
 
 export type CloudListAccountsData = {
     body?: never;
@@ -6835,6 +7054,79 @@ export type AnsibleDeliverFixesResponses = {
 };
 
 export type AnsibleDeliverFixesResponse = AnsibleDeliverFixesResponses[keyof AnsibleDeliverFixesResponses];
+
+export type AnsibleGetSarifData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/ansible/sarif';
+};
+
+export type AnsibleGetSarifErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleGetSarifError = AnsibleGetSarifErrors[keyof AnsibleGetSarifErrors];
+
+export type AnsibleGetSarifResponses = {
+    /**
+     * Response Ansible-Get Sarif
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type AnsibleGetSarifResponse = AnsibleGetSarifResponses[keyof AnsibleGetSarifResponses];
+
+export type AnsibleTriggerScansForCodeScanningData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Branch
+         */
+        branch?: string | null;
+    };
+    url: '/api/v1/ansible/scans';
+};
+
+export type AnsibleTriggerScansForCodeScanningErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleTriggerScansForCodeScanningError = AnsibleTriggerScansForCodeScanningErrors[keyof AnsibleTriggerScansForCodeScanningErrors];
+
+export type AnsibleTriggerScansForCodeScanningResponses = {
+    /**
+     * Response Ansible-Trigger Scans For Code Scanning
+     * Successful Response
+     */
+    202: {
+        [key: string]: string;
+    };
+};
+
+export type AnsibleTriggerScansForCodeScanningResponse = AnsibleTriggerScansForCodeScanningResponses[keyof AnsibleTriggerScansForCodeScanningResponses];
 
 export type BadgesGetBadgeData = {
     body?: never;
