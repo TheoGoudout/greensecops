@@ -414,14 +414,29 @@ function Billing() {
     queryFn: BillingService.listOssApplications,
   })
 
-  // Checkout and the portal both hand back a Stripe-hosted URL to navigate to;
-  // neither renders anything of ours, which is deliberate — card details never
-  // touch this application.
+  // Buying a plan goes one of two ways. An account with no live subscription
+  // is sent to Stripe Checkout — a hosted page, deliberately, so card details
+  // never touch this application. An account that already has a subscription
+  // has that one changed instead of a second one opened beside it, so there is
+  // no page to visit and the answer is what the plan is now.
   const checkout = useMutation({
     mutationFn: (tier: UserTier) =>
       BillingService.createCheckoutSession({ requestBody: { tier } }),
     onSuccess: (data) => {
-      window.location.href = data.url
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      const name = plans?.find((p) => p.tier === data.tier)?.name ?? data.tier
+      showSuccessToast(
+        data.effective_at
+          ? // A downgrade leaves the plan already paid for running to the end
+            // of the period, so say when the cheaper one starts rather than
+            // implying it is live now.
+            `Switching to ${name} on ${formatLongDate(data.effective_at)}`
+          : `Upgraded to ${name}. You have been charged the difference for the rest of this period.`,
+      )
+      queryClient.invalidateQueries({ queryKey: ["billing"] })
     },
     onError: handleApiError,
   })

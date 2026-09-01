@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import stripe
@@ -157,6 +158,134 @@ def create_checkout_session(
         return CheckoutSession(url=str(session["url"]), customer_id_rejected=True)
 
     return CheckoutSession(url=str(session["url"]))
+
+
+@dataclass(frozen=True)
+class PlanChange:
+    """What happened when an existing subscription was moved to another plan.
+
+    ``effective_at`` is ``None`` when the new plan is live now, and the moment
+    it starts when the change was deferred to the renewal. The caller needs the
+    difference to tell the user what they just bought.
+    """
+
+    tier: UserTier
+    effective_at: datetime | None = None
+
+    @property
+    def is_immediate(self) -> bool:
+        return self.effective_at is None
+
+
+def _first_item(subscription: Any) -> Any:
+    """The single line item a plan lives on.
+
+    Every subscription we create has exactly one — one price, quantity one —
+    so there is no ambiguity about which item a plan change replaces.
+    """
+    items = subscription["items"]["data"]
+    if not items:
+        raise stripe_not_configured()
+    return items[0]
+
+
+def _phase_price(item: Any) -> str:
+    """A schedule phase's price id, whether Stripe expanded it or not."""
+    price = item.get("price")
+    return str(price["id"] if isinstance(price, dict) else price)
+
+
+def _upgrade(client: Any, subscription: Any, price_id: str) -> PlanChange:
+    """Swap the price now and invoice the difference.
+
+    ``always_invoice`` is the point of the exercise: it credits the unused
+    remainder of the plan being left and bills only the balance, so the first
+    payment on the new plan is the difference rather than a second full price.
+    Full price resumes at the next renewal on its own.
+    """
+    client.Subscription.modify(
+        subscription["id"],
+        items=[{"id": _first_item(subscription)["id"], "price": price_id}],
+        proration_behavior="always_invoice",
+    )
+    return PlanChange(tier=tier_for_price(price_id) or UserTier.free)
+
+
+def _open_schedule(client: Any, subscription: Any) -> Any:
+    """The subscription's schedule, creating one if it has none.
+
+    A second downgrade before the first has taken effect must edit the
+    schedule already standing rather than try to create another — Stripe
+    refuses that, and the user would be stuck on a downgrade they changed
+    their mind about.
+    """
+    if existing := subscription.get("schedule"):
+        schedule_id = existing["id"] if isinstance(existing, dict) else existing
+        return client.SubscriptionSchedule.retrieve(schedule_id)
+    return client.SubscriptionSchedule.create(from_subscription=subscription["id"])
+
+
+def _downgrade(client: Any, subscription: Any, price_id: str) -> PlanChange:
+    """Leave the paid-for plan running, and start the cheaper one at renewal.
+
+    A downgrade taking effect immediately would either refund time already
+    bought or silently forfeit it. Neither is what someone choosing a smaller
+    plan is asking for: they are asking to pay less *next* month.
+    """
+    schedule = _open_schedule(client, subscription)
+    current = schedule["phases"][0]
+    client.SubscriptionSchedule.modify(
+        schedule["id"],
+        phases=[
+            {
+                "items": [
+                    {"price": _phase_price(item), "quantity": 1}
+                    for item in current["items"]
+                ],
+                "start_date": current["start_date"],
+                "end_date": current["end_date"],
+            },
+            {
+                "items": [{"price": price_id, "quantity": 1}],
+                "iterations": 1,
+                # The switch lands on the period boundary, so there is nothing
+                # to prorate — asking for prorations here would invent a
+                # zero-value adjustment on the invoice.
+                "proration_behavior": "none",
+            },
+        ],
+        # Once the cheaper phase has run, hand the subscription back to normal
+        # recurring billing at that price instead of cancelling it.
+        end_behavior="release",
+    )
+    return PlanChange(
+        tier=tier_for_price(price_id) or UserTier.free,
+        effective_at=datetime.fromtimestamp(current["end_date"], tz=timezone.utc),
+    )
+
+
+def change_subscription_plan(
+    *, subscription_id: str, tier: UserTier, immediate: bool
+) -> PlanChange:
+    """Move a live subscription onto ``tier``'s price.
+
+    Sending an already-subscribed customer through Checkout would open a
+    *second* Stripe subscription beside the first, so the account would be
+    billed for both and our webhook would take whichever event arrived last as
+    the truth. A customer who has one changes it.
+
+    ``immediate`` says which way the change goes, which the caller decides from
+    the two plans' prices: an upgrade starts now with the unused remainder
+    credited, a downgrade starts at the renewal.
+    """
+    price_id = price_id_for(tier)
+    if price_id is None:
+        raise stripe_not_configured()
+    client = _client()
+    subscription = client.Subscription.retrieve(subscription_id)
+    if immediate:
+        return _upgrade(client, subscription, price_id)
+    return _downgrade(client, subscription, price_id)
 
 
 def create_portal_session(*, customer_id: str, return_url: str) -> str:
