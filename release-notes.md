@@ -25,6 +25,7 @@
 
 ### Fixes
 
+* fix(pr-body): link a rule to the page that actually exists. PR [#312](https://github.com/TheoGoudout/greensecops/pull/312) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(readme): put the badge in the row of badges, not above it. PR [#309](https://github.com/TheoGoudout/greensecops/pull/309) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(engines): follow a running scan to its result without a reload. PR [#306](https://github.com/TheoGoudout/greensecops/pull/306) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(github): pin the telemetry action to a real SHA when its tag is absent. PR [#307](https://github.com/TheoGoudout/greensecops/pull/307) by [@TheoGoudout](https://github.com/TheoGoudout).
