@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* fix(fixes): make the commit message and the PR body agree on what was fixed. PR [#294](https://github.com/TheoGoudout/greensecops/pull/294) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(workflow): list only the workflow engine's PRs on its PRs tab. PR [#293](https://github.com/TheoGoudout/greensecops/pull/293) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(billing): say "Downgrade to" on a plan below the current one. PR [#292](https://github.com/TheoGoudout/greensecops/pull/292) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(deploy): let celery-beat write its schedule as an unprivileged user. PR [#291](https://github.com/TheoGoudout/greensecops/pull/291) by [@TheoGoudout](https://github.com/TheoGoudout).
