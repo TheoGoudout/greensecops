@@ -6,12 +6,18 @@ on:
 
 permissions: {}
 
+# One run per pull request. Cancelled: the label this applies describes the
+# head commit, so a run against an older one has nothing left to say.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   main:
     name: "Check for merge conflicts"
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: write # To apply the conflicts label and comment on the pull request.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

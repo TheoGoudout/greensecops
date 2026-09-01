@@ -8,6 +8,13 @@ on:
 
 permissions: {}
 
+# One run per pull request, cancelled on a new push: the autofix commit this
+# pushes is derived from the head it checked out, so a superseded run has
+# nothing left to contribute.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   # Forks and Dependabot don't have access to secrets
   HAS_SECRETS: ${{ secrets.PRE_COMMIT != '' }}
@@ -22,6 +29,11 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
         run: echo "$GITHUB_CONTEXT"
+      # On the artipacked suppression below: persist-credentials is load-bearing
+      # here — the pre-commit-ci step pushes the autofix commit through the
+      # checkout's own credential helper. The token is PRE_COMMIT rather than
+      # GITHUB_TOKEN, and this job uploads no artifacts, so there is nothing for
+      # the persisted credential to be packed into.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout PR for own repo
         if: env.HAS_SECRETS == 'true'
@@ -33,7 +45,7 @@ jobs:
           fetch-depth: 0
           # A token other than the default GITHUB_TOKEN is needed to be able to trigger CI
           token: ${{ secrets.PRE_COMMIT }} # zizmor: ignore[secrets-outside-env]
-          persist-credentials: true # Required for `git push` command
+          persist-credentials: true # zizmor: ignore[artipacked] -- required for `git push`; see above
       # pre-commit lite ci needs the default checkout configs to work
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout PR for fork

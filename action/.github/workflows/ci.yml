@@ -11,8 +11,15 @@ on:
 
 permissions: {}
 
+# One run per pull request, and per branch for a push. Cancelled, because a
+# superseded commit's checks are an answer about code nobody is going to merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
+    name: Lint, type-check, test and build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

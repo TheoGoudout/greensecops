@@ -49,6 +49,12 @@ on:
 
 permissions: {}
 
+# One run per pull request, and per branch for a push. Cancelled, because a
+# superseded commit's checks are an answer about code nobody is going to merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   # Pinned so local hooks, CI and the documented runbook agree. 1.10 is the
   # floor for S3 native state locking, which deploy/terraform/backend.tf uses.

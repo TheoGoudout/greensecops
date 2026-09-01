@@ -67,9 +67,8 @@ jobs:
 
     permissions:
       contents: read
-      # Push to GHCR with the workflow's own token — no registry credentials
-      # stored in the repository.
-      packages: write
+      # No registry credentials are stored in the repository.
+      packages: write # To push this architecture's image layers to GHCR.
 
     strategy:
       fail-fast: false
@@ -157,7 +156,7 @@ jobs:
 
     permissions:
       contents: read
-      packages: write
+      packages: write # To publish the multi-architecture manifest to GHCR.
 
     strategy:
       fail-fast: false
@@ -222,11 +221,16 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The Coolify credentials below belong to this environment, not to the
+    # repository: binding the job scopes them to the one deploy that needs them,
+    # and gives the run a deployment record on `staging`. Unlike `production`,
+    # staging carries no reviewer rule, so nothing here waits for a click. See
+    # deploy/README.md.
+    environment: staging
 
     permissions:
       contents: read
-      # To confirm the tag this job is about to deploy actually resolves.
-      packages: read
+      packages: read # To confirm the tag this job is about to deploy actually resolves.
 
     # Why the staging deploy lives at the end of the *image* workflow rather
     # than being left to Coolify's git watcher, which is what used to do it:

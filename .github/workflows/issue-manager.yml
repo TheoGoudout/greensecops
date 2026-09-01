@@ -16,6 +16,13 @@ on:
 
 permissions: {}
 
+# Serialised across the whole repository, not per issue: the nightly sweep walks
+# every open issue and pull request, so two overlapping runs would post the same
+# reminder twice.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   issue-manager:
     name: Manage issues and PRs
@@ -23,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      issues: write
-      pull-requests: write
+      issues: write # To comment on and close issues that the config below matches.
+      pull-requests: write # Same, for pull requests — `waiting` applies to them.
     steps:
       - name: Dump GitHub context
         env:

@@ -43,7 +43,7 @@ jobs:
     name: Roll back
     uses: ./.github/workflows/deploy-reusable.yml
     permissions:
-      id-token: write
+      id-token: write # Passed to deploy-reusable.yml, which exchanges it for the AWS role.
       contents: read
     with:
       environment: ${{ inputs.environment }}

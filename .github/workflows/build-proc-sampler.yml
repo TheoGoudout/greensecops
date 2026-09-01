@@ -17,6 +17,12 @@ on:
 permissions:
   contents: read
 
+# One run per pull request, and per branch for a push. Cancelled, because a
+# superseded commit's checks are an answer about code nobody is going to merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Vet and test
@@ -63,7 +69,9 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: ${{ matrix.arch }}
-        run: go build -o build/proc-sampler-linux-${{ matrix.arch }} .
+        # Through GOARCH rather than the matrix expansion: an expansion is
+        # pasted into the shell before it runs, an environment variable is not.
+        run: go build -o "build/proc-sampler-linux-${GOARCH}" .
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

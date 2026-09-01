@@ -11,16 +11,24 @@ on:
       - pyproject.toml
       - uv.lock
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+permissions: {}
+
+# Keyed on the pull request, and cancelled: a force-push while the check is
+# still running makes the earlier run's verdict about code that is no longer
+# there.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-author:
     name: Check PR Author
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read # To check out the base branch below.
+      issues: write # To comment on the pull request before closing it.
+      pull-requests: write # To close a pull request from a non-member.
     steps:
       # Base branch only — see the note on the trigger. Needed because the
       # check below is a file in this repository rather than a script inlined

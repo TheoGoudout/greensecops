@@ -17,6 +17,12 @@ on:
 
 permissions: {}
 
+# One run per pull request, and per branch for a push. Cancelled, because a
+# superseded commit's checks are an answer about code nobody is going to merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     name: Check for changes
@@ -100,7 +106,10 @@ jobs:
     - run: docker compose build
     - run: docker compose down -v --remove-orphans
     - name: Run Playwright tests
-      run: docker compose run --rm playwright bunx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      env:
+        SHARD_INDEX: ${{ matrix.shardIndex }}
+        SHARD_TOTAL: ${{ matrix.shardTotal }}
+      run: docker compose run --rm playwright bunx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard="${SHARD_INDEX}/${SHARD_TOTAL}"
     - run: docker compose down -v --remove-orphans
     - name: Upload blob report to GitHub Actions Artifacts
       if: ${{ !cancelled() }}

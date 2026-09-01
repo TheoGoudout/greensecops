@@ -472,8 +472,7 @@ jobs:
 
     permissions:
       contents: read
-      # To read this commit's workflow runs.
-      actions: read
+      actions: read # To read this commit's workflow runs, and wait on the API deploy.
 
     steps:
       # The steps below run scripts from .github/scripts/, so this job needs

@@ -11,13 +11,22 @@ on:
 
 permissions: {}
 
+# Queued rather than cancelled, and that is the whole point of the block: this
+# workflow labels a pull request and also triggers on `labeled`, so its own
+# labeler job fires a second run. Cancelling would let that second run kill the
+# first one's check-labels job — the label-checker's status would then be left
+# on whichever run happened to survive.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   labeler:
     name: Apply labels
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
+      issues: write # actions/labeler writes labels through the issues API.
+      pull-requests: write # To read the changed files and apply the labels.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -30,7 +39,7 @@ jobs:
     needs:
       - labeler
     permissions:
-      pull-requests: read
+      pull-requests: read # To read back the labels the job above applied.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
