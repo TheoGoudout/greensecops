@@ -44,9 +44,8 @@ jobs:
     environment: ${{ inputs.environment }}
 
     permissions:
-      # Mint the OIDC token exchanged for the AWS deploy role. No long-lived
-      # AWS keys exist in this repository's secrets.
-      id-token: write
+      # No long-lived AWS keys exist in this repository's secrets.
+      id-token: write # Mint the OIDC token exchanged for the AWS deploy role.
       contents: read
 
     steps:

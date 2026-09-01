@@ -50,7 +50,7 @@ jobs:
 
     permissions:
       contents: read
-      packages: read
+      packages: read # To wait for the release images to appear on GHCR.
 
     steps:
       # The steps below run scripts from .github/scripts/, so this job needs

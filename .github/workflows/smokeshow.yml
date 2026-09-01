@@ -7,6 +7,13 @@ on:
 
 permissions: {}
 
+# Keyed on the commit whose coverage this is, and never cancelled: the run ends
+# by setting a commit status, and a cancelled one leaves that status missing
+# rather than red.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
 jobs:
   smokeshow:
     name: Upload Coverage
@@ -16,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: read
-      statuses: write
+      actions: read # To download the coverage artifact from the triggering run.
+      statuses: write # To post the coverage percentage as a commit status.
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

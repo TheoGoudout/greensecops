@@ -32,18 +32,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      pull-requests: read
+      pull-requests: read # To read the merged pull request's title and labels.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
         run: echo "$GITHUB_CONTEXT"
+      # On the artipacked suppression below: tiangolo/latest-changes commits the
+      # release notes through the checkout's credential helper, so the credential
+      # has to persist. The token is LATEST_CHANGES rather than GITHUB_TOKEN, and
+      # this job uploads no artifacts, so there is nothing for the persisted
+      # credential to be packed into.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # To allow latest-changes to commit to the main branch
           token: ${{ secrets.LATEST_CHANGES }} # zizmor: ignore[secrets-outside-env]
-          persist-credentials: true # required by tiangolo/latest-changes
+          persist-credentials: true # zizmor: ignore[artipacked] -- required by tiangolo/latest-changes; see above
       - uses: tiangolo/latest-changes@a8b61c97c207b9f0770d49ef657e26c5f20c8935 # 0.7.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
