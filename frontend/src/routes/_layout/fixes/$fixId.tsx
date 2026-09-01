@@ -94,9 +94,7 @@ function FixDetail() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            to={
-              repoId ? "/repositories/$repoId/static-analysis" : "/repositories"
-            }
+            to={repoId ? "/workflows/$repoId/static-analysis" : "/workflows"}
             params={repoId ? { repoId } : undefined}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >

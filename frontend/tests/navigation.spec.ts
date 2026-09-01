@@ -90,8 +90,7 @@ test.describe("Navigation", () => {
     await page.goto("/dashboard")
 
     const navLinks: Array<[string, RegExp]> = [
-      // The CI/CD entry is labelled "Workflows"; its route is still /repositories.
-      ["Workflows", /\/repositories/],
+      ["Workflows", /\/workflows/],
       ["Docker", /\/docker$/],
       ["Terraform", /\/infrastructure$/],
       // Ansible is its own Infrastructure entry, not a tab under Terraform.
@@ -139,7 +138,7 @@ test.describe("Navigation", () => {
       ["/dashboard", "Dashboard - GreenSecOps"],
       // Docker page titles are asserted in docker.spec.ts — this loop shares
       // one test timeout across every goto, so it stays short.
-      ["/repositories", "Repositories - GreenSecOps"],
+      ["/workflows", "Workflows - GreenSecOps"],
       ["/rules", "Rules - GreenSecOps"],
       ["/badges", "Badges - GreenSecOps"],
       ["/billing", "Billing - GreenSecOps"],

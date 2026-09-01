@@ -536,7 +536,7 @@ function Dashboard() {
                                 }) => (
                                   <Link
                                     key={repoId}
-                                    to="/repositories/$repoId/static-analysis"
+                                    to="/workflows/$repoId/static-analysis"
                                     params={{ repoId }}
                                     className="grid grid-cols-[1fr_3.5rem_4rem_4rem_4rem] items-center px-6 py-3 gap-3 hover:bg-muted/50 transition-colors"
                                   >

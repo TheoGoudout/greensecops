@@ -77,7 +77,7 @@ test.describe("Golden Path — Extended", () => {
       },
     )
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
     await expect(page.getByText("acme/web-app")).toBeVisible()
 
     await page.getByRole("button", { name: "Trigger analysis" }).click()
@@ -86,7 +86,7 @@ test.describe("Golden Path — Extended", () => {
 
     await page.getByText("acme/web-app").first().click()
     await expect(page).toHaveURL(
-      new RegExp(`/repositories/${MOCK_REPO.id}/static-analysis`),
+      new RegExp(`/workflows/${MOCK_REPO.id}/static-analysis`),
     )
 
     // Analysis rows live in the collapsible history; open it and follow the
@@ -159,7 +159,7 @@ test.describe("Golden Path — Extended", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     const fixBtn = page.getByRole("button", { name: /Fix selected/ })
     await expect(fixBtn).toBeVisible()
@@ -210,7 +210,7 @@ test.describe("Golden Path — Extended", () => {
     })
 
     // Integrate action lives on the Telemetry tab now.
-    await page.goto(`/repositories/${MOCK_REPO.id}/telemetry`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/telemetry`)
 
     await page.getByRole("button", { name: "Integrate action" }).click()
 

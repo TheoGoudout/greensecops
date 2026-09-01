@@ -61,8 +61,8 @@ test.describe("Auth redirects — unauthenticated", () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 5000 })
   })
 
-  test("accessing /repositories redirects to /login", async ({ page }) => {
-    await page.goto("/repositories")
+  test("accessing /workflows redirects to /login", async ({ page }) => {
+    await page.goto("/workflows")
     await expect(page).toHaveURL(/\/login/, { timeout: 5000 })
   })
 

@@ -135,7 +135,7 @@ test.describe("Repository Detail", () => {
   }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await expect(page.getByText("acme/web-app")).toBeVisible()
     await expect(
@@ -146,7 +146,7 @@ test.describe("Repository Detail", () => {
   test("header shows lock icon for private repos", async ({ page }) => {
     await setupRepoMocks(page, { repo: MOCK_REPO_PRIVATE })
 
-    await page.goto(`/repositories/${MOCK_REPO_PRIVATE.id}`)
+    await page.goto(`/workflows/${MOCK_REPO_PRIVATE.id}`)
 
     await expect(page.getByText("acme/secret-service")).toBeVisible()
     await expect(
@@ -157,7 +157,7 @@ test.describe("Repository Detail", () => {
   test("header hides lock icon for public repos", async ({ page }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await expect(page.getByText("acme/web-app")).toBeVisible()
     await expect(page.locator('[aria-label="Private repository"]')).toHaveCount(
@@ -170,7 +170,7 @@ test.describe("Repository Detail", () => {
   }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     // Default route redirects to the merged Static analysis tab.
     await expect(page).toHaveURL(new RegExp(`/${MOCK_REPO.id}/static-analysis`))
@@ -183,7 +183,7 @@ test.describe("Repository Detail", () => {
   }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page
@@ -197,7 +197,7 @@ test.describe("Repository Detail", () => {
   }) => {
     await setupRepoMocks(page, { workflowFiles: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("No workflow files found")).toBeVisible()
   })
@@ -205,7 +205,7 @@ test.describe("Repository Detail", () => {
   test("Analysis history section lists analyses", async ({ page }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await page.getByRole("button", { name: /Analysis history/ }).click()
     await expect(page.getByText("manual")).toBeVisible()
@@ -215,7 +215,7 @@ test.describe("Repository Detail", () => {
     const findings = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
     await setupRepoMocks(page, { findings })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     const fixBtn = page.getByRole("button", { name: /Fix selected/ })
     await expect(fixBtn).toBeVisible()
@@ -232,7 +232,7 @@ test.describe("Repository Detail", () => {
       fixes: [MOCK_FIX_READY],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("ready").first()).toBeVisible()
   })
@@ -282,7 +282,7 @@ test.describe("Repository Detail", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     const btn = page.getByRole("button", {
       name: "Create PR for all workflows",
@@ -300,7 +300,7 @@ test.describe("Repository Detail", () => {
       pullRequests: [MOCK_PR_OPEN],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/pull-requests`)
 
     await expect(page.getByText("acme/web-app/pull/42")).toBeVisible()
     await expect(page.getByText("open").first()).toBeVisible()
@@ -336,7 +336,7 @@ test.describe("Repository Detail", () => {
       ],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/pull-requests`)
 
     await expect(page.getByText("acme/web-app/pull/42")).toBeVisible()
     await expect(page.getByText("acme/web-app/pull/43")).toHaveCount(0)
@@ -368,7 +368,7 @@ test.describe("Repository Detail", () => {
       ],
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/pull-requests`)
 
     await expect(page.getByText("All workflows")).toBeVisible()
     await expect(page.getByText("Integrate action")).toBeVisible()
@@ -377,7 +377,7 @@ test.describe("Repository Detail", () => {
   test("PRs tab empty state", async ({ page }) => {
     await setupRepoMocks(page, { fixes: [], pullRequests: [] })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/pull-requests`)
 
     await expect(
       page.getByText("No GreenSecOps-created PRs yet."),
@@ -387,7 +387,7 @@ test.describe("Repository Detail", () => {
   test("Run analysis button triggers analysis", async ({ page }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await page.getByRole("button", { name: "Run analysis" }).click()
 
@@ -397,7 +397,7 @@ test.describe("Repository Detail", () => {
   test("Sync from GitHub reports what changed", async ({ page }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await page.getByRole("button", { name: "Sync from GitHub" }).click()
 
@@ -412,7 +412,7 @@ test.describe("Repository Detail", () => {
   }) => {
     await setupRepoMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await expect(page.getByText(/Synced at abc1234/)).toBeVisible()
   })
@@ -424,7 +424,7 @@ test.describe("Repository Detail", () => {
       route.fulfill({ json: { runs: [], average: null } })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/telemetry`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/telemetry`)
 
     await page.getByRole("button", { name: "Integrate action" }).click()
 

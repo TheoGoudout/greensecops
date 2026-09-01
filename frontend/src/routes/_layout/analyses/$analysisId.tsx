@@ -92,8 +92,8 @@ function AnalysisDetail() {
           <Link
             to={
               analysis?.repo_id
-                ? "/repositories/$repoId/static-analysis"
-                : "/repositories"
+                ? "/workflows/$repoId/static-analysis"
+                : "/workflows"
             }
             params={
               analysis?.repo_id ? { repoId: analysis.repo_id } : undefined

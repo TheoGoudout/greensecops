@@ -12,7 +12,7 @@ import {
   mockUserMe,
 } from "./utils/mocks"
 
-test.describe("Repositories", () => {
+test.describe("Workflows", () => {
   test.beforeEach(async ({ page }) => {
     await mockUserMe(page)
     await mockEvents(page)
@@ -25,11 +25,9 @@ test.describe("Repositories", () => {
   test("shows repo list with name, branch, and grade", async ({ page }) => {
     await mockRepositories(page, [MOCK_REPO, MOCK_REPO_DISABLED])
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
-    await expect(
-      page.getByRole("heading", { name: "Repositories" }),
-    ).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible()
     await expect(page.getByText("acme/web-app")).toBeVisible()
     await expect(page.getByText("acme/old-service")).toBeVisible()
     await expect(page.getByText("main").first()).toBeVisible()
@@ -38,7 +36,7 @@ test.describe("Repositories", () => {
   test("shows lock icon for private repos only", async ({ page }) => {
     await mockRepositories(page, [MOCK_REPO, MOCK_REPO_PRIVATE])
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     const publicRow = page.getByText("acme/web-app").locator("..")
     const privateRow = page.getByText("acme/secret-service").locator("..")
@@ -53,7 +51,7 @@ test.describe("Repositories", () => {
   test("empty state when no repos", async ({ page }) => {
     await mockRepositories(page, [])
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await expect(
       page.getByText(
@@ -79,7 +77,7 @@ test.describe("Repositories", () => {
       }
     })
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     const switchEl = page.locator("button[role='switch']").first()
     await switchEl.click()
@@ -109,7 +107,7 @@ test.describe("Repositories", () => {
       },
     )
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await page.getByRole("button", { name: "Trigger analysis" }).click()
 
@@ -120,17 +118,17 @@ test.describe("Repositories", () => {
   test("clicking repo navigates to detail", async ({ page }) => {
     await mockRepositories(page, [MOCK_REPO])
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await page.getByText("acme/web-app").click()
 
-    await expect(page).toHaveURL(new RegExp(`/repositories/${MOCK_REPO.id}`))
+    await expect(page).toHaveURL(new RegExp(`/workflows/${MOCK_REPO.id}`))
   })
 
   test("Install GitHub App button is visible", async ({ page }) => {
     await mockRepositories(page, [MOCK_REPO])
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await expect(
       page.getByRole("button", { name: "Install GitHub App" }),
@@ -143,7 +141,7 @@ test.describe("Repositories", () => {
       route.fulfill({ json: [] })
     })
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await expect(page.locator(".animate-pulse").first()).toBeVisible()
   })

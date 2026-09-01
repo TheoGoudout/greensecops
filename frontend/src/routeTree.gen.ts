@@ -24,6 +24,7 @@ import { Route as LayoutInfrastructureRouteImport } from './routes/_layout/infra
 import { Route as LayoutRepositoriesRouteImport } from './routes/_layout/repositories'
 import { Route as LayoutRulesRouteImport } from './routes/_layout/rules'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
+import { Route as LayoutWorkflowsRouteImport } from './routes/_layout/workflows'
 import { Route as LayoutAnalysesAnalysisIdRouteImport } from './routes/_layout/analyses/$analysisId'
 import { Route as LayoutBadgesIndexRouteImport } from './routes/_layout/badges/index'
 import { Route as LayoutBadgesAnsibleRouteImport } from './routes/_layout/badges/ansible'
@@ -40,7 +41,9 @@ import { Route as LayoutInfrastructureRepoIdRouteImport } from './routes/_layout
 import { Route as LayoutInfrastructureAnsibleRouteImport } from './routes/_layout/infrastructure/ansible'
 import { Route as LayoutInfrastructureBadgesRouteImport } from './routes/_layout/infrastructure/badges'
 import { Route as LayoutRepositoriesIndexRouteImport } from './routes/_layout/repositories/index'
-import { Route as LayoutRepositoriesRepoIdRouteImport } from './routes/_layout/repositories/$repoId'
+import { Route as LayoutRepositoriesSplatRouteImport } from './routes/_layout/repositories/$'
+import { Route as LayoutWorkflowsIndexRouteImport } from './routes/_layout/workflows/index'
+import { Route as LayoutWorkflowsRepoIdRouteImport } from './routes/_layout/workflows/$repoId'
 import { Route as AuthGithubAppCallbackRouteImport } from './routes/auth/github/app-callback'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as LayoutDockerRepoIdIndexRouteImport } from './routes/_layout/docker/$repoId/index'
@@ -54,10 +57,10 @@ import { Route as LayoutInfrastructureRepoIdCloudRouteImport } from './routes/_l
 import { Route as LayoutInfrastructureRepoIdDockerRouteImport } from './routes/_layout/infrastructure/$repoId/docker'
 import { Route as LayoutInfrastructureRepoIdPullRequestsRouteImport } from './routes/_layout/infrastructure/$repoId/pull-requests'
 import { Route as LayoutInfrastructureRepoIdTerraformRouteImport } from './routes/_layout/infrastructure/$repoId/terraform'
-import { Route as LayoutRepositoriesRepoIdIndexRouteImport } from './routes/_layout/repositories/$repoId/index'
-import { Route as LayoutRepositoriesRepoIdPullRequestsRouteImport } from './routes/_layout/repositories/$repoId/pull-requests'
-import { Route as LayoutRepositoriesRepoIdStaticAnalysisRouteImport } from './routes/_layout/repositories/$repoId/static-analysis'
-import { Route as LayoutRepositoriesRepoIdTelemetryRouteImport } from './routes/_layout/repositories/$repoId/telemetry'
+import { Route as LayoutWorkflowsRepoIdIndexRouteImport } from './routes/_layout/workflows/$repoId/index'
+import { Route as LayoutWorkflowsRepoIdPullRequestsRouteImport } from './routes/_layout/workflows/$repoId/pull-requests'
+import { Route as LayoutWorkflowsRepoIdStaticAnalysisRouteImport } from './routes/_layout/workflows/$repoId/static-analysis'
+import { Route as LayoutWorkflowsRepoIdTelemetryRouteImport } from './routes/_layout/workflows/$repoId/telemetry'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -131,6 +134,11 @@ const LayoutRulesRoute = LayoutRulesRouteImport.update({
 const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutWorkflowsRoute = LayoutWorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAnalysesAnalysisIdRoute =
@@ -219,12 +227,21 @@ const LayoutRepositoriesIndexRoute = LayoutRepositoriesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRepositoriesRoute,
 } as any)
-const LayoutRepositoriesRepoIdRoute =
-  LayoutRepositoriesRepoIdRouteImport.update({
-    id: '/$repoId',
-    path: '/$repoId',
-    getParentRoute: () => LayoutRepositoriesRoute,
-  } as any)
+const LayoutRepositoriesSplatRoute = LayoutRepositoriesSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => LayoutRepositoriesRoute,
+} as any)
+const LayoutWorkflowsIndexRoute = LayoutWorkflowsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LayoutWorkflowsRoute,
+} as any)
+const LayoutWorkflowsRepoIdRoute = LayoutWorkflowsRepoIdRouteImport.update({
+  id: '/$repoId',
+  path: '/$repoId',
+  getParentRoute: () => LayoutWorkflowsRoute,
+} as any)
 const AuthGithubAppCallbackRoute = AuthGithubAppCallbackRouteImport.update({
   id: '/auth/github/app-callback',
   path: '/auth/github/app-callback',
@@ -299,29 +316,29 @@ const LayoutInfrastructureRepoIdTerraformRoute =
     path: '/terraform',
     getParentRoute: () => LayoutInfrastructureRepoIdRoute,
   } as any)
-const LayoutRepositoriesRepoIdIndexRoute =
-  LayoutRepositoriesRepoIdIndexRouteImport.update({
+const LayoutWorkflowsRepoIdIndexRoute =
+  LayoutWorkflowsRepoIdIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
+    getParentRoute: () => LayoutWorkflowsRepoIdRoute,
   } as any)
-const LayoutRepositoriesRepoIdPullRequestsRoute =
-  LayoutRepositoriesRepoIdPullRequestsRouteImport.update({
+const LayoutWorkflowsRepoIdPullRequestsRoute =
+  LayoutWorkflowsRepoIdPullRequestsRouteImport.update({
     id: '/pull-requests',
     path: '/pull-requests',
-    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
+    getParentRoute: () => LayoutWorkflowsRepoIdRoute,
   } as any)
-const LayoutRepositoriesRepoIdStaticAnalysisRoute =
-  LayoutRepositoriesRepoIdStaticAnalysisRouteImport.update({
+const LayoutWorkflowsRepoIdStaticAnalysisRoute =
+  LayoutWorkflowsRepoIdStaticAnalysisRouteImport.update({
     id: '/static-analysis',
     path: '/static-analysis',
-    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
+    getParentRoute: () => LayoutWorkflowsRepoIdRoute,
   } as any)
-const LayoutRepositoriesRepoIdTelemetryRoute =
-  LayoutRepositoriesRepoIdTelemetryRouteImport.update({
+const LayoutWorkflowsRepoIdTelemetryRoute =
+  LayoutWorkflowsRepoIdTelemetryRouteImport.update({
     id: '/telemetry',
     path: '/telemetry',
-    getParentRoute: () => LayoutRepositoriesRepoIdRoute,
+    getParentRoute: () => LayoutWorkflowsRepoIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -339,6 +356,7 @@ export interface FileRoutesByFullPath {
   '/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/rules': typeof LayoutRulesRoute
   '/settings': typeof LayoutSettingsRoute
+  '/workflows': typeof LayoutWorkflowsRouteWithChildren
   '/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/badges/ansible': typeof LayoutBadgesAnsibleRoute
   '/badges/cloud': typeof LayoutBadgesCloudRoute
@@ -351,13 +369,15 @@ export interface FileRoutesByFullPath {
   '/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdRouteWithChildren
   '/infrastructure/ansible': typeof LayoutInfrastructureAnsibleRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
-  '/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
+  '/repositories/$': typeof LayoutRepositoriesSplatRoute
+  '/workflows/$repoId': typeof LayoutWorkflowsRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/badges/': typeof LayoutBadgesIndexRoute
   '/docker/': typeof LayoutDockerIndexRoute
   '/infrastructure/': typeof LayoutInfrastructureIndexRoute
   '/repositories/': typeof LayoutRepositoriesIndexRoute
+  '/workflows/': typeof LayoutWorkflowsIndexRoute
   '/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
   '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
@@ -367,12 +387,12 @@ export interface FileRoutesByFullPath {
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
   '/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
   '/infrastructure/$repoId/terraform': typeof LayoutInfrastructureRepoIdTerraformRoute
-  '/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
-  '/repositories/$repoId/static-analysis': typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
-  '/repositories/$repoId/telemetry': typeof LayoutRepositoriesRepoIdTelemetryRoute
+  '/workflows/$repoId/pull-requests': typeof LayoutWorkflowsRepoIdPullRequestsRoute
+  '/workflows/$repoId/static-analysis': typeof LayoutWorkflowsRepoIdStaticAnalysisRoute
+  '/workflows/$repoId/telemetry': typeof LayoutWorkflowsRepoIdTelemetryRoute
   '/docker/$repoId/': typeof LayoutDockerRepoIdIndexRoute
   '/infrastructure/$repoId/': typeof LayoutInfrastructureRepoIdIndexRoute
-  '/repositories/$repoId/': typeof LayoutRepositoriesRepoIdIndexRoute
+  '/workflows/$repoId/': typeof LayoutWorkflowsRepoIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -395,12 +415,14 @@ export interface FileRoutesByTo {
   '/fixes/$fixId': typeof LayoutFixesFixIdRoute
   '/infrastructure/ansible': typeof LayoutInfrastructureAnsibleRoute
   '/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
+  '/repositories/$': typeof LayoutRepositoriesSplatRoute
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/badges': typeof LayoutBadgesIndexRoute
   '/docker': typeof LayoutDockerIndexRoute
   '/infrastructure': typeof LayoutInfrastructureIndexRoute
   '/repositories': typeof LayoutRepositoriesIndexRoute
+  '/workflows': typeof LayoutWorkflowsIndexRoute
   '/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
   '/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
@@ -410,12 +432,12 @@ export interface FileRoutesByTo {
   '/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
   '/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
   '/infrastructure/$repoId/terraform': typeof LayoutInfrastructureRepoIdTerraformRoute
-  '/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
-  '/repositories/$repoId/static-analysis': typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
-  '/repositories/$repoId/telemetry': typeof LayoutRepositoriesRepoIdTelemetryRoute
+  '/workflows/$repoId/pull-requests': typeof LayoutWorkflowsRepoIdPullRequestsRoute
+  '/workflows/$repoId/static-analysis': typeof LayoutWorkflowsRepoIdStaticAnalysisRoute
+  '/workflows/$repoId/telemetry': typeof LayoutWorkflowsRepoIdTelemetryRoute
   '/docker/$repoId': typeof LayoutDockerRepoIdIndexRoute
   '/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdIndexRoute
-  '/repositories/$repoId': typeof LayoutRepositoriesRepoIdIndexRoute
+  '/workflows/$repoId': typeof LayoutWorkflowsRepoIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -433,6 +455,7 @@ export interface FileRoutesById {
   '/_layout/repositories': typeof LayoutRepositoriesRouteWithChildren
   '/_layout/rules': typeof LayoutRulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
+  '/_layout/workflows': typeof LayoutWorkflowsRouteWithChildren
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/analyses/$analysisId': typeof LayoutAnalysesAnalysisIdRoute
   '/_layout/badges/ansible': typeof LayoutBadgesAnsibleRoute
@@ -446,13 +469,15 @@ export interface FileRoutesById {
   '/_layout/infrastructure/$repoId': typeof LayoutInfrastructureRepoIdRouteWithChildren
   '/_layout/infrastructure/ansible': typeof LayoutInfrastructureAnsibleRoute
   '/_layout/infrastructure/badges': typeof LayoutInfrastructureBadgesRoute
-  '/_layout/repositories/$repoId': typeof LayoutRepositoriesRepoIdRouteWithChildren
+  '/_layout/repositories/$': typeof LayoutRepositoriesSplatRoute
+  '/_layout/workflows/$repoId': typeof LayoutWorkflowsRepoIdRouteWithChildren
   '/auth/github/app-callback': typeof AuthGithubAppCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/_layout/badges/': typeof LayoutBadgesIndexRoute
   '/_layout/docker/': typeof LayoutDockerIndexRoute
   '/_layout/infrastructure/': typeof LayoutInfrastructureIndexRoute
   '/_layout/repositories/': typeof LayoutRepositoriesIndexRoute
+  '/_layout/workflows/': typeof LayoutWorkflowsIndexRoute
   '/_layout/docker/$repoId/analysis': typeof LayoutDockerRepoIdAnalysisRoute
   '/_layout/docker/$repoId/pull-requests': typeof LayoutDockerRepoIdPullRequestsRoute
   '/_layout/docker/$repoId/runtime': typeof LayoutDockerRepoIdRuntimeRoute
@@ -462,12 +487,12 @@ export interface FileRoutesById {
   '/_layout/infrastructure/$repoId/docker': typeof LayoutInfrastructureRepoIdDockerRoute
   '/_layout/infrastructure/$repoId/pull-requests': typeof LayoutInfrastructureRepoIdPullRequestsRoute
   '/_layout/infrastructure/$repoId/terraform': typeof LayoutInfrastructureRepoIdTerraformRoute
-  '/_layout/repositories/$repoId/pull-requests': typeof LayoutRepositoriesRepoIdPullRequestsRoute
-  '/_layout/repositories/$repoId/static-analysis': typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
-  '/_layout/repositories/$repoId/telemetry': typeof LayoutRepositoriesRepoIdTelemetryRoute
+  '/_layout/workflows/$repoId/pull-requests': typeof LayoutWorkflowsRepoIdPullRequestsRoute
+  '/_layout/workflows/$repoId/static-analysis': typeof LayoutWorkflowsRepoIdStaticAnalysisRoute
+  '/_layout/workflows/$repoId/telemetry': typeof LayoutWorkflowsRepoIdTelemetryRoute
   '/_layout/docker/$repoId/': typeof LayoutDockerRepoIdIndexRoute
   '/_layout/infrastructure/$repoId/': typeof LayoutInfrastructureRepoIdIndexRoute
-  '/_layout/repositories/$repoId/': typeof LayoutRepositoriesRepoIdIndexRoute
+  '/_layout/workflows/$repoId/': typeof LayoutWorkflowsRepoIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -486,6 +511,7 @@ export interface FileRouteTypes {
     | '/repositories'
     | '/rules'
     | '/settings'
+    | '/workflows'
     | '/analyses/$analysisId'
     | '/badges/ansible'
     | '/badges/cloud'
@@ -498,13 +524,15 @@ export interface FileRouteTypes {
     | '/infrastructure/$repoId'
     | '/infrastructure/ansible'
     | '/infrastructure/badges'
-    | '/repositories/$repoId'
+    | '/repositories/$'
+    | '/workflows/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/badges/'
     | '/docker/'
     | '/infrastructure/'
     | '/repositories/'
+    | '/workflows/'
     | '/docker/$repoId/analysis'
     | '/docker/$repoId/pull-requests'
     | '/docker/$repoId/runtime'
@@ -514,12 +542,12 @@ export interface FileRouteTypes {
     | '/infrastructure/$repoId/docker'
     | '/infrastructure/$repoId/pull-requests'
     | '/infrastructure/$repoId/terraform'
-    | '/repositories/$repoId/pull-requests'
-    | '/repositories/$repoId/static-analysis'
-    | '/repositories/$repoId/telemetry'
+    | '/workflows/$repoId/pull-requests'
+    | '/workflows/$repoId/static-analysis'
+    | '/workflows/$repoId/telemetry'
     | '/docker/$repoId/'
     | '/infrastructure/$repoId/'
-    | '/repositories/$repoId/'
+    | '/workflows/$repoId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -542,12 +570,14 @@ export interface FileRouteTypes {
     | '/fixes/$fixId'
     | '/infrastructure/ansible'
     | '/infrastructure/badges'
+    | '/repositories/$'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/badges'
     | '/docker'
     | '/infrastructure'
     | '/repositories'
+    | '/workflows'
     | '/docker/$repoId/analysis'
     | '/docker/$repoId/pull-requests'
     | '/docker/$repoId/runtime'
@@ -557,12 +587,12 @@ export interface FileRouteTypes {
     | '/infrastructure/$repoId/docker'
     | '/infrastructure/$repoId/pull-requests'
     | '/infrastructure/$repoId/terraform'
-    | '/repositories/$repoId/pull-requests'
-    | '/repositories/$repoId/static-analysis'
-    | '/repositories/$repoId/telemetry'
+    | '/workflows/$repoId/pull-requests'
+    | '/workflows/$repoId/static-analysis'
+    | '/workflows/$repoId/telemetry'
     | '/docker/$repoId'
     | '/infrastructure/$repoId'
-    | '/repositories/$repoId'
+    | '/workflows/$repoId'
   id:
     | '__root__'
     | '/_layout'
@@ -579,6 +609,7 @@ export interface FileRouteTypes {
     | '/_layout/repositories'
     | '/_layout/rules'
     | '/_layout/settings'
+    | '/_layout/workflows'
     | '/_layout/'
     | '/_layout/analyses/$analysisId'
     | '/_layout/badges/ansible'
@@ -592,13 +623,15 @@ export interface FileRouteTypes {
     | '/_layout/infrastructure/$repoId'
     | '/_layout/infrastructure/ansible'
     | '/_layout/infrastructure/badges'
-    | '/_layout/repositories/$repoId'
+    | '/_layout/repositories/$'
+    | '/_layout/workflows/$repoId'
     | '/auth/github/app-callback'
     | '/auth/github/callback'
     | '/_layout/badges/'
     | '/_layout/docker/'
     | '/_layout/infrastructure/'
     | '/_layout/repositories/'
+    | '/_layout/workflows/'
     | '/_layout/docker/$repoId/analysis'
     | '/_layout/docker/$repoId/pull-requests'
     | '/_layout/docker/$repoId/runtime'
@@ -608,12 +641,12 @@ export interface FileRouteTypes {
     | '/_layout/infrastructure/$repoId/docker'
     | '/_layout/infrastructure/$repoId/pull-requests'
     | '/_layout/infrastructure/$repoId/terraform'
-    | '/_layout/repositories/$repoId/pull-requests'
-    | '/_layout/repositories/$repoId/static-analysis'
-    | '/_layout/repositories/$repoId/telemetry'
+    | '/_layout/workflows/$repoId/pull-requests'
+    | '/_layout/workflows/$repoId/static-analysis'
+    | '/_layout/workflows/$repoId/telemetry'
     | '/_layout/docker/$repoId/'
     | '/_layout/infrastructure/$repoId/'
-    | '/_layout/repositories/$repoId/'
+    | '/_layout/workflows/$repoId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -733,6 +766,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/workflows': {
+      id: '/_layout/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof LayoutWorkflowsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/analyses/$analysisId': {
       id: '/_layout/analyses/$analysisId'
       path: '/analyses/$analysisId'
@@ -845,12 +885,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRepositoriesIndexRouteImport
       parentRoute: typeof LayoutRepositoriesRoute
     }
-    '/_layout/repositories/$repoId': {
-      id: '/_layout/repositories/$repoId'
-      path: '/$repoId'
-      fullPath: '/repositories/$repoId'
-      preLoaderRoute: typeof LayoutRepositoriesRepoIdRouteImport
+    '/_layout/repositories/$': {
+      id: '/_layout/repositories/$'
+      path: '/$'
+      fullPath: '/repositories/$'
+      preLoaderRoute: typeof LayoutRepositoriesSplatRouteImport
       parentRoute: typeof LayoutRepositoriesRoute
+    }
+    '/_layout/workflows/': {
+      id: '/_layout/workflows/'
+      path: '/'
+      fullPath: '/workflows/'
+      preLoaderRoute: typeof LayoutWorkflowsIndexRouteImport
+      parentRoute: typeof LayoutWorkflowsRoute
+    }
+    '/_layout/workflows/$repoId': {
+      id: '/_layout/workflows/$repoId'
+      path: '/$repoId'
+      fullPath: '/workflows/$repoId'
+      preLoaderRoute: typeof LayoutWorkflowsRepoIdRouteImport
+      parentRoute: typeof LayoutWorkflowsRoute
     }
     '/auth/github/app-callback': {
       id: '/auth/github/app-callback'
@@ -943,33 +997,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInfrastructureRepoIdTerraformRouteImport
       parentRoute: typeof LayoutInfrastructureRepoIdRoute
     }
-    '/_layout/repositories/$repoId/': {
-      id: '/_layout/repositories/$repoId/'
+    '/_layout/workflows/$repoId/': {
+      id: '/_layout/workflows/$repoId/'
       path: '/'
-      fullPath: '/repositories/$repoId/'
-      preLoaderRoute: typeof LayoutRepositoriesRepoIdIndexRouteImport
-      parentRoute: typeof LayoutRepositoriesRepoIdRoute
+      fullPath: '/workflows/$repoId/'
+      preLoaderRoute: typeof LayoutWorkflowsRepoIdIndexRouteImport
+      parentRoute: typeof LayoutWorkflowsRepoIdRoute
     }
-    '/_layout/repositories/$repoId/pull-requests': {
-      id: '/_layout/repositories/$repoId/pull-requests'
+    '/_layout/workflows/$repoId/pull-requests': {
+      id: '/_layout/workflows/$repoId/pull-requests'
       path: '/pull-requests'
-      fullPath: '/repositories/$repoId/pull-requests'
-      preLoaderRoute: typeof LayoutRepositoriesRepoIdPullRequestsRouteImport
-      parentRoute: typeof LayoutRepositoriesRepoIdRoute
+      fullPath: '/workflows/$repoId/pull-requests'
+      preLoaderRoute: typeof LayoutWorkflowsRepoIdPullRequestsRouteImport
+      parentRoute: typeof LayoutWorkflowsRepoIdRoute
     }
-    '/_layout/repositories/$repoId/static-analysis': {
-      id: '/_layout/repositories/$repoId/static-analysis'
+    '/_layout/workflows/$repoId/static-analysis': {
+      id: '/_layout/workflows/$repoId/static-analysis'
       path: '/static-analysis'
-      fullPath: '/repositories/$repoId/static-analysis'
-      preLoaderRoute: typeof LayoutRepositoriesRepoIdStaticAnalysisRouteImport
-      parentRoute: typeof LayoutRepositoriesRepoIdRoute
+      fullPath: '/workflows/$repoId/static-analysis'
+      preLoaderRoute: typeof LayoutWorkflowsRepoIdStaticAnalysisRouteImport
+      parentRoute: typeof LayoutWorkflowsRepoIdRoute
     }
-    '/_layout/repositories/$repoId/telemetry': {
-      id: '/_layout/repositories/$repoId/telemetry'
+    '/_layout/workflows/$repoId/telemetry': {
+      id: '/_layout/workflows/$repoId/telemetry'
       path: '/telemetry'
-      fullPath: '/repositories/$repoId/telemetry'
-      preLoaderRoute: typeof LayoutRepositoriesRepoIdTelemetryRouteImport
-      parentRoute: typeof LayoutRepositoriesRepoIdRoute
+      fullPath: '/workflows/$repoId/telemetry'
+      preLoaderRoute: typeof LayoutWorkflowsRepoIdTelemetryRouteImport
+      parentRoute: typeof LayoutWorkflowsRepoIdRoute
     }
   }
 }
@@ -1076,41 +1130,53 @@ const LayoutInfrastructureRouteChildren: LayoutInfrastructureRouteChildren = {
 const LayoutInfrastructureRouteWithChildren =
   LayoutInfrastructureRoute._addFileChildren(LayoutInfrastructureRouteChildren)
 
-interface LayoutRepositoriesRepoIdRouteChildren {
-  LayoutRepositoriesRepoIdPullRequestsRoute: typeof LayoutRepositoriesRepoIdPullRequestsRoute
-  LayoutRepositoriesRepoIdStaticAnalysisRoute: typeof LayoutRepositoriesRepoIdStaticAnalysisRoute
-  LayoutRepositoriesRepoIdTelemetryRoute: typeof LayoutRepositoriesRepoIdTelemetryRoute
-  LayoutRepositoriesRepoIdIndexRoute: typeof LayoutRepositoriesRepoIdIndexRoute
-}
-
-const LayoutRepositoriesRepoIdRouteChildren: LayoutRepositoriesRepoIdRouteChildren =
-  {
-    LayoutRepositoriesRepoIdPullRequestsRoute:
-      LayoutRepositoriesRepoIdPullRequestsRoute,
-    LayoutRepositoriesRepoIdStaticAnalysisRoute:
-      LayoutRepositoriesRepoIdStaticAnalysisRoute,
-    LayoutRepositoriesRepoIdTelemetryRoute:
-      LayoutRepositoriesRepoIdTelemetryRoute,
-    LayoutRepositoriesRepoIdIndexRoute: LayoutRepositoriesRepoIdIndexRoute,
-  }
-
-const LayoutRepositoriesRepoIdRouteWithChildren =
-  LayoutRepositoriesRepoIdRoute._addFileChildren(
-    LayoutRepositoriesRepoIdRouteChildren,
-  )
-
 interface LayoutRepositoriesRouteChildren {
-  LayoutRepositoriesRepoIdRoute: typeof LayoutRepositoriesRepoIdRouteWithChildren
+  LayoutRepositoriesSplatRoute: typeof LayoutRepositoriesSplatRoute
   LayoutRepositoriesIndexRoute: typeof LayoutRepositoriesIndexRoute
 }
 
 const LayoutRepositoriesRouteChildren: LayoutRepositoriesRouteChildren = {
-  LayoutRepositoriesRepoIdRoute: LayoutRepositoriesRepoIdRouteWithChildren,
+  LayoutRepositoriesSplatRoute: LayoutRepositoriesSplatRoute,
   LayoutRepositoriesIndexRoute: LayoutRepositoriesIndexRoute,
 }
 
 const LayoutRepositoriesRouteWithChildren =
   LayoutRepositoriesRoute._addFileChildren(LayoutRepositoriesRouteChildren)
+
+interface LayoutWorkflowsRepoIdRouteChildren {
+  LayoutWorkflowsRepoIdPullRequestsRoute: typeof LayoutWorkflowsRepoIdPullRequestsRoute
+  LayoutWorkflowsRepoIdStaticAnalysisRoute: typeof LayoutWorkflowsRepoIdStaticAnalysisRoute
+  LayoutWorkflowsRepoIdTelemetryRoute: typeof LayoutWorkflowsRepoIdTelemetryRoute
+  LayoutWorkflowsRepoIdIndexRoute: typeof LayoutWorkflowsRepoIdIndexRoute
+}
+
+const LayoutWorkflowsRepoIdRouteChildren: LayoutWorkflowsRepoIdRouteChildren = {
+  LayoutWorkflowsRepoIdPullRequestsRoute:
+    LayoutWorkflowsRepoIdPullRequestsRoute,
+  LayoutWorkflowsRepoIdStaticAnalysisRoute:
+    LayoutWorkflowsRepoIdStaticAnalysisRoute,
+  LayoutWorkflowsRepoIdTelemetryRoute: LayoutWorkflowsRepoIdTelemetryRoute,
+  LayoutWorkflowsRepoIdIndexRoute: LayoutWorkflowsRepoIdIndexRoute,
+}
+
+const LayoutWorkflowsRepoIdRouteWithChildren =
+  LayoutWorkflowsRepoIdRoute._addFileChildren(
+    LayoutWorkflowsRepoIdRouteChildren,
+  )
+
+interface LayoutWorkflowsRouteChildren {
+  LayoutWorkflowsRepoIdRoute: typeof LayoutWorkflowsRepoIdRouteWithChildren
+  LayoutWorkflowsIndexRoute: typeof LayoutWorkflowsIndexRoute
+}
+
+const LayoutWorkflowsRouteChildren: LayoutWorkflowsRouteChildren = {
+  LayoutWorkflowsRepoIdRoute: LayoutWorkflowsRepoIdRouteWithChildren,
+  LayoutWorkflowsIndexRoute: LayoutWorkflowsIndexRoute,
+}
+
+const LayoutWorkflowsRouteWithChildren = LayoutWorkflowsRoute._addFileChildren(
+  LayoutWorkflowsRouteChildren,
+)
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
@@ -1122,6 +1188,7 @@ interface LayoutRouteChildren {
   LayoutRepositoriesRoute: typeof LayoutRepositoriesRouteWithChildren
   LayoutRulesRoute: typeof LayoutRulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
+  LayoutWorkflowsRoute: typeof LayoutWorkflowsRouteWithChildren
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutAnalysesAnalysisIdRoute: typeof LayoutAnalysesAnalysisIdRoute
   LayoutFixesFixIdRoute: typeof LayoutFixesFixIdRoute
@@ -1137,6 +1204,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutRepositoriesRoute: LayoutRepositoriesRouteWithChildren,
   LayoutRulesRoute: LayoutRulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
+  LayoutWorkflowsRoute: LayoutWorkflowsRouteWithChildren,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutAnalysesAnalysisIdRoute: LayoutAnalysesAnalysisIdRoute,
   LayoutFixesFixIdRoute: LayoutFixesFixIdRoute,

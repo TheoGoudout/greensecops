@@ -51,21 +51,21 @@ const PAGES: PageConfig[] = [
 
   // App pages (login required)
   { name: "dashboard", route: "/dashboard", auth: true },
-  { name: "repositories", route: "/repositories", auth: true },
-  { name: "repository-detail", route: `/repositories/${REPO_ID}`, auth: true },
+  { name: "workflows", route: "/workflows", auth: true },
+  { name: "repository-detail", route: `/workflows/${REPO_ID}`, auth: true },
   {
     name: "repository-static-analysis",
-    route: `/repositories/${REPO_ID}/static-analysis`,
+    route: `/workflows/${REPO_ID}/static-analysis`,
     auth: true,
   },
   {
     name: "repository-telemetry",
-    route: `/repositories/${REPO_ID}/telemetry`,
+    route: `/workflows/${REPO_ID}/telemetry`,
     auth: true,
   },
   {
     name: "repository-pull-requests",
-    route: `/repositories/${REPO_ID}/pull-requests`,
+    route: `/workflows/${REPO_ID}/pull-requests`,
     auth: true,
   },
   { name: "docker", route: "/docker", auth: true },

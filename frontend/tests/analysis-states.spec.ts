@@ -150,7 +150,7 @@ test.describe("Analysis States", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     // The per-run analysis list is now the collapsible "Analysis history".
     await page.getByRole("button", { name: /Analysis history/ }).click()
@@ -181,7 +181,7 @@ test.describe("Analysis States", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     // Both files appear as rows in the collapsible "Analysis history".
     await page.getByRole("button", { name: /Analysis history/ }).click()
