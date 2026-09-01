@@ -65,11 +65,7 @@ jobs:
         # The deploy-terraform-opa hook shells out to the opa binary. Version
         # pinned to match opa/Dockerfile and .github/workflows/opa.yml so local,
         # server and CI evaluation all agree.
-        run: |
-          curl -fsSL -o /usr/local/bin/opa \
-            "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static"
-          chmod +x /usr/local/bin/opa
-          opa version
+        run: .github/scripts/shared/install-opa.sh
         env:
           OPA_VERSION: "1.19.0"
       - name: Install backend dependencies
@@ -77,30 +73,14 @@ jobs:
       - name: Install frontend dependencies
         run: bun ci
       - name: Prepare env files
-        # The generate-openapi-client hook imports the backend app, which
-        # instantiates Settings and therefore needs the required env vars.
-        run: |
-          cp .env.example .env
-          cp frontend/.env.example frontend/.env
-          # FIRST_SUPERUSER_PASSWORD is required but left empty in the example
-          # (env_ignore_empty drops empty values), so give it a non-empty value.
-          printf '\nFIRST_SUPERUSER_PASSWORD=ci-not-a-real-password\n' >> .env
+        run: .github/scripts/pre-commit/prepare-env-files.sh
       - name: Run prek - pre-commit
         id: precommit
         run: uv run prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
         continue-on-error: true
       - name: Commit and push changes
         if: env.HAS_SECRETS == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "🎨 Auto format and update with pre-commit"
-            git push
-          fi
+        run: .github/scripts/pre-commit/commit-and-push.sh
       - uses: pre-commit-ci/lite-action@5d6cc0eb514c891a40562a58a8e71576c5c7fb43 # v1.1.0
         if: env.HAS_SECRETS == 'false'
         with:

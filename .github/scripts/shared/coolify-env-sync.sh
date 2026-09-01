@@ -17,7 +17,7 @@
 # derived from — so both halves of a deployment cannot disagree about what a
 # hostname is, which is the whole of the bug above.
 #
-#   COOLIFY_URL=... COOLIFY_TOKEN=... coolify_env_sync.sh <environment> <uuid>
+#   COOLIFY_URL=... COOLIFY_TOKEN=... coolify-env-sync.sh <environment> <uuid>
 #
 # Idempotent: it reads the resource's current values first and calls nothing for
 # the ones already correct, so an ordinary run reports no changes at all.
@@ -38,15 +38,13 @@ fi
 
 ENVIRONMENT=$1
 UUID=$2
-ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(cd -- "$(dirname -- "$0")/../../.." && pwd)
 ENV_FILE="${ROOT}/deploy/cloudflare/env/${ENVIRONMENT}.env"
 
-for name in COOLIFY_URL COOLIFY_TOKEN; do
-  if [ -z "${!name:-}" ]; then
-    echo "::error::The ${name} secret is not set." >&2
-    exit 1
-  fi
-done
+# shellcheck source=.github/scripts/lib/coolify.sh
+. "${ROOT}/.github/scripts/lib/coolify.sh"
+
+coolify_require_env COOLIFY_URL COOLIFY_TOKEN
 
 # An empty UUID would otherwise reach the API as /applications//envs and come
 # back as an unhelpful 404 rather than as the missing secret it is.
@@ -93,34 +91,6 @@ if [ "${invalid}" -ne 0 ]; then
   exit 1
 fi
 
-status=""
-body=""
-
-# Sets `status` and `body`. Call it directly — never inside $( ), which would
-# run it in a subshell and discard both assignments.
-#
-# Not `curl -f`: that throws away the response body on an error status, which is
-# the half of a 4xx that says *why*. Losing it turned the first real release
-# failure into a bare "curl: (22) 404" with nothing to act on.
-call() {
-  local method=$1 path=$2
-  shift 2
-  local response
-  response=$(curl -sS --max-time 60 -w '\n%{http_code}' -X "${method}" \
-    -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-    -H "Content-Type: application/json" \
-    "${COOLIFY_URL}/api/v1${path}" "$@")
-  status=${response##*$'\n'}
-  body=${response%$'\n'*}
-}
-
-require_ok() {
-  if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
-    echo "::error::$1 failed with HTTP ${status}: ${body}" >&2
-    exit 1
-  fi
-}
-
 # Current values, so the common case makes no write at all and the changes this
 # does make can be reported honestly.
 #
@@ -128,19 +98,19 @@ require_ok() {
 # unequal costs one redundant PATCH rather than correctness — the upsert below
 # is idempotent, so treating an unreadable value as differing is safe.
 echo "Reading the current variables on ${UUID}"
-call GET "/applications/${UUID}/envs"
-require_ok "Listing the resource's environment variables"
+coolify_call GET "/applications/${UUID}/envs"
+coolify_require_ok "Listing the resource's environment variables"
 
 current=$(jq -c '
   (if type == "array" then . else (.data // .envs // []) end)
   | map({(.key // ""): (.value // "")})
   | add // {}
-' <<<"${body}" 2>/dev/null || echo '{}')
+' <<<"${coolify_body}" 2>/dev/null || echo '{}')
 
 changes=()
 
 sync_one() {
-  local key=$1 value=$2 previous payload
+  local key=$1 value=$2 previous
   if jq -e --arg k "${key}" 'has($k)' <<<"${current}" >/dev/null; then
     previous=$(jq -r --arg k "${key}" '.[$k]' <<<"${current}")
   else
@@ -152,20 +122,7 @@ sync_one() {
     return
   fi
 
-  payload=$(jq -nc --arg k "${key}" --arg v "${value}" '{key: $k, value: $v}')
-
-  # Upsert, because PATCH and POST are not interchangeable here: PATCH updates
-  # an existing variable and 404s when there is none; POST creates one. Which
-  # applies depends on whether the variable was ever set on this resource by
-  # hand — not something a deploy should have an opinion about.
-  call PATCH "/applications/${UUID}/envs" -d "${payload}"
-  if [ "${status}" = "404" ]; then
-    echo "  No ${key} on this resource yet — creating it."
-    call POST "/applications/${UUID}/envs" -d "${payload}"
-    require_ok "Creating ${key}"
-  else
-    require_ok "Setting ${key}"
-  fi
+  coolify_upsert_env "${UUID}" "${key}" "${value}"
 
   echo "  ${key}: ${previous} -> ${value}"
   changes+=("${key}|${previous}|${value}")

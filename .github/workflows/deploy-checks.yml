@@ -10,6 +10,7 @@ on:
       - "scripts/validate_coolify_compose.py"
       - "scripts/validate_landing_defaults.py"
       - ".github/workflows/deploy-checks.yml"
+      - ".github/scripts/**"
       # The version-drift job below. Without these the job would be
       # unreachable on exactly the commits it exists to police — none of the
       # paths above match a manifest bump.
@@ -31,6 +32,7 @@ on:
       - "scripts/validate_coolify_compose.py"
       - "scripts/validate_landing_defaults.py"
       - ".github/workflows/deploy-checks.yml"
+      - ".github/scripts/**"
       # The version-drift job below. Without these the job would be
       # unreachable on exactly the commits it exists to police — none of the
       # paths above match a manifest bump.
@@ -63,32 +65,20 @@ jobs:
           persist-credentials: false
 
       - name: Install Terraform
-        # Installed directly rather than via an action: one fewer third-party
-        # dependency to pin, matching how opa.yml installs the OPA binary.
-        run: |
-          curl -fsSL -o /tmp/terraform.zip \
-            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-          sudo unzip -o -q /tmp/terraform.zip -d /usr/local/bin
-          terraform version
+        run: .github/scripts/deploy-checks/install-terraform.sh
 
       - name: Check formatting
         run: terraform fmt -check -recursive -diff deploy/terraform
 
       - name: Validate the main root
-        # -backend=false so no state bucket and no AWS credentials are needed;
-        # this checks the configuration, it does not touch an account.
         env:
           TF_IN_AUTOMATION: "1"
-        run: |
-          terraform -chdir=deploy/terraform init -backend=false -input=false
-          terraform -chdir=deploy/terraform validate
+        run: .github/scripts/deploy-checks/validate-root.sh deploy/terraform
 
       - name: Validate the bootstrap root
         env:
           TF_IN_AUTOMATION: "1"
-        run: |
-          terraform -chdir=deploy/terraform/bootstrap init -backend=false -input=false
-          terraform -chdir=deploy/terraform/bootstrap validate
+        run: .github/scripts/deploy-checks/validate-root.sh deploy/terraform/bootstrap
 
   coolify:
     name: Coolify compose drift
