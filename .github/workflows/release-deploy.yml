@@ -122,7 +122,7 @@ jobs:
     name: Static surfaces (production)
     # Gated on the API being live, not merely started. The coolify job blocks
     # until Coolify reports `finished`, so this ordering is real.
-    needs: [verify, coolify]
+    needs: [coolify]
     uses: ./.github/workflows/pages-reusable.yml
     # See pages.yml: a caller's permissions cap every job in the called
     # workflow, so api-gate's declaration has to be granted here too.
