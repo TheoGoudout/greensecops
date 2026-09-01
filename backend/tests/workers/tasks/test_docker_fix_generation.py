@@ -308,3 +308,36 @@ def test_prompt_reads_findings_that_outlived_their_session(
     assert result["status"] == FixStatus.ready.value
     assert f"rule: {rule_slug}" in captured["user"]
     assert "runs as root" in captured["user"]
+
+
+def test_prompt_names_the_repository_the_image_is_built_from(
+    db: Session, target: DockerTarget, repo: Repository, rule: Rule
+) -> None:
+    """The OCI annotation has to point at *this* repository.
+
+    Nothing in the prompt named it, so the model wrote the URL from the rule's
+    own example and every fixed image claimed to come from
+    `github.com/example/app`.
+    """
+    full_name = repo.full_name
+    finding = _finding(db, target, rule, "Dockerfile")
+    _pending_fix(db, target, "Dockerfile")
+    captured: dict[str, str] = {}
+    llm_content = (
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>"
+    )
+    with (
+        patch(
+            "app.workers.tasks.docker_fix_generation._fetch_docker_files",
+            return_value=[FakeDockerFile(path="Dockerfile", content=_DOCKERFILE)],
+        ),
+        patch(
+            "app.services.llm.catalog.get_provider",
+            return_value=_CapturingProvider(llm_content, captured),
+        ),
+    ):
+        result = run_docker_fix_generation([str(finding.id)])
+
+    assert result["status"] == FixStatus.ready.value
+    assert f"https://github.com/{full_name}" in captured["user"]
+    assert "**Repository**" in captured["user"]

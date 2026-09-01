@@ -6,6 +6,7 @@ from app.models import DockerBuildEnrichment, DockerFinding
 from app.models.enums import Category, Severity
 from app.services.llm.docker_fix_prompt import (
     NO_STATIC_FINDINGS_PLACEHOLDER,
+    RepositoryFacts,
     build_docker_fix_prompt,
 )
 
@@ -99,3 +100,68 @@ def test_system_prompt_tells_the_model_to_trust_the_measurements() -> None:
         runtime_findings=[_enrichment("peaked at 420 MB", "Set a limit.")],
     )
     assert "measured runtime facts" in system.lower()
+
+
+# ─── Repository facts (OCI annotations) ──────────────────────────────────────
+
+
+def test_prompt_without_a_repository_has_no_repository_section() -> None:
+    """A caller that cannot resolve the repository tells the model nothing.
+
+    Nothing is the safe state: the alternative is a label pointing somewhere
+    else, which tooling believes.
+    """
+    _, user = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.11\n",
+        findings=[_finding("no OCI source label")],
+    )
+    assert "**Repository**" not in user
+
+
+def test_repository_facts_give_the_annotations_a_real_url() -> None:
+    """The label has to name *this* repository.
+
+    With no repository in the prompt the model reached for the URL in the
+    rule's own example, so every fixed image claimed to come from
+    `github.com/example/app`.
+    """
+    _, user = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.11\n",
+        findings=[_finding("no OCI source label")],
+        repository=RepositoryFacts.from_full_name("acme/web-app"),
+    )
+    assert "https://github.com/acme/web-app" in user
+    # The image title is the repository's own name, not the owner-qualified one.
+    assert "`org.opencontainers.image.title`: web-app" in user
+
+
+def test_repository_facts_derive_the_url_from_the_full_name() -> None:
+    facts = RepositoryFacts.from_full_name("acme/web-app")
+    assert facts.url == "https://github.com/acme/web-app"
+    assert facts.image_title == "web-app"
+
+
+def test_system_prompt_forbids_placeholder_annotations() -> None:
+    system, _ = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.11\n",
+        findings=[_finding("no OCI source label")],
+    )
+    assert "Never write an example or placeholder URL" in system
+    # A revision baked in as a literal is wrong on every later build.
+    assert "org.opencontainers.image.revision" in system
+
+
+def test_repository_and_measured_sections_coexist() -> None:
+    _, user = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.11\n",
+        findings=[_finding("no OCI source label")],
+        runtime_findings=[_enrichment("peaked at 420 MB", "set a memory limit")],
+        repository=RepositoryFacts.from_full_name("acme/web-app"),
+    )
+    assert user.index("**Repository**") < user.index("**Measured runtime facts**")
+    assert "peaked at 420 MB" in user
+    assert "https://github.com/acme/web-app" in user

@@ -1,7 +1,31 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models import DockerBuildEnrichment, DockerFinding
+
+
+@dataclass(frozen=True)
+class RepositoryFacts:
+    """What the model needs to know about the repository it is editing.
+
+    Only facts, never guidance: the source URL and the image name are values
+    that belong *in* the file, and without them the model has nothing to write
+    but a placeholder.
+    """
+
+    full_name: str
+    url: str
+
+    @property
+    def image_title(self) -> str:
+        """The repository's own name, without the owner — the image's title."""
+        return self.full_name.rsplit("/", 1)[-1]
+
+    @classmethod
+    def from_full_name(cls, full_name: str) -> "RepositoryFacts":
+        return cls(full_name=full_name, url=f"https://github.com/{full_name}")
+
 
 DOCKER_FIX_SYSTEM_PROMPT = """You are a container and build-systems expert. Fix security, reliability, energy-efficiency and maintainability issues in a Dockerfile or a Docker Compose file.
 
@@ -26,6 +50,8 @@ Rules specific to Dockerfiles:
 - Do NOT reorder instructions unless a finding specifically requires it (a cache-ordering finding does; a missing USER does not)
 - When adding a USER, create the account first (`RUN useradd --system ...` or the base image's documented unprivileged user) — a USER referring to an account that doesn't exist makes the image fail to start
 - When pinning to a digest, do NOT invent one. If a finding asks for a digest you do not know, leave the reference alone and list the finding under <unfixed>
+- For OCI annotations (`org.opencontainers.image.*`), use ONLY the values from the "Repository" section below. Never write an example or placeholder URL — a label pointing at someone else's repository is worse than no label, because tooling believes it
+- Annotations whose value changes every build — `revision`, `created`, `version` — are not literals. Declare them as build arguments (`ARG` plus `LABEL org.opencontainers.image.revision=$VCS_REF`) or leave them out; hardcoding one bakes a lie into every later image
 
 Rules specific to Compose files:
 - Keep service names, network names and volume names unchanged — other files and deploy scripts reference them
@@ -45,13 +71,20 @@ DOCKER_FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following findings in this {
 
 **Findings to fix:**
 {findings_block}
-{runtime_block}
+{repository_block}{runtime_block}
 **Current file (`{file_path}`):**
 ```{fence}
 {file_content}
 ```
 
 Return the <full_content> and <unfixed> blocks — no markdown, no explanation."""
+
+REPOSITORY_HEADER = """
+**Repository** — the real values for this file's OCI annotations. Use these exactly; do not substitute an example:
+- `org.opencontainers.image.source`: {url}
+- `org.opencontainers.image.url`: {url}
+- `org.opencontainers.image.title`: {title}
+"""
 
 RUNTIME_EVIDENCE_HEADER = """
 **Measured runtime facts** — observed while these containers actually ran in CI. Use these numbers rather than estimating:
@@ -79,12 +112,26 @@ def _build_runtime_block(enrichments: "list[DockerBuildEnrichment]") -> str:
     return RUNTIME_EVIDENCE_HEADER.format(evidence_block=evidence_block)
 
 
+def _build_repository_block(repository: RepositoryFacts | None) -> str:
+    """Name the repository being edited, so annotations can be true.
+
+    ``missing_oci_labels`` asks for ``org.opencontainers.image.source``
+    pointing at "the repository URL". With no repository in the prompt the
+    model had no URL to point at and wrote the one from the rule's own example,
+    so every fixed image claimed to come from ``github.com/example/app``.
+    """
+    if repository is None:
+        return ""
+    return REPOSITORY_HEADER.format(url=repository.url, title=repository.image_title)
+
+
 def build_docker_fix_prompt(
     file_path: str,
     file_content: str,
     findings: "list[DockerFinding]",
     kind: str = "dockerfile",
     runtime_findings: "list[DockerBuildEnrichment] | None" = None,
+    repository: RepositoryFacts | None = None,
 ) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt) for one file's Docker findings.
 
@@ -97,6 +144,11 @@ def build_docker_fix_prompt(
     accompany static findings, or stand alone: a measurement like "peaked at
     420 MB with no limit set" is actionable even when no static rule fired,
     which is the whole reason runtime telemetry can produce a fix at all.
+
+    ``repository`` supplies the values an OCI annotation has to carry. It is
+    optional because a caller that cannot resolve the repository must still be
+    able to fix everything else — the model is then told nothing rather than
+    told something wrong.
     """
     findings_block = "\n".join(
         f"{i + 1}. [{finding.severity.value.upper()}] {finding.message}"
@@ -109,6 +161,7 @@ def build_docker_fix_prompt(
         file_kind="Docker Compose file" if is_compose else "Dockerfile",
         fence="yaml" if is_compose else "dockerfile",
         findings_block=findings_block or NO_STATIC_FINDINGS_PLACEHOLDER,
+        repository_block=_build_repository_block(repository),
         runtime_block=_build_runtime_block(runtime_findings or []),
         file_path=file_path,
         file_content=file_content,
