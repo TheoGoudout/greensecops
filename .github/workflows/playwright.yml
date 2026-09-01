@@ -4,10 +4,24 @@ on:
   push:
     branches:
     - main
+    paths:
+    - backend/**
+    - frontend/**
+    - .env.example
+    - frontend/.env.example
+    - compose*.yml
+    - .github/workflows/playwright.yml
   pull_request:
     types:
     - opened
     - synchronize
+    paths:
+    - backend/**
+    - frontend/**
+    - .env.example
+    - frontend/.env.example
+    - compose*.yml
+    - .github/workflows/playwright.yml
   workflow_dispatch:
     inputs:
       debug_enabled:
