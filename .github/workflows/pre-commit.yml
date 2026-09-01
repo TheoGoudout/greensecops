@@ -5,6 +5,9 @@ on:
     types:
       - opened
       - synchronize
+    paths:
+      - '**'
+      - '!docs/**'
 
 permissions: {}
 
@@ -45,7 +48,7 @@ jobs:
           fetch-depth: 0
           # A token other than the default GITHUB_TOKEN is needed to be able to trigger CI
           token: ${{ secrets.PRE_COMMIT }} # zizmor: ignore[secrets-outside-env]
-          persist-credentials: true # zizmor: ignore[artipacked] -- required for `git push`; see above
+          persist-credentials: false # zizmor: ignore[artipacked] -- required for `git push`; see above
       # pre-commit lite ci needs the default checkout configs to work
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         name: Checkout PR for fork
