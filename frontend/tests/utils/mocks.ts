@@ -139,6 +139,14 @@ export const MOCK_REPO = {
   created_at: "2024-01-01T00:00:00Z",
   avg_score: 82,
   grade: "B",
+  // Each engine's own average. The Docker one is deliberately *not* the worst
+  // of MOCK_DOCKER_TARGET's grades (C and E): that difference is what the
+  // Docker header test asserts on.
+  engine_grades: [
+    { engine: "workflow" as const, score: 82, grade: "B" },
+    { engine: "docker" as const, score: 61, grade: "D" },
+    { engine: "terraform" as const, score: 91, grade: "A" },
+  ],
 }
 
 export const MOCK_REPO_DISABLED = {
@@ -192,6 +200,9 @@ export const MOCK_REPO_PRIVATE = {
   created_at: "2024-01-01T00:00:00Z",
   avg_score: 90,
   grade: "A",
+  // Deliberately empty: a repository no engine has scored has no per-engine
+  // grade, and its headers should render "-" rather than an invented letter.
+  engine_grades: [],
 }
 
 // ── Workflow files ────────────────────────────────────────────────────

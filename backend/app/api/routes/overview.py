@@ -53,6 +53,7 @@ from app.models import (
     WorkflowFinding,
     WorkflowScan,
 )
+from app.services.engine_scores import latest_scan_order, latest_scan_subquery
 from app.services.engines import OVERVIEW_SPECS, OverviewSpec
 from app.services.scoring import GRADE_LADDER, score_to_grade
 from app.services.state_machines import IN_FLIGHT_STATUSES
@@ -99,23 +100,6 @@ def _finding_org_filter(spec: OverviewSpec, org_ids: set[uuid.UUID]) -> Any:
     )
 
 
-def _latest_scan_order(spec: OverviewSpec) -> list[Any]:
-    """How to pick a target's most recent scan.
-
-    Two orderings already exist in this codebase and they disagree:
-    ``mappers/base.latest_completed_scan`` takes ``max(created_at)``, while
-    ``get_issue_stats``' correlated subquery orders by ``completed_at`` first.
-    Rather than silently picking one, each engine keeps the ordering its own
-    endpoints already use — so this endpoint's Docker grade always matches what
-    ``GET /docker-targets/`` reports, and its CI counts always match
-    ``GET /workflow/findings/stats``.
-    """
-    order = [col(spec.scan_model.created_at).desc()]
-    if spec.scan_orders_by_completed_at:
-        order.insert(0, col(spec.scan_model.completed_at).desc().nulls_last())
-    return order
-
-
 def _latest_only_predicate(spec: OverviewSpec) -> Any:
     """Pin a finding to the latest completed scan of its own target.
 
@@ -132,40 +116,12 @@ def _latest_only_predicate(spec: OverviewSpec) -> Any:
         select(spec.scan_model.id)
         .where(spec.scan_target_fk == spec.finding_target_fk)
         .where(spec.scan_model.status == spec.scan_completed)
-        .order_by(*_latest_scan_order(spec))
+        .order_by(*latest_scan_order(spec))
         .limit(1)
         .correlate(spec.finding_model)
         .scalar_subquery()
     )
     return spec.finding_scan_fk == latest
-
-
-def _latest_scan_subquery(spec: OverviewSpec, *, completed_only: bool) -> Any:
-    """One row per target: its most recent scan.
-
-    A window function rather than a correlated subquery because the coverage
-    query touches every target in the org — this is one sorted pass over the
-    scan table instead of an index probe per target. (``DISTINCT ON`` would be
-    tighter still, but it is Postgres-only and appears nowhere else here.)
-    """
-    query = select(  # type: ignore[call-overload]
-        spec.scan_target_fk.label("target_id"),
-        col(spec.scan_model.status).label("status"),
-        col(spec.scan_model.score).label("score"),
-        col(spec.scan_model.grade).label("grade"),
-        col(spec.scan_model.completed_at).label("completed_at"),
-        col(spec.scan_model.created_at).label("created_at"),
-        func.row_number()
-        .over(
-            partition_by=spec.scan_target_fk,
-            order_by=_latest_scan_order(spec),
-        )
-        .label("rn"),
-    )
-    if completed_only:
-        query = query.where(spec.scan_model.status == spec.scan_completed)
-    inner = query.subquery()
-    return select(inner).where(inner.c.rn == 1).subquery()
 
 
 # ─── Per-engine aggregates ────────────────────────────────────────────────────
@@ -179,8 +135,8 @@ def _coverage_and_score(
     Grouped by the latest completed scan's grade so the grade distribution
     falls out of the same pass; every scalar is folded from the group rows.
     """
-    latest_completed = _latest_scan_subquery(spec, completed_only=True)
-    latest_any = _latest_scan_subquery(spec, completed_only=False)
+    latest_completed = latest_scan_subquery(spec, completed_only=True)
+    latest_any = latest_scan_subquery(spec, completed_only=False)
 
     query = select(spec.target_model.id)
     if spec.target_join is not None:
