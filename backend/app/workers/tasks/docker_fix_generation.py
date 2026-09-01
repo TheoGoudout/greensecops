@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import uuid
 from typing import TYPE_CHECKING
 
@@ -8,6 +10,7 @@ from app.models import DockerBuildEnrichment, DockerFinding, DockerTarget, Repos
 from app.services.docker.compose_parser import parse_compose_content
 from app.services.docker.dockerfile_parser import parse_dockerfile_content
 from app.services.docker.merge import COMPOSE, classify_docker_file
+from app.services.docker.registry import resolve_base_image_digests
 from app.services.engines import DOCKER_ENGINE
 from app.services.file_fix_generation import (
     MISSING_CONTENT_ERROR as MISSING_CONTENT_ERROR,  # re-exported for callers/tests
@@ -15,6 +18,8 @@ from app.services.file_fix_generation import (
 from app.services.file_fix_generation import generate_file_fix, load_findings
 from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
 from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.services.llm.docker_fix_prompt import RepositoryFacts
@@ -87,6 +92,30 @@ def _repository_facts(
     return RepositoryFacts.from_full_name(repo.full_name)
 
 
+def _base_image_digests(path: str, content: str) -> dict[str, str]:
+    """Digests for the unpinned base images in ``content``, looked up live.
+
+    Resolved here rather than at scan time because the fix rewrites the file
+    the model is looking at now, and a digest recorded days ago may no longer
+    be what the tag points at. A Compose file has no ``FROM`` to resolve, and a
+    registry that will not answer leaves the map empty — the prompt then offers
+    nothing, and the model is told to leave those references alone.
+
+    Never raises: an unreachable registry must cost the fix its digests, not
+    the whole rewrite.
+    """
+    if classify_docker_file(path) == COMPOSE:
+        return {}
+    parsed = parse_dockerfile_content(path, content)
+    if parsed is None:
+        return {}
+    try:
+        return asyncio.run(resolve_base_image_digests(parsed))
+    except Exception:
+        logger.warning("Base image digest lookup failed for %s", path, exc_info=True)
+        return {}
+
+
 @celery_app.task(name="docker_fix_generation.run", bind=True, max_retries=3)
 def run_docker_fix_generation(
     self: object,  # noqa: ARG001
@@ -142,6 +171,7 @@ def run_docker_fix_generation(
             kind=classify_docker_file(path) or "dockerfile",
             runtime_findings=enrichments,
             repository=repository,
+            base_image_digests=_base_image_digests(path, content),
         )
 
     return generate_file_fix(

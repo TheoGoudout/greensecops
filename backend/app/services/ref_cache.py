@@ -1,10 +1,14 @@
-"""Redis caching for GitHub ref lookups, shared by the two callers that do them.
+"""Redis caching for immutable upstream lookups, shared by everything that does one.
 
-``sha_resolver`` (which feeds the fix-generation prompt) and ``action_metadata``
-(which feeds the analysis rules) ask GitHub the same kind of question and want
-the same stampede protection. This was inlined in the first of them; the second
+``github/sha_resolver`` (which feeds the fix-generation prompt),
+``github/action_metadata`` (which feeds the analysis rules) and
+``docker/registry`` (which resolves base-image digests) all ask an upstream the
+same kind of question — "what does this reference point at?" — and all want the
+same stampede protection. This was inlined in the first of them; the second
 needed it too, and a second copy of a cache is a second set of TTLs to keep in
-step.
+step. The third is why it no longer lives under ``services/github``: a container
+registry is not GitHub, and the answer to that question is cached the same way
+whoever is asked.
 
 The one thing lifted rather than copied verbatim is the TTL: the original was a
 flat 24 hours, which is right for a resolved answer and wrong for a failed one.

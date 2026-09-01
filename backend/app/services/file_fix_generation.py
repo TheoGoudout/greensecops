@@ -128,12 +128,20 @@ def generate_file_fix(
             return _fail(session, fix, FILE_NOT_FOUND_ERROR)
 
         try:
+            # Built before the event loop starts, not inside it. An engine's
+            # `build_prompt` is synchronous, and the Docker one resolves
+            # base-image digests from a registry — which it cannot do from
+            # inside a running loop, since `asyncio.run` refuses to nest.
+            # `_generate` called it first thing anyway, so this only moves the
+            # call one frame out; a failure in either still fails the fix with
+            # its own message.
+            system_prompt, user_prompt = build_prompt(
+                file_path, source.content, findings
+            )
             result = asyncio.run(
                 _generate(
-                    build_prompt=build_prompt,
-                    file_path=file_path,
-                    file_content=source.content,
-                    findings=findings,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
                     provider_str=fix.llm_provider.value,
                     model_str=fix.llm_model,
                 )
@@ -182,15 +190,12 @@ def generate_file_fix(
 
 
 async def _generate(
-    build_prompt: Callable[[str, str, list[Any]], tuple[str, str]],
-    file_path: str,
-    file_content: str,
-    findings: list[Any],
+    system_prompt: str,
+    user_prompt: str,
     provider_str: str,
     model_str: str,
 ) -> LLMResponse:
     from app.services.llm.catalog import get_provider
 
     provider = get_provider(provider=provider_str, model=model_str)
-    system_prompt, user_prompt = build_prompt(file_path, file_content, findings)
     return await provider.generate(system_prompt, user_prompt)

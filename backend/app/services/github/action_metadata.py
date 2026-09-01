@@ -29,7 +29,7 @@ import redis.asyncio as aioredis
 from github import Github
 from github.GithubException import GithubException, UnknownObjectException
 
-from app.services.github._ref_cache import cached_fetch, close_cache, open_cache
+from app.services.ref_cache import cached_fetch, close_cache, open_cache
 
 logger = logging.getLogger(__name__)
 

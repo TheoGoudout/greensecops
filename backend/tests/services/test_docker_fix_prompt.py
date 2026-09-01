@@ -165,3 +165,43 @@ def test_repository_and_measured_sections_coexist() -> None:
     assert user.index("**Repository**") < user.index("**Measured runtime facts**")
     assert "peaked at 420 MB" in user
     assert "https://github.com/acme/web-app" in user
+
+
+# ─── Verified base image digests ─────────────────────────────────────────────
+
+
+def test_prompt_without_digests_has_no_digest_section() -> None:
+    _, user = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.11\n",
+        findings=[_finding("base image is not pinned")],
+    )
+    assert "Verified base image digests" not in user
+
+
+def test_verified_digests_are_offered_with_the_tag_kept() -> None:
+    """The rule wants `image:tag@sha256:...`, so the prompt shows that shape.
+
+    Without any digest to offer, the system prompt's honest instruction was
+    "leave it and report it unfixable" — which meant `unpinned_base_image` was
+    effectively never auto-fixed.
+    """
+    digest = "sha256:" + "cd" * 32
+    _, user = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.12-slim\n",
+        findings=[_finding("base image is not pinned")],
+        base_image_digests={"python:3.12-slim": digest},
+    )
+    assert "Verified base image digests" in user
+    assert f"python:3.12-slim@{digest}" in user
+
+
+def test_system_prompt_allows_only_the_listed_digests() -> None:
+    system, _ = build_docker_fix_prompt(
+        file_path="Dockerfile",
+        file_content="FROM python:3.11\n",
+        findings=[_finding("base image is not pinned")],
+    )
+    assert "Verified base image digests" in system
+    assert "do NOT invent or guess a digest" in system
