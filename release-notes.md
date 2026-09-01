@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* fix(readme): put the badge in the row of badges, not above it. PR [#309](https://github.com/TheoGoudout/greensecops/pull/309) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(engines): follow a running scan to its result without a reload. PR [#306](https://github.com/TheoGoudout/greensecops/pull/306) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(github): pin the telemetry action to a real SHA when its tag is absent. PR [#307](https://github.com/TheoGoudout/greensecops/pull/307) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(repositories): report every engine's average grade, not just CI's. PR [#305](https://github.com/TheoGoudout/greensecops/pull/305) by [@TheoGoudout](https://github.com/TheoGoudout).
