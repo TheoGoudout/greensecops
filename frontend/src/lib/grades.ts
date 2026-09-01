@@ -1,3 +1,5 @@
+import type { Engine, RepoEngineGrade } from "@/client"
+
 // Grades run best → worst. Plain string comparison gets this wrong for the
 // plus grades ("A+" > "A" lexically, but it is the better grade), so ordering
 // goes through this table.
@@ -32,4 +34,19 @@ export function worstGrade(
   return known.reduce((worst, g) =>
     gradeRank(g) > gradeRank(worst) ? g : worst,
   )
+}
+
+/**
+ * One engine's average grade for a repository, or `null` if it has none.
+ *
+ * The repository endpoint reports a grade per engine. Reading the engine's own
+ * entry is what stops a page showing the CI grade under a Docker heading, or
+ * falling back to `worstGrade` over its targets — which is not an average, and
+ * let one bad target set the header for all of them.
+ */
+export function engineGrade(
+  repo: { engine_grades?: RepoEngineGrade[] } | undefined,
+  engine: Engine,
+): string | null {
+  return repo?.engine_grades?.find((g) => g.engine === engine)?.grade ?? null
 }

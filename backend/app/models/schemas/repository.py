@@ -8,11 +8,25 @@ from sqlmodel import Field, SQLModel
 from ..enums import (
     Category,
     CIStatus,
+    Engine,
     PullRequestState,
     ReviewDecision,
     Severity,
     UserTier,
 )
+
+
+class RepoEngineGrade(SQLModel):
+    """One engine's average grade for a repository.
+
+    Only engines that have actually scored the repo appear. An engine that has
+    never run has no entry, which is a different statement from a bad grade and
+    is what lets a page render "—" rather than an invented letter.
+    """
+
+    engine: Engine
+    score: float
+    grade: str
 
 
 class RepositoryPublic(SQLModel):
@@ -33,8 +47,14 @@ class RepositoryPublic(SQLModel):
     # repos, which use plain badge URLs. The frontend appends it as ``?sig=``.
     badge_sig: str | None = None
     created_at: datetime | None = None
+    # The CI-workflow average, kept under its historical names because badges,
+    # the dashboard and the repository list all read them. It is the same
+    # number as the `workflow` entry in `engine_grades`.
     avg_score: float | None = None
     grade: str | None = None
+    # Every engine's own average, so each engine's page shows its own grade
+    # rather than the CI one or the worst of its targets'.
+    engine_grades: list[RepoEngineGrade] = []
 
 
 class ExternalRepositoryCreate(SQLModel):

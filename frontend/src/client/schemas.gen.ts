@@ -3458,6 +3458,30 @@ export const RepoCategoryStatSchema = {
 are grouped per repo.`
 } as const;
 
+export const RepoEngineGradeSchema = {
+    properties: {
+        engine: {
+            '$ref': '#/components/schemas/Engine'
+        },
+        score: {
+            type: 'number',
+            title: 'Score'
+        },
+        grade: {
+            type: 'string',
+            title: 'Grade'
+        }
+    },
+    type: 'object',
+    required: ['engine', 'score', 'grade'],
+    title: 'RepoEngineGrade',
+    description: `One engine's average grade for a repository.
+
+Only engines that have actually scored the repo appear. An engine that has
+never run has no entry, which is a different statement from a bad grade and
+is what lets a page render "—" rather than an invented letter.`
+} as const;
+
 export const RepoFindingStatsSchema = {
     properties: {
         repo_id: {
@@ -3609,6 +3633,14 @@ export const RepositoryPublicSchema = {
                 }
             ],
             title: 'Grade'
+        },
+        engine_grades: {
+            items: {
+                '$ref': '#/components/schemas/RepoEngineGrade'
+            },
+            type: 'array',
+            title: 'Engine Grades',
+            default: []
         }
     },
     type: 'object',

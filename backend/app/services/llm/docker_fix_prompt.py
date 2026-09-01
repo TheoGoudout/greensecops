@@ -49,7 +49,7 @@ Rules specific to Dockerfiles:
 - Preserve the multi-stage structure and every stage name; other stages and external tooling reference them by name
 - Do NOT reorder instructions unless a finding specifically requires it (a cache-ordering finding does; a missing USER does not)
 - When adding a USER, create the account first (`RUN useradd --system ...` or the base image's documented unprivileged user) — a USER referring to an account that doesn't exist makes the image fail to start
-- When pinning to a digest, do NOT invent one. If a finding asks for a digest you do not know, leave the reference alone and list the finding under <unfixed>
+- CRITICAL: when pinning a base image to a digest, use ONLY a digest from the "Verified base image digests" section below, and keep the tag alongside it (`FROM image:tag@sha256:...`) so the pin stays reviewable. If a reference you need is not listed there, do NOT invent or guess a digest — leave that FROM alone and list the finding under <unfixed>
 - For OCI annotations (`org.opencontainers.image.*`), use ONLY the values from the "Repository" section below. Never write an example or placeholder URL — a label pointing at someone else's repository is worse than no label, because tooling believes it
 - Annotations whose value changes every build — `revision`, `created`, `version` — are not literals. Declare them as build arguments (`ARG` plus `LABEL org.opencontainers.image.revision=$VCS_REF`) or leave them out; hardcoding one bakes a lie into every later image
 
@@ -71,13 +71,18 @@ DOCKER_FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following findings in this {
 
 **Findings to fix:**
 {findings_block}
-{repository_block}{runtime_block}
+{digest_block}{repository_block}{runtime_block}
 **Current file (`{file_path}`):**
 ```{fence}
 {file_content}
 ```
 
 Return the <full_content> and <unfixed> blocks — no markdown, no explanation."""
+
+DIGEST_HEADER = """
+**Verified base image digests** — looked up from the registry just now. These are the only digests you may write; anything not listed here must keep its current reference:
+{digest_block}
+"""
 
 REPOSITORY_HEADER = """
 **Repository** — the real values for this file's OCI annotations. Use these exactly; do not substitute an example:
@@ -112,6 +117,23 @@ def _build_runtime_block(enrichments: "list[DockerBuildEnrichment]") -> str:
     return RUNTIME_EVIDENCE_HEADER.format(evidence_block=evidence_block)
 
 
+def _build_digest_block(digests: dict[str, str]) -> str:
+    """Offer verified digests, the way the workflow prompt offers action SHAs.
+
+    ``unpinned_base_image`` wants ``image:tag@sha256:...`` and the prompt could
+    supply no digest, so the honest instruction was "leave it and report it
+    unfixable" — which meant the rule was effectively never auto-fixed. With the
+    real values in hand the model can pin, and "never invent one" still governs
+    everything absent from this list.
+    """
+    if not digests:
+        return ""
+    digest_block = "\n".join(
+        f"- {ref}  →  {ref}@{digest}" for ref, digest in sorted(digests.items())
+    )
+    return DIGEST_HEADER.format(digest_block=digest_block)
+
+
 def _build_repository_block(repository: RepositoryFacts | None) -> str:
     """Name the repository being edited, so annotations can be true.
 
@@ -132,6 +154,7 @@ def build_docker_fix_prompt(
     kind: str = "dockerfile",
     runtime_findings: "list[DockerBuildEnrichment] | None" = None,
     repository: RepositoryFacts | None = None,
+    base_image_digests: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt) for one file's Docker findings.
 
@@ -149,6 +172,10 @@ def build_docker_fix_prompt(
     optional because a caller that cannot resolve the repository must still be
     able to fix everything else — the model is then told nothing rather than
     told something wrong.
+
+    ``base_image_digests`` maps ``image:tag`` to the digest it resolves to
+    today. Same contract: only what is listed may be written, so an image that
+    could not be resolved keeps its current reference.
     """
     findings_block = "\n".join(
         f"{i + 1}. [{finding.severity.value.upper()}] {finding.message}"
@@ -161,6 +188,7 @@ def build_docker_fix_prompt(
         file_kind="Docker Compose file" if is_compose else "Dockerfile",
         fence="yaml" if is_compose else "dockerfile",
         findings_block=findings_block or NO_STATIC_FINDINGS_PLACEHOLDER,
+        digest_block=_build_digest_block(base_image_digests or {}),
         repository_block=_build_repository_block(repository),
         runtime_block=_build_runtime_block(runtime_findings or []),
         file_path=file_path,

@@ -97,6 +97,21 @@ test.describe("Docker", () => {
     expect(served).toBeGreaterThan(before)
   })
 
+  test("the repo header shows the Docker average, not the worst target", async ({
+    page,
+  }) => {
+    await mockDockerTargets(page)
+
+    await page.goto(`/docker/${MOCK_REPO.id}/analysis`)
+
+    // MOCK_REPO's Docker average is D; its two targets grade C and E. The
+    // header used to render `worstGrade` over the target list, so it showed E
+    // — one bad target setting the grade for all of them.
+    const header = page.getByTestId("repo-page-header")
+    await expect(header.getByText("D", { exact: true })).toBeVisible()
+    await expect(header.getByText("E", { exact: true })).toHaveCount(0)
+  })
+
   test("expanding a target shows its files and findings", async ({ page }) => {
     await mockDockerTargets(page)
 

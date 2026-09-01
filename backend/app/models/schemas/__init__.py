@@ -81,6 +81,7 @@ from .overview import (
 from .repository import (
     ExternalRepositoryCreate,
     PullRequestPublic,
+    RepoEngineGrade,
     RepositoryPublic,
     RepositoryUpdate,
     RulePublic,
@@ -183,6 +184,7 @@ __all__ = [
     "RepoCategoryStat",
     "RepoFindingStats",
     "RepoScanPublicBase",
+    "RepoEngineGrade",
     "RepositoryPublic",
     "RepositoryUpdate",
     "RulePublic",
