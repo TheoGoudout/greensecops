@@ -341,3 +341,71 @@ def test_prompt_names_the_repository_the_image_is_built_from(
     assert result["status"] == FixStatus.ready.value
     assert f"https://github.com/{full_name}" in captured["user"]
     assert "**Repository**" in captured["user"]
+
+
+def test_prompt_offers_digests_resolved_for_the_file_being_fixed(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    """The digests come from the content the model is about to rewrite.
+
+    Resolved at fix time rather than read off the scan: the rewrite pins what
+    the tag points at now, and a digest recorded days ago may not be that.
+    """
+    digest = "sha256:" + "ef" * 32
+    finding = _finding(db, target, rule, "Dockerfile")
+    _pending_fix(db, target, "Dockerfile")
+    captured: dict[str, str] = {}
+    llm_content = (
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>"
+    )
+    with (
+        patch(
+            "app.workers.tasks.docker_fix_generation._fetch_docker_files",
+            return_value=[FakeDockerFile(path="Dockerfile", content=_DOCKERFILE)],
+        ),
+        patch(
+            "app.workers.tasks.docker_fix_generation.resolve_base_image_digests",
+            new=AsyncMock(return_value={"node:latest": digest}),
+        ) as resolve,
+        patch(
+            "app.services.llm.catalog.get_provider",
+            return_value=_CapturingProvider(llm_content, captured),
+        ),
+    ):
+        result = run_docker_fix_generation([str(finding.id)])
+
+    assert result["status"] == FixStatus.ready.value
+    assert f"node:latest@{digest}" in captured["user"]
+    # Resolved from the parsed Dockerfile, so it sees the real FROM lines.
+    resolve.assert_awaited_once()
+
+
+def test_a_registry_outage_costs_the_digests_not_the_fix(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    """Everything else in the file is still fixable when a lookup fails."""
+    finding = _finding(db, target, rule, "Dockerfile")
+    _pending_fix(db, target, "Dockerfile")
+    captured: dict[str, str] = {}
+    llm_content = (
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>"
+    )
+    with (
+        patch(
+            "app.workers.tasks.docker_fix_generation._fetch_docker_files",
+            return_value=[FakeDockerFile(path="Dockerfile", content=_DOCKERFILE)],
+        ),
+        patch(
+            "app.workers.tasks.docker_fix_generation.resolve_base_image_digests",
+            new=AsyncMock(side_effect=RuntimeError("registry unreachable")),
+        ),
+        patch(
+            "app.services.llm.catalog.get_provider",
+            return_value=_CapturingProvider(llm_content, captured),
+        ),
+    ):
+        result = run_docker_fix_generation([str(finding.id)])
+
+    assert result["status"] == FixStatus.ready.value
+    # No digests offered, so the model is told to leave the references alone.
+    assert "Verified base image digests" not in captured["user"]

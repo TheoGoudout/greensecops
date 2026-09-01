@@ -6,7 +6,7 @@ import redis.asyncio as aioredis
 from github import Github
 from github.GithubException import GithubException, UnknownObjectException
 
-from app.services.github._ref_cache import (
+from app.services.ref_cache import (
     cached_fetch,
     close_cache,
     open_cache,
@@ -28,7 +28,7 @@ WELL_KNOWN_ACTIONS: list[str] = [
 ]
 
 # GitHub tags and release history are effectively immutable, so these take the
-# shared cache's day-long default TTL (see ``_ref_cache``).
+# shared cache's day-long default TTL (see ``ref_cache``).
 _SHA_CACHE_PREFIX = "action_sha:"
 _VERSION_CACHE_PREFIX = "action_version:latest:"
 
