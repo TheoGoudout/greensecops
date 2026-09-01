@@ -18,9 +18,20 @@ from tests.utils.billing import (
     record_usage,
 )
 
-NOW = datetime(2026, 8, 15, tzinfo=timezone.utc)
-PERIOD_START = datetime(2026, 8, 1, tzinfo=timezone.utc)
-PERIOD_END = datetime(2026, 9, 1, tzinfo=timezone.utc)
+# A window around the present rather than a fixed calendar month.
+#
+# Most tests here stamp their own ``occurred_at`` and would not care, but
+# ``test_usage_from_someone_elses_org_is_not_counted`` records through
+# ``usage.record_for_repo``, which stamps the wall clock. Against a hard-coded
+# August 2026 window that test passed only while August 2026 lasted, and began
+# failing on every branch the moment the month turned over.
+#
+# Anchoring to ``now`` keeps what each constant means — NOW sits inside the
+# window, ``PERIOD_START - 1 day`` sits before it, ``PERIOD_END`` is the
+# exclusive upper bound — without tying any of it to a date on the calendar.
+NOW = datetime.now(timezone.utc)
+PERIOD_START = NOW - timedelta(days=14)
+PERIOD_END = NOW + timedelta(days=14)
 
 
 # ─── The catalog is the single source of truth ───────────────────────────────
