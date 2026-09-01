@@ -198,9 +198,18 @@ async def resolve_and_pin_refs(content: str, gh: Github | None = None) -> str:
 async def resolve_pinned_ref(ref: str, gh: Github | None = None) -> str:
     """Resolve a single ``owner/repo@tag`` ref to ``owner/repo@sha # tag``.
 
-    Returns ``ref`` unchanged if it's already a commit SHA or can't be
-    resolved (private repo, unknown tag, network failure) — this never
-    invents a SHA, matching ``resolve_and_pin_refs``.
+    Falls back to the repository's own current version when the configured tag
+    does not exist. ``GITHUB_ACTION_REF`` names a floating major tag —
+    ``greensecops/telemetry@v1`` — which only exists once a release has been
+    cut, so on a deployment that has not cut one the lookup found nothing and
+    the ref went in unpinned. That injected `uses: …@v1` into somebody's
+    workflow: a mutable tag, which is precisely what this product's own
+    ``unpinned_actions`` rule flags. Asking the repository what it is actually
+    on turns that into a real pin.
+
+    Returns ``ref`` unchanged if it is already a commit SHA, or if neither the
+    tag nor a release can be resolved (private repo, no releases yet, network
+    failure) — this never invents a SHA, matching ``resolve_and_pin_refs``.
     """
     match = re.fullmatch(r"([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)@(.+)", ref)
     if not match:
@@ -214,6 +223,16 @@ async def resolve_pinned_ref(ref: str, gh: Github | None = None) -> str:
         gh = Github()
     try:
         sha = await _cached_resolve_ref_to_sha(gh, cache, repo, tag)
+        if sha is None:
+            # The configured tag is not there. Take whatever the repository
+            # says its latest version is, and pin *that* — the comment then
+            # names the version actually installed rather than the one asked
+            # for, which is the honest thing for a reviewer to read.
+            latest = await _cached_get_latest_version(gh, cache, repo)
+            if latest and latest != tag:
+                sha = await _cached_resolve_ref_to_sha(gh, cache, repo, latest)
+                if sha:
+                    tag = latest
     finally:
         await close_cache(cache)
 

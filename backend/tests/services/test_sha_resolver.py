@@ -400,6 +400,67 @@ def test_resolve_pinned_ref_leaves_malformed_ref_as_is() -> None:
     assert result == "not-a-valid-ref"
 
 
+def test_resolve_pinned_ref_does_not_look_up_a_version_it_did_not_need() -> None:
+    """The configured tag resolving is the end of it — no release lookup."""
+    gh = FakeGithub(
+        default_repo=FakeRepo(
+            refs={"tags/v1": ("action_sha", "commit")}, latest_release="v1.4.0"
+        )
+    )
+    result = _resolve_single("greensecops/telemetry@v1", gh, _fake_cache())
+    assert result == "greensecops/telemetry@action_sha # v1"
+    # One repo lookup: the tag. A second would mean the fallback ran anyway.
+    assert gh.get_repo_calls == ["greensecops/telemetry"]
+
+
+def test_resolve_pinned_ref_falls_back_to_the_latest_release() -> None:
+    """A floating major tag that was never cut still yields a real pin.
+
+    ``GITHUB_ACTION_REF`` defaults to ``…@v1``, which exists only once a v1
+    release has been published. Before, this returned the ref unpinned and the
+    generated workflow tripped the product's own ``unpinned_actions`` rule.
+    """
+    gh = FakeGithub(
+        default_repo=FakeRepo(
+            refs={"tags/v1.4.0": ("release_sha", "commit")},
+            latest_release="v1.4.0",
+        )
+    )
+    result = _resolve_single("greensecops/telemetry@v1", gh, _fake_cache())
+    # The comment names the version actually pinned, not the one asked for.
+    assert result == "greensecops/telemetry@release_sha # v1.4.0"
+
+
+def test_resolve_pinned_ref_falls_back_to_the_newest_tag_without_a_release() -> None:
+    gh = FakeGithub(
+        default_repo=FakeRepo(
+            refs={"tags/v0.2.0": ("tag_sha", "commit")}, tags=["v0.2.0", "v0.1.0"]
+        )
+    )
+    result = _resolve_single("greensecops/telemetry@v1", gh, _fake_cache())
+    assert result == "greensecops/telemetry@tag_sha # v0.2.0"
+
+
+def test_resolve_pinned_ref_leaves_as_is_when_the_repo_has_no_versions() -> None:
+    """No tag, no release, nothing to pin to — never invent a SHA."""
+    gh = FakeGithub(default_repo=FakeRepo())
+    result = _resolve_single("greensecops/telemetry@v1", gh, _fake_cache())
+    assert result == "greensecops/telemetry@v1"
+
+
+def test_resolve_pinned_ref_leaves_as_is_when_the_latest_version_is_the_asked_tag() -> (
+    None
+):
+    """The release says ``v1`` too, and ``tags/v1`` already failed to resolve.
+
+    Re-asking for the same ref would be a wasted API call answering the same
+    way, so the ref is left alone rather than looked up twice.
+    """
+    gh = FakeGithub(default_repo=FakeRepo(latest_release="v1"))
+    result = _resolve_single("greensecops/telemetry@v1", gh, _fake_cache())
+    assert result == "greensecops/telemetry@v1"
+
+
 def test_resolve_action_shas_acquires_lock_on_cache_miss() -> None:
     """Redis lock is acquired on a cache miss to prevent concurrent duplicate fetches."""
     lock_keys: list[str] = []
