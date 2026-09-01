@@ -15,6 +15,9 @@ export APP_URL DOCS_URL MARKETING_URL SUPPORT_EMAIL SALES_EMAIL LEGAL_EMAIL PRIV
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 find /usr/share/nginx/html -name "*.html" | while read -r f; do
+  # shellcheck disable=SC2016  # envsubst takes the names literally: the single
+  # quotes are what stop the shell expanding them, and what limits substitution
+  # to this list rather than every $VAR in the page.
   envsubst '${APP_URL} ${DOCS_URL} ${MARKETING_URL} ${SUPPORT_EMAIL} ${SALES_EMAIL} ${LEGAL_EMAIL} ${PRIVACY_EMAIL}' < "$f" > "$tmp"
   # Write only when the substitution changed something. The base image leaves
   # its own root-owned 50x.html in the docroot; it carries no placeholder, so

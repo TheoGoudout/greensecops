@@ -271,8 +271,8 @@ generated customer workflows) empties the same way.
 `FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` onto the resource from
 `deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
 built from, so the two halves of a deployment cannot disagree about a hostname.
-`scripts/coolify_env_sync.sh` does it, called from `pages.yml` for staging and
-from `release-deploy.yml` for production. **Editing those three by hand in
+`.github/scripts/shared/coolify-env-sync.sh` does it, called from
+`images.yml` for staging and from `release-deploy.yml` for production. **Editing those three by hand in
 Coolify is pointless: the next sync overwrites them.** Change
 `deploy/cloudflare/env/<environment>.env` instead.
 

@@ -21,6 +21,8 @@ backend/app/          FastAPI + SQLModel + Celery
 frontend/src/         React + TanStack Router + Query, shadcn/ui
   client/             GENERATED from the backend's OpenAPI — never hand-edit
 action/               the GitHub Action that reports telemetry
+.github/scripts/      one directory per workflow — no workflow carries a
+                      multi-line `run:`; see that directory's README
 ```
 
 ## One vocabulary

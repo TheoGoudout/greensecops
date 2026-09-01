@@ -41,57 +41,21 @@ jobs:
           no-cache: true
 
       - name: Configure git identity
-        run: |
-          git config user.name "greensecops-bot"
-          git config user.email "bot@greensecops.com"
+        run: .github/scripts/sync-action-repo/configure-git-identity.sh
 
       - name: Push action/ subtree to the public repo
         env:
           TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
-        run: |
-          git remote add public-action "https://x-access-token:${TOKEN}@github.com/${TARGET}.git"
-          git fetch public-action main
-
-          # public main is one commit ahead after every run (the dist rebuild
-          # commit added below), so the freshly split source commit is never
-          # a descendant of it. Merge that prior state in before pushing so
-          # the push stays a plain fast-forward instead of a non-ff rejection.
-          SPLIT_SHA=$(git subtree split --prefix=action)
-          git checkout -b sync-branch "${SPLIT_SHA}"
-          git merge public-action/main -m "chore: merge public main" --no-edit
-          git push public-action sync-branch:main
+        run: .github/scripts/sync-action-repo/push-subtree.sh
 
       - name: Build and commit dist/ in the public repo
         id: build_dist
         env:
           GH_TOKEN: ${{ secrets.ACTION_PUBLIC_REPO_TOKEN }}
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
-        run: |
-          rm -rf /tmp/public-action
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${TARGET}.git" /tmp/public-action
-          cd /tmp/public-action
-          git config user.name "greensecops-bot"
-          git config user.email "bot@greensecops.com"
-
-          # dist/bin/* aren't bundled by ncc — cross-compile them first so
-          # the build step below has something to copy in.
-          mkdir -p native/proc-sampler/build
-          for arch in 386 amd64 arm64; do
-            (cd native/proc-sampler && CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
-              go build -o "build/proc-sampler-linux-${arch}" .)
-          done
-
-          bun install
-          bun run build
-          git add -f dist
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            git commit -m "chore: rebuild dist for ${{ github.sha }}"
-            git push origin main
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
+          SHA: ${{ github.sha }}
+        run: .github/scripts/sync-action-repo/build-dist.sh
 
       - name: Tag and release on the public repo
         if: github.event_name == 'release'
@@ -100,19 +64,6 @@ jobs:
           TARGET: ${{ vars.ACTION_PUBLIC_REPO }}
           TAG: ${{ github.event.release.tag_name }}
           PRERELEASE: ${{ github.event.release.prerelease }}
-        run: |
-          cd /tmp/public-action
-          major="v$(echo "${TAG}" | sed -E 's/^v?([0-9]+).*/\1/')"
-          git tag -f "${TAG}"
-          git tag -f "${major}"
-          git push origin "refs/tags/${TAG}" --force
-          git push origin "refs/tags/${major}" --force
-          prerelease_flag=""
-          if [ "${PRERELEASE}" = "true" ]; then
-            prerelease_flag="--prerelease"
-          fi
-          gh release create "${TAG}" \
-            --repo "${TARGET}" \
-            --title "${TAG}" \
-            --notes "Synced from ${{ github.repository }}@${{ github.sha }}" \
-            ${prerelease_flag}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: .github/scripts/sync-action-repo/tag-and-release.sh

@@ -37,11 +37,11 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/images.yml"
-      # Not inputs to the image build — inputs to the staging deploy below,
-      # which syncs the resource's public URLs from those files before it
+      - ".github/scripts/**"
+      # Not an input to the image build — an input to the staging deploy below,
+      # which syncs the resource's public URLs from these files before it
       # deploys. A hostname change reaches the containers only on a deploy, so
       # it has to be able to trigger one.
-      - "scripts/coolify_env_sync.sh"
       - "deploy/cloudflare/env/**"
   workflow_dispatch:
 
@@ -138,20 +138,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform }}
 
       - name: Export the digest
-        # The artifact is an empty file whose *name* is the digest; the merge
-        # job reads the names and ignores the contents.
-        #
-        # The `sha256:` prefix has to come off. upload-artifact rejects a colon
-        # anywhere in a path — it keeps artifacts extractable on NTFS, where
-        # the character is illegal — and the merge job re-adds the prefix when
-        # it rebuilds the full references, so leaving it here would produce
-        # `image@sha256:sha256:…` even if the upload had succeeded.
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          mkdir -p /tmp/digests
-          touch "/tmp/digests/${DIGEST#sha256:}"
-        shell: bash
+        run: .github/scripts/images/export-digest.sh
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -176,6 +165,12 @@ jobs:
         image: [backend, opa]
 
     steps:
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/digests
@@ -208,33 +203,15 @@ jobs:
             type=ref,event=tag
 
       - name: Create the multi-architecture manifest
-        working-directory: /tmp/digests
         env:
           IMAGE: ${{ steps.image.outputs.name }}
-        run: |
-          # Every file here is named for one architecture's digest; the tags
-          # come from the metadata action as -t arguments.
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "${IMAGE}@sha256:%s " *)
+        run: .github/scripts/images/create-manifest.sh /tmp/digests
 
       - name: Confirm both architectures are present
         env:
           IMAGE: ${{ steps.image.outputs.name }}
           VERSION: ${{ steps.meta.outputs.version }}
-        run: |
-          set -euo pipefail
-          version="${VERSION}"
-          platforms=$(docker buildx imagetools inspect "${IMAGE}:${version}" --raw \
-            | jq -r '.manifests[] | select(.platform.os == "linux") | .platform.architecture' \
-            | sort -u | tr '\n' ' ')
-          echo "Published ${IMAGE}:${version} for: ${platforms}"
-          for arch in amd64 arm64; do
-            case " ${platforms} " in
-              *" ${arch} "*) ;;
-              *) echo "::error::${IMAGE}:${version} has no ${arch} manifest"; exit 1 ;;
-            esac
-          done
+        run: .github/scripts/images/confirm-architectures.sh
 
   deploy-staging:
     name: Deploy the staging API
@@ -273,76 +250,21 @@ jobs:
         with:
           persist-credentials: false
 
-      # Skip in one direction only, exactly as the Cloudflare and Coolify
-      # checks elsewhere do. No secrets at all is a fork, or an account that
-      # runs no Coolify — nothing to deploy. *Some* of them is a
-      # misconfiguration, and going green having deployed nothing is how a
-      # staging deployment quietly stops tracking main.
       - name: Check the Coolify secrets
         id: secrets
         env:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-        run: |
-          set -euo pipefail
-          present=0; missing=""
-          for name in COOLIFY_URL COOLIFY_TOKEN UUID; do
-            if [ -n "${!name}" ]; then
-              present=$((present + 1))
-            else
-              missing="${missing} ${name}"
-            fi
-          done
+        run: .github/scripts/images/check-coolify-secrets.sh
 
-          if [ "${present}" -eq 0 ]; then
-            echo "::notice::No Coolify secrets on this repository — skipping the staging API deploy."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ -n "${missing}" ]; then
-            echo "::error::Coolify is partly configured: missing${missing}. Set all three or none — a partial set would deploy nothing and still pass."
-            exit 1
-          fi
-
-          echo "run=true" >> "$GITHUB_OUTPUT"
-
-      # The immutable per-commit tag, and the reason this deployment stopped
-      # serving stale images. `latest` moves under a name that does not change,
-      # so a host that already has it has no reason to look again — Compose's
-      # default pull policy is `missing`, and Coolify's ordinary deploy does not
-      # force a pull. `sha-<short>` is a reference the host has never seen, so
-      # the pull is structural rather than something a flag has to remember to
-      # ask for. It also makes "what is staging running?" exactly answerable.
-      #
-      # The same tag the merge job publishes through metadata-action's
-      # `type=sha,format=short`. Confirmed against the registry below rather
-      # than assumed: if that format ever changes, this must fail loudly here
-      # instead of pinning the resource to a tag that does not exist.
       - name: Resolve and confirm the release tag
         id: tag
         if: steps.secrets.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          tag="sha-${GITHUB_SHA:0:7}"
-          owner=${OWNER,,}
-
-          echo "${GH_TOKEN}" | docker login "${REGISTRY}" -u "${GITHUB_ACTOR}" --password-stdin
-
-          for image in backend opa; do
-            reference="${REGISTRY}/${owner}/greensecops-${image}:${tag}"
-            if ! docker buildx imagetools inspect "${reference}" >/dev/null 2>&1; then
-              echo "::error::${reference} does not exist, so the staging resource must not be pointed at ${tag}. Check the merge job's tags."
-              exit 1
-            fi
-            echo "${reference} ✅"
-          done
-
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/images/resolve-tag.sh
 
       # Before the deploy, not after. The sync itself does not deploy — Coolify
       # applies a variable on the resource's next deploy — so running it here
@@ -354,7 +276,7 @@ jobs:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-        run: scripts/coolify_env_sync.sh staging "${UUID}"
+        run: .github/scripts/shared/coolify-env-sync.sh staging "${UUID}"
 
       - name: Point the resource at the commit and deploy it
         id: trigger
@@ -364,128 +286,13 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-
-          status=""; body=""
-
-          # Sets `status` and `body`. Call it directly — never inside $( ),
-          # which would run it in a subshell and discard both assignments.
-          #
-          # Not `curl -f`: that throws away the response body on an error
-          # status, which is the half of a 4xx that says *why*.
-          call() {
-            local method=$1 path=$2
-            shift 2
-            local response
-            response=$(curl -sS --max-time 60 -w '\n%{http_code}' -X "${method}" \
-              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "${COOLIFY_URL}/api/v1${path}" "$@")
-            status=${response##*$'\n'}
-            body=${response%$'\n'*}
-          }
-
-          require_ok() {
-            if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
-              echo "::error::$1 failed with HTTP ${status}: ${body}"
-              exit 1
-            fi
-          }
-
-          # Upsert, because PATCH and POST are not interchangeable here: PATCH
-          # updates an existing variable and 404s when there is none; POST
-          # creates one. Which applies depends on whether TAG was ever set on
-          # this resource by hand — not something a deploy should have an
-          # opinion about. The first production release failed exactly here.
-          echo "Setting TAG=${TAG}"
-          tag_env=$(jq -nc --arg v "${TAG}" '{key: "TAG", value: $v}')
-          call PATCH "/applications/${UUID}/envs" -d "${tag_env}"
-          if [ "${status}" = "404" ]; then
-            echo "  No TAG variable on this resource yet — creating it."
-            call POST "/applications/${UUID}/envs" -d "${tag_env}"
-            require_ok "Creating the TAG variable"
-          else
-            require_ok "Setting the TAG variable"
-          fi
-
-          # Unlike production, the resource's git ref is not touched: staging
-          # tracks `main` permanently, and it is the TAG variable rather than
-          # the checked-out tree that decides which image runs.
-          echo "Triggering the deploy"
-          call POST "/deploy?uuid=${UUID}&force=true"
-          require_ok "Triggering the deploy"
-          deployment=$(jq -r '.deployments[0].deployment_uuid // empty' <<< "${body}")
-
-          if [ -z "${deployment}" ]; then
-            echo "::error::Coolify accepted the deploy request but returned no deployment_uuid, so it cannot be monitored."
-            exit 1
-          fi
-          echo "deployment=${deployment}" >> "$GITHUB_OUTPUT"
-          echo "Deployment ${deployment} queued."
+        run: .github/scripts/images/coolify-deploy.sh
 
       - name: Monitor the deploy
-        # Coolify's queue has a documented long tail of deployments that sit in
-        # queued or in_progress indefinitely, so this caps the wait rather than
-        # leaning on the job timeout — a capped failure names the deployment and
-        # prints its log, a job timeout does neither.
         if: steps.secrets.outputs.run == 'true'
         env:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
           DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
-        run: |
-          set -euo pipefail
-          status="unknown"
-          for attempt in $(seq 1 90); do
-            # Keep the body on an error status so a failure here says what
-            # Coolify actually returned rather than just a curl exit code. A
-            # transient 5xx mid-rollout is not fatal — retry it rather than
-            # abandoning a deploy that is very likely still progressing.
-            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
-              -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-              "${COOLIFY_URL}/api/v1/deployments/${DEPLOYMENT}")
-            http=${response##*$'\n'}
-            body=${response%$'\n'*}
-
-            if [ "${http}" -lt 200 ] || [ "${http}" -ge 300 ]; then
-              echo "  HTTP ${http} polling the deployment (${attempt}/90): ${body}"
-              sleep 10
-              continue
-            fi
-
-            status=$(jq -r '.status // "unknown"' <<< "${body}")
-
-            case "${status}" in
-              finished)
-                echo "Staging API deployed at ${TAG} ✅"
-                echo "Staging API deployed at \`${TAG}\`." >> "$GITHUB_STEP_SUMMARY"
-                exit 0
-                ;;
-              failed|cancelled-by-user)
-                echo "::error::Coolify reported '${status}' for deployment ${DEPLOYMENT}."
-                {
-                  echo "## Staging API deploy ${status}"
-                  echo
-                  echo "Deployment \`${DEPLOYMENT}\` for \`${TAG}\`."
-                  jq -r '.deployment_url // empty' <<< "${body}" | sed 's/^/Logs: /'
-                  echo
-                  echo '```'
-                  jq -r '.logs // "(no logs returned)"' <<< "${body}" | tail -100
-                  echo '```'
-                } >> "$GITHUB_STEP_SUMMARY"
-                exit 1
-                ;;
-              queued|in_progress)
-                echo "  ${status} (${attempt}/90)"
-                ;;
-              *)
-                echo "  unrecognised status '${status}' (${attempt}/90)"
-                ;;
-            esac
-            sleep 10
-          done
-
-          echo "::error::Deployment ${DEPLOYMENT} was still '${status}' after 15 minutes. Check Coolify — staging is not on ${TAG}."
-          exit 1
+        run: .github/scripts/images/coolify-monitor.sh
