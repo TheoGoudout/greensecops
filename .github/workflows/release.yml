@@ -58,9 +58,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Tags are needed to notice an existing one, and the full history so
-          # the rebase below has something to rebase onto.
-          fetch-depth: 0
           # The push uses an explicit remote URL carrying the PAT (see the
           # "Push" step), which keeps the credential out of the checkout and
           # out of .git/config — the same shape sync-action-repo.yml uses.
