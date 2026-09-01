@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
 import { ansibleFixBranch } from "@/lib/delivery"
 import { formatDateTime } from "@/lib/format"
+import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import { fixStatusColor } from "@/lib/status-colors"
 
 export const Route = createFileRoute("/_layout/infrastructure/$repoId/ansible")(
@@ -52,6 +53,12 @@ function AnsibleTab() {
   const { data: projects, isLoading } = useQuery({
     queryKey: ["ansible-projects", "repo", repoId],
     queryFn: () => AnsibleService.listProjects({ repoId }),
+    // See terraform.tsx: these engines publish no live events, so the list
+    // polls itself while any scan is unfinished and stops when none is.
+    refetchInterval: (query) =>
+      pollWhileScanning(
+        (query.state.data ?? []).map((project) => project.latest_scan_status),
+      ),
   })
 
   const { data: pullRequests } = useQuery({
@@ -135,27 +142,33 @@ function ProjectCard({
     AnsibleFilePublic,
     AnsibleFindingPublic,
     AnsibleFixPublic
-  >(project.id, isOpen, {
-    keyPrefix: "ansible",
-    targetLabel: "Ansible project",
-    listFiles: () => AnsibleService.listFiles({ projectId: project.id }),
-    listFindings: () => AnsibleService.listFindings({ projectId: project.id }),
-    listFixes: () => AnsibleService.listFixes({ projectId: project.id }),
-    toggle: (enabled) =>
-      AnsibleService.updateProject({
-        projectId: project.id,
-        requestBody: { enabled },
-      }),
-    scan: () => AnsibleService.triggerScan({ projectId: project.id }),
-    remove: () => AnsibleService.deleteProject({ projectId: project.id }),
-    generate: (findingIds) =>
-      AnsibleService.generateFixes({
-        projectId: project.id,
-        requestBody: findingIds.length ? { finding_ids: findingIds } : {},
-      }),
-    deliver: (force) =>
-      AnsibleService.deliverFixes({ projectId: project.id, force }),
-  })
+  >(
+    project.id,
+    isOpen,
+    {
+      keyPrefix: "ansible",
+      targetLabel: "Ansible project",
+      listFiles: () => AnsibleService.listFiles({ projectId: project.id }),
+      listFindings: () =>
+        AnsibleService.listFindings({ projectId: project.id }),
+      listFixes: () => AnsibleService.listFixes({ projectId: project.id }),
+      toggle: (enabled) =>
+        AnsibleService.updateProject({
+          projectId: project.id,
+          requestBody: { enabled },
+        }),
+      scan: () => AnsibleService.triggerScan({ projectId: project.id }),
+      remove: () => AnsibleService.deleteProject({ projectId: project.id }),
+      generate: (findingIds) =>
+        AnsibleService.generateFixes({
+          projectId: project.id,
+          requestBody: findingIds.length ? { finding_ids: findingIds } : {},
+        }),
+      deliver: (force) =>
+        AnsibleService.deliverFixes({ projectId: project.id, force }),
+    },
+    isScanInFlight(project.latest_scan_status),
+  )
 
   const findingsByFile = useMemo(() => {
     const map = new Map<string, AnsibleFindingPublic[]>()

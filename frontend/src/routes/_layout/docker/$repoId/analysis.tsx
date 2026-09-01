@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
 import { dockerFixBranch } from "@/lib/delivery"
+import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
 
@@ -49,6 +50,12 @@ function DockerAnalysisTab() {
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
     queryFn: () => DockerService.listTargets({ repoId }),
+    // See terraform.tsx: these engines publish no live events, so the list
+    // polls itself while any scan is unfinished and stops when none is.
+    refetchInterval: (query) =>
+      pollWhileScanning(
+        (query.state.data ?? []).map((target) => target.latest_scan_status),
+      ),
   })
 
   // A ready fix carries no PR of its own, so whether one already exists for
@@ -159,6 +166,7 @@ function TargetCard({
       deliver: (force) =>
         DockerService.deliverFixes({ targetId: target.id, force }),
     },
+    isScanInFlight(target.latest_scan_status),
   )
 
   const fixByFile = useMemo(() => {

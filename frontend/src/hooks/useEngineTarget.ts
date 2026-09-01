@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { apiErrorDetail } from "@/lib/api-error"
+import { SCAN_POLL_MS } from "@/lib/scan-polling"
 
 /**
  * What the Terraform and Docker scan-target cards do identically, once.
@@ -94,9 +95,19 @@ export function useEngineTarget<TFile, TFinding, TFix>(
   targetId: string,
   isOpen: boolean,
   calls: EngineTargetCalls<TFile, TFinding, TFix>,
+  /**
+   * Whether this target's latest scan is still running.
+   *
+   * While it is, the card re-asks for what the scan is about to change. These
+   * engines publish no live events, and the only refresh that ever happened
+   * was the invalidate fired when the *trigger* request returned — which is
+   * before the worker has done anything.
+   */
+  isScanning = false,
 ): EngineTargetState<TFile, TFinding, TFix> {
   const queryClient = useQueryClient()
   const { keyPrefix, targetLabel } = calls
+  const refetchInterval = isScanning ? SCAN_POLL_MS : false
 
   // Everything below the fold loads only once the card is expanded — a repo can
   // hold many targets and each one costs a GitHub round-trip for its files.
@@ -104,16 +115,19 @@ export function useEngineTarget<TFile, TFinding, TFix>(
     queryKey: [`${keyPrefix}-files`, targetId],
     queryFn: calls.listFiles,
     enabled: isOpen,
+    refetchInterval,
   })
   const { data: findings, isLoading: findingsLoading } = useQuery({
     queryKey: [`${keyPrefix}-findings`, targetId],
     queryFn: calls.listFindings,
     enabled: isOpen,
+    refetchInterval,
   })
   const { data: fixes, isLoading: fixesLoading } = useQuery({
     queryKey: [`${keyPrefix}-fixes`, targetId],
     queryFn: calls.listFixes,
     enabled: isOpen,
+    refetchInterval,
   })
 
   const invalidate = () => {
