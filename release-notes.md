@@ -62,6 +62,7 @@
 
 ### Internal
 
+* Fix the action sync, and clear zizmor's auditor findings. PR [#315](https://github.com/TheoGoudout/greensecops/pull/315) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ci: move the workflows' embedded shell into .github/scripts/, checked by shellcheck. PR [#295](https://github.com/TheoGoudout/greensecops/pull/295) by [@TheoGoudout](https://github.com/TheoGoudout).
 * chore(frontend): rename CI/CD sidebar item from Repositories to Workflows. PR [#270](https://github.com/TheoGoudout/greensecops/pull/270) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(ci): disable build-tool caching ahead of the Pages publish step. PR [#266](https://github.com/TheoGoudout/greensecops/pull/266) by [@TheoGoudout](https://github.com/TheoGoudout).
