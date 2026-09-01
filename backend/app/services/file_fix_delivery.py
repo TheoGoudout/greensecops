@@ -28,6 +28,7 @@ from app.core.db import engine
 from app.models import PullRequest, PullRequestState, Repository
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
+from app.services.delivery_pr import record_pull_request
 from app.services.engines import EngineSpec
 from app.services.github.app_client import GitHubAppClient
 from app.services.github.fix_delivery import FixDeliveryResult, FixDeliveryService
@@ -185,28 +186,7 @@ def deliver_file_fixes(
         now = datetime.now(timezone.utc)
         pr: PullRequest | None = None
         if not result.error and result.pr_url:
-            pr = session.exec(
-                select(PullRequest).where(
-                    PullRequest.repo_id == repo.id,
-                    PullRequest.pr_branch == pr_branch,
-                )
-            ).first()
-            if pr is None:
-                pr = PullRequest(
-                    repo_id=repo.id,
-                    pr_branch=pr_branch,
-                    pr_url=result.pr_url,
-                    pr_state=PullRequestState.open,
-                )
-                session.add(pr)
-                session.flush()
-            else:
-                pr.pr_url = result.pr_url
-                if not sm.try_advance(pr, sm.PullRequestMachine, "reopen"):
-                    sm.try_advance(pr, sm.PullRequestMachine, "redeliver")
-                pr.updated_at = now
-                session.add(pr)
-                session.flush()
+            pr = record_pull_request(session, repo.id, pr_branch, result.pr_url)
 
         for fix in fixes:
             if result.error:

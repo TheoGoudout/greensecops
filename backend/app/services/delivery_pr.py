@@ -8,11 +8,13 @@ regex guarantees the two can't drift.
 
 import re
 import uuid
+from datetime import datetime, timezone
 
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.models import PullRequest, WorkflowFile, WorkflowFix
+from app.models import PullRequest, PullRequestState, WorkflowFile, WorkflowFix
+from app.services import state_machines as sm
 from app.services.pr_body import IssueInfo, ManualWorkInfo, build_pr_body
 from app.services.state_machines import DELIVERED_FIX_STATUSES
 
@@ -61,6 +63,50 @@ def ansible_fix_branch(ansible_project_id: uuid.UUID) -> str:
 def docker_fix_branch(docker_target_id: uuid.UUID) -> str:
     """Deterministic branch for a Docker target's fix PR (all its files)."""
     return f"greensecops/docker-{str(docker_target_id)[:8]}"
+
+
+# The one branch that is not per-target: the "Integrate action" PR adds the
+# telemetry action to every workflow file at once, so a repo has at most one.
+INTEGRATE_ACTION_BRANCH = "greensecops/integrate-action"
+
+
+def record_pull_request(
+    session: Session, repo_id: uuid.UUID, pr_branch: str, pr_url: str
+) -> PullRequest:
+    """Upsert the ``PullRequest`` row for a branch just delivered to.
+
+    Every path that opens a PR needs this row, and needs it for the same
+    reasons: the PRs tab reads these rows directly rather than deriving them
+    from fixes, and the webhook and poller handlers find their PR by
+    ``(repo_id, pr_branch)``. A path that opens a PR on GitHub without writing
+    one leaves that PR invisible to the entire application — which is exactly
+    what "Integrate action" did.
+    """
+    pr = session.exec(
+        select(PullRequest).where(
+            PullRequest.repo_id == repo_id,
+            PullRequest.pr_branch == pr_branch,
+        )
+    ).first()
+    if pr is None:
+        # PR creation is initialisation, not a transition (doc §4).
+        pr = PullRequest(
+            repo_id=repo_id,
+            pr_branch=pr_branch,
+            pr_url=pr_url,
+            pr_state=PullRequestState.open,
+        )
+    else:
+        pr.pr_url = pr_url
+        # A forced redelivery onto a closed PR reopens it; a normal redelivery
+        # is the open self-loop; a draft PR stays draft (both events no-op on
+        # it). Merged PRs never reach here.
+        if not sm.try_advance(pr, sm.PullRequestMachine, "reopen"):
+            sm.try_advance(pr, sm.PullRequestMachine, "redeliver")
+        pr.updated_at = datetime.now(timezone.utc)
+    session.add(pr)
+    session.flush()
+    return pr
 
 
 def issues_info_for_fixes(fixes: list[WorkflowFix]) -> list[IssueInfo]:

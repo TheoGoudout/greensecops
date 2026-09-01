@@ -19,6 +19,7 @@ from app.models import (
     WorkflowFix,
 )
 from app.services import state_machines as sm
+from app.services.delivery_pr import record_pull_request
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
 from app.services.github.app_client import GitHubAppClient
@@ -213,34 +214,11 @@ def deliver_fixes_batch(
         delivered_fix_ids = []
         pr: PullRequest | None = None
         if not result.error and result.pr_url:
-            pr = session.exec(
-                select(PullRequest).where(
-                    PullRequest.repo_id == repo.id,
-                    PullRequest.pr_branch == pr_branch,
-                )
-            ).first()
-            if pr is None:
-                # PR creation is initialisation, not a transition (doc §4).
-                pr = PullRequest(
-                    repo_id=repo.id,
-                    pr_branch=pr_branch,
-                    pr_url=result.pr_url,
-                    pr_state=PullRequestState.open,
-                )
-                session.add(pr)
-                session.flush()
-            else:
-                pr.pr_url = result.pr_url
-                # A forced redelivery onto a closed PR reopens it; a normal
-                # redelivery is the open self-loop; a draft PR stays draft
-                # (both events no-op on it). Merged PRs never reach here.
-                if not sm.try_advance(pr, sm.PullRequestMachine, "reopen"):
-                    sm.try_advance(pr, sm.PullRequestMachine, "redeliver")
-                pr.updated_at = now
-                if force and pr.externally_modified:
-                    # The user explicitly forced delivery over their own
-                    # edits: lift the auto-redelivery block.
-                    pr.externally_modified = False
+            pr = record_pull_request(session, repo.id, pr_branch, result.pr_url)
+            if force and pr.externally_modified:
+                # The user explicitly forced delivery over their own edits:
+                # lift the auto-redelivery block.
+                pr.externally_modified = False
                 session.add(pr)
                 session.flush()
 

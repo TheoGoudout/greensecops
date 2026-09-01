@@ -533,6 +533,7 @@ async def integrate_action(
     from github import Auth, Github
     from github.GithubException import GithubException
 
+    from app.services.delivery_pr import INTEGRATE_ACTION_BRANCH, record_pull_request
     from app.services.github.fix_delivery import FixDeliveryService
 
     logger = logging.getLogger(__name__)
@@ -622,7 +623,6 @@ async def integrate_action(
         )
 
     delivery = FixDeliveryService(github_client)
-    fix_branch = "greensecops/integrate-action"
 
     pr_body_parts = [
         f"This PR adds the [{app_name} Telemetry]({settings.MARKETING_URL}) action "
@@ -638,7 +638,7 @@ async def integrate_action(
         installation_id=repo.installation_id,
         full_name=repo.full_name,
         base_branch=repo.default_branch or "main",
-        fix_branch=fix_branch,
+        fix_branch=INTEGRATE_ACTION_BRANCH,
         file_changes=file_changes,
         pr_title=f"ci: add {app_name} telemetry action",
         pr_body="".join(pr_body_parts),
@@ -646,6 +646,13 @@ async def integrate_action(
     if result.error:
         raise HTTPException(status_code=502, detail=result.error)
     if result.pr_url:
+        # Record the PR the way every other delivery path does. Without this
+        # row the PR exists only on GitHub: it never appears on the PRs tab,
+        # the webhook and poller handlers have nothing to attach a state or a
+        # CI result to, and this button had no way to know it had already been
+        # pressed.
+        record_pull_request(session, repo.id, INTEGRATE_ACTION_BRANCH, result.pr_url)
+        session.commit()
         events_pub.publish_event(
             ev.repository_action_pr_opened(
                 str(repo.org_id), str(repo_id), result.pr_url
