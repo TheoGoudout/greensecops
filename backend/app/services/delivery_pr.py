@@ -124,6 +124,7 @@ def issues_info_for_fixes(fixes: list[WorkflowFix]) -> list[IssueInfo]:
             message=issue.message or "",
             workflow_path=fix.workflow_file.path if fix.workflow_file else "unknown",
             line_start=issue.line_start,
+            domain=issue.rule.domain.value if issue.rule else None,
         )
         for fix in fixes
         for issue in fix.findings
@@ -148,6 +149,7 @@ def manual_work_for_fixes(fixes: list[WorkflowFix]) -> list[ManualWorkInfo]:
             message=issue.message or "",
             workflow_path=fix.workflow_file.path if fix.workflow_file else "unknown",
             line_start=issue.line_start,
+            domain=issue.rule.domain.value if issue.rule else None,
             note=issue.manual_work_note,
         )
         for fix in fixes

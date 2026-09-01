@@ -22,6 +22,10 @@ class IssueInfo:
     message: str
     workflow_path: str
     line_start: int | None = None
+    # Which Rego package the rule lives in — the first path segment of its
+    # documentation page. ``None`` when the finding has no rule row at all, in
+    # which case there is no page to link to.
+    domain: str | None = None
 
 
 @dataclass
@@ -38,12 +42,32 @@ class ManualWorkInfo(IssueInfo):
 _NO_NOTE = "The automated fix could not resolve this within the file."
 
 
+def _rule_link(issue: IssueInfo, wiki_base_url: str) -> str:
+    """The rule's title, linked to its documentation page.
+
+    The page lives at ``rules/<domain>/<category>/<slug>``: ``rego_autodoc``
+    writes one directory per domain, because a slug is unique only within one
+    — ``rds_not_encrypted`` is a rule in Terraform *and* in cloud. The link
+    here dropped the domain and appended ``.html``, so every rule in every
+    automated PR pointed at a page that does not exist. The extension is gone
+    too: the docs host serves the extensionless path and redirects ``.html``
+    onto it, so the canonical form is the one without.
+
+    A finding with no rule row has no page, and is rendered as plain text
+    rather than as a link somewhere that would 404.
+    """
+    if not issue.domain:
+        return issue.rule_title
+    url = f"{wiki_base_url}/{issue.domain}/{issue.category}/{issue.rule_slug}"
+    return f"[{issue.rule_title}]({url})"
+
+
 def _issue_table(issues: list[IssueInfo], wiki_base_url: str) -> str:
     sorted_issues = sorted(
         issues, key=lambda i: (_SEVERITY_ORDER.get(i.severity, 99), i.rule_title)
     )
     rows = "\n".join(
-        f"| [{i.rule_title}]({wiki_base_url}/{i.category}/{i.rule_slug}.html) "
+        f"| {_rule_link(i, wiki_base_url)} "
         f"| {i.category.title()} "
         f"| {_SEVERITY_EMOJI.get(i.severity, '')} {i.severity.title()} "
         f"| {i.message} |"
@@ -94,7 +118,7 @@ def _manual_work_section(
     sections = []
     for path in sorted(by_path):
         rows = "\n".join(
-            f"| [{i.rule_title}]({wiki_base_url}/{i.category}/{i.rule_slug}.html) "
+            f"| {_rule_link(i, wiki_base_url)} "
             f"| {_SEVERITY_EMOJI.get(i.severity, '')} {i.severity.title()} "
             f"| {i.note or _NO_NOTE} |"
             for i in sorted(

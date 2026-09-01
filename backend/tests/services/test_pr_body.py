@@ -1,5 +1,7 @@
 """Tests for the PR body builder service."""
 
+from dataclasses import replace
+
 import pytest
 
 from app.services.pr_body import IssueInfo, ManualWorkInfo, build_pr_body
@@ -14,6 +16,7 @@ def single_issue() -> IssueInfo:
         severity="high",
         message="Action uses a mutable tag instead of a pinned SHA",
         workflow_path=".github/workflows/ci.yml",
+        domain="ci_workflow",
     )
 
 
@@ -27,6 +30,7 @@ def issues() -> list[IssueInfo]:
             severity="high",
             message="Action uses a mutable tag",
             workflow_path=".github/workflows/ci.yml",
+            domain="ci_workflow",
         ),
         IssueInfo(
             rule_slug="missing-timeout",
@@ -35,6 +39,7 @@ def issues() -> list[IssueInfo]:
             severity="medium",
             message="Job has no timeout",
             workflow_path=".github/workflows/ci.yml",
+            domain="ci_workflow",
         ),
         IssueInfo(
             rule_slug="no-cache",
@@ -43,6 +48,7 @@ def issues() -> list[IssueInfo]:
             severity="low",
             message="Dependencies are not cached",
             workflow_path=".github/workflows/deploy.yml",
+            domain="ci_workflow",
         ),
     ]
 
@@ -70,7 +76,12 @@ def test_build_pr_body_includes_issue_row(single_issue: IssueInfo) -> None:
     )
 
     assert "Unpinned Actions" in body
-    assert "https://wiki.example.com/rules/security/unpinned-actions.html" in body
+    # The page rego_autodoc actually writes: one directory per domain, and no
+    # extension — the docs host redirects `.html` onto the extensionless path.
+    assert (
+        "https://wiki.example.com/rules/ci_workflow/security/unpinned-actions" in body
+    )
+    assert ".html" not in body
     assert "Security" in body
     assert "High" in body
     assert "Action uses a mutable tag instead of a pinned SHA" in body
@@ -382,3 +393,72 @@ def test_build_pr_body_manual_work_falls_back_when_the_generator_gave_no_note() 
     assert "could not resolve this within the file" in body
     # No review_url given: the section still renders, just without the link.
     assert "Review these issues in context" not in body
+
+
+def test_a_rule_link_names_its_domain(single_issue: IssueInfo) -> None:
+    """Every link in every automated PR used to 404.
+
+    The docs are written to ``rules/<domain>/<category>/<slug>`` because a slug
+    is unique only within a domain — ``rds_not_encrypted`` is a Terraform rule
+    *and* a cloud rule. The link dropped the domain and appended ``.html``, so
+    it pointed at a path that has never existed.
+    """
+    body = build_pr_body(
+        issues=[single_issue],
+        fix_ids=["fix-id-1"],
+        wiki_base_url="https://docs.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    assert (
+        "[Unpinned Actions](https://docs.example.com/rules/ci_workflow/security/unpinned-actions)"
+        in body
+    )
+
+
+def test_a_finding_without_a_rule_is_not_linked_anywhere(
+    single_issue: IssueInfo,
+) -> None:
+    """There is no page for it, and a link to a 404 is worse than no link."""
+    orphan = replace(single_issue, domain=None, rule_title="Fix")
+
+    body = build_pr_body(
+        issues=[orphan],
+        fix_ids=["fix-id-1"],
+        wiki_base_url="https://docs.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+    )
+
+    assert "| Fix |" in body
+    assert "https://docs.example.com/rules" not in body
+
+
+def test_an_unfixed_issue_is_linked_the_same_way(single_issue: IssueInfo) -> None:
+    """The "needs manual work" table had its own copy of the broken URL."""
+    manual = ManualWorkInfo(
+        rule_slug="no_reusable_workflow",
+        rule_title="No Reusable Workflow",
+        category="maintainability",
+        severity="low",
+        message="Duplicated job definitions",
+        workflow_path=".github/workflows/ci.yml",
+        domain="ci_workflow",
+        note="Extracting the shared job needs a judgement call.",
+    )
+
+    body = build_pr_body(
+        issues=[single_issue],
+        fix_ids=["fix-id-1"],
+        wiki_base_url="https://docs.example.com/rules",
+        frontend_host="https://app.example.com",
+        bot_handle="@greensecops",
+        manual_work=[manual],
+    )
+
+    assert (
+        "https://docs.example.com/rules/ci_workflow/maintainability/no_reusable_workflow"
+        in body
+    )
+    assert ".html" not in body
