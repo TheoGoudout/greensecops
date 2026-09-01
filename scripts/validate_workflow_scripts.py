@@ -13,7 +13,6 @@ Four things are asserted:
 2. Every ``.github/scripts/`` path a workflow names exists on disk.
 3. Every script under ``.github/scripts/`` is named by some workflow — which
    catches the orphan a workflow edit leaves behind.
-4. Every `.sh` outside `lib/` starts with the shebang the README asks for.
 
 ``.github/scripts/lib/`` is exempt from (3) and (4): it is sourced by other
 scripts rather than invoked by a step, so no workflow names it and it carries
@@ -25,6 +24,8 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / ".github" / "scripts"
@@ -59,6 +60,23 @@ def block_body(lines: list[str], start: int, indent: int) -> tuple[list[str], in
     return [b for b in body if b.strip()], i
 
 
+def jobs_missing_checkout(wf: Path) -> list[str]:
+    """Names of jobs that run a .github/scripts/ path without checking out."""
+    doc = yaml.safe_load(wf.read_text()) or {}
+    missing = []
+    for name, job in (doc.get("jobs") or {}).items():
+        steps = job.get("steps") or []
+        if any("actions/checkout" in str(s.get("uses", "")) for s in steps):
+            continue
+        if any(
+            "/scripts/" in str(s.get("run", ""))
+            or "/scripts/" in str((s.get("with") or {}).get("script", ""))
+            for s in steps
+        ):
+            missing.append(name)
+    return missing
+
+
 def main() -> int:
     errors: list[str] = []
     referenced: set[Path] = set()
@@ -86,6 +104,13 @@ def main() -> int:
                     f"github-script step may carry is a one-line require() of a file under "
                     f".github/scripts/."
                 )
+
+        for job in jobs_missing_checkout(wf):
+            errors.append(
+                f"{rel}: job '{job}' runs a script from .github/scripts/ but never checks "
+                f"the repository out, so the file will not be there. Add an "
+                f"actions/checkout step (and `contents: read` to its permissions)."
+            )
 
         for path in REFERENCE.findall(wf.read_text()):
             target = ROOT / path

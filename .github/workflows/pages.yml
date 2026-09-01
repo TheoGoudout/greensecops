@@ -149,9 +149,16 @@ jobs:
     timeout-minutes: 5
 
     permissions:
+      contents: read
       pull-requests: write
 
     steps:
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Post or update the preview comment
         env:
           GH_TOKEN: ${{ github.token }}
