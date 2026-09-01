@@ -22,6 +22,7 @@
 
 ### Fixes
 
+* fix(engines): show a loading state while an expanded target is still fetching. PR [#303](https://github.com/TheoGoudout/greensecops/pull/303) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(billing): let an account subscribe again after its Stripe customer is deleted. PR [#302](https://github.com/TheoGoudout/greensecops/pull/302) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(docker): give the fix prompt the repository its OCI labels must name. PR [#301](https://github.com/TheoGoudout/greensecops/pull/301) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(tests): anchor the usage-ledger period window to now, not to August 2026. PR [#297](https://github.com/TheoGoudout/greensecops/pull/297) by [@TheoGoudout](https://github.com/TheoGoudout).
