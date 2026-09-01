@@ -2,8 +2,8 @@ import asyncio
 from dataclasses import dataclass
 
 from github import Auth, Github
-from github.ContentFile import ContentFile
 from github.GithubException import GithubException
+from github.InputGitTreeElement import InputGitTreeElement
 from github.PullRequest import PullRequest as GithubPullRequest
 from github.Repository import Repository as GithubRepository
 
@@ -12,8 +12,9 @@ from app.services.github.app_client import GitHubAppClient
 
 STALE_CONTENT_ERROR_CODE = "stale_fix_workflow_changed"
 USER_COMMITS_ERROR_CODE = "user_commits_on_fix_branch"
-
-WORKFLOW_DIR = ".github/workflows"
+# Every file the fix would write already says what the base branch says —
+# there is no diff to open a PR for.
+NOTHING_TO_DELIVER_ERROR_CODE = "nothing_to_deliver"
 
 
 @dataclass
@@ -90,167 +91,134 @@ def _check_base_content_fresh(
         )
 
 
-def _prepare_fix_branch(
-    repo: GithubRepository,
-    fix_branch: str,
-    base_sha: str,
-    override_user_commits: bool,
-    bot_login: str,
-    reset_to_base: bool,
-) -> None:
-    """Create the fix branch, or reset an existing one to the base SHA.
+def _blob_modes(
+    repo: GithubRepository, tree_sha: str, paths: set[str]
+) -> dict[str, str]:
+    """The file mode each of ``paths`` has in ``tree_sha``.
 
-    ``reset_to_base`` must be false when the branch already backs an open PR:
-    force-pushing an open PR's head to be even with its base makes GitHub
-    auto-close the PR (zero commits ahead to merge) before the new fix
-    commits land, which silently replaces the PR with a new one instead of
-    updating it. The reset is only safe for a branch with no open PR to lose.
-
-    Refuses to force-reset a branch whose head commit was not authored by the
-    app bot (the user pushed their own commits) unless explicitly overridden.
+    Read rather than assumed, so rewriting a file cannot silently drop its
+    executable bit. A path absent from the answer is one the tree does not have
+    — a file this fix is adding — and the caller defaults it to ``100644``.
     """
     try:
-        branch_ref = repo.get_git_ref(f"heads/{fix_branch}")
+        tree = repo.get_git_tree(tree_sha, recursive=True)
     except GithubException:
-        repo.create_git_ref(ref=f"refs/heads/{fix_branch}", sha=base_sha)
-        return
-
-    if not reset_to_base:
-        return
-
-    if not override_user_commits and branch_ref.object.sha != base_sha:
-        head_commit = repo.get_commit(branch_ref.object.sha)
-        author_login = head_commit.author.login if head_commit.author else None
-        if not is_bot_login(author_login, bot_login):
-            raise _DeliveryAborted(
-                USER_COMMITS_ERROR_CODE,
-                f"branch {fix_branch} has commits by {author_login}; "
-                "not overwriting user work",
-            )
-    branch_ref.edit(sha=base_sha, force=True)
+        return {}
+    return {
+        element.path: element.mode
+        for element in tree.tree
+        if element.path in paths and element.type == "blob"
+    }
 
 
-def _upsert_file(
-    repo: GithubRepository,
-    file_path: str,
-    new_content: str,
-    branch: str,
-    commit_message: str,
-) -> None:
-    try:
-        existing = repo.get_contents(file_path, ref=branch)
-        if isinstance(existing, list):
-            existing = existing[0]
-        file_sha: str | None = existing.sha
-        existing_content: str | None = existing.decoded_content.decode(
-            "utf-8", errors="replace"
-        )
-    except GithubException:
-        file_sha = None
-        existing_content = None
-
-    if not new_content.endswith("\n"):
-        new_content += "\n"
-    # The branch already carries this exact content (e.g. an unchanged fix
-    # re-included in the delivery set): committing it again would only add an
-    # empty, churny commit to the PR. Nothing to do.
-    if existing_content is not None and existing_content == new_content:
-        return
-    encoded = new_content.encode("utf-8")
-    if file_sha:
-        repo.update_file(
-            path=file_path,
-            message=commit_message,
-            content=encoded,
-            sha=file_sha,
-            branch=branch,
-        )
-    else:
-        repo.create_file(
-            path=file_path,
-            message=commit_message,
-            content=encoded,
-            branch=branch,
-        )
-
-
-def _list_workflow_files(repo: GithubRepository, ref: str) -> list[ContentFile]:
-    """Return the *.yml/*.yaml content files under .github/workflows at ref.
-
-    Yields an empty list when the directory is absent (404), mirroring
-    ``app_client.fetch_workflow_files``.
-    """
-    try:
-        contents = repo.get_contents(WORKFLOW_DIR, ref=ref)
-    except GithubException as exc:
-        if exc.status == 404:
-            return []
-        raise
-    if not isinstance(contents, list):
-        contents = [contents]
-    return [cf for cf in contents if cf.name.endswith((".yml", ".yaml"))]
-
-
-def _remove_outdated_workflow_files(
+def _rebase_fix_branch(
     branch_repo: GithubRepository,
     base_repo: GithubRepository,
     fix_branch: str,
-    base_branch: str,
-    keep_paths: set[str],
-) -> list[str]:
-    """Reconcile the fix branch so it modifies exactly ``keep_paths``.
+    base_sha: str,
+    file_changes: list[tuple[str, str]],
+    commit_messages: dict[str, str],
+    override_user_commits: bool,
+    bot_login: str,
+) -> str | None:
+    """Rebuild the fix branch as fresh commits on top of ``base_sha``.
 
-    Updating an open PR does not reset the fix branch to base (that would
-    auto-close the PR — see ``_prepare_fix_branch``), so a workflow file the
-    branch changed in an earlier run lingers on the branch even after it drops
-    out of the current fix set (its issues were resolved, or it was deleted on
-    base). Left alone it keeps showing a stale change in the PR — or, for a file
-    deleted on base, a modify/delete conflict that makes the PR unmergeable.
+    The branch used to be left alone whenever it backed an open PR, because
+    force-pushing it *to* the base makes GitHub see zero commits ahead and
+    auto-close the PR. Every redelivery therefore appended to whatever history
+    the branch already had, on whatever base it was originally cut from: the PR
+    drifted further behind the default branch with every run, and accumulated
+    revert-and-re-fix commits that said nothing about the change.
 
-    ``keep_paths`` is the set of workflow paths delivered this run; every one of
-    them is (re)written by the caller, so they are never touched here. For each
-    other ``*.yml``/``*.yaml`` file on the fix branch we compare it to base and
-    apply a forward-only commit (no history rewrite):
+    Building the new history first and moving the ref once avoids that
+    entirely. The branch goes straight from its old tip to a tip that is
+    already ahead of the current base, so it is never observed at zero commits
+    ahead and the PR stays open and is updated in place.
 
-    * absent on base → ``delete_file`` (deleted on base after the branch was cut);
-    * present on base but the branch content differs → an earlier fix we applied
-      that is no longer needed: revert it to the base content so it drops out of
-      the PR diff;
-    * identical to base → an untouched user workflow file inherited from base:
-      leave it alone (we never delete files the user owns).
+    Rebuilding from the base tree each time is also what makes the branch
+    self-reconciling: a file that drops out of the fix set simply carries base
+    content again, and a file deleted on base is simply absent. Both used to
+    need a forward-only reconciliation pass to undo.
 
-    ``base_repo`` owns the base branch — the same repo as ``branch_repo`` for
-    same-repo delivery, or the upstream for fork-based delivery. Returns the
-    paths that were removed or reverted.
+    ``base_repo`` owns the base branch: the same repo as ``branch_repo`` for
+    same-repo delivery, or the upstream for fork-based delivery, where the fix
+    branch lives on the bot's fork. A fork shares the upstream's git objects,
+    so the new commits parent onto the upstream base directly.
+
+    Returns the new head SHA, or ``None`` when every file already matches base
+    and there is nothing to commit.
     """
-    base_paths = {cf.path for cf in _list_workflow_files(base_repo, base_branch)}
-    reconciled: list[str] = []
-    for cf in _list_workflow_files(branch_repo, fix_branch):
-        if cf.path in keep_paths:
-            continue
-        if cf.path not in base_paths:
-            branch_repo.delete_file(
-                path=cf.path,
-                message=f"chore: remove {cf.path} deleted from {base_branch}",
-                sha=cf.sha,
-                branch=fix_branch,
-            )
-            reconciled.append(cf.path)
-            continue
-        base_content = _fetch_file_content(base_repo, cf.path, base_branch)
-        branch_content = _fetch_file_content(branch_repo, cf.path, fix_branch)
-        if base_content is None or branch_content == base_content:
-            # Untouched user file (branch matches base): leave it in place.
-            continue
-        _upsert_file(
-            branch_repo,
-            cf.path,
-            base_content,
-            fix_branch,
-            f"chore: revert {cf.path} no longer part of the fix set",
+    try:
+        branch_ref: object | None = branch_repo.get_git_ref(f"heads/{fix_branch}")
+    except GithubException:
+        branch_ref = None
+
+    if branch_ref is not None and not override_user_commits:
+        _refuse_to_overwrite_user_commits(
+            branch_repo, branch_ref, fix_branch, bot_login
         )
-        reconciled.append(cf.path)
-    return reconciled
+
+    parent = branch_repo.get_git_commit(base_sha)
+    modes = _blob_modes(base_repo, parent.tree.sha, {fp for fp, _ in file_changes})
+    head_sha: str | None = None
+
+    for file_path, new_content in file_changes:
+        if not new_content.endswith("\n"):
+            new_content += "\n"
+        # Compared against the *base*, not against the branch: a fix that
+        # reproduces what base already says adds nothing, and committing it
+        # would put an empty commit in the PR on every redelivery.
+        if _fetch_file_content(base_repo, file_path, base_sha) == new_content:
+            continue
+        tree = branch_repo.create_git_tree(
+            [
+                InputGitTreeElement(
+                    path=file_path,
+                    mode=modes.get(file_path, "100644"),
+                    type="blob",
+                    content=new_content,
+                )
+            ],
+            base_tree=parent.tree,
+        )
+        parent = branch_repo.create_git_commit(
+            commit_messages.get(file_path, f"chore: update {file_path}"),
+            tree,
+            [parent],
+        )
+        head_sha = parent.sha
+
+    if head_sha is None:
+        return None
+
+    if branch_ref is None:
+        branch_repo.create_git_ref(ref=f"refs/heads/{fix_branch}", sha=head_sha)
+    else:
+        branch_ref.edit(sha=head_sha, force=True)  # type: ignore[attr-defined]
+    return head_sha
+
+
+def _refuse_to_overwrite_user_commits(
+    repo: GithubRepository,
+    branch_ref: object,
+    fix_branch: str,
+    bot_login: str,
+) -> None:
+    """Abort if the branch's head commit was not written by the app bot.
+
+    The rebase force-pushes, so anything a person pushed to the branch would be
+    gone. This check used to run only on the paths that already force-pushed;
+    now that every delivery does, it guards every delivery.
+    """
+    head = branch_ref.object.sha  # type: ignore[attr-defined]
+    head_commit = repo.get_commit(head)
+    author_login = head_commit.author.login if head_commit.author else None
+    if not is_bot_login(author_login, bot_login):
+        raise _DeliveryAborted(
+            USER_COMMITS_ERROR_CODE,
+            f"branch {fix_branch} has commits by {author_login}; "
+            "not overwriting user work",
+        )
 
 
 def _update_comment_body(updated_paths: list[str]) -> str:
@@ -342,31 +310,31 @@ class FixDeliveryService:
                         base=base_branch,
                     )
                 )
-                _prepare_fix_branch(
+                head_sha = _rebase_fix_branch(
+                    repo,
                     repo,
                     fix_branch,
                     base_sha,
+                    file_changes,
+                    {
+                        fp: (commit_messages or {}).get(
+                            fp, f"ci: add {settings.PROJECT_NAME} telemetry to {fp}"
+                        )
+                        for fp, _ in file_changes
+                    },
                     override_user_commits,
                     bot_login,
-                    reset_to_base=not open_prs,
                 )
-                if open_prs:
-                    _remove_outdated_workflow_files(
-                        repo,
-                        repo,
-                        fix_branch,
-                        base_branch,
-                        keep_paths={fp for fp, _ in file_changes},
-                    )
-                for fp, new_content in file_changes:
-                    _upsert_file(
-                        repo,
-                        fp,
-                        new_content,
-                        fix_branch,
-                        (commit_messages or {}).get(
-                            fp, f"ci: add {settings.PROJECT_NAME} telemetry to {fp}"
-                        ),
+                if head_sha is None:
+                    # Nothing this delivery changes is different from base. An
+                    # open PR is left exactly as it is rather than reset to
+                    # base, which would make GitHub close it as having nothing
+                    # to merge.
+                    if open_prs:
+                        return str(open_prs[0].html_url)
+                    raise _DeliveryAborted(
+                        NOTHING_TO_DELIVER_ERROR_CODE,
+                        "every file in this fix already matches the base branch",
                     )
                 return _update_or_create_open_pr(
                     repo,
@@ -434,31 +402,27 @@ class FixDeliveryService:
                         base=base_branch,
                     )
                 )
-                _prepare_fix_branch(
+                head_sha = _rebase_fix_branch(
                     fork,
+                    upstream,
                     fix_branch,
                     base_sha,
+                    file_changes,
+                    {
+                        fp: (commit_messages or {}).get(
+                            fp, f"ci: add {settings.PROJECT_NAME} telemetry to {fp}"
+                        )
+                        for fp, _ in file_changes
+                    },
                     override_user_commits,
                     bot_login,
-                    reset_to_base=not open_prs,
                 )
-                if open_prs:
-                    _remove_outdated_workflow_files(
-                        fork,
-                        upstream,
-                        fix_branch,
-                        base_branch,
-                        keep_paths={fp for fp, _ in file_changes},
-                    )
-                for fp, new_content in file_changes:
-                    _upsert_file(
-                        fork,
-                        fp,
-                        new_content,
-                        fix_branch,
-                        (commit_messages or {}).get(
-                            fp, f"ci: add {settings.PROJECT_NAME} telemetry to {fp}"
-                        ),
+                if head_sha is None:
+                    if open_prs:
+                        return str(open_prs[0].html_url)
+                    raise _DeliveryAborted(
+                        NOTHING_TO_DELIVER_ERROR_CODE,
+                        "every file in this fix already matches the base branch",
                     )
                 return _update_or_create_open_pr(
                     upstream,
