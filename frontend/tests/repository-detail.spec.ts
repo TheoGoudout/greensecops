@@ -430,4 +430,64 @@ test.describe("Repository Detail", () => {
 
     await expect(page.getByText("PR opened").first()).toBeVisible()
   })
+
+  test("an open integration PR is linked instead of offered again", async ({
+    page,
+  }) => {
+    // The route records a PullRequest row now, so the tab can see the PR it
+    // opened. Before, the button only knew within the session that pressed it
+    // — after a reload it offered to open a PR that already existed, and
+    // pressing it just returned "already present".
+    await setupRepoMocks(page, {
+      pullRequests: [
+        {
+          ...MOCK_PR_OPEN,
+          pr_branch: "greensecops/integrate-action",
+          pr_url: "https://github.com/acme/web-app/pull/99",
+        },
+      ],
+    })
+    await page.route("**/api/v1/telemetry**", (route) => {
+      route.fulfill({ json: { runs: [], average: null } })
+    })
+
+    await page.goto(`/workflows/${MOCK_REPO.id}/telemetry`)
+
+    const link = page.getByRole("link", { name: /View integration PR/ })
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/acme/web-app/pull/99",
+    )
+    await expect(
+      page.getByRole("button", { name: "Integrate action" }),
+    ).toHaveCount(0)
+  })
+
+  test("a merged integration PR does not hide the button", async ({ page }) => {
+    // Merged means the action is already in the workflows, so the row is
+    // history rather than something to link to. Pinning this because matching
+    // on the branch alone would leave the link pointing at a stale PR forever.
+    await setupRepoMocks(page, {
+      pullRequests: [
+        {
+          ...MOCK_PR_OPEN,
+          pr_branch: "greensecops/integrate-action",
+          pr_state: "merged" as const,
+        },
+      ],
+    })
+    await page.route("**/api/v1/telemetry**", (route) => {
+      route.fulfill({ json: { runs: [], average: null } })
+    })
+
+    await page.goto(`/workflows/${MOCK_REPO.id}/telemetry`)
+
+    await expect(
+      page.getByRole("button", { name: "Integrate action" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("link", { name: /View integration PR/ }),
+    ).toHaveCount(0)
+  })
 })

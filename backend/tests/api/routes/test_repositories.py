@@ -1073,6 +1073,97 @@ def test_integrate_action_badge_url_prefers_greensecops_public_url(
     assert "localhost:8000" not in readme_content
 
 
+def test_integrate_action_records_the_pull_request(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+) -> None:
+    """The PR this opens must be trackable, like every other PR we open.
+
+    It used to be created on GitHub and nowhere else: no ``PullRequest`` row,
+    so it never showed on the PRs tab, the webhook handlers had nothing to
+    attach a state or a CI result to, and the button that opened it could not
+    tell it had already been pressed.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from github.GithubException import GithubException
+
+    from app.api.deps import get_github_app_client
+    from app.main import app as fastapi_app
+    from app.models import PullRequest, PullRequestState
+    from app.services.delivery_pr import INTEGRATE_ACTION_BRANCH
+    from app.services.github.fix_delivery import FixDeliveryResult
+
+    repo_with_install = Repository(
+        org_id=org.id,
+        github_repo_id=int(uuid.uuid4().int % 10**9),
+        full_name=f"owner/track-pr-{uuid.uuid4().hex[:8]}",
+        installation_id=99999,
+        enabled=True,
+    )
+    db.add(repo_with_install)
+    db.commit()
+    db.refresh(repo_with_install)
+    db.add(
+        WorkflowFile(
+            repo_id=repo_with_install.id,
+            path=".github/workflows/ci.yml",
+            content_hash=uuid.uuid4().hex,
+            raw_content="on: push\njobs:\n  build:\n    steps:\n      - run: echo hi\n",
+        )
+    )
+    db.commit()
+
+    mock_client = AsyncMock()
+    mock_client.get_installation_token = AsyncMock(return_value="tok")
+    gh_repo = MagicMock()
+    gh_repo.get_contents.side_effect = GithubException(404, "Not Found", None)
+    gh_repo.get_readme.side_effect = GithubException(404, "Not Found", None)
+    gh_instance = MagicMock()
+    gh_instance.get_repo.return_value = gh_repo
+
+    pr_url = "https://github.com/o/r/pull/7"
+    mock_deliver = AsyncMock(return_value=FixDeliveryResult(pr_url=pr_url))
+
+    fastapi_app.dependency_overrides[get_github_app_client] = lambda: mock_client
+    try:
+        with (
+            patch("github.Github", return_value=gh_instance),
+            patch(
+                "app.services.github.fix_delivery.FixDeliveryService"
+                ".update_or_create_workflow_action_pr",
+                mock_deliver,
+            ),
+            patch(
+                "app.services.github.sha_resolver.resolve_pinned_ref",
+                AsyncMock(return_value=settings.GITHUB_ACTION_REF),
+            ),
+        ):
+            response = client.post(
+                f"{settings.API_V1_STR}/repositories/{repo_with_install.id}/action-integration",
+                headers=superuser_token_headers,
+            )
+    finally:
+        fastapi_app.dependency_overrides.clear()
+
+    assert response.status_code == 202
+    # The branch the row is keyed by is the one delivery actually pushed to;
+    # a row under any other name would not be found by the poller or the tab.
+    assert mock_deliver.await_args.kwargs["fix_branch"] == INTEGRATE_ACTION_BRANCH
+
+    pr = db.exec(
+        select(PullRequest).where(
+            PullRequest.repo_id == repo_with_install.id,
+            PullRequest.pr_branch == INTEGRATE_ACTION_BRANCH,
+        )
+    ).first()
+    assert pr is not None
+    assert pr.pr_url == pr_url
+    assert pr.pr_state == PullRequestState.open
+
+
 # ─── auto-fix toggle and branches listing ────────────────────────────────────
 
 

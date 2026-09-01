@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Cpu,
+  ExternalLink,
   HardDrive,
   MemoryStick,
   Network,
@@ -17,6 +18,7 @@ import {
   RepositoriesService,
   type TelemetryRunPublic,
   TelemetryService,
+  WorkflowService,
 } from "@/client"
 import { RuntimeFindingRow } from "@/components/RuntimeFindingRow"
 import { StatusPill } from "@/components/StatusPill"
@@ -25,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
+import { INTEGRATE_ACTION_BRANCH } from "@/lib/delivery"
 import { dynamicStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
 
@@ -187,11 +190,31 @@ function TelemetryPage() {
       }),
   })
 
+  // The integration PR is a row like any other now that the route records it,
+  // so this tab can ask whether one is already open rather than relying on
+  // having been the tab that opened it. It survives a reload, and a second
+  // person on the same repo sees it too.
+  const { data: pullRequests } = useQuery({
+    queryKey: ["pull-requests", "repo", repoId],
+    queryFn: () => WorkflowService.listPullRequests({ repoId }),
+  })
+  const integrationPr = pullRequests?.find(
+    (pr) =>
+      pr.pr_branch === INTEGRATE_ACTION_BRANCH &&
+      (pr.pr_state === "open" || pr.pr_state === "draft") &&
+      pr.pr_url,
+  )
+
   // "Integrate action" opens a PR adding the GreenSecOps action to the repo.
   // It lives on this tab because telemetry only flows once the action runs.
   const integrateActionMutation = useMutation({
     mutationFn: () => RepositoriesService.integrateAction({ repoId }),
     onSuccess: (data) => {
+      // Refetch so the button becomes the link to the PR that was just
+      // opened, without waiting for a reload.
+      queryClient.invalidateQueries({
+        queryKey: ["pull-requests", "repo", repoId],
+      })
       toast.success("PR opened", {
         description: data.pr_url,
         action: data.pr_url
@@ -230,24 +253,43 @@ function TelemetryPage() {
           .
         </p>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => integrateActionMutation.mutate()}
-            disabled={
-              !isAccessible ||
-              integrateActionMutation.isPending ||
-              integrateActionMutation.isSuccess
-            }
-          >
-            <Puzzle className="h-4 w-4" />
-            {integrateActionMutation.isPending
-              ? "Opening PR…"
-              : integrateActionMutation.isSuccess
-                ? "PR opened"
-                : "Integrate action"}
-          </Button>
+          {integrationPr ? (
+            // Pressing the button again would only 409 ("already present"), and
+            // the PR it opened was the thing worth reaching. So once one is
+            // open, this is the way to it.
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <a
+                href={integrationPr.pr_url ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Puzzle className="h-4 w-4" />
+                View integration PR
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => integrateActionMutation.mutate()}
+              // Stays disabled after a success too: the PR row is being
+              // refetched, and this becomes the link to it a moment later.
+              disabled={
+                !isAccessible ||
+                integrateActionMutation.isPending ||
+                integrateActionMutation.isSuccess
+              }
+            >
+              <Puzzle className="h-4 w-4" />
+              {integrateActionMutation.isPending
+                ? "Opening PR…"
+                : integrateActionMutation.isSuccess
+                  ? "PR opened"
+                  : "Integrate action"}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
