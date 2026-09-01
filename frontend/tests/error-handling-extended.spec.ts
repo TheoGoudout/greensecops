@@ -49,7 +49,7 @@ test.describe("Error Handling — Extended", () => {
       route.fulfill({ status: 404, json: { detail: "Repository not found" } })
     })
 
-    await page.goto("/repositories/00000000-0000-0000-0000-999999999999")
+    await page.goto("/workflows/00000000-0000-0000-0000-999999999999")
 
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -110,7 +110,7 @@ test.describe("Error Handling — Extended", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText(/no workflow files|no fixes|error|failed/i).first(),
@@ -142,7 +142,7 @@ test.describe("Error Handling — Extended", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await expect(
       page.getByText(/no workflow files|no analyses|error/i).first(),
@@ -193,7 +193,7 @@ test.describe("Error Handling — Extended", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     await expect(
       page

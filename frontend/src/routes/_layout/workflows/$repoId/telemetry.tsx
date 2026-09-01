@@ -28,14 +28,12 @@ import { apiErrorDetail } from "@/lib/api-error"
 import { dynamicStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
 
-export const Route = createFileRoute("/_layout/repositories/$repoId/telemetry")(
-  {
-    component: TelemetryPage,
-    head: () => ({
-      meta: [{ title: "Telemetry analysis - GreenSecOps" }],
-    }),
-  },
-)
+export const Route = createFileRoute("/_layout/workflows/$repoId/telemetry")({
+  component: TelemetryPage,
+  head: () => ({
+    meta: [{ title: "Telemetry analysis - GreenSecOps" }],
+  }),
+})
 
 function fmtNumber(value: number | null | undefined, digits = 1): string {
   if (value == null) return "—"

@@ -149,5 +149,5 @@ def build_delivery_pr_body(
         # The static-analysis tab is where an issue's "Needs manual work" badge
         # and the generator's note are shown, so it is the page that answers
         # "what do I have to do about this one".
-        review_url=f"{settings.FRONTEND_HOST}/repositories/{repo_id}/static-analysis",
+        review_url=f"{settings.FRONTEND_HOST}/workflows/{repo_id}/static-analysis",
     )

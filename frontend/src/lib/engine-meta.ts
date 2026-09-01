@@ -23,7 +23,7 @@ export const ENGINE_META: Record<
     icon: Workflow,
     label: "CI workflows",
     blurb: "GitHub Actions workflow files, per repository",
-    to: "/repositories",
+    to: "/workflows",
   },
   docker: {
     icon: Container,
@@ -56,7 +56,7 @@ export const ENGINE_META: Record<
     icon: Activity,
     label: "Telemetry",
     blurb: "Measured runtime data from completed workflow runs",
-    to: "/repositories",
+    to: "/workflows",
   },
 }
 

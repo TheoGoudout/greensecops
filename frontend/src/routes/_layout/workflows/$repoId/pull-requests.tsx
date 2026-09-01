@@ -37,7 +37,7 @@ import {
 import { PAGE_SIZE, workflowLabel } from "@/lib/workflow-utils"
 
 export const Route = createFileRoute(
-  "/_layout/repositories/$repoId/pull-requests",
+  "/_layout/workflows/$repoId/pull-requests",
 )({
   component: PullRequestsPage,
   head: () => ({

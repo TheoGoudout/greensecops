@@ -82,7 +82,7 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
     await mockUserMe(page, MOCK_SUPERUSER)
     await setupAllMocks(page)
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     // Analysis rows live in the collapsible history; the row links to detail.
     await page.getByRole("button", { name: /Analysis history/ }).click()
@@ -111,13 +111,11 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
     const repoLink = page.getByRole("link", { name: /acme\/web-app/i })
     if (await repoLink.isVisible()) {
       await repoLink.click()
-      await expect(page).toHaveURL(new RegExp(`/repositories/${MOCK_REPO.id}`))
+      await expect(page).toHaveURL(new RegExp(`/workflows/${MOCK_REPO.id}`))
     }
   })
 
-  test("sidebar Workflows link navigates to /repositories", async ({
-    page,
-  }) => {
+  test("sidebar Workflows link navigates to /workflows", async ({ page }) => {
     await mockUserMe(page, MOCK_USER)
     await setupAllMocks(page)
 
@@ -128,7 +126,36 @@ test.describe("Navigation — Breadcrumbs and Deep Links", () => {
       .first()
       .click()
 
-    await expect(page).toHaveURL(/\/repositories/)
+    await expect(page).toHaveURL(/\/workflows/)
+  })
+
+  test("the old /repositories list URL redirects to /workflows", async ({
+    page,
+  }) => {
+    await mockUserMe(page, MOCK_USER)
+    await setupAllMocks(page)
+
+    await page.goto("/repositories")
+
+    await expect(page).toHaveURL(/\/workflows$/)
+    await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible()
+  })
+
+  test("the old /repositories tab URLs redirect to the same tab", async ({
+    page,
+  }) => {
+    // Every fix PR body GreenSecOps has ever opened links to
+    // `/repositories/{id}/...`, and those links live in other people's
+    // repositories where nothing can rewrite them. The redirect has to land on
+    // the tab the link named, not just on the list.
+    await mockUserMe(page, MOCK_USER)
+    await setupAllMocks(page)
+
+    await page.goto(`/repositories/${MOCK_REPO.id}/pull-requests`)
+
+    await expect(page).toHaveURL(
+      new RegExp(`/workflows/${MOCK_REPO.id}/pull-requests$`),
+    )
   })
 
   test("sidebar Rules link navigates to /rules", async ({ page }) => {

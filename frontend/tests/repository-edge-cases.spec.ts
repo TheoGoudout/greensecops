@@ -43,7 +43,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await expect(page.getByText("external/third-party-repo")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -69,7 +69,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO_EXTERNAL.id}`)
+    await page.goto(`/workflows/${MOCK_REPO_EXTERNAL.id}`)
 
     await expect(page.getByText("external/third-party-repo")).toBeVisible()
     await expect(page.locator("body")).not.toContainText("Something went wrong")
@@ -93,7 +93,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await expect(page.getByText("acme/old-service")).toBeVisible()
     const toggle = page.locator("button[role='switch']").first()
@@ -123,7 +123,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO_NO_ANALYSES.id}`)
+    await page.goto(`/workflows/${MOCK_REPO_NO_ANALYSES.id}`)
 
     await expect(page.getByText("acme/new-repo")).toBeVisible()
     await expect(page.getByText("No workflow files found")).toBeVisible()
@@ -159,7 +159,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     // The workflow card surfaces the file's latest analysis status.
     await expect(page.getByText("failed").first()).toBeVisible()
@@ -193,7 +193,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto(`/repositories/${MOCK_REPO.id}`)
+    await page.goto(`/workflows/${MOCK_REPO.id}`)
 
     // The workflow card surfaces the file's latest analysis status.
     await expect(page.getByText("pending").first()).toBeVisible()
@@ -224,7 +224,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     const toggle = page.locator("button[role='switch']").first()
     await toggle.click()
@@ -254,7 +254,7 @@ test.describe("Repository Edge Cases", () => {
       },
     )
 
-    await page.goto("/repositories")
+    await page.goto("/workflows")
 
     await expect(page.getByText("acme/web-app")).toBeVisible()
     await expect(page.getByText("acme/old-service")).toBeVisible()

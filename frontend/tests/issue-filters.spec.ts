@@ -40,7 +40,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page
@@ -62,7 +62,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("critical").first()).toBeVisible()
     await expect(page.getByText("high").first()).toBeVisible()
@@ -76,7 +76,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(page.getByText("🔒").first()).toBeVisible()
     await expect(page.getByText("🛡️").first()).toBeVisible()
@@ -88,7 +88,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_CONTEXT] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText("Job 'build' has no timeout-minutes set."),
@@ -103,7 +103,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_PENDING_FIX] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page
@@ -119,7 +119,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_FAILED_FIX] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText("Job 'lint' has no timeout-minutes set."),
@@ -136,7 +136,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [MOCK_ISSUE_WITH_DELIVERED_FIX] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page.getByText("Job 'deploy' has no timeout-minutes set."),
@@ -157,7 +157,7 @@ test.describe("Issue Filters and Display", () => {
       })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     await expect(
       page
@@ -209,7 +209,7 @@ test.describe("Issue Filters and Display", () => {
       route.fulfill({ json: [] })
     })
 
-    await page.goto(`/repositories/${MOCK_REPO.id}/static-analysis`)
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
     // The workflow file still renders; there are just no issue rows to manage.
     await expect(page.getByText("ci.yml").first()).toBeVisible()

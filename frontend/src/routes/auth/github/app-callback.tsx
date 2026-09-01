@@ -85,7 +85,7 @@ function GitHubAppCallback() {
       return () => clearTimeout(timer)
     }
     const timer = setTimeout(() => {
-      navigate({ to: "/repositories" })
+      navigate({ to: "/workflows" })
     }, 2500)
     return () => clearTimeout(timer)
   }, [navigate, syncState])
