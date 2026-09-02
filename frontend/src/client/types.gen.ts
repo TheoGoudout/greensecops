@@ -562,7 +562,7 @@ export type FixFindingSummary = {
     line_end?: (number | null);
 };
 
-export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'superseded_by_deleted_file' | 'landed';
+export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'superseded_by_deleted_file' | 'landed' | 'no_op';
 
 /**
  * How many scan targets currently hold this grade.
