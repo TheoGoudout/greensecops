@@ -2,11 +2,16 @@ import type { DockerFindingPublic } from "@/client"
 import { DockerService } from "@/client"
 import { FindingRow, SubtitleDetail } from "@/components/FindingRow"
 import { useFindingLifecycle } from "@/hooks/useFindingLifecycle"
+import { type EngineActionInput, ignoreAction } from "@/lib/engine-actions"
 
 export function DockerFindingRow({
   finding,
+  targetState,
 }: {
   finding: DockerFindingPublic
+  /** What the owning target is doing, from the page's own action input. A
+   * running scan is about to replace this finding, so muting it is refused. */
+  targetState: EngineActionInput
 }) {
   // A Compose rule names the service it fired on, a Dockerfile rule the build
   // stage; a file-level rule (a missing OCI label) names neither and falls
@@ -27,7 +32,10 @@ export function DockerFindingRow({
     <FindingRow
       finding={finding}
       onToggleIgnore={() => mutation.mutate()}
-      ignorePending={mutation.isPending}
+      ignore={ignoreAction(finding.status, {
+        ...targetState,
+        pending: { ignore: mutation.isPending },
+      })}
       subtitle={
         <>
           {finding.file_path}

@@ -1,4 +1,4 @@
-import { Bell, BellOff, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import type { ReactNode } from "react"
 import type { Category, FindingStatus, Severity } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
@@ -6,6 +6,12 @@ import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import type { EngineAction } from "@/lib/engine-actions"
 import { findingStatusColor, findingStatusLabel } from "@/lib/status-colors"
 
 /**
@@ -28,21 +34,23 @@ interface CommonFinding {
  * the only thing that differs between the engines: Terraform names a resource
  * address, Docker/Ansible a file plus a locator, cloud a resource type and id.
  *
- * The ignore/unignore action is optional (`onToggleIgnore` undefined) so a
- * caller that hasn't wired lifecycle support yet keeps today's read-only
- * rendering — mirrors how `IssueRow`'s checkbox is optional via
- * `onCheckedChange`.
+ * The ignore/unignore action is optional (`ignore` undefined) so a caller that
+ * hasn't wired lifecycle support yet keeps today's read-only rendering —
+ * mirrors how `IssueRow`'s checkbox is optional via `onCheckedChange`.
+ * When it is supplied it comes from `lib/engine-actions`' `ignoreAction`, so
+ * whether it is live, and why not, is decided by the same table the engine's
+ * action bar obeys rather than by this row.
  */
 export function FindingRow({
   finding,
   subtitle,
   onToggleIgnore,
-  ignorePending = false,
+  ignore,
 }: {
   finding: CommonFinding
   subtitle: ReactNode
   onToggleIgnore?: () => void
-  ignorePending?: boolean
+  ignore?: EngineAction
 }) {
   const ignored = finding.status === "ignored"
   return (
@@ -71,26 +79,56 @@ export function FindingRow({
           {subtitle}
         </p>
       </div>
-      {onToggleIgnore && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 gap-1.5 text-xs text-muted-foreground"
-          onClick={onToggleIgnore}
-          disabled={ignorePending}
-          title={ignored ? "Unignore this finding" : "Ignore this finding"}
-        >
-          {ignorePending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : ignored ? (
-            <Bell className="h-3.5 w-3.5" />
-          ) : (
-            <BellOff className="h-3.5 w-3.5" />
-          )}
-          {ignored ? "Unignore" : "Ignore"}
-        </Button>
+      {ignore && onToggleIgnore && (
+        <FindingIgnoreButton action={ignore} onClick={onToggleIgnore} />
       )}
     </div>
+  )
+}
+
+/**
+ * The mute toggle, drawn.
+ *
+ * Shared with `IssueRow` — the CI engine's row is a different component (it
+ * carries a selection checkbox and a "needs manual work" pill) but its one
+ * action is this one, and it answers to the same rules.
+ *
+ * A disabled `<button>` receives no pointer events, so the reason needs a live
+ * wrapper to hang off, exactly as in `EngineActionButton`.
+ */
+export function FindingIgnoreButton({
+  action,
+  onClick,
+}: {
+  action: EngineAction
+  onClick: () => void
+}) {
+  const Icon = action.icon
+  const button = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-7 shrink-0 gap-1.5 text-xs text-muted-foreground"
+      onClick={onClick}
+      disabled={action.disabled}
+    >
+      {action.busy ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Icon className="h-3.5 w-3.5" />
+      )}
+      {action.label}
+    </Button>
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{button}</span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {action.reason ?? `${action.label} this finding`}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

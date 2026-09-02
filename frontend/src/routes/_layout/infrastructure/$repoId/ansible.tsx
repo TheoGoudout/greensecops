@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, GitPullRequest, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import type {
   AnsibleFilePublic,
@@ -15,6 +15,7 @@ import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
 import {
   EngineActionBar,
   EngineActionButton,
+  overflowItem,
 } from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -24,9 +25,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { ansibleFixBranch } from "@/lib/delivery"
-import { engineActions } from "@/lib/engine-actions"
+import {
+  ALREADY_FIXED_REASON,
+  engineActions,
+  isSpentFix,
+  type QuotaReasons,
+  queueableFindings,
+  removeAction,
+} from "@/lib/engine-actions"
 import { formatDateTime } from "@/lib/format"
 import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import { fixStatusColor } from "@/lib/status-colors"
@@ -43,7 +52,10 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId/ansible")(
 function AnsibleTab() {
   const { repoId } = Route.useParams()
   const [open, setOpen] = useState<Set<string>>(new Set())
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
+  // See terraform.tsx: scanning a project and writing its fixes both draw on
+  // the org's allowance, and a spent one is a 402 worth showing coming.
+  const quota = useOrgQuotas(repo?.org_id)
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ["ansible-projects", "repo", repoId],
@@ -94,6 +106,7 @@ function AnsibleTab() {
           isOpen={open.has(project.id)}
           existingPr={prByBranch.get(ansibleFixBranch(project.id))}
           isAccessible={isAccessible}
+          quota={quota}
           onToggleOpen={() =>
             setOpen((prev) => {
               const next = new Set(prev)
@@ -119,12 +132,14 @@ function ProjectCard({
   existingPr,
   onToggleOpen,
   isAccessible,
+  quota,
 }: {
   project: AnsibleProjectPublic
   isOpen: boolean
   existingPr: PullRequestPublic | undefined
   onToggleOpen: () => void
   isAccessible: boolean
+  quota: QuotaReasons | undefined
 }) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const {
@@ -158,9 +173,10 @@ function ProjectCard({
         }),
       scan: () => AnsibleService.triggerScan({ projectId: project.id }),
       remove: () => AnsibleService.deleteProject({ projectId: project.id }),
-      generate: (findingIds) =>
+      generate: (findingIds, force) =>
         AnsibleService.generateFixes({
           projectId: project.id,
+          force,
           requestBody: findingIds.length ? { finding_ids: findingIds } : {},
         }),
       deliver: (force) =>
@@ -185,9 +201,13 @@ function ProjectCard({
     return map
   }, [fixes])
 
-  const openFindingCount = (findings ?? []).filter(
+  const openFindings = (findings ?? []).filter(
     (f) => f.status !== "ignored" && f.status !== "resolved",
-  ).length
+  )
+  // See terraform.tsx: the route skips a file whose fix is already written, so
+  // only these would actually queue anything.
+  const queueable = queueableFindings(openFindings, fixByFile)
+  const regenerable = (fixes ?? []).filter((f) => isSpentFix(f.status))
 
   // See terraform.tsx: one description of the project's state, read by the
   // header bar and by each file's own button at a narrower scope.
@@ -195,6 +215,7 @@ function ProjectCard({
     targetLabel: "Ansible project",
     isAccessible,
     enabled: project.enabled,
+    quota,
     scanStatus: project.latest_scan_status,
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr,
@@ -202,18 +223,28 @@ function ProjectCard({
   const actions = engineActions({
     ...projectState,
     scope: "target" as const,
-    openFindingCount,
-    // A target nobody has scanned yet has no findings *because* of that, and
-    // "No open findings to fix" reads as "there is nothing wrong here".
-    noFindingsReason: project.last_scanned_at
-      ? undefined
-      : "Scan this project first",
+    openFindingCount: queueable.length,
+    noFindingsReason: !project.last_scanned_at
+      ? "Scan this project first"
+      : openFindings.length
+        ? ALREADY_FIXED_REASON
+        : undefined,
     pending: {
       scan: scanMutation.isPending,
       generate: generateMutation.isPending,
       deliver: deliverMutation.isPending,
     },
   })
+  const regenerateAll = engineActions({
+    ...projectState,
+    scope: "target" as const,
+    regenerate: true,
+    openFindingCount: regenerable.length && openFindings.length ? 1 : 0,
+    noFindingsReason: openFindings.length
+      ? "No written fix to discard"
+      : "No open findings to fix",
+    pending: { generate: generateMutation.isPending },
+  }).generate
 
   return (
     <Card>
@@ -245,7 +276,7 @@ function ProjectCard({
           <EngineActionBar
             actions={actions}
             onScan={() => scanMutation.mutate()}
-            onGenerate={() => generateMutation.mutate([])}
+            onGenerate={() => generateMutation.mutate({ findingIds: [] })}
             onDeliver={() => deliverMutation.mutate(actions.deliver.force)}
             leading={
               <>
@@ -266,13 +297,24 @@ function ProjectCard({
               </>
             }
             overflow={[
-              {
-                label: "Remove",
-                icon: Trash2,
-                destructive: true,
-                disabled: deleteMutation.isPending,
-                onSelect: () => setConfirmRemove(true),
-              },
+              overflowItem(
+                regenerateAll,
+                () =>
+                  generateMutation.mutate({
+                    findingIds: openFindings.map((f) => f.id),
+                    force: true,
+                  }),
+                { label: "Regenerate all fixes" },
+              ),
+              overflowItem(
+                removeAction({
+                  ...projectState,
+                  scope: "target",
+                  pending: { remove: deleteMutation.isPending },
+                }),
+                () => setConfirmRemove(true),
+                { destructive: true },
+              ),
             ]}
           />
         </div>
@@ -310,9 +352,13 @@ function ProjectCard({
                   (f) => f.status !== "ignored" && f.status !== "resolved",
                 )
                 .map((f) => f.id)
+              // See terraform.tsx: a file whose fix is already written offers
+              // to discard and rewrite it, because a plain generate would queue
+              // nothing and say it had.
               const fileAction = engineActions({
                 ...projectState,
                 scope: "file" as const,
+                regenerate: isSpentFix(fileFix?.status),
                 fixStatuses: fileFix ? [fileFix.status] : [],
                 openFindingCount: openIds.length,
                 pending: { generate: generateMutation.isPending },
@@ -349,10 +395,15 @@ function ProjectCard({
                         </a>
                       )}
                     </div>
-                    {openIds.length > 0 && (
+                    {fileFindings.length > 0 && (
                       <EngineActionButton
                         action={fileAction}
-                        onClick={() => generateMutation.mutate(openIds)}
+                        onClick={() =>
+                          generateMutation.mutate({
+                            findingIds: openIds,
+                            force: fileAction.force,
+                          })
+                        }
                         compact
                       />
                     )}
@@ -377,7 +428,11 @@ function ProjectCard({
                   {fileFindings.length > 0 && (
                     <div className="rounded-md border divide-y">
                       {fileFindings.map((finding) => (
-                        <AnsibleFindingRow key={finding.id} finding={finding} />
+                        <AnsibleFindingRow
+                          key={finding.id}
+                          finding={finding}
+                          targetState={{ ...projectState, scope: "target" }}
+                        />
                       ))}
                     </div>
                   )}

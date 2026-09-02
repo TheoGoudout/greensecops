@@ -27,7 +27,9 @@ def org(db: Session) -> Organization:
 
 @pytest.fixture()
 def repo(db: Session, org: Organization) -> Repository:
-    return f.make_repo(db, org, installation_id=55555)
+    # Enabled: a manual analysis on a disabled repository is a 403 now, the
+    # same one every other engine raises for a disabled target.
+    return f.make_repo(db, org, installation_id=55555, enabled=True)
 
 
 @pytest.fixture()

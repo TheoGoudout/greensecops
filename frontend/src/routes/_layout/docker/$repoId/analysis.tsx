@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { useMemo, useState } from "react"
 import type {
   DockerFilePublic,
@@ -15,6 +15,7 @@ import { DockerFindingRow } from "@/components/DockerFindingRow"
 import {
   EngineActionBar,
   EngineActionButton,
+  overflowItem,
 } from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -24,9 +25,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { dockerFixBranch } from "@/lib/delivery"
-import { engineActions } from "@/lib/engine-actions"
+import {
+  ALREADY_FIXED_REASON,
+  engineActions,
+  isSpentFix,
+  type QuotaReasons,
+  queueableFindings,
+  removeAction,
+} from "@/lib/engine-actions"
 import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
@@ -41,7 +50,10 @@ export const Route = createFileRoute("/_layout/docker/$repoId/analysis")({
 function DockerAnalysisTab() {
   const { repoId } = Route.useParams()
   const [openTargets, setOpenTargets] = useState<Set<string>>(new Set())
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
+  // See terraform.tsx: scanning a target and writing its fixes both draw on the
+  // org's allowance, and a spent one is a 402 worth showing coming.
+  const quota = useOrgQuotas(repo?.org_id)
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
@@ -110,6 +122,7 @@ function DockerAnalysisTab() {
           onToggleOpen={() => toggleOpen(target.id)}
           existingPr={prByBranch.get(dockerFixBranch(target.id))}
           isAccessible={isAccessible}
+          quota={quota}
         />
       ))}
     </div>
@@ -122,12 +135,14 @@ function TargetCard({
   onToggleOpen,
   existingPr,
   isAccessible,
+  quota,
 }: {
   target: DockerTargetPublic
   isOpen: boolean
   onToggleOpen: () => void
   existingPr?: PullRequestPublic
   isAccessible: boolean
+  quota: QuotaReasons | undefined
 }) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const {
@@ -156,9 +171,10 @@ function TargetCard({
         }),
       scan: () => DockerService.triggerScan({ targetId: target.id }),
       remove: () => DockerService.deleteTarget({ targetId: target.id }),
-      generate: (findingIds) =>
+      generate: (findingIds, force) =>
         DockerService.generateFixes({
           targetId: target.id,
+          force,
           requestBody: findingIds.length
             ? { finding_ids: findingIds }
             : { finding_ids: null },
@@ -191,9 +207,14 @@ function TargetCard({
   // Findings the engine reports as still open — the same filter the other file
   // engines apply. Docker counted every row, including ignored ones, which is
   // why its "Generate all fixes" button could offer to fix nothing.
-  const openFindingCount = (findings ?? []).filter(
+  const openFindings = (findings ?? []).filter(
     (f) => f.status !== "ignored" && f.status !== "resolved",
-  ).length
+  )
+  const openFindingCount = openFindings.length
+  // See terraform.tsx: the route skips a file whose fix is already written, so
+  // only these would actually queue anything.
+  const queueable = queueableFindings(openFindings, fixByFile)
+  const regenerable = (fixes ?? []).filter((f) => isSpentFix(f.status))
 
   // See terraform.tsx: one description of this target's state, read by the
   // header bar and by each file's own button at a narrower scope.
@@ -201,6 +222,7 @@ function TargetCard({
     targetLabel: "Docker target",
     isAccessible,
     enabled: target.enabled,
+    quota,
     scanStatus: target.latest_scan_status,
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr,
@@ -208,18 +230,28 @@ function TargetCard({
   const actions = engineActions({
     ...targetState,
     scope: "target" as const,
-    openFindingCount,
-    // A target nobody has scanned yet has no findings *because* of that, and
-    // "No open findings to fix" reads as "there is nothing wrong here".
-    noFindingsReason: target.last_scanned_at
-      ? undefined
-      : "Scan this target first",
+    openFindingCount: queueable.length,
+    noFindingsReason: !target.last_scanned_at
+      ? "Scan this target first"
+      : openFindingCount
+        ? ALREADY_FIXED_REASON
+        : undefined,
     pending: {
       scan: scanMutation.isPending,
       generate: generateMutation.isPending,
       deliver: deliverMutation.isPending,
     },
   })
+  const regenerateAll = engineActions({
+    ...targetState,
+    scope: "target" as const,
+    regenerate: true,
+    openFindingCount: regenerable.length && openFindingCount ? 1 : 0,
+    noFindingsReason: openFindingCount
+      ? "No written fix to discard"
+      : "No open findings to fix",
+    pending: { generate: generateMutation.isPending },
+  }).generate
 
   return (
     <Card>
@@ -257,7 +289,7 @@ function TargetCard({
         <EngineActionBar
           actions={actions}
           onScan={() => scanMutation.mutate()}
-          onGenerate={() => generateMutation.mutate([])}
+          onGenerate={() => generateMutation.mutate({ findingIds: [] })}
           onDeliver={() => deliverMutation.mutate(actions.deliver.force)}
           leading={
             <>
@@ -272,13 +304,24 @@ function TargetCard({
             </>
           }
           overflow={[
-            {
-              label: "Remove",
-              icon: Trash2,
-              destructive: true,
-              disabled: deleteMutation.isPending,
-              onSelect: () => setConfirmRemove(true),
-            },
+            overflowItem(
+              regenerateAll,
+              () =>
+                generateMutation.mutate({
+                  findingIds: openFindings.map((f) => f.id),
+                  force: true,
+                }),
+              { label: "Regenerate all fixes" },
+            ),
+            overflowItem(
+              removeAction({
+                ...targetState,
+                scope: "target",
+                pending: { remove: deleteMutation.isPending },
+              }),
+              () => setConfirmRemove(true),
+              { destructive: true },
+            ),
           ]}
         />
         <ConfirmRemoveDialog
@@ -302,9 +345,13 @@ function TargetCard({
             const openIds = fileFindings
               .filter((f) => f.status !== "ignored" && f.status !== "resolved")
               .map((f) => f.id)
+            // See terraform.tsx: a file whose fix is already written offers to
+            // discard and rewrite it, because a plain generate would queue
+            // nothing and say it had.
             const fileAction = engineActions({
               ...targetState,
               scope: "file" as const,
+              regenerate: isSpentFix(fileFix?.status),
               fixStatuses: fileFix ? [fileFix.status] : [],
               openFindingCount: openIds.length,
               pending: { generate: generateMutation.isPending },
@@ -330,10 +377,15 @@ function TargetCard({
                       View PR
                     </a>
                   )}
-                  {openIds.length > 0 && (
+                  {fileFindings.length > 0 && (
                     <EngineActionButton
                       action={fileAction}
-                      onClick={() => generateMutation.mutate(openIds)}
+                      onClick={() =>
+                        generateMutation.mutate({
+                          findingIds: openIds,
+                          force: fileAction.force,
+                        })
+                      }
                       compact
                     />
                   )}
@@ -355,7 +407,11 @@ function TargetCard({
                 {fileFindings.length > 0 && (
                   <div className="rounded-md border divide-y">
                     {fileFindings.map((finding) => (
-                      <DockerFindingRow key={finding.id} finding={finding} />
+                      <DockerFindingRow
+                        key={finding.id}
+                        finding={finding}
+                        targetState={{ ...targetState, scope: "target" }}
+                      />
                     ))}
                   </div>
                 )}

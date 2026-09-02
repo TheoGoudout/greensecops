@@ -139,7 +139,9 @@ test.describe("Ansible", () => {
   test("generating fixes for the whole project queues the task", async ({
     page,
   }) => {
-    await mockAnsibleProjects(page)
+    // No fixes yet: the button queues only files that have none, and this
+    // project's one file already carries a written fix in the default mock.
+    await mockAnsibleProjects(page, undefined, { fixes: [] })
 
     await page.goto(`/infrastructure/${MOCK_REPO.id}/ansible`)
     await page.getByTitle("Expand project").first().click()

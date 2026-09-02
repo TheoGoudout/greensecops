@@ -7,6 +7,7 @@ from sqlalchemy import case, func
 from sqlmodel import col, select
 
 from app.api.deps import CurrentUser, SessionDep, get_or_404, user_org_ids
+from app.api.engine_routes import require_idle, workflow_file_activity
 from app.api.mappers import to_workflow_finding_public
 from app.api.router import Role, RoleRouter
 from app.models import (
@@ -18,6 +19,7 @@ from app.models import (
     Rule,
     ScanStatus,
     Severity,
+    TargetAction,
     WorkflowFile,
     WorkflowFinding,
     WorkflowFindingPublic,
@@ -340,15 +342,34 @@ def ignore_finding(
 
     Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
     which takes precedence over resolve/fix state and drops the issue out of the
-    default (active) issue and fix queries. Idempotent.
+    default (active) issue and fix queries. Idempotent on an already-ignored
+    issue, and a 409 on a resolved one.
+
+    That precedence is for an issue resolved *after* it was muted, not a licence
+    to mute one that is already gone — the other four engines refuse it outright
+    (``FindingMachine.ignore`` is legal only from ``open`` and
+    ``fix_in_progress``), and one vocabulary means this engine says the same.
+    The PR-comment ``/greensecops ignore`` path writes the column directly and
+    is deliberately untouched: a bulk fingerprint mute is not a click on a
+    button that should have been grey.
     """
     issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
-    if issue.ignored_at is None:
-        issue.ignored_at = datetime.now(timezone.utc)
-        session.add(issue)
-        session.commit()
-        session.refresh(issue)
+    if issue.ignored_at is not None:
+        return to_workflow_finding_public(issue)
+    wf_file = get_or_404(session, WorkflowFile, issue.workflow_file_id)
+    require_idle(
+        workflow_file_activity(session, wf_file), TargetAction.ignore, "workflow file"
+    )
+    if issue.resolved_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A workflow finding that is resolved cannot be ignored",
+        )
+    issue.ignored_at = datetime.now(timezone.utc)
+    session.add(issue)
+    session.commit()
+    session.refresh(issue)
     return to_workflow_finding_public(issue)
 
 
@@ -362,12 +383,22 @@ def unignore_finding(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> WorkflowFindingPublic:
-    """Un-mute a previously ignored violation. Idempotent."""
+    """Un-mute a previously ignored violation. Idempotent.
+
+    An issue that is not ignored has nothing to un-ignore whatever the reason,
+    so every such state is the idempotent case and this stays safe to retry —
+    the same split its counterpart above now draws.
+    """
     issue = get_or_404(session, WorkflowFinding, finding_id)
     _authorize_issue(session, current_user, issue)
-    if issue.ignored_at is not None:
-        issue.ignored_at = None
-        session.add(issue)
-        session.commit()
-        session.refresh(issue)
+    if issue.ignored_at is None:
+        return to_workflow_finding_public(issue)
+    wf_file = get_or_404(session, WorkflowFile, issue.workflow_file_id)
+    require_idle(
+        workflow_file_activity(session, wf_file), TargetAction.ignore, "workflow file"
+    )
+    issue.ignored_at = None
+    session.add(issue)
+    session.commit()
+    session.refresh(issue)
     return to_workflow_finding_public(issue)

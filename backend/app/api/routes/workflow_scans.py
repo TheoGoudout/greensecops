@@ -107,6 +107,13 @@ def trigger_repository_scan(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    # The switch means "do not spend analyses on this", and it means the same
+    # thing here that it does on a Terraform root or a Docker target, which
+    # both refuse a manual scan while disabled. The CI engine was the one that
+    # accepted it, which left its dashboard button live where every other
+    # engine's was greyed.
+    if not repo.enabled:
+        raise HTTPException(status_code=403, detail="Repository is disabled")
     require_idle(repository_activity(session, repo_id), TargetAction.scan, "repository")
 
     effective_branch = branch or repo.default_branch
@@ -163,6 +170,8 @@ def trigger_file_scan(
     repo = authorize_repo(session, current_user, wf_file.repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    if not repo.enabled:
+        raise HTTPException(status_code=403, detail="Repository is disabled")
     require_idle(
         workflow_file_activity(session, wf_file), TargetAction.scan, "workflow file"
     )

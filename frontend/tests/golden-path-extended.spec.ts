@@ -80,7 +80,7 @@ test.describe("Golden Path — Extended", () => {
     await page.goto("/workflows")
     await expect(page.getByText("acme/web-app")).toBeVisible()
 
-    await page.getByRole("button", { name: "Trigger analysis" }).click()
+    await page.getByRole("button", { name: "Scan now" }).click()
     expect(analysisTriggered).toBe(true)
     await expect(page.getByText("Analysis queued")).toBeVisible()
 

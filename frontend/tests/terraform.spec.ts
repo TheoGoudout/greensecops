@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, type Locator, test } from "@playwright/test"
 import {
   MOCK_PR_OPEN,
   MOCK_REPO,
@@ -11,7 +11,21 @@ import {
   mockRepositories,
   mockTerraformRoots,
   mockUserMe,
+  quotaSpent,
 } from "./utils/mocks"
+
+/**
+ * Hover a disabled action to read its reason.
+ *
+ * A disabled `<button>` takes no pointer events, which is exactly why
+ * `EngineActionButton` wraps it in a focusable span for the tooltip to hang
+ * off — so the hover has to land on that span, not on the button inside it.
+ */
+async function reasonFor(button: Locator) {
+  await button
+    .locator("xpath=ancestor::span[@data-slot='tooltip-trigger']")
+    .hover()
+}
 
 test.describe("Terraform", () => {
   test.beforeEach(async ({ page }) => {
@@ -67,7 +81,9 @@ test.describe("Terraform", () => {
   test("generating fixes for the whole root queues the task", async ({
     page,
   }) => {
-    await mockTerraformRoots(page)
+    // No fixes yet: the button queues only files that have none, so a root
+    // whose one file already carries a written fix is the *other* test.
+    await mockTerraformRoots(page, [MOCK_TERRAFORM_ROOT], { fixes: [] })
 
     await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
     await page.getByTitle("Expand root").first().click()
@@ -79,6 +95,65 @@ test.describe("Terraform", () => {
     )
     await page.getByRole("button", { name: /Generate fixes/ }).click()
     await request
+  })
+
+  test("a file whose fix is already written offers to regenerate it", async ({
+    page,
+  }) => {
+    // `prepare_pending_fix` re-queues only a `failed` fix, so a plain generate
+    // over a file that already has one is accepted, queues nothing, and used to
+    // toast "Fix generation queued" over a request that did nothing.
+    await mockTerraformRoots(page)
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    const bar = page.getByRole("button", { name: /Generate fixes/ }).first()
+    await expect(bar).toBeDisabled()
+    await reasonFor(bar)
+    await expect(
+      page.getByText("Every file with findings already has a fix"),
+    ).toBeVisible()
+
+    await page.getByTitle("Expand root").first().click()
+    const request = page.waitForRequest(
+      (r) =>
+        r.url().includes(`/terraform/roots/${MOCK_TERRAFORM_ROOT.id}/fixes`) &&
+        r.url().includes("force=true") &&
+        r.method() === "POST",
+    )
+    await page.getByRole("button", { name: "Regenerate fix" }).click()
+    await request
+  })
+
+  test("removing a root is refused while it is scanning", async ({ page }) => {
+    // The delete cascades the root's scans, findings and fixes away, so the
+    // route refuses it — and now the menu item says so first.
+    await mockTerraformRoots(page, [
+      { ...MOCK_TERRAFORM_ROOT, latest_scan_status: "running" },
+    ])
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+    await page.getByRole("button", { name: "More actions" }).first().click()
+
+    await expect(page.getByRole("menuitem", { name: "Remove" })).toBeDisabled()
+  })
+
+  test("a spent analysis allowance greys the scan in the 402's own words", async ({
+    page,
+  }) => {
+    const spent =
+      "You've used all 100 analyses included in the Free plan this month."
+    await mockBilling(page, undefined, undefined, undefined, {
+      quotas: quotaSpent("analyses", spent),
+    })
+    await mockTerraformRoots(page)
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    const scan = page.getByRole("button", { name: "Scan now" }).first()
+    await expect(scan).toBeDisabled()
+    await reasonFor(scan)
+    await expect(page.getByText(spent)).toBeVisible()
   })
 
   test("ignoring and unignoring a finding round-trips its status", async ({

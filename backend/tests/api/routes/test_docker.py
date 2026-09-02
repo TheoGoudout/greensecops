@@ -661,6 +661,44 @@ def test_list_fixes_is_scoped_to_the_target(
     assert body[0]["status"] == "ready"
 
 
+def test_repository_fixes_span_every_target(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    target: DockerTarget,
+) -> None:
+    """The cross-target read the PR tab needs — see the Terraform twin for why
+    a per-target read could not answer it."""
+    from app.models import DockerFix, LLMProvider
+    from app.models.enums import FixStatus
+
+    other = DockerTarget(repo_id=repo.id, root_path="services/api")
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+    for owner, path in ((target, "Dockerfile"), (other, "services/api/Dockerfile")):
+        db.add(
+            DockerFix(
+                docker_target_id=owner.id,
+                file_path=path,
+                llm_provider=LLMProvider.openai,
+                llm_model="gpt-4o-mini",
+                status=FixStatus.ready,
+            )
+        )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/docker/fixes",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert {f["docker_target_id"] for f in body} == {str(target.id), str(other.id)}
+
 # ─── GET /docker/targets/{id}/runtime-findings ────────────────────────────────────────
 
 

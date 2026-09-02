@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import {
-  ChevronDown,
-  ChevronRight,
-  GitPullRequest,
-  RefreshCw,
-} from "lucide-react"
+import { ChevronDown, ChevronRight, GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -16,7 +11,7 @@ import {
   type WorkflowScanPublic,
   WorkflowService,
 } from "@/client"
-import { EngineActionBar } from "@/components/EngineActionBar"
+import { EngineActionBar, overflowItem } from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { IssueRow } from "@/components/IssueRow"
@@ -26,13 +21,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { WorkflowFilterMenu } from "@/components/WorkflowFilterMenu"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
 import { deliverAction, repoFixBranch } from "@/lib/delivery"
 import {
-  actionBlockedReason,
+  type EngineActionInput,
   engineActions,
   isFixInFlight,
+  syncAction,
 } from "@/lib/engine-actions"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { relativeTime } from "@/lib/format"
@@ -65,7 +62,10 @@ function StaticAnalysisPage() {
   const { branch } = RepoRoute.useSearch()
   const queryClient = useQueryClient()
 
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
+  // Analysing this repository fans out to one analysis per workflow file, and
+  // each fix is its own LLM call, so both meters can grey a button here.
+  const quota = useOrgQuotas(repo?.org_id)
 
   const [unfixed, setUnfixed] = useState(false)
   const [showIgnored, setShowIgnored] = useState(false)
@@ -383,17 +383,29 @@ function StaticAnalysisPage() {
   // the newest row: a CI analysis writes one scan per workflow file under a
   // single repo-wide lock, so "the latest one" is regularly a finished sibling
   // of one still running.
-  const repoState = {
+  const repoState: EngineActionInput = {
     targetLabel: "repository",
+    scope: "repo",
     isAccessible,
+    // The switch means "do not spend analyses on this", the same as every
+    // other engine's target flag — and the scan route now refuses it, so the
+    // button says so rather than the 403 doing it after the click.
+    enabled: repo?.enabled,
+    quota,
     scanStatus: (analyses ?? []).map((a) => a.status),
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr: prByBranch.get(repoFixBranch(repoId)),
   }
-  const regenerateBlocked = actionBlockedReason("generate", {
+  // Regenerating discards every eligible fix in the repository and starts over,
+  // so unlike the button below it does not care what is selected — only that
+  // there is something to discard.
+  const regenerateAll = engineActions({
     ...repoState,
-    scope: "repo",
-  })
+    regenerate: true,
+    openFindingCount: (fixes ?? []).some(isRegenerable) ? 1 : 0,
+    noFindingsReason: "No fix to regenerate",
+    pending: { generate: regenerateRepoMutation.isPending },
+  }).generate
   const repoActions = engineActions({
     ...repoState,
     scope: "repo" as const,
@@ -497,33 +509,24 @@ function StaticAnalysisPage() {
         overflow={[
           // Discarding every eligible fix and starting over is a deliberate,
           // occasional act — a menu item, not a fourth button competing with
-          // the one that generates the fixes that are missing.
-          ...(fixes?.some(isRegenerable)
-            ? [
-                {
-                  label: regenerateRepoMutation.isPending
-                    ? "Queuing…"
-                    : "Regenerate all fixes",
-                  icon: RefreshCw,
-                  // Activity only: regenerating discards every eligible fix
-                  // in the repo, so unlike the button above it does not care
-                  // what is selected.
-                  disabled:
-                    !!regenerateBlocked || regenerateRepoMutation.isPending,
-                  reason: regenerateBlocked,
-                  onSelect: () => regenerateRepoMutation.mutate(),
-                },
-              ]
-            : []),
-          {
-            label: syncMutation.isPending ? "Syncing…" : "Sync from GitHub",
-            icon: RefreshCw,
-            disabled: !isAccessible || syncMutation.isPending,
-            reason: isAccessible
-              ? null
-              : "GitHub access to this repository was lost",
-            onSelect: () => syncMutation.mutate(),
-          },
+          // the one that generates the fixes that are missing. Drawn even when
+          // there is nothing to discard: a menu that loses an entry teaches
+          // nobody why it was there yesterday.
+          overflowItem(regenerateAll, () => regenerateRepoMutation.mutate(), {
+            label: regenerateRepoMutation.isPending
+              ? "Queuing…"
+              : "Regenerate all fixes",
+          }),
+          // Re-reading the workflow files takes the same repo-wide lock an
+          // analysis does, and the route refuses it for the same reason — so
+          // it is the activity table's answer, not a bespoke one.
+          overflowItem(
+            syncAction({
+              ...repoState,
+              pending: { sync: syncMutation.isPending },
+            }),
+            () => syncMutation.mutate(),
+          ),
         ]}
       />
 
@@ -710,6 +713,23 @@ function StaticAnalysisPage() {
               deliver: isWfDelivering,
             },
           })
+          // Discarding this file's fix and writing it again — the per-file
+          // twin of the bar's "Regenerate all fixes", and drawn on the same
+          // terms: always present, carrying the reason when it cannot run.
+          const wfRegenerate = engineActions({
+            ...repoState,
+            targetLabel: "workflow file",
+            scope: "file" as const,
+            regenerate: true,
+            fixStatuses: fileFix ? [fileFix.status] : [],
+            openFindingCount: fileFix && isRegenerable(fileFix) ? 1 : 0,
+            noFindingsReason: fileFix
+              ? "This fix has already been merged"
+              : "No fix to regenerate",
+            pending: {
+              generate: isRegenerating || regenerateRepoMutation.isPending,
+            },
+          }).generate
           // The per-file delivery label and force flag come from
           // `deliverAction`, which knows one thing the shared rules do not: a
           // withdrawn fix whose PR was closed can be reopened. Only the
@@ -793,25 +813,17 @@ function StaticAnalysisPage() {
                         force: delivery.force,
                       })
                     }
-                    overflow={
-                      fileFix && isRegenerable(fileFix)
-                        ? [
-                            {
-                              label: isRegenerating
-                                ? "Queuing…"
-                                : "Regenerate fix",
-                              icon: RefreshCw,
-                              disabled:
-                                wfActions.generate.disabled ||
-                                isRegenerating ||
-                                regenerateRepoMutation.isPending,
-                              reason: wfActions.generate.reason,
-                              onSelect: () =>
-                                regenerateWorkflowMutation.mutate(fileFix.id),
-                            },
-                          ]
-                        : undefined
-                    }
+                    overflow={[
+                      overflowItem(
+                        wfRegenerate,
+                        () =>
+                          fileFix &&
+                          regenerateWorkflowMutation.mutate(fileFix.id),
+                        {
+                          label: isRegenerating ? "Queuing…" : "Regenerate fix",
+                        },
+                      ),
+                    ]}
                   />
                 </div>
               </CardHeader>
@@ -862,7 +874,10 @@ function StaticAnalysisPage() {
                               key={issue.id}
                               issue={issue}
                               repoId={repoId}
-                              isAccessible={isAccessible}
+                              // The whole repository's analysis is what would
+                              // replace this issue, so the file's own fix work
+                              // does not gate muting it.
+                              targetState={repoState}
                             />
                           ))}
                         </div>

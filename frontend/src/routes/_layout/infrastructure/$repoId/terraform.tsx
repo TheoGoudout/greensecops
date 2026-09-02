@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, GitPullRequest, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, GitPullRequest } from "lucide-react"
 import { useMemo, useState } from "react"
 import type {
   PullRequestPublic,
@@ -14,6 +14,7 @@ import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
 import {
   EngineActionBar,
   EngineActionButton,
+  overflowItem,
 } from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
@@ -24,9 +25,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { tfFixBranch } from "@/lib/delivery"
-import { engineActions } from "@/lib/engine-actions"
+import {
+  ALREADY_FIXED_REASON,
+  engineActions,
+  isSpentFix,
+  type QuotaReasons,
+  queueableFindings,
+  removeAction,
+} from "@/lib/engine-actions"
 import { formatDateTime } from "@/lib/format"
 import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import {
@@ -47,7 +56,11 @@ export const Route = createFileRoute(
 function TerraformTab() {
   const { repoId } = Route.useParams()
   const [openRoots, setOpenRoots] = useState<Set<string>>(new Set())
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
+  // What the owning org has left to spend. Scanning a root and writing its
+  // fixes both draw on it, and a spent allowance is a 402 the button should
+  // have shown coming.
+  const quota = useOrgQuotas(repo?.org_id)
 
   const { data: roots, isLoading } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
@@ -111,6 +124,7 @@ function TerraformTab() {
           onToggleOpen={() => toggleOpen(root.id)}
           existingPr={prByBranch.get(tfFixBranch(root.id))}
           isAccessible={isAccessible}
+          quota={quota}
         />
       ))}
     </div>
@@ -123,6 +137,7 @@ interface RootCardProps {
   onToggleOpen: () => void
   existingPr: PullRequestPublic | undefined
   isAccessible: boolean
+  quota: QuotaReasons | undefined
 }
 
 function RootCard({
@@ -131,6 +146,7 @@ function RootCard({
   onToggleOpen,
   existingPr,
   isAccessible,
+  quota,
 }: RootCardProps) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -165,9 +181,10 @@ function RootCard({
         }),
       scan: () => TerraformService.triggerScan({ rootId: root.id }),
       remove: () => TerraformService.deleteRoot({ rootId: root.id }),
-      generate: (findingIds) =>
+      generate: (findingIds, force) =>
         TerraformService.generateFixes({
           rootId: root.id,
+          force,
           requestBody: findingIds.length ? { finding_ids: findingIds } : {},
         }),
       deliver: (force) =>
@@ -200,9 +217,14 @@ function RootCard({
     return map
   }, [fixes])
 
-  const openFindingCount = (findings ?? []).filter(
+  const openFindings = (findings ?? []).filter(
     (f) => f.status !== "ignored" && f.status !== "resolved",
-  ).length
+  )
+  // Findings a plain "Generate fixes" would actually queue something for: the
+  // route skips any file whose fix is already written, so counting every open
+  // finding left the button live over a request that returned `queued: 0`.
+  const queueable = queueableFindings(openFindings, fixByFile)
+  const regenerable = (fixes ?? []).filter((f) => isSpentFix(f.status))
 
   // One description of what this root may do, shared by the header bar and by
   // each file's own button below — the difference between them is the scope,
@@ -211,6 +233,7 @@ function RootCard({
     targetLabel: "Terraform root",
     isAccessible,
     enabled: root.enabled,
+    quota,
     scanStatus: root.latest_scan_status,
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr,
@@ -218,16 +241,35 @@ function RootCard({
   const actions = engineActions({
     ...rootState,
     scope: "target" as const,
-    openFindingCount,
-    // A target nobody has scanned yet has no findings *because* of that, and
-    // "No open findings to fix" reads as "there is nothing wrong here".
-    noFindingsReason: root.last_scanned_at ? undefined : "Scan this root first",
+    openFindingCount: queueable.length,
+    // Three different silences to break, in order of how wrong the default
+    // would read: a root nobody has scanned has no findings *because* of that,
+    // and "No open findings to fix" would read as "there is nothing wrong
+    // here"; a root whose files all have fixes already is not clean either.
+    noFindingsReason: !root.last_scanned_at
+      ? "Scan this root first"
+      : openFindings.length
+        ? ALREADY_FIXED_REASON
+        : undefined,
     pending: {
       scan: scanMutation.isPending,
       generate: generateMutation.isPending,
       deliver: deliverMutation.isPending,
     },
   })
+  // Discarding every written fix and starting over: the way out of the state
+  // the button above greys itself for. A menu item rather than a fourth
+  // button, matching the CI page — it is deliberate and occasional.
+  const regenerateAll = engineActions({
+    ...rootState,
+    scope: "target" as const,
+    regenerate: true,
+    openFindingCount: regenerable.length && openFindings.length ? 1 : 0,
+    noFindingsReason: openFindings.length
+      ? "No written fix to discard"
+      : "No open findings to fix",
+    pending: { generate: generateMutation.isPending },
+  }).generate
 
   return (
     <Card>
@@ -256,7 +298,7 @@ function RootCard({
           <EngineActionBar
             actions={actions}
             onScan={() => scanMutation.mutate()}
-            onGenerate={() => generateMutation.mutate([])}
+            onGenerate={() => generateMutation.mutate({ findingIds: [] })}
             onDeliver={() => deliverMutation.mutate(actions.deliver.force)}
             leading={
               <>
@@ -277,13 +319,24 @@ function RootCard({
               </>
             }
             overflow={[
-              {
-                label: "Remove",
-                icon: Trash2,
-                destructive: true,
-                disabled: deleteMutation.isPending,
-                onSelect: () => setConfirmRemove(true),
-              },
+              overflowItem(
+                regenerateAll,
+                () =>
+                  generateMutation.mutate({
+                    findingIds: openFindings.map((f) => f.id),
+                    force: true,
+                  }),
+                { label: "Regenerate all fixes" },
+              ),
+              overflowItem(
+                removeAction({
+                  ...rootState,
+                  scope: "target",
+                  pending: { remove: deleteMutation.isPending },
+                }),
+                () => setConfirmRemove(true),
+                { destructive: true },
+              ),
             ]}
           />
         </div>
@@ -322,10 +375,13 @@ function RootCard({
                 )
                 .map((f) => f.id)
               // Same rules, narrowed to this file: only its own fix counts as
-              // in flight, so one file generating never freezes the rest.
+              // in flight, so one file generating never freezes the rest. A
+              // file whose fix is already written offers to discard and rewrite
+              // it — a plain generate would queue nothing and say it had.
               const fileAction = engineActions({
                 ...rootState,
                 scope: "file" as const,
+                regenerate: isSpentFix(fileFix?.status),
                 fixStatuses: fileFix ? [fileFix.status] : [],
                 openFindingCount: openIds.length,
                 pending: { generate: generateMutation.isPending },
@@ -354,10 +410,18 @@ function RootCard({
                         </a>
                       )}
                     </div>
-                    {openIds.length > 0 && (
+                    {/* Drawn whenever the file has findings at all, greyed
+                        with its reason when they are all muted or resolved —
+                        hiding it left "why can I not fix this?" unanswered. */}
+                    {fileFindings.length > 0 && (
                       <EngineActionButton
                         action={fileAction}
-                        onClick={() => generateMutation.mutate(openIds)}
+                        onClick={() =>
+                          generateMutation.mutate({
+                            findingIds: openIds,
+                            force: fileAction.force,
+                          })
+                        }
                         compact
                       />
                     )}
@@ -381,6 +445,7 @@ function RootCard({
                         <TerraformFindingRow
                           key={finding.id}
                           finding={finding}
+                          targetState={{ ...rootState, scope: "target" }}
                         />
                       ))}
                     </div>

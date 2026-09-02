@@ -356,16 +356,26 @@ class TargetActivity(str, enum.Enum):
 
 
 class TargetAction(str, enum.Enum):
-    """The three things a user can ask an engine to do to a target.
+    """The things a user can ask an engine to do to a target.
 
     Deliberately not one per route: ``POST .../scans``, ``POST .../fixes`` and
     ``POST .../deliveries`` are the same three verbs on every engine, and the
     values here are the words that go into the 409 detail and the UI tooltip.
+
+    The last three are not engine flows of their own but they collide with the
+    same in-flight work, and saying so in this vocabulary is what keeps their
+    refusals readable: they read as "Cannot remove this target while a scan is
+    already running for this Terraform root" rather than each route inventing a
+    sentence. ``ignore`` is phrased "change a finding" because the one control
+    it guards toggles both ways.
     """
 
     scan = "start a scan"
     generate = "generate fixes"
     deliver = "open a pull request"
+    remove = "remove this target"
+    ignore = "change a finding"
+    sync = "sync from GitHub"
 
 
 class FindingResolutionReason(str, enum.Enum):

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable, Generator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import patch
 
@@ -34,6 +34,8 @@ from app.models import (
 from app.services.billing import stripe_gateway
 from app.services.billing.lifecycle import get_or_create_subscription
 from tests.utils.billing import (
+    link_owner,
+    make_org,
     make_subscription,
     make_user,
     owned_setup,
@@ -977,3 +979,134 @@ def test_checkout_recovers_when_stripe_rejects_a_deleted_customer(
     assert response.json()["url"] == "https://checkout.stripe.com/c/pay/new"
     db.refresh(sub)
     assert sub.stripe_customer_id is None
+
+
+def _headers_for(client: TestClient, db: Session, user: User) -> dict[str, str]:
+    """Sign in as ``user``.
+
+    Deliberately not the superuser fixture: a superuser *caller* is exempt from
+    enforcement (``state_for_org``), so it would read every org as unlimited —
+    which is right, and useless for testing the numbers a member is shown.
+    """
+    return authentication_token_from_email(client=client, email=user.email, db=db)
+
+
+def _current_period(db: Session, user: User, tier: UserTier) -> None:
+    """A subscription whose billing period is open *now*.
+
+    ``make_subscription`` leaves the period unset, and the usage read rolls it
+    forward on first sight — which would place a ledger entry written a moment
+    earlier just outside the window it is then counted against.
+    """
+    now = datetime.now(timezone.utc)
+    make_subscription(
+        db,
+        user,
+        tier=tier,
+        period_start=now - timedelta(days=1),
+        period_end=now + timedelta(days=29),
+    )
+
+
+# ─── Org quotas ──────────────────────────────────────────────────────────────
+#
+# The read behind every greyed-out "Scan now". Distinct from ``/billing/usage``
+# in exactly the way that matters: it answers for the org's *billing owner*,
+# which is who ``enforce_quota`` measures.
+
+
+def test_org_quotas_report_every_meter_with_its_headroom(
+    client: TestClient, db: Session
+) -> None:
+    user, org, _repo = owned_setup(db, tier=UserTier.starter)
+    _current_period(db, user, UserTier.starter)
+    record_usage(db, user, org, meter=UsageMeter.analyses, quantity=40)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/organizations/{org.id}/quotas",
+        headers=_headers_for(client, db, user),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert set(body) == {"analyses", "fixes", "repos"}
+    assert body["analyses"]["used"] == 40
+    assert body["analyses"]["limit"] == 1_000
+    assert body["analyses"]["remaining"] == 960
+    # Headroom left means no refusal, which is what keeps the button live.
+    assert body["analyses"]["exhausted_reason"] is None
+
+
+def test_org_quotas_hand_over_the_sentence_the_402_would_carry(
+    client: TestClient, db: Session
+) -> None:
+    """The tooltip that greys a button out has to be the error it prevents, not
+    a paraphrase — same discipline the activity refusals already keep."""
+    user, org, _repo = owned_setup(db, tier=UserTier.free)
+    _current_period(db, user, UserTier.free)
+    record_usage(db, user, org, meter=UsageMeter.analyses, quantity=100)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/organizations/{org.id}/quotas",
+        headers=_headers_for(client, db, user),
+    )
+
+    reason = response.json()["analyses"]["exhausted_reason"]
+    assert reason is not None
+    assert "100 analyses" in reason
+    # And the fixes meter, untouched, stays live.
+    assert response.json()["fixes"]["exhausted_reason"] is None
+
+
+def test_org_quotas_answer_for_the_billing_owner_not_the_caller(
+    client: TestClient, db: Session
+) -> None:
+    """A teammate reading their own subscription would be shown an allowance
+    they are not spending against — and greyed, or not greyed, wrongly."""
+    owner, org, _repo = owned_setup(db, tier=UserTier.free)
+    _current_period(db, owner, UserTier.free)
+    record_usage(db, owner, org, meter=UsageMeter.analyses, quantity=100)
+
+    teammate = make_user(db, tier=UserTier.ultimate)
+    _current_period(db, teammate, UserTier.ultimate)
+    link_owner(db, org, teammate, joined_at=datetime(2099, 1, 1, tzinfo=timezone.utc))
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/organizations/{org.id}/quotas",
+        headers=_headers_for(client, db, teammate),
+    )
+
+    assert response.status_code == 200, response.text
+    # The owner's Free allowance, spent — not the teammate's own Ultimate one.
+    assert response.json()["analyses"]["exhausted_reason"] is not None
+
+
+def test_org_quotas_report_a_superuser_owned_org_as_unlimited(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
+    """The sponsored-open-source path: exempt orgs must not grey anything."""
+    owner = make_user(db, is_superuser=True)
+    org = make_org(db)
+    link_owner(db, org, owner)
+
+    body = client.get(
+        f"{settings.API_V1_STR}/billing/organizations/{org.id}/quotas",
+        headers=superuser_token_headers,
+    ).json()
+
+    for meter in ("analyses", "fixes", "repos"):
+        assert body[meter]["limit"] is None
+        assert body[meter]["remaining"] is None
+        assert body[meter]["exhausted_reason"] is None
+
+
+def test_org_quotas_are_not_readable_by_a_non_member(
+    client: TestClient, db: Session, user_headers: dict[str, str]
+) -> None:
+    _owner, org, _repo = owned_setup(db)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/billing/organizations/{org.id}/quotas",
+        headers=user_headers,
+    )
+
+    assert response.status_code == 404, response.text

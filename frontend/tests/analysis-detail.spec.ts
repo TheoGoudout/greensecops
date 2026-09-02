@@ -10,6 +10,7 @@ import {
   mockRepositories,
   mockRules,
   mockUserMe,
+  mockWorkflowScans,
 } from "./utils/mocks"
 
 test.describe("Analysis Detail", () => {
@@ -25,12 +26,7 @@ test.describe("Analysis Detail", () => {
   test("shows metadata: grade, score, status, branch, workflow", async ({
     page,
   }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      },
-    )
+    await mockWorkflowScans(page)
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
@@ -45,12 +41,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("issues grouped by category", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      },
-    )
+    await mockWorkflowScans(page)
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({
         json: [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY, MOCK_ISSUE_ENERGY],
@@ -71,12 +62,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("Generate fix button visible per issue", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      },
-    )
+    await mockWorkflowScans(page)
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [MOCK_ISSUE_SECURITY] })
     })
@@ -89,12 +75,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("empty issues state", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      },
-    )
+    await mockWorkflowScans(page)
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })
@@ -107,12 +88,7 @@ test.describe("Analysis Detail", () => {
   })
 
   test("invalid analysis ID shows error alert", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ status: 404, json: { detail: "Not found" } })
-      },
-    )
+    await mockWorkflowScans(page, null)
     await page.route("**/api/v1/workflow/findings**", (route) => {
       route.fulfill({ json: [] })
     })

@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { GitBranch, Lock, Play, WifiOff } from "lucide-react"
+import { GitBranch, Lock, WifiOff } from "lucide-react"
 import { toast } from "sonner"
 import type { RepositoryPublic } from "@/client"
 import { RepositoriesService, WorkflowService } from "@/client"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { GradeBadge } from "@/components/GradeBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,6 +17,9 @@ import {
 } from "@/components/ui/tooltip"
 import useAuth from "@/hooks/useAuth"
 import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
+import { engineActions } from "@/lib/engine-actions"
+import { pollWhileScanning } from "@/lib/scan-polling"
 
 export const Route = createFileRoute("/_layout/workflows/")({
   component: Repositories,
@@ -28,6 +32,7 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const isAccessible = repo.is_accessible ?? true
+  const quota = useOrgQuotas(repo.org_id)
   // Auto-fix is a paid feature: only a superuser or a user on a paid tier may
   // enable it. The API enforces this too (HTTP 402); the disabled control is
   // just the UX affordance.
@@ -64,6 +69,10 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
     onSuccess: () => {
       toast.success(`Analysis queued for ${repo.full_name}`)
       queryClient.invalidateQueries({ queryKey: ["scans", repo.id] })
+      // The row's own button reads `latest_scan_status` off this list, and the
+      // analysis it just queued is what that has to start reporting.
+      queryClient.invalidateQueries({ queryKey: ["repositories"] })
+      queryClient.invalidateQueries({ queryKey: ["quotas"] })
     },
     onError: () => {
       toast.error(`Failed to trigger analysis for ${repo.full_name}`)
@@ -148,15 +157,26 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
         )}
         <span className="text-xs text-muted-foreground">Auto-fix</span>
       </div>
-      <Button
+      {/* The same button, under the same rules, as every engine's card: this
+          was the one scan trigger still hand-rolled, an unlabelled icon that
+          knew nothing about the analysis already running behind it and let a
+          second click 409. */}
+      <EngineActionButton
         variant="ghost"
-        size="icon"
-        title="Trigger analysis"
+        compact
+        action={
+          engineActions({
+            targetLabel: "repository",
+            scope: "repo",
+            isAccessible,
+            enabled: repo.enabled,
+            quota,
+            scanStatus: repo.latest_scan_status,
+            pending: { scan: triggerMutation.isPending },
+          }).scan
+        }
         onClick={() => triggerMutation.mutate()}
-        disabled={triggerMutation.isPending || !isAccessible}
-      >
-        <Play className="h-4 w-4" />
-      </Button>
+      />
     </div>
   )
 }
@@ -170,6 +190,12 @@ function Repositories() {
   } = useQuery({
     queryKey: ["repositories"],
     queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
+    // Follow a queued analysis to its end, the way every engine's target list
+    // does — otherwise the row's button stays greyed until a manual reload.
+    refetchInterval: (query) =>
+      pollWhileScanning(
+        (query.state.data ?? []).map((r) => r.latest_scan_status),
+      ),
   })
 
   return (

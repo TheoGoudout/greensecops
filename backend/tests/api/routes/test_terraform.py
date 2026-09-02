@@ -658,6 +658,67 @@ def test_list_terraform_fixes(
     assert body[0]["status"] == "ready"
 
 
+# ─── GET /terraform/fixes ────────────────────────────────────────────────────
+
+
+def test_repository_fixes_span_every_root(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    repo: Repository,
+    terraform_root: TerraformRoot,
+) -> None:
+    """The cross-target read the pull-requests tab needs: it lists a whole
+    repository's PRs and has to know, per target, whether a delivery is already
+    in flight — which per-root reads could only answer one request per card."""
+    other = TerraformRoot(repo_id=repo.id, root_path="infra/other")
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+    for root, path in ((terraform_root, "main.tf"), (other, "other.tf")):
+        db.add(
+            TerraformFix(
+                terraform_root_id=root.id,
+                file_path=path,
+                llm_provider=LLMProvider.openai,
+                llm_model="gpt-4o-mini",
+                status=FixStatus.ready,
+            )
+        )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform/fixes",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert {f["file_path"] for f in body} == {"main.tf", "other.tf"}
+    assert {f["terraform_root_id"] for f in body} == {
+        str(terraform_root.id),
+        str(other.id),
+    }
+
+
+def test_repository_fixes_are_scoped_to_the_caller(
+    client: TestClient,
+    db: Session,
+    repo: Repository,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    """Same 404 as every other read on a repository the caller cannot see —
+    the API never discloses that another tenant's repository exists."""
+    response = client.get(
+        f"{settings.API_V1_STR}/terraform/fixes",
+        params={"repo_id": str(repo.id)},
+        headers=normal_user_token_headers,
+    )
+
+    assert response.status_code == 404, response.text
+
+
 def test_trigger_terraform_delivery_queues_task(
     client: TestClient,
     superuser_token_headers: dict[str, str],

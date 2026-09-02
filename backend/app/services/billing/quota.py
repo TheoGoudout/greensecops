@@ -163,6 +163,85 @@ def state_for_org(
     )
 
 
+# Every meter a caller can be refused on, in the order the UI reads them.
+METERS: tuple[str, ...] = ("analyses", "fixes", "repos")
+
+
+def states_for_org(
+    session: Session,
+    actor: User | None,
+    org_id: uuid.UUID,
+) -> dict[str, QuotaState]:
+    """Every meter's standing for ``org_id``, read against one billing period.
+
+    ``state_for_org`` three times would roll the owner's subscription three
+    times and could straddle a period boundary mid-read — the same hazard
+    ``snapshot`` exists to avoid, one level up. This is the read behind
+    ``GET /billing/organizations/{org_id}/quotas``, which is what lets the UI
+    grey out "Scan now" *before* the click instead of after the 402.
+
+    Resolving through the org's billing owner rather than ``actor`` is the whole
+    point: it is who ``enforce_quota`` measures, so a teammate on a shared org
+    is shown the numbers they will actually be blocked by.
+    """
+    exempt = QuotaState(tier=None, limit=None, used=0, resets_at=None, exempt=True)
+    if actor is not None and actor.is_superuser:
+        return dict.fromkeys(METERS, exempt)
+    owner = org_billing_owner(session, org_id)
+    if owner is None or owner.is_superuser:
+        return dict.fromkeys(METERS, exempt)
+
+    snap = snapshot(session, owner)
+    tier = effective_tier(snap.subscription)
+    limits = limits_for(tier)
+    used = {
+        "analyses": snap.analyses_used,
+        "fixes": snap.fixes_used,
+        "repos": snap.repos_used,
+    }
+    return {
+        meter: QuotaState(
+            tier=tier,
+            limit=limits.get(meter),
+            used=used[meter],
+            # A repo slot is capacity, not consumption — it frees when a repo is
+            # disabled, not at a period boundary. ``errors.quota_exceeded``
+            # drops the reset date for the same reason.
+            resets_at=None if meter == "repos" else snap.subscription.period_end,
+        )
+        for meter in METERS
+    }
+
+
+def refusal_for(
+    state: QuotaState,
+    meter: str,
+    requested: int = 1,
+    *,
+    engine: UsageEngine | None = None,
+) -> str | None:
+    """The sentence ``enforce_quota`` would raise for ``state``, or ``None``.
+
+    Built from the same ``errors.quota_exceeded`` the 402 comes from, so a
+    tooltip that greys a button out and the error it prevents are the same
+    words — the discipline ``engine_target.REASONS`` already keeps for activity.
+    """
+    if state.allows(requested):
+        return None
+    assert state.tier is not None and state.limit is not None
+    detail = errors.quota_exceeded(
+        meter=meter,
+        tier=state.tier,
+        limit=state.limit,
+        used=state.used,
+        requested=requested,
+        resets_at=state.resets_at,
+        engine=engine.value if engine else None,
+    ).detail
+    assert isinstance(detail, dict)
+    return str(detail["message"])
+
+
 def remaining(
     session: Session,
     actor: User | None,
@@ -191,21 +270,9 @@ def exhausted_message(
     come from the same builder, so a user reading an SSE toast and a user
     reading an API error see the same numbers and the same upgrade advice.
     """
-    state = state_for_org(session, None, org_id, meter)
-    if state.allows(1):
-        return None
-    assert state.tier is not None and state.limit is not None
-    detail = errors.quota_exceeded(
-        meter=meter,
-        tier=state.tier,
-        limit=state.limit,
-        used=state.used,
-        requested=1,
-        resets_at=state.resets_at,
-        engine=engine.value if engine else None,
-    ).detail
-    assert isinstance(detail, dict)
-    return str(detail["message"])
+    return refusal_for(
+        state_for_org(session, None, org_id, meter), meter, engine=engine
+    )
 
 
 def enforce_quota(

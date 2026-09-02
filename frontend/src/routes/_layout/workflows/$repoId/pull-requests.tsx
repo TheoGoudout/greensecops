@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { GitPullRequest, Loader2, RefreshCw } from "lucide-react"
+import { GitPullRequest, RefreshCw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -8,6 +8,7 @@ import {
   type WorkflowFixPublic,
   WorkflowService,
 } from "@/client"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -27,6 +28,14 @@ import {
   repoFixBranch,
   workflowFixBranch,
 } from "@/lib/delivery"
+import {
+  type EngineAction,
+  type EngineActionInput,
+  engineActions,
+  isFixInFlight,
+  NO_ACCESS_REASON,
+} from "@/lib/engine-actions"
+import { SCAN_POLL_MS } from "@/lib/scan-polling"
 import {
   ciStatusColor,
   ciStatusLabel,
@@ -70,7 +79,28 @@ function PullRequestsPage() {
   const { data: fixes } = useQuery({
     queryKey: ["fixes", "repo", repoId],
     queryFn: () => WorkflowService.listFixes({ repoId, limit: 100 }),
+    // A delivery queued from this page is what greys these buttons; without a
+    // poll they stayed grey until a reload.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((f) => isFixInFlight(f.status))
+        ? SCAN_POLL_MS
+        : false,
   })
+
+  // The analyses this repository is running. A CI analysis holds a repo-wide
+  // lock and refuses every delivery under it, so the buttons below have to see
+  // it — this page never asked.
+  const { data: analyses } = useQuery({
+    queryKey: ["scans", repoId],
+    queryFn: () => WorkflowService.listScans({ repoId, limit: 100 }),
+  })
+
+  const repoState: EngineActionInput = {
+    targetLabel: "repository",
+    scope: "repo",
+    isAccessible,
+    scanStatus: (analyses ?? []).map((a) => a.status),
+  }
 
   const fixByBranch = useMemo(() => {
     const map = new Map<string, WorkflowFixPublic>()
@@ -153,34 +183,71 @@ function PullRequestsPage() {
     [filtered, page],
   )
 
-  // What Update/Reopen should do for a PR, and how to fire it. Merged PRs are
-  // terminal; a workflow PR needs a still-deliverable fix behind its branch.
+  // What Update/Reopen may do for a PR, and how to fire it.
+  //
+  // The two states this row knows and the shared rules do not are the PR's own:
+  // a merged PR is finished, and a branch with no fix behind it has nothing to
+  // redeliver from. Both used to return `null` and take the button away with
+  // them; they are reasons now, and everything else — a running analysis, a fix
+  // still being written, lost access — comes from the same table every other
+  // delivery button obeys.
   function prAction(pr: PullRequestPublic): {
-    label: string
+    action: EngineAction
     run: () => void
-    pending: boolean
-  } | null {
+  } {
     const state = pr.pr_state ?? "open"
-    if (state === "merged") return null
     const force = state === "closed"
-    const label = state === "closed" ? "Reopen PR" : "Update PR"
+    const isRepoWide = pr.pr_branch === repoBranch
+    const fix = isRepoWide ? undefined : fixByBranch.get(pr.pr_branch)
+    const pending = isRepoWide
+      ? deliverRepoMutation.isPending
+      : deliverWorkflowMutation.isPending &&
+        deliverWorkflowMutation.variables?.fixId === fix?.id
 
-    if (pr.pr_branch === repoBranch) {
+    const action = engineActions({
+      ...repoState,
+      // A repo-wide PR is delivered from every fix in the repository; a
+      // per-workflow one only from its own, so one file's generation must not
+      // freeze another file's PR.
+      fixStatuses: isRepoWide
+        ? (fixes ?? []).map((f) => f.status)
+        : fix
+          ? [fix.status]
+          : [],
+      existingPr: pr,
+      // Redelivery does not need a `ready` fix the way a first delivery does:
+      // `force` widens the worker's selection to the fixes already delivered,
+      // which is what updating an open PR means.
+      reopenable: true,
+      pending: { deliver: pending },
+    }).deliver
+
+    const run = () =>
+      isRepoWide
+        ? deliverRepoMutation.mutate({ force })
+        : fix && deliverWorkflowMutation.mutate({ fixId: fix.id, force })
+
+    if (state === "merged") {
       return {
-        label,
-        run: () => deliverRepoMutation.mutate({ force }),
-        pending: deliverRepoMutation.isPending,
+        run,
+        action: {
+          ...action,
+          disabled: true,
+          reason: "This pull request has been merged",
+        },
       }
     }
-    const fix = fixByBranch.get(pr.pr_branch)
-    if (!fix) return null
-    return {
-      label,
-      run: () => deliverWorkflowMutation.mutate({ fixId: fix.id, force }),
-      pending:
-        deliverWorkflowMutation.isPending &&
-        deliverWorkflowMutation.variables?.fixId === fix.id,
+    if (!isRepoWide && !fix) {
+      return {
+        run,
+        action: {
+          ...action,
+          disabled: true,
+          reason: "No fix on this branch to redeliver",
+        },
+      }
     }
+    return { action, run }
   }
 
   return (
@@ -219,18 +286,23 @@ function PullRequestsPage() {
           </Select>
         </div>
         <div className="flex items-center gap-2">
-          <Button
+          {/* Reading GitHub's view of these PRs back. Deliberately *not* the
+              `sync` action: that one re-reads the workflow files and takes the
+              analysis lock, while this only refreshes PR state, so a running
+              analysis is no reason to refuse it. Lost access is. */}
+          <EngineActionButton
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            disabled={syncMutation.isPending}
+            compact
+            action={{
+              label: syncMutation.isPending ? "Syncing…" : "Sync",
+              icon: RefreshCw,
+              busy: syncMutation.isPending,
+              disabled: !isAccessible || syncMutation.isPending,
+              reason: isAccessible ? null : NO_ACCESS_REASON,
+              force: false,
+            }}
             onClick={() => syncMutation.mutate()}
-            title="Sync PR statuses from GitHub"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`}
-            />
-          </Button>
+          />
           <span className="text-xs text-muted-foreground">
             {filtered.length} PR{filtered.length !== 1 ? "s" : ""}
           </span>
@@ -353,27 +425,11 @@ function PullRequestsPage() {
                               : "—"}
                           </span>
                         </div>
-                        {action && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs gap-1.5 shrink-0"
-                            onClick={action.run}
-                            disabled={!isAccessible || action.pending}
-                            title={
-                              pr.externally_modified
-                                ? "This branch has user commits; use force via the workflow card if needed"
-                                : undefined
-                            }
-                          >
-                            {action.pending ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <GitPullRequest className="h-3 w-3" />
-                            )}
-                            {action.pending ? "Queuing…" : action.label}
-                          </Button>
-                        )}
+                        <EngineActionButton
+                          action={action.action}
+                          compact
+                          onClick={action.run}
+                        />
                       </div>
                     </div>
                   )

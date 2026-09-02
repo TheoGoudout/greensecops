@@ -2839,6 +2839,24 @@ export const NewPasswordSchema = {
     title: 'NewPassword'
 } as const;
 
+export const OrgQuotasPublicSchema = {
+    properties: {
+        analyses: {
+            '$ref': '#/components/schemas/QuotaPublic'
+        },
+        fixes: {
+            '$ref': '#/components/schemas/QuotaPublic'
+        },
+        repos: {
+            '$ref': '#/components/schemas/QuotaPublic'
+        }
+    },
+    type: 'object',
+    required: ['analyses', 'fixes', 'repos'],
+    title: 'OrgQuotasPublic',
+    description: 'Every meter an organization can be refused on.'
+} as const;
+
 export const OrganizationPublicSchema = {
     properties: {
         id: {
@@ -3463,6 +3481,76 @@ export const PullRequestStateSchema = {
     title: 'PullRequestState'
 } as const;
 
+export const QuotaPublicSchema = {
+    properties: {
+        meter: {
+            type: 'string',
+            title: 'Meter'
+        },
+        limit: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Limit'
+        },
+        used: {
+            type: 'integer',
+            title: 'Used',
+            default: 0
+        },
+        remaining: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Remaining'
+        },
+        resets_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resets At'
+        },
+        exhausted_reason: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Exhausted Reason'
+        }
+    },
+    type: 'object',
+    required: ['meter'],
+    title: 'QuotaPublic',
+    description: `One meter's standing for an organization, and the refusal it would draw.
+
+\`\`exhausted_reason\`\` is the whole point: it is the *exact* sentence
+\`\`enforce_quota\`\` puts in its 402, or \`\`None\`\` when the next unit would go
+through. A client greys a button out on the string alone, and the tooltip
+it shows is then the error it prevented rather than a paraphrase of it —
+the same discipline \`\`state_machines/engine_target.REASONS\`\` keeps for the
+activity refusals.`
+} as const;
+
 export const RepoCategoryStatSchema = {
     properties: {
         category: {
@@ -3662,6 +3750,16 @@ export const RepositoryPublicSchema = {
                 }
             ],
             title: 'Created At'
+        },
+        latest_scan_status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ScanStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         avg_score: {
             anyOf: [

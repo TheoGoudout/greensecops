@@ -40,6 +40,7 @@ from app.models import (
     Invoice,
     InvoicePublic,
     InvoiceStatus,
+    OrgQuotasPublic,
     OssApplication,
     OssApplicationCreate,
     OssApplicationPublic,
@@ -48,6 +49,7 @@ from app.models import (
     PlanChangePublic,
     PlanLimitsPublic,
     PlanPublic,
+    QuotaPublic,
     SubscriptionStatus,
     UsageBreakdownPublic,
     UsagePublic,
@@ -55,7 +57,7 @@ from app.models import (
     UserTier,
     get_datetime_utc,
 )
-from app.services.billing import errors, stripe_gateway
+from app.services.billing import errors, quota, stripe_gateway
 from app.services.billing import usage as usage_service
 from app.services.billing.lifecycle import (
     apply_tier,
@@ -185,6 +187,44 @@ def get_usage(
             UsageBreakdownPublic(meter=meter, engine=engine, quantity=quantity)
             for meter, engine, quantity in breakdown
         ],
+    )
+
+
+def _quota_public(meter: str, state: quota.QuotaState) -> QuotaPublic:
+    return QuotaPublic(
+        meter=meter,
+        limit=state.limit,
+        used=state.used,
+        remaining=state.remaining,
+        resets_at=state.resets_at,
+        exhausted_reason=quota.refusal_for(state, meter),
+    )
+
+
+@router.get(
+    "/organizations/{org_id}/quotas",
+    role=Role.org_member,
+    response_model=OrgQuotasPublic,
+)
+def get_org_quotas(
+    org_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> OrgQuotasPublic:
+    """What ``org_id`` may still spend, and the refusal if it may not.
+
+    Distinct from ``GET /billing/usage``, which reports the *caller's* own
+    subscription: enforcement measures the org's **billing owner**
+    (``quota.state_for_org``), so a teammate reading their own numbers would be
+    shown an allowance they are not actually spending against. This endpoint is
+    what the engine pages read to grey a button out before it is pressed, so it
+    has to answer the same question ``enforce_quota`` does.
+    """
+    states = quota.states_for_org(session, current_user, org_id)
+    return OrgQuotasPublic(
+        analyses=_quota_public("analyses", states["analyses"]),
+        fixes=_quota_public("fixes", states["fixes"]),
+        repos=_quota_public("repos", states["repos"]),
     )
 
 

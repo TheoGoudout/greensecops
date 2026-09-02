@@ -19,6 +19,7 @@ from app.api.engine_routes import (
     get_finding_for_user,
     get_target_for_user,
     ignore_finding_for_user,
+    list_fixes_for_repo,
     prepare_pending_fix,
     require_target_idle,
     sarif_for_claims,
@@ -157,7 +158,10 @@ def delete_project(
 ) -> None:
     project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
     # Cascades to its scans/findings — the user is removing this project, not
-    # just disabling it.
+    # just disabling it. Which is why it needs the guard the disable switch does
+    # not: a worker still holding one of those rows would be writing into a
+    # deleted tree.
+    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.remove)
     session.delete(project)
     session.commit()
 
@@ -332,6 +336,26 @@ def list_files(
             kind=classify_ansible_file(f.path, f.content) or "tasks",
         )
         for f in sorted(fetched, key=lambda f: f.path)
+    ]
+
+
+@router.get("/fixes", role=Role.user, response_model=list[AnsibleFixPublic])
+def list_repository_fixes(
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID,
+) -> list[AnsibleFixPublic]:
+    """Every fix across a repository's Ansible projects.
+
+    The cross-target read beside the per-target one, matching
+    ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
+    "Update PR" may be pressed: a delivery already in flight, or a fix still
+    being generated, refuses one — and asking per target would be a request per
+    card on a page that already lists them all.
+    """
+    return [
+        to_ansible_fix_public(f)
+        for f in list_fixes_for_repo(ANSIBLE_ENGINE, session, current_user, repo_id)
     ]
 
 

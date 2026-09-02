@@ -1,4 +1,10 @@
-from app.models import Engine, RepoEngineGrade, Repository, RepositoryPublic
+from app.models import (
+    Engine,
+    RepoEngineGrade,
+    Repository,
+    RepositoryPublic,
+    ScanStatus,
+)
 from app.services.badge_signing import repo_badge_message, sign_badge
 
 
@@ -7,6 +13,7 @@ def to_repo_public(
     avg_score: float | None,
     grade: str | None,
     engine_grades: dict[Engine, tuple[float, str]] | None = None,
+    latest_scan_status: ScanStatus | None = None,
 ) -> RepositoryPublic:
     """Shape a repository for the API.
 
@@ -14,6 +21,13 @@ def to_repo_public(
     five engines — a toggle returning the row it just wrote — does not pay for
     the query. An absent map renders as no per-engine grades, which is what a
     page shows as "—".
+
+    ``latest_scan_status`` is optional for the same reason, and carries the same
+    meaning it does on ``ScanTargetPublicBase``: the CI engine's answer to "is
+    something running on this?", which is what lets the repository list grey its
+    own "Scan now" out. A caller that omits it reports ``None``, which reads as
+    "not known here" rather than "idle" — so only the reads a user acts from
+    pay for the query.
     """
     badge_sig: str | None = None
     if repo.is_private and "/" in repo.full_name:
@@ -33,6 +47,7 @@ def to_repo_public(
         created_at=repo.created_at,
         avg_score=avg_score,
         grade=grade,
+        latest_scan_status=latest_scan_status,
         engine_grades=[
             RepoEngineGrade(engine=engine, score=score, grade=letter)
             for engine, (score, letter) in sorted(

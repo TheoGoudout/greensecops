@@ -633,6 +633,15 @@ export type OrganizationUpdate = {
     default_llm_model?: (string | null);
 };
 
+/**
+ * Every meter an organization can be refused on.
+ */
+export type OrgQuotasPublic = {
+    analyses: QuotaPublic;
+    fixes: QuotaPublic;
+    repos: QuotaPublic;
+};
+
 export type OssApplicationCreate = {
     repo_url: string;
     license_name: string;
@@ -773,6 +782,25 @@ export type PullRequestPublic = {
 export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
 
 /**
+ * One meter's standing for an organization, and the refusal it would draw.
+ *
+ * ``exhausted_reason`` is the whole point: it is the *exact* sentence
+ * ``enforce_quota`` puts in its 402, or ``None`` when the next unit would go
+ * through. A client greys a button out on the string alone, and the tooltip
+ * it shows is then the error it prevented rather than a paraphrase of it —
+ * the same discipline ``state_machines/engine_target.REASONS`` keeps for the
+ * activity refusals.
+ */
+export type QuotaPublic = {
+    meter: string;
+    limit?: (number | null);
+    used?: number;
+    remaining?: (number | null);
+    resets_at?: (string | null);
+    exhausted_reason?: (string | null);
+};
+
+/**
  * A repo's open-finding counts and severity-weighted grade for one category.
  *
  * ``score``/``grade`` are ``None`` when the repo has no overall grade yet
@@ -832,6 +860,7 @@ export type RepositoryPublic = {
     tier?: (UserTier | null);
     badge_sig?: (string | null);
     created_at?: (string | null);
+    latest_scan_status?: (ScanStatus | null);
     avg_score?: (number | null);
     grade?: (string | null);
     engine_grades?: Array<RepoEngineGrade>;
@@ -1456,6 +1485,12 @@ export type AnsibleListFilesData = {
 
 export type AnsibleListFilesResponse = (Array<AnsibleFilePublic>);
 
+export type AnsibleListRepositoryFixesData = {
+    repoId: string;
+};
+
+export type AnsibleListRepositoryFixesResponse = (Array<AnsibleFixPublic>);
+
 export type AnsibleListFixesData = {
     projectId: string;
 };
@@ -1619,6 +1654,12 @@ export type BillingListPlansResponse = (Array<PlanPublic>);
 export type BillingGetSubscriptionResponse = (BillingSubscriptionPublic);
 
 export type BillingGetUsageResponse = (UsagePublic);
+
+export type BillingGetOrgQuotasData = {
+    orgId: string;
+};
+
+export type BillingGetOrgQuotasResponse = (OrgQuotasPublic);
 
 export type BillingGetTierLimitsResponse = ({
     [key: string]: unknown;
@@ -1797,6 +1838,12 @@ export type DockerListRuntimeFindingsData = {
 };
 
 export type DockerListRuntimeFindingsResponse = (Array<DockerBuildTelemetryPublic>);
+
+export type DockerListRepositoryFixesData = {
+    repoId: string;
+};
+
+export type DockerListRepositoryFixesResponse = (Array<DockerFixPublic>);
 
 export type DockerListFixesData = {
     targetId: string;
@@ -2104,6 +2151,12 @@ export type TerraformListFilesData = {
 };
 
 export type TerraformListFilesResponse = (Array<TerraformFilePublic>);
+
+export type TerraformListRepositoryFixesData = {
+    repoId: string;
+};
+
+export type TerraformListRepositoryFixesResponse = (Array<TerraformFixPublic>);
 
 export type TerraformListFixesData = {
     rootId: string;
