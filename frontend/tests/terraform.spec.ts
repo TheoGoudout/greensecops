@@ -3,6 +3,7 @@ import {
   MOCK_PR_OPEN,
   MOCK_REPO,
   MOCK_TERRAFORM_FINDING,
+  MOCK_TERRAFORM_FIX,
   MOCK_TERRAFORM_ROOT,
   mockBilling,
   mockEvents,
@@ -76,7 +77,7 @@ test.describe("Terraform", () => {
         r.url().includes(`/terraform/roots/${MOCK_TERRAFORM_ROOT.id}/fixes`) &&
         r.method() === "POST",
     )
-    await page.getByRole("button", { name: "Generate all fixes" }).click()
+    await page.getByRole("button", { name: /Generate fixes/ }).click()
     await request
   })
 
@@ -132,6 +133,83 @@ test.describe("Terraform", () => {
       (r) => r.url().includes("/scan") && r.method() === "POST",
     )
     await page.getByRole("button", { name: "Scan now" }).first().click()
+    await request
+  })
+
+  // ── What a busy target refuses ───────────────────────────────────────────
+  //
+  // The rule these cover lives in `lib/engine-actions.ts` and, identically, in
+  // `services/state_machines/engine_target.py`. Here they check the wiring:
+  // that the card reads its own scan and fix state, and says why rather than
+  // offering an action the API would answer 409 to.
+
+  test("a running scan disables every action on the root", async ({ page }) => {
+    await mockTerraformRoots(page, [
+      { ...MOCK_TERRAFORM_ROOT, latest_scan_status: "running" },
+    ])
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    for (const name of [/Scan/, /Generate fixes/, /Create PR|Update PR/]) {
+      await expect(page.getByRole("button", { name }).first()).toBeDisabled()
+    }
+    // And the button says so rather than leaving the user to guess.
+    await expect(page.getByRole("button", { name: /Scanning/ })).toBeVisible()
+  })
+
+  test("a fix being generated blocks the scan and the PR, not more fixes", async ({
+    page,
+  }) => {
+    await mockTerraformRoots(page, [MOCK_TERRAFORM_ROOT], {
+      fixes: [{ ...MOCK_TERRAFORM_FIX, status: "generating" }],
+    })
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    await expect(
+      page.getByRole("button", { name: "Scan now" }).first(),
+    ).toBeDisabled()
+    await expect(
+      page.getByRole("button", { name: /Create PR|Update PR/ }).first(),
+    ).toBeDisabled()
+    // Writing a fix for another file while this one is in flight is ordinary
+    // work, so generation stays available.
+    await expect(
+      page.getByRole("button", { name: /Generating/ }).first(),
+    ).toBeEnabled()
+  })
+
+  test("a disabled root explains why its actions are off", async ({ page }) => {
+    await mockTerraformRoots(page, [{ ...MOCK_TERRAFORM_ROOT, enabled: false }])
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    const scan = page.getByRole("button", { name: "Scan now" }).first()
+    await expect(scan).toBeDisabled()
+    // The tooltip hangs off a focusable wrapper, since a disabled button
+    // swallows pointer events.
+    await scan.locator("..").hover()
+    await expect(
+      page.getByText("Enable this terraform root first"),
+    ).toBeVisible()
+  })
+
+  test("removing a root asks before it deletes", async ({ page }) => {
+    await mockTerraformRoots(page)
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    await page.getByRole("button", { name: "More actions" }).first().click()
+    await page.getByRole("menuitem", { name: "Remove" }).click()
+
+    const dialog = page.getByRole("alertdialog")
+    await expect(dialog).toContainText("deploy/terraform")
+    const request = page.waitForRequest(
+      (r) =>
+        r.url().includes(`/terraform/roots/${MOCK_TERRAFORM_ROOT.id}`) &&
+        r.method() === "DELETE",
+    )
+    await dialog.getByRole("button", { name: "Remove" }).click()
     await request
   })
 })

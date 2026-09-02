@@ -1,15 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, Wand2 } from "lucide-react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { DockerBuildTelemetryPublic, DockerTargetPublic } from "@/client"
 import { DockerService } from "@/client"
 import { DockerRuntimeFindingRow } from "@/components/DockerRuntimeFindingRow"
-import { Button } from "@/components/ui/button"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
+import { engineActions } from "@/lib/engine-actions"
 import { severityRank } from "@/lib/severity"
 
 export const Route = createFileRoute("/_layout/docker/$repoId/runtime")({
@@ -22,6 +24,7 @@ export const Route = createFileRoute("/_layout/docker/$repoId/runtime")({
 function DockerRuntimeTab() {
   const { repoId } = Route.useParams()
   const [openTargets, setOpenTargets] = useState<Set<string>>(new Set())
+  const { isAccessible } = useRepository(repoId)
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
@@ -67,6 +70,7 @@ function DockerRuntimeTab() {
           target={target}
           isOpen={openTargets.has(target.id)}
           onToggleOpen={() => toggleOpen(target.id)}
+          isAccessible={isAccessible}
         />
       ))}
     </div>
@@ -77,10 +81,12 @@ function RuntimeTargetCard({
   target,
   isOpen,
   onToggleOpen,
+  isAccessible,
 }: {
   target: DockerTargetPublic
   isOpen: boolean
   onToggleOpen: () => void
+  isAccessible: boolean
 }) {
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -91,6 +97,14 @@ function RuntimeTargetCard({
     queryKey: ["docker-runtime", target.id],
     queryFn: () => DockerService.listRuntimeFindings({ targetId: target.id }),
     enabled: isOpen,
+  })
+
+  // A runtime fix is written into the same Dockerfile a static fix would be, so
+  // it obeys the same rules and shares the Analysis tab's cache entry rather
+  // than asking for the fix list a second time.
+  const { data: fixes } = useQuery({
+    queryKey: ["docker-fixes", target.id],
+    queryFn: () => DockerService.listFixes({ targetId: target.id }),
   })
 
   const fixMutation = useMutation({
@@ -182,14 +196,23 @@ function RuntimeTargetCard({
         </div>
 
         {isOpen && selected.size > 0 && (
-          <Button
-            size="sm"
-            disabled={fixMutation.isPending}
+          <EngineActionButton
+            action={
+              engineActions({
+                targetLabel: "Docker target",
+                scope: "target",
+                isAccessible,
+                enabled: target.enabled,
+                scanStatus: target.latest_scan_status,
+                fixStatuses: (fixes ?? []).map((f) => f.status),
+                openFindingCount: selected.size,
+                count: selected.size,
+                pending: { generate: fixMutation.isPending },
+              }).generate
+            }
             onClick={() => fixMutation.mutate([...selected])}
-          >
-            <Wand2 className="size-3.5" />
-            Fix {selected.size} finding{selected.size !== 1 ? "s" : ""}
-          </Button>
+            compact
+          />
         )}
       </CardHeader>
 

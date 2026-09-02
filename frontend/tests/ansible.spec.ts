@@ -151,7 +151,10 @@ test.describe("Ansible", () => {
           .includes(`/ansible/projects/${MOCK_ANSIBLE_PROJECT.id}/fixes`) &&
         r.method() === "POST",
     )
-    await page.getByRole("button", { name: "Generate all fixes" }).click()
+    await page
+      .getByRole("button", { name: /Generate fixes/ })
+      .first()
+      .click()
     await request
   })
 
@@ -171,7 +174,7 @@ test.describe("Ansible", () => {
     )
     // No PR exists on this project's branch yet, so the button offers to make
     // one rather than to update or reopen.
-    await page.getByRole("button", { name: "Create PR" }).click()
+    await page.getByRole("button", { name: "Create PR" }).first().click()
     await request
   })
 

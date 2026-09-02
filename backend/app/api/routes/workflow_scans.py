@@ -12,7 +12,13 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.engine_routes import repo_from_oidc_claims, sarif_for_claims
+from app.api.engine_routes import (
+    repo_from_oidc_claims,
+    repository_activity,
+    require_idle,
+    sarif_for_claims,
+    workflow_file_activity,
+)
 from app.api.mappers import to_workflow_scan_public
 from app.api.router import Role, RoleRouter
 from app.core.rate_limit import LIMIT_EXPENSIVE, LIMIT_INGEST
@@ -20,6 +26,7 @@ from app.models import (
     Engine,
     Repository,
     ScanStatus,
+    TargetAction,
     WorkflowFile,
     WorkflowFilePublic,
     WorkflowScan,
@@ -100,6 +107,7 @@ def trigger_repository_scan(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_idle(repository_activity(session, repo_id), TargetAction.scan, "repository")
 
     effective_branch = branch or repo.default_branch
     # One trigger fans out to one analysis *per workflow file*, so checking for
@@ -155,6 +163,9 @@ def trigger_file_scan(
     repo = authorize_repo(session, current_user, wf_file.repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_idle(
+        workflow_file_activity(session, wf_file), TargetAction.scan, "workflow file"
+    )
 
     enforce_quota(session, current_user, repo.org_id, "analyses")
     effective_branch = wf_file.branch or repo.default_branch

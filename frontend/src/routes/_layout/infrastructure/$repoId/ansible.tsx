@@ -1,15 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import {
-  ChevronDown,
-  ChevronRight,
-  GitPullRequest,
-  Loader2,
-  Play,
-  Trash2,
-  Wand2,
-  Zap,
-} from "lucide-react"
+import { ChevronDown, ChevronRight, GitPullRequest, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import type {
   AnsibleFilePublic,
@@ -20,16 +11,22 @@ import type {
 } from "@/client"
 import { AnsibleService, WorkflowService } from "@/client"
 import { AnsibleFindingRow } from "@/components/AnsibleFindingRow"
+import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
+import {
+  EngineActionBar,
+  EngineActionButton,
+} from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { useRepository } from "@/hooks/useRepository"
 import { ansibleFixBranch } from "@/lib/delivery"
+import { engineActions } from "@/lib/engine-actions"
 import { formatDateTime } from "@/lib/format"
 import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import { fixStatusColor } from "@/lib/status-colors"
@@ -43,12 +40,10 @@ export const Route = createFileRoute("/_layout/infrastructure/$repoId/ansible")(
   },
 )
 
-// Fix statuses a worker is actively processing — used to disable actions.
-const IN_FLIGHT = new Set(["pending", "generating", "delivering"])
-
 function AnsibleTab() {
   const { repoId } = Route.useParams()
   const [open, setOpen] = useState<Set<string>>(new Set())
+  const { isAccessible } = useRepository(repoId)
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ["ansible-projects", "repo", repoId],
@@ -98,6 +93,7 @@ function AnsibleTab() {
           project={project}
           isOpen={open.has(project.id)}
           existingPr={prByBranch.get(ansibleFixBranch(project.id))}
+          isAccessible={isAccessible}
           onToggleOpen={() =>
             setOpen((prev) => {
               const next = new Set(prev)
@@ -122,12 +118,15 @@ function ProjectCard({
   isOpen,
   existingPr,
   onToggleOpen,
+  isAccessible,
 }: {
   project: AnsibleProjectPublic
   isOpen: boolean
   existingPr: PullRequestPublic | undefined
   onToggleOpen: () => void
+  isAccessible: boolean
 }) {
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const {
     files,
     isLoading,
@@ -189,10 +188,32 @@ function ProjectCard({
   const openFindingCount = (findings ?? []).filter(
     (f) => f.status !== "ignored" && f.status !== "resolved",
   ).length
-  const hasReadyFix = (fixes ?? []).some((f) => f.status === "ready")
-  const prState = existingPr?.pr_state
-  const deliverLabel =
-    prState === "closed" ? "Reopen PR" : existingPr ? "Update PR" : "Create PR"
+
+  // See terraform.tsx: one description of the project's state, read by the
+  // header bar and by each file's own button at a narrower scope.
+  const projectState = {
+    targetLabel: "Ansible project",
+    isAccessible,
+    enabled: project.enabled,
+    scanStatus: project.latest_scan_status,
+    fixStatuses: (fixes ?? []).map((f) => f.status),
+    existingPr,
+  }
+  const actions = engineActions({
+    ...projectState,
+    scope: "target" as const,
+    openFindingCount,
+    // A target nobody has scanned yet has no findings *because* of that, and
+    // "No open findings to fix" reads as "there is nothing wrong here".
+    noFindingsReason: project.last_scanned_at
+      ? undefined
+      : "Scan this project first",
+    pending: {
+      scan: scanMutation.isPending,
+      generate: generateMutation.isPending,
+      deliver: deliverMutation.isPending,
+    },
+  })
 
   return (
     <Card>
@@ -221,63 +242,47 @@ function ProjectCard({
               className="shrink-0"
             />
           </CardTitle>
-          <div className="flex items-center gap-3 shrink-0">
-            <ScanRunningBadge status={project.latest_scan_status} />
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={project.enabled}
-                onCheckedChange={(enabled) => toggleMutation.mutate(enabled)}
-                disabled={toggleMutation.isPending}
-                aria-label="Enable scanning for this project"
-              />
-              <span className="text-xs text-muted-foreground">
-                {project.enabled ? "Enabled" : "Disabled"}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs gap-1.5"
-              onClick={() => scanMutation.mutate()}
-              disabled={!project.enabled || scanMutation.isPending}
-              title={
-                project.enabled
-                  ? "Scan this project now"
-                  : "Enable this project to scan"
-              }
-            >
-              {scanMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Play className="h-3 w-3" />
-              )}
-              Scan now
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remove Ansible project "${project.root_path || "/"}"? This deletes its scan history, findings and fixes.`,
-                  )
-                ) {
-                  deleteMutation.mutate()
-                }
-              }}
-              disabled={deleteMutation.isPending}
-              aria-label="Remove this project"
-            >
-              {deleteMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Trash2 className="h-3 w-3" />
-              )}
-              Remove
-            </Button>
-          </div>
+          <EngineActionBar
+            actions={actions}
+            onScan={() => scanMutation.mutate()}
+            onGenerate={() => generateMutation.mutate([])}
+            onDeliver={() => deliverMutation.mutate(actions.deliver.force)}
+            leading={
+              <>
+                <ScanRunningBadge status={project.latest_scan_status} />
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={project.enabled}
+                    onCheckedChange={(enabled) =>
+                      toggleMutation.mutate(enabled)
+                    }
+                    disabled={!isAccessible || toggleMutation.isPending}
+                    aria-label="Enable scanning for this project"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {project.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              </>
+            }
+            overflow={[
+              {
+                label: "Remove",
+                icon: Trash2,
+                destructive: true,
+                disabled: deleteMutation.isPending,
+                onSelect: () => setConfirmRemove(true),
+              },
+            ]}
+          />
         </div>
+        <ConfirmRemoveDialog
+          open={confirmRemove}
+          onOpenChange={setConfirmRemove}
+          name={project.root_path || "/"}
+          targetLabel="Ansible project"
+          onConfirm={() => deleteMutation.mutate()}
+        />
         {project.last_scanned_at && (
           <p className="text-xs text-muted-foreground">
             Last scanned {formatDateTime(project.last_scanned_at)}
@@ -287,41 +292,6 @@ function ProjectCard({
 
       {isOpen && (
         <CardContent className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {openFindingCount > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1.5"
-                onClick={() => generateMutation.mutate([])}
-                disabled={!project.enabled || generateMutation.isPending}
-              >
-                {generateMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Zap className="h-3 w-3" />
-                )}
-                Generate all fixes
-              </Button>
-            )}
-            {hasReadyFix && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1.5"
-                onClick={() => deliverMutation.mutate(prState === "closed")}
-                disabled={!project.enabled || deliverMutation.isPending}
-              >
-                {deliverMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <GitPullRequest className="h-3 w-3" />
-                )}
-                {deliverLabel}
-              </Button>
-            )}
-          </div>
-
           {isLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : !files?.length ? (
@@ -335,14 +305,18 @@ function ProjectCard({
               const fileFix = fixByFile.get(file.path)
               const showFix =
                 fileFix?.status === "ready" || fileFix?.status === "delivered"
-              const fixInFlight = fileFix
-                ? IN_FLIGHT.has(fileFix.status)
-                : false
               const openIds = fileFindings
                 .filter(
                   (f) => f.status !== "ignored" && f.status !== "resolved",
                 )
                 .map((f) => f.id)
+              const fileAction = engineActions({
+                ...projectState,
+                scope: "file" as const,
+                fixStatuses: fileFix ? [fileFix.status] : [],
+                openFindingCount: openIds.length,
+                pending: { generate: generateMutation.isPending },
+              }).generate
               return (
                 <div key={file.path} className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -376,24 +350,11 @@ function ProjectCard({
                       )}
                     </div>
                     {openIds.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5"
+                      <EngineActionButton
+                        action={fileAction}
                         onClick={() => generateMutation.mutate(openIds)}
-                        disabled={
-                          !project.enabled ||
-                          fixInFlight ||
-                          generateMutation.isPending
-                        }
-                      >
-                        {fixInFlight ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-3 w-3" />
-                        )}
-                        {fixInFlight ? "Generating…" : "Generate fix"}
-                      </Button>
+                        compact
+                      />
                     )}
                   </div>
                   <FileViewer

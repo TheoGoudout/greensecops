@@ -20,6 +20,7 @@ from app.api.engine_routes import (
     get_target_for_user,
     ignore_finding_for_user,
     prepare_pending_fix,
+    require_target_idle,
     sarif_for_claims,
     unignore_finding_for_user,
 )
@@ -45,6 +46,7 @@ from app.models import (
     Engine,
     Repository,
     ScanTargetUpdate,
+    TargetAction,
     UsageEngine,
 )
 from app.services.ansible.discovery import classify_ansible_file
@@ -175,6 +177,7 @@ def trigger_scan(
     project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
     if not project.enabled:
         raise HTTPException(status_code=403, detail="Ansible project is disabled")
+    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.scan)
     repo = get_or_404(
         session, Repository, project.repo_id, detail="Repository not found"
     )
@@ -366,6 +369,7 @@ def generate_fixes(
 ) -> dict[str, str | int]:
     """Generate LLM fixes for a project's open findings, one whole-file fix each."""
     project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
+    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.generate)
     repo = get_or_404(
         session, Repository, project.repo_id, detail="Repository not found"
     )
@@ -437,6 +441,7 @@ def deliver_fixes(
 ) -> dict[str, str]:
     """Deliver the project's ready fixes as a single PR (branch per project)."""
     project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
+    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.deliver)
     deliver_ansible_fixes.delay(ansible_project_id=str(project.id), force=force)
     return {
         "status": "queued",

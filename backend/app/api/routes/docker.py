@@ -20,6 +20,7 @@ from app.api.engine_routes import (
     get_target_for_user,
     ignore_finding_for_user,
     prepare_pending_fix,
+    require_target_idle,
     sarif_for_claims,
     unignore_finding_for_user,
 )
@@ -52,6 +53,7 @@ from app.models import (
     Repository,
     Rule,
     ScanTargetUpdate,
+    TargetAction,
     UsageEngine,
 )
 from app.services.billing.quota import enforce_quota
@@ -186,6 +188,7 @@ def trigger_scan(
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
     if not target.enabled:
         raise HTTPException(status_code=403, detail="Docker target is disabled")
+    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.scan)
     repo = get_or_404(
         session, Repository, target.repo_id, detail="Repository not found"
     )
@@ -456,6 +459,7 @@ def generate_fixes(
 ) -> dict[str, str | int]:
     """Generate LLM fixes for a target's open findings, one whole-file fix each."""
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
+    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.generate)
     repo = get_or_404(
         session, Repository, target.repo_id, detail="Repository not found"
     )
@@ -547,6 +551,7 @@ def generate_runtime_fixes(
     and a static fix can never race to patch the same lines.
     """
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
+    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.generate)
     repo = get_or_404(
         session, Repository, target.repo_id, detail="Repository not found"
     )
@@ -640,6 +645,7 @@ def deliver_fixes(
 ) -> dict[str, str]:
     """Deliver the target's ready fixes as a single PR (branch per target)."""
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
+    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.deliver)
     deliver_docker_fixes.delay(docker_target_id=str(target.id), force=force)
     return {
         "status": "queued",

@@ -3,8 +3,10 @@
 This document formalizes the core lifecycles — **Analysis**, **Issue**,
 **Fix**, **Pull Request**, **Repository**, **Telemetry (dynamic analysis)**,
 the IaC/cloud-posture engines' **Scan**, **Finding**, and **Cloud Account**,
-and the **Billing Subscription** — as state machines: their **states**, the **input events** that
-drive transitions, and the **outputs** (SSE signals) each transition emits.
+the **Billing Subscription**, and the derived **Target activity** that decides
+which actions an engine target will accept — as state machines: their
+**states**, the **input events** that drive transitions, and the **outputs**
+(SSE signals) each transition emits.
 It is kept in sync with the code in
 [`backend/app/services/state_machines/`](../backend/app/services/state_machines),
 which is the single source of truth.
@@ -841,3 +843,95 @@ crash — and, critically, must not restart the grace window, which is why
 `lifecycle.transition` only stamps `grace_expires_at` on a transition that
 actually fired. Redelivery is also caught earlier, by the `stripe_event_id`
 recorded in `billing_webhook_event`.
+
+---
+
+## 11. Target activity — what a target is busy with
+
+Every lifecycle above drives a **persisted** column. This one does not: it is
+derived, and it is the machine the engine pages' buttons actually obey.
+
+A scan target — a Terraform root, a Docker target, an Ansible project, a cloud
+account, a workflow file, or a whole repository on the CI engine — has no
+status column of its own. What it is *doing* is the union of its latest scan's
+status and its fixes' statuses, and that union decides which of the three
+actions every engine offers (`POST .../scans`, `POST .../fixes`,
+`POST .../deliveries`) may run.
+
+Code: [`services/state_machines/engine_target.py`](../backend/app/services/state_machines/engine_target.py)
+(the pure rule), `api/engine_routes.py` (`require_idle` / `require_target_idle`,
+the HTTP half), and `frontend/src/lib/engine-actions.ts` (the same rule, so the
+buttons say in advance what the API would refuse). The reason strings are kept
+identical across all three.
+
+### States
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Scanning: scan queued/running
+    Idle --> Generating: fix pending/generating
+    Idle --> Delivering: fix delivering
+    Scanning --> Idle: scan completed/failed/no_targets
+    Generating --> Idle: fix ready/failed/rejected
+    Delivering --> Idle: fix delivered/failed
+```
+
+Several can hold at once, so one is reported, by precedence:
+**`scanning` > `delivering` > `generating` > `idle`**. A scan outranks fix work
+because it rewrites what the fixes are about; a delivery outranks generation
+because it names the shorter, more specific wait.
+
+### Which activity blocks which action
+
+| | `scan` | `generate` | `deliver` |
+|---|---|---|---|
+| `idle` | ✅ | ✅ | ✅ |
+| `scanning` | ❌ | ❌ | ❌ |
+| `generating` | ❌ | ✅ | ❌ |
+| `delivering` | ❌ | ❌ | ❌ |
+
+`generate` is the one action a `generating` target still allows: writing a fix
+for file B while file A's is in flight is ordinary work, and
+`prepare_pending_fix` already declines to reset a file whose own fix a worker
+holds.
+
+A refusal is a **409** reading
+`Cannot <action> while <reason> for this <target>`, e.g.
+`Cannot open a pull request while a scan is already running for this Terraform root`.
+
+### Scope
+
+Activity is only ever read within the unit the action addresses:
+
+| Scope | Used by | Scans counted | Fixes counted |
+|---|---|---|---|
+| repository | the CI engine's repo-wide routes | **any** unfinished scan for the repo | every fix, joined through `WorkflowFile` |
+| target | a registered root / target / project / account | the **most recent** scan, whatever its outcome | that target's fixes |
+| file | per-file generate and per-fix delivery | the owning repo's or target's | that file's own fix |
+
+The two scan rules differ on purpose. A registered target follows "the most
+recent scan", which is exactly what `mappers.base.latest_scan_status` puts on
+its card, so the tooltip and the badge on screen can never disagree. The CI
+engine follows "any unfinished scan", because `static_analysis` takes one
+`scan_lock("static_analysis:<repo>")` for the whole repository and writes one
+scan row per workflow file — "the latest row" is regularly a finished sibling
+of one still running.
+
+### What is deliberately *not* guarded
+
+- **Service/OIDC fan-out routes** (`POST /{engine}/scans`, `POST /workflow/scans`)
+  — CI ingestion has to stay idempotent, and a GitHub Action retrying is not a
+  user double-clicking.
+- **`force`** overrides a fix's own status ("deliver this even though it isn't
+  `ready`"); it does not override a collision with work a worker is doing right
+  now.
+- **Failed scans.** `failed` and `no_targets` are finished outcomes. Counting
+  them as activity would leave a target permanently unscannable after one bad
+  run.
+
+**Why 409 rather than the old 202:** the duplicate was already being discarded
+— by the Redis lock in the worker, or by `prepare_pending_fix` — but nothing
+said so, and the UI had no way to know. Same reasoning as the 402
+`enforce_quota` raises: fail where the user can see it, rather than letting
+them watch a job disappear.

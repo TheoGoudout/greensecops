@@ -904,10 +904,16 @@ def test_deliver_for_repo_not_found_returns_404(
 def test_deliver_for_repo_no_ready_fixes_returns_404(
     client: TestClient,
     superuser_token_headers: dict[str, str],
+    db: Session,
     repo: Repository,
-    pending_fix: WorkflowFix,
+    pending_workflow_file: WorkflowFile,
 ) -> None:
-    # Act — repo only has a pending fix (not ready)
+    # Arrange — a failed fix: nothing to deliver, but nothing in flight either,
+    # so the request reaches the "no ready fixes" check rather than the
+    # target-activity guard (see test_deliver_for_repo_blocked_while_generating).
+    _make_fix(db, pending_workflow_file.id, FixStatus.failed)
+
+    # Act
     with patch("app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"):
         response = client.post(
             f"{settings.API_V1_STR}/workflow/repositories/{repo.id}/deliveries",
@@ -995,24 +1001,30 @@ def test_generate_fixes_for_repo_force_deletes_delivered(
 def test_deliver_for_workflow_force_includes_non_ready(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    pending_fix: WorkflowFix,
+    db: Session,
+    pending_workflow_file: WorkflowFile,
 ) -> None:
-    # Act — pending fix would normally be excluded (no ready fix → 404)
+    # Arrange — a failed fix would normally be excluded (no ready fix → 404).
+    # ``force`` overrides the fix's own status, not the activity guard, so this
+    # uses a settled failure rather than a fix a worker still holds.
+    failed_fix = _make_fix(db, pending_workflow_file.id, FixStatus.failed)
+
+    # Act
     with patch(
         "app.workers.tasks.fix_delivery.deliver_fixes_batch.delay"
     ) as mock_delay:
         response = client.post(
-            f"{settings.API_V1_STR}/workflow/fixes/{pending_fix.id}/deliveries",
+            f"{settings.API_V1_STR}/workflow/fixes/{failed_fix.id}/deliveries",
             params={"force": "true"},
             headers=superuser_token_headers,
         )
 
-    # Assert — force=True includes the pending fix
+    # Assert — force=True includes the failed fix
     assert response.status_code == 202
     assert response.json()["status"] == "queued"
     mock_delay.assert_called_once()
     call_kwargs = mock_delay.call_args.kwargs
-    assert call_kwargs["fix_ids"] == [str(pending_fix.id)]
+    assert call_kwargs["fix_ids"] == [str(failed_fix.id)]
     assert call_kwargs["force"] is True
 
 
@@ -1762,11 +1774,15 @@ def test_regenerate_for_repo_keeps_closed_pr_referenced_by_surviving_fix(
     pending_workflow_file: WorkflowFile,
     issue: WorkflowFinding,
 ) -> None:
-    # Arrange — a closed PR shared by a regenerable fix and an in-flight one
+    # Arrange — a closed PR shared by a regenerable fix and one that survives
+    # the sweep because its workflow file has no unresolved issues to
+    # regenerate from. (A fix a worker still held would survive too, but a
+    # target mid-delivery is refused outright now — see
+    # test_regenerate_for_repo_blocked_while_delivering.)
     pr = _make_pr(db, repo, "closed", "greensecops/regen-repo-shared")
     _make_fix(db, workflow_file.id, FixStatus.delivered, pr_id=pr.id)
     surviving_fix_id = _make_fix(
-        db, pending_workflow_file.id, FixStatus.delivering, pr_id=pr.id
+        db, pending_workflow_file.id, FixStatus.delivered, pr_id=pr.id
     ).id
     pr_id = pr.id
 

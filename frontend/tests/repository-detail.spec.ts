@@ -211,13 +211,15 @@ test.describe("Repository Detail", () => {
     await expect(page.getByText("manual")).toBeVisible()
   })
 
-  test("Fix selected button queues fixes", async ({ page }) => {
+  test("Generate fixes button queues fixes", async ({ page }) => {
     const findings = [MOCK_ISSUE_SECURITY, MOCK_ISSUE_RELIABILITY]
     await setupRepoMocks(page, { findings })
 
     await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
-    const fixBtn = page.getByRole("button", { name: /Fix selected/ })
+    const fixBtn = page
+      .getByTestId("repo-action-bar")
+      .getByRole("button", { name: /Generate fixes/ })
     await expect(fixBtn).toBeVisible()
     await fixBtn.click()
 
@@ -237,9 +239,7 @@ test.describe("Repository Detail", () => {
     await expect(page.getByText("ready").first()).toBeVisible()
   })
 
-  test("Create PR for all workflows button delivers repo-wide", async ({
-    page,
-  }) => {
+  test("Create PR button delivers repo-wide", async ({ page }) => {
     let deliverCalled = false
     await page.route(/\/api\/v1\/(workflow\/)?repositories\b/, (route) => {
       const url = route.request().url()
@@ -284,9 +284,9 @@ test.describe("Repository Detail", () => {
 
     await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
-    const btn = page.getByRole("button", {
-      name: "Create PR for all workflows",
-    })
+    const btn = page
+      .getByTestId("repo-action-bar")
+      .getByRole("button", { name: "Create PR" })
     await expect(btn).toBeVisible()
     await btn.click()
 
@@ -384,14 +384,76 @@ test.describe("Repository Detail", () => {
     ).toBeVisible()
   })
 
-  test("Run analysis button triggers analysis", async ({ page }) => {
+  test("Scan now button triggers analysis", async ({ page }) => {
     await setupRepoMocks(page)
 
     await page.goto(`/workflows/${MOCK_REPO.id}`)
 
-    await page.getByRole("button", { name: "Run analysis" }).click()
+    await page
+      .getByTestId("repo-action-bar")
+      .getByRole("button", { name: "Scan now" })
+      .click()
 
     await expect(page.getByText("Analysis queued")).toBeVisible()
+  })
+
+  // ── The repository-wide bar ──────────────────────────────────────────────
+
+  test("filters live in a menu that says how many are on", async ({ page }) => {
+    await setupRepoMocks(page)
+
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
+
+    // Two pseudo-toggle buttons in the action row became one menu, so filters
+    // no longer read as actions.
+    const filters = page.getByRole("button", { name: /Filters/ })
+    await filters.click()
+    await page
+      .getByRole("menuitemcheckbox", { name: "Open issues only" })
+      .click()
+
+    await expect(filters).toContainText("1")
+    await expect(page.getByRole("button", { name: "Open only" })).toHaveCount(0)
+  })
+
+  test("selection is a checkbox and a count, not a button", async ({
+    page,
+  }) => {
+    await setupRepoMocks(page)
+
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
+
+    await expect(page.getByText("1 of 1 workflow selected")).toBeVisible()
+    await page.getByLabel("Deselect all workflows").click()
+    await expect(page.getByText("0 of 1 workflow selected")).toBeVisible()
+
+    // Nothing selected, so there is nothing to generate — and the button says
+    // that rather than disappearing.
+    await expect(
+      page
+        .getByTestId("repo-action-bar")
+        .getByRole("button", { name: /Generate fixes/ }),
+    ).toBeDisabled()
+  })
+
+  test("a running analysis disables the repo-wide fix and PR actions", async ({
+    page,
+  }) => {
+    await setupRepoMocks(page, {
+      analyses: [{ ...MOCK_ANALYSIS, status: "running" }],
+      fixes: [MOCK_FIX_READY],
+    })
+
+    await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
+
+    const bar = page.getByTestId("repo-action-bar")
+    await expect(bar.getByRole("button", { name: /Scanning/ })).toBeDisabled()
+    await expect(
+      bar.getByRole("button", { name: /Generate fixes/ }),
+    ).toBeDisabled()
+    await expect(
+      bar.getByRole("button", { name: /Create PR|Update PR/ }),
+    ).toBeDisabled()
   })
 
   test("Sync from GitHub reports what changed", async ({ page }) => {
@@ -399,7 +461,13 @@ test.describe("Repository Detail", () => {
 
     await page.goto(`/workflows/${MOCK_REPO.id}`)
 
-    await page.getByRole("button", { name: "Sync from GitHub" }).click()
+    // A repair action, not an everyday one, so it lives in the overflow menu
+    // rather than beside Scan now / Generate fixes / Create PR.
+    await page
+      .getByTestId("repo-action-bar")
+      .getByRole("button", { name: "More actions" })
+      .click()
+    await page.getByRole("menuitem", { name: "Sync from GitHub" }).click()
 
     // The toast summarises the reconciliation rather than just saying "done".
     await expect(

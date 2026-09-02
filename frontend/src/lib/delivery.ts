@@ -69,7 +69,17 @@ export function labelForBranch(
   branch: string,
   verb: string,
 ): { label: string; force: boolean } {
-  const pr = prByBranch.get(branch)
+  return labelForPr(prByBranch.get(branch), verb)
+}
+
+// The Create/Update/Reopen decision itself, for callers that already hold the
+// PR rather than a branch to look it up by — `engine-actions` resolves the
+// branch once and hands the row down. Reopening a PR the user closed without
+// merging needs force=true to bypass the closed-PR delivery guard.
+export function labelForPr(
+  pr: PullRequestPublic | undefined,
+  verb: string,
+): { label: string; force: boolean } {
   if (pr?.pr_state === "closed") return { label: `Reopen ${verb}`, force: true }
   if (pr) return { label: `Update ${verb}`, force: false }
   return { label: `Create ${verb}`, force: false }

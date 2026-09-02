@@ -134,14 +134,23 @@ test.describe("Docker", () => {
     page,
   }) => {
     await mockDockerTargets(page)
-    // Hold the findings back so the gap the bug lived in stays open. The files
-    // query resolves first, and the card used to render its file rows straight
-    // away with no findings and no fix under them — which reads as "there is
-    // nothing in here" rather than "this is still loading".
-    await page.route("**/api/v1/docker/targets/**findings**", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-      route.fulfill({ json: [] })
-    })
+    // Hold the files back. The card used to render its file rows straight away
+    // with no findings and no fix under them — which reads as "there is nothing
+    // in here" rather than "this is still loading".
+    //
+    // Findings and fixes now load with the page rather than on expansion (the
+    // header's buttons need them to know whether the target is busy), so the
+    // file list is the one query that still starts on the click, and it is
+    // what the skeleton has to cover. A RegExp rather than a glob: Playwright
+    // will not match `**` glued to text inside a path segment, so the pattern
+    // this test used to carry silently matched nothing.
+    await page.route(
+      /\/api\/v1\/docker\/targets\/[^/]+\/files/,
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+        route.fulfill({ json: [] })
+      },
+    )
 
     await page.goto(`/docker/${MOCK_REPO.id}/analysis`)
     await page.getByLabel("Expand target").first().click()
@@ -149,7 +158,7 @@ test.describe("Docker", () => {
     const skeleton = page.locator('[data-slot="skeleton"]').first()
     await expect(skeleton).toBeVisible()
     // And it is a loading state, not a permanent element: it goes once the
-    // slowest of the three queries lands.
+    // slowest of the queries behind the open card lands.
     await expect(skeleton).toBeHidden({ timeout: 15_000 })
   })
 
@@ -323,7 +332,7 @@ test.describe("Docker", () => {
     await page.getByLabel("Expand target").first().click()
 
     await page.getByLabel("Select container_unbounded_memory").check()
-    await page.getByRole("button", { name: "Fix 1 finding" }).click()
+    await page.getByRole("button", { name: "Generate fixes (1)" }).click()
 
     await expect(page.getByText("Fix generation queued")).toBeVisible()
   })

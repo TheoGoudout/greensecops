@@ -1,13 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import {
-  ChevronDown,
-  ChevronRight,
-  GitPullRequest,
-  Play,
-  Trash2,
-  Wand2,
-} from "lucide-react"
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import type {
   DockerFilePublic,
@@ -17,17 +10,23 @@ import type {
   PullRequestPublic,
 } from "@/client"
 import { DockerService, WorkflowService } from "@/client"
+import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
 import { DockerFindingRow } from "@/components/DockerFindingRow"
+import {
+  EngineActionBar,
+  EngineActionButton,
+} from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { useRepository } from "@/hooks/useRepository"
 import { dockerFixBranch } from "@/lib/delivery"
+import { engineActions } from "@/lib/engine-actions"
 import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
@@ -39,13 +38,10 @@ export const Route = createFileRoute("/_layout/docker/$repoId/analysis")({
   }),
 })
 
-// Fix statuses a worker is actively processing — used to disable actions.
-// Mirrors the server-side _IN_FLIGHT_FIX_STATUSES.
-const IN_FLIGHT = new Set(["pending", "generating", "delivering"])
-
 function DockerAnalysisTab() {
   const { repoId } = Route.useParams()
   const [openTargets, setOpenTargets] = useState<Set<string>>(new Set())
+  const { isAccessible } = useRepository(repoId)
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
@@ -113,6 +109,7 @@ function DockerAnalysisTab() {
           isOpen={openTargets.has(target.id)}
           onToggleOpen={() => toggleOpen(target.id)}
           existingPr={prByBranch.get(dockerFixBranch(target.id))}
+          isAccessible={isAccessible}
         />
       ))}
     </div>
@@ -124,12 +121,15 @@ function TargetCard({
   isOpen,
   onToggleOpen,
   existingPr,
+  isAccessible,
 }: {
   target: DockerTargetPublic
   isOpen: boolean
   onToggleOpen: () => void
   existingPr?: PullRequestPublic
+  isAccessible: boolean
 }) {
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const {
     files,
     isLoading,
@@ -175,14 +175,6 @@ function TargetCard({
     return map
   }, [fixes])
 
-  const hasReadyFix = (fixes ?? []).some((f) => f.status === "ready")
-  const deliverLabel =
-    existingPr?.pr_state === "closed"
-      ? "Reopen PR"
-      : existingPr
-        ? "Update PR"
-        : "Create PR"
-
   const findingsByFile = useMemo(() => {
     const map = new Map<string, DockerFindingPublic[]>()
     for (const finding of findings ?? []) {
@@ -196,7 +188,38 @@ function TargetCard({
     return map
   }, [findings])
 
-  const openFindingCount = findings?.length ?? 0
+  // Findings the engine reports as still open — the same filter the other file
+  // engines apply. Docker counted every row, including ignored ones, which is
+  // why its "Generate all fixes" button could offer to fix nothing.
+  const openFindingCount = (findings ?? []).filter(
+    (f) => f.status !== "ignored" && f.status !== "resolved",
+  ).length
+
+  // See terraform.tsx: one description of this target's state, read by the
+  // header bar and by each file's own button at a narrower scope.
+  const targetState = {
+    targetLabel: "Docker target",
+    isAccessible,
+    enabled: target.enabled,
+    scanStatus: target.latest_scan_status,
+    fixStatuses: (fixes ?? []).map((f) => f.status),
+    existingPr,
+  }
+  const actions = engineActions({
+    ...targetState,
+    scope: "target" as const,
+    openFindingCount,
+    // A target nobody has scanned yet has no findings *because* of that, and
+    // "No open findings to fix" reads as "there is nothing wrong here".
+    noFindingsReason: target.last_scanned_at
+      ? undefined
+      : "Scan this target first",
+    pending: {
+      scan: scanMutation.isPending,
+      generate: generateMutation.isPending,
+      deliver: deliverMutation.isPending,
+    },
+  })
 
   return (
     <Card>
@@ -231,80 +254,61 @@ function TargetCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <ScanRunningBadge status={target.latest_scan_status} />
-          <GradeBadge grade={target.latest_grade ?? null} />
-          <Switch
-            checked={target.enabled}
-            onCheckedChange={() => toggleMutation.mutate(!target.enabled)}
-            aria-label="Enable target"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!target.enabled || scanMutation.isPending}
-            onClick={() => scanMutation.mutate()}
-          >
-            <Play className="size-3.5" />
-            Scan now
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Remove the Docker target "${target.root_path || "/"}"?`,
-                )
-              ) {
-                deleteMutation.mutate()
-              }
-            }}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
+        <EngineActionBar
+          actions={actions}
+          onScan={() => scanMutation.mutate()}
+          onGenerate={() => generateMutation.mutate([])}
+          onDeliver={() => deliverMutation.mutate(actions.deliver.force)}
+          leading={
+            <>
+              <ScanRunningBadge status={target.latest_scan_status} />
+              <GradeBadge grade={target.latest_grade ?? null} />
+              <Switch
+                checked={target.enabled}
+                onCheckedChange={() => toggleMutation.mutate(!target.enabled)}
+                disabled={!isAccessible || toggleMutation.isPending}
+                aria-label="Enable target"
+              />
+            </>
+          }
+          overflow={[
+            {
+              label: "Remove",
+              icon: Trash2,
+              destructive: true,
+              disabled: deleteMutation.isPending,
+              onSelect: () => setConfirmRemove(true),
+            },
+          ]}
+        />
+        <ConfirmRemoveDialog
+          open={confirmRemove}
+          onOpenChange={setConfirmRemove}
+          name={target.root_path || "/"}
+          targetLabel="Docker target"
+          onConfirm={() => deleteMutation.mutate()}
+        />
       </CardHeader>
 
       {isOpen && (
         <CardContent className="flex flex-col gap-4">
-          {(openFindingCount > 0 || hasReadyFix) && (
-            <div className="flex flex-wrap gap-2">
-              {openFindingCount > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={generateMutation.isPending}
-                  onClick={() => generateMutation.mutate([])}
-                >
-                  <Wand2 className="size-3.5" />
-                  Generate all fixes
-                </Button>
-              )}
-              {hasReadyFix && (
-                <Button
-                  size="sm"
-                  disabled={deliverMutation.isPending}
-                  onClick={() =>
-                    deliverMutation.mutate(existingPr?.pr_state === "closed")
-                  }
-                >
-                  <GitPullRequest className="size-3.5" />
-                  {deliverLabel}
-                </Button>
-              )}
-            </div>
-          )}
-
           {isLoading && <Skeleton className="h-40 w-full" />}
 
           {(files ?? []).map((file: DockerFilePublic) => {
             const fileFindings = findingsByFile.get(file.path) ?? []
             const fileFix = fixByFile.get(file.path)
-            const fixInFlight = fileFix ? IN_FLIGHT.has(fileFix.status) : false
             const showFix =
               fileFix?.status === "ready" || fileFix?.status === "delivered"
+            const openIds = fileFindings
+              .filter((f) => f.status !== "ignored" && f.status !== "resolved")
+              .map((f) => f.id)
+            const fileAction = engineActions({
+              ...targetState,
+              scope: "file" as const,
+              fixStatuses: fileFix ? [fileFix.status] : [],
+              openFindingCount: openIds.length,
+              pending: { generate: generateMutation.isPending },
+            }).generate
             return (
               <div key={file.path} className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -326,17 +330,12 @@ function TargetCard({
                       View PR
                     </a>
                   )}
-                  {fileFindings.length > 0 && !fixInFlight && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        generateMutation.mutate(fileFindings.map((f) => f.id))
-                      }
-                    >
-                      <Wand2 className="size-3.5" />
-                      Generate fix
-                    </Button>
+                  {openIds.length > 0 && (
+                    <EngineActionButton
+                      action={fileAction}
+                      onClick={() => generateMutation.mutate(openIds)}
+                      compact
+                    />
                   )}
                 </div>
                 <FileViewer

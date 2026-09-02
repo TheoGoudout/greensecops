@@ -558,11 +558,16 @@ function mockFindingLifecycle(
 
 export async function mockTerraformRoots(
   page: Page,
-  roots: Array<{ id: string; repo_id: string }> = [MOCK_TERRAFORM_ROOT],
+  // Widened past `{ id, repo_id }` so a test can vary the fields the card's
+  // action bar reads — `latest_scan_status`, `enabled` — without the literal
+  // types of the constants above narrowing them away.
+  roots: Array<Record<string, unknown> & { id: string; repo_id: string }> = [
+    MOCK_TERRAFORM_ROOT,
+  ],
   {
     files = [MOCK_TERRAFORM_FILE],
     findings: findingsIn = [MOCK_TERRAFORM_FINDING],
-    fixes = [MOCK_TERRAFORM_FIX],
+    fixes = [MOCK_TERRAFORM_FIX] as Array<Record<string, unknown>>,
     scans = [MOCK_TERRAFORM_SCAN],
   } = {},
 ) {
