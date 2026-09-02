@@ -13,6 +13,7 @@
 
 ### Features
 
+* feat(ui): grey out every action the API would refuse, not just three. PR [#318](https://github.com/TheoGoudout/greensecops/pull/318) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(ui): one action bar per engine, gated by what the target is doing. PR [#317](https://github.com/TheoGoudout/greensecops/pull/317) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(delivery): rebase the fix branch instead of piling onto it. PR [#314](https://github.com/TheoGoudout/greensecops/pull/314) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(sarif): publish findings to GitHub Code Scanning. PR [#311](https://github.com/TheoGoudout/greensecops/pull/311) by [@TheoGoudout](https://github.com/TheoGoudout).
