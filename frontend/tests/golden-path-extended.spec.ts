@@ -161,7 +161,7 @@ test.describe("Golden Path — Extended", () => {
 
     await page.goto(`/workflows/${MOCK_REPO.id}/static-analysis`)
 
-    const fixBtn = page.getByRole("button", { name: /Fix selected/ })
+    const fixBtn = page.getByRole("button", { name: /Generate fixes/ })
     await expect(fixBtn).toBeVisible()
     await fixBtn.click()
     expect(batchFixCalled).toBe(true)

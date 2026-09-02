@@ -5,7 +5,9 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 import { toast } from "sonner"
+import type { FixStatus } from "@/client"
 import { apiErrorDetail } from "@/lib/api-error"
+import { isFixInFlight } from "@/lib/engine-actions"
 import { SCAN_POLL_MS } from "@/lib/scan-polling"
 
 /**
@@ -46,17 +48,17 @@ type Mutation<TArgs> = UseMutationResult<unknown, Error, TArgs>
 export interface EngineTargetState<TFile, TFinding, TFix> {
   files: TFile[] | undefined
   /**
-   * Whether *any* of the three queries behind an expanded card is still in
-   * flight.
+   * Whether the expanded card's contents are still arriving.
    *
-   * All three, not just the files one: the files list resolves first and the
-   * card rendered its rows immediately, so an expanded target showed a list of
-   * file names with no findings and no fix under them — which reads as "there
-   * is nothing in here" rather than "this is still loading". The findings and
-   * fixes then appeared a moment later, having looked absent.
+   * All three queries, not just the files one: the files list resolves first
+   * and the card rendered its rows immediately, so an expanded target showed a
+   * list of file names with no findings and no fix under them — which reads as
+   * "there is nothing in here" rather than "this is still loading".
    *
-   * A collapsed card is not loading: the queries are `enabled: isOpen`, and a
-   * disabled query is pending but not fetching, which `isLoading` excludes.
+   * A collapsed card is not loading: the files query is `enabled: isOpen`, and
+   * a disabled query is pending but not fetching, which `isLoading` excludes.
+   * Findings and fixes now load whether or not the card is open (see below), so
+   * in practice they have usually settled before it is expanded at all.
    */
   isLoading: boolean
   findings: TFinding[] | undefined
@@ -91,7 +93,11 @@ function useAction<TArgs>(
   })
 }
 
-export function useEngineTarget<TFile, TFinding, TFix>(
+export function useEngineTarget<
+  TFile,
+  TFinding,
+  TFix extends { status: FixStatus },
+>(
   targetId: string,
   isOpen: boolean,
   calls: EngineTargetCalls<TFile, TFinding, TFix>,
@@ -107,26 +113,40 @@ export function useEngineTarget<TFile, TFinding, TFix>(
 ): EngineTargetState<TFile, TFinding, TFix> {
   const queryClient = useQueryClient()
   const { keyPrefix, targetLabel } = calls
-  const refetchInterval = isScanning ? SCAN_POLL_MS : false
 
-  // Everything below the fold loads only once the card is expanded — a repo can
-  // hold many targets and each one costs a GitHub round-trip for its files.
+  // Fixes come first because everything else's poll depends on them: a fix
+  // being generated or delivered is exactly as much "work in flight" as a
+  // running scan, and it used to resolve on screen only after a page reload.
+  const { data: fixes, isLoading: fixesLoading } = useQuery({
+    queryKey: [`${keyPrefix}-fixes`, targetId],
+    queryFn: calls.listFixes,
+    refetchInterval: (query) =>
+      isScanning ||
+      (query.state.data ?? []).some((f) => isFixInFlight(f.status))
+        ? SCAN_POLL_MS
+        : false,
+  })
+  const refetchInterval =
+    isScanning || (fixes ?? []).some((f) => isFixInFlight(f.status))
+      ? SCAN_POLL_MS
+      : false
+
+  // The file list loads only once the card is expanded — a repo can hold many
+  // targets and each one costs a GitHub round-trip for its files.
   const { data: files, isLoading: filesLoading } = useQuery({
     queryKey: [`${keyPrefix}-files`, targetId],
     queryFn: calls.listFiles,
     enabled: isOpen,
     refetchInterval,
   })
+  // Findings and fixes do not wait for the card to open. They are plain
+  // database reads, and the card's *header* now needs them: whether a fix is
+  // being generated decides whether "Scan now" and "Create PR" are live, and a
+  // collapsed card that could not see its own fixes had to show those buttons
+  // enabled and let the server refuse them.
   const { data: findings, isLoading: findingsLoading } = useQuery({
     queryKey: [`${keyPrefix}-findings`, targetId],
     queryFn: calls.listFindings,
-    enabled: isOpen,
-    refetchInterval,
-  })
-  const { data: fixes, isLoading: fixesLoading } = useQuery({
-    queryKey: [`${keyPrefix}-fixes`, targetId],
-    queryFn: calls.listFixes,
-    enabled: isOpen,
     refetchInterval,
   })
 

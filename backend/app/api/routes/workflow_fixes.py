@@ -14,6 +14,11 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
+from app.api.engine_routes import (
+    repository_activity,
+    require_idle,
+    workflow_file_activity,
+)
 from app.api.mappers import to_public
 from app.api.router import Role, RoleRouter
 from app.core.config import settings
@@ -29,6 +34,7 @@ from app.models import (
     Repository,
     Rule,
     ScanStatus,
+    TargetAction,
     TerraformFix,
     UsageEngine,
     UsageMeter,
@@ -485,6 +491,9 @@ def generate_repository_fixes(
     Only issues from the latest analysis per workflow file are targeted.
     """
     repo = authorize_repo(session, current_user, repo_id)
+    require_idle(
+        repository_activity(session, repo_id), TargetAction.generate, "repository"
+    )
 
     by_wf_file = _latest_unresolved_issues(
         session,
@@ -558,6 +567,12 @@ def deliver_fix(
         authorize_repo(session, current_user, repo.id, detail="Repository not found")
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    # ``force`` overrides the *fix status* precondition above, not this one: a
+    # running scan or an in-flight sibling is a collision, not a stale state the
+    # caller is knowingly overriding.
+    require_idle(
+        workflow_file_activity(session, wf_file), TargetAction.deliver, "workflow file"
+    )
 
     # Stable branch: reuse the branch of the fix's own PR when it has one.
     existing_pr = session.get(PullRequest, fix.pr_id) if fix.pr_id else None
@@ -596,6 +611,9 @@ def deliver_repository_fixes(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_idle(
+        repository_activity(session, repo_id), TargetAction.deliver, "repository"
+    )
 
     base_query = (
         select(WorkflowFix)
@@ -676,6 +694,9 @@ def regenerate_repository_fixes(
     repo = authorize_repo(session, current_user, repo_id)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_idle(
+        repository_activity(session, repo_id), TargetAction.generate, "repository"
+    )
 
     # pr_state is nullable, and NULL != 'merged' is NULL in SQL — the IS NULL
     # arms keep fixes on stateless PR records eligible.
@@ -762,6 +783,13 @@ def regenerate_fix(
         raise HTTPException(status_code=404, detail="Repository not found")
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    # The in-flight check above covers this fix; this one covers the scan that
+    # is about to replace the issues it would be regenerated from.
+    require_idle(
+        workflow_file_activity(session, wf_file),
+        TargetAction.generate,
+        "workflow file",
+    )
 
     by_wf_file = _latest_unresolved_issues(
         session,
@@ -810,6 +838,11 @@ def retry_fix(
         raise HTTPException(status_code=404, detail="Repository not found")
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_idle(
+        workflow_file_activity(session, wf_file),
+        TargetAction.generate,
+        "workflow file",
+    )
 
     # Issues still needing this fix (a resolved/ignored issue no longer counts).
     issue_ids = [

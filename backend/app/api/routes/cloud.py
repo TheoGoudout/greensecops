@@ -11,6 +11,7 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
+from app.api.engine_routes import cloud_account_activity, require_idle
 from app.api.mappers import (
     to_cloud_account_public,
     to_cloud_finding_public,
@@ -28,6 +29,7 @@ from app.models import (
     CloudScan,
     CloudScanPublic,
     ScanTargetUpdate,
+    TargetAction,
     UsageEngine,
 )
 from app.services import state_machines as sm
@@ -150,6 +152,11 @@ def trigger_scan(
     account = _get_account_for_user(account_id, session, current_user)
     if account.status == CloudAccountStatus.disabled:
         raise HTTPException(status_code=403, detail="Cloud account is disabled")
+    require_idle(
+        cloud_account_activity(session, account_id),
+        TargetAction.scan,
+        "cloud account",
+    )
     # Fail fast with a precise 402; the worker re-checks before assuming the
     # cross-account role, which is the gate that actually holds.
     enforce_quota(

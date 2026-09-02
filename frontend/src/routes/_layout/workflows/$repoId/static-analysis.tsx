@@ -4,16 +4,11 @@ import {
   ChevronDown,
   ChevronRight,
   GitPullRequest,
-  Loader2,
-  Play,
   RefreshCw,
-  Wand2,
-  Zap,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
-  type FixStatus,
   type PullRequestPublic,
   RepositoriesService,
   type WorkflowFindingPublic,
@@ -21,6 +16,7 @@ import {
   type WorkflowScanPublic,
   WorkflowService,
 } from "@/client"
+import { EngineActionBar } from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { IssueRow } from "@/components/IssueRow"
@@ -29,9 +25,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
+import { WorkflowFilterMenu } from "@/components/WorkflowFilterMenu"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
-import { deliverAction, labelForBranch, repoFixBranch } from "@/lib/delivery"
+import { deliverAction, repoFixBranch } from "@/lib/delivery"
+import {
+  actionBlockedReason,
+  engineActions,
+  isFixInFlight,
+} from "@/lib/engine-actions"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { relativeTime } from "@/lib/format"
 import { severityRank } from "@/lib/severity"
@@ -52,13 +54,11 @@ export const Route = createFileRoute(
   }),
 })
 
-const IN_FLIGHT_STATUSES: FixStatus[] = ["pending", "generating", "delivering"]
-
 // Mirrors the backend eligibility rules: a fix a worker is processing cannot
 // be regenerated out from under it, and merged code changes are already
 // applied.
 const isRegenerable = (fix: WorkflowFixPublic) =>
-  !IN_FLIGHT_STATUSES.includes(fix.status) && fix.pr_state !== "merged"
+  !isFixInFlight(fix.status) && fix.pr_state !== "merged"
 
 function StaticAnalysisPage() {
   const { repoId } = Route.useParams()
@@ -276,7 +276,7 @@ function StaticAnalysisPage() {
       }),
   })
 
-  // Repo-wide "Run analysis" — moved here from the shared repo layout header so
+  // Repo-wide "Scan now" — moved here from the shared repo layout header so
   // it lives on the tab it acts on.
   const triggerMutation = useMutation({
     mutationFn: () =>
@@ -295,7 +295,7 @@ function StaticAnalysisPage() {
   })
 
   // Sync-only: re-read the workflow files from GitHub and reconcile the stored
-  // set, without running policy evaluation or an LLM. "Run analysis" does this
+  // set, without running policy evaluation or an LLM. "Scan now" does this
   // first anyway; this is for when the list on screen looks wrong and the user
   // wants it corrected without paying for a full re-analysis.
   const syncMutation = useMutation({
@@ -378,11 +378,37 @@ function StaticAnalysisPage() {
       }),
   })
 
-  const repoDeliverAction = labelForBranch(
-    prByBranch,
-    repoFixBranch(repoId),
-    "PR for all workflows",
-  )
+  // Everything the repo-wide bar needs to know about the repository, in the
+  // vocabulary every engine shares. `scanStatus` is the whole list rather than
+  // the newest row: a CI analysis writes one scan per workflow file under a
+  // single repo-wide lock, so "the latest one" is regularly a finished sibling
+  // of one still running.
+  const repoState = {
+    targetLabel: "repository",
+    isAccessible,
+    scanStatus: (analyses ?? []).map((a) => a.status),
+    fixStatuses: (fixes ?? []).map((f) => f.status),
+    existingPr: prByBranch.get(repoFixBranch(repoId)),
+  }
+  const regenerateBlocked = actionBlockedReason("generate", {
+    ...repoState,
+    scope: "repo",
+  })
+  const repoActions = engineActions({
+    ...repoState,
+    scope: "repo" as const,
+    // This bar acts on the selection below it, not on the whole repository.
+    openFindingCount: selectedIssueIds.length,
+    noFindingsReason: selectablePaths.length
+      ? "Select at least one workflow"
+      : "No open issues to fix",
+    count: selectedPaths.length,
+    pending: {
+      scan: triggerMutation.isPending,
+      generate: batchFixMutation.isPending || regenerateRepoMutation.isPending,
+      deliver: deliverRepoMutation.isPending,
+    },
+  })
 
   const sortedAnalyses = useMemo(
     () =>
@@ -410,7 +436,6 @@ function StaticAnalysisPage() {
   )
 
   const allSelected = selectablePaths.length > 0 && deselectedPaths.size === 0
-  const noneSelected = selectedPaths.length === 0
 
   function toggleWorkflow(path: string) {
     setDeselectedPaths((prev) => {
@@ -440,116 +465,90 @@ function StaticAnalysisPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Action bar: repo-wide analyze + filters + repo-wide fix / PR actions. */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => triggerMutation.mutate()}
-          disabled={!isAccessible || triggerMutation.isPending}
-        >
-          <Play className="h-4 w-4" />
-          {triggerMutation.isPending ? "Queuing…" : "Run analysis"}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          title="Re-read the workflow files from GitHub without running an analysis"
-          onClick={() => syncMutation.mutate()}
-          disabled={!isAccessible || syncMutation.isPending}
-        >
-          {syncMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          {syncMutation.isPending ? "Syncing…" : "Sync from GitHub"}
-        </Button>
-        <Button
-          variant={unfixed ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            setUnfixed((v) => !v)
-            setDeselectedPaths(new Set())
-          }}
-        >
-          Open only
-        </Button>
-        <Button
-          variant={showIgnored ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            setShowIgnored((v) => !v)
-            setDeselectedPaths(new Set())
-          }}
-        >
-          Show ignored
-        </Button>
-        {selectablePaths.length > 0 && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={() =>
-                setDeselectedPaths(
-                  allSelected ? new Set(selectablePaths) : new Set(),
-                )
-              }
-            >
-              {allSelected ? "Deselect all" : "Select all"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => batchFixMutation.mutate()}
-              disabled={
-                !isAccessible || batchFixMutation.isPending || noneSelected
-              }
-            >
-              <Zap className="h-4 w-4" />
-              {batchFixMutation.isPending
-                ? "Queuing…"
-                : `Fix selected${
-                    selectedPaths.length > 0 ? ` (${selectedPaths.length})` : ""
-                  }`}
-            </Button>
-          </>
-        )}
-        {fixes?.some(isRegenerable) && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => regenerateRepoMutation.mutate()}
-            disabled={!isAccessible || regenerateRepoMutation.isPending}
-          >
-            <RefreshCw className="h-4 w-4" />
-            {regenerateRepoMutation.isPending
-              ? "Queuing…"
-              : "Regenerate all fixes"}
-          </Button>
-        )}
-        {fixes?.some((f) => f.status === "ready") && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() =>
-              deliverRepoMutation.mutate({ force: repoDeliverAction.force })
+      {/* Three actions, a filter menu and an overflow — the same bar every
+          other engine's card carries, at repository scope. It was eight
+          controls in one flat row: two of them filters faking their state with
+          a button variant, one a selection control, and the rest actions whose
+          availability the reader had to work out from which ones happened to
+          be rendered. */}
+      <EngineActionBar
+        size="page"
+        testId="repo-action-bar"
+        actions={repoActions}
+        onScan={() => triggerMutation.mutate()}
+        onGenerate={() => batchFixMutation.mutate()}
+        onDeliver={() =>
+          deliverRepoMutation.mutate({ force: repoActions.deliver.force })
+        }
+        trailing={
+          <WorkflowFilterMenu
+            openOnly={unfixed}
+            onOpenOnlyChange={(value) => {
+              setUnfixed(value)
+              setDeselectedPaths(new Set())
+            }}
+            showIgnored={showIgnored}
+            onShowIgnoredChange={(value) => {
+              setShowIgnored(value)
+              setDeselectedPaths(new Set())
+            }}
+          />
+        }
+        overflow={[
+          // Discarding every eligible fix and starting over is a deliberate,
+          // occasional act — a menu item, not a fourth button competing with
+          // the one that generates the fixes that are missing.
+          ...(fixes?.some(isRegenerable)
+            ? [
+                {
+                  label: regenerateRepoMutation.isPending
+                    ? "Queuing…"
+                    : "Regenerate all fixes",
+                  icon: RefreshCw,
+                  // Activity only: regenerating discards every eligible fix
+                  // in the repo, so unlike the button above it does not care
+                  // what is selected.
+                  disabled:
+                    !!regenerateBlocked || regenerateRepoMutation.isPending,
+                  reason: regenerateBlocked,
+                  onSelect: () => regenerateRepoMutation.mutate(),
+                },
+              ]
+            : []),
+          {
+            label: syncMutation.isPending ? "Syncing…" : "Sync from GitHub",
+            icon: RefreshCw,
+            disabled: !isAccessible || syncMutation.isPending,
+            reason: isAccessible
+              ? null
+              : "GitHub access to this repository was lost",
+            onSelect: () => syncMutation.mutate(),
+          },
+        ]}
+      />
+
+      {/* Selection, which is neither a filter nor an action: a master checkbox
+          and a count, the way a table header does it. The count feeds the
+          "Generate fixes (N)" label above. */}
+      {selectablePaths.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Checkbox
+            checked={allSelected}
+            aria-label={
+              allSelected ? "Deselect all workflows" : "Select all workflows"
             }
-            disabled={!isAccessible || deliverRepoMutation.isPending}
-          >
-            <GitPullRequest className="h-4 w-4" />
-            {deliverRepoMutation.isPending
-              ? "Queuing…"
-              : repoDeliverAction.label}
-          </Button>
-        )}
-      </div>
+            onCheckedChange={() =>
+              setDeselectedPaths(
+                allSelected ? new Set(selectablePaths) : new Set(),
+              )
+            }
+          />
+          <span>
+            {selectedPaths.length} of {selectablePaths.length} workflow
+            {selectablePaths.length !== 1 ? "s" : ""} selected
+          </span>
+        </div>
+      )}
 
       {/* Collapsible analysis history */}
       <Card>
@@ -680,15 +679,49 @@ function StaticAnalysisPage() {
           const latest = latestAnalysisByPath.get(wf.path)
           const showFix =
             fileFix?.status === "ready" || fileFix?.status === "delivered"
-          const wfFixInFlight =
-            !!fileFix && IN_FLIGHT_STATUSES.includes(fileFix.status)
           const isRegenerating =
             regenerateWorkflowMutation.isPending &&
             regenerateWorkflowMutation.variables === fileFix?.id
+          // `deliverAction` knows one thing the shared rules do not: a fix that
+          // is delivered or withdrawn can still be re-opened once its PR was
+          // closed. It stays the authority on that, and hands the answer over.
           const delivery = fileFix ? deliverAction(fileFix, prByBranch) : null
           const isWfDelivering =
             deliverWorkflowMutation.isPending &&
             deliverWorkflowMutation.variables?.fixId === fileFix?.id
+          const openIssueIds = fileIssues
+            .filter((i) => i.status !== "ignored")
+            .map((i) => i.id)
+          // The card's own bar: the repository's scan blocks it (one analysis
+          // holds the whole repo), but only this file's fix counts as busy.
+          const wfActions = engineActions({
+            ...repoState,
+            targetLabel: "workflow file",
+            scope: "file" as const,
+            fixStatuses: fileFix ? [fileFix.status] : [],
+            openFindingCount: openIssueIds.length,
+            existingPr: undefined,
+            reopenable: !!delivery,
+            pending: {
+              scan:
+                analyzeWorkflowMutation.isPending &&
+                analyzeWorkflowMutation.variables === wf.id,
+              generate: wfFixMutation.isPending || isRegenerating,
+              deliver: isWfDelivering,
+            },
+          })
+          // The per-file delivery label and force flag come from
+          // `deliverAction`, which knows one thing the shared rules do not: a
+          // withdrawn fix whose PR was closed can be reopened. Only the
+          // *availability* — access, the enable flag, what the target is busy
+          // with — comes from the shared rules.
+          const wfDeliver = delivery
+            ? {
+                ...wfActions.deliver,
+                label: isWfDelivering ? "Queuing…" : delivery.label,
+                force: delivery.force,
+              }
+            : wfActions.deliver
           const selectable = selectablePaths.includes(wf.path)
           const issueListOpen = !collapsedIssueLists.has(wf.path)
           // Workflows with issues open by default; issue-free ones start
@@ -742,94 +775,44 @@ function StaticAnalysisPage() {
                       className="shrink-0"
                     />
                   </CardTitle>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs gap-1.5"
-                      onClick={() => analyzeWorkflowMutation.mutate(wf.id)}
-                      disabled={
-                        !isAccessible ||
-                        (analyzeWorkflowMutation.isPending &&
-                          analyzeWorkflowMutation.variables === wf.id)
-                      }
-                      title="Re-run static analysis for this workflow file"
-                    >
-                      {analyzeWorkflowMutation.isPending &&
-                      analyzeWorkflowMutation.variables === wf.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Play className="h-3 w-3" />
-                      )}
-                      Re-analyze
-                    </Button>
-                    {fileFix && isRegenerable(fileFix) ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5"
-                        onClick={() =>
-                          regenerateWorkflowMutation.mutate(fileFix.id)
-                        }
-                        disabled={
-                          !isAccessible ||
-                          isRegenerating ||
-                          regenerateRepoMutation.isPending
-                        }
-                      >
-                        {isRegenerating ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3 w-3" />
-                        )}
-                        {isRegenerating ? "Queuing…" : "Regenerate fix"}
-                      </Button>
-                    ) : (
-                      fileIssues.some((i) => i.status !== "ignored") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1.5"
-                          onClick={() =>
-                            wfFixMutation.mutate({
-                              issueIds: fileIssues
-                                .filter((i) => i.status !== "ignored")
-                                .map((i) => i.id),
-                            })
-                          }
-                          disabled={
-                            !isAccessible ||
-                            wfFixInFlight ||
-                            wfFixMutation.isPending
-                          }
-                        >
-                          {wfFixInFlight || wfFixMutation.isPending ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Wand2 className="h-3 w-3" />
-                          )}
-                          {wfFixInFlight ? "Generating…" : "Generate fix"}
-                        </Button>
-                      )
-                    )}
-                    {delivery && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5"
-                        onClick={() =>
-                          deliverWorkflowMutation.mutate({
-                            fixId: fileFix!.id,
-                            force: delivery.force,
-                          })
-                        }
-                        disabled={!isAccessible || isWfDelivering}
-                      >
-                        <GitPullRequest className="h-3 w-3" />
-                        {isWfDelivering ? "Queuing…" : delivery.label}
-                      </Button>
-                    )}
-                  </div>
+                  {/* The same three buttons every other engine's card shows,
+                      in the same order. "Re-analyze" was this engine's private
+                      name for "Scan now", and Generate/Regenerate were two
+                      buttons that were never both available. */}
+                  <EngineActionBar
+                    actions={{ ...wfActions, deliver: wfDeliver }}
+                    onScan={() => analyzeWorkflowMutation.mutate(wf.id)}
+                    onGenerate={() =>
+                      wfFixMutation.mutate({ issueIds: openIssueIds })
+                    }
+                    onDeliver={() =>
+                      fileFix &&
+                      delivery &&
+                      deliverWorkflowMutation.mutate({
+                        fixId: fileFix.id,
+                        force: delivery.force,
+                      })
+                    }
+                    overflow={
+                      fileFix && isRegenerable(fileFix)
+                        ? [
+                            {
+                              label: isRegenerating
+                                ? "Queuing…"
+                                : "Regenerate fix",
+                              icon: RefreshCw,
+                              disabled:
+                                wfActions.generate.disabled ||
+                                isRegenerating ||
+                                regenerateRepoMutation.isPending,
+                              reason: wfActions.generate.reason,
+                              onSelect: () =>
+                                regenerateWorkflowMutation.mutate(fileFix.id),
+                            },
+                          ]
+                        : undefined
+                    }
+                  />
                 </div>
               </CardHeader>
               {wfOpen && (

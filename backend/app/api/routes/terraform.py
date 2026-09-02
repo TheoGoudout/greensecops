@@ -20,6 +20,7 @@ from app.api.engine_routes import (
     get_target_for_user,
     ignore_finding_for_user,
     prepare_pending_fix,
+    require_target_idle,
     sarif_for_claims,
     unignore_finding_for_user,
 )
@@ -35,6 +36,7 @@ from app.models import (
     Engine,
     Repository,
     ScanTargetUpdate,
+    TargetAction,
     TerraformFilePublic,
     TerraformFinding,
     TerraformFindingPublic,
@@ -169,6 +171,7 @@ def trigger_scan(
     root = get_target_for_user(TERRAFORM_ENGINE, root_id, session, current_user)
     if not root.enabled:
         raise HTTPException(status_code=403, detail="Terraform root is disabled")
+    require_target_idle(TERRAFORM_ENGINE, session, root_id, TargetAction.scan)
     repo = get_or_404(session, Repository, root.repo_id, detail="Repository not found")
     # Fail fast with a precise 402 rather than letting the user watch a job
     # disappear. The worker re-checks — that gate is the one that holds.
@@ -343,6 +346,7 @@ def generate_fixes(
 ) -> dict[str, str | int]:
     """Generate LLM fixes for a root's open findings, one whole-file fix each."""
     root = get_target_for_user(TERRAFORM_ENGINE, root_id, session, current_user)
+    require_target_idle(TERRAFORM_ENGINE, session, root_id, TargetAction.generate)
     repo = get_or_404(session, Repository, root.repo_id, detail="Repository not found")
 
     query = (
@@ -414,6 +418,7 @@ def deliver_fixes(
 ) -> dict[str, str]:
     """Deliver the root's ready fixes as a single PR (branch per root)."""
     root = get_target_for_user(TERRAFORM_ENGINE, root_id, session, current_user)
+    require_target_idle(TERRAFORM_ENGINE, session, root_id, TargetAction.deliver)
     deliver_terraform_fixes.delay(terraform_root_id=str(root.id), force=force)
     return {
         "status": "queued",

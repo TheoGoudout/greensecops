@@ -13,6 +13,14 @@ Typical use::
     sm.advance(fix, sm.FixMachine, "start_generation")       # raises if illegal
     sm.try_advance(pr, sm.PullRequestMachine, "reopen")      # idempotent no-op
     sm.force_to(fix, sm.FixMachine, FixStatus.delivering)    # admin override
+
+One lifecycle here is *derived* rather than persisted: :mod:`.engine_target`
+folds a target's scan and fix statuses into a :class:`~app.models.enums.
+TargetActivity` and says which :class:`~app.models.enums.TargetAction` that
+forbids. It has no state column and so no ``StateMachine`` subclass, but it is
+the graph the engine pages' buttons obey::
+
+    sm.blocked_reason(sm.activity_of(scans, fixes), TargetAction.generate)
 """
 
 from .base import (
@@ -27,6 +35,13 @@ from .billing import (
     BillingSubscriptionMachine,
 )
 from .cloud_account import CloudAccountMachine
+from .engine_target import (
+    ACTIVE_SCAN_STATUSES,
+    BLOCKS,
+    REASONS,
+    activity_of,
+    blocked_reason,
+)
 from .finding import FindingMachine
 from .fix import (
     DELIVERED_FIX_STATUSES,
@@ -47,6 +62,12 @@ __all__ = [
     "output_for",
     "IllegalTransition",
     "sync_access_flag",
+    # derived target activity
+    "activity_of",
+    "blocked_reason",
+    "ACTIVE_SCAN_STATUSES",
+    "BLOCKS",
+    "REASONS",
     # machines
     "BillingSubscriptionMachine",
     "CloudAccountMachine",

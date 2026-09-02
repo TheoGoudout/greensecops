@@ -1,15 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import {
-  ChevronDown,
-  ChevronRight,
-  GitPullRequest,
-  Loader2,
-  Play,
-  Trash2,
-  Wand2,
-  Zap,
-} from "lucide-react"
+import { ChevronDown, ChevronRight, GitPullRequest, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import type {
   PullRequestPublic,
@@ -19,17 +10,23 @@ import type {
   TerraformRootPublic,
 } from "@/client"
 import { TerraformService, WorkflowService } from "@/client"
+import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
+import {
+  EngineActionBar,
+  EngineActionButton,
+} from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
 import { TerraformFindingRow } from "@/components/TerraformFindingRow"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useEngineTarget } from "@/hooks/useEngineTarget"
+import { useRepository } from "@/hooks/useRepository"
 import { tfFixBranch } from "@/lib/delivery"
+import { engineActions } from "@/lib/engine-actions"
 import { formatDateTime } from "@/lib/format"
 import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
 import {
@@ -47,12 +44,10 @@ export const Route = createFileRoute(
   }),
 })
 
-// Fix statuses a worker is actively processing — used to disable actions.
-const IN_FLIGHT = new Set(["pending", "generating", "delivering"])
-
 function TerraformTab() {
   const { repoId } = Route.useParams()
   const [openRoots, setOpenRoots] = useState<Set<string>>(new Set())
+  const { isAccessible } = useRepository(repoId)
 
   const { data: roots, isLoading } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
@@ -115,6 +110,7 @@ function TerraformTab() {
           isOpen={openRoots.has(root.id)}
           onToggleOpen={() => toggleOpen(root.id)}
           existingPr={prByBranch.get(tfFixBranch(root.id))}
+          isAccessible={isAccessible}
         />
       ))}
     </div>
@@ -126,10 +122,18 @@ interface RootCardProps {
   isOpen: boolean
   onToggleOpen: () => void
   existingPr: PullRequestPublic | undefined
+  isAccessible: boolean
 }
 
-function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
+function RootCard({
+  root,
+  isOpen,
+  onToggleOpen,
+  existingPr,
+  isAccessible,
+}: RootCardProps) {
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const {
     files,
@@ -199,10 +203,31 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
   const openFindingCount = (findings ?? []).filter(
     (f) => f.status !== "ignored" && f.status !== "resolved",
   ).length
-  const hasReadyFix = (fixes ?? []).some((f) => f.status === "ready")
-  const prState = existingPr?.pr_state
-  const deliverLabel =
-    prState === "closed" ? "Reopen PR" : existingPr ? "Update PR" : "Create PR"
+
+  // One description of what this root may do, shared by the header bar and by
+  // each file's own button below — the difference between them is the scope,
+  // not the rules.
+  const rootState = {
+    targetLabel: "Terraform root",
+    isAccessible,
+    enabled: root.enabled,
+    scanStatus: root.latest_scan_status,
+    fixStatuses: (fixes ?? []).map((f) => f.status),
+    existingPr,
+  }
+  const actions = engineActions({
+    ...rootState,
+    scope: "target" as const,
+    openFindingCount,
+    // A target nobody has scanned yet has no findings *because* of that, and
+    // "No open findings to fix" reads as "there is nothing wrong here".
+    noFindingsReason: root.last_scanned_at ? undefined : "Scan this root first",
+    pending: {
+      scan: scanMutation.isPending,
+      generate: generateMutation.isPending,
+      deliver: deliverMutation.isPending,
+    },
+  })
 
   return (
     <Card>
@@ -228,59 +253,47 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
               className="shrink-0"
             />
           </CardTitle>
-          <div className="flex items-center gap-3 shrink-0">
-            <ScanRunningBadge status={root.latest_scan_status} />
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={root.enabled}
-                onCheckedChange={(enabled) => toggleMutation.mutate(enabled)}
-                disabled={toggleMutation.isPending}
-              />
-              <span className="text-xs text-muted-foreground">
-                {root.enabled ? "Enabled" : "Disabled"}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs gap-1.5"
-              onClick={() => scanMutation.mutate()}
-              disabled={!root.enabled || scanMutation.isPending}
-              title={
-                root.enabled ? "Scan this root now" : "Enable this root to scan"
-              }
-            >
-              {scanMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Play className="h-3 w-3" />
-              )}
-              Scan now
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remove Terraform root "${root.root_path}"? This deletes its scan history, findings and fixes.`,
-                  )
-                ) {
-                  deleteMutation.mutate()
-                }
-              }}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Trash2 className="h-3 w-3" />
-              )}
-              Remove
-            </Button>
-          </div>
+          <EngineActionBar
+            actions={actions}
+            onScan={() => scanMutation.mutate()}
+            onGenerate={() => generateMutation.mutate([])}
+            onDeliver={() => deliverMutation.mutate(actions.deliver.force)}
+            leading={
+              <>
+                <ScanRunningBadge status={root.latest_scan_status} />
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={root.enabled}
+                    onCheckedChange={(enabled) =>
+                      toggleMutation.mutate(enabled)
+                    }
+                    disabled={!isAccessible || toggleMutation.isPending}
+                    aria-label="Enable this root"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {root.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              </>
+            }
+            overflow={[
+              {
+                label: "Remove",
+                icon: Trash2,
+                destructive: true,
+                disabled: deleteMutation.isPending,
+                onSelect: () => setConfirmRemove(true),
+              },
+            ]}
+          />
         </div>
+        <ConfirmRemoveDialog
+          open={confirmRemove}
+          onOpenChange={setConfirmRemove}
+          name={root.root_path}
+          targetLabel="Terraform root"
+          onConfirm={() => deleteMutation.mutate()}
+        />
         {root.last_scanned_at && (
           <p className="text-xs text-muted-foreground">
             Last scanned {formatDateTime(root.last_scanned_at)}
@@ -290,41 +303,6 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
 
       {isOpen && (
         <CardContent className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {openFindingCount > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1.5"
-                onClick={() => generateMutation.mutate([])}
-                disabled={!root.enabled || generateMutation.isPending}
-              >
-                {generateMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Zap className="h-3 w-3" />
-                )}
-                Generate all fixes
-              </Button>
-            )}
-            {hasReadyFix && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1.5"
-                onClick={() => deliverMutation.mutate(prState === "closed")}
-                disabled={!root.enabled || deliverMutation.isPending}
-              >
-                {deliverMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <GitPullRequest className="h-3 w-3" />
-                )}
-                {deliverLabel}
-              </Button>
-            )}
-          </div>
-
           {isLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : !files?.length ? (
@@ -338,14 +316,20 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
               const fileFix = fixByFile.get(file.path)
               const showFix =
                 fileFix?.status === "ready" || fileFix?.status === "delivered"
-              const fixInFlight = fileFix
-                ? IN_FLIGHT.has(fileFix.status)
-                : false
               const openIds = fileFindings
                 .filter(
                   (f) => f.status !== "ignored" && f.status !== "resolved",
                 )
                 .map((f) => f.id)
+              // Same rules, narrowed to this file: only its own fix counts as
+              // in flight, so one file generating never freezes the rest.
+              const fileAction = engineActions({
+                ...rootState,
+                scope: "file" as const,
+                fixStatuses: fileFix ? [fileFix.status] : [],
+                openFindingCount: openIds.length,
+                pending: { generate: generateMutation.isPending },
+              }).generate
               return (
                 <div key={file.path} className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -371,24 +355,11 @@ function RootCard({ root, isOpen, onToggleOpen, existingPr }: RootCardProps) {
                       )}
                     </div>
                     {openIds.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5"
+                      <EngineActionButton
+                        action={fileAction}
                         onClick={() => generateMutation.mutate(openIds)}
-                        disabled={
-                          !root.enabled ||
-                          fixInFlight ||
-                          generateMutation.isPending
-                        }
-                      >
-                        {fixInFlight ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-3 w-3" />
-                        )}
-                        {fixInFlight ? "Generating…" : "Generate fix"}
-                      </Button>
+                        compact
+                      />
                     )}
                   </div>
                   <FileViewer

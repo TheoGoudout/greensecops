@@ -15,11 +15,21 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser, SessionDep, authorize_repo, get_or_404
-from app.models import Engine, LLMProvider, Repository, UsageEngine, UsageMeter
-from app.models.enums import FixStatus
+from app.models import (
+    CloudScan,
+    Engine,
+    LLMProvider,
+    Repository,
+    UsageEngine,
+    UsageMeter,
+    WorkflowFile,
+    WorkflowFix,
+    WorkflowScan,
+)
+from app.models.enums import FixStatus, TargetAction, TargetActivity
 from app.services import state_machines as sm
 from app.services.billing import usage as billing_usage
 from app.services.engines import EngineSpec
@@ -93,6 +103,176 @@ def unignore_finding_for_user(
         session.commit()
         session.refresh(finding)
     return finding
+
+
+def require_idle(
+    activity: TargetActivity,
+    action: TargetAction,
+    target_label: str,
+) -> None:
+    """409 when ``activity`` forbids ``action``.
+
+    The HTTP half of :mod:`app.services.state_machines.engine_target`. Split
+    from the query below so the two callers that have no ``EngineSpec`` — the
+    cloud engine, which has no fixes, and the CI-workflow engine, whose scope
+    is a repository or a single workflow file — raise the identical error
+    rather than writing their own.
+
+    A 409 rather than the silent ``202`` these routes used to return: the
+    duplicate was already being discarded, by the Redis lock in the worker
+    (``scan_support.scan_lock``) or by ``prepare_pending_fix`` below, but
+    nothing said so and the UI had no way to know. Same reasoning as the 402
+    ``enforce_quota`` raises — fail where the user can see it, rather than
+    letting them watch a job disappear.
+    """
+    reason = sm.blocked_reason(activity, action)
+    if reason is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot {action.value} while {reason} for this {target_label}",
+        )
+
+
+def _statuses(session: SessionDep, statement: Any) -> list[Any]:
+    """Run a single-column ``status`` select and return the values.
+
+    ``list[Any]`` on purpose. The two type checkers this project runs describe a
+    scalar-column select differently — mypy calls it ``Sequence[str]``, ty calls
+    it ``Sequence[Sequence[Unknown]]`` — and neither is what SQLAlchemy actually
+    hands back, which is the status enum. ``activity_of`` reads either spelling,
+    so this is where the argument stops rather than spreading through three
+    call sites.
+    """
+    return list(session.exec(statement).all())
+
+
+def target_activity(
+    spec: EngineSpec,
+    session: SessionDep,
+    target_id: uuid.UUID,
+) -> TargetActivity:
+    """What one registered target is busy with right now.
+
+    Reads the same two things the target's card does: the status of its most
+    recent scan whatever the outcome (matching ``mappers.base.latest_scan_status``,
+    so the API and the badge on screen never disagree) and the statuses of any
+    fixes a worker still holds.
+    """
+    scan_target = getattr(spec.scan_model, spec.target_id_field)
+    fix_target = getattr(spec.fix_model, spec.target_id_field)
+    return sm.activity_of(
+        _statuses(
+            session,
+            select(spec.scan_model.status)
+            .where(scan_target == target_id)
+            .order_by(col(spec.scan_model.created_at).desc())
+            .limit(1),
+        ),
+        _statuses(
+            session,
+            select(spec.fix_model.status)
+            .where(fix_target == target_id)
+            .where(col(spec.fix_model.status).in_(sm.IN_FLIGHT_STATUSES)),
+        ),
+    )
+
+
+def require_target_idle(
+    spec: EngineSpec,
+    session: SessionDep,
+    target_id: uuid.UUID,
+    action: TargetAction,
+) -> None:
+    """Refuse ``action`` on a target that is already scanning, generating or
+    delivering. See :func:`require_idle` for why this is a 409."""
+    require_idle(target_activity(spec, session, target_id), action, spec.target_label)
+
+
+def repository_activity(session: SessionDep, repo_id: uuid.UUID) -> TargetActivity:
+    """What a repository is busy with on the CI-workflow engine.
+
+    The CI engine has no ``EngineSpec`` — its fixes key on a persisted
+    ``WorkflowFile`` rather than a ``(target, path)`` pair — so its scope is
+    spelled out here instead of derived from a spec.
+
+    Scans are counted as *any* unfinished scan for the repository rather than
+    only the most recent one, because that is the granularity the work actually
+    serializes at: ``static_analysis`` takes ``scan_lock("static_analysis:<repo>")``,
+    one lock for the whole repository, and a repo-wide analysis writes one scan
+    row per workflow file, so "the latest row" would happily be a finished one
+    while a sibling is still running.
+
+    Fixes reach the repository through ``WorkflowFile``: ``WorkflowFix`` carries
+    no ``repo_id`` column (the public schema derives one in the mapper), so the
+    membership test is a join, not a filter.
+    """
+    return sm.activity_of(
+        _statuses(
+            session,
+            select(WorkflowScan.status)
+            .where(WorkflowScan.repo_id == repo_id)
+            .where(col(WorkflowScan.status).in_(sm.ACTIVE_SCAN_STATUSES))
+            .limit(1),
+        ),
+        _statuses(
+            session,
+            select(WorkflowFix.status)
+            .join(
+                WorkflowFile, col(WorkflowFile.id) == col(WorkflowFix.workflow_file_id)
+            )
+            .where(WorkflowFile.repo_id == repo_id)
+            .where(col(WorkflowFix.status).in_(sm.IN_FLIGHT_STATUSES)),
+        ),
+    )
+
+
+def workflow_file_activity(
+    session: SessionDep,
+    workflow_file: Any,
+) -> TargetActivity:
+    """What one workflow file is busy with.
+
+    The scan half is the whole repository's — a CI analysis holds a repo-wide
+    lock whether it was aimed at one file or all of them — while the fix half is
+    this file's own, so a user can still ship or regenerate file A's fix while
+    file B is being written.
+    """
+    return sm.activity_of(
+        _statuses(
+            session,
+            select(WorkflowScan.status)
+            .where(WorkflowScan.repo_id == workflow_file.repo_id)
+            .where(col(WorkflowScan.status).in_(sm.ACTIVE_SCAN_STATUSES))
+            .limit(1),
+        ),
+        _statuses(
+            session,
+            select(WorkflowFix.status)
+            .where(WorkflowFix.workflow_file_id == workflow_file.id)
+            .where(col(WorkflowFix.status).in_(sm.IN_FLIGHT_STATUSES)),
+        ),
+    )
+
+
+def cloud_account_activity(
+    session: SessionDep, account_id: uuid.UUID
+) -> TargetActivity:
+    """What a cloud account is busy with.
+
+    Cloud has no fixes — no files to rewrite — so the only thing that can be in
+    flight is another scan. It lives here beside the CI helpers, rather than in
+    the cloud route module, for the same reason: this is where "what is this
+    target doing?" is answered for every engine, spec or no spec.
+    """
+    return sm.activity_of(
+        _statuses(
+            session,
+            select(CloudScan.status)
+            .where(CloudScan.cloud_account_id == account_id)
+            .order_by(col(CloudScan.created_at).desc())
+            .limit(1),
+        )
+    )
 
 
 def prepare_pending_fix(

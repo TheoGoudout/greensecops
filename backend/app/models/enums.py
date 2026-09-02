@@ -328,6 +328,38 @@ class FindingStatus(str, enum.Enum):
     ignored = "ignored"
 
 
+class TargetActivity(str, enum.Enum):
+    """What a scan target is busy with right now, on any engine.
+
+    Derived rather than persisted: it is read off the target's latest scan
+    status and its fixes' statuses, which every engine already stores. It exists
+    because "what may I do to this target?" is a question all five engines
+    answer identically, and answering it from scattered ``if`` expressions is
+    how the UI ended up offering "Generate fixes" during a running scan.
+
+    See ``services/state_machines/engine_target.py`` for the transitions and
+    which :class:`TargetAction` each activity blocks.
+    """
+
+    idle = "idle"
+    scanning = "scanning"
+    generating = "generating"
+    delivering = "delivering"
+
+
+class TargetAction(str, enum.Enum):
+    """The three things a user can ask an engine to do to a target.
+
+    Deliberately not one per route: ``POST .../scans``, ``POST .../fixes`` and
+    ``POST .../deliveries`` are the same three verbs on every engine, and the
+    values here are the words that go into the 409 detail and the UI tooltip.
+    """
+
+    scan = "start a scan"
+    generate = "generate fixes"
+    deliver = "open a pull request"
+
+
 class FindingResolutionReason(str, enum.Enum):
     """Why a finding stopped being open.
 

@@ -71,6 +71,8 @@ from .enums import (
     Severity,
     SSESignal,
     SubscriptionStatus,
+    TargetAction,
+    TargetActivity,
     TelemetryPhase,
     UsageEngine,
     UsageMeter,
@@ -246,6 +248,8 @@ __all__ = [
     "ENGINE_OF_DOMAIN",
     "Engine",
     "OverviewSection",
+    "TargetActivity",
+    "TargetAction",
     # schemas
     "UserPublic",
     "UsersPublic",

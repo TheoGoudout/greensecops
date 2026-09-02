@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Copy,
   Loader2,
-  Play,
   Plus,
   Trash2,
 } from "lucide-react"
@@ -15,6 +14,8 @@ import { toast } from "sonner"
 import type { CloudAccountPublic } from "@/client"
 import { CloudService } from "@/client"
 import { CloudFindingRow } from "@/components/CloudFindingRow"
+import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
+import { EngineActionBar } from "@/components/EngineActionBar"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -26,6 +27,7 @@ import { Switch } from "@/components/ui/switch"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
+import { engineActions } from "@/lib/engine-actions"
 import {
   cloudAccountStatusColor,
   cloudAccountStatusLabel,
@@ -301,6 +303,7 @@ function CloudAccountCard({
 }: CloudAccountCardProps) {
   const [copiedText, copy] = useCopyToClipboard()
   const copied = copiedText === account.external_id
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const { data: findings, isLoading: findingsLoading } = useQuery({
     queryKey: ["cloud-findings", account.id],
@@ -315,6 +318,15 @@ function CloudAccountCard({
   })
 
   const enabled = account.status !== "disabled"
+  // Cloud has no fixes, so its only activity is a scan — but the rule that
+  // decides whether "Scan now" is live is the same one every engine uses.
+  const actions = engineActions({
+    targetLabel: "Cloud account",
+    scope: "target",
+    enabled,
+    scanStatus: account.latest_scan_status,
+    pending: { scan: scanMutationPending },
+  })
 
   return (
     <Card>
@@ -348,53 +360,47 @@ function CloudAccountCard({
               className="shrink-0"
             />
           </CardTitle>
-          <div className="flex items-center gap-3 shrink-0">
-            <ScanRunningBadge status={account.latest_scan_status} />
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={enabled}
-                onCheckedChange={onToggleEnabled}
-                disabled={toggleMutationPending}
-              />
-              <span className="text-xs text-muted-foreground">
-                {enabled ? "Enabled" : "Disabled"}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs gap-1.5"
-              onClick={onScan}
-              disabled={!enabled || scanMutationPending}
-              title={
-                enabled
-                  ? "Scan this account now"
-                  : "Enable this account to scan it"
-              }
-            >
-              {scanMutationPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Play className="h-3 w-3" />
-              )}
-              Scan now
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
-              onClick={onDelete}
-              disabled={deleteMutationPending}
-            >
-              {deleteMutationPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Trash2 className="h-3 w-3" />
-              )}
-              Remove
-            </Button>
-          </div>
+          {/* Cloud posture has no files to rewrite, so it declares neither
+              `generate` nor `deliver` rather than showing two dead buttons. */}
+          <EngineActionBar
+            actions={actions}
+            capabilities={{ generate: false, deliver: false }}
+            onScan={onScan}
+            leading={
+              <>
+                <ScanRunningBadge status={account.latest_scan_status} />
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={enabled}
+                    onCheckedChange={onToggleEnabled}
+                    disabled={toggleMutationPending}
+                    aria-label="Enable this account"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              </>
+            }
+            overflow={[
+              {
+                label: "Remove",
+                icon: Trash2,
+                destructive: true,
+                disabled: deleteMutationPending,
+                onSelect: () => setConfirmRemove(true),
+              },
+            ]}
+          />
         </div>
+        <ConfirmRemoveDialog
+          open={confirmRemove}
+          onOpenChange={setConfirmRemove}
+          name={account.display_name}
+          targetLabel="Cloud account"
+          description="This deletes its scan history and findings. It cannot be undone."
+          onConfirm={onDelete}
+        />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {account.role_arn && (
             <span className="font-mono truncate">{account.role_arn}</span>
