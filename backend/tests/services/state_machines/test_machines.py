@@ -228,6 +228,7 @@ def test_rejected_statuses_constant() -> None:
             FixStatus.rejected_by_user,
             FixStatus.superseded_by_closed_pr,
             FixStatus.superseded_by_deleted_file,
+            FixStatus.no_op,
         }
     )
 

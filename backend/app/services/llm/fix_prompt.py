@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING
 
+from .remediation import remediation_block
+
 if TYPE_CHECKING:
     from app.models import WorkflowFinding
 
@@ -30,6 +32,7 @@ Rules for <full_content>:
 Rules for <unfixed>:
 - List an issue here ONLY when it genuinely cannot be resolved by editing this workflow file — e.g. it requires setting up cloud IAM/OIDC trust, creating repository secrets/variables outside this file, or a multi-file refactor
 - Do NOT list an issue here just because it was tedious; if you can express the fix as a diff to this file, fix it and leave it out of <unfixed>
+- A comment in the file explaining that the current state is deliberate — that a setting is omitted on purpose, or a flag left as it is for a stated reason — is the file's author answering this finding already. Report it under <unfixed>, quoting their reason. Never delete such a comment, and never make the change it argues against
 - Leave the block empty if every issue was fixed"""
 
 FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following issues in this GitHub Actions workflow that can be resolved by editing this file. For any that genuinely cannot, list them in <unfixed> instead:
@@ -69,6 +72,7 @@ def build_fix_prompt(
         issues_block=issues_block,
         workflow_content=workflow_content,
     )
+    user_prompt += remediation_block(issues)
     user_prompt += (
         f"\n\n**This repository's default branch is `{default_branch}`.** Keep every"
         " branch name in the file exactly as it is."

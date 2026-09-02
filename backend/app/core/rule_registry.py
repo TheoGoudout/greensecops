@@ -52,9 +52,11 @@ VALID_DETECTION_METHODS = frozenset(
     }
 )
 
-# Rule.title / Rule.description column limits (app/models/db/rule.py).
+# Rule.title / Rule.description / Rule.remediation column limits
+# (app/models/db/rule.py).
 _MAX_TITLE = 255
 _MAX_DESCRIPTION = 2048
+_MAX_REMEDIATION = 2048
 
 
 class RuleMetadataError(ValueError):
@@ -130,6 +132,23 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
             path, f"description is {len(description)} chars (max {_MAX_DESCRIPTION})"
         )
 
+    # `custom.examples.fix` is the rule author's remediation prose. The docs
+    # render it and — since the fix pipeline started sending it — the LLM reads
+    # it too, which is why a missing one now fails the seed rather than merely
+    # warning in the docs build. A rule whose fix text is absent produces
+    # rewrites reinvented from the finding message alone.
+    examples = custom.get("examples") or {}
+    if not isinstance(examples, dict):
+        raise _fail(path, "'custom.examples' is not a mapping")
+    remediation = str(examples.get("fix") or "").strip()
+    if not remediation:
+        raise _fail(path, "METADATA has no 'custom.examples.fix'")
+    if len(remediation) > _MAX_REMEDIATION:
+        raise _fail(
+            path,
+            f"custom.examples.fix is {len(remediation)} chars (max {_MAX_REMEDIATION})",
+        )
+
     raw_severity = custom.get("severity")
     if raw_severity is None:
         raise _fail(path, "METADATA has no 'custom.severity'")
@@ -160,6 +179,7 @@ def rule_from_path(path: Path, rules_dir: Path | None = None) -> dict[str, Any]:
         "severity_weight": float(weight),
         "title": title,
         "description": description,
+        "remediation": remediation,
     }
 
 

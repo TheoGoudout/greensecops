@@ -13,6 +13,7 @@ from ..enums import (
     Severity,
 )
 from .base import get_datetime_utc
+from .mixins import ManualWorkMixin
 
 if TYPE_CHECKING:
     from .rule import Rule
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from .workflow_scan import WorkflowScan
 
 
-class WorkflowFinding(SQLModel, table=True):
+class WorkflowFinding(ManualWorkMixin, SQLModel, table=True):
     __tablename__ = "workflow_finding"
 
     __table_args__ = (
@@ -71,13 +72,13 @@ class WorkflowFinding(SQLModel, table=True):
     # Set when a user dismisses the violation (false positive / accepted risk);
     # takes precedence in the status trigger so the issue reads ``ignored``.
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
-    # Set from the fix-generation LLM's own <unfixed> report: it could not
-    # resolve this issue within the workflow-file diff (too many steps,
-    # requires external setup, etc). Excluded from the PR body's "fixed"
-    # table and from implicit bulk auto-fix selection; an explicit retry on
-    # this issue/workflow clears it and gives the LLM another attempt.
-    needs_manual_work: bool = Field(default=False)
-    manual_work_note: str | None = Field(default=None, max_length=1024)
+    # `needs_manual_work` / `manual_work_note` come from ManualWorkMixin: set
+    # from the fix-generation LLM's own <unfixed> report when it could not
+    # resolve this issue within the workflow-file diff (too many steps, requires
+    # external setup, the file's comments say the state is deliberate). Excluded
+    # from the PR body's "fixed" table and from implicit bulk auto-fix
+    # selection; an explicit retry on this issue/workflow clears it and gives
+    # the LLM another attempt.
     fix_id: uuid.UUID | None = Field(
         default=None,
         sa_column=sa.Column(

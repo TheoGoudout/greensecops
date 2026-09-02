@@ -9,14 +9,19 @@ from app.core.db import engine
 from app.models import DockerBuildEnrichment, DockerFinding, DockerTarget, Repository
 from app.services.docker.compose_parser import parse_compose_content
 from app.services.docker.dockerfile_parser import parse_dockerfile_content
-from app.services.docker.merge import COMPOSE, classify_docker_file
+from app.services.docker.merge import COMPOSE, classify_docker_file, merge_docker_files
 from app.services.docker.registry import resolve_base_image_digests
 from app.services.engines import DOCKER_ENGINE
 from app.services.file_fix_generation import (
     MISSING_CONTENT_ERROR as MISSING_CONTENT_ERROR,  # re-exported for callers/tests
 )
-from app.services.file_fix_generation import generate_file_fix, load_findings
+from app.services.file_fix_generation import (
+    generate_file_fix,
+    load_findings,
+    make_rescan,
+)
 from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
+from app.services.opa.evaluator import evaluate_docker
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -184,4 +189,5 @@ def run_docker_fix_generation(
         _fetch_docker_files,
         build_prompt,
         _validate,
+        make_rescan(merge_docker_files, evaluate_docker),
     )

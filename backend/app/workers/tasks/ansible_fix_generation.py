@@ -3,9 +3,15 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.models import AnsibleFinding
 from app.services.ansible.fix_guard import validate_ansible_fix
+from app.services.ansible.parser import merge_ansible_files
 from app.services.engines import ANSIBLE_ENGINE
-from app.services.file_fix_generation import generate_file_fix, load_findings
+from app.services.file_fix_generation import (
+    generate_file_fix,
+    load_findings,
+    make_rescan,
+)
 from app.services.github.fetch import fetch_ansible_files as _fetch_ansible_files
+from app.services.opa.evaluator import evaluate_ansible
 from app.workers.celery_app import celery_app
 
 
@@ -58,4 +64,5 @@ def run_ansible_fix_generation(
         _fetch_ansible_files,
         _build_prompt,
         _validate,
+        make_rescan(merge_ansible_files, evaluate_ansible),
     )

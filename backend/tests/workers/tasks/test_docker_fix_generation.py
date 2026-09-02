@@ -409,3 +409,73 @@ def test_a_registry_outage_costs_the_digests_not_the_fix(
     assert result["status"] == FixStatus.ready.value
     # No digests offered, so the model is told to leave the references alone.
     assert "Verified base image digests" not in captured["user"]
+
+
+# ─── <unfixed> ───────────────────────────────────────────────────────────────
+#
+# The generator is asked, in the same call, which findings it could not resolve.
+# This engine parsed that answer and threw it away, so it had no way to decline
+# a finding — a rewrite that should have said "the file's own comment says this
+# USER is omitted deliberately" deleted the comment and added the USER instead.
+
+
+def test_an_unfixed_report_is_recorded_on_the_finding(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    finding = _finding(db, target, rule, "Dockerfile")
+    _pending_fix(db, target, "Dockerfile")
+    result = _run(
+        finding,
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n"
+        "<unfixed>\n1: the file says this is deliberate\n</unfixed>",
+        _DOCKERFILE,
+        "Dockerfile",
+    )
+    assert result["status"] == FixStatus.ready.value
+    db.refresh(finding)
+    assert finding.needs_manual_work is True
+    assert finding.manual_work_note == "the file says this is deliberate"
+
+
+def test_a_retry_that_succeeds_clears_an_earlier_manual_work_flag(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    finding = _finding(db, target, rule, "Dockerfile")
+    finding.needs_manual_work = True
+    finding.manual_work_note = "left over from an earlier attempt"
+    db.add(finding)
+    db.commit()
+    _pending_fix(db, target, "Dockerfile")
+
+    _run(
+        finding,
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>",
+        _DOCKERFILE,
+        "Dockerfile",
+    )
+    db.refresh(finding)
+    assert finding.needs_manual_work is False
+    assert finding.manual_work_note is None
+
+
+def test_a_rewrite_that_deletes_a_comment_is_discarded(
+    db: Session, target: DockerTarget, rule: Rule
+) -> None:
+    """The comment was the repository's answer to the rule being fixed."""
+    source = (
+        "# No USER here, deliberately: this image is a CI test harness.\n"
+        'FROM python:3.12-slim\nCMD ["python"]\n'
+    )
+    finding = _finding(db, target, rule, "Dockerfile")
+    fix = _pending_fix(db, target, "Dockerfile")
+    result = _run(
+        finding,
+        f"<full_content>\n{_FIXED_DOCKERFILE}</full_content>\n<unfixed>\n</unfixed>",
+        source,
+        "Dockerfile",
+    )
+    assert result["status"] == FixStatus.failed.value
+    db.refresh(fix)
+    assert fix.full_content is None
+    assert fix.error_message is not None
+    assert "No USER here, deliberately" in fix.error_message

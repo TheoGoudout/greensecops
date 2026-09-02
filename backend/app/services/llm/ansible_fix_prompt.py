@@ -14,6 +14,8 @@ two invariants after the fact — the prompt asks, the guard checks.
 
 from typing import TYPE_CHECKING
 
+from .remediation import remediation_block
+
 if TYPE_CHECKING:
     from app.models import AnsibleFinding
 
@@ -43,6 +45,7 @@ Rules for <full_content>:
 Rules for <unfixed>:
 - List a finding here ONLY when it genuinely cannot be resolved by editing this file — e.g. the checksum to pin belongs in a `defaults/main.yml` you cannot see, or the fix needs a variable defined in another role
 - Do NOT list a finding here just because it was tedious; if you can express the fix as a diff to this file, fix it and leave it out of <unfixed>
+- A comment in the file explaining that the current state is deliberate — that a setting is omitted on purpose, or a flag left as it is for a stated reason — is the file's author answering this finding already. Report it under <unfixed>, quoting their reason. Never delete such a comment, and never make the change it argues against
 - Leave the block empty if every finding was fixed"""
 
 ANSIBLE_FIX_USER_PROMPT_TEMPLATE = """Fix ALL of the following findings in this Ansible file that can be resolved by editing this file. For any that genuinely cannot, list them in <unfixed> instead:
@@ -79,4 +82,5 @@ def build_ansible_fix_prompt(
         file_path=file_path,
         file_content=file_content,
     )
+    user_prompt += remediation_block(findings)
     return ANSIBLE_FIX_SYSTEM_PROMPT, user_prompt

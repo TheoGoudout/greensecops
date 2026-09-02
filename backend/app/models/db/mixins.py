@@ -134,6 +134,24 @@ class FindingMixin(SQLModel):
     ignored_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
 
 
+class ManualWorkMixin(SQLModel):
+    """What the fix generator reported it could not resolve, and why.
+
+    Set from the LLM's own ``<unfixed>`` block: the finding cannot be fixed by
+    editing this file — it needs external setup, a multi-file refactor, or the
+    file's own comments say the current state is deliberate. The PR body lists
+    these under "Needs Manual Work" instead of claiming them as fixed, and a
+    rewrite that resolves *nothing* is withheld from delivery entirely.
+
+    Not on ``FindingMixin`` because the cloud engine has no files to rewrite and
+    so no fixes to decline — the columns would be permanently null there, which
+    is the same reason ``EngineSpec`` and ``OverviewSpec`` stay separate.
+    """
+
+    needs_manual_work: bool = Field(default=False)
+    manual_work_note: str | None = Field(default=None, max_length=1024)
+
+
 class FileFixMixin(SQLModel):
     """An LLM-generated rewrite of one file, and the PR it was delivered on.
 

@@ -4,7 +4,13 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship
 
-from .mixins import FileFixMixin, FindingMixin, RepoScanMixin, ScanTargetMixin
+from .mixins import (
+    FileFixMixin,
+    FindingMixin,
+    ManualWorkMixin,
+    RepoScanMixin,
+    ScanTargetMixin,
+)
 
 if TYPE_CHECKING:
     from .pull_request import PullRequest
@@ -58,7 +64,7 @@ class AnsibleScan(RepoScanMixin, table=True):
     )
 
 
-class AnsibleFinding(FindingMixin, table=True):
+class AnsibleFinding(FindingMixin, ManualWorkMixin, table=True):
     __tablename__ = "ansible_finding"
     __table_args__ = (
         UniqueConstraint(

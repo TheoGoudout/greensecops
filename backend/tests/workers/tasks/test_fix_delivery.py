@@ -331,8 +331,15 @@ def test_commit_message_counts_only_the_issues_the_diff_resolves(
     assert messages[wf.path] == f"Fixing 2 issues in {wf.path}"
 
 
-def test_commit_message_when_the_rewrite_resolved_nothing(db: Session) -> None:
-    """Every finding unfixable: say so rather than claiming "0 issues"."""
+def test_a_rewrite_that_resolved_nothing_is_not_delivered(db: Session) -> None:
+    """Every finding unfixable: withhold the rewrite instead of pushing it.
+
+    The generator declined every issue it was given, so whatever came back is an
+    edit no issue asked for. One of these shipped: it flipped
+    `persist-credentials: true` to `false` on a workflow whose own comment said
+    the action required it, under a commit subject that admitted no issues had
+    been resolved.
+    """
     repo, fix = _build_ready_fix(db)
     wf = db.get(WorkflowFile, fix.workflow_file_id)
     assert wf is not None
@@ -360,5 +367,8 @@ def test_commit_message_when_the_rewrite_resolved_nothing(db: Session) -> None:
             pr_body="b",
         )
 
-    messages = mock_deliver.await_args.kwargs["commit_messages"]
-    assert messages[wf.path] == f"Updating {wf.path} (no issues resolved automatically)"
+    mock_deliver.assert_not_awaited()
+    db.refresh(fix)
+    assert fix.status == FixStatus.no_op
+    assert fix.error_message is not None
+    assert "resolved none of its findings" in fix.error_message

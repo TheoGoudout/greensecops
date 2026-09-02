@@ -41,6 +41,21 @@ logger = logging.getLogger(__name__)
 _FORCED_STATUSES = (FixStatus.ready, FixStatus.delivered, FixStatus.failed)
 
 
+def _resolves_something(fix: Any) -> bool:
+    """Whether this rewrite resolves any finding it was generated for.
+
+    A generator that declines every finding it was given still returns a file,
+    and that file is an edit nobody asked for. The workflow engine shipped one:
+    it flipped `persist-credentials` on a workflow whose own comment said the
+    action required it, under a commit subject that said no issues had been
+    resolved. Withhold it here rather than push it.
+    """
+    open_findings = [f for f in fix.findings if f.resolved_at is None]
+    if not open_findings:
+        return True
+    return any(not f.needs_manual_work for f in open_findings)
+
+
 class FixFetchError(Exception):
     """Raised when the target's current files cannot be fetched from GitHub.
 
@@ -49,8 +64,19 @@ class FixFetchError(Exception):
     """
 
 
+def _finding_line(finding: Any) -> str:
+    slug = finding.rule.slug if finding.rule else "finding"
+    return f"- **{slug}** ({finding.severity.value}): {finding.message}"
+
+
 def build_pr_body(spec: EngineSpec, fixes: list[Any]) -> str:
-    """The PR description: one section per file, listing what it fixes."""
+    """The PR description: one section per file, listing what it fixes.
+
+    A finding the generator reported under ``<unfixed>`` is listed separately
+    rather than counted as fixed. Claiming one is worse than omitting it: the
+    reviewer reads the table, sees the rule named, and assumes the diff below
+    addresses it.
+    """
     lines = [
         f"## {settings.PROJECT_NAME} {spec.label} fixes",
         "",
@@ -58,11 +84,33 @@ def build_pr_body(spec: EngineSpec, fixes: list[Any]) -> str:
         f"by {settings.PROJECT_NAME} static analysis.",
         "",
     ]
+    manual: list[tuple[str, Any]] = []
     for fix in sorted(fixes, key=lambda f: f.file_path):
         lines.append(f"### `{fix.file_path}`")
         for finding in (f for f in fix.findings if f.resolved_at is None):
-            slug = finding.rule.slug if finding.rule else "finding"
-            lines.append(f"- **{slug}** ({finding.severity.value}): {finding.message}")
+            if finding.needs_manual_work:
+                manual.append((fix.file_path, finding))
+                continue
+            lines.append(_finding_line(finding))
+        lines.append("")
+    if manual:
+        lines += [
+            "---",
+            "",
+            "## Needs manual work",
+            "",
+            f"{len(manual)} finding{'s' if len(manual) != 1 else ''} "
+            f"{'were' if len(manual) != 1 else 'was'} analysed but **not** "
+            "changed by this PR — they need a judgement call this diff cannot "
+            "make for you.",
+            "",
+        ]
+        for path, finding in manual:
+            note = (finding.manual_work_note or "").strip()
+            lines.append(
+                f"- `{path}` — {_finding_line(finding)[2:]}"
+                + (f" _{note}_" if note else "")
+            )
         lines.append("")
     return "\n".join(lines)
 
@@ -108,7 +156,7 @@ def deliver_file_fixes(
                     else status_col == FixStatus.ready
                 )
             ).all()
-            if fix.full_content
+            if fix.full_content and _resolves_something(fix)
         ]
         if not fixes:
             return {"status": "error", "detail": "no_ready_fixes"}
@@ -159,7 +207,18 @@ def deliver_file_fixes(
             file_changes.append((fix.file_path, fix.full_content or ""))
             if fix.file_path in base_by_path:
                 expected_base_contents[fix.file_path] = base_by_path[fix.file_path]
-            n = len([f for f in fix.findings if f.resolved_at is None])
+            # Only what this diff actually resolves — a finding the generator
+            # reported under <unfixed> is in the PR body's "needs manual work"
+            # section, and a commit claiming it would contradict the body
+            # describing the same change. `_resolves_something` has already
+            # withheld the fixes where that count would be zero.
+            n = len(
+                [
+                    f
+                    for f in fix.findings
+                    if f.resolved_at is None and not f.needs_manual_work
+                ]
+            )
             commit_messages[fix.file_path] = (
                 f"Fixing {n} finding{'s' if n != 1 else ''} in {fix.file_path}"
             )

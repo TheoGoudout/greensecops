@@ -104,6 +104,14 @@ class FixStatus(str, enum.Enum):
     # from ``delivered`` (awaiting review) — set from the pull_request merge
     # webhook, and it resolves the fix's issues with reason ``merged``.
     landed = "landed"
+    # The rewrite resolved none of the findings it was given: the generator
+    # reported every one of them as needing manual work, and what came back is
+    # an edit nobody asked for. Delivering it pushed a real regression once
+    # (PR #275 flipped `persist-credentials` on a workflow whose own comment
+    # said the credential was required), so it is now withheld. Terminal by
+    # intent rather than by failure — ``failed`` is regenerable, and retrying a
+    # fix the model correctly declined just churns the PR.
+    no_op = "no_op"
 
 
 class PullRequestState(str, enum.Enum):
