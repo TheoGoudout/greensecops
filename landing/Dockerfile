@@ -3,7 +3,7 @@
 # server runs unprivileged without a chown layer of our own. An unprivileged
 # process cannot bind a port below 1024, which is why landing/nginx.conf listens
 # on 8080 and the deployment's container port is 8080 rather than 80.
-FROM nginxinc/nginx-unprivileged:1.31.3-alpine@sha256:f972e5322b9797dc2a6b830030094426437b1ae7032e4644496395336ac6fdac
+FROM nginxinc/nginx-unprivileged:1.31.4-alpine@sha256:d9083fe47768377ef55dedafd67d4da7c2f2bc2bece7554954f29359deb0dce9
 
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
 LABEL org.opencontainers.image.licenses="MIT"

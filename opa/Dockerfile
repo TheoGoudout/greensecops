@@ -2,7 +2,7 @@
 # reproducible across builds. The -static variant is multi-arch
 # (amd64 + arm64) — required because the deployment host is arm64. Rules use
 # `import rego.v1`, the default dialect since OPA 1.0.
-FROM openpolicyagent/opa:1.19.1-static@sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32
+FROM openpolicyagent/opa:1.20.1-static@sha256:efbca2ec7decf2cf23fd93ae171280a736c17d83d9d2e21c66a8f717e8fc7f20
 
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
 LABEL org.opencontainers.image.licenses="MIT"
