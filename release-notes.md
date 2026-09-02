@@ -26,6 +26,7 @@
 
 ### Fixes
 
+* fix(fixes): stop the fix pipeline shipping edits nobody asked for. PR [#316](https://github.com/TheoGoudout/greensecops/pull/316) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(errors): show the quota message the API actually sent. PR [#313](https://github.com/TheoGoudout/greensecops/pull/313) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(pr-body): link a rule to the page that actually exists. PR [#312](https://github.com/TheoGoudout/greensecops/pull/312) by [@TheoGoudout](https://github.com/TheoGoudout).
 * fix(readme): put the badge in the row of badges, not above it. PR [#309](https://github.com/TheoGoudout/greensecops/pull/309) by [@TheoGoudout](https://github.com/TheoGoudout).
