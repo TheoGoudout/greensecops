@@ -37,13 +37,17 @@ logger = logging.getLogger(__name__)
 def _fix_commit_message(n_issues: int, path: str) -> str:
     """The commit subject for one workflow file's rewrite.
 
-    ``n_issues`` counts only what the diff resolves. Zero is reachable — the
-    generator can return a rewrite whose every finding it also reported as
-    unfixable — and "Fixing 0 issues" would be a worse claim than the one this
-    change exists to correct, so that case says what it is instead.
+    ``n_issues`` counts only what the diff resolves. Zero used to mean the
+    generator had reported every finding it was given as unfixable and the
+    rewrite was shipping anyway — one of those flipped `persist-credentials:
+    true` to `false` on a workflow whose own comment said the action required
+    it. The delivery precheck now withholds that fix instead, so the only way
+    left to reach zero is a fix with no findings attached at all (its issues
+    relinked or swept), where "0 issues" is simply the truth and there is
+    nothing to name.
     """
     if n_issues == 0:
-        return f"Updating {path} (no issues resolved automatically)"
+        return f"Updating {path}"
     return f"Fixing {n_issues} issue{'s' if n_issues != 1 else ''} in {path}"
 
 
@@ -160,6 +164,35 @@ def deliver_fixes_batch(
                     )
                 )
                 continue
+            # Only what this diff actually resolves. Counting every finding on
+            # the fix meant a commit claiming issues the PR body had already
+            # excluded as `needs_manual_work` — the commit and the description
+            # disagreed about the same change.
+            n_issues = len([f for f in fix.findings if not f.needs_manual_work])
+            # `fix.findings` empty is a different case — a fix whose issues were
+            # relinked or swept still has content worth delivering — so only a
+            # fix that *has* findings and resolved none of them is withheld.
+            if fix.findings and n_issues == 0:
+                # The generator declined every finding it was given, so whatever
+                # came back is an edit no finding asked for. Withhold it rather
+                # than pushing it under a commit subject admitting as much: a
+                # rewrite that resolves nothing has no business on the branch,
+                # and one of them broke a workflow the model had itself reported
+                # as unfixable.
+                if force:
+                    sm.force_to(fix, sm.FixMachine, FixStatus.no_op)
+                else:
+                    sm.advance(fix, sm.FixMachine, "precheck_no_op")
+                fix.error_message = (
+                    "Rewrite resolved none of its findings; nothing to deliver"
+                )
+                session.add(fix)
+                events_pub.publish_event(
+                    ev.fix_delivery_failed(
+                        org_id, repo_id_str, str(fix.id), fix.error_message
+                    )
+                )
+                continue
             seen[wf.path] = (wf.path, fix.full_content)
             # The base the rewrite was generated from, not the scan's
             # snapshot of the file. They agree in the normal case; when they
@@ -168,11 +201,6 @@ def deliver_fixes_batch(
             # remains the fallback for fixes generated before base_content
             # existed, and while an older worker is still creating them.
             expected_base_contents[wf.path] = fix.base_content or wf.raw_content
-            # Only what this diff actually resolves. Counting every finding on
-            # the fix meant a commit claiming issues the PR body had already
-            # excluded as `needs_manual_work` — the commit and the description
-            # disagreed about the same change.
-            n_issues = len([f for f in fix.findings if not f.needs_manual_work])
             commit_messages[wf.path] = _fix_commit_message(n_issues, wf.path)
             deliverable.append(fix)
         session.commit()

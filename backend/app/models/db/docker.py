@@ -11,6 +11,7 @@ from .mixins import (
     EnrichmentMixin,
     FileFixMixin,
     FindingMixin,
+    ManualWorkMixin,
     RepoScanMixin,
     ScanTargetMixin,
 )
@@ -64,7 +65,7 @@ class DockerScan(RepoScanMixin, table=True):
     )
 
 
-class DockerFinding(FindingMixin, table=True):
+class DockerFinding(FindingMixin, ManualWorkMixin, table=True):
     __tablename__ = "docker_finding"
     __table_args__ = (
         UniqueConstraint(

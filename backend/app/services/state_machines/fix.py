@@ -29,12 +29,15 @@ IN_FLIGHT_STATUSES: frozenset[FixStatus] = frozenset(
 
 # The rejection/withdrawal states — an issue whose fix is in any of these is
 # not actively being addressed. Single source of truth for the "active fix"
-# filter.
+# filter. ``no_op`` belongs here for the same reason the others do: the rewrite
+# was withheld, so the finding is still the user's to deal with and must not
+# look like it has a fix in flight.
 REJECTED_STATUSES: frozenset[FixStatus] = frozenset(
     {
         FixStatus.rejected_by_user,
         FixStatus.superseded_by_closed_pr,
         FixStatus.superseded_by_deleted_file,
+        FixStatus.no_op,
     }
 )
 
@@ -69,6 +72,10 @@ class FixMachine(StateMachine):
     # Terminal success: the fix's PR was merged. Distinct from ``delivered``
     # (awaiting review) so "landed on the branch" is queryable.
     landed = State(value=FixStatus.landed, final=True)
+    # Withheld at the delivery precheck: the rewrite resolves nothing, so there
+    # is no change worth pushing. Final — a rescan that finds the file still
+    # violating creates a fresh fix rather than reviving this one.
+    no_op = State(value=FixStatus.no_op, final=True)
 
     # Inputs (events)
     start_generation = pending.to(generating)
@@ -77,6 +84,7 @@ class FixMachine(StateMachine):
     mark_ready = ready.to.itself() | delivered.to(ready)  # type: ignore[no-untyped-call]
     start_delivery = ready.to(delivering)
     precheck_failed = ready.to(failed)
+    precheck_no_op = ready.to(no_op)
     delivery_succeeded = delivering.to(delivered)
     delivery_failed = delivering.to(failed)
     # Closed-PR delivery guard: distinct from a user rejection so it can be

@@ -26,6 +26,7 @@ from app.models import Repository
 from app.models.enums import FixStatus
 from app.services import state_machines as sm
 from app.services.engines import EngineSpec
+from app.services.llm.comment_guard import comment_deletion_error
 from app.services.llm.response import (
     parse_full_content,
     parse_unfixed_issues,
@@ -67,6 +68,100 @@ def _fail(session: Session, fix: Any, message: str) -> dict[str, object]:
     return {"status": "failed", "fix_id": str(fix.id)}
 
 
+def make_rescan(
+    merge: Callable[[list[tuple[str, str]]], Any],
+    evaluate: Callable[[Any], Any],
+) -> Callable[[list[tuple[str, str]]], set[str]]:
+    """A ``rescan`` callable from an engine's own merge and evaluate pair.
+
+    Every file engine analyses the same way — fold ``(path, content)`` pairs
+    into one document, hand it to OPA — so the only per-engine part is which
+    two functions. Wrapping the ``asyncio.run`` here keeps it out of three
+    identical worker-side copies; ``generate_file_fix`` calls the result
+    synchronously, outside its own event loop, for the reason its docstring
+    gives.
+    """
+
+    def rescan(files: list[tuple[str, str]]) -> set[str]:
+        violations = asyncio.run(evaluate(merge(files)))
+        return {v.rule_slug for v in violations}
+
+    return rescan
+
+
+def _vet_rewrite(
+    response: str,
+    original: str,
+    file_path: str,
+    fetched: list[Any],
+    validate: Callable[[str, str, str], str | None],
+    rescan: Callable[[list[tuple[str, str]]], set[str]] | None,
+) -> tuple[str | None, str | None]:
+    """The rewrite to store and why it is unusable — exactly one of them set.
+
+    Three gates, cheapest first, each one an answer to a rewrite that shipped:
+    it still parses as what it claims to be, it kept the comments the file
+    already carried, and it does not violate a rule the original did not.
+    """
+    full_content = parse_full_content(response)
+    if not full_content:
+        return None, MISSING_CONTENT_ERROR
+
+    full_content = restore_trailing_whitespace(original, full_content)
+
+    if error := validate(file_path, original, full_content):
+        logger.warning(
+            "LLM full_content for %s does not re-parse; discarding", file_path
+        )
+        return None, error
+
+    # A comment the file already carried is often the repository's answer to the
+    # very rule being fixed. Deleting it and making the change it argued against
+    # is not a fix.
+    if error := comment_deletion_error(original, full_content):
+        logger.warning("LLM full_content for %s drops comments; discarding", file_path)
+        return None, error
+
+    if rescan is not None and (
+        error := _introduced_violations_error(rescan, fetched, file_path, full_content)
+    ):
+        logger.warning("Rejecting fix for %s: %s", file_path, error)
+        return None, error
+
+    return full_content, None
+
+
+def _introduced_violations_error(
+    rescan: Callable[[list[tuple[str, str]]], set[str]],
+    fetched: list[Any],
+    file_path: str,
+    patched: str,
+) -> str | None:
+    """Rules the rewrite violates that the original did not.
+
+    Both sides are evaluated over the *whole* target, not the one file: these
+    engines fold every file into one document so a rule can correlate a Compose
+    service with the Dockerfile it builds, and a rewrite is only meaningful
+    against the same document the scan saw.
+    """
+    before_files = [(f.path, f.content) for f in fetched]
+    after_files = [
+        (f.path, patched if f.path == file_path else f.content) for f in fetched
+    ]
+    try:
+        introduced = rescan(after_files) - rescan(before_files)
+    except Exception:
+        # A rescan that cannot run is not evidence against the rewrite; the
+        # parse gate above has already had its say.
+        logger.exception("Re-scan of the rewrite of %s failed; skipping", file_path)
+        return None
+    if not introduced:
+        return None
+    return "LLM rewrite introduced violations the original did not have: " + ", ".join(
+        sorted(introduced)
+    )
+
+
 def generate_file_fix(
     spec: EngineSpec,
     target_id: uuid.UUID,
@@ -75,6 +170,7 @@ def generate_file_fix(
     fetch_files: Callable[..., Any],
     build_prompt: Callable[[str, str, list[Any]], tuple[str, str]],
     validate: Callable[[str, str, str], str | None],
+    rescan: Callable[[list[tuple[str, str]]], set[str]] | None = None,
 ) -> dict[str, object]:
     """Run one LLM call rewriting ``file_path`` to fix ``findings``.
 
@@ -89,6 +185,22 @@ def generate_file_fix(
     one produces a file that parses perfectly and does the wrong thing, so its
     guard has to diff the two. The original is fetched here rather than by the
     caller, so a closure in the task could not capture it.
+
+    ``rescan`` runs the engine's own rules over a set of ``(path, content)``
+    files and returns the slugs they violate. Given one, this re-evaluates the
+    target with the rewrite swapped in and rejects it if it violates a rule the
+    original did not — the rewrite is supposed to remove findings, and a fix
+    that trades one for another is not one. It is synchronous for the same
+    reason ``build_prompt`` is: the engines' evaluators are async, and the
+    worker that owns the merge step also owns the ``asyncio.run`` around it.
+
+    Only *introduced* violations are checked, not whether the findings asked
+    about are gone. A rule slug is not a finding — one Compose file produced
+    twenty-one ``compose_service_not_hardened`` findings — so a slug still
+    present after the rewrite cannot say which of them remains, and flagging all
+    twenty-one as unfixed on that evidence would be a worse claim than making
+    none. Telling them apart needs a per-finding fingerprint the OPA violations
+    do not carry.
     """
     with Session(engine) as session:
         target = session.get(spec.target_model, target_id)
@@ -152,17 +264,9 @@ def generate_file_fix(
             )
             return _fail(session, fix, str(exc))
 
-        full_content = parse_full_content(result.content)
-        generation_error: str | None = None
-        if not full_content:
-            generation_error = MISSING_CONTENT_ERROR
-        else:
-            full_content = restore_trailing_whitespace(source.content, full_content)
-            generation_error = validate(file_path, source.content, full_content)
-            if generation_error:
-                logger.warning(
-                    "LLM full_content for %s does not re-parse; discarding", file_path
-                )
+        full_content, generation_error = _vet_rewrite(
+            result.content, source.content, file_path, fetched, validate, rescan
+        )
 
         fix.prompt_tokens = result.prompt_tokens
         fix.completion_tokens = result.completion_tokens
@@ -173,9 +277,18 @@ def generate_file_fix(
         else:
             fix.full_content = full_content
             sm.advance(fix, sm.FixMachine, "generation_succeeded")
-            # Parsed for parity with the workflow flow; neither engine's
-            # findings carry a manual-work flag yet, so it's informational.
-            parse_unfixed_issues(result.content)
+            # The LLM's own report of which findings it couldn't resolve in
+            # this file. Re-evaluated on every attempt so a retry that succeeds
+            # clears a manual-work flag left over from an earlier one. Until
+            # these engines recorded it, a generator that correctly declined a
+            # finding — because the file's own comments said the state was
+            # deliberate — had no way to say so, and its rewrite shipped as if
+            # it had fixed everything.
+            unfixed = parse_unfixed_issues(result.content)
+            for i, finding in enumerate(findings, start=1):
+                finding.needs_manual_work = i in unfixed
+                finding.manual_work_note = unfixed.get(i)
+                session.add(finding)
         session.add(fix)
         session.commit()
 

@@ -35,6 +35,9 @@ _VALID_METADATA = """\
 # custom:
 #   severity: high
 #   detection: static_analysis
+#   examples:
+#     fix: |
+#       Do the thing the rule asks for.
 package greensecops.ci_workflow.security.example
 
 import rego.v1
@@ -83,6 +86,7 @@ def test_rule_from_path_reads_every_field(tmp_path: Path) -> None:
         "severity_weight": 1.8,
         "title": "Example rule",
         "description": "A rule used only by the registry tests.",
+        "remediation": "Do the thing the rule asks for.",
     }
 
 
@@ -151,6 +155,18 @@ def test_rule_from_path_honours_an_explicit_weight(tmp_path: Path) -> None:
             ),
             "must be a number",
             id="non-numeric-weight",
+        ),
+        # The fix prompts send this text to the model. A rule shipped without it
+        # leaves the model reinventing the remediation from the finding message
+        # alone, which is how a bare `read_only: true` reached a database
+        # service — so it fails the seed rather than merely warning in the docs.
+        pytest.param(
+            lambda body: body.replace(
+                "#   examples:\n#     fix: |\n#       Do the thing the rule asks for.\n",
+                "",
+            ),
+            "no 'custom.examples.fix'",
+            id="no-remediation",
         ),
     ],
 )

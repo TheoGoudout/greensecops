@@ -70,6 +70,10 @@ export const fixStatusColor = toneMap<FixStatus>(
     rejected_by_user: "mutedStruck",
     superseded_by_closed_pr: "mutedStruck",
     superseded_by_deleted_file: "mutedStruck",
+    // Withheld at delivery because the rewrite resolved nothing — a withdrawal
+    // like the three above it, not the yellow "still working on it" the
+    // fallback would give it.
+    no_op: "mutedStruck",
   },
   "pending",
 )

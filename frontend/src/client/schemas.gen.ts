@@ -2620,7 +2620,7 @@ export const FixFindingSummarySchema = {
 
 export const FixStatusSchema = {
     type: 'string',
-    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr', 'superseded_by_deleted_file', 'landed'],
+    enum: ['pending', 'generating', 'ready', 'delivering', 'delivered', 'failed', 'rejected_by_user', 'superseded_by_closed_pr', 'superseded_by_deleted_file', 'landed', 'no_op'],
     title: 'FixStatus'
 } as const;
 

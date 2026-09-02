@@ -129,3 +129,50 @@ test_no_violation_when_a_run_step_diffs_against_the_base if {
 	]}}}
 	count(violations) == 0
 }
+
+# A `run:` that hands off to a script in the repository puts its commands in a
+# file this rule never sees, so "no git history commands found" is a claim the
+# workflow does not support. Acting on it removed `fetch-depth: 0` from a
+# release job whose script does `git tag` and `git push --tags`, and from a
+# mirror job whose script pushes a subtree — both need the full history.
+test_no_violation_when_a_run_step_invokes_a_repo_script if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"release": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"run": ".github/scripts/release/push-commit-and-tag.sh"},
+	]}}}
+	count(violations) == 0
+}
+
+test_no_violation_when_a_run_step_invokes_a_python_script if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"b": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"run": "scripts/build.py --check"},
+	]}}}
+	count(violations) == 0
+}
+
+test_no_violation_when_a_run_step_invokes_a_dot_slash_script if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"b": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"run": "./ci/deploy.sh production"},
+	]}}}
+	count(violations) == 0
+}
+
+# The rule still fires where it can actually see the commands: an inline
+# command with arguments is not a script hand-off.
+test_violation_survives_an_inline_command_that_mentions_a_path if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"b": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"run": "npm ci && npm run build"},
+	]}}}
+	count(violations) == 1
+}
+
+test_no_violation_when_a_run_step_pushes_tags if {
+	violations := unnecessary_full_checkout.violations with input as {"jobs": {"b": {"steps": [
+		{"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+		{"run": "git push origin --tags"},
+	]}}}
+	count(violations) == 0
+}

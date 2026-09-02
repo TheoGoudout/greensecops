@@ -42,6 +42,8 @@ _history_commands := [
 	"standard-version",
 	"--from-ref",
 	"prek",
+	"git subtree",
+	"--tags",
 ]
 
 _uses_git_history(steps) if {
@@ -75,6 +77,26 @@ _uses_git_history(steps) if {
 	uses := lower(object.get(step, "uses", ""))
 	some action in _history_actions
 	startswith(uses, action)
+}
+
+# A `run:` that hands off to a script in the repository is opaque to this rule:
+# the commands are in a file the analyzer never sees. Reporting "no git history
+# commands found" about one is a claim about the workflow that the workflow does
+# not support, and acting on it removed `fetch-depth: 0` from two jobs whose
+# scripts do `git tag`, `git fetch` and a subtree push. A repository that keeps
+# its CI logic in `.github/scripts/` rather than in multi-line `run:` blocks
+# would otherwise see this fire on every job it has.
+#
+# Deliberately broad: any step whose whole command is a path to a file. An
+# inline command with arguments (`npm ci && npm run build`) still reads as
+# inline, so the rule keeps working where it can actually see the commands.
+_script_invocation := `^\s*\.?/?[\w.@-]+(/[\w.@-]+)*\.(sh|bash|py|rb|js|ts|pl)(\s|$)`
+
+_opaque_run(step) if regex.match(_script_invocation, object.get(step, "run", ""))
+
+_uses_git_history(steps) if {
+	some step in steps
+	_opaque_run(step)
 }
 
 violations contains violation if {

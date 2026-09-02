@@ -12,11 +12,13 @@ from app.models import FixStatus, Repository, WorkflowFile, WorkflowFinding, Wor
 from app.services import state_machines as sm
 from app.services.events import publisher as events_pub
 from app.services.events import schemas as ev
+from app.services.llm.comment_guard import comment_deletion_error
 from app.services.llm.response import (
     parse_full_content,
     parse_unfixed_issues,
     restore_trailing_whitespace,
 )
+from app.services.opa.evaluator import evaluate_workflow
 from app.workers.celery_app import celery_app
 
 if TYPE_CHECKING:
@@ -74,6 +76,31 @@ def _remote_workflow_content(
 
 _USES_PIN_RE = re.compile(r"uses:\s*([^\s#]+)")
 _SHA_REF_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _rule_slugs(raw_content: str) -> set[str] | None:
+    """The rules ``raw_content`` violates, or None if it cannot be evaluated."""
+    try:
+        return {v.rule_slug for v in asyncio.run(evaluate_workflow(raw_content))}
+    except Exception:
+        logger.exception("Re-scan of a workflow rewrite failed; skipping")
+        return None
+
+
+def _introduced_rule_slugs(original: str, patched: str) -> set[str]:
+    """Rules the rewrite violates that the original did not.
+
+    Evaluated without action metadata on both sides, so the four rules that
+    read it are silent for this comparison rather than differing between the
+    two calls for a reason that has nothing to do with the rewrite. An
+    evaluation that cannot run is not evidence against the rewrite: the YAML
+    gate above has already had its say, so this returns nothing.
+    """
+    before = _rule_slugs(original)
+    after = _rule_slugs(patched)
+    if before is None or after is None:
+        return set()
+    return after - before
 
 
 def unrequested_pin_changes(
@@ -498,6 +525,31 @@ def run_fix_generation(
                     wf_file.id,
                 )
                 generation_error = INVALID_YAML_ERROR
+            # A comment the workflow already carried is often the repository's
+            # answer to the very rule being fixed — the `zizmor: ignore` line
+            # explaining that an action requires its credential, the note saying
+            # a job ordering is real. Deleting it and making the change it
+            # argued against is not a fix.
+            elif comment_error := comment_deletion_error(base_content, full_content):
+                logger.warning("Rejecting fix for %s: %s", wf_file.path, comment_error)
+                generation_error = comment_error
+                full_content = None
+            # A rewrite is supposed to remove findings. One that trades a
+            # finding for a different one has not fixed the workflow, it has
+            # moved the problem — and the PR body would claim the trade as a
+            # win. Slug-level only: which of several findings on the same rule
+            # survived needs a fingerprint the violations do not carry.
+            elif introduced := _introduced_rule_slugs(base_content, full_content):
+                logger.warning(
+                    "Rejecting fix for %s: it introduced %s",
+                    wf_file.path,
+                    ", ".join(sorted(introduced)),
+                )
+                generation_error = (
+                    "LLM rewrite introduced violations the original did not "
+                    "have: " + ", ".join(sorted(introduced))
+                )
+                full_content = None
 
         fix.prompt_tokens = result.prompt_tokens
         fix.completion_tokens = result.completion_tokens

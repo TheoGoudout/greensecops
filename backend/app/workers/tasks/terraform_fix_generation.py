@@ -3,9 +3,17 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.models import TerraformFinding
 from app.services.engines import TERRAFORM_ENGINE
-from app.services.file_fix_generation import generate_file_fix, load_findings
+from app.services.file_fix_generation import (
+    generate_file_fix,
+    load_findings,
+    make_rescan,
+)
 from app.services.github.fetch import fetch_terraform_files as _fetch_terraform_files
-from app.services.terraform.hcl_parser import parse_terraform_content
+from app.services.opa.evaluator import evaluate_terraform
+from app.services.terraform.hcl_parser import (
+    merge_terraform_configs,
+    parse_terraform_content,
+)
 from app.workers.celery_app import celery_app
 
 INVALID_HCL_ERROR = "LLM returned invalid Terraform (HCL)"
@@ -66,4 +74,5 @@ def run_terraform_fix_generation(
         _fetch_terraform_files,
         _build_prompt,
         _validate,
+        make_rescan(merge_terraform_configs, evaluate_terraform),
     )
