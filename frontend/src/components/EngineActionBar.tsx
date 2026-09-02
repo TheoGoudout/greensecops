@@ -36,8 +36,31 @@ export interface OverflowItem {
   /** Renders in the destructive colour and sits below a divider. */
   destructive?: boolean
   disabled?: boolean
-  /** Shown instead of the label's tooltip when disabled. */
+  /** Shown when disabled, in the same tooltip the three buttons use. */
   reason?: string | null
+}
+
+/**
+ * An `EngineAction` as an overflow item.
+ *
+ * Removing a target and re-syncing a repository are ruled on by the same table
+ * the three buttons obey (`lib/engine-actions`), they just belong in a menu
+ * rather than the row. This is the adapter, so a caller never rebuilds
+ * `disabled` and `reason` by hand next to an action that already carries them.
+ */
+export function overflowItem(
+  action: EngineAction,
+  onSelect: () => void,
+  extra: { destructive?: boolean; label?: string } = {},
+): OverflowItem {
+  return {
+    label: extra.label ?? action.label,
+    icon: action.icon,
+    onSelect,
+    destructive: extra.destructive,
+    disabled: action.disabled,
+    reason: action.reason,
+  }
 }
 
 export interface EngineActionBarProps {
@@ -122,6 +145,37 @@ export function EngineActionButton({
   )
 }
 
+/**
+ * One overflow item, drawn.
+ *
+ * A disabled `DropdownMenuItem` receives no pointer events, so — exactly as
+ * with a disabled `<button>` — its reason needs a live wrapper to hang off.
+ * These used to fall back to a native `title`, which meant the one place the
+ * bar explains a destructive action was also the one place the explanation
+ * looked different and could not be reached from the keyboard.
+ */
+function OverflowMenuItem({ item }: { item: OverflowItem }) {
+  const element = (
+    <DropdownMenuItem
+      variant={item.destructive ? "destructive" : "default"}
+      disabled={item.disabled}
+      onSelect={item.onSelect}
+    >
+      <item.icon className="h-4 w-4" />
+      {item.label}
+    </DropdownMenuItem>
+  )
+  if (!item.disabled || !item.reason) return element
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex w-full">{element}</span>
+      </TooltipTrigger>
+      <TooltipContent side="left">{item.reason}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function EngineActionBar({
   actions,
   capabilities,
@@ -179,16 +233,7 @@ export function EngineActionBar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {overflow.map((item) => (
-              <DropdownMenuItem
-                key={item.label}
-                variant={item.destructive ? "destructive" : "default"}
-                disabled={item.disabled}
-                title={item.disabled ? (item.reason ?? undefined) : undefined}
-                onSelect={item.onSelect}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </DropdownMenuItem>
+              <OverflowMenuItem key={item.label} item={item} />
             ))}
           </DropdownMenuContent>
         </DropdownMenu>

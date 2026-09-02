@@ -14,6 +14,7 @@ import {
   mockRepositories,
   mockRules,
   mockUserMe,
+  mockWorkflowScans,
 } from "./utils/mocks"
 
 test.describe("Analysis States", () => {
@@ -28,12 +29,7 @@ test.describe("Analysis States", () => {
   })
 
   test("pending analysis shows status badge and no score", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS_PENDING })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS_PENDING)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS_PENDING.id}`)
 
@@ -43,12 +39,7 @@ test.describe("Analysis States", () => {
   })
 
   test("in_progress analysis shows status and no score", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS_IN_PROGRESS })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS_IN_PROGRESS)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS_IN_PROGRESS.id}`)
 
@@ -60,12 +51,7 @@ test.describe("Analysis States", () => {
   test("failed analysis shows error message and failed status", async ({
     page,
   }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS_FAILED })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS_FAILED)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS_FAILED.id}`)
 
@@ -74,12 +60,7 @@ test.describe("Analysis States", () => {
   })
 
   test("grade-A analysis shows 100/100 score and A badge", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS_GRADE_A })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS_GRADE_A)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS_GRADE_A.id}`)
 
@@ -89,12 +70,7 @@ test.describe("Analysis States", () => {
   })
 
   test("grade-F analysis shows low score and F badge", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS_GRADE_F })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS_GRADE_F)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS_GRADE_F.id}`)
 
@@ -104,12 +80,7 @@ test.describe("Analysis States", () => {
   })
 
   test("analysis detail shows workflow file path", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS.id}`)
 
@@ -118,12 +89,7 @@ test.describe("Analysis States", () => {
   })
 
   test("analysis detail shows branch and commit info", async ({ page }) => {
-    await page.route(
-      /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
-      (route) => {
-        route.fulfill({ json: MOCK_ANALYSIS })
-      },
-    )
+    await mockWorkflowScans(page, MOCK_ANALYSIS)
 
     await page.goto(`/analyses/${MOCK_ANALYSIS.id}`)
 

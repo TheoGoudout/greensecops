@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query
 from ruamel.yaml import YAML
+from sqlalchemy import and_, func
 from sqlmodel import Session, col, select
 
 from app import crud
@@ -14,6 +15,7 @@ from app.api.deps import (
     authorize_repo,
     get_current_active_superuser,
 )
+from app.api.engine_routes import repository_activity, require_idle
 from app.api.mappers import to_repo_public
 from app.api.router import Role, RoleRouter
 from app.core.config import settings
@@ -25,6 +27,7 @@ from app.models import (
     RepositoryPublic,
     RepositoryUpdate,
     ScanStatus,
+    TargetAction,
     User,
     WorkflowFile,
     WorkflowScan,
@@ -40,6 +43,7 @@ from app.services.scoring import (
     compute_avg_scores_batch,
     score_to_grade,
 )
+from app.services.state_machines import ACTIVE_SCAN_STATUSES
 from app.services.workflow_sync import (
     WorkflowFetchError,
     sync_workflow_files,
@@ -127,6 +131,62 @@ def _compute_grades_batch(
     return result
 
 
+def _latest_scan_statuses_batch(
+    session: Session, repo_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, ScanStatus]:
+    """The scan status each repository reports, batched over the page.
+
+    Deliberately the same definition ``engine_routes.repository_activity`` uses
+    for its scan half, and for the same reason: a CI analysis writes one
+    ``WorkflowScan`` per workflow file under a single repo-wide lock, so "the
+    newest row" is regularly a finished sibling of one still running. An
+    unfinished scan therefore wins outright, and only when there is none does
+    the newest row's outcome stand.
+
+    Batched because ``list_repositories`` runs at ``limit=200``: the naive
+    per-row read is what a target list would do 200 times.
+    """
+    if not repo_ids:
+        return {}
+
+    result: dict[uuid.UUID, ScanStatus] = {}
+    for repo_id, status in session.exec(
+        select(WorkflowScan.repo_id, WorkflowScan.status)
+        .where(col(WorkflowScan.repo_id).in_(repo_ids))
+        .where(col(WorkflowScan.status).in_(ACTIVE_SCAN_STATUSES))
+        .distinct()
+    ).all():
+        # ``running`` outranks ``queued``: both mean "in flight", but the label
+        # drawn from this should name the further-along one.
+        if result.get(repo_id) != ScanStatus.running:
+            result[repo_id] = ScanStatus(status)
+
+    settled = [r for r in repo_ids if r not in result]
+    if settled:
+        newest = (
+            select(
+                WorkflowScan.repo_id,
+                func.max(col(WorkflowScan.created_at)).label("created_at"),
+            )
+            .where(col(WorkflowScan.repo_id).in_(settled))
+            .group_by(col(WorkflowScan.repo_id))
+            .subquery()
+        )
+        for repo_id, status in session.exec(
+            select(WorkflowScan.repo_id, WorkflowScan.status).join(
+                newest,
+                and_(
+                    col(WorkflowScan.repo_id) == newest.c.repo_id,
+                    col(WorkflowScan.created_at) == newest.c.created_at,
+                ),
+            )
+        ).all():
+            # Two scans can share a timestamp — one trigger fans out per
+            # workflow file — so the first row wins rather than the last.
+            result.setdefault(repo_id, ScanStatus(status))
+    return result
+
+
 @router.get("", role=Role.user, response_model=list[RepositoryPublic])
 def list_repositories(
     session: SessionDep,
@@ -149,8 +209,17 @@ def list_repositories(
         query = query.where(Repository.enabled == enabled)
     query = query.order_by(Repository.full_name).offset(skip).limit(limit)
     repos = list(session.exec(query).all())
-    grades = _compute_grades_batch(session, [r.id for r in repos])
-    return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
+    repo_ids = [r.id for r in repos]
+    grades = _compute_grades_batch(session, repo_ids)
+    # This list is where the "Scan now" button on the Workflows page lives, so
+    # it is one of the two reads that pay for the scan-status query.
+    scanning = _latest_scan_statuses_batch(session, repo_ids)
+    return [
+        to_repo_public(
+            r, *grades.get(r.id, (None, None)), latest_scan_status=scanning.get(r.id)
+        )
+        for r in repos
+    ]
 
 
 @router.get("/external", role=Role.user, response_model=list[RepositoryPublic])
@@ -169,8 +238,15 @@ def list_external_repositories(
             .limit(limit)
         ).all()
     )
-    grades = _compute_grades_batch(session, [r.id for r in repos])
-    return [to_repo_public(r, *grades.get(r.id, (None, None))) for r in repos]
+    repo_ids = [r.id for r in repos]
+    grades = _compute_grades_batch(session, repo_ids)
+    scanning = _latest_scan_statuses_batch(session, repo_ids)
+    return [
+        to_repo_public(
+            r, *grades.get(r.id, (None, None)), latest_scan_status=scanning.get(r.id)
+        )
+        for r in repos
+    ]
 
 
 @router.post(
@@ -243,7 +319,13 @@ def get_repository(
     # Every engine's own average, so the Docker and Infrastructure headers show
     # their engine's grade rather than the CI one or the worst of their targets'.
     engine_grades = repo_engine_grades(session, [repo_id]).get(repo_id, {})
-    return to_repo_public(repo, avg_score, grade, engine_grades)
+    return to_repo_public(
+        repo,
+        avg_score,
+        grade,
+        engine_grades,
+        latest_scan_status=_latest_scan_statuses_batch(session, [repo_id]).get(repo_id),
+    )
 
 
 @router.post("/{repo_id}/workflow-sync", role=Role.org_admin, limit=LIMIT_EXPENSIVE)
@@ -268,6 +350,11 @@ def sync_repository_workflows(
     repo = _get_repo_for_user(repo_id, session, current_user)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+    # The refusal a user can see coming: same wording every other blocked action
+    # on every other engine uses, so the tooltip that greys this out and the
+    # error it prevents are one sentence. The lock below still has the last
+    # word — it is the race backstop, this is the answer.
+    require_idle(repository_activity(session, repo_id), TargetAction.sync, "repository")
 
     # Same lock the analysis worker takes. Without it a manual sync can interleave
     # with an in-flight analysis and the two race on the rows this writes.

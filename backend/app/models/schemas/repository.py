@@ -11,6 +11,7 @@ from ..enums import (
     Engine,
     PullRequestState,
     ReviewDecision,
+    ScanStatus,
     Severity,
     UserTier,
 )
@@ -47,6 +48,14 @@ class RepositoryPublic(SQLModel):
     # repos, which use plain badge URLs. The frontend appends it as ``?sig=``.
     badge_sig: str | None = None
     created_at: datetime | None = None
+    # What the CI engine is doing to this repository right now, under the same
+    # name ``ScanTargetPublicBase`` uses for the file engines' targets — a
+    # repository is the CI engine's target, and giving the concept two names
+    # would leave the UI unable to ask one question of every engine. Unfinished
+    # beats newest (see ``_latest_scan_statuses_batch``), so it says "a scan is
+    # running" even when a sibling workflow file's scan has already landed.
+    # ``None`` on the reads that do not compute it.
+    latest_scan_status: ScanStatus | None = None
     # The CI-workflow average, kept under its historical names because badges,
     # the dashboard and the repository list all read them. It is the same
     # number as the `workflow` entry in `engine_grades`.

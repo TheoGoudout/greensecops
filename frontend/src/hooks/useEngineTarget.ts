@@ -36,14 +36,26 @@ export interface EngineTargetCalls<TFile, TFinding, TFix> {
   toggle: (enabled: boolean) => Promise<unknown>
   scan: () => Promise<unknown>
   remove: () => Promise<unknown>
-  /** Empty array means "everything", matching both engines' route contracts. */
-  generate: (findingIds: string[]) => Promise<unknown>
+  /**
+   * Empty array means "everything", matching both engines' route contracts.
+   * `force` discards the fixes those findings already have and queues them
+   * again — without it the route silently skips every file whose fix is not
+   * `failed`, which is what "Regenerate" exists to get past.
+   */
+  generate: (findingIds: string[], force: boolean) => Promise<unknown>
   deliver: (force: boolean) => Promise<unknown>
   /** Noun used in the action toasts: "Terraform root", "Docker target". */
   targetLabel: string
 }
 
 type Mutation<TArgs> = UseMutationResult<unknown, Error, TArgs>
+
+/** What a "Generate fixes" click asks for: which findings, and whether to
+ * discard the fixes they already have. */
+export interface GenerateArgs {
+  findingIds: string[]
+  force?: boolean
+}
 
 export interface EngineTargetState<TFile, TFinding, TFix> {
   files: TFile[] | undefined
@@ -67,7 +79,7 @@ export interface EngineTargetState<TFile, TFinding, TFix> {
   toggleMutation: Mutation<boolean>
   scanMutation: Mutation<void>
   deleteMutation: Mutation<void>
-  generateMutation: Mutation<string[]>
+  generateMutation: Mutation<GenerateArgs>
   deliverMutation: Mutation<boolean>
 }
 
@@ -156,7 +168,12 @@ export function useEngineTarget<
       [`${keyPrefix}-findings`, targetId],
       [`${keyPrefix}-fixes`, targetId],
       [`${keyPrefix}-scans`, targetId],
+      [`${keyPrefix}-repo-fixes`],
       ["pull-requests", "repo"],
+      // Every action here spends an analysis or a fix, and the allowance those
+      // come out of is what greys the buttons out. Left stale, a user who has
+      // just spent their last one keeps a live button.
+      ["quotas"],
     ]) {
       queryClient.invalidateQueries({ queryKey: key })
     }
@@ -180,10 +197,14 @@ export function useEngineTarget<
       success: `${targetLabel} removed`,
       failure: `Could not remove ${targetLabel.toLowerCase()}`,
     }),
-    generateMutation: useAction<string[]>(calls.generate, invalidate, {
-      success: "Fix generation queued",
-      failure: "Could not queue fixes",
-    }),
+    generateMutation: useAction<GenerateArgs>(
+      ({ findingIds, force = false }) => calls.generate(findingIds, force),
+      invalidate,
+      {
+        success: "Fix generation queued",
+        failure: "Could not queue fixes",
+      },
+    ),
     deliverMutation: useAction<boolean>(calls.deliver, invalidate, {
       success: "PR queued",
       failure: "Could not queue PR",

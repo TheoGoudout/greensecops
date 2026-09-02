@@ -12,6 +12,7 @@ compares.
 
 import uuid
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import patch
 
@@ -21,27 +22,42 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.models import (
+    AnsibleFinding,
     AnsibleFix,
     AnsibleProject,
     AnsibleScan,
+    Category,
     CloudAccount,
     CloudScan,
+    DockerFinding,
     DockerFix,
     DockerScan,
     DockerTarget,
+    FindingStatus,
     FixStatus,
     LLMProvider,
     Organization,
     Repository,
+    RuleDomain,
     ScanStatus,
     ScanTrigger,
+    Severity,
+    TerraformFinding,
     TerraformFix,
     TerraformRoot,
     TerraformScan,
     UserTier,
     WorkflowScan,
 )
-from tests.fixtures.factories import make_fix, make_org, make_repo, make_workflow_file
+from tests.fixtures.factories import (
+    make_finding,
+    make_fix,
+    make_org,
+    make_repo,
+    make_rule,
+    make_scan,
+    make_workflow_file,
+)
 
 # ─── Shared fixtures ─────────────────────────────────────────────────────────
 
@@ -53,7 +69,10 @@ def org(db: Session) -> Organization:
 
 @pytest.fixture()
 def repo(db: Session, org: Organization) -> Repository:
-    return make_repo(db, org)
+    # Enabled, because these tests are about the *activity* refusals and the
+    # CI scan routes now decline a disabled repository first — the same 403
+    # every other engine raises for a disabled target.
+    return make_repo(db, org, enabled=True)
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +129,9 @@ _ENGINE_SHAPE: dict[str, dict[str, Any]] = {
         "target_model": TerraformRoot,
         "scan_model": TerraformScan,
         "fix_model": TerraformFix,
+        "finding_model": TerraformFinding,
         "fk": "terraform_root_id",
+        "domain": RuleDomain.iac_terraform,
         "collection": "terraform/roots",
         "label": "Terraform root",
     },
@@ -118,7 +139,9 @@ _ENGINE_SHAPE: dict[str, dict[str, Any]] = {
         "target_model": DockerTarget,
         "scan_model": DockerScan,
         "fix_model": DockerFix,
+        "finding_model": DockerFinding,
         "fk": "docker_target_id",
+        "domain": RuleDomain.container_docker,
         "collection": "docker/targets",
         "label": "Docker target",
     },
@@ -126,7 +149,9 @@ _ENGINE_SHAPE: dict[str, dict[str, Any]] = {
         "target_model": AnsibleProject,
         "scan_model": AnsibleScan,
         "fix_model": AnsibleFix,
+        "finding_model": AnsibleFinding,
         "fk": "ansible_project_id",
+        "domain": RuleDomain.iac_ansible,
         "collection": "ansible/projects",
         "label": "Ansible project",
     },
@@ -169,6 +194,38 @@ def _make_engine_fix(db: Session, engine: str, target: Any, status: FixStatus) -
     db.add(fix)
     db.commit()
     return fix
+
+
+def _make_engine_finding(
+    db: Session,
+    engine: str,
+    target: Any,
+    scan: Any,
+    *,
+    status: FindingStatus = FindingStatus.open,
+) -> Any:
+    shape = _ENGINE_SHAPE[engine]
+    finding = shape["finding_model"](
+        **{shape["fk"]: target.id},
+        scan_id=scan.id,
+        rule_id=make_rule(db, domain=shape["domain"]).id,
+        fingerprint=uuid.uuid4().hex[:16],
+        severity=Severity.high,
+        category=Category.security,
+        status=status,
+        message="Test violation",
+        file_path="main.tf",
+        resolved_at=(
+            datetime.now(timezone.utc) if status is FindingStatus.resolved else None
+        ),
+        ignored_at=(
+            datetime.now(timezone.utc) if status is FindingStatus.ignored else None
+        ),
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
 
 
 @pytest.mark.parametrize("engine", _FILE_ENGINES)
@@ -553,3 +610,270 @@ def test_forced_delivery_does_not_bypass_the_guard(
     )
 
     _assert_conflict(response, "a pull request is being opened", "workflow file")
+
+
+# ─── Remove, ignore and sync ─────────────────────────────────────────────────
+#
+# Not engine flows of their own, but they collide with the same in-flight work
+# and answer to the same table. Their routes had no guard at all: removing a
+# target mid-scan cascaded its scans and findings away underneath the worker
+# still writing them, and muting a finding a scan was about to resolve raced the
+# transition that mute depends on.
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+@pytest.mark.parametrize(
+    ("busy", "reason"),
+    [
+        ("scan", "a scan is already running"),
+        ("generate", "fixes are being generated"),
+        ("deliver", "a pull request is being opened"),
+    ],
+)
+def test_removing_a_target_is_refused_while_a_worker_holds_it(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+    busy: str,
+    reason: str,
+) -> None:
+    shape = _ENGINE_SHAPE[engine]
+    target = _make_target(db, engine, repo)
+    if busy == "scan":
+        _make_scan(db, engine, target, ScanStatus.running)
+    else:
+        _make_engine_fix(
+            db,
+            engine,
+            target,
+            FixStatus.generating if busy == "generate" else FixStatus.delivering,
+        )
+
+    response = client.delete(
+        _url(f"/{shape['collection']}/{target.id}"),
+        headers=superuser_token_headers,
+    )
+
+    _assert_conflict(response, reason, shape["label"])
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+def test_removing_an_idle_target_still_works(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+) -> None:
+    shape = _ENGINE_SHAPE[engine]
+    target = _make_target(db, engine, repo)
+    _make_scan(db, engine, target, ScanStatus.completed)
+
+    response = client.delete(
+        _url(f"/{shape['collection']}/{target.id}"),
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 204, response.text
+
+
+def test_removing_a_cloud_account_is_refused_while_it_scans(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    cloud_account: CloudAccount,
+) -> None:
+    """The engine where this matters most: a cloud scan holds its lock for an
+    hour, so the window in which a delete can land mid-scan is the widest."""
+    db.add(
+        CloudScan(
+            cloud_account_id=cloud_account.id,
+            status=ScanStatus.running,
+            triggered_by=ScanTrigger.manual,
+        )
+    )
+    db.commit()
+
+    response = client.delete(
+        _url(f"/cloud/accounts/{cloud_account.id}"),
+        headers=superuser_token_headers,
+    )
+
+    _assert_conflict(response, "a scan is already running", "cloud account")
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+def test_ignoring_a_finding_waits_for_a_scan_but_not_for_fix_work(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+) -> None:
+    """A scan resolves findings out from under the ignore transition; writing a
+    fix reads them and writes neither, so it lets the mute through."""
+    shape = _ENGINE_SHAPE[engine]
+    target = _make_target(db, engine, repo)
+    scan = _make_scan(db, engine, target, ScanStatus.running)
+    finding = _make_engine_finding(db, engine, target, scan)
+
+    _assert_conflict(
+        client.put(
+            _url(f"/{engine}/findings/{finding.id}/ignore"),
+            headers=superuser_token_headers,
+        ),
+        "a scan is already running",
+        shape["label"],
+    )
+
+    scan.status = ScanStatus.completed
+    _make_engine_fix(db, engine, target, FixStatus.generating)
+    db.add(scan)
+    db.commit()
+
+    allowed = client.put(
+        _url(f"/{engine}/findings/{finding.id}/ignore"),
+        headers=superuser_token_headers,
+    )
+    assert allowed.status_code == 200, allowed.text
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+def test_ignoring_a_resolved_finding_is_a_conflict_not_a_silent_no_op(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+) -> None:
+    """``FindingMachine.ignore`` has no edge from ``resolved``, so this used to
+    answer 200 with the row unchanged and let the UI say it had worked."""
+    target = _make_target(db, engine, repo)
+    scan = _make_scan(db, engine, target, ScanStatus.completed)
+    finding = _make_engine_finding(
+        db, engine, target, scan, status=FindingStatus.resolved
+    )
+
+    response = client.put(
+        _url(f"/{engine}/findings/{finding.id}/ignore"),
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 409, response.text
+    assert "cannot be ignored" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+def test_ignoring_an_already_ignored_finding_stays_idempotent(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+) -> None:
+    target = _make_target(db, engine, repo)
+    scan = _make_scan(db, engine, target, ScanStatus.completed)
+    finding = _make_engine_finding(
+        db, engine, target, scan, status=FindingStatus.ignored
+    )
+
+    response = client.put(
+        _url(f"/{engine}/findings/{finding.id}/ignore"),
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == FindingStatus.ignored.value
+
+
+def test_ignoring_a_workflow_finding_follows_the_same_two_rules(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    """The CI engine derives ``status`` from a DB trigger rather than a state
+    machine, but the two refusals it owes a user are the same ones."""
+    wf_file = make_workflow_file(db, repo, path=".github/workflows/mute.yml")
+    scan = make_scan(db, repo, wf_file, status=ScanStatus.completed)
+    rule = make_rule(db)
+    finding = make_finding(db, scan, rule, workflow_file=wf_file)
+
+    running = WorkflowScan(
+        repo_id=repo.id,
+        content_hash=uuid.uuid4().hex,
+        status=ScanStatus.running,
+        triggered_by=ScanTrigger.manual,
+    )
+    db.add(running)
+    db.commit()
+
+    _assert_conflict(
+        client.put(
+            _url(f"/workflow/findings/{finding.id}/ignore"),
+            headers=superuser_token_headers,
+        ),
+        "a scan is already running",
+        "workflow file",
+    )
+
+    db.delete(running)
+    finding.resolved_at = datetime.now(timezone.utc)
+    db.add(finding)
+    db.commit()
+
+    resolved = client.put(
+        _url(f"/workflow/findings/{finding.id}/ignore"),
+        headers=superuser_token_headers,
+    )
+    assert resolved.status_code == 409, resolved.text
+    assert "cannot be ignored" in resolved.json()["detail"]
+
+
+def test_workflow_sync_is_refused_while_an_analysis_runs(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    """Re-reading the workflow files takes the same repo-wide lock the analysis
+    holds. The lock probe already refused it, in its own private words; this is
+    the sentence the greyed button shows."""
+    db.add(
+        WorkflowScan(
+            repo_id=repo.id,
+            content_hash=uuid.uuid4().hex,
+            status=ScanStatus.running,
+            triggered_by=ScanTrigger.manual,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        _url(f"/repositories/{repo.id}/workflow-sync"),
+        headers=superuser_token_headers,
+    )
+
+    _assert_conflict(response, "a scan is already running", "repository")
+
+
+def test_a_disabled_repository_refuses_a_manual_analysis(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    org: Organization,
+) -> None:
+    """The switch means the same thing on every engine now: Terraform, Docker
+    and Ansible have always 403'd a disabled target, and the CI engine was the
+    one that accepted it."""
+    disabled = make_repo(db, org, enabled=False)
+
+    response = client.post(
+        _url(f"/workflow/repositories/{disabled.id}/scans"),
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "Repository is disabled"

@@ -19,6 +19,7 @@ from app.api.engine_routes import (
     get_finding_for_user,
     get_target_for_user,
     ignore_finding_for_user,
+    list_fixes_for_repo,
     prepare_pending_fix,
     require_target_idle,
     sarif_for_claims,
@@ -169,6 +170,9 @@ def delete_target(
     target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
     target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
+    # Cascades to its scans, findings and fixes, so a worker still holding one
+    # of them would be writing into a deleted tree.
+    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.remove)
     session.delete(target)
     session.commit()
 
@@ -422,6 +426,26 @@ def list_runtime_findings(
     return [
         to_docker_build_telemetry_public(row, by_telemetry.get(row.id, []))
         for row in mine
+    ]
+
+
+@router.get("/fixes", role=Role.user, response_model=list[DockerFixPublic])
+def list_repository_fixes(
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID,
+) -> list[DockerFixPublic]:
+    """Every fix across a repository's Docker targets.
+
+    The cross-target read beside the per-target one, matching
+    ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
+    "Update PR" may be pressed: a delivery already in flight, or a fix still
+    being generated, refuses one — and asking per target would be a request per
+    card on a page that already lists them all.
+    """
+    return [
+        to_docker_fix_public(f)
+        for f in list_fixes_for_repo(DOCKER_ENGINE, session, current_user, repo_id)
     ]
 
 

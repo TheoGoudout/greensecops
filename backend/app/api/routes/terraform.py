@@ -19,6 +19,7 @@ from app.api.engine_routes import (
     get_finding_for_user,
     get_target_for_user,
     ignore_finding_for_user,
+    list_fixes_for_repo,
     prepare_pending_fix,
     require_target_idle,
     sarif_for_claims,
@@ -151,7 +152,10 @@ def delete_root(
 ) -> None:
     root = get_target_for_user(TERRAFORM_ENGINE, root_id, session, current_user)
     # Cascades to its scans/findings (ondelete="CASCADE" on both FKs) — the
-    # user is deliberately removing this root, not just disabling it.
+    # user is deliberately removing this root, not just disabling it. Which is
+    # also why it needs the guard the disable switch does not: a worker still
+    # holding one of those rows would be writing into a deleted tree.
+    require_target_idle(TERRAFORM_ENGINE, session, root_id, TargetAction.remove)
     session.delete(root)
     session.commit()
 
@@ -309,6 +313,26 @@ def list_files(
     return [
         TerraformFilePublic(path=f.path, raw_content=f.content)
         for f in sorted(fetched, key=lambda f: f.path)
+    ]
+
+
+@router.get("/fixes", role=Role.user, response_model=list[TerraformFixPublic])
+def list_repository_fixes(
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID,
+) -> list[TerraformFixPublic]:
+    """Every fix across a repository's Terraform roots.
+
+    The cross-target read beside the per-target one, matching
+    ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
+    "Update PR" may be pressed: a delivery already in flight, or a fix still
+    being generated, refuses one — and asking per target would be a request per
+    card on a page that already lists them all.
+    """
+    return [
+        to_terraform_fix_public(f)
+        for f in list_fixes_for_repo(TERRAFORM_ENGINE, session, current_user, repo_id)
     ]
 
 

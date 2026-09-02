@@ -109,7 +109,7 @@ test.describe("Workflows", () => {
 
     await page.goto("/workflows")
 
-    await page.getByRole("button", { name: "Trigger analysis" }).click()
+    await page.getByRole("button", { name: "Scan now" }).click()
 
     expect(triggerCalled).toBe(true)
     await expect(page.getByText("Analysis queued")).toBeVisible()

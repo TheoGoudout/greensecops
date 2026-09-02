@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { AnsibleService, TerraformService } from "@/client"
+import {
+  type AnsibleFixPublic,
+  AnsibleService,
+  type TerraformFixPublic,
+  TerraformService,
+} from "@/client"
 import { EnginePullRequestsTab } from "@/components/EnginePullRequestsTab"
+import { useRepository } from "@/hooks/useRepository"
 import { ansibleFixBranch, tfFixBranch } from "@/lib/delivery"
 
 export const Route = createFileRoute(
@@ -28,6 +34,7 @@ const ANSIBLE_BRANCH_PREFIX = "greensecops/ansible-"
  */
 function InfrastructurePullRequestsTab() {
   const { repoId } = Route.useParams()
+  const { isAccessible } = useRepository(repoId)
 
   const { data: roots } = useQuery({
     queryKey: ["terraform-roots", "repo", repoId],
@@ -49,6 +56,10 @@ function InfrastructurePullRequestsTab() {
           branchPrefix={TF_BRANCH_PREFIX}
           targets={roots}
           branchForTarget={tfFixBranch}
+          isAccessible={isAccessible}
+          keyPrefix="terraform"
+          listFixes={() => TerraformService.listRepositoryFixes({ repoId })}
+          targetIdOfFix={(fix) => (fix as TerraformFixPublic).terraform_root_id}
           deliver={({ targetId, force }) =>
             TerraformService.deliverFixes({ rootId: targetId, force })
           }
@@ -63,6 +74,10 @@ function InfrastructurePullRequestsTab() {
           branchPrefix={ANSIBLE_BRANCH_PREFIX}
           targets={projects}
           branchForTarget={ansibleFixBranch}
+          isAccessible={isAccessible}
+          keyPrefix="ansible"
+          listFixes={() => AnsibleService.listRepositoryFixes({ repoId })}
+          targetIdOfFix={(fix) => (fix as AnsibleFixPublic).ansible_project_id}
           sourceTabLabel="Ansible"
           deliver={({ targetId, force }) =>
             AnsibleService.deliverFixes({

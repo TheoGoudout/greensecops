@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { GitPullRequest, Loader2 } from "lucide-react"
+import { GitPullRequest } from "lucide-react"
 import { useMemo } from "react"
 import { toast } from "sonner"
+import type { FixStatus, PullRequestPublic, ScanStatus } from "@/client"
 import { WorkflowService } from "@/client"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { StatusPill } from "@/components/StatusPill"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { apiErrorDetail } from "@/lib/api-error"
+import { engineActions, isFixInFlight } from "@/lib/engine-actions"
+import { SCAN_POLL_MS } from "@/lib/scan-polling"
 import {
   ciStatusColor,
   ciStatusLabel,
@@ -26,6 +29,13 @@ const STATE_CLASSES: Record<string, string> = {
 interface Target {
   id: string
   root_path: string
+  enabled: boolean
+  latest_scan_status?: ScanStatus | null
+}
+
+/** The minimum a fix needs for the activity rules. */
+interface Fix {
+  status: FixStatus
 }
 
 interface EnginePullRequestsTabProps {
@@ -50,6 +60,77 @@ interface EnginePullRequestsTabProps {
   sourceTabLabel?: string
   /** Re-run delivery for a target, updating (or reopening) its PR. */
   deliver: (vars: { targetId: string; force: boolean }) => Promise<unknown>
+  /** The repo's GitHub App access — a delivery is a push, so it needs it. */
+  isAccessible?: boolean
+  /**
+   * Every fix under this repository's targets, and which target each belongs
+   * to.
+   *
+   * "Update PR" is a delivery, and a delivery is refused while the target is
+   * scanning, generating or already delivering. This tab could not see any of
+   * that: it knew the PRs and the targets but never the fixes, so the button
+   * stayed live through all three and the click 409'd. The engines'
+   * cross-target `GET /{engine}/fixes` exists for this.
+   */
+  keyPrefix: string
+  listFixes: () => Promise<Fix[]>
+  targetIdOfFix: (fix: Fix) => string
+}
+
+/**
+ * Whether one PR row's "Update PR" may be pressed, and what to say if not.
+ *
+ * Redelivery is a delivery: the same table that refuses one on a scanning,
+ * generating or delivering target refuses it here, and this row had none of
+ * that — it checked only whether its own request was in flight. The two states
+ * the shared rules cannot know about are the PR's own: a merged one is
+ * finished, and a branch whose target has since been removed has nothing left
+ * to deliver from. Both are drawn greyed rather than dropped, so a reader is
+ * told why the row they are looking at has no action.
+ */
+function redeliverAction({
+  pr,
+  target,
+  isAccessible,
+  fixStatuses,
+  pending,
+}: {
+  pr: PullRequestPublic
+  target: Target | undefined
+  isAccessible: boolean
+  fixStatuses: readonly FixStatus[]
+  pending: boolean
+}) {
+  const state = pr.pr_state ?? "open"
+  const action = engineActions({
+    targetLabel: target ? "target" : "pull request",
+    scope: "target",
+    isAccessible,
+    enabled: target?.enabled,
+    scanStatus: target?.latest_scan_status,
+    fixStatuses,
+    existingPr: pr,
+    // Redelivery does not need a `ready` fix the way a first delivery does:
+    // `force` widens the worker's selection to the fixes already delivered,
+    // which is exactly what updating an open PR means.
+    reopenable: true,
+    pending: { deliver: pending },
+  }).deliver
+  if (!target) {
+    return {
+      ...action,
+      disabled: true,
+      reason: "No target on this branch to redeliver from",
+    }
+  }
+  if (state === "merged") {
+    return {
+      ...action,
+      disabled: true,
+      reason: "This pull request has been merged",
+    }
+  }
+  return action
 }
 
 /**
@@ -67,9 +148,33 @@ export function EnginePullRequestsTab({
   targets,
   branchForTarget,
   deliver,
+  isAccessible = true,
+  keyPrefix,
+  listFixes,
+  targetIdOfFix,
   sourceTabLabel = "Analysis",
 }: EnginePullRequestsTabProps) {
   const queryClient = useQueryClient()
+
+  const { data: fixes } = useQuery({
+    queryKey: [`${keyPrefix}-repo-fixes`, repoId],
+    queryFn: listFixes,
+    // A delivery queued from here is what greys these buttons; without a poll
+    // they stayed grey until a reload.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((f) => isFixInFlight(f.status))
+        ? SCAN_POLL_MS
+        : false,
+  })
+
+  const fixesByTarget = useMemo(() => {
+    const map = new Map<string, FixStatus[]>()
+    for (const fix of fixes ?? []) {
+      const id = targetIdOfFix(fix)
+      map.set(id, [...(map.get(id) ?? []), fix.status])
+    }
+    return map
+  }, [fixes, targetIdOfFix])
 
   const { data: pullRequests, isLoading } = useQuery({
     queryKey: ["pull-requests", "repo", repoId],
@@ -104,6 +209,8 @@ export function EnginePullRequestsTab({
       queryClient.invalidateQueries({
         queryKey: ["pull-requests", "repo", repoId],
       })
+      queryClient.invalidateQueries({ queryKey: [`${keyPrefix}-repo-fixes`] })
+      queryClient.invalidateQueries({ queryKey: [`${keyPrefix}-fixes`] })
     },
     onError: (error) =>
       toast.error("Failed to update PR", {
@@ -132,12 +239,20 @@ export function EnginePullRequestsTab({
               const state = pr.pr_state ?? "open"
               const lastActivity = pr.updated_at ?? pr.created_at
               const target = targetByBranch.get(pr.pr_branch)
-              const canRedeliver = target && state !== "merged"
-              // A closed PR needs the delivery forced to reopen it.
+              // A closed PR needs the delivery forced to reopen it; a merged
+              // one is finished, and a branch whose target is gone has nothing
+              // to redeliver from. Both are said rather than hidden.
               const force = state === "closed"
               const isPending =
                 deliverMutation.isPending &&
                 deliverMutation.variables?.targetId === target?.id
+              const action = redeliverAction({
+                pr,
+                target,
+                isAccessible,
+                fixStatuses: target ? (fixesByTarget.get(target.id) ?? []) : [],
+                pending: isPending,
+              })
               return (
                 <div
                   key={pr.id}
@@ -204,31 +319,14 @@ export function EnginePullRequestsTab({
                           : "—"}
                       </span>
                     </div>
-                    {canRedeliver && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1.5 shrink-0"
-                        onClick={() =>
-                          deliverMutation.mutate({
-                            targetId: target.id,
-                            force,
-                          })
-                        }
-                        disabled={isPending}
-                      >
-                        {isPending ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <GitPullRequest className="h-3 w-3" />
-                        )}
-                        {isPending
-                          ? "Queuing…"
-                          : force
-                            ? "Reopen PR"
-                            : "Update PR"}
-                      </Button>
-                    )}
+                    <EngineActionButton
+                      action={action}
+                      compact
+                      onClick={() =>
+                        target &&
+                        deliverMutation.mutate({ targetId: target.id, force })
+                      }
+                    />
                   </div>
                 </div>
               )

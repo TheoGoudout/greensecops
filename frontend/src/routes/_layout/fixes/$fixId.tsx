@@ -1,19 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { AlertCircle, ArrowLeft, GitPullRequest, RefreshCw } from "lucide-react"
+import { AlertCircle, ArrowLeft, GitPullRequest } from "lucide-react"
+import { useMemo } from "react"
 import { toast } from "sonner"
-import { WorkflowService } from "@/client"
+import { type PullRequestPublic, WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { FileViewer } from "@/components/FileViewer"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
+import { deliverAction } from "@/lib/delivery"
+import { fixActions, isFixInFlight, targetActivity } from "@/lib/engine-actions"
 import { formatDateTime } from "@/lib/format"
+import { SCAN_POLL_MS } from "@/lib/scan-polling"
 import { fixStatusColor } from "@/lib/status-colors"
 
 type FixDetailSearch = { repoId?: string }
@@ -40,10 +45,37 @@ function FixDetail() {
   } = useQuery({
     queryKey: ["fix", fixId],
     queryFn: () => WorkflowService.getFix({ fixId }),
+    // Nothing else refreshes this page, so a fix left `generating` sat there
+    // while the three buttons below stayed greyed for a worker that had
+    // finished.
+    refetchInterval: (query) =>
+      isFixInFlight(query.state.data?.status) ? SCAN_POLL_MS : false,
   })
 
+  // Everything the three buttons need beyond the fix's own status: whether the
+  // repository is still reachable, whether an analysis is running (which is
+  // repo-wide on this engine and refuses a delivery), and whether a pull
+  // request already exists on this fix's branch.
+  const { isAccessible } = useRepository(repoId)
+  const { data: scans } = useQuery({
+    queryKey: ["scans", repoId],
+    queryFn: () => WorkflowService.listScans({ repoId: repoId!, limit: 100 }),
+    enabled: !!repoId,
+  })
+  const { data: pullRequests } = useQuery({
+    queryKey: ["pull-requests", "repo", repoId],
+    queryFn: () => WorkflowService.listPullRequests({ repoId: repoId! }),
+    enabled: !!repoId,
+  })
+  const prByBranch = useMemo(() => {
+    const map = new Map<string, PullRequestPublic>()
+    for (const pr of pullRequests ?? []) map.set(pr.pr_branch, pr)
+    return map
+  }, [pullRequests])
+
   const deliverMutation = useMutation({
-    mutationFn: () => WorkflowService.deliverFix({ fixId }),
+    mutationFn: (force: boolean) =>
+      WorkflowService.deliverFix({ fixId, force }),
     onSuccess: () => {
       toast.success("PR creation queued")
       queryClient.invalidateQueries({ queryKey: ["fix", fixId] })
@@ -89,6 +121,27 @@ function FixDetail() {
 
   const findings = fix?.findings ?? []
 
+  // One statement of what this fix may do, from the same tables the engine
+  // pages read: `FixMachine`'s transitions for the status, the activity table
+  // for what the repository is busy with, and `deliverAction` for the one thing
+  // neither knows — that a withdrawn fix whose PR was closed can be reopened.
+  const actions = fixActions({
+    status: fix?.status,
+    isAccessible: repoId ? isAccessible : undefined,
+    activity: targetActivity({
+      targetLabel: "workflow file",
+      scope: "file",
+      scanStatus: (scans ?? []).map((a) => a.status),
+      fixStatuses: fix ? [fix.status] : [],
+    }),
+    delivery: fix ? deliverAction(fix, prByBranch) : null,
+    pending: {
+      deliver: deliverMutation.isPending || deliverMutation.isSuccess,
+      retry: retryMutation.isPending || retryMutation.isSuccess,
+      reject: rejectMutation.isPending,
+    },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -109,49 +162,22 @@ function FixDetail() {
         </div>
         {fix && (
           <div className="flex items-center gap-2">
-            {fix.status === "ready" && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => rejectMutation.mutate()}
-                  disabled={rejectMutation.isPending}
-                >
-                  {rejectMutation.isPending ? "Rejecting…" : "Reject"}
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => deliverMutation.mutate()}
-                  disabled={
-                    deliverMutation.isPending || deliverMutation.isSuccess
-                  }
-                >
-                  <GitPullRequest className="h-4 w-4" />
-                  {deliverMutation.isPending
-                    ? "Queuing…"
-                    : deliverMutation.isSuccess
-                      ? "Queued"
-                      : "Create PR"}
-                </Button>
-              </>
-            )}
-            {fix.status === "failed" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => retryMutation.mutate()}
-                disabled={retryMutation.isPending || retryMutation.isSuccess}
-              >
-                <RefreshCw className="h-4 w-4" />
-                {retryMutation.isPending
-                  ? "Retrying…"
-                  : retryMutation.isSuccess
-                    ? "Queued"
-                    : "Retry"}
-              </Button>
-            )}
+            {/* All three, always. They used to appear only in the state that
+                made them live — Reject and Create PR on a `ready` fix, Retry on
+                a `failed` one — so a user looking at a rejected or no-op fix
+                got an empty header and no account of why. */}
+            <EngineActionButton
+              action={actions.reject}
+              onClick={() => rejectMutation.mutate()}
+            />
+            <EngineActionButton
+              action={actions.retry}
+              onClick={() => retryMutation.mutate()}
+            />
+            <EngineActionButton
+              action={actions.deliver}
+              onClick={() => deliverMutation.mutate(actions.deliver.force)}
+            />
             {fix.pr_url && (
               <a
                 href={fix.pr_url}

@@ -854,9 +854,10 @@ derived, and it is the machine the engine pages' buttons actually obey.
 A scan target — a Terraform root, a Docker target, an Ansible project, a cloud
 account, a workflow file, or a whole repository on the CI engine — has no
 status column of its own. What it is *doing* is the union of its latest scan's
-status and its fixes' statuses, and that union decides which of the three
-actions every engine offers (`POST .../scans`, `POST .../fixes`,
-`POST .../deliveries`) may run.
+status and its fixes' statuses, and that union decides which of the actions
+every engine offers may run — the three engine flows (`POST .../scans`,
+`POST .../fixes`, `POST .../deliveries`) plus removing the target, muting one
+of its findings and re-reading its files from GitHub.
 
 Code: [`services/state_machines/engine_target.py`](../backend/app/services/state_machines/engine_target.py)
 (the pure rule), `api/engine_routes.py` (`require_idle` / `require_target_idle`,
@@ -884,21 +885,46 @@ because it names the shorter, more specific wait.
 
 ### Which activity blocks which action
 
-| | `scan` | `generate` | `deliver` |
-|---|---|---|---|
-| `idle` | ✅ | ✅ | ✅ |
-| `scanning` | ❌ | ❌ | ❌ |
-| `generating` | ❌ | ✅ | ❌ |
-| `delivering` | ❌ | ❌ | ❌ |
+| | `scan` | `generate` | `deliver` | `remove` | `ignore` | `sync` |
+|---|---|---|---|---|---|---|
+| `idle` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `scanning` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `generating` | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| `delivering` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 
-`generate` is the one action a `generating` target still allows: writing a fix
-for file B while file A's is in flight is ordinary work, and
+`generate` is the one *engine* action a `generating` target still allows:
+writing a fix for file B while file A's is in flight is ordinary work, and
 `prepare_pending_fix` already declines to reset a file whose own fix a worker
-holds.
+holds. `remove` joins the one-at-a-time majority because deleting a target
+cascades its scans, findings and fixes away (`ondelete="CASCADE"`) underneath
+whoever is holding them.
+
+`ignore` and `sync` are the two a scan alone refuses. They are not engine flows,
+but they touch exactly what a scan rewrites: `resolve_stale_findings` moves a
+finding out from under the `ignore` transition, and `static_analysis` holds
+`WorkflowFile.raw_content` under a repo-wide lock. Fix generation and delivery
+read both and write neither, so they let them through.
 
 A refusal is a **409** reading
 `Cannot <action> while <reason> for this <target>`, e.g.
 `Cannot open a pull request while a scan is already running for this Terraform root`.
+
+### Two conditions that are not activity
+
+The buttons obey two standing conditions before they reach this table, both
+enforced server-side and both restated in `engine-actions.ts` so the tooltip is
+the error it prevents rather than a paraphrase of it:
+
+- **The target's switch.** A disabled root, target, project or account answers
+  **403 `<Target> is disabled`** — and now so does a disabled repository on the
+  CI engine, which was the one engine that accepted a manual scan anyway.
+- **The org's allowance.** `enforce_quota` answers **402** with a sentence naming
+  the plan, the cap and the upgrade.
+  `GET /billing/organizations/{org_id}/quotas` hands that same sentence over
+  before the click, built by the same `errors.quota_exceeded`. It resolves
+  through the org's **billing owner**, which is who enforcement measures;
+  `GET /billing/usage` reports the *caller's* own subscription and would grey
+  the wrong buttons for a teammate on a shared org.
 
 ### Scope
 
@@ -929,6 +955,16 @@ of one still running.
 - **Failed scans.** `failed` and `no_targets` are finished outcomes. Counting
   them as activity would leave a target permanently unscannable after one bad
   run.
+- **The enable switch itself.** Disabling a target mid-scan is a preference
+  applied to the next run, not an action on the work in flight.
+- **Rejecting a fix.** `FixMachine.reject` is legal from `delivering`, and
+  dismissing a fix needs no GitHub call, so it answers to its own status alone.
+- **Removing a target on an inaccessible repository.** The delete has no access
+  check and should not: cleaning up after an uninstalled App is exactly when
+  someone reaches for it. Same for muting a finding, which is a database write.
+- **The PR-comment `/greensecops ignore` command.** It writes `ignored_at`
+  directly for every finding sharing a fingerprint. A bulk mute is not a click
+  on a button that should have been grey.
 
 **Why 409 rather than the old 202:** the duplicate was already being discarded
 — by the Redis lock in the worker, or by `prepare_pending_fix` — but nothing

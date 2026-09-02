@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleGetFindingData, AnsibleGetFindingResponse, AnsibleIgnoreFindingData, AnsibleIgnoreFindingResponse, AnsibleUnignoreFindingData, AnsibleUnignoreFindingResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AnsibleGetSarifData, AnsibleGetSarifResponse, AnsibleTriggerScansForCodeScanningData, AnsibleTriggerScansForCodeScanningResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BadgesGetCloudAccountBadgeData, BadgesGetCloudAccountBadgeResponse, BadgesGetCloudAccountBadgeJsonData, BadgesGetCloudAccountBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, CloudGetFindingData, CloudGetFindingResponse, CloudIgnoreFindingData, CloudIgnoreFindingResponse, CloudUnignoreFindingData, CloudUnignoreFindingResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerGetFindingData, DockerGetFindingResponse, DockerIgnoreFindingData, DockerIgnoreFindingResponse, DockerUnignoreFindingData, DockerUnignoreFindingResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, DockerGetSarifData, DockerGetSarifResponse, DockerTriggerScansForCodeScanningData, DockerTriggerScansForCodeScanningResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformGetFindingData, TerraformGetFindingResponse, TerraformIgnoreFindingData, TerraformIgnoreFindingResponse, TerraformUnignoreFindingData, TerraformUnignoreFindingResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, TerraformGetSarifData, TerraformGetSarifResponse, TerraformTriggerScansForCodeScanningData, TerraformTriggerScansForCodeScanningResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowTriggerScansForCodeScanningData, WorkflowTriggerScansForCodeScanningResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowGetSarifData, WorkflowGetSarifResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
+import type { AnsibleCreateProjectData, AnsibleCreateProjectResponse, AnsibleListProjectsData, AnsibleListProjectsResponse, AnsibleUpdateProjectData, AnsibleUpdateProjectResponse, AnsibleDeleteProjectData, AnsibleDeleteProjectResponse, AnsibleTriggerScanData, AnsibleTriggerScanResponse, AnsibleListScansData, AnsibleListScansResponse, AnsibleListFindingsData, AnsibleListFindingsResponse, AnsibleGetFindingData, AnsibleGetFindingResponse, AnsibleIgnoreFindingData, AnsibleIgnoreFindingResponse, AnsibleUnignoreFindingData, AnsibleUnignoreFindingResponse, AnsibleListFilesData, AnsibleListFilesResponse, AnsibleListRepositoryFixesData, AnsibleListRepositoryFixesResponse, AnsibleListFixesData, AnsibleListFixesResponse, AnsibleGenerateFixesData, AnsibleGenerateFixesResponse, AnsibleDeliverFixesData, AnsibleDeliverFixesResponse, AnsibleGetSarifData, AnsibleGetSarifResponse, AnsibleTriggerScansForCodeScanningData, AnsibleTriggerScansForCodeScanningResponse, AuthGithubCallbackData, AuthGithubCallbackResponse, AuthCreateTokenData, AuthCreateTokenResponse, AuthVerifyTokenResponse, AuthRecoverPasswordData, AuthRecoverPasswordResponse, AuthResetPasswordData, AuthResetPasswordResponse, AuthRegisterUserData, AuthRegisterUserResponse, BadgesGetBadgeData, BadgesGetBadgeResponse, BadgesGetBadgeJsonData, BadgesGetBadgeJsonResponse, BadgesGetTerraformRootBadgeData, BadgesGetTerraformRootBadgeResponse, BadgesGetTerraformRootBadgeJsonData, BadgesGetTerraformRootBadgeJsonResponse, BadgesGetAnsibleProjectBadgeData, BadgesGetAnsibleProjectBadgeResponse, BadgesGetAnsibleProjectBadgeJsonData, BadgesGetAnsibleProjectBadgeJsonResponse, BadgesGetDockerTargetBadgeData, BadgesGetDockerTargetBadgeResponse, BadgesGetDockerTargetBadgeJsonData, BadgesGetDockerTargetBadgeJsonResponse, BadgesGetCloudAccountBadgeData, BadgesGetCloudAccountBadgeResponse, BadgesGetCloudAccountBadgeJsonData, BadgesGetCloudAccountBadgeJsonResponse, BillingListPlansResponse, BillingGetSubscriptionResponse, BillingGetUsageResponse, BillingGetOrgQuotasData, BillingGetOrgQuotasResponse, BillingGetTierLimitsResponse, BillingListInvoicesResponse, BillingCreateCheckoutSessionData, BillingCreateCheckoutSessionResponse, BillingCreatePortalSessionResponse, BillingListOssApplicationsResponse, BillingCreateOssApplicationData, BillingCreateOssApplicationResponse, BillingListAllOssApplicationsData, BillingListAllOssApplicationsResponse, BillingReviewOssApplicationData, BillingReviewOssApplicationResponse, CloudCreateAccountData, CloudCreateAccountResponse, CloudListAccountsData, CloudListAccountsResponse, CloudUpdateAccountData, CloudUpdateAccountResponse, CloudDeleteAccountData, CloudDeleteAccountResponse, CloudTriggerScanData, CloudTriggerScanResponse, CloudListScansData, CloudListScansResponse, CloudListFindingsData, CloudListFindingsResponse, CloudGetFindingData, CloudGetFindingResponse, CloudIgnoreFindingData, CloudIgnoreFindingResponse, CloudUnignoreFindingData, CloudUnignoreFindingResponse, DockerCreateTargetData, DockerCreateTargetResponse, DockerListTargetsData, DockerListTargetsResponse, DockerUpdateTargetData, DockerUpdateTargetResponse, DockerDeleteTargetData, DockerDeleteTargetResponse, DockerTriggerScanData, DockerTriggerScanResponse, DockerListScansData, DockerListScansResponse, DockerListFindingsData, DockerListFindingsResponse, DockerGetFindingData, DockerGetFindingResponse, DockerIgnoreFindingData, DockerIgnoreFindingResponse, DockerUnignoreFindingData, DockerUnignoreFindingResponse, DockerListFilesData, DockerListFilesResponse, DockerListRuntimeFindingsData, DockerListRuntimeFindingsResponse, DockerListRepositoryFixesData, DockerListRepositoryFixesResponse, DockerListFixesData, DockerListFixesResponse, DockerGenerateFixesData, DockerGenerateFixesResponse, DockerGenerateRuntimeFixesData, DockerGenerateRuntimeFixesResponse, DockerDeliverFixesData, DockerDeliverFixesResponse, DockerGetSarifData, DockerGetSarifResponse, DockerTriggerScansForCodeScanningData, DockerTriggerScansForCodeScanningResponse, EventsGetSseSignalsResponse, EventsGetSseEventSchemaResponse, EventsCreateSseTicketResponse, EventsStreamEventsData, EventsStreamEventsResponse, InstallationsListInstallationsResponse, InstallationsSyncInstallationsData, InstallationsSyncInstallationsResponse, OrganizationsListAiProvidersResponse, OrganizationsListMyOrganizationsResponse, OrganizationsUpdateOrganizationData, OrganizationsUpdateOrganizationResponse, OverviewGetOverviewData, OverviewGetOverviewResponse, PrivateCreateUserData, PrivateCreateUserResponse, RepositoriesListRepositoriesData, RepositoriesListRepositoriesResponse, RepositoriesListExternalRepositoriesData, RepositoriesListExternalRepositoriesResponse, RepositoriesCreateExternalRepositoryData, RepositoriesCreateExternalRepositoryResponse, RepositoriesGetRepositoryData, RepositoriesGetRepositoryResponse, RepositoriesUpdateRepositoryData, RepositoriesUpdateRepositoryResponse, RepositoriesSyncRepositoryWorkflowsData, RepositoriesSyncRepositoryWorkflowsResponse, RepositoriesListRepositoryBranchesData, RepositoriesListRepositoryBranchesResponse, RepositoriesIntegrateActionData, RepositoriesIntegrateActionResponse, RulesListRulesData, RulesListRulesResponse, RulesGetRuleData, RulesGetRuleResponse, RulesUpdateRuleData, RulesUpdateRuleResponse, SystemTestEmailData, SystemTestEmailResponse, SystemHealthResponse, SystemVersionResponse, TelemetryIngestRunData, TelemetryIngestRunResponse, TelemetryIngestDockerBuildData, TelemetryIngestDockerBuildResponse, TelemetryIngestSampleData, TelemetryIngestSampleResponse, TelemetryGetSummaryData, TelemetryGetSummaryResponse, TelemetryListFindingsData, TelemetryListFindingsResponse, TelemetryTriggerScanData, TelemetryTriggerScanResponse, TerraformCreateRootData, TerraformCreateRootResponse, TerraformListRootsData, TerraformListRootsResponse, TerraformUpdateRootData, TerraformUpdateRootResponse, TerraformDeleteRootData, TerraformDeleteRootResponse, TerraformTriggerScanData, TerraformTriggerScanResponse, TerraformListScansData, TerraformListScansResponse, TerraformListFindingsData, TerraformListFindingsResponse, TerraformGetFindingData, TerraformGetFindingResponse, TerraformIgnoreFindingData, TerraformIgnoreFindingResponse, TerraformUnignoreFindingData, TerraformUnignoreFindingResponse, TerraformListFilesData, TerraformListFilesResponse, TerraformListRepositoryFixesData, TerraformListRepositoryFixesResponse, TerraformListFixesData, TerraformListFixesResponse, TerraformGenerateFixesData, TerraformGenerateFixesResponse, TerraformDeliverFixesData, TerraformDeliverFixesResponse, TerraformGetSarifData, TerraformGetSarifResponse, TerraformTriggerScansForCodeScanningData, TerraformTriggerScansForCodeScanningResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, WebhooksGithubWebhookData, WebhooksGithubWebhookResponse, WebhooksStripeWebhookData, WebhooksStripeWebhookResponse, WorkflowListScansData, WorkflowListScansResponse, WorkflowTriggerScansForCodeScanningData, WorkflowTriggerScansForCodeScanningResponse, WorkflowGetScanData, WorkflowGetScanResponse, WorkflowTriggerRepositoryScanData, WorkflowTriggerRepositoryScanResponse, WorkflowTriggerFileScanData, WorkflowTriggerFileScanResponse, WorkflowBackfillScansResponse, WorkflowListFilesData, WorkflowListFilesResponse, WorkflowGetSarifData, WorkflowGetSarifResponse, WorkflowListFindingsData, WorkflowListFindingsResponse, WorkflowGetFindingStatsData, WorkflowGetFindingStatsResponse, WorkflowGetFindingData, WorkflowGetFindingResponse, WorkflowIgnoreFindingData, WorkflowIgnoreFindingResponse, WorkflowUnignoreFindingData, WorkflowUnignoreFindingResponse, WorkflowListFixesData, WorkflowListFixesResponse, WorkflowListPullRequestsData, WorkflowListPullRequestsResponse, WorkflowGetFixData, WorkflowGetFixResponse, WorkflowRejectFixData, WorkflowRejectFixResponse, WorkflowGenerateRepositoryFixesData, WorkflowGenerateRepositoryFixesResponse, WorkflowDeliverFixData, WorkflowDeliverFixResponse, WorkflowDeliverRepositoryFixesData, WorkflowDeliverRepositoryFixesResponse, WorkflowRegenerateRepositoryFixesData, WorkflowRegenerateRepositoryFixesResponse, WorkflowRegenerateFixData, WorkflowRegenerateFixResponse, WorkflowRetryFixData, WorkflowRetryFixResponse, WorkflowSyncPullRequestStatusesData, WorkflowSyncPullRequestStatusesResponse } from './types.gen';
 
 export class AnsibleService {
     /**
@@ -245,6 +245,33 @@ export class AnsibleService {
             },
             query: {
                 ref: data.ref
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Repository Fixes
+     * Every fix across a repository's Ansible projects.
+     *
+     * The cross-target read beside the per-target one, matching
+     * ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
+     * "Update PR" may be pressed: a delivery already in flight, or a fix still
+     * being generated, refuses one — and asking per target would be a request per
+     * card on a page that already lists them all.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns AnsibleFixPublic Successful Response
+     * @throws ApiError
+     */
+    public static listRepositoryFixes(data: AnsibleListRepositoryFixesData): CancelablePromise<AnsibleListRepositoryFixesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/ansible/fixes',
+            query: {
+                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'
@@ -806,6 +833,34 @@ export class BillingService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/billing/usage'
+        });
+    }
+
+    /**
+     * Get Org Quotas
+     * What ``org_id`` may still spend, and the refusal if it may not.
+     *
+     * Distinct from ``GET /billing/usage``, which reports the *caller's* own
+     * subscription: enforcement measures the org's **billing owner**
+     * (``quota.state_for_org``), so a teammate reading their own numbers would be
+     * shown an allowance they are not actually spending against. This endpoint is
+     * what the engine pages read to grey a button out before it is pressed, so it
+     * has to answer the same question ``enforce_quota`` does.
+     * @param data The data for the request.
+     * @param data.orgId
+     * @returns OrgQuotasPublic Successful Response
+     * @throws ApiError
+     */
+    public static getOrgQuotas(data: BillingGetOrgQuotasData): CancelablePromise<BillingGetOrgQuotasResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/billing/organizations/{org_id}/quotas',
+            path: {
+                org_id: data.orgId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
         });
     }
 
@@ -1429,6 +1484,33 @@ export class DockerService {
             url: '/api/v1/docker/targets/{target_id}/runtime-findings',
             path: {
                 target_id: data.targetId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
+     * List Repository Fixes
+     * Every fix across a repository's Docker targets.
+     *
+     * The cross-target read beside the per-target one, matching
+     * ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
+     * "Update PR" may be pressed: a delivery already in flight, or a fix still
+     * being generated, refuses one — and asking per target would be a request per
+     * card on a page that already lists them all.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns DockerFixPublic Successful Response
+     * @throws ApiError
+     */
+    public static listRepositoryFixes(data: DockerListRepositoryFixesData): CancelablePromise<DockerListRepositoryFixesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/docker/fixes',
+            query: {
+                repo_id: data.repoId
             },
             errors: {
                 422: 'Validation Error'
@@ -2540,6 +2622,33 @@ export class TerraformService {
     }
 
     /**
+     * List Repository Fixes
+     * Every fix across a repository's Terraform roots.
+     *
+     * The cross-target read beside the per-target one, matching
+     * ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
+     * "Update PR" may be pressed: a delivery already in flight, or a fix still
+     * being generated, refuses one — and asking per target would be a request per
+     * card on a page that already lists them all.
+     * @param data The data for the request.
+     * @param data.repoId
+     * @returns TerraformFixPublic Successful Response
+     * @throws ApiError
+     */
+    public static listRepositoryFixes(data: TerraformListRepositoryFixesData): CancelablePromise<TerraformListRepositoryFixesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/terraform/fixes',
+            query: {
+                repo_id: data.repoId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+
+    /**
      * List Fixes
      * @param data The data for the request.
      * @param data.rootId
@@ -3216,7 +3325,16 @@ export class WorkflowService {
      *
      * Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
      * which takes precedence over resolve/fix state and drops the issue out of the
-     * default (active) issue and fix queries. Idempotent.
+     * default (active) issue and fix queries. Idempotent on an already-ignored
+     * issue, and a 409 on a resolved one.
+     *
+     * That precedence is for an issue resolved *after* it was muted, not a licence
+     * to mute one that is already gone — the other four engines refuse it outright
+     * (``FindingMachine.ignore`` is legal only from ``open`` and
+     * ``fix_in_progress``), and one vocabulary means this engine says the same.
+     * The PR-comment ``/greensecops ignore`` path writes the column directly and
+     * is deliberately untouched: a bulk fingerprint mute is not a click on a
+     * button that should have been grey.
      * @param data The data for the request.
      * @param data.findingId
      * @returns WorkflowFindingPublic Successful Response
@@ -3238,6 +3356,10 @@ export class WorkflowService {
     /**
      * Unignore Finding
      * Un-mute a previously ignored violation. Idempotent.
+     *
+     * An issue that is not ignored has nothing to un-ignore whatever the reason,
+     * so every such state is the idempotent case and this stays safe to retry —
+     * the same split its counterpart above now draws.
      * @param data The data for the request.
      * @param data.findingId
      * @returns WorkflowFindingPublic Successful Response

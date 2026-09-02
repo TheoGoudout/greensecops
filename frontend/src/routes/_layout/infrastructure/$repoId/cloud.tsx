@@ -7,7 +7,6 @@ import {
   Copy,
   Loader2,
   Plus,
-  Trash2,
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -15,7 +14,7 @@ import type { CloudAccountPublic } from "@/client"
 import { CloudService } from "@/client"
 import { CloudFindingRow } from "@/components/CloudFindingRow"
 import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
-import { EngineActionBar } from "@/components/EngineActionBar"
+import { EngineActionBar, overflowItem } from "@/components/EngineActionBar"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -25,9 +24,16 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
-import { engineActions } from "@/lib/engine-actions"
+import {
+  type EngineActionInput,
+  engineActions,
+  type QuotaReasons,
+  removeAction,
+} from "@/lib/engine-actions"
+import { pollWhileScanning } from "@/lib/scan-polling"
 import {
   cloudAccountStatusColor,
   cloudAccountStatusLabel,
@@ -47,6 +53,8 @@ function CloudTab() {
   const queryClient = useQueryClient()
   const { repo, isLoading: repoLoading } = useRepository(repoId)
   const orgId = repo?.org_id
+  // Cloud has no fixes, so the only allowance it can spend is analyses.
+  const quota = useOrgQuotas(orgId)
 
   const [displayName, setDisplayName] = useState("")
   const [roleArn, setRoleArn] = useState("")
@@ -63,6 +71,14 @@ function CloudTab() {
     queryKey: ["cloud-accounts", orgId],
     queryFn: () => CloudService.listAccounts({ orgId }),
     enabled: !!orgId,
+    // This engine publishes no live events either, and its scans are the
+    // longest of any (a cloud scan holds its lock for an hour), so a card that
+    // greyed itself for a running scan and then never un-greyed was the most
+    // visible here of anywhere.
+    refetchInterval: (query) =>
+      pollWhileScanning(
+        (query.state.data ?? []).map((account) => account.latest_scan_status),
+      ),
   })
 
   const createMutation = useMutation({
@@ -254,19 +270,15 @@ function CloudTab() {
             scanMutationPending={
               scanMutation.isPending && scanMutation.variables === account.id
             }
-            onDelete={() => {
-              if (
-                window.confirm(
-                  `Remove cloud account "${account.display_name}"? This deletes its scan history and findings.`,
-                )
-              ) {
-                deleteMutation.mutate(account.id)
-              }
-            }}
+            // The card owns the confirmation (`ConfirmRemoveDialog`); this
+            // used to `window.confirm` on top of it, so removing an account
+            // asked twice.
+            onDelete={() => deleteMutation.mutate(account.id)}
             deleteMutationPending={
               deleteMutation.isPending &&
               deleteMutation.variables === account.id
             }
+            quota={quota}
           />
         ))
       )}
@@ -286,6 +298,7 @@ interface CloudAccountCardProps {
   scanMutationPending: boolean
   onDelete: () => void
   deleteMutationPending: boolean
+  quota: QuotaReasons | undefined
 }
 
 function CloudAccountCard({
@@ -300,6 +313,7 @@ function CloudAccountCard({
   scanMutationPending,
   onDelete,
   deleteMutationPending,
+  quota,
 }: CloudAccountCardProps) {
   const [copiedText, copy] = useCopyToClipboard()
   const copied = copiedText === account.external_id
@@ -319,12 +333,17 @@ function CloudAccountCard({
 
   const enabled = account.status !== "disabled"
   // Cloud has no fixes, so its only activity is a scan — but the rule that
-  // decides whether "Scan now" is live is the same one every engine uses.
-  const actions = engineActions({
+  // decides whether "Scan now" is live is the same one every engine uses, and
+  // so is the one that greys it when the org's analyses are spent.
+  const accountState: EngineActionInput = {
     targetLabel: "Cloud account",
     scope: "target",
     enabled,
+    quota,
     scanStatus: account.latest_scan_status,
+  }
+  const actions = engineActions({
+    ...accountState,
     pending: { scan: scanMutationPending },
   })
 
@@ -383,13 +402,14 @@ function CloudAccountCard({
               </>
             }
             overflow={[
-              {
-                label: "Remove",
-                icon: Trash2,
-                destructive: true,
-                disabled: deleteMutationPending,
-                onSelect: () => setConfirmRemove(true),
-              },
+              overflowItem(
+                removeAction({
+                  ...accountState,
+                  pending: { remove: deleteMutationPending },
+                }),
+                () => setConfirmRemove(true),
+                { destructive: true },
+              ),
             ]}
           />
         </div>
@@ -448,7 +468,11 @@ function CloudAccountCard({
             ) : (
               <div className="divide-y">
                 {findings.map((finding) => (
-                  <CloudFindingRow key={finding.id} finding={finding} />
+                  <CloudFindingRow
+                    key={finding.id}
+                    finding={finding}
+                    targetState={accountState}
+                  />
                 ))}
               </div>
             )}

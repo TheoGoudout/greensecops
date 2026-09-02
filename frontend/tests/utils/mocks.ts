@@ -573,6 +573,12 @@ export async function mockTerraformRoots(
 ) {
   const findings = cloneFindings(findingsIn)
   await mockFindingLifecycle(page, "terraform", findings)
+  // The cross-target read the PR tab uses to know whether a target is already
+  // delivering. A distinct path from `/roots/{id}/fixes`, so it needs its own
+  // route or it falls through to the dev server and 404s.
+  await page.route("**/api/v1/terraform/fixes**", (route) =>
+    route.fulfill({ json: fixes }),
+  )
   await page.route("**/api/v1/terraform/roots**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -1452,6 +1458,40 @@ export async function mockRepositories(
   })
 }
 
+/**
+ * The two scan reads the analysis pages make.
+ *
+ * `GET /workflow/scans/{id}` answers with the one analysis on screen;
+ * `GET /workflow/scans?repo_id=` answers with a *list*. The detail page needs
+ * both: its "Generate fix" button posts to the repository rather than to this
+ * analysis, so an analysis running anywhere in the repo refuses it and the
+ * button has to say so rather than 409 after the click. One handler covering
+ * both paths with the detail's shape left the list read handing back an object,
+ * which the page then tried to map over.
+ *
+ * Pass `null` for the not-found case: the detail 404s, the list stays empty.
+ */
+export async function mockWorkflowScans(
+  page: Page,
+  analysis: unknown = MOCK_ANALYSIS,
+) {
+  await page.route(
+    /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
+    (route) => {
+      const isDetail = /\/scans\/[^/?]+/.test(route.request().url())
+      if (analysis === null) {
+        route.fulfill(
+          isDetail
+            ? { status: 404, json: { detail: "Not found" } }
+            : { json: [] },
+        )
+        return
+      }
+      route.fulfill({ json: isDetail ? analysis : [analysis] })
+    },
+  )
+}
+
 export async function mockAnalyses(page: Page, analyses = [MOCK_ANALYSIS]) {
   await page.route(
     /\/api\/v1\/workflow\/(repositories\/[^/]+\/)?scans/,
@@ -1662,18 +1702,71 @@ export async function mockRules(
   })
 }
 
+/**
+ * An organization with allowance left on every meter.
+ *
+ * `exhausted_reason` is what greys "Scan now" and "Generate fixes"; `null`
+ * everywhere is the default so a test about anything else is not silently
+ * asserting against a quota-blocked button. `quotaSpent` builds the opposite.
+ */
+export const MOCK_QUOTAS = {
+  analyses: {
+    meter: "analyses",
+    limit: 100,
+    used: 12,
+    remaining: 88,
+    resets_at: "2026-10-01T00:00:00Z",
+    exhausted_reason: null,
+  },
+  fixes: {
+    meter: "fixes",
+    limit: 10,
+    used: 2,
+    remaining: 8,
+    resets_at: "2026-10-01T00:00:00Z",
+    exhausted_reason: null,
+  },
+  repos: {
+    meter: "repos",
+    limit: 3,
+    used: 1,
+    remaining: 2,
+    resets_at: null,
+    exhausted_reason: null,
+  },
+}
+
+/** The same shape with one meter spent, carrying the 402's own sentence. */
+export function quotaSpent(meter: "analyses" | "fixes", reason: string) {
+  return {
+    ...MOCK_QUOTAS,
+    [meter]: {
+      ...MOCK_QUOTAS[meter],
+      used: MOCK_QUOTAS[meter].limit,
+      remaining: 0,
+      exhausted_reason: reason,
+    },
+  }
+}
+
 export async function mockBilling(
   page: Page,
   subscription = MOCK_SUBSCRIPTION,
   limits = MOCK_TIER_LIMITS,
   usage = MOCK_USAGE,
-  { plans = MOCK_PLANS, invoices = [] as unknown[] } = {},
+  {
+    plans = MOCK_PLANS,
+    invoices = [] as unknown[],
+    quotas = MOCK_QUOTAS as unknown,
+  } = {},
 ) {
   await page.route("**/api/v1/billing**", (route) => {
     const url = route.request().url()
     // Longest-prefix-ish ordering: /oss-applications must be tested before
     // /oss-application, and /subscription is the fallback.
-    if (url.includes("/limits")) {
+    if (url.includes("/quotas")) {
+      route.fulfill({ json: quotas })
+    } else if (url.includes("/limits")) {
       route.fulfill({ json: limits })
     } else if (url.includes("/usage")) {
       route.fulfill({ json: usage })
@@ -1734,6 +1827,10 @@ export async function mockDockerTargets(
 ) {
   const findings = cloneFindings(findingsIn)
   await mockFindingLifecycle(page, "docker", findings)
+  // See mockTerraformRoots: the cross-target read is its own path.
+  await page.route("**/api/v1/docker/fixes**", (route) =>
+    route.fulfill({ json: fixes }),
+  )
   await page.route("**/api/v1/docker/targets**", (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -1801,6 +1898,10 @@ export async function mockAnsibleProjects(
 ) {
   const findings = cloneFindings(findingsIn)
   await mockFindingLifecycle(page, "ansible", findings)
+  // See mockTerraformRoots: the cross-target read is its own path.
+  await page.route("**/api/v1/ansible/fixes**", (route) =>
+    route.fulfill({ json: fixes }),
+  )
   await page.route("**/api/v1/ansible/projects**", (route) => {
     const url = route.request().url()
     const method = route.request().method()

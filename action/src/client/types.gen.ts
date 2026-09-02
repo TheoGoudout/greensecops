@@ -1527,6 +1527,16 @@ export type NewPassword = {
 };
 
 /**
+ * OrgQuotasPublic
+ * Every meter an organization can be refused on.
+ */
+export type OrgQuotasPublic = {
+    analyses: QuotaPublic;
+    fixes: QuotaPublic;
+    repos: QuotaPublic;
+};
+
+/**
  * OrganizationPublic
  */
 export type OrganizationPublic = {
@@ -1891,6 +1901,44 @@ export type PullRequestPublic = {
 export type PullRequestState = 'open' | 'draft' | 'merged' | 'closed';
 
 /**
+ * QuotaPublic
+ * One meter's standing for an organization, and the refusal it would draw.
+ *
+ * ``exhausted_reason`` is the whole point: it is the *exact* sentence
+ * ``enforce_quota`` puts in its 402, or ``None`` when the next unit would go
+ * through. A client greys a button out on the string alone, and the tooltip
+ * it shows is then the error it prevented rather than a paraphrase of it —
+ * the same discipline ``state_machines/engine_target.REASONS`` keeps for the
+ * activity refusals.
+ */
+export type QuotaPublic = {
+    /**
+     * Meter
+     */
+    meter: string;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+    /**
+     * Used
+     */
+    used?: number;
+    /**
+     * Remaining
+     */
+    remaining?: number | null;
+    /**
+     * Resets At
+     */
+    resets_at?: string | null;
+    /**
+     * Exhausted Reason
+     */
+    exhausted_reason?: string | null;
+};
+
+/**
  * RepoCategoryStat
  * A repo's open-finding counts and severity-weighted grade for one category.
  *
@@ -2019,6 +2067,7 @@ export type RepositoryPublic = {
      * Created At
      */
     created_at?: string | null;
+    latest_scan_status?: ScanStatus | null;
     /**
      * Avg Score
      */
@@ -5541,6 +5590,37 @@ export type DockerListRuntimeFindingsResponses = {
 
 export type DockerListRuntimeFindingsResponse = DockerListRuntimeFindingsResponses[keyof DockerListRuntimeFindingsResponses];
 
+export type DockerListRepositoryFixesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Repo Id
+         */
+        repo_id: string;
+    };
+    url: '/api/v1/docker/fixes';
+};
+
+export type DockerListRepositoryFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DockerListRepositoryFixesError = DockerListRepositoryFixesErrors[keyof DockerListRepositoryFixesErrors];
+
+export type DockerListRepositoryFixesResponses = {
+    /**
+     * Response Docker-List Repository Fixes
+     * Successful Response
+     */
+    200: Array<DockerFixPublic>;
+};
+
+export type DockerListRepositoryFixesResponse = DockerListRepositoryFixesResponses[keyof DockerListRepositoryFixesResponses];
+
 export type DockerListFixesData = {
     body?: never;
     path: {
@@ -6108,6 +6188,37 @@ export type TerraformListFilesResponses = {
 };
 
 export type TerraformListFilesResponse = TerraformListFilesResponses[keyof TerraformListFilesResponses];
+
+export type TerraformListRepositoryFixesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Repo Id
+         */
+        repo_id: string;
+    };
+    url: '/api/v1/terraform/fixes';
+};
+
+export type TerraformListRepositoryFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TerraformListRepositoryFixesError = TerraformListRepositoryFixesErrors[keyof TerraformListRepositoryFixesErrors];
+
+export type TerraformListRepositoryFixesResponses = {
+    /**
+     * Response Terraform-List Repository Fixes
+     * Successful Response
+     */
+    200: Array<TerraformFixPublic>;
+};
+
+export type TerraformListRepositoryFixesResponse = TerraformListRepositoryFixesResponses[keyof TerraformListRepositoryFixesResponses];
 
 export type TerraformListFixesData = {
     body?: never;
@@ -6945,6 +7056,37 @@ export type AnsibleListFilesResponses = {
 
 export type AnsibleListFilesResponse = AnsibleListFilesResponses[keyof AnsibleListFilesResponses];
 
+export type AnsibleListRepositoryFixesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Repo Id
+         */
+        repo_id: string;
+    };
+    url: '/api/v1/ansible/fixes';
+};
+
+export type AnsibleListRepositoryFixesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnsibleListRepositoryFixesError = AnsibleListRepositoryFixesErrors[keyof AnsibleListRepositoryFixesErrors];
+
+export type AnsibleListRepositoryFixesResponses = {
+    /**
+     * Response Ansible-List Repository Fixes
+     * Successful Response
+     */
+    200: Array<AnsibleFixPublic>;
+};
+
+export type AnsibleListRepositoryFixesResponse = AnsibleListRepositoryFixesResponses[keyof AnsibleListRepositoryFixesResponses];
+
 export type AnsibleListFixesData = {
     body?: never;
     path: {
@@ -7752,6 +7894,36 @@ export type BillingGetUsageResponses = {
 };
 
 export type BillingGetUsageResponse = BillingGetUsageResponses[keyof BillingGetUsageResponses];
+
+export type BillingGetOrgQuotasData = {
+    body?: never;
+    path: {
+        /**
+         * Org Id
+         */
+        org_id: string;
+    };
+    query?: never;
+    url: '/api/v1/billing/organizations/{org_id}/quotas';
+};
+
+export type BillingGetOrgQuotasErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BillingGetOrgQuotasError = BillingGetOrgQuotasErrors[keyof BillingGetOrgQuotasErrors];
+
+export type BillingGetOrgQuotasResponses = {
+    /**
+     * Successful Response
+     */
+    200: OrgQuotasPublic;
+};
+
+export type BillingGetOrgQuotasResponse = BillingGetOrgQuotasResponses[keyof BillingGetOrgQuotasResponses];
 
 export type BillingGetTierLimitsData = {
     body?: never;

@@ -133,7 +133,15 @@ def delete_account(
 ) -> None:
     account = _get_account_for_user(account_id, session, current_user)
     # Cascades to its scans/findings (ondelete="CASCADE" on both FKs) — the
-    # user is deliberately removing this account, not just disabling it.
+    # user is deliberately removing this account, not just disabling it. A cloud
+    # scan holds its lock for an hour (fourteen resource types across every
+    # configured region), so this is the engine where deleting mid-scan is most
+    # likely to actually land.
+    require_idle(
+        cloud_account_activity(session, account_id),
+        TargetAction.remove,
+        "cloud account",
+    )
     session.delete(account)
     session.commit()
 

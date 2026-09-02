@@ -9,9 +9,15 @@ import { DockerRuntimeFindingRow } from "@/components/DockerRuntimeFindingRow"
 import { EngineActionButton } from "@/components/EngineActionBar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
-import { engineActions } from "@/lib/engine-actions"
+import {
+  engineActions,
+  isFixInFlight,
+  type QuotaReasons,
+} from "@/lib/engine-actions"
+import { pollWhileScanning, SCAN_POLL_MS } from "@/lib/scan-polling"
 import { severityRank } from "@/lib/severity"
 
 export const Route = createFileRoute("/_layout/docker/$repoId/runtime")({
@@ -24,11 +30,20 @@ export const Route = createFileRoute("/_layout/docker/$repoId/runtime")({
 function DockerRuntimeTab() {
   const { repoId } = Route.useParams()
   const [openTargets, setOpenTargets] = useState<Set<string>>(new Set())
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
+  // A runtime fix is an LLM rewrite like any other, so it draws on the same
+  // allowance and greys for the same 402.
+  const quota = useOrgQuotas(repo?.org_id)
 
   const { data: targets, isLoading } = useQuery({
     queryKey: ["docker-targets", "repo", repoId],
     queryFn: () => DockerService.listTargets({ repoId }),
+    // Shares its cache entry with the Analysis tab, and needs the same follow:
+    // a scan started there decides whether this tab's button is live.
+    refetchInterval: (query) =>
+      pollWhileScanning(
+        (query.state.data ?? []).map((target) => target.latest_scan_status),
+      ),
   })
 
   const toggleOpen = (id: string) =>
@@ -71,6 +86,7 @@ function DockerRuntimeTab() {
           isOpen={openTargets.has(target.id)}
           onToggleOpen={() => toggleOpen(target.id)}
           isAccessible={isAccessible}
+          quota={quota}
         />
       ))}
     </div>
@@ -82,11 +98,13 @@ function RuntimeTargetCard({
   isOpen,
   onToggleOpen,
   isAccessible,
+  quota,
 }: {
   target: DockerTargetPublic
   isOpen: boolean
   onToggleOpen: () => void
   isAccessible: boolean
+  quota: QuotaReasons | undefined
 }) {
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -105,6 +123,12 @@ function RuntimeTargetCard({
   const { data: fixes } = useQuery({
     queryKey: ["docker-fixes", target.id],
     queryFn: () => DockerService.listFixes({ targetId: target.id }),
+    // A fix queued here decides whether this button — and the Analysis tab's —
+    // is live, so it has to resolve without a reload.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((f) => isFixInFlight(f.status))
+        ? SCAN_POLL_MS
+        : false,
   })
 
   const fixMutation = useMutation({
@@ -195,7 +219,11 @@ function RuntimeTargetCard({
           </div>
         </div>
 
-        {isOpen && selected.size > 0 && (
+        {/* Drawn as soon as there is something to select. An empty selection
+            is a reason ("Select at least one finding"), not grounds for the
+            button to vanish — the CI page's repository-wide bar has said so
+            since it started acting on a selection. */}
+        {isOpen && fixableIds.size > 0 && (
           <EngineActionButton
             action={
               engineActions({
@@ -203,9 +231,11 @@ function RuntimeTargetCard({
                 scope: "target",
                 isAccessible,
                 enabled: target.enabled,
+                quota,
                 scanStatus: target.latest_scan_status,
                 fixStatuses: (fixes ?? []).map((f) => f.status),
                 openFindingCount: selected.size,
+                noFindingsReason: "Select at least one finding",
                 count: selected.size,
                 pending: { generate: fixMutation.isPending },
               }).generate

@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Bell, BellOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { type WorkflowFindingPublic, WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { FindingIgnoreButton } from "@/components/FindingRow"
 import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
-import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { apiErrorDetail } from "@/lib/api-error"
+import { type EngineActionInput, ignoreAction } from "@/lib/engine-actions"
 import { findingStatusColor, findingStatusLabel } from "@/lib/status-colors"
 
 interface IssueRowProps {
@@ -16,7 +16,12 @@ interface IssueRowProps {
   repoId: string
   checked?: boolean
   onCheckedChange?: () => void
-  isAccessible?: boolean
+  /**
+   * What the repository is doing, from the page's own action input. A running
+   * analysis is about to replace this issue, so muting it is refused — and a
+   * resolved one cannot be muted at all.
+   */
+  targetState: EngineActionInput
 }
 
 export function IssueRow({
@@ -24,7 +29,7 @@ export function IssueRow({
   repoId,
   checked,
   onCheckedChange,
-  isAccessible = true,
+  targetState,
 }: IssueRowProps) {
   const queryClient = useQueryClient()
   const ignored = issue.status === "ignored"
@@ -100,23 +105,13 @@ export function IssueRow({
           </p>
         )}
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 shrink-0 gap-1.5 text-xs text-muted-foreground"
+      <FindingIgnoreButton
+        action={ignoreAction(issue.status, {
+          ...targetState,
+          pending: { ignore: muteMutation.isPending },
+        })}
         onClick={() => muteMutation.mutate()}
-        disabled={!isAccessible || muteMutation.isPending}
-        title={ignored ? "Unignore this issue" : "Ignore this issue"}
-      >
-        {muteMutation.isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : ignored ? (
-          <Bell className="h-3.5 w-3.5" />
-        ) : (
-          <BellOff className="h-3.5 w-3.5" />
-        )}
-        {ignored ? "Unignore" : "Ignore"}
-      </Button>
+      />
     </div>
   )
 }

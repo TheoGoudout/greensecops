@@ -9,25 +9,29 @@ import {
   HardDrive,
   MemoryStick,
   Network,
-  Play,
   Puzzle,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   RepositoriesService,
+  type ScanStatus,
   type TelemetryRunPublic,
   TelemetryService,
   WorkflowService,
 } from "@/client"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { RuntimeFindingRow } from "@/components/RuntimeFindingRow"
 import { StatusPill } from "@/components/StatusPill"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
 import { INTEGRATE_ACTION_BRANCH } from "@/lib/delivery"
+import { engineActions } from "@/lib/engine-actions"
+import { pollWhileScanning } from "@/lib/scan-polling"
 import { dynamicStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
 
@@ -37,6 +41,25 @@ export const Route = createFileRoute("/_layout/workflows/$repoId/telemetry")({
     meta: [{ title: "Telemetry analysis - GreenSecOps" }],
   }),
 })
+
+/**
+ * The telemetry engine's runs, as scan statuses.
+ *
+ * A telemetry analysis is tracked per run on `dynamic_status`
+ * (`DynamicAnalysisStatus`) rather than on a `WorkflowScan` row, but the two
+ * enums agree on the two members that matter here — `queued` and `running` both
+ * mean "a worker holds this" — so the shared rules can read it. Everything else
+ * is a finished outcome and maps to nothing.
+ */
+function dynamicScanStatuses(
+  runs: readonly TelemetryRunPublic[] | undefined,
+): (ScanStatus | null)[] {
+  return (runs ?? []).map((run) =>
+    run.dynamic_status === "queued" || run.dynamic_status === "running"
+      ? (run.dynamic_status satisfies ScanStatus)
+      : null,
+  )
+}
 
 function fmtNumber(value: number | null | undefined, digits = 1): string {
   if (value == null) return "—"
@@ -161,11 +184,17 @@ function TelemetryPage() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
 
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
+  // One analysis per completed run, so this button can cost hundreds at once —
+  // and the route checks the whole batch up front. A spent allowance is the
+  // 402 it would raise.
+  const quota = useOrgQuotas(repo?.org_id)
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ["telemetry", "summary", repoId],
     queryFn: () => TelemetryService.getSummary({ repoId, limit: 200 }),
+    refetchInterval: (query) =>
+      pollWhileScanning(dynamicScanStatuses(query.state.data?.runs)),
   })
 
   const analyzeMutation = useMutation({
@@ -183,6 +212,7 @@ function TelemetryPage() {
       queryClient.invalidateQueries({
         queryKey: ["telemetry", "findings", repoId],
       })
+      queryClient.invalidateQueries({ queryKey: ["quotas"] })
     },
     onError: (error) =>
       toast.error("Failed to queue telemetry analysis", {
@@ -290,16 +320,19 @@ function TelemetryPage() {
                   : "Integrate action"}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
+          <EngineActionButton
+            action={
+              engineActions({
+                targetLabel: "repository",
+                scope: "repo",
+                isAccessible,
+                quota,
+                scanStatus: dynamicScanStatuses(summary?.runs),
+                pending: { scan: analyzeMutation.isPending },
+              }).scan
+            }
             onClick={() => analyzeMutation.mutate()}
-            disabled={!isAccessible || analyzeMutation.isPending}
-          >
-            <Play className="h-4 w-4" />
-            {analyzeMutation.isPending ? "Queuing…" : "Run telemetry analysis"}
-          </Button>
+          />
         </div>
       </div>
 

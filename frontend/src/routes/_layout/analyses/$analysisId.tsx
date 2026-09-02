@@ -1,17 +1,20 @@
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { AlertCircle, ArrowLeft, ExternalLink, Wand2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import type { Category, WorkflowFindingPublic } from "@/client"
 import { RepositoriesService, WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
+import { EngineActionButton } from "@/components/EngineActionBar"
 import { GradeBadge } from "@/components/GradeBadge"
 import { SeverityChip } from "@/components/SeverityChip"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useOrgQuotas } from "@/hooks/useOrgQuotas"
+import { engineActions } from "@/lib/engine-actions"
 import { ISSUE_CATEGORIES } from "@/lib/issue-constants"
+import { pollWhileScanning } from "@/lib/scan-polling"
 
 export const Route = createFileRoute("/_layout/analyses/$analysisId")({
   component: AnalysisDetail,
@@ -34,6 +37,7 @@ function groupByCategory(
 
 function AnalysisDetail() {
   const { analysisId } = Route.useParams()
+  const queryClient = useQueryClient()
 
   const {
     data: analysis,
@@ -58,6 +62,26 @@ function AnalysisDetail() {
     enabled: !!analysis?.repo_id,
   })
   const isAccessible = repo?.is_accessible ?? true
+  const quota = useOrgQuotas(repo?.org_id)
+
+  // The button below acts on the whole repository (the route is
+  // `POST /repositories/{id}/fixes`), so it answers to the repository's
+  // activity, not this one analysis's — a scan running anywhere in the repo
+  // refuses it, and so does a fix already in flight.
+  const { data: repoScans } = useQuery({
+    queryKey: ["scans", analysis?.repo_id],
+    queryFn: () =>
+      WorkflowService.listScans({ repoId: analysis!.repo_id, limit: 100 }),
+    enabled: !!analysis?.repo_id,
+    refetchInterval: (query) =>
+      pollWhileScanning((query.state.data ?? []).map((a) => a.status)),
+  })
+  const { data: repoFixes } = useQuery({
+    queryKey: ["fixes", "repo", analysis?.repo_id],
+    queryFn: () =>
+      WorkflowService.listFixes({ repoId: analysis!.repo_id, limit: 100 }),
+    enabled: !!analysis?.repo_id,
+  })
 
   const fixMutation = useMutation({
     mutationFn: () =>
@@ -68,9 +92,27 @@ function AnalysisDetail() {
           ? { issue_ids: issues.map((i) => i.id) }
           : undefined,
       }),
-    onSuccess: () => toast.success("Fix generation queued"),
+    onSuccess: () => {
+      toast.success("Fix generation queued")
+      queryClient.invalidateQueries({
+        queryKey: ["fixes", "repo", analysis?.repo_id],
+      })
+      queryClient.invalidateQueries({ queryKey: ["quotas"] })
+    },
     onError: () => toast.error("Failed to queue fix"),
   })
+
+  const fixAction = engineActions({
+    targetLabel: "repository",
+    scope: "repo",
+    isAccessible,
+    enabled: repo?.enabled,
+    quota,
+    scanStatus: (repoScans ?? []).map((a) => a.status),
+    fixStatuses: (repoFixes ?? []).map((f) => f.status),
+    openFindingCount: issues?.length ?? 0,
+    pending: { generate: fixMutation.isPending },
+  }).generate
 
   const grouped = issues ? groupByCategory(issues) : null
 
@@ -112,16 +154,10 @@ function AnalysisDetail() {
           </div>
         </div>
         {analysis?.repo_id && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 shrink-0"
+          <EngineActionButton
+            action={fixAction}
             onClick={() => fixMutation.mutate()}
-            disabled={!isAccessible || fixMutation.isPending || !issues?.length}
-          >
-            <Wand2 className="h-4 w-4" />
-            {fixMutation.isPending ? "Queuing…" : "Generate fix"}
-          </Button>
+          />
         )}
       </div>
 

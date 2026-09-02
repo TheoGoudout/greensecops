@@ -102,42 +102,55 @@ def test_activity_of_accepts_plain_strings() -> None:
 
 _ALLOWED = None
 
-# One row per activity; the columns are the three actions in TargetAction order.
+# One row per activity, one column per action, in ``TargetAction`` order.
 # ``_ALLOWED`` means the action goes through.
-_MATRIX: dict[TargetActivity, tuple[str | None, str | None, str | None]] = {
-    TargetActivity.idle: (_ALLOWED, _ALLOWED, _ALLOWED),
-    TargetActivity.scanning: (
-        "a scan is already running",
-        "a scan is already running",
-        "a scan is already running",
-    ),
-    # Generating is the one activity that still allows generating: writing a fix
-    # for file B while file A's is in flight is ordinary work.
-    TargetActivity.generating: (
-        "fixes are being generated",
-        _ALLOWED,
-        "fixes are being generated",
-    ),
-    TargetActivity.delivering: (
-        "a pull request is being opened",
-        "a pull request is being opened",
-        "a pull request is being opened",
-    ),
+#
+# The last three columns are not engine flows of their own — removing a target,
+# muting a finding, re-reading a repository's files — but they collide with the
+# same in-flight work, and each had no guard at all before: a delete cascaded a
+# target's rows away underneath the worker still writing them.
+_SCAN = "a scan is already running"
+_GEN = "fixes are being generated"
+_PR = "a pull request is being opened"
+
+_MATRIX: dict[TargetActivity, dict[TargetAction, str | None]] = {
+    TargetActivity.idle: dict.fromkeys(TargetAction, _ALLOWED),
+    TargetActivity.scanning: dict.fromkeys(TargetAction, _SCAN),
+    # Generating is the one engine action that a generating target still allows:
+    # writing a fix for file B while file A's is in flight is ordinary work.
+    # Muting and syncing are allowed too — fix work reads findings and files and
+    # writes neither.
+    TargetActivity.generating: {
+        TargetAction.scan: _GEN,
+        TargetAction.generate: _ALLOWED,
+        TargetAction.deliver: _GEN,
+        TargetAction.remove: _GEN,
+        TargetAction.ignore: _ALLOWED,
+        TargetAction.sync: _ALLOWED,
+    },
+    TargetActivity.delivering: {
+        TargetAction.scan: _PR,
+        TargetAction.generate: _PR,
+        TargetAction.deliver: _PR,
+        TargetAction.remove: _PR,
+        TargetAction.ignore: _ALLOWED,
+        TargetAction.sync: _ALLOWED,
+    },
 }
 
 
 @pytest.mark.parametrize("activity", list(_MATRIX))
 def test_blocked_reason_matrix(activity: TargetActivity) -> None:
-    scan, generate, deliver = _MATRIX[activity]
-    assert sm.blocked_reason(activity, TargetAction.scan) == scan
-    assert sm.blocked_reason(activity, TargetAction.generate) == generate
-    assert sm.blocked_reason(activity, TargetAction.deliver) == deliver
+    for action, expected in _MATRIX[activity].items():
+        assert sm.blocked_reason(activity, action) == expected, action
 
 
 def test_every_activity_and_action_is_covered() -> None:
     """The matrix above is the specification, so it has to stay exhaustive —
     a new activity or action must not slip through untested."""
     assert set(_MATRIX) == set(TargetActivity)
+    for row in _MATRIX.values():
+        assert set(row) == set(TargetAction)
     assert set(engine_target.BLOCKS) == set(TargetAction)
     assert set(engine_target.REASONS) == set(TargetActivity) - {TargetActivity.idle}
 

@@ -29,7 +29,12 @@ from app.models import (
     WorkflowFix,
     WorkflowScan,
 )
-from app.models.enums import FixStatus, TargetAction, TargetActivity
+from app.models.enums import (
+    FindingStatus,
+    FixStatus,
+    TargetAction,
+    TargetActivity,
+)
 from app.services import state_machines as sm
 from app.services.billing import usage as billing_usage
 from app.services.engines import EngineSpec
@@ -81,12 +86,32 @@ def ignore_finding_for_user(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
-    """Mute a violation (false positive / accepted risk). Idempotent."""
+    """Mute a violation (false positive / accepted risk).
+
+    Idempotent on an already-ignored finding, and a **409** on one that is
+    ``resolved``: ``FindingMachine.ignore`` is legal only from ``open`` and
+    ``fix_in_progress``, so this used to answer ``200`` with an unchanged row
+    and let the UI toast "Finding ignored" over a finding it had not ignored.
+    The two cases look identical to ``try_advance``, which is why the
+    idempotent one is decided before it rather than read out of its ``False``.
+    """
     finding = get_finding_for_user(spec, finding_id, session, current_user)
-    if sm.try_advance(finding, sm.FindingMachine, "ignore"):
-        session.add(finding)
-        session.commit()
-        session.refresh(finding)
+    require_target_idle(
+        spec, session, getattr(finding, spec.target_id_field), TargetAction.ignore
+    )
+    if finding.status == FindingStatus.ignored:
+        return finding
+    if not sm.try_advance(finding, sm.FindingMachine, "ignore"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A {spec.label} finding that is {finding.status.value} "
+                "cannot be ignored"
+            ),
+        )
+    session.add(finding)
+    session.commit()
+    session.refresh(finding)
     return finding
 
 
@@ -96,13 +121,54 @@ def unignore_finding_for_user(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
-    """Un-mute a previously ignored violation. Idempotent."""
+    """Un-mute a previously ignored violation. Idempotent.
+
+    Stays silent where its counterpart now raises: a finding that is not
+    ignored has nothing to un-ignore whatever the reason, so every non-
+    ``ignored`` state is the idempotent case and the DELETE remains safe to
+    retry.
+    """
     finding = get_finding_for_user(spec, finding_id, session, current_user)
+    require_target_idle(
+        spec, session, getattr(finding, spec.target_id_field), TargetAction.ignore
+    )
     if sm.try_advance(finding, sm.FindingMachine, "unignore"):
         session.add(finding)
         session.commit()
         session.refresh(finding)
     return finding
+
+
+def list_fixes_for_repo(
+    spec: EngineSpec,
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID,
+) -> list[Any]:
+    """Every fix under one repository's targets of ``spec``, newest first.
+
+    The cross-target read the URL grammar already promises each engine
+    (``/{engine}/fixes``) and that only the CI engine had. Its caller is the
+    pull-requests tab: it lists a repository's PRs and offers "Update PR" on
+    each, and deciding whether that may be pressed means knowing whether any of
+    the owning target's fixes is in flight. Per-target reads could only answer
+    that with one request per target, on a page that already has the whole list.
+    """
+    authorize_repo(session, current_user, repo_id, detail="Repository not found")
+    target_col = getattr(spec.fix_model, spec.target_id_field)
+    return list(
+        session.exec(
+            select(spec.fix_model)
+            .where(
+                col(target_col).in_(
+                    select(spec.target_model.id).where(
+                        spec.target_model.repo_id == repo_id
+                    )
+                )
+            )
+            .order_by(col(spec.fix_model.created_at).desc())
+        ).all()
+    )
 
 
 def require_idle(

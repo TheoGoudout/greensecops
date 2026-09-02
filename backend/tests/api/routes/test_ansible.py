@@ -586,6 +586,44 @@ def test_list_fixes_returns_the_projects_fixes(
     assert body[0]["status"] == "ready"
 
 
+def test_repository_fixes_span_every_project(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    project: AnsibleProject,
+) -> None:
+    """The cross-target read the PR tab needs — see the Terraform twin for why
+    a per-project read could not answer it."""
+    from app.models import AnsibleFix, FixStatus, LLMProvider
+
+    other = AnsibleProject(repo_id=repo.id, root_path="ops")
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+    for owner, path in ((project, "site.yml"), (other, "ops/site.yml")):
+        db.add(
+            AnsibleFix(
+                ansible_project_id=owner.id,
+                file_path=path,
+                llm_provider=LLMProvider.openai,
+                llm_model="gpt-4o-mini",
+                status=FixStatus.ready,
+            )
+        )
+    db.commit()
+
+    response = client.get(
+        f"{settings.API_V1_STR}/ansible/fixes",
+        params={"repo_id": str(repo.id)},
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert {f["ansible_project_id"] for f in body} == {str(project.id), str(other.id)}
+
+
 def test_deliver_queues_the_task_and_reports_the_branch(
     client: TestClient,
     superuser_token_headers: dict[str, str],

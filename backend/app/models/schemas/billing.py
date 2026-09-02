@@ -63,6 +63,33 @@ class PlanPublic(SQLModel):
     features: list[str] = []
 
 
+class QuotaPublic(SQLModel):
+    """One meter's standing for an organization, and the refusal it would draw.
+
+    ``exhausted_reason`` is the whole point: it is the *exact* sentence
+    ``enforce_quota`` puts in its 402, or ``None`` when the next unit would go
+    through. A client greys a button out on the string alone, and the tooltip
+    it shows is then the error it prevented rather than a paraphrase of it —
+    the same discipline ``state_machines/engine_target.REASONS`` keeps for the
+    activity refusals.
+    """
+
+    meter: str
+    limit: int | None = None  # None = unlimited (or exempt)
+    used: int = 0
+    remaining: int | None = None  # None = unlimited
+    resets_at: datetime | None = None
+    exhausted_reason: str | None = None
+
+
+class OrgQuotasPublic(SQLModel):
+    """Every meter an organization can be refused on."""
+
+    analyses: QuotaPublic
+    fixes: QuotaPublic
+    repos: QuotaPublic
+
+
 class UsageBreakdownPublic(SQLModel):
     """How much of one meter a single engine accounted for this period."""
 
