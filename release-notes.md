@@ -8,6 +8,7 @@
 
 ### Internal
 
+* ⬆ Bump the pre-commit group across 2 directories with 1 update. PR [#320](https://github.com/TheoGoudout/greensecops/pull/320) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump re-actors/alls-green from 1.2.2 to 1.3.0 in the github-actions group across 1 directory. PR [#323](https://github.com/TheoGoudout/greensecops/pull/323) by [@dependabot[bot]](https://github.com/apps/dependabot).
 
 ## 0.12.0 (2026-09-03)
