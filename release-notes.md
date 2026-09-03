@@ -2,6 +2,10 @@
 
 ## Latest Changes
 
+### Upgrades
+
+* ⬆ Bump the python group across 2 directories with 1 update. PR [#319](https://github.com/TheoGoudout/greensecops/pull/319) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
 ## 0.12.0 (2026-09-03)
 
 ### Breaking Changes
