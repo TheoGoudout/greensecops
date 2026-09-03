@@ -2,6 +2,8 @@
 
 ## Latest Changes
 
+## 0.12.0 (2026-09-03)
+
 ### Breaking Changes
 
 * ♻️ Restructure the API onto one URL grammar. PR [#248](https://github.com/TheoGoudout/greensecops/pull/248) by [@TheoGoudout](https://github.com/TheoGoudout).
