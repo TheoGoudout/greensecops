@@ -41,8 +41,10 @@ ACTION_FILES = tuple(sorted((ROOT / ".github" / "actions").glob("*/action.yml"))
 
 # A step body written as a YAML block scalar: `run: |`, `run: >-`, and so on.
 BLOCK = re.compile(r"^(\s*)(run|script):\s*[|>][+-]?\s*$")
-# Any .github/scripts/ path mentioned anywhere in a workflow.
-REFERENCE = re.compile(r"\.github/scripts/[\w./-]+")
+# Any .github/scripts/ path mentioned anywhere in a workflow. The last
+# character may not be a `.`, so a sentence ending "see .github/scripts/
+# README.md." does not resolve to a filename with the full stop attached.
+REFERENCE = re.compile(r"\.github/scripts/[\w./-]*[\w/-]")
 # The one shape of `script:` block that is allowed to survive: a loader.
 LOADER = re.compile(r"require\(.*\)")
 
