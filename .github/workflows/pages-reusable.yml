@@ -232,7 +232,11 @@ jobs:
         # Globally, and outside the workspace, so the action skips its own
         # install — which crashes on npm 12. See the note at the top of this
         # file, which also carries the reason for the ignore.
-        run: npm i -g wrangler@${{ env.WRANGLER_VERSION }} # zizmor: ignore[adhoc-packages]
+        #
+        # `$WRANGLER_VERSION` rather than `${{ env.WRANGLER_VERSION }}`: the
+        # workflow-level `env:` is already exported into the shell, and no other
+        # `run:` in this file expands a template into a command.
+        run: npm i -g "wrangler@${WRANGLER_VERSION}" # zizmor: ignore[adhoc-packages]
         working-directory: ${{ runner.temp }}
 
       - name: Validate the Worker configuration
@@ -381,7 +385,11 @@ jobs:
         # Globally, and outside the workspace, so the action skips its own
         # install — which crashes on npm 12. See the note at the top of this
         # file, which also carries the reason for the ignore.
-        run: npm i -g wrangler@${{ env.WRANGLER_VERSION }} # zizmor: ignore[adhoc-packages]
+        #
+        # `$WRANGLER_VERSION` rather than `${{ env.WRANGLER_VERSION }}`: the
+        # workflow-level `env:` is already exported into the shell, and no other
+        # `run:` in this file expands a template into a command.
+        run: npm i -g "wrangler@${WRANGLER_VERSION}" # zizmor: ignore[adhoc-packages]
         working-directory: ${{ runner.temp }}
 
       - name: Validate the Worker configuration
@@ -462,7 +470,11 @@ jobs:
         # Globally, and outside the workspace, so the action skips its own
         # install — which crashes on npm 12. See the note at the top of this
         # file, which also carries the reason for the ignore.
-        run: npm i -g wrangler@${{ env.WRANGLER_VERSION }} # zizmor: ignore[adhoc-packages]
+        #
+        # `$WRANGLER_VERSION` rather than `${{ env.WRANGLER_VERSION }}`: the
+        # workflow-level `env:` is already exported into the shell, and no other
+        # `run:` in this file expands a template into a command.
+        run: npm i -g "wrangler@${WRANGLER_VERSION}" # zizmor: ignore[adhoc-packages]
         working-directory: ${{ runner.temp }}
 
       - name: Validate the Worker configuration
