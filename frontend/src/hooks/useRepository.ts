@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { RepositoriesService } from "@/client"
+import { pollForActivity } from "@/lib/scan-polling"
 
 /**
  * Fetch a repository by id. The `["repository", repoId]` query key is shared
@@ -16,6 +17,13 @@ export function useRepository(repoId: string | undefined) {
     queryKey: ["repository", repoId],
     queryFn: () => RepositoriesService.getRepository({ repoId: repoId! }),
     enabled: !!repoId,
+    // This row carries the repository's `activity`, and every engine page gates
+    // its buttons on it — so it is the one read that must not sit still. SSE
+    // invalidates it faster on the CI engine, but only while the stream is up,
+    // and the other engines have no stream at all. See `pollForActivity`: five
+    // seconds while something is running, thirty when nothing appears to be,
+    // because "nothing appears to be" is the answer this can be wrong about.
+    refetchInterval: (query) => pollForActivity([query.state.data?.activity]),
   })
   const isAccessible = repo?.is_accessible ?? true
   return { repo, isLoading, isAccessible }

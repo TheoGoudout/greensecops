@@ -15,7 +15,11 @@ from app.api.deps import (
     authorize_repo,
     get_current_active_superuser,
 )
-from app.api.engine_routes import repository_activity, require_idle
+from app.api.engine_routes import (
+    repository_activities,
+    repository_activity,
+    require_idle,
+)
 from app.api.mappers import to_repo_public
 from app.api.router import Role, RoleRouter
 from app.core.config import settings
@@ -28,6 +32,7 @@ from app.models import (
     RepositoryUpdate,
     ScanStatus,
     TargetAction,
+    TargetActivity,
     User,
     WorkflowFile,
     WorkflowScan,
@@ -212,11 +217,16 @@ def list_repositories(
     repo_ids = [r.id for r in repos]
     grades = _compute_grades_batch(session, repo_ids)
     # This list is where the "Scan now" button on the Workflows page lives, so
-    # it is one of the two reads that pay for the scan-status query.
+    # it is one of the two reads that pay for the scan-status query — and for
+    # the activity beside it, which is what the button is actually gated on.
     scanning = _latest_scan_statuses_batch(session, repo_ids)
+    activities = repository_activities(session, repo_ids)
     return [
         to_repo_public(
-            r, *grades.get(r.id, (None, None)), latest_scan_status=scanning.get(r.id)
+            r,
+            *grades.get(r.id, (None, None)),
+            latest_scan_status=scanning.get(r.id),
+            activity=activities.get(r.id, TargetActivity.idle),
         )
         for r in repos
     ]
@@ -241,9 +251,13 @@ def list_external_repositories(
     repo_ids = [r.id for r in repos]
     grades = _compute_grades_batch(session, repo_ids)
     scanning = _latest_scan_statuses_batch(session, repo_ids)
+    activities = repository_activities(session, repo_ids)
     return [
         to_repo_public(
-            r, *grades.get(r.id, (None, None)), latest_scan_status=scanning.get(r.id)
+            r,
+            *grades.get(r.id, (None, None)),
+            latest_scan_status=scanning.get(r.id),
+            activity=activities.get(r.id, TargetActivity.idle),
         )
         for r in repos
     ]
@@ -325,6 +339,9 @@ def get_repository(
         grade,
         engine_grades,
         latest_scan_status=_latest_scan_statuses_batch(session, [repo_id]).get(repo_id),
+        activity=repository_activities(session, [repo_id]).get(
+            repo_id, TargetActivity.idle
+        ),
     )
 
 
@@ -686,6 +703,15 @@ async def integrate_action(
     repo = _get_repo_for_user(repo_id, session, current_user)
     if not repo.is_accessible:
         raise HTTPException(status_code=403, detail="Repository is not accessible")
+
+    # A PR-opening action like any other, and the last one that was not ruled
+    # on: it reads the very ``WorkflowFile`` rows an analysis holds under its
+    # repo-wide lock and a sync rewrites, then opens a pull request. Guarded as
+    # ``deliver`` because that is what it is — one at a time, like every other
+    # button that puts a branch on GitHub.
+    require_idle(
+        repository_activity(session, repo_id), TargetAction.deliver, "repository"
+    )
 
     workflow_files = [
         wf for wf in repo.workflow_files if wf.branch == (repo.default_branch or "main")

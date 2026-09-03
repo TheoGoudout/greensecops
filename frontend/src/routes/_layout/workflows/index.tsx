@@ -19,7 +19,7 @@ import useAuth from "@/hooks/useAuth"
 import { useGitHubAppInstall } from "@/hooks/useGitHubAppInstall"
 import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { engineActions } from "@/lib/engine-actions"
-import { pollWhileScanning } from "@/lib/scan-polling"
+import { pollForActivity } from "@/lib/scan-polling"
 
 export const Route = createFileRoute("/_layout/workflows/")({
   component: Repositories,
@@ -69,8 +69,8 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
     onSuccess: () => {
       toast.success(`Analysis queued for ${repo.full_name}`)
       queryClient.invalidateQueries({ queryKey: ["scans", repo.id] })
-      // The row's own button reads `latest_scan_status` off this list, and the
-      // analysis it just queued is what that has to start reporting.
+      // The row's own button reads `activity` off this list, and the analysis
+      // it just queued is what that has to start reporting.
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
       queryClient.invalidateQueries({ queryKey: ["quotas"] })
     },
@@ -171,6 +171,10 @@ function RepoRow({ repo }: { repo: RepositoryPublic }) {
             isAccessible,
             enabled: repo.enabled,
             quota,
+            // The row's own `activity`, which covers the fix work a bare scan
+            // status cannot see: a repository whose fixes a worker is writing
+            // refuses a scan just as a running one does.
+            activity: repo.activity,
             scanStatus: repo.latest_scan_status,
             pending: { scan: triggerMutation.isPending },
           }).scan
@@ -191,11 +195,11 @@ function Repositories() {
     queryKey: ["repositories"],
     queryFn: () => RepositoriesService.listRepositories({ limit: 200 }),
     // Follow a queued analysis to its end, the way every engine's target list
-    // does — otherwise the row's button stays greyed until a manual reload.
+    // does — and keep a slow baseline poll under it, so an analysis a push
+    // started greys these buttons without waiting for something else to
+    // refetch. See `pollForActivity`.
     refetchInterval: (query) =>
-      pollWhileScanning(
-        (query.state.data ?? []).map((r) => r.latest_scan_status),
-      ),
+      pollForActivity((query.state.data ?? []).map((r) => r.activity)),
   })
 
   return (

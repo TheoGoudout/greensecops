@@ -468,6 +468,10 @@ export const AnsibleProjectPublicSchema = {
                 }
             ]
         },
+        activity: {
+            '$ref': '#/components/schemas/TargetActivity',
+            default: 'idle'
+        },
         badge_sig: {
             anyOf: [
                 {
@@ -993,6 +997,10 @@ export const CloudAccountPublicSchema = {
                     type: 'null'
                 }
             ]
+        },
+        activity: {
+            '$ref': '#/components/schemas/TargetActivity',
+            default: 'idle'
         },
         badge_sig: {
             anyOf: [
@@ -2120,6 +2128,10 @@ export const DockerTargetPublicSchema = {
                     type: 'null'
                 }
             ]
+        },
+        activity: {
+            '$ref': '#/components/schemas/TargetActivity',
+            default: 'idle'
         },
         badge_sig: {
             anyOf: [
@@ -3761,6 +3773,10 @@ export const RepositoryPublicSchema = {
                 }
             ]
         },
+        activity: {
+            '$ref': '#/components/schemas/TargetActivity',
+            default: 'idle'
+        },
         avg_score: {
             anyOf: [
                 {
@@ -4382,6 +4398,22 @@ quota enforcement reads.
 \`\`past_due\`\` deliberately keeps full paid service — it is the grace window,
 not a punishment. Only \`\`unpaid\`\` (grace expired) and \`\`canceled\`\` fall
 back to Free limits, and neither ever removes data.`
+} as const;
+
+export const TargetActivitySchema = {
+    type: 'string',
+    enum: ['idle', 'scanning', 'generating', 'delivering'],
+    title: 'TargetActivity',
+    description: `What a scan target is busy with right now, on any engine.
+
+Derived rather than persisted: it is read off the target's latest scan
+status and its fixes' statuses, which every engine already stores. It exists
+because "what may I do to this target?" is a question all five engines
+answer identically, and answering it from scattered \`\`if\`\` expressions is
+how the UI ended up offering "Generate fixes" during a running scan.
+
+See \`\`services/state_machines/engine_target.py\`\` for the transitions and
+which :class:\`TargetAction\` each activity blocks.`
 } as const;
 
 export const TelemetryAveragePublicSchema = {
@@ -5060,6 +5092,10 @@ export const TerraformRootPublicSchema = {
                     type: 'null'
                 }
             ]
+        },
+        activity: {
+            '$ref': '#/components/schemas/TargetActivity',
+            default: 'idle'
         },
         badge_sig: {
             anyOf: [

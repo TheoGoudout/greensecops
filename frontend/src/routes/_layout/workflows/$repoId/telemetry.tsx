@@ -30,7 +30,11 @@ import { useOrgQuotas } from "@/hooks/useOrgQuotas"
 import { useRepository } from "@/hooks/useRepository"
 import { apiErrorDetail } from "@/lib/api-error"
 import { INTEGRATE_ACTION_BRANCH } from "@/lib/delivery"
-import { engineActions } from "@/lib/engine-actions"
+import {
+  actionBlockedReason,
+  type EngineAction,
+  engineActions,
+} from "@/lib/engine-actions"
 import { pollWhileScanning } from "@/lib/scan-polling"
 import { dynamicStatusColor } from "@/lib/status-colors"
 import { PAGE_SIZE } from "@/lib/workflow-utils"
@@ -261,6 +265,35 @@ function TelemetryPage() {
       }),
   })
 
+  // The last PR-opening control outside the rule set. It reads the very
+  // workflow files an analysis holds and a sync rewrites, then opens a branch —
+  // so it answers to `deliver` like every other button that puts a PR on
+  // GitHub, and the route now refuses it for the same reason rather than
+  // failing somewhere inside the GitHub call.
+  //
+  // Still disabled after a success: the PR row is being refetched and this
+  // becomes the link to it a moment later.
+  const integrateBlocked = actionBlockedReason("deliver", {
+    targetLabel: "repository",
+    scope: "repo",
+    isAccessible,
+    activity: repo?.activity,
+  })
+  const integratePending =
+    integrateActionMutation.isPending || integrateActionMutation.isSuccess
+  const integrateAction: EngineAction = {
+    label: integrateActionMutation.isPending
+      ? "Opening PR…"
+      : integrateActionMutation.isSuccess
+        ? "PR opened"
+        : "Integrate action",
+    icon: Puzzle,
+    busy: integrateActionMutation.isPending,
+    disabled: !!integrateBlocked || integratePending,
+    reason: integrateBlocked,
+    force: false,
+  }
+
   const avg = summary?.average
   const runs = useMemo(() => summary?.runs ?? [], [summary])
   const findings = useMemo(
@@ -299,26 +332,10 @@ function TelemetryPage() {
               </a>
             </Button>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
+            <EngineActionButton
+              action={integrateAction}
               onClick={() => integrateActionMutation.mutate()}
-              // Stays disabled after a success too: the PR row is being
-              // refetched, and this becomes the link to it a moment later.
-              disabled={
-                !isAccessible ||
-                integrateActionMutation.isPending ||
-                integrateActionMutation.isSuccess
-              }
-            >
-              <Puzzle className="h-4 w-4" />
-              {integrateActionMutation.isPending
-                ? "Opening PR…"
-                : integrateActionMutation.isSuccess
-                  ? "PR opened"
-                  : "Integrate action"}
-            </Button>
+            />
           )}
           <EngineActionButton
             action={

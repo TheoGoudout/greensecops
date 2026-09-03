@@ -23,6 +23,8 @@ from app.api.engine_routes import (
     prepare_pending_fix,
     require_target_idle,
     sarif_for_claims,
+    target_activities,
+    target_activity,
     unignore_finding_for_user,
 )
 from app.api.mappers import (
@@ -38,6 +40,7 @@ from app.models import (
     Repository,
     ScanTargetUpdate,
     TargetAction,
+    TargetActivity,
     TerraformFilePublic,
     TerraformFinding,
     TerraformFindingPublic,
@@ -123,7 +126,14 @@ def list_roots(
                 TerraformRoot.repo_id == Repository.id,  # type: ignore[arg-type]
             ).where(Repository.org_id.in_(user_org_ids(session, current_user)))  # type: ignore[attr-defined]
     roots = session.exec(query.order_by(col(TerraformRoot.root_path))).all()
-    return [to_terraform_root_public(r) for r in roots]
+    # One batched read for the whole page: every row publishes what it is busy
+    # with, so the list can grey its own actions without fetching each root's
+    # fixes to work it out.
+    activities = target_activities(TERRAFORM_ENGINE, session, [r.id for r in roots])
+    return [
+        to_terraform_root_public(r, activities.get(r.id, TargetActivity.idle))
+        for r in roots
+    ]
 
 
 @router.patch(
@@ -141,7 +151,9 @@ def update_root(
     session.add(root)
     session.commit()
     session.refresh(root)
-    return to_terraform_root_public(root)
+    return to_terraform_root_public(
+        root, target_activity(TERRAFORM_ENGINE, session, root.id)
+    )
 
 
 @router.delete("/roots/{root_id}", role=Role.org_admin, status_code=204)

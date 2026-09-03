@@ -16,6 +16,7 @@ import {
   EngineActionButton,
   overflowItem,
 } from "@/components/EngineActionBar"
+import { EngineFlowRail } from "@/components/EngineFlowRail"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
@@ -37,7 +38,7 @@ import {
   removeAction,
 } from "@/lib/engine-actions"
 import { formatDateTime } from "@/lib/format"
-import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
+import { isScanInFlight, pollForActivity } from "@/lib/scan-polling"
 import {
   fixStatusColor,
   scanStatusColor,
@@ -69,9 +70,7 @@ function TerraformTab() {
     // scan status, so re-asking for it is what turns "queued" into a result
     // without a page reload — and it stops the moment nothing is running.
     refetchInterval: (query) =>
-      pollWhileScanning(
-        (query.state.data ?? []).map((root) => root.latest_scan_status),
-      ),
+      pollForActivity((query.state.data ?? []).map((root) => root.activity)),
   })
 
   const { data: pullRequests } = useQuery({
@@ -234,6 +233,10 @@ function RootCard({
     isAccessible,
     enabled: root.enabled,
     quota,
+    // The server's own answer, which knows about work this page did not start —
+    // a scan the Action queued, a fix a teammate asked for. Unioned with the
+    // statuses below rather than replacing them; see `targetActivity`.
+    activity: root.activity,
     scanStatus: root.latest_scan_status,
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr,
@@ -354,8 +357,27 @@ function RootCard({
         )}
       </CardHeader>
 
+      {/* What this root is doing, and what each stage of its flow has to show
+          for itself — above the files rather than only inside the tooltips on
+          the bar. Drawn only when expanded: the collapsed header already
+          carries the grade, the scan badge and the greyed buttons, and four
+          more chips per collapsed card would bury them. */}
       {isOpen && (
         <CardContent className="flex flex-col gap-3">
+          <EngineFlowRail
+            {...rootState}
+            scope="target"
+            capabilities={{ sync: false }}
+            fileCount={files?.length}
+            grade={root.latest_grade}
+            hasCompletedScan={!!root.last_scanned_at}
+            openFindingCount={openFindings.length}
+            pending={{
+              scan: scanMutation.isPending,
+              generate: generateMutation.isPending,
+              deliver: deliverMutation.isPending,
+            }}
+          />
           {isLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : !files?.length ? (
