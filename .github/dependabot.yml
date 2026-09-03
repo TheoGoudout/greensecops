@@ -112,6 +112,7 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
+    labels: [dependencies, internal]
     groups:
       python:
         patterns:
@@ -130,6 +131,7 @@ updates:
       default-days: 7
     commit-message:
       prefix: ⬆
+    labels: [dependencies, internal]
     groups:
       docker-compose:
         patterns:

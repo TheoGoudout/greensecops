@@ -40,9 +40,15 @@ on:
 
 permissions: {}
 
+# One run per pull request, and per branch for a push.
+#
+# Cancelled for a pull request, because a superseded commit's findings are an
+# answer about code nobody is going to merge. *Not* cancelled for a push to
+# main: the report job uploads to code scanning, and cancelling it would leave
+# the Security tab describing an older commit with nothing saying so.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   report:
@@ -50,6 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      contents: read # To check out the repository below.
       security-events: write # Required for upload-sarif (used by zizmor-action) to upload SARIF files.
     steps:
       - name: Checkout repository
@@ -72,6 +79,8 @@ jobs:
   gate:
     name: Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 10
     steps:
       - name: Checkout repository

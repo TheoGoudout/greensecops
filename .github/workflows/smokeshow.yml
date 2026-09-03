@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      contents: read # To check out the repository below.
       actions: read # To download the coverage artifact from the triggering run.
       statuses: write # To post the coverage percentage as a commit status.
 
@@ -32,7 +33,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          # The tooling interpreter, as in deploy-checks.yml, opa.yml and
+          # pre-commit.yml. This job resolves the workspace and runs one
+          # uploader; it does not exercise application code, so it has no
+          # reason to be on a version of its own — it was on 3.13 for none.
+          python-version: "3.11"
           cache: pip
       - name: Setup uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1

@@ -26,7 +26,12 @@ concurrency:
 jobs:
   issue-manager:
     name: Manage issues and PRs
-    if: github.repository_owner == 'fastapi'
+    # The guard is inherited from upstream, where it stopped every fork of the
+    # template running the issue manager against its own tracker. It kept doing
+    # that here — against *this* repository, since the owner is no longer
+    # `fastapi`, so the only job in this workflow could never run. Same intent,
+    # this repository's owner.
+    if: github.repository_owner == 'TheoGoudout'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -17,11 +17,16 @@ on:
 permissions:
   contents: read
 
-# One run per pull request, and per branch for a push. Cancelled, because a
-# superseded commit's checks are an answer about code nobody is going to merge.
+# One run per pull request, and per branch for a push.
+#
+# Cancelled for a pull request, because a superseded commit's checks are an
+# answer about code nobody is going to merge. *Not* cancelled for a push to
+# main: that run is the branch's own record, and a second merge landing while
+# it is still going would erase the first one's result rather than supersede
+# it — the check would simply be missing from the commit that caused it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

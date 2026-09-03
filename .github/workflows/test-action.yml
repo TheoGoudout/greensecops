@@ -15,16 +15,23 @@ on:
 
 permissions: {}
 
-# One run per pull request, and per branch for a push. Cancelled, because a
-# superseded commit's checks are an answer about code nobody is going to merge.
+# One run per pull request, and per branch for a push.
+#
+# Cancelled for a pull request, because a superseded commit's checks are an
+# answer about code nobody is going to merge. *Not* cancelled for a push to
+# main: that run is the branch's own record, and a second merge landing while
+# it is still going would erase the first one's result rather than supersede
+# it — the check would simply be missing from the commit that caused it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     name: Run tests and linting
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 10
     defaults:
       run:
@@ -36,17 +43,26 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
+      # Keyed on bun.lock — the workspace's one lockfile, at the repository root
+      # and in the text format. `action/bun.lockb` does not exist and never did,
+      # so hashFiles returned "" and the key was the constant `Linux-bun-`; the
+      # `restore-keys` fallback then matched it unconditionally, so this cache
+      # restored the same node_modules forever and a dependency bump was tested
+      # against the tree it was meant to replace. There is no fallback now: a
+      # partial restore of node_modules against a different lockfile is worse
+      # than a cold install.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: action/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('action/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+          key: ${{ runner.os }}-action-node-modules-${{ hashFiles('bun.lock') }}
 
+      # `bun ci` rather than `bun install`, as everywhere else: it refuses to
+      # update the lockfile, so a drifted action/package.json fails here rather
+      # than being silently resolved on the runner.
       - name: Install dependencies
-        run: bun install
+        run: bun ci
 
       - name: Lint & format check
         run: bun run lint

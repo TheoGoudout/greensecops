@@ -1,6 +1,15 @@
 name: "Conflict detector"
+# Two triggers, for the two ways a pull request becomes conflicted: its own head
+# moved, or the base branch did. The second is what the push trigger is for —
+# when main advances, every open pull request is re-checked.
+#
+# Scoped to main. A bare `push:` fires on every push to every branch, including
+# the topic branches whose pull requests this already covers through
+# `pull_request_target`, so each one booked a runner to re-scan the same set.
 on:
   push:
+    branches:
+      - main
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [synchronize]
 
