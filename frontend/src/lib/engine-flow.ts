@@ -59,6 +59,20 @@ export interface FlowStage {
   detail: string
   /** Why it is blocked, or what it is doing. `null` on `todo` and `done`. */
   reason: string | null
+  /**
+   * The subset of `reason` that is a *standing* condition — no GitHub access,
+   * a disabled target, a spent allowance, nothing here to act on — rather than
+   * "something else is running right now". `null` when the only thing in the
+   * way is the activity.
+   *
+   * The split is what stops the rail repeating itself. While one stage runs,
+   * the other three are all blocked by that same one activity, and captioning
+   * each with a truncated copy of the sentence already printed under the rail
+   * says nothing three more times. A standing condition is the opposite: it is
+   * specific to its stage and stated nowhere else, so it is what the caption
+   * shows.
+   */
+  standing: string | null
 }
 
 /** Which stage each activity lights up. The map is total over the non-idle
@@ -154,6 +168,28 @@ const PLURALS: Record<string, string> = {
   fix: "fixes",
 }
 
+/**
+ * The reason `action` is blocked when nothing is running — the standing
+ * conditions alone.
+ *
+ * Asks `actionBlockedReason` the same question with every source of activity
+ * removed, rather than re-listing the conditions here: they are checked
+ * widest-first and ahead of the activity table, so what survives with an idle
+ * input is exactly the standing half.
+ */
+function standingReason(
+  action: Parameters<typeof actionBlockedReason>[0],
+  input: EngineFlowInput,
+): string | null {
+  return actionBlockedReason(action, {
+    ...input,
+    activity: "idle",
+    scanStatus: undefined,
+    fixStatuses: [],
+    pending: {},
+  })
+}
+
 function pluralize(count: number, noun: string): string {
   return `${count} ${count === 1 ? noun : PLURALS[noun]}`
 }
@@ -186,6 +222,7 @@ function syncStage(input: EngineFlowInput, running: boolean): FlowStage {
         ? parts.join(" · ")
         : "Nothing read yet",
     reason: running ? "Reading files from GitHub" : blocked,
+    standing: running ? null : standingReason("sync", input),
   }
 }
 
@@ -210,6 +247,7 @@ function scanStage(input: EngineFlowInput, running: boolean): FlowStage {
           : "todo",
     detail: running ? "Analysing…" : detail,
     reason: running ? "An analysis is running" : blocked,
+    standing: running ? null : standingReason("scan", input),
   }
 }
 
@@ -234,6 +272,16 @@ function fixStage(input: EngineFlowInput, running: boolean): FlowStage {
     // block writing *more*: the fixes it reports are real and the bar below
     // already explains why the button is off.
     reason: running ? "Fixes are being generated" : ready ? null : blocked,
+    // "No open findings to fix" is a standing fact about this stage, not an
+    // activity, so it belongs in the caption, where it is the only account of
+    // why. A stage with fixes to show says nothing: they are the better answer.
+    standing:
+      running || ready
+        ? null
+        : (standingReason("generate", input) ??
+          ((input.openFindingCount ?? 0) > 0
+            ? null
+            : "No open findings to fix")),
   }
 }
 
@@ -266,6 +314,13 @@ function deliverStage(input: EngineFlowInput, running: boolean): FlowStage {
     state,
     detail: running ? "Opening…" : detail,
     reason: running ? "A pull request is being opened" : blocked,
+    standing:
+      state === "blocked"
+        ? (standingReason("deliver", input) ??
+          ((input.fixStatuses ?? []).includes("ready")
+            ? null
+            : "No fix is ready to deliver"))
+        : null,
   }
 }
 

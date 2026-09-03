@@ -1,4 +1,3 @@
-import { ChevronRight } from "lucide-react"
 import {
   type EngineFlowInput,
   engineFlow,
@@ -39,19 +38,19 @@ const ICON_STYLES: Record<FlowStageState, string> = {
 
 function Stage({ stage }: { stage: FlowStage }) {
   const StateIcon = STATE_ICONS[stage.state]
-  // A blocked stage's caption *is* its reason — that is the whole thing this
-  // rail was added to say, and burying it in a tooltip would put it back where
-  // it already was. The other states show what they have to show for
-  // themselves; the running one's own sentence goes under the rail, once for
-  // the page, rather than four times over.
-  const caption =
-    stage.state === "blocked" ? (stage.reason ?? stage.detail) : stage.detail
+  // A stage blocked by a *standing* condition captions itself with it — that
+  // is the whole thing this rail was added to say, and burying it in a tooltip
+  // would put it back where it already was. A stage blocked merely because
+  // something else is running does not: the sentence under the rail already
+  // says so once, and three truncated copies of it would crowd out what each
+  // stage actually has to show.
+  const caption = stage.standing ?? stage.detail
   return (
     <div
       data-testid={`flow-stage-${stage.id}`}
       data-state={stage.state}
       className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 rounded-md border px-3 py-2",
+        "flex min-w-0 items-center gap-2 rounded-md border px-3 py-2",
         STATE_STYLES[stage.state],
       )}
     >
@@ -74,21 +73,21 @@ export function EngineFlowRail({
   const running = stages.find((s) => s.state === "running")
 
   return (
-    <div data-testid={testId} className="flex flex-col gap-2">
-      {/* Stacked on a narrow screen, a row with chevrons once there is width:
-          four chips side by side below ~640px would truncate every caption to
-          nothing, which is the one thing this is here to avoid. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-        {stages.map((stage, index) => (
-          <div
-            key={stage.id}
-            className="flex min-w-0 flex-1 items-center gap-2"
-          >
-            <Stage stage={stage} />
-            {index < stages.length - 1 ? (
-              <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/50 sm:block" />
-            ) : null}
-          </div>
+    <div data-testid={testId} className="flex min-w-0 flex-col gap-2">
+      {/* A grid rather than a flex row, and no chevrons between the stages.
+          `grid-cols-N` is `repeat(N, minmax(0, 1fr))`, so a track can never
+          exceed its share however long a caption is — where flex children,
+          even with `min-w-0` throughout, still contributed their nowrap text
+          to the page's min-content width and pushed the whole layout wider
+          than the viewport. Left-to-right order already reads as a flow. */}
+      <div
+        className={cn(
+          "grid min-w-0 gap-2 sm:grid-cols-2",
+          stages.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3",
+        )}
+      >
+        {stages.map((stage) => (
+          <Stage key={stage.id} stage={stage} />
         ))}
       </div>
       {/* One sentence for the whole page while something is running, so the

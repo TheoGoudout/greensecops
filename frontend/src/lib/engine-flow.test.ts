@@ -113,16 +113,38 @@ describe("engineFlow", () => {
       expect(stages.get(id)?.reason).toBe(
         "GitHub access to this repository was lost",
       )
+      // Standing, so it is what the chip says — it is stated nowhere else.
+      expect(stages.get(id)?.standing).toBe(
+        "GitHub access to this repository was lost",
+      )
     }
   })
 
+  it("does not repeat the running activity on the stages it blocks", () => {
+    // While one stage runs, the other three are blocked by that same activity,
+    // and the rail prints that sentence once beneath itself. Repeating it in
+    // each chip would crowd out what those stages actually have to show.
+    const stages = byId(
+      engineFlow(input({ scanStatus: "running", openFindingCount: 2 })),
+    )
+    expect(stages.get("fix")?.state).toBe("blocked")
+    expect(stages.get("fix")?.reason).toBe(
+      "Cannot generate fixes while a scan is already running",
+    )
+    expect(stages.get("fix")?.standing).toBeNull()
+  })
+
   it("distinguishes nothing to fix from nothing wrong", () => {
-    expect(byId(engineFlow(input())).get("fix")?.reason).toBe(
+    expect(byId(engineFlow(input())).get("fix")?.standing).toBe(
       "No open findings to fix",
     )
     expect(
       byId(engineFlow(input({ openFindingCount: 2 }))).get("fix")?.state,
     ).toBe("todo")
+    // A stage with fixes to show says nothing standing: they are the answer.
+    expect(
+      byId(engineFlow(input({ fixStatuses: ["ready"] }))).get("fix")?.standing,
+    ).toBeNull()
   })
 
   it("counts what each stage has, in its caption", () => {
