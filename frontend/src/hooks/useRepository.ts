@@ -23,7 +23,8 @@ export function useRepository(repoId: string | undefined) {
     // and the other engines have no stream at all. See `pollForActivity`: five
     // seconds while something is running, thirty when nothing appears to be,
     // because "nothing appears to be" is the answer this can be wrong about.
-    refetchInterval: (query) => pollForActivity([query.state.data?.activity]),
+    refetchInterval: (query) =>
+      pollForActivity(query.state.data ? [query.state.data] : []),
   })
   const isAccessible = repo?.is_accessible ?? true
   return { repo, isLoading, isAccessible }

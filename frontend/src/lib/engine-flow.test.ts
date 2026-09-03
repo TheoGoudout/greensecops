@@ -52,9 +52,12 @@ describe("engineFlow", () => {
       ).map((s) => s.id),
     ).toEqual(["scan"])
     // The CI engine is the only one that re-reads its files from GitHub.
-    expect(
-      engineFlow(input({ capabilities: {} })).map((s) => s.id),
-    ).toEqual(["sync", "scan", "fix", "deliver"])
+    expect(engineFlow(input({ capabilities: {} })).map((s) => s.id)).toEqual([
+      "sync",
+      "scan",
+      "fix",
+      "deliver",
+    ])
   })
 
   it("never marks more than one stage running", () => {

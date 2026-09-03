@@ -517,9 +517,7 @@ describe("the three sources of an activity", () => {
 
   it("takes whichever source outranks the others", () => {
     expect(
-      targetActivity(
-        input({ activity: "generating", scanStatus: "running" }),
-      ),
+      targetActivity(input({ activity: "generating", scanStatus: "running" })),
     ).toBe("scanning")
   })
 
@@ -552,9 +550,9 @@ describe("the three sources of an activity", () => {
   })
 
   it("carries the pin into the actions outside the bar", () => {
-    expect(
-      removeAction(input({ pending: { deliver: true } })).reason,
-    ).toBe("Cannot remove this target while a pull request is being opened")
+    expect(removeAction(input({ pending: { deliver: true } })).reason).toBe(
+      "Cannot remove this target while a pull request is being opened",
+    )
     expect(syncAction(input({ pending: { scan: true } })).reason).toBe(
       "Cannot sync from GitHub while a scan is already running",
     )

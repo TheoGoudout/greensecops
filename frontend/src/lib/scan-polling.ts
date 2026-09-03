@@ -75,13 +75,24 @@ export const IDLE_POLL_MS = 30_000
  * reads keep `pollWhileScanning`: they are a request each and there is no
  * point re-asking a settled one on a timer.
  *
- * Takes the rows' `activity` rather than their scan status, because that is
- * the field the buttons are gated on and it covers fix work too — a target
- * whose fixes a worker is writing is exactly as unavailable as one being
- * scanned, and its scan status says `completed`.
+ * Takes whole rows and reads *both* signals, because neither alone is
+ * sufficient. `activity` covers fix work, which a scan status cannot see — a
+ * target whose fixes a worker is writing reports `completed`. And
+ * `latest_scan_status` covers a row that reports no activity at all, which is
+ * every row served by an older API or a test double; falling back to the idle
+ * interval there would quietly make a running scan take half a minute to
+ * resolve on screen.
  */
 export function pollForActivity(
-  activities: readonly (TargetActivity | null | undefined)[],
+  rows: readonly {
+    activity?: TargetActivity | null
+    latest_scan_status?: ScanStatus | null
+  }[],
 ): number {
-  return activities.some((a) => a && a !== "idle") ? SCAN_POLL_MS : IDLE_POLL_MS
+  const busy = rows.some(
+    (row) =>
+      (row.activity != null && row.activity !== "idle") ||
+      isScanInFlight(row.latest_scan_status),
+  )
+  return busy ? SCAN_POLL_MS : IDLE_POLL_MS
 }

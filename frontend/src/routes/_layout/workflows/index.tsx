@@ -198,8 +198,7 @@ function Repositories() {
     // does — and keep a slow baseline poll under it, so an analysis a push
     // started greys these buttons without waiting for something else to
     // refetch. See `pollForActivity`.
-    refetchInterval: (query) =>
-      pollForActivity((query.state.data ?? []).map((r) => r.activity)),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   return (

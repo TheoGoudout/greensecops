@@ -61,10 +61,7 @@ function DockerAnalysisTab() {
     queryFn: () => DockerService.listTargets({ repoId }),
     // See terraform.tsx: these engines publish no live events, so the list
     // polls itself while any scan is unfinished and stops when none is.
-    refetchInterval: (query) =>
-      pollForActivity(
-        (query.state.data ?? []).map((target) => target.activity),
-      ),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   // A ready fix carries no PR of its own, so whether one already exists for

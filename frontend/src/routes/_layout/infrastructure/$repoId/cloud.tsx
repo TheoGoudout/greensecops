@@ -76,10 +76,7 @@ function CloudTab() {
     // longest of any (a cloud scan holds its lock for an hour), so a card that
     // greyed itself for a running scan and then never un-greyed was the most
     // visible here of anywhere.
-    refetchInterval: (query) =>
-      pollForActivity(
-        (query.state.data ?? []).map((account) => account.activity),
-      ),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   const createMutation = useMutation({

@@ -69,8 +69,7 @@ function TerraformTab() {
     // Follow a running scan to its end. The list carries every root's grade and
     // scan status, so re-asking for it is what turns "queued" into a result
     // without a page reload — and it stops the moment nothing is running.
-    refetchInterval: (query) =>
-      pollForActivity((query.state.data ?? []).map((root) => root.activity)),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   const { data: pullRequests } = useQuery({

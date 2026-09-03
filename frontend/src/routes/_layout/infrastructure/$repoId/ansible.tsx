@@ -63,10 +63,7 @@ function AnsibleTab() {
     queryFn: () => AnsibleService.listProjects({ repoId }),
     // See terraform.tsx: these engines publish no live events, so the list
     // polls itself while any scan is unfinished and stops when none is.
-    refetchInterval: (query) =>
-      pollForActivity(
-        (query.state.data ?? []).map((project) => project.activity),
-      ),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   const { data: pullRequests } = useQuery({
