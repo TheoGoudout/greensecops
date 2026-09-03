@@ -8,6 +8,7 @@ hand-written table that could fall behind it.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -241,7 +242,9 @@ def test_checkout_does_not_retry_on_an_unrelated_stripe_error() -> None:
     """Only a missing *customer* is recoverable; a bad price is a real error."""
     fake = MagicMock()
     fake.checkout.Session.create.side_effect = stripe.InvalidRequestError(
-        "No such price: price_pro", param="line_items[0][price]", code="resource_missing"
+        "No such price: price_pro",
+        param="line_items[0][price]",
+        code="resource_missing",
     )
     with (
         patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
@@ -262,30 +265,64 @@ def test_checkout_does_not_retry_on_an_unrelated_stripe_error() -> None:
 
 # ─── Changing an existing subscription's plan ────────────────────────────────
 
-
-def _stripe_client(subscription: dict) -> MagicMock:
-    client = MagicMock()
-    client.Subscription.retrieve.return_value = subscription
-    return client
-
-
 SUBSCRIPTION = {
     "id": "sub_123",
+    "customer": "cus_123",
     "items": {"data": [{"id": "si_1", "price": {"id": "price_starter"}}]},
 }
 
-# One period, ending in the middle of 2026 — the moment a deferred change lands.
-PERIOD_END = 1_780_000_000
-SCHEDULE = {
-    "id": "sub_sched_1",
-    "phases": [
-        {
-            "items": [{"price": "price_pro"}],
-            "start_date": 1_777_000_000,
-            "end_date": PERIOD_END,
-        }
-    ],
+# Two plans on one Stripe product and a third on its own, so the grouping is
+# exercised rather than assumed — and the third comes back expanded, which is
+# the other shape Stripe answers `price.product` with.
+PRODUCT_OF = {
+    "price_starter": "prod_plans",
+    "price_pro": "prod_plans",
+    "price_ultimate": {"id": "prod_ultimate"},
 }
+CATALOG_PRODUCTS = [
+    {"product": "prod_plans", "prices": ["price_starter", "price_pro"]},
+    {"product": "prod_ultimate", "prices": ["price_ultimate"]},
+]
+
+
+@pytest.fixture(autouse=True)
+def _forget_resolved_configurations() -> Iterator[None]:
+    """The configuration id is cached per price set; tests change prices."""
+    stripe_gateway._CONFIGURATION_CACHE.clear()
+    yield
+    stripe_gateway._CONFIGURATION_CACHE.clear()
+
+
+def _stripe_client(
+    subscription: dict | None = None, *, configurations: list[dict] | None = None
+) -> MagicMock:
+    client = MagicMock()
+    client.Subscription.retrieve.return_value = subscription or SUBSCRIPTION
+    client.Price.retrieve.side_effect = lambda price_id: {
+        "id": price_id,
+        "product": PRODUCT_OF[price_id],
+    }
+    client.billing_portal.Configuration.list.return_value = {
+        "data": configurations or []
+    }
+    client.billing_portal.Configuration.create.return_value = {"id": "bpc_new"}
+    client.billing_portal.Configuration.modify.return_value = {"id": "bpc_existing"}
+    client.billing_portal.Session.create.return_value = {
+        "url": "https://portal/confirm"
+    }
+    return client
+
+
+def _configuration(prices: list[str], *, mine: bool = True) -> dict:
+    return {
+        "id": "bpc_existing",
+        "metadata": {"greensecops": "plan-changes"} if mine else {"other": "thing"},
+        "features": {
+            "subscription_update": {
+                "products": [{"product": "prod_plans", "prices": prices}]
+            }
+        },
+    }
 
 
 def _prices() -> object:
@@ -294,82 +331,313 @@ def _prices() -> object:
         STRIPE_SECRET_KEY="sk_test_x",
         STRIPE_PRICE_STARTER="price_starter",
         STRIPE_PRICE_PRO="price_pro",
+        STRIPE_PRICE_ULTIMATE="price_ultimate",
+        STRIPE_PORTAL_CONFIGURATION_ID=None,
     )
 
 
-def test_an_upgrade_swaps_the_price_and_invoices_the_difference() -> None:
+def test_a_plan_change_is_confirmed_on_stripe_rather_than_charged_here() -> None:
     """The point of the whole exercise.
 
-    ``always_invoice`` credits the unused remainder of the plan being left and
-    bills only the balance, so the first payment on the new plan is the
-    difference rather than a second full price.
+    Nothing is modified from this end: the customer is handed a Stripe page
+    naming the price change, and only their confirmation there moves any money.
     """
-    client = _stripe_client(SUBSCRIPTION)
+    client = _stripe_client()
     with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
-        change = stripe_gateway.change_subscription_plan(
-            subscription_id="sub_123", tier=UserTier.pro, immediate=True
+        url = stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
         )
 
-    client.Subscription.modify.assert_called_once_with(
-        "sub_123",
-        items=[{"id": "si_1", "price": "price_pro"}],
-        proration_behavior="always_invoice",
-    )
-    # No second subscription was opened, which is the bug this replaces.
-    client.checkout.Session.create.assert_not_called()
-    assert change.tier == UserTier.pro
-    assert change.is_immediate
-
-
-def test_a_downgrade_starts_at_the_renewal_and_not_before() -> None:
-    """A downgrade taking effect now would forfeit time already paid for."""
-    client = _stripe_client(SUBSCRIPTION)
-    client.SubscriptionSchedule.create.return_value = SCHEDULE
-    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
-        change = stripe_gateway.change_subscription_plan(
-            subscription_id="sub_123", tier=UserTier.starter, immediate=False
-        )
-
-    # Nothing about the live subscription changes; only what follows it.
+    assert url == "https://portal/confirm"
+    params = client.billing_portal.Session.create.call_args.kwargs
+    assert params["customer"] == "cus_123"
+    assert params["configuration"] == "bpc_new"
+    flow = params["flow_data"]
+    assert flow["type"] == "subscription_update_confirm"
+    assert flow["subscription_update_confirm"]["subscription"] == "sub_123"
+    # The one item the plan lives on, moved to the new price.
+    assert flow["subscription_update_confirm"]["items"] == [
+        {"id": "si_1", "price": "price_pro", "quantity": 1}
+    ]
+    assert flow["after_completion"] == {
+        "type": "redirect",
+        "redirect": {"return_url": "https://app/billing"},
+    }
+    # Neither of the two ways this used to move money behind the user's back.
     client.Subscription.modify.assert_not_called()
-    phases = client.SubscriptionSchedule.modify.call_args.kwargs["phases"]
-    # The plan already paid for runs to the end of the period it was bought for.
-    assert phases[0]["items"] == [{"price": "price_pro", "quantity": 1}]
-    assert phases[0]["end_date"] == PERIOD_END
-    assert phases[1]["items"] == [{"price": "price_starter", "quantity": 1}]
-    assert (
-        client.SubscriptionSchedule.modify.call_args.kwargs["end_behavior"] == "release"
-    )
-    assert change.tier == UserTier.starter
-    assert not change.is_immediate
-    assert change.effective_at is not None
-    assert change.effective_at.timestamp() == PERIOD_END
+    client.checkout.Session.create.assert_not_called()
 
 
-def test_a_second_downgrade_edits_the_schedule_already_standing() -> None:
-    """Stripe refuses a second schedule, and the user would be stuck."""
-    client = _stripe_client({**SUBSCRIPTION, "schedule": "sub_sched_1"})
-    client.SubscriptionSchedule.retrieve.return_value = SCHEDULE
+def test_a_downgrade_goes_through_the_same_flow() -> None:
+    """Direction is the configuration's business, not this module's.
+
+    There is no price comparison here any more: ``schedule_at_period_end``
+    below is what defers a cheaper plan to the renewal, so our idea of which
+    way a change goes and Stripe's cannot drift apart.
+    """
+    client = _stripe_client()
     with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
-        stripe_gateway.change_subscription_plan(
-            subscription_id="sub_123", tier=UserTier.starter, immediate=False
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.starter,
+            return_url="https://app/billing",
         )
 
+    flow = client.billing_portal.Session.create.call_args.kwargs["flow_data"]
+    assert flow["type"] == "subscription_update_confirm"
+    assert flow["subscription_update_confirm"]["items"][0]["price"] == "price_starter"
     client.SubscriptionSchedule.create.assert_not_called()
-    client.SubscriptionSchedule.retrieve.assert_called_once_with("sub_sched_1")
-    client.SubscriptionSchedule.modify.assert_called_once()
+
+
+# ─── The portal configuration ────────────────────────────────────────────────
+
+
+def test_the_configuration_is_built_from_the_plan_catalog() -> None:
+    """Stripe only allows switching to a price the configuration lists.
+
+    Deriving it from the catalog is what stops a plan added to ``core/plans.py``
+    from being unsellable through the portal until someone remembers to add it
+    in the dashboard as well.
+    """
+    client = _stripe_client()
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    created = client.billing_portal.Configuration.create.call_args.kwargs
+    assert created["metadata"] == {"greensecops": "plan-changes"}
+    update = created["features"]["subscription_update"]
+    assert update["enabled"] is True
+    assert update["products"] == CATALOG_PRODUCTS
+    # The whole billing policy for a plan change, in the three settings Stripe
+    # both applies and explains on the confirmation page.
+    assert update["proration_behavior"] == "always_invoice"
+    assert update["schedule_at_period_end"] == {
+        "conditions": [{"type": "decreasing_item_amount"}]
+    }
+    assert update["trial_update_behavior"] == "continue_trial"
+    # The same configuration backs "Manage subscription", so it carries those
+    # features too rather than opening an empty portal.
+    assert created["features"]["payment_method_update"]["enabled"] is True
+    assert created["features"]["subscription_cancel"]["enabled"] is True
+
+
+def test_a_configuration_already_matching_the_catalog_is_reused() -> None:
+    client = _stripe_client(
+        configurations=[
+            _configuration(["price_starter", "price_pro", "price_ultimate"])
+        ]
+    )
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    client.billing_portal.Configuration.create.assert_not_called()
+    client.billing_portal.Configuration.modify.assert_not_called()
+    # No prices had to be resolved to products either.
+    client.Price.retrieve.assert_not_called()
+    params = client.billing_portal.Session.create.call_args.kwargs
+    assert params["configuration"] == "bpc_existing"
+
+
+def test_a_configuration_whose_prices_drifted_is_brought_back_in_line() -> None:
+    """A price changed in the catalog updates the standing configuration.
+
+    Creating a second one beside it on every price change would leave a trail
+    of stale configurations, and no way to tell which is current.
+    """
+    client = _stripe_client(configurations=[_configuration(["price_starter"])])
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    client.billing_portal.Configuration.create.assert_not_called()
+    modified = client.billing_portal.Configuration.modify.call_args
+    assert modified.args == ("bpc_existing",)
+    assert modified.kwargs["features"]["subscription_update"]["products"] == (
+        CATALOG_PRODUCTS
+    )
+
+
+def test_someone_elses_configuration_is_left_alone() -> None:
+    """Only the one this module marked as its own is ever edited."""
+    client = _stripe_client(
+        configurations=[_configuration(["price_starter", "price_pro"], mine=False)]
+    )
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    client.billing_portal.Configuration.modify.assert_not_called()
+    client.billing_portal.Configuration.create.assert_called_once()
+
+
+def test_a_pinned_configuration_id_skips_provisioning_entirely() -> None:
+    """An operator managing the configuration by hand keeps that control."""
+    client = _stripe_client()
+    with (
+        _prices(),
+        patch.object(settings, "STRIPE_PORTAL_CONFIGURATION_ID", "bpc_by_hand"),
+        patch.object(stripe_gateway, "_client", return_value=client),
+    ):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    client.billing_portal.Configuration.list.assert_not_called()
+    client.billing_portal.Configuration.create.assert_not_called()
+    params = client.billing_portal.Session.create.call_args.kwargs
+    assert params["configuration"] == "bpc_by_hand"
+
+
+def test_the_configuration_is_resolved_once_per_price_set() -> None:
+    """Every plan change would otherwise cost an extra round trip to Stripe."""
+    client = _stripe_client()
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        for tier in (UserTier.pro, UserTier.ultimate):
+            stripe_gateway.create_plan_change_session(
+                subscription_id="sub_123",
+                customer_id="cus_123",
+                tier=tier,
+                return_url="https://app/billing",
+            )
+
+    assert client.billing_portal.Configuration.list.call_count == 1
+    assert client.billing_portal.Configuration.create.call_count == 1
+    assert client.billing_portal.Session.create.call_count == 2
+
+
+def test_a_deployment_with_no_prices_still_opens_the_portal() -> None:
+    """Stripe refuses a configuration that enables switching to nothing.
+
+    Cards and cancellation still work on the account default, which is all a
+    deployment with no prices configured could have offered anyway.
+    """
+    client = _stripe_client()
+    with (
+        patch.multiple(
+            settings,
+            STRIPE_SECRET_KEY="sk_test_x",
+            STRIPE_PRICE_STARTER=None,
+            STRIPE_PRICE_PRO=None,
+            STRIPE_PRICE_ULTIMATE=None,
+            STRIPE_PORTAL_CONFIGURATION_ID=None,
+        ),
+        patch.object(stripe_gateway, "_client", return_value=client),
+    ):
+        url = stripe_gateway.create_portal_session(
+            customer_id="cus_123", return_url="https://app/billing"
+        )
+
+    assert url == "https://portal/confirm"
+    client.billing_portal.Configuration.create.assert_not_called()
+    assert "configuration" not in client.billing_portal.Session.create.call_args.kwargs
+
+
+def test_the_manage_subscription_portal_uses_the_same_configuration() -> None:
+    """Otherwise it would open the account default, which may allow nothing."""
+    client = _stripe_client()
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        url = stripe_gateway.create_portal_session(
+            customer_id="cus_123", return_url="https://app/billing"
+        )
+
+    assert url == "https://portal/confirm"
+    params = client.billing_portal.Session.create.call_args.kwargs
+    assert params["configuration"] == "bpc_new"
+    assert "flow_data" not in params
+
+
+# ─── Leftovers from the old deferred-downgrade path ──────────────────────────
+
+
+def test_a_subscription_still_driven_by_a_schedule_is_released_and_retried() -> None:
+    """Downgrades used to be deferred by a schedule this module created.
+
+    Stripe will not let the portal touch a subscription a schedule is driving,
+    which would leave those accounts unable to change plan at all.
+    """
+    client = _stripe_client({**SUBSCRIPTION, "schedule": "sub_sched_1"})
+    client.billing_portal.Session.create.side_effect = [
+        stripe.InvalidRequestError(
+            "The subscription is managed by a schedule", param="subscription"
+        ),
+        {"url": "https://portal/recovered"},
+    ]
+    with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
+        url = stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    assert url == "https://portal/recovered"
+    client.SubscriptionSchedule.release.assert_called_once_with("sub_sched_1")
+    assert client.billing_portal.Session.create.call_count == 2
 
 
 def test_an_expanded_schedule_object_is_accepted_too() -> None:
     """Stripe returns the schedule as an id or an object depending on expansion."""
     client = _stripe_client({**SUBSCRIPTION, "schedule": {"id": "sub_sched_1"}})
-    client.SubscriptionSchedule.retrieve.return_value = SCHEDULE
+    client.billing_portal.Session.create.side_effect = [
+        stripe.InvalidRequestError("managed by a schedule", param="subscription"),
+        {"url": "https://portal/recovered"},
+    ]
     with _prices(), patch.object(stripe_gateway, "_client", return_value=client):
-        stripe_gateway.change_subscription_plan(
-            subscription_id="sub_123", tier=UserTier.starter, immediate=False
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
         )
 
-    client.SubscriptionSchedule.retrieve.assert_called_once_with("sub_sched_1")
+    client.SubscriptionSchedule.release.assert_called_once_with("sub_sched_1")
+
+
+def test_a_rejection_with_no_schedule_behind_it_is_not_retried() -> None:
+    """Releasing is the repair for one specific state, not a blanket retry."""
+    client = _stripe_client()
+    client.billing_portal.Session.create.side_effect = stripe.InvalidRequestError(
+        "No such price", param="flow_data[subscription_update_confirm][items][0][price]"
+    )
+    with (
+        _prices(),
+        patch.object(stripe_gateway, "_client", return_value=client),
+        pytest.raises(stripe.InvalidRequestError),
+    ):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
+        )
+
+    client.SubscriptionSchedule.release.assert_not_called()
+    assert client.billing_portal.Session.create.call_count == 1
 
 
 def test_changing_to_an_unpurchasable_plan_raises_a_clear_503() -> None:
@@ -377,7 +645,24 @@ def test_changing_to_an_unpurchasable_plan_raises_a_clear_503() -> None:
         patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
         pytest.raises(HTTPException) as exc,
     ):
-        stripe_gateway.change_subscription_plan(
-            subscription_id="sub_123", tier=UserTier.free, immediate=True
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.free,
+            return_url="https://app/billing",
+        )
+    assert exc.value.status_code == 503
+
+
+def test_a_plan_change_without_credentials_raises_a_clear_503() -> None:
+    with (
+        patch.multiple(settings, STRIPE_SECRET_KEY=None, STRIPE_PRICE_PRO="price_pro"),
+        pytest.raises(HTTPException) as exc,
+    ):
+        stripe_gateway.create_plan_change_session(
+            subscription_id="sub_123",
+            customer_id="cus_123",
+            tier=UserTier.pro,
+            return_url="https://app/billing",
         )
     assert exc.value.status_code == 503

@@ -46,7 +46,6 @@ from app.models import (
     OssApplicationPublic,
     OssApplicationReview,
     OssApplicationStatus,
-    PlanChangePublic,
     PlanLimitsPublic,
     PlanPublic,
     QuotaPublic,
@@ -277,49 +276,52 @@ def _has_live_subscription(sub: BillingSubscription) -> bool:
 
     Only these two statuses: a ``canceled`` or ``incomplete`` subscription id
     still sits in the column, and modifying either fails — those accounts need
-    a fresh Checkout, which is what they got before any of this existed.
+    a fresh Checkout, which is what they got before any of this existed. The
+    customer id is part of the question because the portal is opened for a
+    customer: without one there is no page to send them to, and Checkout is
+    already the path that mints a fresh customer for exactly that state.
     """
-    return bool(sub.stripe_subscription_id) and sub.status in (
-        SubscriptionStatus.active,
-        SubscriptionStatus.trialing,
+    return (
+        bool(sub.stripe_subscription_id)
+        and bool(sub.stripe_customer_id)
+        and sub.status in (SubscriptionStatus.active, SubscriptionStatus.trialing)
     )
 
 
-def _change_plan(sub: BillingSubscription, tier: UserTier) -> PlanChangePublic:
-    """Move an existing subscription to ``tier`` rather than selling a new one.
+def _change_plan(sub: BillingSubscription, tier: UserTier) -> CheckoutSessionPublic:
+    """Send the customer to Stripe to confirm moving onto ``tier`` instead.
 
-    Sending an already-subscribed customer to Checkout opened a *second*
-    Stripe subscription alongside the first: the account was billed twice, and
-    whichever ``customer.subscription.*`` event landed last decided the tier.
-    A customer who already has a subscription changes it.
+    Sending an already-subscribed customer to Checkout opened a *second* Stripe
+    subscription alongside the first: the account was billed twice, and
+    whichever ``customer.subscription.*`` event landed last decided the tier. A
+    customer who already has a subscription changes it.
 
-    Direction is decided by price, the same comparison the billing page's
-    button label uses, so "Upgrade" in the UI and "charge the difference now"
-    here can never disagree about which way a change is going.
+    Changing it is money moving, though, so it is not a click here — it is
+    Stripe's own confirmation page, which names the amount due today for an
+    upgrade or the date the cheaper plan starts for a downgrade. Which of the
+    two it is is the portal configuration's decision, so this end never has to
+    guess. Nothing local changes until the resulting webhook arrives.
     """
-    immediate = get_plan(tier).price_cents > get_plan(sub.tier).price_cents
-    change = stripe_gateway.change_subscription_plan(
+    url = stripe_gateway.create_plan_change_session(
         subscription_id=str(sub.stripe_subscription_id),
+        customer_id=str(sub.stripe_customer_id),
         tier=tier,
-        immediate=immediate,
+        return_url=errors.billing_url(),
     )
-    # The tier itself is not written here: the ``customer.subscription.updated``
-    # webhook is the one authority on what Stripe is actually billing, and for
-    # a downgrade it will not say so until the scheduled phase starts.
-    return PlanChangePublic(tier=change.tier, effective_at=change.effective_at)
+    return CheckoutSessionPublic(url=url)
 
 
 @router.post(
     "/checkout-sessions",
     role=Role.user,
     limit=LIMIT_EXPENSIVE,
-    response_model=PlanChangePublic,
+    response_model=CheckoutSessionPublic,
 )
 def create_checkout_session(
     body: CheckoutRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> PlanChangePublic:
+) -> CheckoutSessionPublic:
     """Buy ``body.tier``: a Checkout session, or a change to the live one."""
     plan = get_plan(body.tier)
     if not plan.is_purchasable:
@@ -361,7 +363,7 @@ def create_checkout_session(
         # repair path for an account already broken before the
         # ``customer.deleted`` handler below existed — that event is long gone.
         _forget_stripe_customer(session, sub)
-    return PlanChangePublic(url=checkout.url)
+    return CheckoutSessionPublic(url=checkout.url)
 
 
 @router.post(
@@ -549,6 +551,22 @@ def _period_from_items(data: dict[str, Any]) -> tuple[int | None, int | None]:
     )
 
 
+def _invoice_subscription_id(data: dict[str, Any]) -> Any:
+    """The subscription an invoice belongs to, tolerating both Stripe shapes.
+
+    Newer API versions moved it under ``parent.subscription_details``; older
+    ones keep it flat on the invoice. Which one arrives is decided by the API
+    version set on the *webhook endpoint* in Stripe rather than by the SDK
+    here, so reading both is what keeps raising that version from silently
+    orphaning every invoice — the same reason ``_period_from_items`` above
+    reads the period from two places.
+    """
+    if flat := data.get("subscription"):
+        return flat
+    parent = data.get("parent") or {}
+    return (parent.get("subscription_details") or {}).get("subscription")
+
+
 # Stripe subscription status -> the lifecycle events that could produce it,
 # in the order they should be attempted.
 _STATUS_EVENTS: dict[str, tuple[str, ...]] = {
@@ -649,8 +667,7 @@ def _handle_invoice(session: Session, data: dict[str, Any], event_type: str) -> 
     and so a dunning email can link straight to the thing that needs paying.
     """
     customer_id = data.get("customer")
-    stripe_sub_id = data.get("subscription")
-    sub = _sub_by_stripe_ids(session, customer_id, stripe_sub_id)
+    sub = _sub_by_stripe_ids(session, customer_id, _invoice_subscription_id(data))
     if sub is None:
         logger.warning("Invoice %s has no matching subscription", data.get("id"))
         return

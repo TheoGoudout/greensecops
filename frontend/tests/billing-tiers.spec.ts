@@ -215,8 +215,8 @@ test.describe("Billing Tiers", () => {
 
   /**
    * An account that already pays for a plan has that subscription changed
-   * rather than a second one opened beside it, so the answer carries no URL to
-   * navigate to — it says what the plan is now, and when.
+   * rather than a second one opened beside it — on Stripe's own confirmation
+   * page, so the answer is the URL of that page just as Checkout's is.
    */
   function mockPlanChange(
     page: import("@playwright/test").Page,
@@ -271,39 +271,43 @@ test.describe("Billing Tiers", () => {
     })
   }
 
-  test("an in-place upgrade is reported instead of navigating away", async ({
+  test("an upgrade is confirmed on Stripe, not charged from the button", async ({
     page,
   }) => {
-    await mockPlanChange(page, {
-      url: null,
-      tier: "pro",
-      effective_at: null,
+    // The click used to charge the prorated difference outright. Now it only
+    // asks Stripe for the page where that amount is named and agreed to.
+    const confirm = "https://billing.stripe.com/p/session/confirm_upgrade"
+    await mockPlanChange(page, { url: confirm })
+    // Stop the browser at the boundary — the hosted page is Stripe's to render.
+    let sentTo: string | null = null
+    await page.route(`${confirm}**`, (route) => {
+      sentTo = route.request().url()
+      return route.fulfill({ body: "stripe", contentType: "text/html" })
     })
 
     await page.goto("/billing")
     await page.getByRole("button", { name: "Upgrade to Pro" }).click()
 
-    await expect(page.getByText(/Upgraded to Pro/)).toBeVisible()
-    // Still on our own page: there was no payment page to send anyone to.
-    await expect(page).toHaveURL(/\/billing/)
+    await expect.poll(() => sentTo).toBe(confirm)
+    // No claim is made about the new plan from here: nothing has changed yet.
+    await expect(page.getByText(/Upgraded to/)).toHaveCount(0)
   })
 
-  test("a scheduled downgrade says when the cheaper plan starts", async ({
-    page,
-  }) => {
-    // The plan already paid for runs to the end of the period, so the toast
-    // must not imply the smaller one is live now.
-    await mockPlanChange(
-      page,
-      { url: null, tier: "starter", effective_at: "2026-10-01T00:00:00Z" },
-      // Starter is only a *downgrade* from somewhere above it.
-      MOCK_SUBSCRIPTION_PRO,
-    )
+  test("a downgrade goes to the same confirmation page", async ({ page }) => {
+    // The plan already paid for runs to the end of the period. Which way a
+    // change goes, and what it costs, is Stripe's page to explain — this end
+    // no longer has an opinion about either.
+    const confirm = "https://billing.stripe.com/p/session/confirm_downgrade"
+    await mockPlanChange(page, { url: confirm }, MOCK_SUBSCRIPTION_PRO)
+    let sentTo: string | null = null
+    await page.route(`${confirm}**`, (route) => {
+      sentTo = route.request().url()
+      return route.fulfill({ body: "stripe", contentType: "text/html" })
+    })
 
     await page.goto("/billing")
     await page.getByRole("button", { name: "Downgrade to Starter" }).click()
 
-    await expect(page.getByText(/Switching to Starter on/)).toBeVisible()
-    await expect(page.getByText(/Upgraded to/)).toHaveCount(0)
+    await expect.poll(() => sentTo).toBe(confirm)
   })
 })

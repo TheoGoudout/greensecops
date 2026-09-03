@@ -273,7 +273,7 @@ def subscribe(
     db.commit()
 
 
-def test_upgrading_changes_the_subscription_instead_of_opening_a_second_one(
+def test_a_plan_change_goes_to_stripe_instead_of_opening_a_second_subscription(
     client: TestClient,
     user_headers: dict[str, str],
     subscribe: Callable[[UserTier], None],
@@ -282,7 +282,8 @@ def test_upgrading_changes_the_subscription_instead_of_opening_a_second_one(
 
     An already-subscribed customer sent to Checkout gets a *second* Stripe
     subscription beside the first, and whichever ``customer.subscription.*``
-    event landed last decided the tier. A customer who has one changes it.
+    event landed last decided the tier. A customer who has one changes it —
+    on Stripe's own confirmation page, which is where the amount is named.
     """
     subscribe(UserTier.starter)
     with (
@@ -290,8 +291,8 @@ def test_upgrading_changes_the_subscription_instead_of_opening_a_second_one(
         patch.object(billing.stripe_gateway, "create_checkout_session") as checkout,
         patch.object(
             billing.stripe_gateway,
-            "change_subscription_plan",
-            return_value=stripe_gateway.PlanChange(tier=UserTier.pro),
+            "create_plan_change_session",
+            return_value="https://portal/confirm",
         ) as change,
     ):
         response = client.post(
@@ -302,35 +303,31 @@ def test_upgrading_changes_the_subscription_instead_of_opening_a_second_one(
 
     assert response.status_code == 200
     checkout.assert_not_called()
-    assert change.call_args.kwargs == {
-        "subscription_id": "sub_123",
-        "tier": UserTier.pro,
-        # Pro costs more than Starter, so the change is an upgrade: it starts
-        # now with the unused remainder credited.
-        "immediate": True,
-    }
-    body = response.json()
-    assert body["url"] is None
-    assert body["tier"] == "pro"
-    # No date: an upgrade is live immediately.
-    assert body["effective_at"] is None
+    assert change.call_args.kwargs["subscription_id"] == "sub_123"
+    assert change.call_args.kwargs["customer_id"] == "cus_123"
+    assert change.call_args.kwargs["tier"] == UserTier.pro
+    # The one thing the client has to do with the answer, either way it went.
+    assert response.json()["url"] == "https://portal/confirm"
 
 
-def test_downgrading_defers_the_cheaper_plan_to_the_renewal(
+def test_a_downgrade_takes_the_same_route(
     client: TestClient,
     user_headers: dict[str, str],
     subscribe: Callable[[UserTier], None],
 ) -> None:
+    """No direction is decided here.
+
+    Whether a change prorates now or waits for the renewal is the portal
+    configuration's rule, applied and explained by Stripe on the same page.
+    Comparing prices here as well would be a second rule to drift from it.
+    """
     subscribe(UserTier.pro)
-    renewal = datetime(2026, 10, 1, tzinfo=timezone.utc)
     with (
         patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
         patch.object(
             billing.stripe_gateway,
-            "change_subscription_plan",
-            return_value=stripe_gateway.PlanChange(
-                tier=UserTier.starter, effective_at=renewal
-            ),
+            "create_plan_change_session",
+            return_value="https://portal/confirm",
         ) as change,
     ):
         response = client.post(
@@ -340,8 +337,8 @@ def test_downgrading_defers_the_cheaper_plan_to_the_renewal(
         )
 
     assert response.status_code == 200
-    assert change.call_args.kwargs["immediate"] is False
-    assert response.json()["effective_at"].startswith("2026-10-01")
+    assert change.call_args.kwargs["tier"] == UserTier.starter
+    assert response.json()["url"] == "https://portal/confirm"
 
 
 def test_the_tier_is_not_written_until_stripe_says_so(
@@ -350,23 +347,21 @@ def test_the_tier_is_not_written_until_stripe_says_so(
     db: Session,
     subscribe: Callable[[UserTier], None],
 ) -> None:
-    """A scheduled downgrade must not take the plan away early.
+    """Asking for a plan is not getting it.
 
-    ``customer.subscription.updated`` is the one authority on what Stripe is
-    actually billing, and for a deferred change it will not say the new tier
-    until the scheduled phase starts. Writing it here would drop the account to
-    Starter limits the moment they asked, having paid for Pro.
+    The customer has only been handed a page at this point — they may never
+    confirm it, and a downgrade they do confirm does not start until the
+    renewal. ``customer.subscription.updated`` is the one authority on what
+    Stripe is actually billing; writing the tier here would drop the account
+    to Starter limits the moment they asked, having paid for Pro.
     """
     subscribe(UserTier.pro)
     with (
         patch.object(settings, "STRIPE_SECRET_KEY", "sk_test_x"),
         patch.object(
             billing.stripe_gateway,
-            "change_subscription_plan",
-            return_value=stripe_gateway.PlanChange(
-                tier=UserTier.starter,
-                effective_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
-            ),
+            "create_plan_change_session",
+            return_value="https://portal/confirm",
         ),
     ):
         client.post(
@@ -400,7 +395,7 @@ def test_a_canceled_subscription_goes_back_through_checkout(
             "create_checkout_session",
             return_value=stripe_gateway.CheckoutSession(url="https://checkout/x"),
         ) as checkout,
-        patch.object(billing.stripe_gateway, "change_subscription_plan") as change,
+        patch.object(billing.stripe_gateway, "create_plan_change_session") as change,
     ):
         response = client.post(
             f"{settings.API_V1_STR}/billing/checkout-sessions",

@@ -136,8 +136,9 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **Billing (optional)**
 
-* `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`: Stripe API credentials.
+* `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`: Stripe API credentials. The secret key must be allowed to write Customer Portal configurations — see below.
 * `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ULTIMATE`: Stripe price IDs for the subscription tiers.
+* `STRIPE_PORTAL_CONFIGURATION_ID`: Optional. Changing plan sends the customer to Stripe's own confirmation page, which will only offer a price its Customer Portal configuration lists. That configuration is created and kept in step with the plan catalog automatically on the first plan change, so adding a plan needs no dashboard work — set this to a configuration id only if you would rather manage it by hand, in which case nothing is created or modified for you.
 
 **Observability (optional)**
 

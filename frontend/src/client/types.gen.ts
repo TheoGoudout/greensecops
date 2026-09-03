@@ -158,6 +158,12 @@ export type CheckoutRequest = {
 
 /**
  * The Stripe-hosted URL the browser must be sent to.
+ *
+ * Every way of buying or changing a plan answers with one of these. Both are
+ * a page on Stripe: a new subscription is a Checkout session, and a change to
+ * a live one is the Customer Portal's confirmation flow. The client's job is
+ * the same in either case — navigate — and nothing here reports a new plan,
+ * because until the customer confirms on Stripe there is not one.
  */
 export type CheckoutSessionPublic = {
     url: string;
@@ -714,25 +720,6 @@ export type OverviewTotals = {
  */
 export type PasswordRecovery = {
     email: string;
-};
-
-/**
- * Where a plan purchase went — a payment page, or the plan itself.
- *
- * An account with no live subscription is sent to Stripe Checkout and gets a
- * ``url`` to visit. An account that already has one changes that
- * subscription in place instead, so there is no page: ``tier`` is what it is
- * now on and ``effective_at`` when, which is ``None`` for an upgrade
- * (immediately) and the renewal date for a downgrade, since a downgrade
- * leaves the plan already paid for running to the end of the period.
- *
- * Exactly one side is ever filled in, and ``url`` is the one to check: a
- * client that has a URL should navigate, and otherwise report the change.
- */
-export type PlanChangePublic = {
-    url?: (string | null);
-    tier?: (UserTier | null);
-    effective_at?: (string | null);
 };
 
 /**
@@ -1671,7 +1658,7 @@ export type BillingCreateCheckoutSessionData = {
     requestBody: CheckoutRequest;
 };
 
-export type BillingCreateCheckoutSessionResponse = (PlanChangePublic);
+export type BillingCreateCheckoutSessionResponse = (CheckoutSessionPublic);
 
 export type BillingCreatePortalSessionResponse = (CheckoutSessionPublic);
 
