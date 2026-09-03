@@ -1,0 +1,109 @@
+name: Publish a Cloudflare Worker
+description: >-
+  Validate, preview-upload or deploy one static surface's Worker, depending on
+  whether this is a preview run and whether Cloudflare credentials are present.
+
+# The tail of every surface's job in pages-reusable.yml. The landing page, the
+# dashboard and the documentation each built something different and then ran
+# the same four steps over it, differing only in a directory name and a label —
+# fifty lines, three times, with three copies of the reasoning below. Three
+# copies is how a fix lands in two of them.
+#
+# What is *not* here is deliberate: the build, the `_headers` copy, the noindex
+# pass and the job's `environment:` all stay in the calling job, because those
+# are the parts that genuinely differ per surface.
+#
+# Secrets arrive as inputs because a composite action has no `secrets` context.
+# They go straight into wrangler-action's own `with:`, never into a `run:`.
+
+inputs:
+  surface:
+    description: Human name for this surface, used in the preview comment.
+    required: true
+  working-directory:
+    description: Directory holding the surface's wrangler configuration.
+    required: true
+  wrangler-version:
+    description: Pinned wrangler version, so a deploy is reproducible.
+    required: true
+  wrangler-env:
+    description: >-
+      The `--env` flag to pass, or a single space for production, which is the
+      unnamed top-level configuration and so takes no flag.
+    required: true
+  preview:
+    description: '"true" to upload a throwaway version instead of deploying.'
+    required: true
+  has-cloudflare:
+    description: '"true" when an API token is configured.'
+    required: true
+  api-token:
+    description: Workers Scripts:Edit token. Empty disables publishing.
+    required: false
+    default: ""
+  account-id:
+    description: Cloudflare account the Workers live in.
+    required: false
+    default: ""
+
+outputs:
+  preview-url:
+    description: The uploaded version's URL, empty on a non-preview run.
+    value: ${{ steps.preview.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate the Worker configuration
+      # Only where nothing else will validate it. A configured account runs
+      # either `versions upload` or `deploy` below, both of which resolve the
+      # config for real; this is the fork and unconfigured-account path.
+      if: inputs.has-cloudflare != 'true'
+      uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+      with:
+        wranglerVersion: ${{ inputs.wrangler-version }}
+        packageManager: npm
+        workingDirectory: ${{ inputs.working-directory }}
+        # --dry-run resolves the config and the asset directory without
+        # contacting the account, so this runs on forks and pull requests.
+        command: deploy --dry-run ${{ inputs.wrangler-env }}
+
+    - name: Upload a preview version
+      id: preview-upload
+      if: inputs.preview == 'true' && inputs.has-cloudflare == 'true'
+      uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+      with:
+        apiToken: ${{ inputs.api-token }}
+        accountId: ${{ inputs.account-id }}
+        wranglerVersion: ${{ inputs.wrangler-version }}
+        packageManager: npm
+        workingDirectory: ${{ inputs.working-directory }}
+        # `versions upload` creates a version with its own preview URL and
+        # shifts no traffic, so the staging Worker carries on serving main.
+        #
+        # No --message: wrangler-action splits this string on whitespace
+        # without honouring quotes, so `--message "PR #12 at abc"` arrives as
+        # `--message PR` and the rest is dropped. --tag carries the number,
+        # which is what the Cloudflare UI shows anyway.
+        command: versions upload ${{ inputs.wrangler-env }} --tag pr-${{ github.event.number }}
+
+    - name: Extract the preview URL
+      id: preview
+      if: inputs.preview == 'true' && inputs.has-cloudflare == 'true'
+      shell: bash
+      env:
+        STDOUT: ${{ steps.preview-upload.outputs.command-output }}
+        STDERR: ${{ steps.preview-upload.outputs.command-stderr }}
+        SURFACE: ${{ inputs.surface }}
+      run: .github/scripts/shared/extract-preview-url.sh "$SURFACE"
+
+    - name: Publish
+      if: ${{ inputs.preview != 'true' && inputs.has-cloudflare == 'true' }}
+      uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+      with:
+        apiToken: ${{ inputs.api-token }}
+        accountId: ${{ inputs.account-id }}
+        wranglerVersion: ${{ inputs.wrangler-version }}
+        packageManager: npm
+        workingDirectory: ${{ inputs.working-directory }}
+        command: deploy ${{ inputs.wrangler-env }}

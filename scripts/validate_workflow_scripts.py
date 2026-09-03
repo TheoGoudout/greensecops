@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check that no workflow carries an embedded script, and that .github/scripts/ agrees with them.
+"""Check that no workflow or composite action carries an embedded script, and that
+.github/scripts/ agrees with them.
 
 Shell inside a YAML string is invisible to every linter there is. Moving each
 step body into .github/scripts/ is what lets the shellcheck hook see it at all
@@ -8,10 +9,10 @@ is the guard that stops that, in the style of the other drift checks beside it.
 
 Four things are asserted:
 
-1. No workflow has a multi-line ``run:``. A ``script:`` block (actions/
+1. No workflow or composite action has a multi-line ``run:``. A ``script:`` block (actions/
    github-script) is allowed only as a one-line ``require(...)`` loader.
-2. Every ``.github/scripts/`` path a workflow names exists on disk.
-3. Every script under ``.github/scripts/`` is named by some workflow — which
+2. Every ``.github/scripts/`` path one of them names exists on disk.
+3. Every script under ``.github/scripts/`` is named by one of them — which
    catches the orphan a workflow edit leaves behind.
 
 ``.github/scripts/lib/`` is exempt from (3) and (4): it is sourced by other
@@ -33,6 +34,10 @@ WORKFLOW_DIRS = (
     ROOT / ".github" / "workflows",
     ROOT / "action" / ".github" / "workflows",
 )
+# Composite actions carry step bodies exactly as workflows do, and are just as
+# invisible to shellcheck when that body is a YAML string — so they are held to
+# the same rule, and their `.github/scripts/` references count as calls.
+ACTION_FILES = tuple(sorted((ROOT / ".github" / "actions").glob("*/action.yml")))
 
 # A step body written as a YAML block scalar: `run: |`, `run: >-`, and so on.
 BLOCK = re.compile(r"^(\s*)(run|script):\s*[|>][+-]?\s*$")
@@ -45,7 +50,13 @@ SHEBANG = "#!/usr/bin/env bash"
 
 
 def workflows() -> list[Path]:
-    return sorted(p for d in WORKFLOW_DIRS if d.is_dir() for p in d.glob("*.yml"))
+    files = [p for d in WORKFLOW_DIRS if d.is_dir() for p in d.glob("*.yml")]
+    return sorted(files) + list(ACTION_FILES)
+
+
+def destination(wf: Path) -> str:
+    """The .github/scripts/ subdirectory a file's step bodies belong in."""
+    return wf.parent.name if wf.name == "action.yml" else wf.stem
 
 
 def block_body(lines: list[str], start: int, indent: int) -> tuple[list[str], int]:
@@ -95,7 +106,7 @@ def main() -> int:
             if key == "run":
                 errors.append(
                     f"{rel}:{i - len(body)}: a multi-line `run:` block of {len(body)} line(s). "
-                    f"Move it to .github/scripts/{wf.stem}/<step>.sh and call it from here — "
+                    f"Move it to .github/scripts/{destination(wf)}/<step>.sh and call it from here — "
                     f"see .github/scripts/README.md."
                 )
             elif len(body) != 1 or not LOADER.search(body[0]):
@@ -125,7 +136,10 @@ def main() -> int:
         if SCRIPTS / "lib" in script.parents:
             continue
         if script not in referenced:
-            errors.append(f"{rel}: no workflow calls this. Delete it, or wire it up.")
+            errors.append(
+                f"{rel}: no workflow or composite action calls this. "
+                f"Delete it, or wire it up."
+            )
         first = script.read_text().split("\n", 1)[0]
         if script.suffix == ".sh" and first != SHEBANG:
             errors.append(f"{rel}: starts with {first!r}, expected {SHEBANG!r}.")
