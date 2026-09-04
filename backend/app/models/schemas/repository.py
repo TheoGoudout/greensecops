@@ -13,6 +13,7 @@ from ..enums import (
     ReviewDecision,
     ScanStatus,
     Severity,
+    TargetActivity,
     UserTier,
 )
 
@@ -56,6 +57,12 @@ class RepositoryPublic(SQLModel):
     # running" even when a sibling workflow file's scan has already landed.
     # ``None`` on the reads that do not compute it.
     latest_scan_status: ScanStatus | None = None
+    # What the repository is busy with, under the same name and the same rules
+    # ``ScanTargetPublicBase.activity`` uses — a repository *is* the CI engine's
+    # target. Computed by ``engine_routes.repository_activities``, which is the
+    # batched form of what the 409 guard asks, so the field and the refusal it
+    # predicts are one answer. ``idle`` on the reads that do not compute it.
+    activity: TargetActivity = TargetActivity.idle
     # The CI-workflow average, kept under its historical names because badges,
     # the dashboard and the repository list all read them. It is the same
     # number as the `workflow` entry in `engine_grades`.

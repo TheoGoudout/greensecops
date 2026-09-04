@@ -8,12 +8,17 @@ from app.models import (
     AnsibleScan,
     AnsibleScanPublic,
 )
+from app.models.enums import TargetActivity
 from app.services.badge_signing import sign_badge
 
 from .base import latest_completed_scan, latest_scan_status, to_public
 
 
-def to_ansible_project_public(project: AnsibleProject) -> AnsibleProjectPublic:
+def to_ansible_project_public(
+    project: AnsibleProject,
+    activity: TargetActivity = TargetActivity.idle,
+) -> AnsibleProjectPublic:
+    # Passed in, not read off the row — see ``to_terraform_root_public``.
     latest = latest_completed_scan(project)
     badge_sig: str | None = None
     if project.repository and project.repository.is_private:
@@ -25,6 +30,7 @@ def to_ansible_project_public(project: AnsibleProject) -> AnsibleProjectPublic:
         latest_score=latest.score if latest else None,
         latest_grade=latest.grade if latest else None,
         latest_scan_status=latest_scan_status(project),
+        activity=activity,
         badge_sig=badge_sig,
     )
 

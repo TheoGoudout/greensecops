@@ -1,4 +1,4 @@
-import type { ScanStatus } from "@/client"
+import type { ScanStatus, TargetActivity } from "@/client"
 
 /**
  * Scan states that have not finished yet.
@@ -51,4 +51,48 @@ export function pollWhileScanning(
   statuses: readonly (ScanStatus | null | undefined)[],
 ): number | false {
   return statuses.some(isScanInFlight) ? SCAN_POLL_MS : false
+}
+
+/**
+ * How often to re-ask while nothing appears to be running.
+ *
+ * Thirty seconds, because "nothing appears to be running" is the state this
+ * page can be wrong about. `pollWhileScanning` starts polling only once the
+ * data it already holds shows a scan — so work started anywhere else (the
+ * GitHub Action on a push, a webhook, a teammate on the same repository) is
+ * invisible until something else happens to refetch, and every action stays
+ * live over it. A slow baseline poll is what closes that: the buttons grey
+ * within half a minute rather than never.
+ */
+export const IDLE_POLL_MS = 30_000
+
+/**
+ * A `refetchInterval` that never stops, but slows down when nothing is in
+ * flight.
+ *
+ * For the target and repository *lists* — the cheap reads that carry
+ * `activity` and gate the buttons drawn beside them. The heavier per-target
+ * reads keep `pollWhileScanning`: they are a request each and there is no
+ * point re-asking a settled one on a timer.
+ *
+ * Takes whole rows and reads *both* signals, because neither alone is
+ * sufficient. `activity` covers fix work, which a scan status cannot see — a
+ * target whose fixes a worker is writing reports `completed`. And
+ * `latest_scan_status` covers a row that reports no activity at all, which is
+ * every row served by an older API or a test double; falling back to the idle
+ * interval there would quietly make a running scan take half a minute to
+ * resolve on screen.
+ */
+export function pollForActivity(
+  rows: readonly {
+    activity?: TargetActivity | null
+    latest_scan_status?: ScanStatus | null
+  }[],
+): number {
+  const busy = rows.some(
+    (row) =>
+      (row.activity != null && row.activity !== "idle") ||
+      isScanInFlight(row.latest_scan_status),
+  )
+  return busy ? SCAN_POLL_MS : IDLE_POLL_MS
 }

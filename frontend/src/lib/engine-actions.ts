@@ -9,6 +9,7 @@ import {
   Wand2,
 } from "lucide-react"
 import type {
+  TargetActivity as ClientTargetActivity,
   FindingStatus,
   FixStatus,
   PullRequestPublic,
@@ -76,10 +77,17 @@ export type EngineActionId = Extract<
 >
 
 /**
- * What a target is busy with. Derived from data the pages already fetch — the
- * target's latest scan status and its fixes' statuses — not from a field.
+ * What a target is busy with.
+ *
+ * Re-exported from the generated client rather than spelled out here: the
+ * backend publishes this on every target and repository as
+ * `ScanTargetPublicBase.activity`, so the browser now *reads* the value the 409
+ * guard would decide from instead of only reconstructing it. The local
+ * derivation stays — see `targetActivity` — because a page often holds fresher
+ * fix statuses than the row it fetched, and because a request still in flight
+ * has no server-side row to be seen in yet.
  */
-export type TargetActivity = "idle" | "scanning" | "generating" | "delivering"
+export type TargetActivity = ClientTargetActivity
 
 /** Reported when several hold at once: a scan outranks fix work because it
  * rewrites what the fixes are about; a delivery outranks generation because it
@@ -117,6 +125,27 @@ const BLOCKS: Record<TargetActionId, ReadonlySet<TargetActivity>> = {
   remove: BUSY,
   ignore: new Set<TargetActivity>(["scanning"]),
   sync: new Set<TargetActivity>(["scanning"]),
+}
+
+/**
+ * The activity an in-flight trigger request is about to create.
+ *
+ * Without this there is a window — between the click and the refetch that
+ * follows the response — in which the server has no row to report yet and the
+ * page still believes the target is idle. `pending.scan` greyed only the scan
+ * button, so "Generate fixes" and "Create PR" stayed live over an analysis
+ * already on its way: exactly the race the blocking table exists to stop, just
+ * a second wide. Folding the pending request into the activity closes it with
+ * no new state, and the tooltip it grows is the one the table already writes.
+ *
+ * `remove`, `ignore` and `sync` are absent because they create no activity —
+ * they are refused *by* one. They still obey the pin, since they read the same
+ * value.
+ */
+const PENDING_ACTIVITY: Partial<Record<TargetActionId, TargetActivity>> = {
+  scan: "scanning",
+  generate: "generating",
+  deliver: "delivering",
 }
 
 /**
@@ -189,6 +218,16 @@ export interface EngineActionInput {
   enabled?: boolean
   /** The owning org's spent allowances. Absent means "not known here". */
   quota?: QuotaReasons
+  /**
+   * What the server says this scope is busy with, straight off the target's or
+   * repository's `activity` field.
+   *
+   * Unioned with the statuses below rather than replacing them: a list row is
+   * authoritative about work started elsewhere — by the Action, a webhook, a
+   * teammate — while an expanded card often holds fresher fix statuses than the
+   * row it was drawn from. Neither is a superset of the other.
+   */
+  activity?: TargetActivity
   /** This scope's latest scan status, or every unfinished one for a repository. */
   scanStatus?: ScanStatus | readonly (ScanStatus | null | undefined)[] | null
   /** Every fix in this scope. */
@@ -244,15 +283,28 @@ function asArray<T>(value: T | readonly T[] | null | undefined): readonly T[] {
   return Array.isArray(value) ? value : [value as T]
 }
 
-/** What this scope is busy with. Mirrors the backend's `activity_of`. */
+/**
+ * What this scope is busy with, from all three things that can know.
+ *
+ * The server's own answer (`activity`), the statuses this page happens to hold,
+ * and any trigger request still in flight — unioned, then resolved by
+ * `PRECEDENCE`. The middle one mirrors the backend's `activity_of`; the other
+ * two are what a single derivation cannot see. Whichever says "busy" wins:
+ * over-reporting costs a button that comes back a moment later, while
+ * under-reporting is the race.
+ */
 export function targetActivity(input: EngineActionInput): TargetActivity {
   const found = new Set<TargetActivity>()
+  if (input.activity && input.activity !== "idle") found.add(input.activity)
   if (asArray(input.scanStatus).some(isScanInFlight)) found.add("scanning")
   for (const status of input.fixStatuses ?? []) {
     if (status === "delivering") found.add("delivering")
     else if (status === "pending" || status === "generating") {
       found.add("generating")
     }
+  }
+  for (const [action, activity] of Object.entries(PENDING_ACTIVITY)) {
+    if (input.pending?.[action as TargetActionId]) found.add(activity)
   }
   return PRECEDENCE.find((activity) => found.has(activity)) ?? "idle"
 }

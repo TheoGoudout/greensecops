@@ -244,6 +244,7 @@ export type AnsibleProjectPublic = {
      */
     latest_grade?: string | null;
     latest_scan_status?: ScanStatus | null;
+    activity?: TargetActivity;
     /**
      * Badge Sig
      */
@@ -514,6 +515,7 @@ export type CloudAccountPublic = {
      */
     latest_grade?: string | null;
     latest_scan_status?: ScanStatus | null;
+    activity?: TargetActivity;
     /**
      * Badge Sig
      */
@@ -1063,6 +1065,7 @@ export type DockerTargetPublic = {
      */
     latest_grade?: string | null;
     latest_scan_status?: ScanStatus | null;
+    activity?: TargetActivity;
     /**
      * Badge Sig
      */
@@ -2068,6 +2071,7 @@ export type RepositoryPublic = {
      */
     created_at?: string | null;
     latest_scan_status?: ScanStatus | null;
+    activity?: TargetActivity;
     /**
      * Avg Score
      */
@@ -2386,6 +2390,21 @@ export type SeverityStat = {
  * back to Free limits, and neither ever removes data.
  */
 export type SubscriptionStatus = 'incomplete' | 'trialing' | 'active' | 'past_due' | 'unpaid' | 'pending_cancellation' | 'canceled';
+
+/**
+ * TargetActivity
+ * What a scan target is busy with right now, on any engine.
+ *
+ * Derived rather than persisted: it is read off the target's latest scan
+ * status and its fixes' statuses, which every engine already stores. It exists
+ * because "what may I do to this target?" is a question all five engines
+ * answer identically, and answering it from scattered ``if`` expressions is
+ * how the UI ended up offering "Generate fixes" during a running scan.
+ *
+ * See ``services/state_machines/engine_target.py`` for the transitions and
+ * which :class:`TargetAction` each activity blocks.
+ */
+export type TargetActivity = 'idle' | 'scanning' | 'generating' | 'delivering';
 
 /**
  * TelemetryAveragePublic
@@ -2734,6 +2753,7 @@ export type TerraformRootPublic = {
      */
     latest_grade?: string | null;
     latest_scan_status?: ScanStatus | null;
+    activity?: TargetActivity;
     /**
      * Badge Sig
      */

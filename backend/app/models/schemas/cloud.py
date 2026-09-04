@@ -9,6 +9,7 @@ from ..enums import (
     CloudAccountStatus,
     CloudProvider,
     ScanStatus,
+    TargetActivity,
 )
 from .base import (
     FindingPublicBase,
@@ -37,6 +38,11 @@ class CloudAccountPublic(SQLModel):
     latest_score: float | None = None
     latest_grade: str | None = None
     latest_scan_status: ScanStatus | None = None
+    # Same field, same meaning and same source as ``ScanTargetPublicBase``'s,
+    # spelled out because a cloud account is not a repo-backed scan target and
+    # so does not inherit that base. Cloud has no fixes, so the only activity it
+    # ever reports is ``scanning``.
+    activity: TargetActivity = TargetActivity.idle
     # Unlike a Terraform root or Docker target, a cloud account has no public
     # repo to inherit visibility from — an AWS account's posture is sensitive
     # regardless, so this is always set, never conditional on a privacy flag.
