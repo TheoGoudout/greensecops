@@ -49,21 +49,38 @@ on:
 
 permissions: {}
 
-# One run per pull request, and per branch for a push. Cancelled, because a
-# superseded commit's checks are an answer about code nobody is going to merge.
+# One run per pull request, and per branch for a push.
+#
+# Cancelled for a pull request, because a superseded commit's checks are an
+# answer about code nobody is going to merge. *Not* cancelled for a push to
+# main: that run is the branch's own record, and a second merge landing while
+# it is still going would erase the first one's result rather than supersede
+# it — the check would simply be missing from the commit that caused it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Pinned so local hooks, CI and the documented runbook agree. 1.10 is the
   # floor for S3 native state locking, which deploy/terraform/backend.tf uses.
   TERRAFORM_VERSION: "1.14.4"
+  # The same range deploy-reusable.yml pins, spelled the same way, because the
+  # two have to agree: this job is what asserts the playbooks are clean under
+  # the ansible-core that actually deploys them. It was a literal in the
+  # `pip install` line here and an env var there — one range, two places to
+  # edit, and nothing that noticed when only one moved.
+  #
+  # >= 2.19 is also why every Python here is 3.11 rather than the 3.10 the
+  # application is tested on: 2.19 requires a 3.11+ controller.
+  ANSIBLE_CORE_VERSION: ">=2.19,<2.21"
+  ANSIBLE_LINT_VERSION: ">=25.9,<26.0"
 
 jobs:
   terraform:
     name: Terraform format & validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,6 +106,8 @@ jobs:
   coolify:
     name: Coolify compose drift
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,6 +127,8 @@ jobs:
   cloudflare:
     name: Landing default drift
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -126,6 +147,8 @@ jobs:
   versions:
     name: Version drift
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -143,6 +166,8 @@ jobs:
   ansible:
     name: Ansible lint & syntax check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -154,7 +179,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Ansible
-        run: pip install "ansible-core>=2.19,<2.21" "ansible-lint>=25.9,<26.0"
+        run: pip install "ansible-core${ANSIBLE_CORE_VERSION}" "ansible-lint${ANSIBLE_LINT_VERSION}"
 
       - name: Install collections
         # amazon.aws supplies both the aws_ec2 inventory plugin and the aws_ssm

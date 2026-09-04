@@ -6,8 +6,7 @@
 # Coolify generates them at deploy time, so they are empty in CI.
 set -euo pipefail
 
-cp .env.example .env
-cp frontend/.env.example frontend/.env
+.github/scripts/shared/prepare-env-files.sh
 {
   printf '\nFIRST_SUPERUSER_PASSWORD=%s\n' "$SERVICE_PASSWORD_FIRSTSUPERUSER"
   printf 'POSTGRES_PASSWORD=%s\n' "$SERVICE_PASSWORD_POSTGRES"

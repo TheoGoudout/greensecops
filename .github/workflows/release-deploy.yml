@@ -7,6 +7,13 @@ name: release-deploy
 # moves production. Staging is untouched here: it tracks main automatically
 # (pages.yml for the static surfaces, Coolify's own auto-deploy for the API).
 #
+# The whole promotion is one run, so there is one place to read its status and
+# "Re-run failed jobs" re-drives only the half that broke. The workflow_dispatch
+# trigger is the same thing from the other direction: name a tag that is already
+# released and, optionally, narrow it to one half. That is the shape of the
+# half-failed release — Coolify deployed, Cloudflare did not — where restarting
+# a rollout that already succeeded is the wrong move.
+#
 # The two halves run in sequence, backend first, and that ordering is
 # load-bearing rather than tidy. The dashboard ships a *generated* OpenAPI
 # client, so the two mismatch directions are not equally bad:
@@ -30,12 +37,28 @@ name: release-deploy
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Released tag to promote, e.g. v0.12.0"
+        required: true
+        type: string
+      targets:
+        description: "Which halves of the promotion to run"
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - coolify
+          - cloudflare
 
 permissions: {}
 
 concurrency:
-  # Never cancelled: interrupting a Coolify rollout half-way is exactly the
-  # state this workflow exists to avoid.
+  # One promotion at a time, whatever the tag: two releases rolling out at once
+  # would race to set production's image tag. Never cancelled — interrupting a
+  # Coolify rollout half-way is exactly the state this workflow exists to avoid.
   group: release-deploy
   cancel-in-progress: false
 
@@ -43,8 +66,46 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  resolve:
+    name: Resolve the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      run_coolify: ${{ steps.targets.outputs.coolify }}
+      run_cloudflare: ${{ steps.targets.outputs.cloudflare }}
+
+    steps:
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: .github/scripts/release-deploy/resolve-tag.sh
+
+      - name: Resolve the targets
+        id: targets
+        env:
+          TARGETS: ${{ inputs.targets || 'all' }}
+        run: .github/scripts/release-deploy/resolve-targets.sh
+
   verify:
     name: Verify the images
+    needs: [resolve]
+    # Only the API deploy consumes the images. A `targets: cloudflare` run has
+    # nothing to wait for, and waiting thirty minutes for it would be the whole
+    # cost of the narrow re-drive.
+    if: needs.resolve.outputs.run_coolify == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -62,13 +123,17 @@ jobs:
       - name: Wait for the release images
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ needs.resolve.outputs.tag }}
           OWNER: ${{ github.repository_owner }}
         run: .github/scripts/release-deploy/wait-for-images.sh
 
   coolify:
     name: API (production)
-    needs: [verify]
+    needs: [resolve, verify]
+    # No `always()` here, deliberately: this job must not run unless the images
+    # are actually in the registry, so the default "every `needs` succeeded"
+    # gate is the one we want. `run_coolify` only narrows it further.
+    if: needs.resolve.outputs.run_coolify == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # The approval gate. production's protection rules hold this until a
@@ -107,14 +172,14 @@ jobs:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ needs.resolve.outputs.tag }}
         run: .github/scripts/release-deploy/coolify-deploy.sh
 
       - name: Monitor the deploy
         env:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ needs.resolve.outputs.tag }}
           DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
         run: .github/scripts/release-deploy/coolify-monitor.sh
 
@@ -122,7 +187,18 @@ jobs:
     name: Static surfaces (production)
     # Gated on the API being live, not merely started. The coolify job blocks
     # until Coolify reports `finished`, so this ordering is real.
-    needs: [verify, coolify]
+    #
+    # `always()` is what lets a *skipped* coolify job through — `targets:
+    # cloudflare` skips it, and a plain `needs:` would then skip this job too.
+    # A coolify job that actually failed still blocks the dashboard, which is
+    # the whole point of the sequencing above.
+    needs: [resolve, coolify]
+    if: >-
+      always() &&
+      needs.resolve.result == 'success' &&
+      needs.resolve.outputs.run_cloudflare == 'true' &&
+      needs.coolify.result != 'failure' &&
+      needs.coolify.result != 'cancelled'
     uses: ./.github/workflows/pages-reusable.yml
     # See pages.yml: a caller's permissions cap every job in the called
     # workflow, so api-gate's declaration has to be granted here too.
@@ -141,7 +217,9 @@ jobs:
 
   summary:
     name: Summarise
-    needs: [verify, coolify, cloudflare]
+    needs: [resolve, verify, coolify, cloudflare]
+    # Runs even when a stage failed or was skipped, so the run's conclusion is
+    # the release's conclusion rather than just the last job's.
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -158,8 +236,18 @@ jobs:
 
       - name: Report
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ needs.resolve.outputs.tag || github.event.release.tag_name || inputs.tag }}
           IMAGES: ${{ needs.verify.result }}
           API: ${{ needs.coolify.result }}
           STATIC: ${{ needs.cloudflare.result }}
         run: .github/scripts/release-deploy/report.sh
+
+      # The report above always exits 0 — right for a report, wrong for the last
+      # job in the workflow. Without this, a release whose Cloudflare deploy died
+      # ended on a green check with the failure buried in a table.
+      - name: Fail if any target failed
+        env:
+          IMAGES: ${{ needs.verify.result }}
+          API: ${{ needs.coolify.result }}
+          STATIC: ${{ needs.cloudflare.result }}
+        run: .github/scripts/release-deploy/fail-if-any-target-failed.sh

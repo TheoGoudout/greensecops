@@ -3,8 +3,7 @@
 # Settings and therefore needs the required env vars.
 set -euo pipefail
 
-cp .env.example .env
-cp frontend/.env.example frontend/.env
+.github/scripts/shared/prepare-env-files.sh
 # FIRST_SUPERUSER_PASSWORD is required but left empty in the example
 # (env_ignore_empty drops empty values), so give it a non-empty value.
 printf '\nFIRST_SUPERUSER_PASSWORD=ci-not-a-real-password\n' >> .env
