@@ -12,6 +12,7 @@
 
 ### Internal
 
+* ci: adopt Shop'n'Cook's release-orchestrator shape, and fix the drift an audit found. PR [#326](https://github.com/TheoGoudout/greensecops/pull/326) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ci: install Wrangler outside the workspace, where npm 12 cannot crash. PR [#328](https://github.com/TheoGoudout/greensecops/pull/328) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ Bump the pre-commit group across 2 directories with 1 update. PR [#320](https://github.com/TheoGoudout/greensecops/pull/320) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump re-actors/alls-green from 1.2.2 to 1.3.0 in the github-actions group across 1 directory. PR [#323](https://github.com/TheoGoudout/greensecops/pull/323) by [@dependabot[bot]](https://github.com/apps/dependabot).
