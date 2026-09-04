@@ -2,6 +2,10 @@
 
 ## Latest Changes
 
+### Features
+
+* feat(ux): say what is running, and stop the click that races it. PR [#327](https://github.com/TheoGoudout/greensecops/pull/327) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ### Upgrades
 
 * ⬆ Bump the python group across 2 directories with 1 update. PR [#319](https://github.com/TheoGoudout/greensecops/pull/319) by [@dependabot[bot]](https://github.com/apps/dependabot).
