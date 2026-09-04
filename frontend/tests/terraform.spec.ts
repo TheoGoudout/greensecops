@@ -287,4 +287,74 @@ test.describe("Terraform", () => {
     await dialog.getByRole("button", { name: "Remove" }).click()
     await request
   })
+
+  test("the wire's activity greys the bar with no fix list to derive it from", async ({
+    page,
+  }) => {
+    // A collapsed card fetches no fixes, so before `activity` was published
+    // there was nothing here to derive "a pull request is being opened" from —
+    // and all three buttons stayed live over a worker mid-delivery.
+    await mockTerraformRoots(
+      page,
+      [{ ...MOCK_TERRAFORM_ROOT, activity: "delivering" }],
+      { fixes: [] },
+    )
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+
+    const scan = page.getByRole("button", { name: "Scan now" }).first()
+    await expect(scan).toBeDisabled()
+    await reasonFor(scan)
+    await expect(
+      page.getByText(
+        "Cannot start a scan while a pull request is being opened",
+      ),
+    ).toBeVisible()
+  })
+
+  test("one click greys every other action before the response lands", async ({
+    page,
+  }) => {
+    // The window this closes: the scan row does not exist until the POST
+    // returns, so "Generate fixes" and "Create PR" used to stay pressable over
+    // an analysis already on its way.
+    await mockTerraformRoots(page)
+    // Hold the trigger open so the pending state is observable.
+    await page.route("**/api/v1/terraform/roots/*/scans**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await route.fulfill({ status: 202, json: { status: "queued" } })
+    })
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+    await page.getByRole("button", { name: "Scan now" }).first().click()
+
+    await expect(
+      page.getByRole("button", { name: /Generate fixes/ }).first(),
+    ).toBeDisabled()
+    await expect(
+      page.getByRole("button", { name: /Create PR|Update PR/ }).first(),
+    ).toBeDisabled()
+  })
+
+  test("the flow rail names the running stage and pauses the rest", async ({
+    page,
+  }) => {
+    await mockTerraformRoots(page, [
+      { ...MOCK_TERRAFORM_ROOT, latest_scan_status: "running" },
+    ])
+
+    await page.goto(`/infrastructure/${MOCK_REPO.id}/terraform`)
+    await page.getByTitle("Expand root").first().click()
+
+    await expect(page.getByTestId("flow-stage-scan")).toHaveAttribute(
+      "data-state",
+      "running",
+    )
+    // Cloud is the only engine that drops stages; Terraform keeps three and
+    // never draws the CI-only sync one.
+    await expect(page.getByTestId("flow-stage-sync")).toHaveCount(0)
+    await expect(page.getByTestId("engine-flow-activity")).toContainText(
+      "the other actions are paused",
+    )
+  })
 })

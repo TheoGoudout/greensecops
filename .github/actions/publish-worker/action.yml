@@ -16,27 +16,14 @@ description: >-
 # Secrets arrive as inputs because a composite action has no `secrets` context.
 # They go straight into wrangler-action's own `with:`, never into a `run:`.
 #
-# Every wrangler-action step below carries `npm_config_global: "true"`.
-#
-# wrangler-action installs with `npm i wrangler@<version>` inside
-# `workingDirectory`. npm walks up from there, finds the root package.json's
-# `workspaces: ["frontend", "action", "landing"]`, and crashes building that
-# tree: `Cannot read properties of null (reading 'edgesOut')`. It takes out
-# landing/ and docs/ — the two surfaces with no resolved node_modules — while
-# frontend/ survives only because `bun ci` ran first and left npm a coherent
-# tree to read.
-#
-# Installing one pinned CLI has no business resolving this repository's
-# workspaces at all, so it stops doing so: npm reads `npm_config_*` as
-# configuration, and a global install has no project tree to build. wrangler
-# lands on PATH, which is where wrangler-action's own
-# `npx --no-install wrangler --version` probe looks for it.
-#
-# `--no-workspaces` was tried first and does not work: npm already passes
-# `--workspace` implicitly in a member directory, so landing/ fails with
-# "Can not use --no-workspaces and --workspace at the same time", and docs/ —
-# which has no package.json of its own — is unaffected and still crashes. Both
-# were reproduced against this tree before this line was written.
+# The caller installs wrangler globally before using this action — see the
+# `Install Wrangler` step and the note at the top of pages-reusable.yml. That
+# is load-bearing, not incidental: left to itself wrangler-action runs
+# `npm i wrangler@<version>` inside `workingDirectory`, npm walks up to the root
+# package.json's `workspaces`, and arborist dies building that tree. With the
+# binary already on PATH the action's own `npx --no-install wrangler --version`
+# probe finds it and skips installing at all, so nothing here has to work
+# around it.
 
 inputs:
   surface:
@@ -82,8 +69,6 @@ runs:
       # config for real; this is the fork and unconfigured-account path.
       if: inputs.has-cloudflare != 'true'
       uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-      env:
-        npm_config_global: "true" # see the header
       with:
         wranglerVersion: ${{ inputs.wrangler-version }}
         packageManager: npm
@@ -96,8 +81,6 @@ runs:
       id: preview-upload
       if: inputs.preview == 'true' && inputs.has-cloudflare == 'true'
       uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-      env:
-        npm_config_global: "true" # see the header
       with:
         apiToken: ${{ inputs.api-token }}
         accountId: ${{ inputs.account-id }}
@@ -126,8 +109,6 @@ runs:
     - name: Publish
       if: ${{ inputs.preview != 'true' && inputs.has-cloudflare == 'true' }}
       uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-      env:
-        npm_config_global: "true" # see the header
       with:
         apiToken: ${{ inputs.api-token }}
         accountId: ${{ inputs.account-id }}

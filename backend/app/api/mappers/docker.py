@@ -24,12 +24,17 @@ from app.models import (
     DockerTargetPublic,
     Rule,
 )
+from app.models.enums import TargetActivity
 from app.services.badge_signing import sign_badge
 
 from .base import latest_completed_scan, latest_scan_status, to_public
 
 
-def to_docker_target_public(target: DockerTarget) -> DockerTargetPublic:
+def to_docker_target_public(
+    target: DockerTarget,
+    activity: TargetActivity = TargetActivity.idle,
+) -> DockerTargetPublic:
+    # Passed in, not read off the row — see ``to_terraform_root_public``.
     latest = latest_completed_scan(target)
     badge_sig: str | None = None
     if target.repository and target.repository.is_private:
@@ -45,6 +50,7 @@ def to_docker_target_public(target: DockerTarget) -> DockerTargetPublic:
         latest_score=latest.score if latest else None,
         latest_grade=latest.grade if latest else None,
         latest_scan_status=latest_scan_status(target),
+        activity=activity,
         badge_sig=badge_sig,
     )
 

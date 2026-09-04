@@ -11,7 +11,11 @@ from app.api.deps import (
     get_or_404,
     user_org_ids,
 )
-from app.api.engine_routes import cloud_account_activity, require_idle
+from app.api.engine_routes import (
+    cloud_account_activities,
+    cloud_account_activity,
+    require_idle,
+)
 from app.api.mappers import (
     to_cloud_account_public,
     to_cloud_finding_public,
@@ -30,6 +34,7 @@ from app.models import (
     CloudScanPublic,
     ScanTargetUpdate,
     TargetAction,
+    TargetActivity,
     UsageEngine,
 )
 from app.services import state_machines as sm
@@ -99,7 +104,12 @@ def list_accounts(
                 col(CloudAccount.org_id).in_(user_org_ids(session, current_user))
             )
     accounts = session.exec(query.order_by(col(CloudAccount.display_name))).all()
-    return [to_cloud_account_public(a) for a in accounts]
+    # Batched for the whole page — see the Terraform list route.
+    activities = cloud_account_activities(session, [a.id for a in accounts])
+    return [
+        to_cloud_account_public(a, activities.get(a.id, TargetActivity.idle))
+        for a in accounts
+    ]
 
 
 @router.patch(
@@ -122,7 +132,7 @@ def update_account(
     session.add(account)
     session.commit()
     session.refresh(account)
-    return to_cloud_account_public(account)
+    return to_cloud_account_public(account, cloud_account_activity(session, account.id))
 
 
 @router.delete("/accounts/{account_id}", role=Role.org_admin, status_code=204)

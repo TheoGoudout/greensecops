@@ -17,6 +17,7 @@ import {
   EngineActionButton,
   overflowItem,
 } from "@/components/EngineActionBar"
+import { EngineFlowRail } from "@/components/EngineFlowRail"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
@@ -36,7 +37,7 @@ import {
   queueableFindings,
   removeAction,
 } from "@/lib/engine-actions"
-import { isScanInFlight, pollWhileScanning } from "@/lib/scan-polling"
+import { isScanInFlight, pollForActivity } from "@/lib/scan-polling"
 import { severityRank } from "@/lib/severity"
 import { fixStatusColor } from "@/lib/status-colors"
 
@@ -60,10 +61,7 @@ function DockerAnalysisTab() {
     queryFn: () => DockerService.listTargets({ repoId }),
     // See terraform.tsx: these engines publish no live events, so the list
     // polls itself while any scan is unfinished and stops when none is.
-    refetchInterval: (query) =>
-      pollWhileScanning(
-        (query.state.data ?? []).map((target) => target.latest_scan_status),
-      ),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   // A ready fix carries no PR of its own, so whether one already exists for
@@ -223,6 +221,10 @@ function TargetCard({
     isAccessible,
     enabled: target.enabled,
     quota,
+    // The server's own answer, which knows about work this page did not start
+    // — a scan the Action queued, a fix a teammate asked for. Unioned with the
+    // statuses below rather than replacing them; see `targetActivity`.
+    activity: target.activity,
     scanStatus: target.latest_scan_status,
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr,
@@ -333,8 +335,26 @@ function TargetCard({
         />
       </CardHeader>
 
+      {/* What this target is doing, and what each stage of its flow has to
+          show for itself — above the files rather than only in the tooltips on
+          the bar. Expanded only: the collapsed header already carries the
+          grade, the scan badge and the greyed buttons. */}
       {isOpen && (
         <CardContent className="flex flex-col gap-4">
+          <EngineFlowRail
+            {...targetState}
+            scope="target"
+            capabilities={{ sync: false }}
+            fileCount={files?.length}
+            grade={target.latest_grade}
+            hasCompletedScan={!!target.last_scanned_at}
+            openFindingCount={openFindings.length}
+            pending={{
+              scan: scanMutation.isPending,
+              generate: generateMutation.isPending,
+              deliver: deliverMutation.isPending,
+            }}
+          />
           {isLoading && <Skeleton className="h-40 w-full" />}
 
           {(files ?? []).map((file: DockerFilePublic) => {

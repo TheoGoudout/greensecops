@@ -877,3 +877,202 @@ def test_a_disabled_repository_refuses_a_manual_analysis(
 
     assert response.status_code == 403, response.text
     assert response.json()["detail"] == "Repository is disabled"
+
+
+# ─── The same answer, published rather than only enforced ────────────────────
+#
+# ``activity`` on a target's or a repository's public schema is what greys the
+# button out, and the 409 above is what happens if one is pressed anyway. They
+# have to be the same value, computed by the same rules, or the UI is stating a
+# rule the API does not hold — which is the exact failure the whole vocabulary
+# exists to prevent. Each of these asserts the *reported* field against the
+# refusal it predicts.
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+@pytest.mark.parametrize(
+    ("fixture", "expected"),
+    [
+        (None, "idle"),
+        (ScanStatus.running, "scanning"),
+        (FixStatus.generating, "generating"),
+        (FixStatus.delivering, "delivering"),
+    ],
+    ids=["idle", "scanning", "generating", "delivering"],
+)
+def test_a_targets_list_reports_what_it_is_busy_with(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+    fixture: Any,
+    expected: str,
+) -> None:
+    target = _make_target(db, engine, repo)
+    if isinstance(fixture, ScanStatus):
+        _make_scan(db, engine, target, fixture)
+    elif isinstance(fixture, FixStatus):
+        _make_engine_fix(db, engine, target, fixture)
+
+    collection = _ENGINE_SHAPE[engine]["collection"]
+    response = client.get(
+        _url(f"/{collection}?repo_id={repo.id}"), headers=superuser_token_headers
+    )
+
+    assert response.status_code == 200, response.text
+    rows = {row["id"]: row for row in response.json()}
+    assert rows[str(target.id)]["activity"] == expected
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+def test_a_finished_scan_is_not_activity(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+) -> None:
+    """The same "only the latest scan counts" rule the guard uses: a target
+    whose newest scan finished is idle however many running ones precede it."""
+    target = _make_target(db, engine, repo)
+    _make_scan(db, engine, target, ScanStatus.running)
+    _make_scan(db, engine, target, ScanStatus.completed)
+
+    collection = _ENGINE_SHAPE[engine]["collection"]
+    response = client.get(
+        _url(f"/{collection}?repo_id={repo.id}"), headers=superuser_token_headers
+    )
+
+    rows = {row["id"]: row for row in response.json()}
+    assert rows[str(target.id)]["activity"] == "idle"
+
+
+@pytest.mark.parametrize("engine", _FILE_ENGINES)
+def test_a_list_reports_each_targets_own_activity(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+    engine: str,
+) -> None:
+    """The batched read has to key its answers, not smear one over the page."""
+    scanning = _make_target(db, engine, repo)
+    _make_scan(db, engine, scanning, ScanStatus.running)
+    idle = _make_target(db, engine, repo)
+    _make_scan(db, engine, idle, ScanStatus.completed)
+    untouched = _make_target(db, engine, repo)
+
+    collection = _ENGINE_SHAPE[engine]["collection"]
+    response = client.get(
+        _url(f"/{collection}?repo_id={repo.id}"), headers=superuser_token_headers
+    )
+
+    rows = {row["id"]: row["activity"] for row in response.json()}
+    assert rows[str(scanning.id)] == "scanning"
+    assert rows[str(idle.id)] == "idle"
+    assert rows[str(untouched.id)] == "idle"
+
+
+def test_a_repository_reports_what_it_is_busy_with(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    """Any unfinished scan counts, not just the newest row — a CI analysis
+    fans out one scan per workflow file under a single repo-wide lock, so the
+    list and ``repository_activity`` must agree on that or the button and the
+    409 disagree."""
+    workflow_file = make_workflow_file(db, repo)
+    db.add(
+        WorkflowScan(
+            repo_id=repo.id,
+            workflow_file_id=workflow_file.id,
+            content_hash=uuid.uuid4().hex,
+            status=ScanStatus.completed,
+            triggered_by=ScanTrigger.manual,
+        )
+    )
+    db.add(
+        WorkflowScan(
+            repo_id=repo.id,
+            workflow_file_id=workflow_file.id,
+            content_hash=uuid.uuid4().hex,
+            status=ScanStatus.queued,
+            triggered_by=ScanTrigger.manual,
+        )
+    )
+    db.commit()
+
+    listed = client.get(
+        _url(f"/repositories?org_id={repo.org_id}"),
+        headers=superuser_token_headers,
+    )
+    rows = {row["id"]: row["activity"] for row in listed.json()}
+    assert rows[str(repo.id)] == "scanning"
+
+    detail = client.get(
+        _url(f"/repositories/{repo.id}"), headers=superuser_token_headers
+    )
+    assert detail.json()["activity"] == "scanning"
+
+    # And it is the value the refusal is built from.
+    _assert_conflict(
+        client.post(
+            _url(f"/repositories/{repo.id}/workflow-sync"),
+            headers=superuser_token_headers,
+        ),
+        "a scan is already running",
+        "repository",
+    )
+
+
+def test_a_cloud_account_reports_what_it_is_busy_with(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    cloud_account: CloudAccount,
+) -> None:
+    db.add(
+        CloudScan(
+            cloud_account_id=cloud_account.id,
+            status=ScanStatus.running,
+            triggered_by=ScanTrigger.manual,
+        )
+    )
+    db.commit()
+
+    response = client.get(_url("/cloud/accounts"), headers=superuser_token_headers)
+
+    rows = {row["id"]: row["activity"] for row in response.json()}
+    assert rows[str(cloud_account.id)] == "scanning"
+
+
+def test_integrating_the_action_waits_for_the_work_it_would_race(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+    repo: Repository,
+) -> None:
+    """The last PR-opening control outside the rule set: it reads the workflow
+    files an analysis holds and then opens a branch, so it is guarded as
+    ``deliver`` like every other button that puts a PR on GitHub."""
+    workflow_file = make_workflow_file(db, repo)
+    db.add(
+        WorkflowScan(
+            repo_id=repo.id,
+            workflow_file_id=workflow_file.id,
+            content_hash=uuid.uuid4().hex,
+            status=ScanStatus.running,
+            triggered_by=ScanTrigger.manual,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        _url(f"/repositories/{repo.id}/action-integration"),
+        headers=superuser_token_headers,
+    )
+
+    _assert_conflict(response, "a scan is already running", "repository")

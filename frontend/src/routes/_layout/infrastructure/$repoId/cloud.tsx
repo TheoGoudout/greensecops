@@ -15,6 +15,7 @@ import { CloudService } from "@/client"
 import { CloudFindingRow } from "@/components/CloudFindingRow"
 import { ConfirmRemoveDialog } from "@/components/ConfirmRemoveDialog"
 import { EngineActionBar, overflowItem } from "@/components/EngineActionBar"
+import { EngineFlowRail } from "@/components/EngineFlowRail"
 import { GradeBadge } from "@/components/GradeBadge"
 import { ScanRunningBadge } from "@/components/ScanRunningBadge"
 import { StatusPill } from "@/components/StatusPill"
@@ -33,7 +34,7 @@ import {
   type QuotaReasons,
   removeAction,
 } from "@/lib/engine-actions"
-import { pollWhileScanning } from "@/lib/scan-polling"
+import { pollForActivity } from "@/lib/scan-polling"
 import {
   cloudAccountStatusColor,
   cloudAccountStatusLabel,
@@ -75,10 +76,7 @@ function CloudTab() {
     // longest of any (a cloud scan holds its lock for an hour), so a card that
     // greyed itself for a running scan and then never un-greyed was the most
     // visible here of anywhere.
-    refetchInterval: (query) =>
-      pollWhileScanning(
-        (query.state.data ?? []).map((account) => account.latest_scan_status),
-      ),
+    refetchInterval: (query) => pollForActivity(query.state.data ?? []),
   })
 
   const createMutation = useMutation({
@@ -340,6 +338,9 @@ function CloudAccountCard({
     scope: "target",
     enabled,
     quota,
+    // The server's own answer, so a scan started elsewhere greys the button
+    // here too — cloud posture scans are the longest-running of the lot.
+    activity: account.activity,
     scanStatus: account.latest_scan_status,
   }
   const actions = engineActions({
@@ -449,8 +450,20 @@ function CloudAccountCard({
           </Button>
         </div>
       </CardHeader>
+      {/* Two stages, not four: cloud posture has no files to rewrite, so it
+          declares neither `fix` nor `deliver` rather than showing two chips
+          that could never leave `blocked`. Same idea as the action bar's
+          capabilities above. */}
       {isOpen && (
         <CardContent className="flex flex-col gap-3">
+          <EngineFlowRail
+            {...accountState}
+            capabilities={{ sync: false, fix: false, deliver: false }}
+            hasCompletedScan={!!account.last_synced_at}
+            grade={account.latest_grade}
+            openFindingCount={findings?.length ?? 0}
+            pending={{ scan: scanMutationPending }}
+          />
           <div className="rounded-md border">
             <div className="px-4 py-2 text-xs font-medium text-muted-foreground border-b">
               Open findings

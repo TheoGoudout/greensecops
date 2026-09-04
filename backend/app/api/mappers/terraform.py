@@ -8,12 +8,20 @@ from app.models import (
     TerraformScan,
     TerraformScanPublic,
 )
+from app.models.enums import TargetActivity
 from app.services.badge_signing import sign_badge
 
 from .base import latest_completed_scan, latest_scan_status, to_public
 
 
-def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
+def to_terraform_root_public(
+    root: TerraformRoot,
+    activity: TargetActivity = TargetActivity.idle,
+) -> TerraformRootPublic:
+    # ``activity`` is passed in rather than read off the row: a root has no
+    # ``fixes`` relationship, and the fix half of the answer is a query the
+    # caller batches over the whole page. See ``engine_routes.target_activities``
+    # and the field's own comment on ``ScanTargetPublicBase``.
     latest = latest_completed_scan(root)
     badge_sig: str | None = None
     if root.repository and root.repository.is_private:
@@ -28,6 +36,7 @@ def to_terraform_root_public(root: TerraformRoot) -> TerraformRootPublic:
         latest_score=latest.score if latest else None,
         latest_grade=latest.grade if latest else None,
         latest_scan_status=latest_scan_status(root),
+        activity=activity,
         badge_sig=badge_sig,
     )
 
