@@ -19,6 +19,7 @@ from ..enums import (
     ScanStatus,
     ScanTrigger,
     Severity,
+    TargetActivity,
 )
 
 
@@ -119,6 +120,17 @@ class ScanTargetPublicBase(SQLModel):
     # `latest_grade`, which only ever reflects a *completed* scan — so the UI
     # can show a target is currently being scanned.
     latest_scan_status: ScanStatus | None = None
+    # What this target is busy with, in the vocabulary the refusals use.
+    #
+    # The same value `engine_routes.require_target_idle` decides a 409 from, so
+    # a greyed button and the error it prevents are one answer rather than two.
+    # The browser used to rebuild this from the target's scans, its fixes and
+    # its findings, which meant a row in a list — or a collapsed card — had to
+    # fetch a fix list it never rendered just to know whether "Scan now" was
+    # live. Defaults to `idle` rather than `None`: a read that does not compute
+    # it is saying "nothing known to be in flight here", and a button gated on
+    # `None` would be a third state nobody draws.
+    activity: TargetActivity = TargetActivity.idle
     badge_sig: str | None = None
 
 

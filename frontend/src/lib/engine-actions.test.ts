@@ -495,3 +495,66 @@ describe("fixActions", () => {
     ).toBe("GitHub access to this repository was lost")
   })
 })
+
+describe("the three sources of an activity", () => {
+  it("takes the server's answer even with nothing else to go on", () => {
+    // A list row carries `activity` and no fix statuses at all; before it was
+    // published, a collapsed card had to fetch a fix list it never rendered
+    // just to know whether its buttons were live.
+    expect(targetActivity(input({ activity: "generating" }))).toBe("generating")
+    expect(engineActions(input({ activity: "delivering" })).scan.reason).toBe(
+      "Cannot start a scan while a pull request is being opened",
+    )
+  })
+
+  it("still derives from statuses the server has not caught up with", () => {
+    // `idle` from the wire does not mean idle: the row may predate the fix this
+    // page has just watched go `pending`.
+    expect(
+      targetActivity(input({ activity: "idle", fixStatuses: ["pending"] })),
+    ).toBe("generating")
+  })
+
+  it("takes whichever source outranks the others", () => {
+    expect(
+      targetActivity(input({ activity: "generating", scanStatus: "running" })),
+    ).toBe("scanning")
+  })
+
+  it("greys the whole bar the moment a trigger is in flight", () => {
+    // The window this closes: the scan row does not exist until the POST
+    // returns, so `generate` and `deliver` used to stay live over an analysis
+    // already on its way.
+    const a = engineActions(
+      input({ fixStatuses: ["ready"], pending: { scan: true } }),
+    )
+    expect(a.generate.disabled).toBe(true)
+    expect(a.generate.reason).toBe(
+      "Cannot generate fixes while a scan is already running",
+    )
+    expect(a.deliver.disabled).toBe(true)
+    expect(a.deliver.reason).toBe(
+      "Cannot open a pull request while a scan is already running",
+    )
+  })
+
+  it("lets a second file's fix be queued while the first is being written", () => {
+    // The one engine action `generating` allows, and a pending generate must
+    // not accidentally take it away.
+    expect(
+      engineActions(input({ pending: { generate: true } })).scan.reason,
+    ).toBe("Cannot start a scan while fixes are being generated")
+    expect(
+      actionBlockedReason("generate", input({ pending: { generate: true } })),
+    ).toBeNull()
+  })
+
+  it("carries the pin into the actions outside the bar", () => {
+    expect(removeAction(input({ pending: { deliver: true } })).reason).toBe(
+      "Cannot remove this target while a pull request is being opened",
+    )
+    expect(syncAction(input({ pending: { scan: true } })).reason).toBe(
+      "Cannot sync from GitHub while a scan is already running",
+    )
+  })
+})

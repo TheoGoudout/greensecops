@@ -15,6 +15,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser, SessionDep, authorize_repo, get_or_404
@@ -32,6 +33,7 @@ from app.models import (
 from app.models.enums import (
     FindingStatus,
     FixStatus,
+    ScanStatus,
     TargetAction,
     TargetActivity,
 )
@@ -243,6 +245,65 @@ def target_activity(
     )
 
 
+def target_activities(
+    spec: EngineSpec,
+    session: Session,
+    target_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, TargetActivity]:
+    """:func:`target_activity` for a whole page of targets, in two queries.
+
+    The list endpoints publish this on ``ScanTargetPublicBase.activity`` so the
+    browser reads what the 409 guard would decide rather than reconstructing it
+    from three separate collections. Per-row reads would be the N+1 the
+    repository list already avoids with ``_latest_scan_statuses_batch``, and
+    these lists are unpaginated.
+
+    Deliberately the same two questions :func:`target_activity` asks — the
+    latest scan whatever its outcome, and any fix a worker still holds — so a
+    row's field and the refusal it predicts can never disagree.
+    """
+    if not target_ids:
+        return {}
+
+    scan_target = getattr(spec.scan_model, spec.target_id_field)
+    fix_target = getattr(spec.fix_model, spec.target_id_field)
+
+    # The latest scan per target: rank by recency within each target and keep
+    # the first. One query rather than one per row.
+    ranked = (
+        select(
+            scan_target.label("target_id"),
+            col(spec.scan_model.status).label("status"),
+            func.row_number()
+            .over(
+                partition_by=scan_target,
+                order_by=col(spec.scan_model.created_at).desc(),
+            )
+            .label("rank"),
+        )
+        .where(col(scan_target).in_(target_ids))
+        .subquery()
+    )
+    scans: dict[uuid.UUID, Any] = dict(
+        session.exec(
+            select(ranked.c.target_id, ranked.c.status).where(ranked.c.rank == 1)
+        ).all()
+    )
+
+    fixes: dict[uuid.UUID, list[Any]] = {}
+    for target_id, status in session.exec(
+        select(fix_target, spec.fix_model.status)
+        .where(col(fix_target).in_(target_ids))
+        .where(col(spec.fix_model.status).in_(sm.IN_FLIGHT_STATUSES))
+    ).all():
+        fixes.setdefault(target_id, []).append(status)
+
+    return {
+        target_id: sm.activity_of([scans.get(target_id)], fixes.get(target_id, []))
+        for target_id in target_ids
+    }
+
+
 def require_target_idle(
     spec: EngineSpec,
     session: SessionDep,
@@ -339,6 +400,82 @@ def cloud_account_activity(
             .limit(1),
         )
     )
+
+
+def cloud_account_activities(
+    session: Session, account_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, TargetActivity]:
+    """:func:`cloud_account_activity` for a whole page of accounts.
+
+    Cloud has no ``EngineSpec`` and no fixes, so it cannot use
+    :func:`target_activities`; the shape is the same, minus the fix half.
+    """
+    if not account_ids:
+        return {}
+
+    ranked = (
+        select(
+            col(CloudScan.cloud_account_id).label("account_id"),
+            col(CloudScan.status).label("status"),
+            func.row_number()
+            .over(
+                partition_by=col(CloudScan.cloud_account_id),
+                order_by=col(CloudScan.created_at).desc(),
+            )
+            .label("rank"),
+        )
+        .where(col(CloudScan.cloud_account_id).in_(account_ids))
+        .subquery()
+    )
+    latest: dict[uuid.UUID, Any] = dict(
+        session.exec(
+            select(ranked.c.account_id, ranked.c.status).where(ranked.c.rank == 1)
+        ).all()
+    )
+    return {
+        account_id: sm.activity_of([latest.get(account_id)])
+        for account_id in account_ids
+    }
+
+
+def repository_activities(
+    session: Session, repo_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, TargetActivity]:
+    """:func:`repository_activity` for a whole page of repositories.
+
+    The scan half matches ``routes/repositories._latest_scan_statuses_batch``'s
+    rule — *any* unfinished scan counts, because a CI analysis writes one row
+    per workflow file under one repo-wide lock — so the ``activity`` a row
+    publishes and the ``latest_scan_status`` beside it tell the same story.
+    """
+    if not repo_ids:
+        return {}
+
+    scanning = set(
+        session.exec(
+            select(WorkflowScan.repo_id)
+            .where(col(WorkflowScan.repo_id).in_(repo_ids))
+            .where(col(WorkflowScan.status).in_(sm.ACTIVE_SCAN_STATUSES))
+            .distinct()
+        ).all()
+    )
+
+    fixes: dict[uuid.UUID, list[Any]] = {}
+    for repo_id, status in session.exec(
+        select(WorkflowFile.repo_id, WorkflowFix.status)
+        .join(WorkflowFile, col(WorkflowFile.id) == col(WorkflowFix.workflow_file_id))
+        .where(col(WorkflowFile.repo_id).in_(repo_ids))
+        .where(col(WorkflowFix.status).in_(sm.IN_FLIGHT_STATUSES))
+    ).all():
+        fixes.setdefault(repo_id, []).append(status)
+
+    return {
+        repo_id: sm.activity_of(
+            [ScanStatus.running] if repo_id in scanning else [],
+            fixes.get(repo_id, []),
+        )
+        for repo_id in repo_ids
+    }
 
 
 def prepare_pending_fix(

@@ -23,6 +23,8 @@ from app.api.engine_routes import (
     prepare_pending_fix,
     require_target_idle,
     sarif_for_claims,
+    target_activities,
+    target_activity,
     unignore_finding_for_user,
 )
 from app.api.mappers import (
@@ -48,6 +50,7 @@ from app.models import (
     Repository,
     ScanTargetUpdate,
     TargetAction,
+    TargetActivity,
     UsageEngine,
 )
 from app.services.ansible.discovery import classify_ansible_file
@@ -129,7 +132,12 @@ def list_projects(
                 AnsibleProject.repo_id == Repository.id,  # type: ignore[arg-type]
             ).where(Repository.org_id.in_(user_org_ids(session, current_user)))  # type: ignore[attr-defined]
     projects = session.exec(query.order_by(col(AnsibleProject.root_path))).all()
-    return [to_ansible_project_public(p) for p in projects]
+    # Batched for the whole page — see the Terraform list route.
+    activities = target_activities(ANSIBLE_ENGINE, session, [p.id for p in projects])
+    return [
+        to_ansible_project_public(p, activities.get(p.id, TargetActivity.idle))
+        for p in projects
+    ]
 
 
 @router.patch(
@@ -147,7 +155,9 @@ def update_project(
     session.add(project)
     session.commit()
     session.refresh(project)
-    return to_ansible_project_public(project)
+    return to_ansible_project_public(
+        project, target_activity(ANSIBLE_ENGINE, session, project.id)
+    )
 
 
 @router.delete("/projects/{project_id}", role=Role.org_admin, status_code=204)

@@ -23,6 +23,8 @@ from app.api.engine_routes import (
     prepare_pending_fix,
     require_target_idle,
     sarif_for_claims,
+    target_activities,
+    target_activity,
     unignore_finding_for_user,
 )
 from app.api.mappers import (
@@ -55,6 +57,7 @@ from app.models import (
     Rule,
     ScanTargetUpdate,
     TargetAction,
+    TargetActivity,
     UsageEngine,
 )
 from app.services.billing.quota import enforce_quota
@@ -144,7 +147,12 @@ def list_targets(
                 DockerTarget.repo_id == Repository.id,  # type: ignore[arg-type]
             ).where(col(Repository.org_id).in_(user_org_ids(session, current_user)))
     targets = session.exec(query.order_by(col(DockerTarget.root_path))).all()
-    return [to_docker_target_public(t) for t in targets]
+    # Batched for the whole page — see the Terraform list route.
+    activities = target_activities(DOCKER_ENGINE, session, [t.id for t in targets])
+    return [
+        to_docker_target_public(t, activities.get(t.id, TargetActivity.idle))
+        for t in targets
+    ]
 
 
 @router.patch(
@@ -162,7 +170,9 @@ def update_target(
     session.add(target)
     session.commit()
     session.refresh(target)
-    return to_docker_target_public(target)
+    return to_docker_target_public(
+        target, target_activity(DOCKER_ENGINE, session, target.id)
+    )
 
 
 @router.delete("/targets/{target_id}", role=Role.org_admin, status_code=204)

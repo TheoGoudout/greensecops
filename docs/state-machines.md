@@ -944,6 +944,45 @@ engine follows "any unfinished scan", because `static_analysis` takes one
 scan row per workflow file — "the latest row" is regularly a finished sibling
 of one still running.
 
+### Published, not only enforced
+
+The activity is also a **field**: `ScanTargetPublicBase.activity` on every
+engine's target, `RepositoryPublic.activity` on the CI engine's, and
+`CloudAccountPublic.activity` — computed by `engine_routes.target_activities` /
+`repository_activities` / `cloud_account_activities`, the batched forms of the
+same reads the 409 guard makes.
+
+It was derived in the browser alone, from three separate queries, which had two
+costs. A list row or a collapsed card had to fetch a fix list it never rendered
+just to decide whether its own buttons were live. And work started anywhere
+else — the GitHub Action on a push, a webhook, a teammate on the same
+repository — was invisible until something happened to refetch, so every action
+stayed live over it.
+
+The browser still derives, and `targetActivity` in `engine-actions.ts` returns
+the **union** of three sources, resolved by the same precedence:
+
+1. `activity` from the wire — authoritative about work this page did not start;
+2. the scan and fix statuses this page holds — often fresher than the row they
+   were drawn from, since an expanded card polls its own fixes;
+3. any trigger request still **in flight** — a `pending` scan reports
+   `scanning` before the row it will create exists.
+
+The third closes a window the table alone could not: between the click and the
+refetch that follows the response, the server has nothing to report yet, so
+"Generate fixes" and "Create PR" stayed live over an analysis already on its
+way. Whichever source says "busy" wins — over-reporting costs a button that
+comes back a moment later, under-reporting is the race.
+
+`frontend/src/lib/engine-flow.ts` turns the same value into the four-stage rail
+above each engine page (**Sync → Analyse → Generate fixes → Pull request**). It
+is a readout, not a wizard: every stage reports its own standing state side by
+side, because the flow is not linear — you re-scan after fixing, you reopen a
+closed pull request — and a "current step" pointer would have to call those
+going backwards. At most one stage is ever `running`, and it comes from the
+same `targetActivity` call the buttons make, so the rail cannot contradict the
+bar beneath it.
+
 ### What is deliberately *not* guarded
 
 - **Service/OIDC fan-out routes** (`POST /{engine}/scans`, `POST /workflow/scans`)

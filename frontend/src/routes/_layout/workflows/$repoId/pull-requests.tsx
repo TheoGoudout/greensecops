@@ -29,11 +29,11 @@ import {
   workflowFixBranch,
 } from "@/lib/delivery"
 import {
+  actionBlockedReason,
   type EngineAction,
   type EngineActionInput,
   engineActions,
   isFixInFlight,
-  NO_ACCESS_REASON,
 } from "@/lib/engine-actions"
 import { SCAN_POLL_MS } from "@/lib/scan-polling"
 import {
@@ -64,7 +64,7 @@ const STATE_CLASSES: Record<string, string> = {
 function PullRequestsPage() {
   const { repoId } = Route.useParams()
   const queryClient = useQueryClient()
-  const { isAccessible } = useRepository(repoId)
+  const { repo, isAccessible } = useRepository(repoId)
   const [stateFilter, setStateFilter] = useState<string>("all")
   const [sortBy, setSortBy] = useState<"updated" | "created">("updated")
   const [page, setPage] = useState(0)
@@ -99,8 +99,18 @@ function PullRequestsPage() {
     targetLabel: "repository",
     scope: "repo",
     isAccessible,
+    activity: repo?.activity,
     scanStatus: (analyses ?? []).map((a) => a.status),
   }
+
+  // Why `deliver` rather than `sync`: this re-reads GitHub's view of the
+  // repository's pull requests and writes it back onto the `pull_request`
+  // rows — which is exactly what a delivery in flight is creating. It does not
+  // take the analysis lock, so `sync`'s rule (refused by a scan alone) is the
+  // wrong one; `deliver`'s names the activity that actually collides. That it
+  // also stands down during a scan or a generation is a moment's wait on a
+  // refresh nobody asked for, which is the cheaper mistake.
+  const syncBlocked = actionBlockedReason("deliver", repoState)
 
   const fixByBranch = useMemo(() => {
     const map = new Map<string, WorkflowFixPublic>()
@@ -158,9 +168,15 @@ function PullRequestsPage() {
       }),
   })
 
+  // Re-reading the PR statuses on arrival, but only when nothing is writing
+  // them. It is a write the user did not ask for, fired from a mount effect,
+  // and it lands on the same `pull_request` rows a delivery is creating — so
+  // during one it would race the worker and then report what it raced. Idle is
+  // the only state in which an unrequested refresh is a refresh.
+  const canAutoSync = !syncBlocked
   useEffect(() => {
-    syncMutation.mutate()
-  }, [syncMutation.mutate])
+    if (canAutoSync) syncMutation.mutate()
+  }, [canAutoSync, syncMutation.mutate])
 
   const sorted = useMemo(() => {
     const key = sortBy === "created" ? "created_at" : "updated_at"
@@ -297,8 +313,8 @@ function PullRequestsPage() {
               label: syncMutation.isPending ? "Syncing…" : "Sync",
               icon: RefreshCw,
               busy: syncMutation.isPending,
-              disabled: !isAccessible || syncMutation.isPending,
-              reason: isAccessible ? null : NO_ACCESS_REASON,
+              disabled: !!syncBlocked || syncMutation.isPending,
+              reason: syncBlocked,
               force: false,
             }}
             onClick={() => syncMutation.mutate()}

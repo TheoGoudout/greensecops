@@ -4,6 +4,7 @@ from app.models import (
     Repository,
     RepositoryPublic,
     ScanStatus,
+    TargetActivity,
 )
 from app.services.badge_signing import repo_badge_message, sign_badge
 
@@ -14,6 +15,7 @@ def to_repo_public(
     grade: str | None,
     engine_grades: dict[Engine, tuple[float, str]] | None = None,
     latest_scan_status: ScanStatus | None = None,
+    activity: TargetActivity = TargetActivity.idle,
 ) -> RepositoryPublic:
     """Shape a repository for the API.
 
@@ -28,6 +30,12 @@ def to_repo_public(
     own "Scan now" out. A caller that omits it reports ``None``, which reads as
     "not known here" rather than "idle" — so only the reads a user acts from
     pay for the query.
+
+    ``activity`` is the same statement in the vocabulary the refusals use, and
+    covers fix work as well as scans. It defaults to ``idle`` rather than
+    ``None`` because a button gated on a third "unknown" state is a state
+    nobody draws; a caller that has not asked is saying "nothing known to be in
+    flight". Both come from ``engine_routes.repository_activities``.
     """
     badge_sig: str | None = None
     if repo.is_private and "/" in repo.full_name:
@@ -48,6 +56,7 @@ def to_repo_public(
         avg_score=avg_score,
         grade=grade,
         latest_scan_status=latest_scan_status,
+        activity=activity,
         engine_grades=[
             RepoEngineGrade(engine=engine, score=score, grade=letter)
             for engine, (score, letter) in sorted(

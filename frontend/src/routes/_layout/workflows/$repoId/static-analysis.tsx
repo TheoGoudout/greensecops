@@ -12,6 +12,7 @@ import {
   WorkflowService,
 } from "@/client"
 import { EngineActionBar, overflowItem } from "@/components/EngineActionBar"
+import { EngineFlowRail } from "@/components/EngineFlowRail"
 import { FileViewer } from "@/components/FileViewer"
 import { GradeBadge } from "@/components/GradeBadge"
 import { IssueRow } from "@/components/IssueRow"
@@ -33,6 +34,7 @@ import {
 } from "@/lib/engine-actions"
 import { resolvedIssueIds } from "@/lib/file-viewer"
 import { relativeTime } from "@/lib/format"
+import { pollWhileScanning, SCAN_POLL_MS } from "@/lib/scan-polling"
 import { severityRank } from "@/lib/severity"
 import {
   fixStatusColor,
@@ -125,6 +127,16 @@ function StaticAnalysisPage() {
         branch: branch || undefined,
         limit: 100,
       }),
+    // A floor under the SSE stream, not a replacement for it. This is the one
+    // engine page that refreshed on live events alone, so a dropped connection
+    // left every action live over work still running — the failure mode the
+    // whole activity rule exists to prevent, reached by the one path that
+    // silently stops reporting. `useRepoEvents` still does the fast update;
+    // this only guarantees the page cannot be indefinitely wrong.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((f) => isFixInFlight(f.status))
+        ? SCAN_POLL_MS
+        : false,
   })
 
   const { data: analyses } = useQuery({
@@ -135,6 +147,9 @@ function StaticAnalysisPage() {
         branch: branch || undefined,
         limit: 100,
       }),
+    // Same floor, on the read that decides whether an analysis is running.
+    refetchInterval: (query) =>
+      pollWhileScanning((query.state.data ?? []).map((a) => a.status)),
   })
 
   const { data: pullRequests } = useQuery({
@@ -171,6 +186,30 @@ function StaticAnalysisPage() {
     for (const fix of fixes ?? []) map.set(fix.file_path ?? "", fix)
     return map
   }, [fixes])
+
+  // When the repository's workflow files were last read from GitHub. The newest
+  // wins because a sync writes each file's own `fetched_at`, and a file skipped
+  // as stale keeps its older one — so the newest is the last time a sync
+  // actually reached this repository.
+  const newestFetchedAt = useMemo(() => {
+    let newest: string | null = null
+    for (const wf of workflowFiles ?? []) {
+      if (wf.fetched_at && (!newest || wf.fetched_at > newest)) {
+        newest = wf.fetched_at
+      }
+    }
+    return newest
+  }, [workflowFiles])
+
+  // Issues a fix could still be written for, across the repository. The rail's
+  // own count, distinct from the bar's, which counts the *selection*.
+  const openIssueCount = useMemo(
+    () =>
+      (issues ?? []).filter(
+        (i) => i.status !== "ignored" && i.status !== "resolved",
+      ).length,
+    [issues],
+  )
 
   // Latest analysis per workflow file drives the per-card grade / status.
   const latestAnalysisByPath = useMemo(() => {
@@ -392,6 +431,10 @@ function StaticAnalysisPage() {
     // button says so rather than the 403 doing it after the click.
     enabled: repo?.enabled,
     quota,
+    // The repository *is* the CI engine's target, so it publishes the same
+    // `activity` every other engine's target does — and it knows about work
+    // this page did not start: a push-triggered analysis, a teammate's fix.
+    activity: repo?.activity,
     scanStatus: (analyses ?? []).map((a) => a.status),
     fixStatuses: (fixes ?? []).map((f) => f.status),
     existingPr: prByBranch.get(repoFixBranch(repoId)),
@@ -475,8 +518,28 @@ function StaticAnalysisPage() {
     })
   }
 
+  // The whole flow at repository scope, and the only rail that carries a sync
+  // stage: the CI engine is the one that re-reads its target's files from
+  // GitHub, where the other engines' targets are registered rather than
+  // fetched.
+  const flowState = {
+    ...repoState,
+    fileCount: workflowFiles?.length,
+    syncedAt: newestFetchedAt,
+    grade: repo?.grade,
+    hasCompletedScan: (analyses ?? []).some((a) => a.status === "completed"),
+    openFindingCount: openIssueCount,
+    syncPending: syncMutation.isPending,
+    pending: {
+      scan: triggerMutation.isPending,
+      generate: batchFixMutation.isPending || regenerateRepoMutation.isPending,
+      deliver: deliverRepoMutation.isPending,
+    },
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <EngineFlowRail {...flowState} />
       {/* Three actions, a filter menu and an overflow — the same bar every
           other engine's card carries, at repository scope. It was eight
           controls in one flat row: two of them filters faking their state with

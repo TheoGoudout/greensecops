@@ -2,6 +2,20 @@
 
 ## Latest Changes
 
+### Features
+
+* feat(ux): say what is running, and stop the click that races it. PR [#327](https://github.com/TheoGoudout/greensecops/pull/327) by [@TheoGoudout](https://github.com/TheoGoudout).
+
+### Upgrades
+
+* ⬆ Bump the python group across 2 directories with 1 update. PR [#319](https://github.com/TheoGoudout/greensecops/pull/319) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
+### Internal
+
+* ci: install Wrangler outside the workspace, where npm 12 cannot crash. PR [#328](https://github.com/TheoGoudout/greensecops/pull/328) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ⬆ Bump the pre-commit group across 2 directories with 1 update. PR [#320](https://github.com/TheoGoudout/greensecops/pull/320) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ Bump re-actors/alls-green from 1.2.2 to 1.3.0 in the github-actions group across 1 directory. PR [#323](https://github.com/TheoGoudout/greensecops/pull/323) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
 ## 0.12.0 (2026-09-03)
 
 ### Breaking Changes

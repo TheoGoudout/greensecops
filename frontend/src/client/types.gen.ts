@@ -84,6 +84,7 @@ export type AnsibleProjectPublic = {
     latest_score?: (number | null);
     latest_grade?: (string | null);
     latest_scan_status?: (ScanStatus | null);
+    activity?: TargetActivity;
     badge_sig?: (string | null);
 };
 
@@ -194,6 +195,7 @@ export type CloudAccountPublic = {
     latest_score?: (number | null);
     latest_grade?: (string | null);
     latest_scan_status?: (ScanStatus | null);
+    activity?: TargetActivity;
     badge_sig?: (string | null);
     created_at?: (string | null);
 };
@@ -397,6 +399,7 @@ export type DockerTargetPublic = {
     latest_score?: (number | null);
     latest_grade?: (string | null);
     latest_scan_status?: (ScanStatus | null);
+    activity?: TargetActivity;
     badge_sig?: (string | null);
 };
 
@@ -848,6 +851,7 @@ export type RepositoryPublic = {
     badge_sig?: (string | null);
     created_at?: (string | null);
     latest_scan_status?: (ScanStatus | null);
+    activity?: TargetActivity;
     avg_score?: (number | null);
     grade?: (string | null);
     engine_grades?: Array<RepoEngineGrade>;
@@ -1009,6 +1013,20 @@ export type SSESignal = 'analysis.queued' | 'analysis.started' | 'analysis.compl
 export type SubscriptionStatus = 'incomplete' | 'trialing' | 'active' | 'past_due' | 'unpaid' | 'pending_cancellation' | 'canceled';
 
 /**
+ * What a scan target is busy with right now, on any engine.
+ *
+ * Derived rather than persisted: it is read off the target's latest scan
+ * status and its fixes' statuses, which every engine already stores. It exists
+ * because "what may I do to this target?" is a question all five engines
+ * answer identically, and answering it from scattered ``if`` expressions is
+ * how the UI ended up offering "Generate fixes" during a running scan.
+ *
+ * See ``services/state_machines/engine_target.py`` for the transitions and
+ * which :class:`TargetAction` each activity blocks.
+ */
+export type TargetActivity = 'idle' | 'scanning' | 'generating' | 'delivering';
+
+/**
  * Averaged telemetry across a repo's runs.
  *
  * Sample-derived fields are averaged over ``TelemetryMetricSample`` rows;
@@ -1137,6 +1155,7 @@ export type TerraformRootPublic = {
     latest_score?: (number | null);
     latest_grade?: (string | null);
     latest_scan_status?: (ScanStatus | null);
+    activity?: TargetActivity;
     badge_sig?: (string | null);
 };
 
