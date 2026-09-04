@@ -45,6 +45,30 @@ name: pages-reusable
 # would pick npm anyway — but a stray bun.lock in landing/ or docs/ would flip
 # it to bun, which those two jobs never install.
 #
+# Wrangler is installed *globally*, once per job, before the first
+# wrangler-action step. The action would otherwise install it itself with
+# `npm i wrangler@<version>` inside `workingDirectory` — and landing/, frontend/
+# and docs/ all sit under the root `package.json`'s `workspaces`. npm 12, which
+# the hosted runner image picked up on 2026-09-03, walks up to that workspace
+# root, finds no `package-lock.json` (this repo is on bun) and dies building the
+# dependency tree with `Cannot read properties of null (reading 'edgesOut')`.
+# It broke every open pull request at once while `main` stayed green, because
+# `main` had not run the workflow since the image rolled.
+#
+# A global install builds no tree under the workspace, so the npm version
+# cannot matter; the action's own detection step — `npx --no-install wrangler
+# --version` — then finds the pinned binary on PATH and skips its install
+# entirely. Running it from `runner.temp` keeps even the *cwd* clear of a
+# package.json. The Dashboard job was the one that stayed green: it runs
+# `bun install` first, which leaves a node_modules for npm to find.
+#
+# Each of those steps carries `zizmor: ignore[adhoc-packages]`. The audit is
+# right in general and wrong about these three lines: they *replace* an ad-hoc
+# install rather than adding one — the action runs the identical
+# `npm i wrangler@<version>` itself when the binary is absent — and the version
+# stays pinned to WRANGLER_VERSION either way. Deleting them does not delete
+# the install, only the control over where it runs.
+#
 # Requires two repository secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
 # — one account serves both environments. Publishing is skipped when the token
 # is absent, so a fork never fails on this: `pull_request` runs from a fork are
@@ -204,6 +228,17 @@ jobs:
         if: inputs.environment != 'production'
         run: .github/scripts/shared/noindex.sh landing/dist
 
+      - name: Install Wrangler
+        # Globally, and outside the workspace, so the action skips its own
+        # install — which crashes on npm 12. See the note at the top of this
+        # file, which also carries the reason for the ignore.
+        #
+        # `$WRANGLER_VERSION` rather than `${{ env.WRANGLER_VERSION }}`: the
+        # workflow-level `env:` is already exported into the shell, and no other
+        # `run:` in this file expands a template into a command.
+        run: npm i -g "wrangler@${WRANGLER_VERSION}" # zizmor: ignore[adhoc-packages]
+        working-directory: ${{ runner.temp }}
+
       - name: Validate the Worker configuration
         # Only where nothing else will validate it. A configured account runs
         # either `versions upload` or `deploy` below, both of which resolve the
@@ -346,6 +381,17 @@ jobs:
         if: inputs.environment != 'production'
         run: .github/scripts/shared/noindex.sh frontend/dist
 
+      - name: Install Wrangler
+        # Globally, and outside the workspace, so the action skips its own
+        # install — which crashes on npm 12. See the note at the top of this
+        # file, which also carries the reason for the ignore.
+        #
+        # `$WRANGLER_VERSION` rather than `${{ env.WRANGLER_VERSION }}`: the
+        # workflow-level `env:` is already exported into the shell, and no other
+        # `run:` in this file expands a template into a command.
+        run: npm i -g "wrangler@${WRANGLER_VERSION}" # zizmor: ignore[adhoc-packages]
+        working-directory: ${{ runner.temp }}
+
       - name: Validate the Worker configuration
         if: env.HAS_CLOUDFLARE != 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
@@ -419,6 +465,17 @@ jobs:
       - name: Keep this copy out of search results
         if: inputs.environment != 'production'
         run: .github/scripts/shared/noindex.sh docs/_build/html
+
+      - name: Install Wrangler
+        # Globally, and outside the workspace, so the action skips its own
+        # install — which crashes on npm 12. See the note at the top of this
+        # file, which also carries the reason for the ignore.
+        #
+        # `$WRANGLER_VERSION` rather than `${{ env.WRANGLER_VERSION }}`: the
+        # workflow-level `env:` is already exported into the shell, and no other
+        # `run:` in this file expands a template into a command.
+        run: npm i -g "wrangler@${WRANGLER_VERSION}" # zizmor: ignore[adhoc-packages]
+        working-directory: ${{ runner.temp }}
 
       - name: Validate the Worker configuration
         if: env.HAS_CLOUDFLARE != 'true'
