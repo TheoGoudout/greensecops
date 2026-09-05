@@ -4,6 +4,7 @@
 
 ### Features
 
+* feat(billing): confirm every plan change on Stripe's own page. PR [#325](https://github.com/TheoGoudout/greensecops/pull/325) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(ux): say what is running, and stop the click that races it. PR [#327](https://github.com/TheoGoudout/greensecops/pull/327) by [@TheoGoudout](https://github.com/TheoGoudout).
 
 ### Upgrades
