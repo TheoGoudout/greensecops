@@ -391,8 +391,6 @@ function OssApplicationForm({
 }
 
 function Billing() {
-  const queryClient = useQueryClient()
-
   const { data: subscription, isLoading: subLoading } = useQuery({
     queryKey: ["billing", "subscription"],
     queryFn: BillingService.getSubscription,
@@ -414,29 +412,17 @@ function Billing() {
     queryFn: BillingService.listOssApplications,
   })
 
-  // Buying a plan goes one of two ways. An account with no live subscription
-  // is sent to Stripe Checkout — a hosted page, deliberately, so card details
-  // never touch this application. An account that already has a subscription
-  // has that one changed instead of a second one opened beside it, so there is
-  // no page to visit and the answer is what the plan is now.
+  // Every way of choosing a plan ends on a page hosted by Stripe, so this only
+  // ever navigates. A new subscription is a Checkout session; a change to a
+  // live one is the Customer Portal's confirmation flow, which names the
+  // amount due today for an upgrade and the date the cheaper plan starts for a
+  // downgrade. Both are deliberate: money moving is confirmed where the terms
+  // are shown, not on a button here, and card details never touch this app.
   const checkout = useMutation({
     mutationFn: (tier: UserTier) =>
       BillingService.createCheckoutSession({ requestBody: { tier } }),
     onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url
-        return
-      }
-      const name = plans?.find((p) => p.tier === data.tier)?.name ?? data.tier
-      showSuccessToast(
-        data.effective_at
-          ? // A downgrade leaves the plan already paid for running to the end
-            // of the period, so say when the cheaper one starts rather than
-            // implying it is live now.
-            `Switching to ${name} on ${formatLongDate(data.effective_at)}`
-          : `Upgraded to ${name}. You have been charged the difference for the rest of this period.`,
-      )
-      queryClient.invalidateQueries({ queryKey: ["billing"] })
+      window.location.href = data.url
     },
     onError: handleApiError,
   })
@@ -465,10 +451,9 @@ function Billing() {
   // lapsed. Worth naming explicitly rather than silently showing the lower one.
   const isDowngraded = effectiveTier !== currentTier
 
-  const handleSelectPlan = (tier: UserTier) => {
-    checkout.mutate(tier)
-    queryClient.invalidateQueries({ queryKey: ["billing"] })
-  }
+  // Nothing local changes on a click any more — the answer is a URL to visit,
+  // and the plan itself only moves once Stripe's webhook says it did.
+  const handleSelectPlan = (tier: UserTier) => checkout.mutate(tier)
 
   return (
     <div className="flex flex-col gap-6">

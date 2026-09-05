@@ -234,6 +234,11 @@ class Settings(BaseSettings):
     STRIPE_PRICE_STARTER: str | None = None
     STRIPE_PRICE_PRO: str | None = None
     STRIPE_PRICE_ULTIMATE: str | None = None
+    # The Customer Portal configuration used for plan changes. Left unset, one
+    # is provisioned from the plan catalog on first use — see
+    # services/billing/stripe_gateway.portal_configuration_id. Set it to point
+    # at a configuration managed by hand in the Stripe dashboard instead.
+    STRIPE_PORTAL_CONFIGURATION_ID: str | None = None
 
     # Days a subscription keeps full paid service after a payment fails. The
     # account stays on its plan for this whole window while dunning reminders

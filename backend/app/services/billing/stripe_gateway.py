@@ -17,14 +17,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
 import stripe
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.core.plans import PLANS, get_plan
+from app.core.plans import PLANS, get_plan, ordered_plans
 from app.models import UserTier
 
 from .errors import stripe_not_configured
@@ -160,23 +159,6 @@ def create_checkout_session(
     return CheckoutSession(url=str(session["url"]))
 
 
-@dataclass(frozen=True)
-class PlanChange:
-    """What happened when an existing subscription was moved to another plan.
-
-    ``effective_at`` is ``None`` when the new plan is live now, and the moment
-    it starts when the change was deferred to the renewal. The caller needs the
-    difference to tell the user what they just bought.
-    """
-
-    tier: UserTier
-    effective_at: datetime | None = None
-
-    @property
-    def is_immediate(self) -> bool:
-        return self.effective_at is None
-
-
 def _first_item(subscription: Any) -> Any:
     """The single line item a plan lives on.
 
@@ -189,103 +171,225 @@ def _first_item(subscription: Any) -> Any:
     return items[0]
 
 
-def _phase_price(item: Any) -> str:
-    """A schedule phase's price id, whether Stripe expanded it or not."""
-    price = item.get("price")
-    return str(price["id"] if isinstance(price, dict) else price)
+def _schedule_id(subscription: Any) -> str | None:
+    """The id of the subscription schedule driving ``subscription``, if any."""
+    schedule = subscription.get("schedule")
+    if not schedule:
+        return None
+    return str(schedule["id"] if isinstance(schedule, dict) else schedule)
 
 
-def _upgrade(client: Any, subscription: Any, price_id: str) -> PlanChange:
-    """Swap the price now and invoice the difference.
+# ─── The Customer Portal configuration ───────────────────────────────────────
 
-    ``always_invoice`` is the point of the exercise: it credits the unused
-    remainder of the plan being left and bills only the balance, so the first
-    payment on the new plan is the difference rather than a second full price.
-    Full price resumes at the next renewal on its own.
+# Marks the portal configuration this module owns. Stripe cannot filter the
+# configuration list server-side, so ours is recognised by reading this key
+# back off the candidates rather than by remembering an id somewhere.
+_CONFIGURATION_MARKER = {"greensecops": "plan-changes"}
+
+# Resolved configuration ids, keyed by the set of prices each was built for.
+# Keying on the prices rather than holding one bare id means a deployment — or
+# a test — that changes ``STRIPE_PRICE_*`` resolves afresh instead of reusing a
+# configuration that no longer offers the plan being bought.
+_CONFIGURATION_CACHE: dict[frozenset[str], str] = {}
+
+
+def _purchasable_price_ids() -> list[str]:
+    """Every configured price a subscription may be switched between."""
+    return [
+        price_id
+        for plan in ordered_plans()
+        if (price_id := price_id_for(plan.tier)) is not None
+    ]
+
+
+def _products_for(client: Any, price_ids: list[str]) -> list[dict[str, Any]]:
+    """Group ``price_ids`` by the Stripe product each belongs to.
+
+    ``features.subscription_update.products`` is keyed by product, so the price
+    ids alone will not do — every one has to be resolved. Grouping rather than
+    assuming a product per plan means the catalog works whether the plans are
+    separate products or several prices on a single one.
     """
-    client.Subscription.modify(
-        subscription["id"],
-        items=[{"id": _first_item(subscription)["id"], "price": price_id}],
-        proration_behavior="always_invoice",
-    )
-    return PlanChange(tier=tier_for_price(price_id) or UserTier.free)
+    by_product: dict[str, list[str]] = {}
+    for price_id in price_ids:
+        product = client.Price.retrieve(price_id)["product"]
+        product_id = str(product["id"] if isinstance(product, dict) else product)
+        by_product.setdefault(product_id, []).append(price_id)
+    return [
+        {"product": product_id, "prices": prices}
+        for product_id, prices in by_product.items()
+    ]
 
 
-def _open_schedule(client: Any, subscription: Any) -> Any:
-    """The subscription's schedule, creating one if it has none.
+def _configuration_features(products: list[dict[str, Any]]) -> dict[str, Any]:
+    """The portal features a plan change needs, and the rules it runs under.
 
-    A second downgrade before the first has taken effect must edit the
-    schedule already standing rather than try to create another — Stripe
-    refuses that, and the user would be stuck on a downgrade they changed
-    their mind about.
+    ``proration_behavior``, ``schedule_at_period_end`` and
+    ``trial_update_behavior`` are the whole billing policy for a plan change,
+    and they live on the configuration rather than in our code deliberately:
+    Stripe applies them *and* explains them on the confirmation page, so what
+    the customer is shown and what they are charged come from one place.
     """
-    if existing := subscription.get("schedule"):
-        schedule_id = existing["id"] if isinstance(existing, dict) else existing
-        return client.SubscriptionSchedule.retrieve(schedule_id)
-    return client.SubscriptionSchedule.create(from_subscription=subscription["id"])
-
-
-def _downgrade(client: Any, subscription: Any, price_id: str) -> PlanChange:
-    """Leave the paid-for plan running, and start the cheaper one at renewal.
-
-    A downgrade taking effect immediately would either refund time already
-    bought or silently forfeit it. Neither is what someone choosing a smaller
-    plan is asking for: they are asking to pay less *next* month.
-    """
-    schedule = _open_schedule(client, subscription)
-    current = schedule["phases"][0]
-    client.SubscriptionSchedule.modify(
-        schedule["id"],
-        phases=[
-            {
-                "items": [
-                    {"price": _phase_price(item), "quantity": 1}
-                    for item in current["items"]
-                ],
-                "start_date": current["start_date"],
-                "end_date": current["end_date"],
+    return {
+        "subscription_update": {
+            "enabled": True,
+            # Price is the only thing a plan change moves. Quantity is always
+            # one, and promotion codes belong to the initial Checkout.
+            "default_allowed_updates": ["price"],
+            "products": products,
+            # Credits the unused remainder of the plan being left and invoices
+            # only the balance, so an upgrade asks for the difference rather
+            # than a second full price. Full price resumes at the next renewal.
+            "proration_behavior": "always_invoice",
+            # A change that lowers the bill waits for the renewal instead of
+            # landing now: someone choosing a smaller plan is asking to pay
+            # less *next* month, not to forfeit the month already bought.
+            "schedule_at_period_end": {
+                "conditions": [{"type": "decreasing_item_amount"}]
             },
-            {
-                "items": [{"price": price_id, "quantity": 1}],
-                "iterations": 1,
-                # The switch lands on the period boundary, so there is nothing
-                # to prorate — asking for prorations here would invent a
-                # zero-value adjustment on the invoice.
-                "proration_behavior": "none",
-            },
-        ],
-        # Once the cheaper phase has run, hand the subscription back to normal
-        # recurring billing at that price instead of cancelling it.
-        end_behavior="release",
-    )
-    return PlanChange(
-        tier=tier_for_price(price_id) or UserTier.free,
-        effective_at=datetime.fromtimestamp(current["end_date"], tz=timezone.utc),
-    )
+            # A trialing account keeps its trial rather than being charged the
+            # moment it looks at a bigger plan.
+            "trial_update_behavior": "continue_trial",
+        },
+        # The same configuration backs ``create_portal_session``, so it carries
+        # the card, history and cancellation features that flow needs too —
+        # otherwise opening the portal would show a page with nothing on it.
+        "payment_method_update": {"enabled": True},
+        "invoice_history": {"enabled": True},
+        "subscription_cancel": {"enabled": True},
+    }
 
 
-def change_subscription_plan(
-    *, subscription_id: str, tier: UserTier, immediate: bool
-) -> PlanChange:
-    """Move a live subscription onto ``tier``'s price.
+def _listed_prices(configuration: Any) -> set[str]:
+    """The prices ``configuration`` currently allows switching between."""
+    update = (configuration.get("features") or {}).get("subscription_update") or {}
+    return {
+        price
+        for product in (update.get("products") or [])
+        for price in product["prices"]
+    }
+
+
+def _find_configuration(client: Any) -> Any | None:
+    """The portal configuration this module created, if it still exists."""
+    listing = client.billing_portal.Configuration.list(active=True, limit=100)
+    for configuration in listing["data"]:
+        metadata = configuration.get("metadata") or {}
+        if all(
+            metadata.get(key) == value for key, value in _CONFIGURATION_MARKER.items()
+        ):
+            return configuration
+    return None
+
+
+def _portal_configuration_id(client: Any) -> str | None:
+    """The configuration plan changes are confirmed against, provisioning it.
+
+    Stripe will only move a subscription onto a price the configuration lists,
+    so this is derived from the plan catalog rather than pinned by hand: adding
+    a plan to ``core/plans.py`` cannot leave the portal unable to sell it. An
+    operator who would rather manage the configuration in the dashboard sets
+    ``STRIPE_PORTAL_CONFIGURATION_ID`` and none of this runs.
+
+    ``None`` when no price is configured at all: there is no plan to switch to,
+    and Stripe refuses a configuration that enables switching to nothing. The
+    portal still opens for cards and cancellation on the account default, which
+    is the most a deployment in that state could offer anyway.
+    """
+    if configured := settings.STRIPE_PORTAL_CONFIGURATION_ID:
+        return str(configured)
+    price_ids = _purchasable_price_ids()
+    if not price_ids:
+        return None
+    cache_key = frozenset(price_ids)
+    if cached := _CONFIGURATION_CACHE.get(cache_key):
+        return cached
+
+    existing = _find_configuration(client)
+    if existing is not None and _listed_prices(existing) == cache_key:
+        configuration = existing
+    else:
+        features = _configuration_features(_products_for(client, price_ids))
+        if existing is None:
+            configuration = client.billing_portal.Configuration.create(
+                features=features, metadata=dict(_CONFIGURATION_MARKER)
+            )
+        else:
+            # The catalog moved. Bring the standing configuration in line
+            # rather than minting a second one beside it on every price change.
+            configuration = client.billing_portal.Configuration.modify(
+                existing["id"], features=features
+            )
+    configuration_id = str(configuration["id"])
+    _CONFIGURATION_CACHE[cache_key] = configuration_id
+    return configuration_id
+
+
+def create_plan_change_session(
+    *, subscription_id: str, customer_id: str, tier: UserTier, return_url: str
+) -> str:
+    """Open the Stripe page that confirms moving a subscription onto ``tier``.
 
     Sending an already-subscribed customer through Checkout would open a
     *second* Stripe subscription beside the first, so the account would be
     billed for both and our webhook would take whichever event arrived last as
-    the truth. A customer who has one changes it.
+    the truth. A customer who has one changes it — but changing it is money
+    moving, so it is confirmed on Stripe's own page rather than on a click
+    here. Nothing is charged, and nothing in our database moves, until the
+    customer confirms there and the resulting webhook comes back.
 
-    ``immediate`` says which way the change goes, which the caller decides from
-    the two plans' prices: an upgrade starts now with the unused remainder
-    credited, a downgrade starts at the renewal.
+    Which way the change goes is the configuration's business, not ours: its
+    ``schedule_at_period_end`` condition prorates a more expensive plan onto
+    the current period and defers a cheaper one to the renewal. Deciding that
+    here as well would be two rules that could drift apart.
     """
     price_id = price_id_for(tier)
     if price_id is None:
         raise stripe_not_configured()
     client = _client()
     subscription = client.Subscription.retrieve(subscription_id)
-    if immediate:
-        return _upgrade(client, subscription, price_id)
-    return _downgrade(client, subscription, price_id)
+    params: dict[str, Any] = {
+        "customer": customer_id,
+        "return_url": return_url,
+        "flow_data": {
+            "type": "subscription_update_confirm",
+            "subscription_update_confirm": {
+                "subscription": subscription_id,
+                "items": [
+                    {
+                        "id": _first_item(subscription)["id"],
+                        "price": price_id,
+                        "quantity": 1,
+                    }
+                ],
+            },
+            "after_completion": {
+                "type": "redirect",
+                "redirect": {"return_url": return_url},
+            },
+        },
+    }
+    if configuration_id := _portal_configuration_id(client):
+        params["configuration"] = configuration_id
+    try:
+        session = client.billing_portal.Session.create(**params)
+    except stripe.InvalidRequestError:
+        schedule_id = _schedule_id(subscription)
+        if schedule_id is None:
+            raise
+        # Left over from when a downgrade was deferred by a schedule of our
+        # own: Stripe will not let the portal touch a subscription a schedule
+        # is driving. Releasing hands it back to plain recurring billing at the
+        # price it is on today, which drops the pending downgrade — the right
+        # answer, since the customer is on their way to Stripe to choose again.
+        logger.warning(
+            "Releasing schedule %s so subscription %s can be changed in the portal",
+            schedule_id,
+            subscription_id,
+        )
+        client.SubscriptionSchedule.release(schedule_id)
+        session = client.billing_portal.Session.create(**params)
+    return str(session["url"])
 
 
 def create_portal_session(*, customer_id: str, return_url: str) -> str:
@@ -296,9 +400,13 @@ def create_portal_session(*, customer_id: str, return_url: str) -> str:
     place, and the resulting webhooks drive our own state machine.
     """
     client = _client()
-    session = client.billing_portal.Session.create(
-        customer=customer_id, return_url=return_url
-    )
+    params: dict[str, Any] = {"customer": customer_id, "return_url": return_url}
+    # The same configuration a plan change is confirmed against, so "Manage
+    # subscription" offers the plans as well rather than opening whatever the
+    # account default happens to allow.
+    if configuration_id := _portal_configuration_id(client):
+        params["configuration"] = configuration_id
+    session = client.billing_portal.Session.create(**params)
     return str(session["url"])
 
 
@@ -313,7 +421,7 @@ def parse_webhook_event(payload: bytes, signature: str | None) -> dict[str, Any]
         raise stripe_not_configured()
     stripe.api_key = settings.STRIPE_SECRET_KEY
     try:
-        event = stripe.Webhook.construct_event(  # type: ignore[no-untyped-call]
+        event = stripe.Webhook.construct_event(
             payload, signature, settings.STRIPE_WEBHOOK_SECRET
         )
     except stripe.SignatureVerificationError:
