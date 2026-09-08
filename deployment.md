@@ -127,7 +127,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `DEFAULT_LLM_PROVIDER`: Which LLM provider to use for fix generation. One of `openai`, `anthropic`, `gemini`, `ollama`. Default: `openai`.
 * `DEFAULT_LLM_MODEL`: The model name for the selected provider. Default: `gpt-4o-mini`.
 * `OLLAMA_BASE_URL`: Base URL of an Ollama instance, when using the `ollama` provider. Default: `http://localhost:11434`.
-* `AI_PROVIDERS_CONFIG`: Path to a JSON file defining available providers and model lists. Defaults to the file bundled in the backend image.
+* `AI_PROVIDERS_CONFIG`: Path to a JSON file defining available providers and model lists. Defaults to the file bundled in the backend image; a file that is missing or malformed falls back to it too, with an error in the logs. The Coolify deployment instead mounts that file into every backend container so it can be edited from Coolify's Storages tab — see [deploy/coolify/README.md](deploy/coolify/README.md#the-ai-provider-catalog).
 
 **AWS cloud posture scanning (optional)**
 
