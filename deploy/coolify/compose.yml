@@ -20,8 +20,13 @@
 # The real fix is upstream — CI pins TAG to an immutable `sha-<short>` per
 # commit (images.yml on staging, release-deploy.yml on production), so the
 # reference itself changes and the pull cannot be skipped. This is the braces to
-# that belt: it covers a redeploy clicked by hand, a fork still on `TAG=latest`,
-# and anyone running this file directly.
+# that belt: it covers a redeploy clicked by hand and a fork still on
+# `TAG=latest`.
+#
+# Not, any longer, someone running this file with `docker compose`. The
+# provider-catalog mount below carries two keys Coolify understands and
+# Compose rejects; see the comment on it. The root compose.yml is the one to
+# run by hand.
 #
 # Five containers instead of ten, on a box that costs about €13/month. See
 # deploy/coolify/README.md.
@@ -121,6 +126,65 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # The provider catalog, mounted as a file Coolify can edit rather than one
+    # baked into the image. prestart, backend and celery-worker share &app-env
+    # and therefore its AI_PROVIDERS_CONFIG, so the path has to resolve in all
+    # three — hence the anchor here and the aliases below.
+    #
+    # `content` and `is_directory` are Coolify's keys, not Compose's, and this
+    # is the only shape that yields an editable *file*: Coolify takes a bind
+    # mount for a directory unless `content` is set, and would create one at
+    # the mount point — a container finding a directory where it expects JSON.
+    # Coolify strips both keys before Docker is handed the file. `docker
+    # compose` rejects them outright, which is what makes this file Coolify's
+    # alone to run; the root compose.yml is the one to run by hand.
+    #
+    # `content` seeds a resource that has no file storage for this mount yet.
+    # Once one exists, Coolify reads its content back from its own database on
+    # every parse, so an edit made in the Storages tab survives redeploys
+    # instead of being reverted to what is written here. Keep it in step with
+    # backend/app/config/ai_providers.json regardless — that is the copy the
+    # image falls back to, and what a fresh resource starts from.
+    # scripts/validate_coolify_compose.py checks the two agree.
+    volumes:
+      - &ai-providers-config
+        type: bind
+        source: ./ai_providers.json
+        target: /etc/greensecops/ai_providers.json
+        is_directory: false
+        content: |
+          {
+            "providers": [
+              {
+                "id": "openai",
+                "name": "OpenAI",
+                "default_model": "gpt-4o-mini",
+                "models": ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+              },
+              {
+                "id": "anthropic",
+                "name": "Anthropic",
+                "default_model": "claude-haiku-4-5-20251001",
+                "models": [
+                  "claude-haiku-4-5-20251001",
+                  "claude-sonnet-4-6",
+                  "claude-opus-4-7"
+                ]
+              },
+              {
+                "id": "gemini",
+                "name": "Google Gemini",
+                "default_model": "gemini-3.1-flash-lite",
+                "models": ["gemini-3.1-flash-lite"]
+              },
+              {
+                "id": "ollama",
+                "name": "Ollama (self-hosted)",
+                "default_model": "llama3.2",
+                "models": []
+              }
+            ]
+          }
     environment: &app-env
       # General
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -193,7 +257,11 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
-      - AI_PROVIDERS_CONFIG=${AI_PROVIDERS_CONFIG}
+      # The catalog of provider ids, display names and model lists. It
+      # defaults to the file bind mounted into every service that shares this
+      # environment, so a model list changes in Coolify rather than in a new
+      # image.
+      - AI_PROVIDERS_CONFIG=${AI_PROVIDERS_CONFIG:-/etc/greensecops/ai_providers.json}
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
@@ -238,6 +306,8 @@ services:
       prestart:
         condition: service_completed_successfully
     environment: *app-env
+    volumes:
+      - *ai-providers-config
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/health"]
       interval: 10s
@@ -281,6 +351,7 @@ services:
       --schedule /var/lib/celery/celerybeat-schedule
     volumes:
       - app-celery-data:/var/lib/celery
+      - *ai-providers-config
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 10"]
       interval: 30s

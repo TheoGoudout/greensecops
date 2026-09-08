@@ -17,8 +17,10 @@ That is exactly the kind of drift a comment cannot prevent, so this checks it:
 * every variable the Coolify compose reads without a default is either named in
   the README's configuration block or recorded here as optional,
 * every service running a pre-built image pulls it every deploy,
-* and every directory a backend service mounts a named volume over is created
-  in ``backend/Dockerfile`` before it drops privileges.
+* every directory a backend service mounts a named volume over is created
+  in ``backend/Dockerfile`` before it drops privileges,
+* and the LLM provider catalog is mounted, in the one shape Coolify renders as
+  an editable file, wherever the configuration names it.
 
 The third check exists because the first two cannot see the other half of the
 loop. Naming a variable in the compose file only asks Coolify for it; something
@@ -36,6 +38,7 @@ bug.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -46,6 +49,12 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_COMPOSE = ROOT / "compose.yml"
 COOLIFY_COMPOSE = ROOT / "deploy" / "coolify" / "compose.yml"
 COOLIFY_README = ROOT / "deploy" / "coolify" / "README.md"
+BUNDLED_AI_PROVIDERS = ROOT / "backend" / "app" / "config" / "ai_providers.json"
+
+# The setting naming the LLM provider catalog. Its ``:-`` default in the Coolify
+# compose is the mount point the checks below are written against, so the path
+# is read from the file rather than repeated here.
+AI_PROVIDERS_VARIABLE = "AI_PROVIDERS_CONFIG"
 
 # The README section whose first fenced block lists what the operator types into
 # Coolify's Environment Variables tab.
@@ -70,6 +79,10 @@ EXPECTED_DIVERGENCE = {
     "MARKETING_URL": "Cloudflare Pages, so there is no SERVICE_URL_LANDING",
     "DOCS_URL": "Cloudflare Pages, so there is no SERVICE_URL_DOCS",
     "BACKEND_CORS_ORIGINS": "follows FRONTEND_HOST",
+    "AI_PROVIDERS_CONFIG": (
+        "this deployment mounts an operator-editable copy and defaults to it; "
+        "the root compose.yml leaves the image's own catalog in place"
+    ),
 }
 
 # Undefaulted variables the README's configuration block deliberately omits.
@@ -79,7 +92,6 @@ EXPECTED_DIVERGENCE = {
 OPTIONAL = {
     "ANTHROPIC_API_KEY": "alternative LLM provider; the block names one",
     "GOOGLE_API_KEY": "alternative LLM provider; the block names one",
-    "AI_PROVIDERS_CONFIG": "per-provider overrides; defaults suffice",
     "AWS_ACCESS_KEY_ID": "unset disables cloud-posture scanning only",
     "AWS_SECRET_ACCESS_KEY": "unset disables cloud-posture scanning only",
     "SMTP_HOST": "unset disables outbound email only",
@@ -111,8 +123,7 @@ def _stale_image_services(coolify: dict) -> list[str]:
 
     CI pinning ``TAG`` to an immutable ``sha-<short>`` is the primary fix and
     makes this redundant on that path. It is not redundant on the others: a
-    redeploy clicked in Coolify, a fork still on ``TAG=latest``, or this file
-    run by hand.
+    redeploy clicked in Coolify, or a fork still on ``TAG=latest``.
 
     Only *this project's* images are checked — the ones carrying ``${TAG}``.
     ``db`` and ``redis`` run upstream tags, and pulling those on every deploy
@@ -125,6 +136,21 @@ def _stale_image_services(coolify: dict) -> list[str]:
         if "${TAG" in (service.get("image") or "")
         and service.get("pull_policy") != "always"
     ]
+
+
+def _volume_source_target(volume: object) -> tuple[str, str]:
+    """The ``(source, target)`` a compose volume names, in either syntax.
+
+    Short syntax is ``source:target[:mode]``; long syntax is a mapping. Both are
+    in use here — named volumes as strings, and the provider-catalog file mount
+    as a mapping, because the keys that make Coolify treat it as a file exist
+    only in the long form. A parser that knew one of them would read the other
+    as nonsense rather than skipping it.
+    """
+    if isinstance(volume, dict):
+        return str(volume.get("source") or ""), str(volume.get("target") or "")
+    source, _, rest = str(volume).partition(":")
+    return source, rest.split(":", 1)[0]
 
 
 def _unprepared_volume_targets(coolify: dict) -> list[tuple[str, str]]:
@@ -158,12 +184,12 @@ def _unprepared_volume_targets(coolify: dict) -> list[tuple[str, str]]:
         if "greensecops-backend" not in (service.get("image") or ""):
             continue
         for volume in service.get("volumes") or []:
-            source, _, rest = str(volume).partition(":")
+            source, target = _volume_source_target(volume)
             # A bind mount carries the host's ownership, so the image cannot
-            # decide it; deploy/ansible chowns those host paths instead.
-            if source.startswith((".", "/")):
+            # decide it; deploy/ansible chowns those host paths instead, and
+            # Coolify writes the file mount below itself.
+            if source.startswith((".", "/", "~")):
                 continue
-            target = rest.split(":", 1)[0]
             if target and target not in prepared:
                 unprepared.append((name, target))
     return unprepared
@@ -175,6 +201,133 @@ def _declared(service: dict) -> set[str]:
     if isinstance(environment, dict):
         return set(environment)
     return {entry.split("=", 1)[0] for entry in environment}
+
+
+def _declared_value(service: dict, name: str) -> str | None:
+    """The right-hand side a service gives one environment variable."""
+    environment = service.get("environment") or []
+    if isinstance(environment, dict):
+        value = environment.get(name)
+        return None if value is None else str(value)
+    for entry in environment:
+        key, separator, value = str(entry).partition("=")
+        if key == name and separator:
+            return value
+    return None
+
+
+def _ai_provider_catalog_errors(coolify: dict) -> list[str]:
+    """Faults in the mount that makes the LLM provider catalog editable.
+
+    ``backend/app/services/llm/catalog.py`` reads the catalog from
+    ``AI_PROVIDERS_CONFIG``, falling back to the copy baked into the image. This
+    deployment points that setting at a bind mount instead, so an operator can
+    add a model from Coolify's Storages tab rather than by shipping an image.
+    Three things have to hold for that, and none of them fails loudly on its own:
+
+    * Every service declaring the setting has to mount the file. All three share
+      one ``&app-env``, so a mount added to the backend alone leaves the worker
+      — the service that actually generates fixes — pointed at a path that does
+      not exist in its container.
+    * Each mount has to keep Coolify's ``content`` key. Coolify assumes a bind
+      mount is a *directory* unless ``content`` is set — ``is_directory: false``
+      alone is not enough, its parser forces the flag back on — and then creates
+      a directory at the mount point: a container finding a directory where it
+      expects JSON, on a path nothing else checks.
+    * The seeded content has to match the catalog bundled in the image, because
+      it is what a resource with no file storage yet starts from. Drift here
+      means a new deployment quietly starting a model list behind its own image.
+    """
+    services = coolify.get("services") or {}
+    declaring = {
+        name: service
+        for name, service in sorted(services.items())
+        if AI_PROVIDERS_VARIABLE in _declared(service)
+    }
+    if not declaring:
+        return [
+            f"no service declares {AI_PROVIDERS_VARIABLE}, so nothing tells the "
+            "backend where to find its provider catalog."
+        ]
+
+    values = set()
+    mount_paths = set()
+    for service in declaring.values():
+        value = _declared_value(service, AI_PROVIDERS_VARIABLE) or ""
+        values.add(value)
+        match = VARIABLE_REFERENCE.fullmatch(value)
+        modifier = (match.group(2) or "") if match else ""
+        if modifier.startswith(":-"):
+            mount_paths.add(modifier[2:])
+    if len(mount_paths) != 1:
+        return [
+            f"{AI_PROVIDERS_VARIABLE} should read "
+            f"`${{{AI_PROVIDERS_VARIABLE}:-<path>}}` — the mount point of the "
+            "catalog file, so that leaving the variable unset still finds it — "
+            f"and every service should name the same one. Found: {sorted(values)}."
+        ]
+    mount_path = mount_paths.pop()
+
+    errors: list[str] = []
+    bundled = json.loads(BUNDLED_AI_PROVIDERS.read_text(encoding="utf-8"))
+    for name, service in declaring.items():
+        mounts = [
+            volume
+            for volume in service.get("volumes") or []
+            if _volume_source_target(volume)[1] == mount_path
+        ]
+        if not mounts:
+            errors.append(
+                f"the Coolify {name} service declares {AI_PROVIDERS_VARIABLE}="
+                f"{mount_path} but mounts nothing there, so that container has "
+                "no catalog at the path its own configuration names. Alias the "
+                "&ai-providers-config mount into it."
+            )
+        for mount in mounts:
+            errors.extend(_catalog_mount_errors(name, mount, bundled))
+    return errors
+
+
+def _catalog_mount_errors(name: str, mount: object, bundled: object) -> list[str]:
+    """Ways one provider-catalog mount stops being an editable, current file."""
+    where = f"the Coolify {name} service's provider-catalog mount"
+    if not isinstance(mount, dict):
+        return [
+            f"{where} uses the short `source:target` syntax, which Coolify reads "
+            "as a directory — leaving the container a directory where it expects "
+            "JSON. Use the long syntax carrying a `content:` key."
+        ]
+
+    errors: list[str] = []
+    content = mount.get("content")
+    if not (isinstance(content, str) and content.strip()):
+        errors.append(
+            f"{where} has no `content:`. That key is what makes Coolify treat "
+            "the mount as a file and offer it for editing; without it Coolify "
+            "forces `is_directory` back on and creates a directory."
+        )
+    else:
+        try:
+            seeded = json.loads(content)
+        except json.JSONDecodeError as exc:
+            seeded = None
+            errors.append(f"{where} seeds content that is not valid JSON: {exc}.")
+        if seeded is not None and seeded != bundled:
+            errors.append(
+                f"{where} seeds content that differs from "
+                f"{BUNDLED_AI_PROVIDERS.relative_to(ROOT)}, so a resource "
+                "deploying for the first time would start from a different "
+                "catalog than the image falls back to. Copy that file's "
+                "contents into the `content:` block."
+            )
+    if mount.get("is_directory") is not False:
+        errors.append(
+            f"{where} should carry `is_directory: false`. Set true, it makes "
+            "Coolify create a directory at the mount point whatever `content:` "
+            "says; omitted, Coolify infers a file from `content:` and the two "
+            "keys have no way to contradict each other."
+        )
+    return errors
 
 
 def _undefaulted_references(text: str) -> set[str]:
@@ -290,6 +443,8 @@ def main() -> int:
             + "\n    Add an `install --directory --owner=appuser` for each to "
             "backend/Dockerfile, above its USER instruction."
         )
+
+    errors.extend(_ai_provider_catalog_errors(coolify))
 
     stale = sorted(set(OPTIONAL) - _undefaulted_references(coolify_text))
     if stale:

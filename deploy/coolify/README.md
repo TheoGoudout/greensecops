@@ -332,6 +332,42 @@ variable and returns **404** when there is none; `POST` to the same path
 where `TAG` had never been set, so the workflow now tries the update and falls
 back to the create.
 
+#### The AI provider catalog
+
+Which LLM providers the dashboard offers, and which model names under each, is a
+JSON file — and on this deployment it is a **file mount** rather than something
+baked into the image. `deploy/coolify/compose.yml` mounts it at
+`/etc/greensecops/ai_providers.json` in the backend, the worker and prestart,
+and points `AI_PROVIDERS_CONFIG` there.
+
+Coolify renders it in the resource's **Storages** tab, where it can be edited in
+the browser. That is the whole point of the mount: adding a model no longer
+means editing the repository and shipping an image. The compose file's
+`content:` block only seeds a resource that has no copy of it yet — after that
+Coolify keeps the content in its own database and writes the file on each
+deploy, so an edit made here survives redeploys rather than being reverted to
+what the repository says. Editing `backend/app/config/ai_providers.json`
+upstream changes what a *fresh* resource starts from, and the fallback below;
+not what this deployment is serving.
+
+Two things to know before editing it:
+
+* **It is read once per process**, so an edit takes effect when the `backend`
+  and `celery-worker` containers restart — Coolify's Restart button, or the
+  next deploy.
+* **A malformed edit does not take the deployment down.** Invalid JSON, an
+  empty file, or an entry missing `id`, `name`, `default_model` or `models` is
+  logged as an error and the catalog bundled in the image is used instead. The
+  models you added are missing until the file parses again; nothing else
+  changes.
+
+That mount carries two keys Compose does not have — `content` and
+`is_directory` — because they are what makes Coolify create an editable *file*
+rather than a directory. Coolify strips them before Docker sees the file, and
+`docker compose` rejects them outright, which is why
+`deploy/coolify/compose.yml` is Coolify's to run and the root `compose.yml` is
+the one to run by hand.
+
 ### 5. Deploy
 
 **Staging is automatic, and ordered.** Push to `main` and three things happen in
