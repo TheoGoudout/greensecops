@@ -1,7 +1,7 @@
 # Stage: dev — Vite dev server with HMR for docker compose watch
 # Pinned by digest, not just by tag: `oven/bun` republishes :1 on every release,
 # so the tag alone does not make the build reproducible.
-FROM oven/bun:1@sha256:9e123d5fc069e29d519fd4c981afb61b8542ac80274771961136db1e4538d53e AS dev-stage
+FROM oven/bun:1@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1630f0546895 AS dev-stage
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ CMD ["bun", "run", "dev", "--host", "0.0.0.0"]
 
 
 # Stage 0, "build-stage", based on Bun, to build and compile the frontend
-FROM oven/bun:1@sha256:9e123d5fc069e29d519fd4c981afb61b8542ac80274771961136db1e4538d53e AS build-stage
+FROM oven/bun:1@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1630f0546895 AS build-stage
 
 WORKDIR /app
 
@@ -62,7 +62,7 @@ RUN bun run build
 # The alpine variant also drops the `apt-get install curl` layer this stage used
 # to carry purely to satisfy the health check — the nginx alpine images install
 # curl themselves.
-FROM nginxinc/nginx-unprivileged:1.31.5-alpine@sha256:aa8c9087d36d93e9d650c5365f883b421e8214aedbad24ade52b844c583358f1
+FROM nginxinc/nginx-unprivileged:1.31.5-alpine@sha256:2ddec616f1cb58bcac057aa388f28cb81e35137641ef4226d321714499329bd1
 
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
 LABEL org.opencontainers.image.licenses="MIT"
