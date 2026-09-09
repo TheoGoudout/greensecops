@@ -7,6 +7,8 @@ WORKDIR /app
 
 COPY package.json bun.lock /app/
 COPY frontend/package.json /app/frontend/
+COPY action/package.json /app/action/
+COPY landing/package.json /app/landing/
 
 WORKDIR /app/frontend
 
@@ -27,6 +29,8 @@ WORKDIR /app
 COPY package.json bun.lock /app/
 
 COPY frontend/package.json /app/frontend/
+COPY action/package.json /app/action/
+COPY landing/package.json /app/landing/
 
 WORKDIR /app/frontend
 
