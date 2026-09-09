@@ -10,6 +10,7 @@
 
 ### Upgrades
 
+* ⬆ bump the docker group across 4 directories with 3 updates. PR [#330](https://github.com/TheoGoudout/greensecops/pull/330) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ Bump the python group across 2 directories with 1 update. PR [#319](https://github.com/TheoGoudout/greensecops/pull/319) by [@dependabot[bot]](https://github.com/apps/dependabot).
 
 ### Internal
