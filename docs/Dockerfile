@@ -39,7 +39,7 @@ RUN uv run sphinx-build -b html -W docs docs/_build/html
 # server runs unprivileged without a chown layer of our own. An unprivileged
 # process cannot bind a port below 1024, which is why docs/nginx.conf listens on
 # 8080 and the deployment's container port is 8080 rather than 80.
-FROM nginxinc/nginx-unprivileged:1.31.5-alpine@sha256:aa8c9087d36d93e9d650c5365f883b421e8214aedbad24ade52b844c583358f1
+FROM nginxinc/nginx-unprivileged:1.31.5-alpine@sha256:2ddec616f1cb58bcac057aa388f28cb81e35137641ef4226d321714499329bd1
 
 LABEL org.opencontainers.image.source="https://github.com/TheoGoudout/greensecops"
 LABEL org.opencontainers.image.licenses="MIT"
