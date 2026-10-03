@@ -15,6 +15,7 @@
 
 ### Internal
 
+* feat(deploy): default the Coolify API and Celery worker to one process each. PR [#349](https://github.com/TheoGoudout/greensecops/pull/349) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(deploy): make the Coolify backend's worker count configurable. PR [#348](https://github.com/TheoGoudout/greensecops/pull/348) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump the pre-commit group across 2 directories with 1 update. PR [#329](https://github.com/TheoGoudout/greensecops/pull/329) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the npm-packages group across 1 directory with 11 updates. PR [#322](https://github.com/TheoGoudout/greensecops/pull/322) by [@dependabot[bot]](https://github.com/apps/dependabot).
