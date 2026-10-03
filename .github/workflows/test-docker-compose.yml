@@ -97,7 +97,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Prepare env files
-        run: .github/scripts/shared/prepare-env-files.sh
+        run: .github/scripts/test-docker-compose/prepare-dev-env-files.sh
       - run: docker compose build backend frontend
       - name: Start the stack
         run: docker compose up -d --wait --wait-timeout 300 backend frontend
