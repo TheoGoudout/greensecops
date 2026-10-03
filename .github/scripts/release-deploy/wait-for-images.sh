@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Block until the release's images are in the registry.
 #
-# A poll, not a check. images.yml starts when release.yml pushes the tag, and it
-# is four build jobs plus two manifest merges — if the draft is published
-# promptly, which is the normal case, that run is still going. A one-shot check
-# would turn an ordinary timing window into a failed release.
+# A poll, not a check. images.yml starts on the tag push, and the tag is created
+# by the very act of publishing the release that started this run — so that
+# build has only just begun, and it is four build jobs plus two manifest merges.
+# A one-shot check would turn that ordinary timing window into a failed release.
 #
 # GH_TOKEN, TAG and OWNER come from the calling step's env; REGISTRY from the
 # workflow's.

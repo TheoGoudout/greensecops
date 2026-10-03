@@ -243,7 +243,7 @@ jobs:
       # that action for why each of them is shaped the way it is.
       - name: Publish the Worker
         id: publish
-        uses: ./.github/actions/publish-worker
+        uses: ./.github/actions/publish-worker # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
         with:
           surface: "landing"
           working-directory: landing
@@ -359,7 +359,7 @@ jobs:
       # that action for why each of them is shaped the way it is.
       - name: Publish the Worker
         id: publish
-        uses: ./.github/actions/publish-worker
+        uses: ./.github/actions/publish-worker # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
         with:
           surface: "the dashboard"
           working-directory: frontend
@@ -419,7 +419,7 @@ jobs:
       # that action for why each of them is shaped the way it is.
       - name: Publish the Worker
         id: publish
-        uses: ./.github/actions/publish-worker
+        uses: ./.github/actions/publish-worker # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
         with:
           surface: "the documentation"
           working-directory: docs

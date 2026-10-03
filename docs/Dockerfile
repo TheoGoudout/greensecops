@@ -52,6 +52,9 @@ COPY docs/nginx.conf /etc/nginx/conf.d/default.conf
 # and 403. Ownership by uid 101 makes serving independent of the builder's modes.
 COPY --chown=101:101 --from=builder /build/docs/_build/html /usr/share/nginx/html
 
+# Shell form on purpose: `|| exit 1` folds curl's exit codes into the 0/1
+# Docker defines for a healthcheck. hadolint's DL3025 is about CMD/ENTRYPOINT.
+# hadolint ignore=DL3025
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS -o /dev/null http://localhost:8080/ || exit 1
 

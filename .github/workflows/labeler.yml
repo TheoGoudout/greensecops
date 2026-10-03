@@ -43,12 +43,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # v1.6.66, not v1.6.65. This is a Docker action built from source on
-      # every run, and v1.6.65's Dockerfile installs UPX from Debian
-      # bullseye — whose security Release file expired on 2026-09-07, so
-      # `apt-get update` exits 100 and the build fails before the checker
-      # runs at all. v1.6.66 builds on bookworm and drops that step.
-      - uses: agilepathway/label-checker@c324842522fbd012e4f590afe3b4e591301322ed # v1.6.66
+      # The published image, pinned by OCI digest, rather than the action's
+      # Dockerfile built from source on every run. The source build is what
+      # broke here once already: v1.6.65's Dockerfile installs UPX from Debian
+      # bullseye, whose security Release file expired on 2026-09-07, so
+      # `apt-get update` exited 100 before the checker ran at all. A prebuilt
+      # image cannot fail that way, starts faster, and a digest is immutable
+      # where a git ref only names the recipe. (A docker:// reference must be
+      # pinned by digest, not by a git SHA.) This digest is the v1.6.66 image.
+      - uses: docker://agilepathway/pull-request-label-checker@sha256:a61b40c6b9e13e62a8cf5b9810871ea582a21897ebb1a8afc9dfeb98440de323 # v1.6.66
         with:
           one_of: breaking,security,feature,bug,refactor,upgrade,docs,lang-all,internal
           repo_token: ${{ secrets.GITHUB_TOKEN }}

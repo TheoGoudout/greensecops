@@ -8,6 +8,7 @@ on:
     types:
     - opened
     - synchronize
+    - reopened
   workflow_dispatch:
     inputs:
       debug_enabled:
@@ -119,7 +120,9 @@ jobs:
         SHARD_INDEX: ${{ matrix.shardIndex }}
         SHARD_TOTAL: ${{ matrix.shardTotal }}
       run: docker compose run --rm playwright bunx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard="${SHARD_INDEX}/${SHARD_TOTAL}"
-    - run: docker compose down -v --remove-orphans
+    - name: Stop the stack
+      if: always()
+      run: docker compose down -v --remove-orphans
     - name: Upload blob report to GitHub Actions Artifacts
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -181,6 +184,7 @@ jobs:
     name: All Playwright tests passed
     if: always()
     needs:
+      - changes
       - test-playwright
     runs-on: ubuntu-latest
     timeout-minutes: 5

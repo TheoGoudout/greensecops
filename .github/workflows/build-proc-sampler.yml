@@ -10,6 +10,7 @@ on:
     types:
       - opened
       - synchronize
+      - reopened
     paths:
       - "action/native/proc-sampler/**"
   workflow_dispatch:

@@ -19,6 +19,9 @@ COPY --chmod=0755 landing/entrypoint.sh /docker-entrypoint-landing.sh
 COPY --chown=101:101 landing/assets/ /usr/share/nginx/html/assets/
 COPY --chown=101:101 landing/*.html /usr/share/nginx/html/
 
+# Shell form on purpose: `|| exit 1` folds curl's exit codes into the 0/1
+# Docker defines for a healthcheck. hadolint's DL3025 is about CMD/ENTRYPOINT.
+# hadolint ignore=DL3025
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS -o /dev/null http://localhost:8080/ || exit 1
 

@@ -88,6 +88,9 @@ WORKDIR /app/backend/
 # deploy/ansible/vars/services.yml override this per service — celery-worker
 # with `inspect ping`, celery-beat with a schedule-file check, and prestart with
 # `disable: true` because a one-shot migration job has no steady state.
+# Shell form on purpose: `|| exit 1` folds curl's exit codes into the 0/1
+# Docker defines for a healthcheck. hadolint's DL3025 is about CMD/ENTRYPOINT.
+# hadolint ignore=DL3025
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS http://localhost:8000/api/v1/system/health || exit 1
 
