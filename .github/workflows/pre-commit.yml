@@ -5,6 +5,7 @@ on:
     types:
       - opened
       - synchronize
+      - reopened
 
 permissions: {}
 
@@ -25,12 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read # To check out the repository below.
-    timeout-minutes: 5
+    # Thirty, not five: the hooks include mypy, the frontend type-check, OPA
+    # over the deployment Terraform and a client regeneration, behind a cold
+    # `uv sync` and `bun ci`. A timeout below the work it bounds does not catch
+    # a hang, it manufactures one (see test-backend.yml).
+    timeout-minutes: 30
     steps:
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: echo "$GITHUB_CONTEXT"
       # On the artipacked suppression below: persist-credentials is load-bearing
       # here — the pre-commit-ci step pushes the autofix commit through the
       # checkout's own credential helper. The token is PRE_COMMIT rather than
@@ -90,7 +91,7 @@ jobs:
         run: .github/scripts/pre-commit/prepare-env-files.sh
       - name: Run prek - pre-commit
         id: precommit
-        run: uv run prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
+        run: uv run prek run --from-ref "origin/${GITHUB_BASE_REF}" --to-ref HEAD --show-diff-on-failure
         continue-on-error: true
       - name: Commit and push changes
         if: env.HAS_SECRETS == 'true'
@@ -112,10 +113,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: echo "$GITHUB_CONTEXT"
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:

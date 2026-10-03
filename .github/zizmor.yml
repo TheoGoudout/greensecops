@@ -53,8 +53,19 @@ rules:
         # Upstream of the project this repository was forked from; used by
         # issue-manager.yml and latest-changes.yml.
         - tiangolo/*
+        # `collect: all` reaches the pre-commit configs too, so the hook
+        # repositories are held to the same allowlist as the actions: a hook
+        # runs arbitrary code on a contributor's machine and in the pre-commit
+        # job.
+        - pre-commit/*
+        - AleksaC/hadolint-py
+        - compilerla/conventional-pre-commit
+        - gitleaks/gitleaks
+        - Mateusz-Grzelinski/actionlint-py
+        - python-jsonschema/check-jsonschema
+        - shellcheck-py/shellcheck-py
         # Vetted individually — single-purpose actions, no org-wide trust.
-        - agilepathway/label-checker
+        - agilepathway/pull-request-label-checker
         - dorny/paths-filter
         - eps1lon/actions-label-merge-conflict
         - mxschmitt/action-tmate

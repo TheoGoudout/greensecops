@@ -36,10 +36,6 @@ jobs:
       pull-requests: read # To read the merged pull request's title and labels.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     steps:
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: echo "$GITHUB_CONTEXT"
       # On the artipacked suppression below: tiangolo/latest-changes commits the
       # release notes through the checkout's credential helper, so the credential
       # has to persist. The token is LATEST_CHANGES rather than GITHUB_TOKEN, and

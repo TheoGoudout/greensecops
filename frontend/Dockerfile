@@ -72,6 +72,9 @@ COPY --from=build-stage /app/frontend/dist/ /usr/share/nginx/html
 COPY ./frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY ./frontend/nginx-backend-not-found.conf /etc/nginx/extra-conf.d/backend-not-found.conf
 
+# Shell form on purpose: `|| exit 1` folds curl's exit codes into the 0/1
+# Docker defines for a healthcheck. hadolint's DL3025 is about CMD/ENTRYPOINT.
+# hadolint ignore=DL3025
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS -o /dev/null http://localhost:8080/ || exit 1
 

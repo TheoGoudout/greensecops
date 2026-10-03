@@ -3,22 +3,26 @@ name: release
 # Cuts a release: Actions → release → Run workflow, pick a bump.
 #
 # This is the first half of a two-step promotion. It changes nothing that is
-# deployed — it bumps the version everywhere, closes off the accumulated
-# release notes, tags, and opens a **draft** GitHub release. Publishing that
-# draft is what promotes production, and that is release-deploy.yml.
+# deployed — it checks main is green, bumps the version everywhere, closes off
+# the accumulated release notes, and opens a **draft** GitHub release. It does
+# **not** create the tag. Publishing that draft is what creates the tag (GitHub
+# does it, at the commit the draft targets) and what promotes production, via
+# release-deploy.yml.
 #
-# The draft is the review gate. Everything here is reversible with a tag delete
-# and a revert, because no production surface has been touched yet.
+# The draft is the review gate, and leaving the tag to it makes a tag without a
+# release impossible: this workflow used to push the tag itself, so a run that
+# failed after the push left a tag nothing would ever publish. Everything here
+# is reversible with a revert, because nothing has been tagged or deployed.
 #
 # What it writes, all from the root VERSION file (scripts/_versions.py has the
 # list): frontend/package.json, action/package.json, backend/pyproject.toml,
 # docs/pyproject.toml, backend/app/__version__.py, and uv.lock.
 #
-# Pushing the tag is what starts images.yml, which publishes
-# ghcr.io/<owner>/greensecops-{backend,opa}:vX.Y.Z. That has to happen with the
-# PAT rather than GITHUB_TOKEN: a push authenticated with GITHUB_TOKEN does not
-# trigger other workflows, so the images would never be built and the release
-# would have nothing to deploy.
+# The tag push that publishing performs is what starts images.yml, which
+# publishes ghcr.io/<owner>/greensecops-{backend,opa}:vX.Y.Z; release-deploy.yml
+# waits for those images before deploying. The bump commit has to be pushed
+# with the PAT rather than GITHUB_TOKEN: a push authenticated with GITHUB_TOKEN
+# does not trigger other workflows, so the released commit would get no CI.
 
 on:
   workflow_dispatch:
@@ -40,9 +44,8 @@ permissions: {}
 concurrency:
   # Shared with latest-changes.yml, which also pushes to main. Without this a
   # pull request merging mid-run rejects the release push as non-fast-forward
-  # and leaves the release half-cut: manifests bumped locally, no tag, no
-  # draft. Never cancelled — an interrupted run is the state that is hard to
-  # reason about.
+  # and leaves the release half-cut: manifests bumped locally, no draft. Never
+  # cancelled — an interrupted run is the state that is hard to reason about.
   group: main-write
   cancel-in-progress: false
 
@@ -54,16 +57,20 @@ jobs:
 
     permissions:
       contents: read
+      actions: read # To read main's workflow runs, for the green check.
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Tags are needed to notice an existing one, and the full history so
-          # the rebase below has something to rebase onto.
+          # Tags are needed to notice an existing one and to order the new
+          # version against them, and the full history so the rebase below has
+          # something to rebase onto.
           fetch-depth: 0
+          fetch-tags: true
           # The push uses an explicit remote URL carrying the PAT (see the
-          # "Push" step), which keeps the credential out of the checkout and
-          # out of .git/config — the same shape sync-action-repo.yml uses.
+          # "Push the bump to main" step), which keeps the credential out of the
+          # checkout and out of .git/config — the same shape
+          # sync-action-repo.yml uses.
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -71,12 +78,27 @@ jobs:
           version: "0.11.4"
           enable-cache: true
 
+      - name: Refuse to release from anywhere but main
+        env:
+          REF: ${{ github.ref }}
+        run: .github/scripts/release/refuse-to-release-from-anywhere-but-main.sh
+
+      - name: Verify every manifest agrees with VERSION
+        run: python3 scripts/validate_versions.py
+
       - name: Resolve the version
         id: version
         env:
           BUMP: ${{ inputs.bump }}
           EXPLICIT: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: .github/scripts/release/resolve-version.sh
+
+      - name: Require main to be green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: .github/scripts/release/require-main-to-be-green.sh
 
       - name: Bump the version everywhere
         env:
@@ -88,20 +110,21 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: .github/scripts/release/cut-release-notes.sh
 
-      - name: Push the commit and the tag
+      - name: Push the bump to main
+        id: push
         env:
           # zizmor: ignore[secrets-outside-env] -- the token is in env, which is
           # the point; the URL below is assembled inside the shell so it never
           # appears in a workflow expression.
           TOKEN: ${{ secrets.LATEST_CHANGES }}
-          VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
-        run: .github/scripts/release/push-commit-and-tag.sh
+        run: .github/scripts/release/push-the-bump-to-main.sh
 
       - name: Open the release draft
         env:
           GH_TOKEN: ${{ secrets.LATEST_CHANGES }}
           TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ steps.push.outputs.sha }}
           VERSION: ${{ steps.version.outputs.version }}
         run: .github/scripts/release/open-release-draft.sh
 

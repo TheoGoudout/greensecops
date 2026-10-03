@@ -244,21 +244,27 @@ member. The validator asserts they stay that way.
 
 Two steps, and the first one deploys nothing.
 
-1. **Actions → release → Run workflow.** Pick `patch`/`minor`/`major`, or type
-   an exact version to override it (this is how a `0.11.0-rc1` gets cut). The
-   workflow bumps the version everywhere, renames the accumulated
-   `## Latest Changes` section of `release-notes.md` to `## X.Y.Z (date)` and
-   opens a fresh empty one, pushes the commit and the `vX.Y.Z` tag to `main`,
-   and opens a **draft** GitHub release. Pushing the tag is what starts
-   `images.yml` building `greensecops-{backend,opa}:vX.Y.Z`.
+1. **Actions → release → Run workflow**, from `main`. Pick
+   `patch`/`minor`/`major`, or type an exact version to override it (this is
+   how a `0.11.0-rc1` gets cut). The workflow refuses to run unless every
+   manifest agrees with `VERSION`, the version sorts above every existing tag
+   and has no release or draft yet, and `main`'s CI is green. It then bumps the
+   version everywhere, renames the accumulated `## Latest Changes` section of
+   `release-notes.md` to `## X.Y.Z (date)` and opens a fresh empty one, pushes
+   the commit to `main`, and opens a **draft** GitHub release targeting that
+   commit. It does **not** create the tag.
 
-2. **Publish the draft.** That runs `release-deploy.yml`: it waits for the
-   images, then — after the `production` environment's reviewer approves —
-   deploys the API through Coolify's API and blocks until Coolify reports the
-   deployment finished, then publishes the three static surfaces to Cloudflare.
+2. **Publish the draft.** GitHub creates the `vX.Y.Z` tag at that moment, on
+   the commit the draft targets, and the tag push starts `images.yml` building
+   `greensecops-{backend,opa}:vX.Y.Z`. Publishing also runs
+   `release-deploy.yml`: it waits for those images, then — after the
+   `production` environment's reviewer approves — deploys the API through
+   Coolify's API and blocks until Coolify reports the deployment finished, then
+   publishes the three static surfaces to Cloudflare.
 
-Between the two steps nothing has been deployed, so a release that looks wrong
-is undone by deleting the draft and the tag and reverting the commit.
+Between the two steps nothing has been tagged or deployed, so a release that
+looks wrong is undone by deleting the draft and reverting the commit. Because
+only publishing creates the tag, a tag without a release cannot exist.
 
 `release-notes.md` itself is written by `latest-changes.yml` on every merged
 pull request; you should not normally edit it by hand. It shares a `main-write`
