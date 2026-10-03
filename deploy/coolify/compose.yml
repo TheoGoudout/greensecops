@@ -288,8 +288,10 @@ services:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     restart: always
     pull_policy: always
-    # The image runs `fastapi run --workers 4`; each uvicorn worker holds its
-    # own copy of the application, so the floor is four of them.
+    # One uvicorn worker per WEB_CONCURRENCY (4 by default, as the image's own
+    # CMD); each holds its own copy of the application, so the floor is that
+    # many of them. Lower it when the host is shared with other stacks.
+    command: ["fastapi", "run", "--workers", "${WEB_CONCURRENCY:-4}", "app/main.py"]
     mem_limit: 1536m
     mem_reservation: 512m
     cpu_shares: 1024
