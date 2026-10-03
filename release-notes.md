@@ -15,6 +15,7 @@
 
 ### Internal
 
+* feat(deploy): make the Coolify backend's worker count configurable. PR [#348](https://github.com/TheoGoudout/greensecops/pull/348) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump the pre-commit group across 2 directories with 1 update. PR [#329](https://github.com/TheoGoudout/greensecops/pull/329) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ⬆ bump the npm-packages group across 1 directory with 11 updates. PR [#322](https://github.com/TheoGoudout/greensecops/pull/322) by [@dependabot[bot]](https://github.com/apps/dependabot).
 * ci: adopt Shop'n'Cook's release-orchestrator shape, and fix the drift an audit found. PR [#326](https://github.com/TheoGoudout/greensecops/pull/326) by [@TheoGoudout](https://github.com/TheoGoudout).
