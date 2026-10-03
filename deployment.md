@@ -120,8 +120,8 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 * `POSTGRES_PORT`: The port of the PostgreSQL server. Default: `5432`.
 * `POSTGRES_DB`: The database name to use for this application. Default: `greensecops`.
 * `POSTGRES_SERVER`, `REDIS_URL`, `OPA_URL`: Hardcoded by `compose.yml` to the in-network services (`db`, `redis://redis:6379/0`, `http://opa:8181`); only relevant when running the backend outside the Compose stack, where they default to `localhost`-based values.
-* `CELERY_CONCURRENCY`: Number of concurrent Celery worker processes/threads in the `celery-worker` service. Lower it to reduce CPU/memory strain on a smaller (e.g. staging) host; raise it to process more tasks in parallel. Default: `4` (`2` under `compose.override.yml` for local development).
-* `WEB_CONCURRENCY`: Number of uvicorn worker processes in the `backend` service of `deploy/coolify/compose.yml`, each a full copy of the application. Lower it (to `1`) on a small host shared with other stacks. Default: `4`.
+* `CELERY_CONCURRENCY`: Number of concurrent Celery worker processes/threads in the `celery-worker` service. Lower it to reduce CPU/memory strain on a smaller (e.g. staging) host; raise it to process more tasks in parallel. Default: `4` (`1` in `deploy/coolify/compose.yml`, `2` under `compose.override.yml` for local development).
+* `WEB_CONCURRENCY`: Number of uvicorn worker processes in the `backend` service of `deploy/coolify/compose.yml`, each a full copy of the application. Default: `1`, sized for a small host shared with other stacks; raise it on a bigger one.
 
 **LLM configuration**
 
