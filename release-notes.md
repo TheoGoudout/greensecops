@@ -15,6 +15,7 @@
 
 ### Internal
 
+* ci: cut releases as drafts the tag is created from, and harden CI. PR [#350](https://github.com/TheoGoudout/greensecops/pull/350) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(deploy): default the Coolify API and Celery worker to one process each. PR [#349](https://github.com/TheoGoudout/greensecops/pull/349) by [@TheoGoudout](https://github.com/TheoGoudout).
 * feat(deploy): make the Coolify backend's worker count configurable. PR [#348](https://github.com/TheoGoudout/greensecops/pull/348) by [@TheoGoudout](https://github.com/TheoGoudout).
 * ⬆ bump the pre-commit group across 2 directories with 1 update. PR [#329](https://github.com/TheoGoudout/greensecops/pull/329) by [@dependabot[bot]](https://github.com/apps/dependabot).
