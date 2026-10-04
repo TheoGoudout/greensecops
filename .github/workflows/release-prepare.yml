@@ -41,11 +41,17 @@ on:
 
 permissions: {}
 
+# The `secrets` context is not available in a step-level `if`, so surface the
+# presence of the token as an env var. RELEASE_TOKEN is the name the other
+# repositories use; LATEST_CHANGES, the older one, is read while it exists.
+env:
+  HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' || secrets.LATEST_CHANGES != '' }}
+
 concurrency:
   # Two releases cut at once would both push a bump to main and both open a
   # draft. Never cancelled — an interrupted run is the state that is hard to
   # reason about.
-  group: main-write
+  group: release-prepare
   cancel-in-progress: false
 
 jobs:
@@ -77,6 +83,10 @@ jobs:
         with:
           version: "0.11.4"
           enable-cache: true
+
+      - name: Require a release token
+        if: env.HAS_RELEASE_TOKEN != 'true'
+        run: .github/scripts/release-prepare/require-a-release-token.sh
 
       - name: Refuse to release from anywhere but main
         env:
@@ -117,13 +127,13 @@ jobs:
           # zizmor: ignore[secrets-outside-env] -- the token is in env, which is
           # the point; the URL below is assembled inside the shell so it never
           # appears in a workflow expression.
-          TOKEN: ${{ secrets.LATEST_CHANGES }}
+          TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.LATEST_CHANGES }}
           TAG: ${{ steps.version.outputs.tag }}
         run: .github/scripts/release-prepare/push-the-bump-to-main.sh
 
       - name: Open the release draft
         env:
-          GH_TOKEN: ${{ secrets.LATEST_CHANGES }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.LATEST_CHANGES }}
           TAG: ${{ steps.version.outputs.tag }}
           SHA: ${{ steps.push.outputs.sha }}
           VERSION: ${{ steps.version.outputs.version }}

@@ -440,8 +440,8 @@ deploy/
     roles/              common, docker, cloudwatch_agent, greensecops_service
 ```
 
-The workflows that drive all of this live in `.github/workflows/`: `deploy.yml`
-and `rollback.yml` are the two dispatch entries, and `deploy-reusable.yml` holds
+The workflows that drive all of this live in `.github/workflows/`: `deploy-aws.yml`
+and `rollback-aws.yml` are the two dispatch entries, and `deploy-reusable.yml` holds
 the mechanics they share.
 
 ## Checks

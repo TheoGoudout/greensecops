@@ -14,7 +14,7 @@
 set -euo pipefail
 
 if [ -z "${TOKEN}" ]; then
-  echo "::error::The LATEST_CHANGES secret is not set. It is the PAT that lets this workflow push the bump to main; without it the released commit would get no CI."
+  echo "::error::Neither RELEASE_TOKEN nor LATEST_CHANGES is set. It is the PAT that lets this workflow push the bump to main; without it the released commit would get no CI."
   exit 1
 fi
 

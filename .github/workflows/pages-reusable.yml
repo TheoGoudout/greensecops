@@ -82,6 +82,11 @@ on:
         description: Environment to publish to.
         required: true
         type: string
+      ref:
+        description: Git ref to build; empty builds the calling ref.
+        required: false
+        type: string
+        default: ""
       preview:
         description: >-
           Upload a throwaway version and report its URL instead of deploying.
@@ -171,6 +176,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
 
       - name: Resolve the environment's URLs
         id: resolve
@@ -204,6 +210,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
 
       - name: Install envsubst
         # gettext-base is present on the current runner image, but the landing
@@ -266,6 +273,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
 
       # The cache-poisoning ignore on the step below, and the matching one in
       # the `docs` job. The audit is right that this job both restores a cache
@@ -378,6 +386,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
 
       # Same shape and same cache-scoping argument as the `frontend` job above,
       # where the reasoning is written out.

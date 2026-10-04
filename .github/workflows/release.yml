@@ -133,55 +133,26 @@ jobs:
     # No `always()` here, deliberately: this job must not run unless the images
     # are actually in the registry, so the default "every `needs` succeeded"
     # gate is the one we want. `run_coolify` only narrows it further.
+    #
+    # The approval gate is the `production` environment deploy-coolify.yml's
+    # job names. One approval releases every job in the run that names it, so
+    # the dashboard below is covered by the same click.
     if: needs.resolve.outputs.run_coolify == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # The approval gate. production's protection rules hold this until a
-    # reviewer approves, and one approval releases every job in the run that
-    # names the environment — so the dashboard job below is covered by the same
-    # click rather than asking for a second one.
-    environment: production
-
     permissions:
       contents: read
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # Before the repoint below, not after, and not in pages-reusable.yml where
-      # staging's equivalent lives — that workflow runs *after* this job has
-      # deployed, so a sync there would reach production's containers one
-      # release late, every release.
-      #
-      # Same values the dashboard is about to be built with, from the same file.
-      # The API cannot derive them: SERVICE_URL_* magic is per-service, and the
-      # dashboard, landing and docs are Cloudflare Workers rather than services
-      # in deploy/coolify/compose.yml, so nothing generates a hostname for them.
-      - name: Sync the public URLs
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
-        run: .github/scripts/shared/coolify-env-sync.sh production "${UUID}"
-
-      - name: Point the resource at the release and deploy it
-        id: trigger
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
-          TAG: ${{ needs.resolve.outputs.tag }}
-        run: .github/scripts/release/coolify-deploy.sh
-
-      - name: Monitor the deploy
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          TAG: ${{ needs.resolve.outputs.tag }}
-          DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
-        run: .github/scripts/release/coolify-monitor.sh
+      packages: read # deploy-coolify.yml confirms the images exist.
+    uses: ./.github/workflows/deploy-coolify.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+    with:
+      environment: production
+      ref: ${{ needs.resolve.outputs.tag }}
+      image_tag: ${{ needs.resolve.outputs.tag }}
+    secrets:
+      COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+      COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+      COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      COOLIFY_STAGING_UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+      COOLIFY_PRODUCTION_UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
 
   cloudflare:
     name: Static surfaces (production)

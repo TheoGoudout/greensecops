@@ -151,7 +151,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 There are some environment variables only used by GitHub Actions (as repository secrets) that you can configure:
 
-* `LATEST_CHANGES`: Personal access token `release-prepare.yml` pushes the version bump to `main` and opens the draft release with. It has to be a PAT: a push made with `GITHUB_TOKEN` starts no workflow, so the released commit would get no CI. (The name is historical — it was first used by the latest-changes action, which the release notes no longer come from.)
+* `RELEASE_TOKEN`: Personal access token `release-prepare.yml` pushes the version bump to `main` and opens the draft release with — the same name Shop'n'Cook and Prism use. It has to be a PAT: a push made with `GITHUB_TOKEN` starts no workflow, so the released commit would get no CI. The older name, `LATEST_CHANGES`, is still read while `RELEASE_TOKEN` is unset.
 * `SMOKESHOW_AUTH_KEY`: Used to handle and publish the code coverage using [Smokeshow](https://github.com/samuelcolvin/smokeshow), follow their instructions to create a (free) Smokeshow key.
 
 ## Deploy with Docker Compose

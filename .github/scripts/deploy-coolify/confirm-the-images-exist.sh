@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Resolve the immutable per-commit tag, confirm it is in the registry, and
-# publish it as a step output.
+# Resolve the image tag to deploy, confirm it is in the registry, and publish
+# it as a step output.
+#
+# The tag is IMAGE_TAG when the caller names one (a release's vX.Y.Z), and
+# otherwise this commit's immutable `sha-<short>`.
 #
 # This is the reason this deployment stopped serving stale images. `latest`
 # moves under a name that does not change, so a host that already has it has no
@@ -15,11 +18,11 @@
 # if that format ever changes, this must fail loudly here instead of pinning the
 # resource to a tag that does not exist.
 #
-# GH_TOKEN and OWNER come from the calling step's env; REGISTRY from the
-# workflow's.
+# GH_TOKEN, OWNER, IMAGE_TAG and ENVIRONMENT come from the calling step's env;
+# REGISTRY from the workflow's.
 set -euo pipefail
 
-tag="sha-${GITHUB_SHA:0:7}"
+tag="${IMAGE_TAG:-sha-${GITHUB_SHA:0:7}}"
 owner_lc=${OWNER,,}
 
 echo "${GH_TOKEN}" | docker login "${REGISTRY}" -u "${GITHUB_ACTOR}" --password-stdin
@@ -27,7 +30,7 @@ echo "${GH_TOKEN}" | docker login "${REGISTRY}" -u "${GITHUB_ACTOR}" --password-
 for image in backend opa; do
   reference="${REGISTRY}/${owner_lc}/greensecops-${image}:${tag}"
   if ! docker buildx imagetools inspect "${reference}" >/dev/null 2>&1; then
-    echo "::error::${reference} does not exist, so the staging resource must not be pointed at ${tag}. Check the merge job's tags."
+    echo "::error::${reference} does not exist, so the ${ENVIRONMENT} resource must not be pointed at ${tag}. Check images.yml's run for it."
     exit 1
   fi
   echo "${reference} ✅"

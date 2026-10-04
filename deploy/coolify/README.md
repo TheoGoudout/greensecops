@@ -414,24 +414,26 @@ personal access token holding `read:packages`.
 
 #### What the release workflows need
 
-Four repository secrets, all for the Coolify half:
+The Coolify half reads three secrets, the same names Shop'n'Cook and Prism use,
+set on **each** of the `staging` and `production` GitHub Environments with that
+environment's values. All three are required: `deploy-coolify.yml` fails the run
+when one is missing, rather than going green having deployed nothing.
 
 | Secret | What it is |
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
-| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy either of them |
-| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release.yml` |
-| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `deploy-staging.yml`, which syncs its URLs, sets its `TAG` and deploys it |
+| `COOLIFY_API_TOKEN` | An API token with permission to read and write the resource's variables, and to deploy it |
+| `COOLIFY_APP_UUID` | The environment's resource UUID. `deploy-coolify.yml` syncs its URLs, sets its `TAG` and deploys it |
 
-Set all four or none. Both workflows refuse a partial set rather than skipping:
-deploying nothing and passing is exactly how staging kept a localhost
-`FRONTEND_HOST` for the life of the deployment.
+The older names are still read while the new ones are unset: `COOLIFY_TOKEN` for
+`COOLIFY_API_TOKEN`, and `COOLIFY_STAGING_UUID` / `COOLIFY_PRODUCTION_UUID` for
+`COOLIFY_APP_UUID`. Delete them once the new ones are in place.
 
 The Pi is not in the request path, but it *is* in the deploy path — if its API
 is not reachable from GitHub's runners, the Coolify job cannot run and
 production has to be promoted from Coolify's UI instead.
 
-`release-prepare.yml` reuses the existing `LATEST_CHANGES` PAT to push the release
+`release-prepare.yml` uses the `RELEASE_TOKEN` PAT (or, until it is set, the older `LATEST_CHANGES`) to push the release
 commit and the tag. That has to be a PAT rather than `GITHUB_TOKEN`: a push
 authenticated with `GITHUB_TOKEN` does not trigger other workflows, so
 `images.yml` would never build the release images.
