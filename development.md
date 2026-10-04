@@ -244,20 +244,21 @@ member. The validator asserts they stay that way.
 
 Two steps, and the first one deploys nothing.
 
-1. **Actions → release → Run workflow**, from `main`. Pick
+1. **Actions → Prepare Release → Run workflow**, from `main`. Pick
    `patch`/`minor`/`major`, or type an exact version to override it (this is
    how a `0.11.0-rc1` gets cut). The workflow refuses to run unless every
    manifest agrees with `VERSION`, the version sorts above every existing tag
    and has no release or draft yet, and `main`'s CI is green. It then bumps the
-   version everywhere, renames the accumulated `## Latest Changes` section of
-   `release-notes.md` to `## X.Y.Z (date)` and opens a fresh empty one, pushes
-   the commit to `main`, and opens a **draft** GitHub release targeting that
-   commit. It does **not** create the tag.
+   version everywhere, writes a `## X.Y.Z (date)` section into
+   `release-notes.md` from the pull requests merged since the last stable tag
+   (`scripts/release_notes.py`), pushes the commit to `main`, and opens a
+   **draft** GitHub release targeting that commit, with the same notes as its
+   body. It does **not** create the tag.
 
 2. **Publish the draft.** GitHub creates the `vX.Y.Z` tag at that moment, on
    the commit the draft targets, and the tag push starts `images.yml` building
    `greensecops-{backend,opa}:vX.Y.Z`. Publishing also runs
-   `release-deploy.yml`: it waits for those images, then — after the
+   `release.yml`: it waits for those images, then — after the
    `production` environment's reviewer approves — deploys the API through
    Coolify's API and blocks until Coolify reports the deployment finished, then
    publishes the three static surfaces to Cloudflare.
@@ -266,9 +267,12 @@ Between the two steps nothing has been tagged or deployed, so a release that
 looks wrong is undone by deleting the draft and reverting the commit. Because
 only publishing creates the tag, a tag without a release cannot exist.
 
-`release-notes.md` itself is written by `latest-changes.yml` on every merged
-pull request; you should not normally edit it by hand. It shares a `main-write`
-concurrency group with `release.yml` so the two cannot race to push.
+`release-notes.md` is written only when a release is cut, so nothing pushes to
+`main` between merges and its head is always a commit CI ran on — which the
+green check requires. A pull request's labels pick its section (`feature`,
+`bug`, `upgrade`, `internal`, … — the list is in `scripts/release_notes.py`);
+an unlabelled one lands under Internal. To fix an entry, retitle or relabel the
+pull request before cutting the release, or edit the draft and the file after.
 
 ### Seeing what is deployed
 

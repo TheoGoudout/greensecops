@@ -1,137 +1,221 @@
-name: release
+name: Release
 
-# Cuts a release: Actions → release → Run workflow, pick a bump.
+# Promotes a published release to production, on both platforms.
 #
-# This is the first half of a two-step promotion. It changes nothing that is
-# deployed — it checks main is green, bumps the version everywhere, closes off
-# the accumulated release notes, and opens a **draft** GitHub release. It does
-# **not** create the tag. Publishing that draft is what creates the tag (GitHub
-# does it, at the commit the draft targets) and what promotes production, via
-# release-deploy.yml.
+# Triggered by publishing the draft release-prepare.yml opened — that click is the
+# human decision this whole flow is built around, and it is the only thing that
+# moves production. Staging is untouched here: it tracks main automatically
+# (pages.yml for the static surfaces, Coolify's own auto-deploy for the API).
 #
-# The draft is the review gate, and leaving the tag to it makes a tag without a
-# release impossible: this workflow used to push the tag itself, so a run that
-# failed after the push left a tag nothing would ever publish. Everything here
-# is reversible with a revert, because nothing has been tagged or deployed.
+# The whole promotion is one run, so there is one place to read its status and
+# "Re-run failed jobs" re-drives only the half that broke. The workflow_dispatch
+# trigger is the same thing from the other direction: name a tag that is already
+# released and, optionally, narrow it to one half. That is the shape of the
+# half-failed release — Coolify deployed, Cloudflare did not — where restarting
+# a rollout that already succeeded is the wrong move.
 #
-# What it writes, all from the root VERSION file (scripts/_versions.py has the
-# list): frontend/package.json, action/package.json, backend/pyproject.toml,
-# docs/pyproject.toml, backend/app/__version__.py, and uv.lock.
+# The two halves run in sequence, backend first, and that ordering is
+# load-bearing rather than tidy. The dashboard ships a *generated* OpenAPI
+# client, so the two mismatch directions are not equally bad:
 #
-# The tag push that publishing performs is what starts images.yml, which
-# publishes ghcr.io/<owner>/greensecops-{backend,opa}:vX.Y.Z; release-deploy.yml
-# waits for those images before deploying. The bump commit has to be pushed
-# with the PAT rather than GITHUB_TOKEN: a push authenticated with GITHUB_TOKEN
-# does not trigger other workflows, so the released commit would get no CI.
+#   dashboard ahead of API  ->  calls a contract the server has not shipped
+#   API ahead of dashboard  ->  fine, as long as the change was additive
+#
+# Run in parallel, Cloudflare wins the race every time — it is a static build
+# and a seconds-long upload, against Coolify pulling images, restarting
+# containers and running migrations — so parallel would put production in the
+# bad direction on every release. Worse, a Coolify failure after a successful
+# Cloudflare deploy would make that direction *permanent* until someone rolled
+# back by hand. Sequencing costs one dashboard build on a manual, infrequent,
+# reviewer-gated action. See deploy/coolify/README.md.
+#
+# Sequencing is not a substitute for compatibility: browsers hold the old
+# dashboard bundle far longer than either deploy window, so "old client, new
+# server" persists for hours regardless. Backward-compatible API changes are
+# the real mitigation; this only narrows the window for fresh page loads.
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      bump:
-        description: Which part of the version to increment
+      tag:
+        description: "Released tag to promote, e.g. v0.12.0"
+        required: true
+        type: string
+      targets:
+        description: "Which halves of the promotion to run"
         required: true
         type: choice
-        options: [patch, minor, major]
-        default: minor
-      version:
-        description: "Exact version, e.g. 0.11.0 or 0.11.0-rc1 (overrides bump)"
-        required: false
-        type: string
-        default: ""
+        default: all
+        options:
+          - all
+          - coolify
+          - cloudflare
 
 permissions: {}
 
 concurrency:
-  # Shared with latest-changes.yml, which also pushes to main. Without this a
-  # pull request merging mid-run rejects the release push as non-fast-forward
-  # and leaves the release half-cut: manifests bumped locally, no draft. Never
-  # cancelled — an interrupted run is the state that is hard to reason about.
-  group: main-write
+  # One promotion at a time, whatever the tag: two releases rolling out at once
+  # would race to set production's image tag. Never cancelled — interrupting a
+  # Coolify rollout half-way is exactly the state this workflow exists to avoid.
+  group: release
   cancel-in-progress: false
 
+env:
+  REGISTRY: ghcr.io
+
 jobs:
-  release:
-    name: Cut the release
+  resolve:
+    name: Resolve the release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
 
     permissions:
       contents: read
-      actions: read # To read main's workflow runs, for the green check.
+
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      run_coolify: ${{ steps.targets.outputs.coolify }}
+      run_cloudflare: ${{ steps.targets.outputs.cloudflare }}
 
     steps:
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Tags are needed to notice an existing one and to order the new
-          # version against them, and the full history so the rebase below has
-          # something to rebase onto.
-          fetch-depth: 0
-          fetch-tags: true
-          # The push uses an explicit remote URL carrying the PAT (see the
-          # "Push the bump to main" step), which keeps the credential out of the
-          # checkout and out of .git/config — the same shape
-          # sync-action-repo.yml uses.
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Resolve the tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: .github/scripts/release/resolve-tag.sh
+
+      - name: Resolve the targets
+        id: targets
+        env:
+          TARGETS: ${{ inputs.targets || 'all' }}
+        run: .github/scripts/release/resolve-targets.sh
+
+  verify:
+    name: Verify the images
+    needs: [resolve]
+    # Only the API deploy consumes the images. A `targets: cloudflare` run has
+    # nothing to wait for, and waiting thirty minutes for it would be the whole
+    # cost of the narrow re-drive.
+    if: needs.resolve.outputs.run_coolify == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    permissions:
+      contents: read
+      packages: read # To wait for the release images to appear on GHCR.
+
+    steps:
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: "0.11.4"
-          enable-cache: true
+          persist-credentials: false
 
-      - name: Refuse to release from anywhere but main
-        env:
-          REF: ${{ github.ref }}
-        run: .github/scripts/release/refuse-to-release-from-anywhere-but-main.sh
-
-      - name: Verify every manifest agrees with VERSION
-        run: python3 scripts/validate_versions.py
-
-      - name: Resolve the version
-        id: version
-        env:
-          BUMP: ${{ inputs.bump }}
-          EXPLICIT: ${{ inputs.version }}
-          GH_TOKEN: ${{ github.token }}
-        run: .github/scripts/release/resolve-version.sh
-
-      - name: Require main to be green
+      - name: Wait for the release images
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: .github/scripts/release/require-main-to-be-green.sh
+          TAG: ${{ needs.resolve.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+        run: .github/scripts/release/wait-for-images.sh
 
-      - name: Bump the version everywhere
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: .github/scripts/release/bump-version.sh
+  coolify:
+    name: API (production)
+    needs: [resolve, verify]
+    # No `always()` here, deliberately: this job must not run unless the images
+    # are actually in the registry, so the default "every `needs` succeeded"
+    # gate is the one we want. `run_coolify` only narrows it further.
+    #
+    # The approval gate is the `production` environment deploy-coolify.yml's
+    # job names. One approval releases every job in the run that names it, so
+    # the dashboard below is covered by the same click.
+    if: needs.resolve.outputs.run_coolify == 'true'
+    permissions:
+      contents: read
+      packages: read # deploy-coolify.yml confirms the images exist.
+    uses: ./.github/workflows/deploy-coolify.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+    with:
+      environment: production
+      ref: ${{ needs.resolve.outputs.tag }}
+      image_tag: ${{ needs.resolve.outputs.tag }}
+    secrets:
+      COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+      COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+      COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      COOLIFY_STAGING_UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+      COOLIFY_PRODUCTION_UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
 
-      - name: Cut the release notes
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: .github/scripts/release/cut-release-notes.sh
+  cloudflare:
+    name: Static surfaces (production)
+    # Gated on the API being live, not merely started. The coolify job blocks
+    # until Coolify reports `finished`, so this ordering is real.
+    #
+    # `always()` is what lets a *skipped* coolify job through — `targets:
+    # cloudflare` skips it, and a plain `needs:` would then skip this job too.
+    # A coolify job that actually failed still blocks the dashboard, which is
+    # the whole point of the sequencing above.
+    needs: [resolve, coolify]
+    if: >-
+      always() &&
+      needs.resolve.result == 'success' &&
+      needs.resolve.outputs.run_cloudflare == 'true' &&
+      needs.coolify.result != 'failure' &&
+      needs.coolify.result != 'cancelled'
+    uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+    permissions:
+      contents: read
+    with:
+      environment: production
+    secrets:
+      # Named explicitly. pages-reusable.yml declares these as workflow_call
+      # secrets and deliberately does not inherit — and omitting them here
+      # would not fail: HAS_CLOUDFLARE would simply be false and the run would
+      # go green having deployed nothing at all.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Push the bump to main
-        id: push
-        env:
-          # zizmor: ignore[secrets-outside-env] -- the token is in env, which is
-          # the point; the URL below is assembled inside the shell so it never
-          # appears in a workflow expression.
-          TOKEN: ${{ secrets.LATEST_CHANGES }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: .github/scripts/release/push-the-bump-to-main.sh
+  summary:
+    name: Summarise
+    needs: [resolve, verify, coolify, cloudflare]
+    # Runs even when a stage failed or was skipped, so the run's conclusion is
+    # the release's conclusion rather than just the last job's.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
-      - name: Open the release draft
-        env:
-          GH_TOKEN: ${{ secrets.LATEST_CHANGES }}
-          TAG: ${{ steps.version.outputs.tag }}
-          SHA: ${{ steps.push.outputs.sha }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: .github/scripts/release/open-release-draft.sh
+    permissions:
+      contents: read
 
-      - name: Summarise
-        if: always()
+    steps:
+      # The steps below run scripts from .github/scripts/, so this job needs
+      # the repository even though it builds nothing from it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Report
         env:
-          TAG: ${{ steps.version.outputs.tag }}
-          OUTCOME: ${{ job.status }}
-          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-        run: .github/scripts/release/summarise.sh
+          TAG: ${{ needs.resolve.outputs.tag || github.event.release.tag_name || inputs.tag }}
+          IMAGES: ${{ needs.verify.result }}
+          API: ${{ needs.coolify.result }}
+          STATIC: ${{ needs.cloudflare.result }}
+        run: .github/scripts/release/report.sh
+
+      # The report above always exits 0 — right for a report, wrong for the last
+      # job in the workflow. Without this, a release whose Cloudflare deploy died
+      # ended on a green check with the failure buried in a table.
+      - name: Fail if any target failed
+        env:
+          IMAGES: ${{ needs.verify.result }}
+          API: ${{ needs.coolify.result }}
+          STATIC: ${{ needs.cloudflare.result }}
+        run: .github/scripts/release/fail-if-any-target-failed.sh

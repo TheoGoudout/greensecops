@@ -272,7 +272,7 @@ generated customer workflows) empties the same way.
 `deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
 built from, so the two halves of a deployment cannot disagree about a hostname.
 `.github/scripts/shared/coolify-env-sync.sh` does it, called from
-`images.yml` for staging and from `release-deploy.yml` for production. **Editing those three by hand in
+`deploy-staging.yml` for staging and from `release.yml` for production. **Editing those three by hand in
 Coolify is pointless: the next sync overwrites them.** Change
 `deploy/cloudflare/env/<environment>.env` instead.
 
@@ -297,9 +297,9 @@ Coolify's proxy terminates TLS and routes to it. The other three hostnames are
 Cloudflare's.
 
 **`TAG` is owned by CI on both resources, and you should not set it by hand.**
-On **staging** it belongs to `.github/workflows/images.yml`, which sets it to
-`sha-<short>` for the commit it has just built. On **production** it belongs to
-`.github/workflows/release-deploy.yml`, which sets it to the published release's
+On **staging** it belongs to `.github/workflows/deploy-staging.yml`, which sets
+it to `sha-<short>` for the commit it has just built. On **production** it belongs to
+`.github/workflows/release.yml`, which sets it to the published release's
 tag alongside the resource's git ref.
 
 Neither needs creating by hand — both workflows create the variable if it is
@@ -309,18 +309,17 @@ the resource to whatever you typed until the next deploy overwrites it.
 **Turn Automatic Deployment off on the staging resource.** This is the one
 setting that has to be clicked rather than committed, and leaving it on is a
 bug rather than a redundancy. Coolify's git watcher fires the moment a push
-lands — ten to twenty-five minutes before `images.yml` has published that
-commit's images — so it deploys the *previous* commit's image while `pages.yml`
-puts the new commit's dashboard on Cloudflare within a minute. The dashboard
-ships a generated OpenAPI client, so that is a client calling a contract the
-server has not shipped. With the watcher off, `images.yml` deploys staging
-itself once the images provably exist.
+lands — ten to twenty-five minutes before that commit's images are published —
+so it deploys the *previous* commit's image, and the new commit's dashboard can
+reach Cloudflare first. The dashboard ships a generated OpenAPI client, so that
+is a client calling a contract the server has not shipped. With the watcher off,
+`deploy-staging.yml` deploys staging itself once the images provably exist.
 
 An immutable per-commit tag is what makes the pull reliable, and it is worth
 knowing why `latest` was not enough. A tag that does not change gives Docker no
 reason to look for a new image: Compose's default pull policy is `missing`, and
 an ordinary Coolify deploy does not force a pull — which is what `force=true` in
-`release-deploy.yml` is for. `sha-<short>` is a reference the host has never
+`release.yml` is for. `sha-<short>` is a reference the host has never
 seen, so the pull happens because it must. `deploy/coolify/compose.yml` also
 carries `pull_policy: always` on every service running one of this project's
 images, which covers a redeploy clicked here by hand.
@@ -370,23 +369,21 @@ the one to run by hand.
 
 ### 5. Deploy
 
-**Staging is automatic, and ordered.** Push to `main` and three things happen in
-sequence, not in parallel:
+**Staging is automatic, and ordered.** Push to `main` and `deploy-staging.yml`
+does three things in sequence, not in parallel:
 
 1. `images.yml` publishes the backend and OPA images to GHCR, tagged both
    `latest` and `sha-<short>` for the commit.
-2. The same run then deploys the staging API: it syncs the resource's public
-   URLs, sets `TAG` to that `sha-<short>`, triggers the deploy and blocks until
-   Coolify reports it finished.
-3. Only then does `pages.yml` publish the dashboard. Its `api-gate` job waits on
-   this commit's `images.yml` run and fails rather than publishing if that run
-   failed — the same "API first" rule `release-deploy.yml` enforces for
-   production, for the same reason. The landing page and docs do not ship the
-   generated client, so they publish without waiting.
+2. It deploys the staging API: it syncs the resource's public URLs, sets `TAG`
+   to that `sha-<short>`, triggers the deploy and blocks until Coolify reports
+   it finished.
+3. Only then does it publish the static surfaces (`pages-reusable.yml`), and not
+   at all if the API deploy failed — the same "API first" rule `release.yml`
+   enforces for production, for the same reason.
 
-A commit that touches nothing `images.yml` watches produces no run for that SHA,
-the gate clears immediately, and the static surfaces publish as before. Look at
-staging.
+A commit that touches only one half deploys only that half. Disable the
+workflow (Actions → Deploy staging → Disable workflow) to stop staging without
+touching anything else. Look at staging.
 
 **Production is two clicks**, and both halves move together:
 
@@ -394,13 +391,13 @@ staging.
    everywhere, closes off the accumulated release notes, tags `vX.Y.Z` and
    opens a **draft** GitHub release. Nothing is deployed — this is reviewable
    and undoable.
-2. Review the draft, then **publish** it. That runs `release-deploy.yml`, which
+2. Review the draft, then **publish** it. That runs `release.yml`, which
    waits for the reviewer the `production` environment requires and then
    promotes the API and the static sites in that order.
 
 The ordering is the point. The dashboard ships a generated OpenAPI client, so a
 promoted dashboard talking to an unpromoted API breaks against a contract the
-server has not shipped yet — `release-deploy.yml` deploys Coolify first and
+server has not shipped yet — `release.yml` deploys Coolify first and
 blocks until Coolify reports the deployment finished, so the dashboard can
 never get ahead. The reverse window still exists and is the tolerable one.
 
@@ -417,24 +414,26 @@ personal access token holding `read:packages`.
 
 #### What the release workflows need
 
-Four repository secrets, all for the Coolify half:
+The Coolify half reads three secrets, the same names Shop'n'Cook and Prism use,
+set on **each** of the `staging` and `production` GitHub Environments with that
+environment's values. All three are required: `deploy-coolify.yml` fails the run
+when one is missing, rather than going green having deployed nothing.
 
 | Secret | What it is |
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
-| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy either of them |
-| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release-deploy.yml` |
-| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `images.yml`, which syncs its URLs, sets its `TAG` and deploys it |
+| `COOLIFY_API_TOKEN` | An API token with permission to read and write the resource's variables, and to deploy it |
+| `COOLIFY_APP_UUID` | The environment's resource UUID. `deploy-coolify.yml` syncs its URLs, sets its `TAG` and deploys it |
 
-Set all four or none. Both workflows refuse a partial set rather than skipping:
-deploying nothing and passing is exactly how staging kept a localhost
-`FRONTEND_HOST` for the life of the deployment.
+The older names are still read while the new ones are unset: `COOLIFY_TOKEN` for
+`COOLIFY_API_TOKEN`, and `COOLIFY_STAGING_UUID` / `COOLIFY_PRODUCTION_UUID` for
+`COOLIFY_APP_UUID`. Delete them once the new ones are in place.
 
 The Pi is not in the request path, but it *is* in the deploy path — if its API
 is not reachable from GitHub's runners, the Coolify job cannot run and
 production has to be promoted from Coolify's UI instead.
 
-`release.yml` reuses the existing `LATEST_CHANGES` PAT to push the release
+`release-prepare.yml` uses the `RELEASE_TOKEN` PAT (or, until it is set, the older `LATEST_CHANGES`) to push the release
 commit and the tag. That has to be a PAT rather than `GITHUB_TOKEN`: a push
 authenticated with `GITHUB_TOKEN` does not trigger other workflows, so
 `images.yml` would never build the release images.
