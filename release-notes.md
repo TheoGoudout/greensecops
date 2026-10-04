@@ -1,5 +1,42 @@
 # Release Notes
 
+## 0.13.0 (2026-10-04)
+
+### Features
+
+* feat(frontend): console visual identity, one meaning palette, self-hosted fonts. PR [#360](https://github.com/TheoGoudout/greensecops/pull/360) by [@TheoGoudout](https://github.com/TheoGoudout).
+* Dev, staging and production environments. PR [#358](https://github.com/TheoGoudout/greensecops/pull/358) by [@TheoGoudout](https://github.com/TheoGoudout).
+* feat(coolify): mount the AI provider catalog as an editable file. PR [#331](https://github.com/TheoGoudout/greensecops/pull/331) by [@TheoGoudout](https://github.com/TheoGoudout).
+* feat(billing): confirm every plan change on Stripe's own page. PR [#325](https://github.com/TheoGoudout/greensecops/pull/325) by [@TheoGoudout](https://github.com/TheoGoudout).
+* feat(ux): say what is running, and stop the click that races it. PR [#327](https://github.com/TheoGoudout/greensecops/pull/327) by [@TheoGoudout](https://github.com/TheoGoudout).
+
+### Upgrades
+
+* ⬆ bump the docker group across 4 directories with 3 updates. PR [#330](https://github.com/TheoGoudout/greensecops/pull/330) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ Bump the python group across 2 directories with 1 update. PR [#319](https://github.com/TheoGoudout/greensecops/pull/319) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
+### Internal
+
+* ⬆ bump the npm-packages group across 1 directory with 20 updates. PR [#355](https://github.com/TheoGoudout/greensecops/pull/355) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ bump the python-packages group across 1 directory with 2 updates. PR [#335](https://github.com/TheoGoudout/greensecops/pull/335) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ update sentry-sdk[fastapi] requirement from <3.0.0,>=2.68.0 to >=2.68.1,<3.0.0. PR [#337](https://github.com/TheoGoudout/greensecops/pull/337) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ bump the github-actions group across 1 directory with 5 updates. PR [#354](https://github.com/TheoGoudout/greensecops/pull/354) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ update psycopg[binary] requirement from <4.0.0,>=3.3.4 to >=3.3.5,<4.0.0. PR [#336](https://github.com/TheoGoudout/greensecops/pull/336) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ bump the terraform group across 2 directories with 1 update. PR [#344](https://github.com/TheoGoudout/greensecops/pull/344) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ bump adminer from 6.0.1 to 6.1.0 in the docker-compose group. PR [#352](https://github.com/TheoGoudout/greensecops/pull/352) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* Make the staging environment opt-in. PR [#359](https://github.com/TheoGoudout/greensecops/pull/359) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ci(playwright): turn the rate limiter off for the E2E stack. PR [#357](https://github.com/TheoGoudout/greensecops/pull/357) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ci: release notes at release time, and workflows shaped like the other repos. PR [#356](https://github.com/TheoGoudout/greensecops/pull/356) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ci: cut releases as drafts the tag is created from, and harden CI. PR [#350](https://github.com/TheoGoudout/greensecops/pull/350) by [@TheoGoudout](https://github.com/TheoGoudout).
+* feat(deploy): default the Coolify API and Celery worker to one process each. PR [#349](https://github.com/TheoGoudout/greensecops/pull/349) by [@TheoGoudout](https://github.com/TheoGoudout).
+* feat(deploy): make the Coolify backend's worker count configurable. PR [#348](https://github.com/TheoGoudout/greensecops/pull/348) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ⬆ bump the pre-commit group across 2 directories with 1 update. PR [#329](https://github.com/TheoGoudout/greensecops/pull/329) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ bump the npm-packages group across 1 directory with 11 updates. PR [#322](https://github.com/TheoGoudout/greensecops/pull/322) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ci: adopt Shop'n'Cook's release-orchestrator shape, and fix the drift an audit found. PR [#326](https://github.com/TheoGoudout/greensecops/pull/326) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ci: install Wrangler outside the workspace, where npm 12 cannot crash. PR [#328](https://github.com/TheoGoudout/greensecops/pull/328) by [@TheoGoudout](https://github.com/TheoGoudout).
+* ⬆ Bump the pre-commit group across 2 directories with 1 update. PR [#320](https://github.com/TheoGoudout/greensecops/pull/320) by [@dependabot[bot]](https://github.com/apps/dependabot).
+* ⬆ Bump re-actors/alls-green from 1.2.2 to 1.3.0 in the github-actions group across 1 directory. PR [#323](https://github.com/TheoGoudout/greensecops/pull/323) by [@dependabot[bot]](https://github.com/apps/dependabot).
+
 ## 0.12.0 (2026-09-03)
 
 ### Breaking Changes
