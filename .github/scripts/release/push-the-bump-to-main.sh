@@ -28,10 +28,8 @@ git commit -m "chore: release ${TAG}"
 # appears in one.
 remote="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-# The concurrency group makes a collision with latest-changes.yml unlikely
-# rather than impossible — it only serialises this repo's own runs, and a human
-# can always push. Rebase and retry rather than failing a release for a race
-# that resolves itself.
+# A pull request merging mid-run moves main under this push. Rebase and retry
+# rather than failing a release for a race that resolves itself.
 for attempt in 1 2 3; do
   git pull --rebase "${remote}" main && git push "${remote}" HEAD:main && break
   if [ "${attempt}" = "3" ]; then

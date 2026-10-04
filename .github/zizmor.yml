@@ -51,7 +51,7 @@ rules:
         - docker/*
         - oven-sh/*
         # Upstream of the project this repository was forked from; used by
-        # issue-manager.yml and latest-changes.yml.
+        # issue-manager.yml.
         - tiangolo/*
         # `collect: all` reaches the pre-commit configs too, so the hook
         # repositories are held to the same allowlist as the actions: a hook

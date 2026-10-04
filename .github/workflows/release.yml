@@ -3,11 +3,11 @@ name: release
 # Cuts a release: Actions → release → Run workflow, pick a bump.
 #
 # This is the first half of a two-step promotion. It changes nothing that is
-# deployed — it checks main is green, bumps the version everywhere, closes off
-# the accumulated release notes, and opens a **draft** GitHub release. It does
-# **not** create the tag. Publishing that draft is what creates the tag (GitHub
-# does it, at the commit the draft targets) and what promotes production, via
-# release-deploy.yml.
+# deployed — it checks main is green, bumps the version everywhere, writes the
+# release notes from the pull requests merged since the last release, and opens
+# a **draft** GitHub release. It does **not** create the tag. Publishing that
+# draft is what creates the tag (GitHub does it, at the commit the draft
+# targets) and what promotes production, via release-deploy.yml.
 #
 # The draft is the review gate, and leaving the tag to it makes a tag without a
 # release impossible: this workflow used to push the tag itself, so a run that
@@ -42,10 +42,9 @@ on:
 permissions: {}
 
 concurrency:
-  # Shared with latest-changes.yml, which also pushes to main. Without this a
-  # pull request merging mid-run rejects the release push as non-fast-forward
-  # and leaves the release half-cut: manifests bumped locally, no draft. Never
-  # cancelled — an interrupted run is the state that is hard to reason about.
+  # Two releases cut at once would both push a bump to main and both open a
+  # draft. Never cancelled — an interrupted run is the state that is hard to
+  # reason about.
   group: main-write
   cancel-in-progress: false
 
@@ -58,6 +57,7 @@ jobs:
     permissions:
       contents: read
       actions: read # To read main's workflow runs, for the green check.
+      pull-requests: read # To read merged pull requests' titles and labels, for the notes.
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,10 +105,11 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: .github/scripts/release/bump-version.sh
 
-      - name: Cut the release notes
+      - name: Generate the release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: .github/scripts/release/cut-release-notes.sh
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/release/generate-release-notes.sh
 
       - name: Push the bump to main
         id: push

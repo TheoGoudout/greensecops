@@ -151,7 +151,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 There are some environment variables only used by GitHub Actions (as repository secrets) that you can configure:
 
-* `LATEST_CHANGES`: Used by the GitHub Action [latest-changes](https://github.com/tiangolo/latest-changes) to automatically add release notes based on the PRs merged. It's a personal access token, read the docs for details.
+* `LATEST_CHANGES`: Personal access token `release.yml` pushes the version bump to `main` and opens the draft release with. It has to be a PAT: a push made with `GITHUB_TOKEN` starts no workflow, so the released commit would get no CI. (The name is historical — it was first used by the latest-changes action, which the release notes no longer come from.)
 * `SMOKESHOW_AUTH_KEY`: Used to handle and publish the code coverage using [Smokeshow](https://github.com/samuelcolvin/smokeshow), follow their instructions to create a (free) Smokeshow key.
 
 ## Deploy with Docker Compose
