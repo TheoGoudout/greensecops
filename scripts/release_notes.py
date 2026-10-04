@@ -76,6 +76,7 @@ RELEASE_HEADER = re.compile(
     re.MULTILINE,
 )
 SECTION_HEADER = re.compile(r"^## ", re.MULTILINE)
+LATEST_CHANGES_HEADER = "## Latest Changes"
 
 
 def parse_args() -> argparse.Namespace:
@@ -186,8 +187,23 @@ def render(repo: str, numbers: list[int]) -> str:
     return "\n\n".join(blocks)
 
 
+def drop_latest_changes(text: str) -> str:
+    """Remove a leftover ``## Latest Changes`` section.
+
+    latest-changes.yml ran from the base branch, so the merge that deleted it
+    still ran it once more. Every entry it wrote is a merged pull request this
+    script lists again, so the section is dropped rather than released twice.
+    """
+    start = text.find(f"{LATEST_CHANGES_HEADER}\n")
+    if start == -1:
+        return text
+    end = SECTION_HEADER.search(text, start + len(LATEST_CHANGES_HEADER))
+    return text[:start] + (text[end.start() :] if end else "")
+
+
 def insert(text: str, section: str) -> str:
     """Put the new section above the newest existing one."""
+    text = drop_latest_changes(text)
     first = SECTION_HEADER.search(text)
     at = first.start() if first else len(text)
     head = text[:at].rstrip("\n")
