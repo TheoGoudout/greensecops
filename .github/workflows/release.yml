@@ -2,8 +2,11 @@ name: Release
 
 # Promotes a published release or pre-release, on both platforms:
 #
-#   pre-release -> staging
-#   release     -> staging and production, side by side
+#   pre-release -> staging, if enabled
+#   release     -> production, and staging beside it if enabled
+#
+# Staging is opt-in: set the STAGING_ENABLED repository variable to `true`.
+# Without it a pre-release deploys nothing and a release production alone.
 #
 # Triggered by publishing the draft release-prepare.yml opened — that click is the
 # human decision this whole flow is built around, and it is the only thing that
@@ -108,6 +111,7 @@ jobs:
         id: environments
         env:
           PRERELEASE: ${{ steps.release.outputs.prerelease }}
+          STAGING_ENABLED: ${{ vars.STAGING_ENABLED }}
         run: .github/scripts/release/resolve-environments.sh
 
   verify:
@@ -116,7 +120,7 @@ jobs:
     # Only the API deploy consumes the images. A `targets: cloudflare` run has
     # nothing to wait for, and waiting thirty minutes for it would be the whole
     # cost of the narrow re-drive.
-    if: needs.resolve.outputs.run_coolify == 'true'
+    if: needs.resolve.outputs.run_coolify == 'true' && needs.resolve.outputs.environments != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -148,13 +152,15 @@ jobs:
       needs.resolve.result == 'success' &&
       needs.verify.result != 'failure' &&
       needs.verify.result != 'cancelled' &&
+      needs.resolve.outputs.environments != '[]' &&
       (needs.resolve.outputs.run_coolify == 'true' || needs.resolve.outputs.run_cloudflare == 'true')
     strategy:
       # Staging and production roll out side by side; one failing does not
       # cancel the other.
       fail-fast: false
       matrix:
-        # staging for a pre-release; staging and production for a release.
+        # production for a release; with STAGING_ENABLED, staging as well, and
+        # for a pre-release staging alone (resolve-environments.sh).
         environment: ${{ fromJSON(needs.resolve.outputs.environments) }}
     # The approval gate is each environment's own protection rules, held by
     # the jobs deploy-environment.yml calls: one production approval releases
