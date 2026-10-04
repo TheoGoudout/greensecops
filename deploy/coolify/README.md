@@ -424,9 +424,9 @@ through `release.yml` instead.
    fails while it is stale.
 3. No `TAG`, and no workflow syncs its URLs: set `FRONTEND_HOST`,
    `MARKETING_URL` and `DOCS_URL` by hand to `https://app.dev.greensecops.com`,
-   `https://dev.greensecops.com` and `https://docs.dev.greensecops.com`, and
-   `ENVIRONMENT=staging` (the backend knows only `local`, `staging` and
-   `production`).
+   `https://dev.greensecops.com` and `https://docs.dev.greensecops.com`.
+   `ENVIRONMENT` needs no setting: `compose.dev.yml` defaults it to `dev`, which
+   the backend treats like staging and production.
 4. Domain `https://api.dev.greensecops.com:8000` on the `backend` service, and a
    GitHub App of its own (its callback is the dev dashboard).
 

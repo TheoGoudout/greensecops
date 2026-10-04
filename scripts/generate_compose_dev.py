@@ -10,7 +10,8 @@ hand-written stack, is what keeps dev running the same services, limits and
 Coolify magic variables as the environments it previews.
 
 Every service that runs one of the two GHCR images gets a local tag, a
-``build:`` section and ``pull_policy: build``. Build contexts are relative to
+``build:`` section and ``pull_policy: build``, and ``ENVIRONMENT`` defaults to
+``dev`` rather than ``production``. Build contexts are relative to
 the compose file's own directory, ``deploy/coolify/``, hence ``../..``.
 
 This is plain YAML rather than ``docker compose config``: the stack uses
@@ -57,6 +58,17 @@ class _NoAliasDumper(yaml.SafeDumper):
         return True
 
 
+def _default_environment_to_dev(service: dict[str, Any]) -> None:
+    """Default ENVIRONMENT to dev, where compose.yml defaults it to production."""
+    environment = service.get("environment")
+    if isinstance(environment, list):
+        for i, entry in enumerate(environment):
+            if str(entry).startswith("ENVIRONMENT="):
+                environment[i] = "ENVIRONMENT=${ENVIRONMENT:-dev}"
+    elif isinstance(environment, dict) and "ENVIRONMENT" in environment:
+        environment["ENVIRONMENT"] = "${ENVIRONMENT:-dev}"
+
+
 def render() -> str:
     stack = yaml.safe_load(SOURCE.read_text(encoding="utf-8"))
     found: set[str] = set()
@@ -70,6 +82,7 @@ def render() -> str:
         service["image"] = f"{repository}:dev"
         service["pull_policy"] = "build"
         service["build"] = dict(build)
+        _default_environment_to_dev(service)
         found.add(repository)
     missing = set(BUILDS) - found
     if missing:

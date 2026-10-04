@@ -53,11 +53,11 @@ Some values must be secret keys. To generate one, run:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Copy the output and use it as the password / secret key. Run it again to generate another secure key. The backend refuses to start in `staging`/`production` with an empty `SECRET_KEY` or with any secret left at the placeholder value `changethis`.
+Copy the output and use it as the password / secret key. Run it again to generate another secure key. The backend refuses to start in `dev`/`staging`/`production` with an empty `SECRET_KEY` or with any secret left at the placeholder value `changethis`.
 
 ### Required Environment Variables
 
-* `ENVIRONMENT`: Deployment environment: `local` (development), `staging`, or `production`. `compose.yml` defaults it to `production`.
+* `ENVIRONMENT`: Deployment environment: `local` (development), `dev`, `staging`, or `production`. Everything but `local` is treated as deployed. `compose.yml` defaults it to `production`, `deploy/coolify/compose.dev.yml` to `dev`.
 * `FIRST_SUPERUSER`: The email of the first superuser, this superuser will be the one that can create new users. Default: `admin@example.com`.
 * `GITHUB_APP_ID`: The numeric ID of your GitHub App.
 * `GITHUB_APP_PRIVATE_KEY`: The full PEM content of your GitHub App's private key.

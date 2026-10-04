@@ -91,7 +91,7 @@ services:
         ]\n    },\n    {\n      \"id\": \"ollama\",\n      \"name\": \"Ollama (self-hosted)\",\n     \
         \ \"default_model\": \"llama3.2\",\n      \"models\": []\n    }\n  ]\n}\n"
     environment:
-    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ENVIRONMENT=${ENVIRONMENT:-dev}
     - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
     - FRONTEND_HOST=${FRONTEND_HOST:?}
     - BACKEND_HOST=${SERVICE_URL_BACKEND}
@@ -182,7 +182,7 @@ services:
       prestart:
         condition: service_completed_successfully
     environment:
-    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ENVIRONMENT=${ENVIRONMENT:-dev}
     - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
     - FRONTEND_HOST=${FRONTEND_HOST:?}
     - BACKEND_HOST=${SERVICE_URL_BACKEND}
@@ -288,7 +288,7 @@ services:
       prestart:
         condition: service_completed_successfully
     environment:
-    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ENVIRONMENT=${ENVIRONMENT:-dev}
     - PROJECT_NAME=${PROJECT_NAME:-GreenSecOps}
     - FRONTEND_HOST=${FRONTEND_HOST:?}
     - BACKEND_HOST=${SERVICE_URL_BACKEND}
