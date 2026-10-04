@@ -33,7 +33,7 @@ The rest of this document describes the generic single-host Compose deployment, 
 
 These `SERVICE_URL_*`/`FRONTEND_HOST`/`BACKEND_HOST`/`DOCS_URL`/`MARKETING_URL`/`BACKEND_CORS_ORIGINS` pairs are wired with flat `${SERVICE_URL_X}` references (no `${VAR:-default}` fallback chain) so Coolify's variable scanner reliably detects them — nested `${VAR:-${OTHER}}` defaults aren't documented as supported by Coolify's UI. This means these values are fixed to the corresponding magic variable in `compose.yml`; they're only independently overridable when running the compose file by hand without Coolify (see below), or in local dev via `compose.override.yml`.
 
-**The Coolify stack is the exception to the frontend half of this.** `deploy/coolify/compose.yml` runs no frontend, landing or docs container — those three are Cloudflare Workers — so Coolify generates no `SERVICE_URL_FRONTEND`, `SERVICE_URL_LANDING` or `SERVICE_URL_DOCS` for it, and that file reads `FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` directly instead. CI writes all three onto the resource from `deploy/cloudflare/env/<environment>.env` via `.github/scripts/shared/coolify-env-sync.sh` — from `deploy-staging.yml` for staging and `release.yml` for production, in both cases immediately before the deploy that applies them — so they are not typed by hand on this deployment and hand edits are overwritten on the next sync; see [deploy/coolify/README.md](deploy/coolify/README.md#4-configure), which explains what an unset `FRONTEND_HOST` costs. `scripts/validate_coolify_compose.py` records the divergence and checks that file stays documented.
+**The Coolify stack is the exception to the frontend half of this.** `deploy/coolify/compose.yml` runs no frontend, landing or docs container — those three are Cloudflare Workers — so Coolify generates no `SERVICE_URL_FRONTEND`, `SERVICE_URL_LANDING` or `SERVICE_URL_DOCS` for it, and that file reads `FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` directly instead. CI writes all three onto the resource from `deploy/cloudflare/env/<environment>.env` via `.github/scripts/shared/coolify-env-sync.sh` — from `deploy-coolify.yml` for staging and production, immediately before the deploy that applies them (the dev resource, which deploys itself, has them set by hand) — so they are not typed by hand on this deployment and hand edits are overwritten on the next sync; see [deploy/coolify/README.md](deploy/coolify/README.md#4-configure), which explains what an unset `FRONTEND_HOST` costs. `scripts/validate_coolify_compose.py` records the divergence and checks that file stays documented.
 
 Those three also carry `${VAR:?}` there, which is the one interpolation form this repository does use with Coolify — it is Coolify's own documented syntax for a required variable, not a generic-compose trick, and it makes the UI sort an empty one to the top of the Environment Variables tab with a red border. The reasoning above still holds for everything else: no `${VAR:-default}` chains on the values Coolify's scanner has to detect.
 
@@ -53,11 +53,11 @@ Some values must be secret keys. To generate one, run:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Copy the output and use it as the password / secret key. Run it again to generate another secure key. The backend refuses to start in `staging`/`production` with an empty `SECRET_KEY` or with any secret left at the placeholder value `changethis`.
+Copy the output and use it as the password / secret key. Run it again to generate another secure key. The backend refuses to start in `dev`/`staging`/`production` with an empty `SECRET_KEY` or with any secret left at the placeholder value `changethis`.
 
 ### Required Environment Variables
 
-* `ENVIRONMENT`: Deployment environment: `local` (development), `staging`, or `production`. `compose.yml` defaults it to `production`.
+* `ENVIRONMENT`: Deployment environment: `local` (development), `dev`, `staging`, or `production`. Everything but `local` is treated as deployed. `compose.yml` defaults it to `production`, `deploy/coolify/compose.dev.yml` to `dev`.
 * `FIRST_SUPERUSER`: The email of the first superuser, this superuser will be the one that can create new users. Default: `admin@example.com`.
 * `GITHUB_APP_ID`: The numeric ID of your GitHub App.
 * `GITHUB_APP_PRIVATE_KEY`: The full PEM content of your GitHub App's private key.
@@ -103,7 +103,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **Image tag**
 
-* `TAG`: Docker image tag to deploy (e.g. a released version or git SHA). Default: `latest`. On the Coolify deployments CI owns this variable and you should not set it by hand — `deploy-staging.yml` pins staging to `sha-<short>` for the commit it built, and `release.yml` pins production to the published release's tag. An immutable tag is deliberate: a tag that does not change gives Docker no reason to re-pull, since Compose's default pull policy is `missing`, which is how staging once served an image a commit behind its dashboard.
+* `TAG`: Docker image tag to deploy (e.g. a released version or git SHA). Default: `latest`. On the Coolify deployments CI owns this variable and you should not set it by hand — `release.yml` pins staging and production to the published release's tag (dev builds its own images and takes no `TAG`). An immutable tag is deliberate: a tag that does not change gives Docker no reason to re-pull, since Compose's default pull policy is `missing`, which is how staging once served an image a commit behind its dashboard.
 
 **Emails**
 

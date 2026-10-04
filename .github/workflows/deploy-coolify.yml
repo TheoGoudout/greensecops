@@ -8,10 +8,13 @@ name: Deploy API to Coolify
 # Nothing is built on the Coolify host: images.yml publishes the images to GHCR
 # and compose.yml only names them. The TAG variable decides which image runs.
 #
-#   called by deploy-staging.yml -> staging, at this commit's sha-<short>
-#   called by release.yml        -> production, pinned to the released tag
-#   called by rollback.yml       -> either environment, at an older tag
-#   workflow_dispatch            -> either environment, any tag that has images
+#   called by deploy-environment.yml -> staging or production, pinned to the
+#                                       release tag (release.yml decides which)
+#   called by rollback.yml           -> either environment, at an older tag
+#   workflow_dispatch                -> either environment, any tag that has images
+#
+# Dev is not deployed from here: its Coolify resource auto-deploys
+# deploy/coolify/compose.dev.yml from main and builds the images itself.
 #
 # The secrets are read from the job's GitHub Environment. The names the other
 # repositories use (COOLIFY_API_TOKEN, COOLIFY_APP_UUID) win; the older ones
