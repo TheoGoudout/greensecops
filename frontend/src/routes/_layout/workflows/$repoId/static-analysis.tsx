@@ -642,7 +642,7 @@ function StaticAnalysisPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <div className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] min-w-[44rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                  <div className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] min-w-[44rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider gap-4">
                     <span>Branch</span>
                     <span>Workflow</span>
                     <span>Triggered by</span>

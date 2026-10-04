@@ -89,7 +89,7 @@ export function CategoryEngineHeatmap({
       <div className="overflow-x-auto">
         <div className="min-w-[26rem]">
           <div className="grid gap-1 pb-1" style={columns}>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide self-end">
+            <span className="text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider self-end">
               Category
             </span>
             {engines.map((engine) => (

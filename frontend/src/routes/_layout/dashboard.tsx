@@ -517,7 +517,7 @@ function Dashboard() {
                             whole page scroll sideways. */}
                         <div className="overflow-x-auto">
                           <div className="min-w-[30rem]">
-                            <div className="grid grid-cols-[1fr_3.5rem_4rem_4rem_4rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-3">
+                            <div className="grid grid-cols-[1fr_3.5rem_4rem_4rem_4rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider gap-3">
                               <span>Repository</span>
                               <span>Grade</span>
                               <span className="text-right">First</span>

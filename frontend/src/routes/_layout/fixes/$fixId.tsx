@@ -196,7 +196,7 @@ function FixDetail() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="text-sm font-medium text-muted-foreground font-mono uppercase tracking-wider">
               Issues addressed
             </CardTitle>
             {fix && (
