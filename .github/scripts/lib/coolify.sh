@@ -5,8 +5,8 @@
 # Sourced, never executed — no shebang, no executable bit. Callers:
 #   .github/scripts/images/coolify-deploy.sh          staging
 #   .github/scripts/images/coolify-monitor.sh         staging
-#   .github/scripts/release-deploy/coolify-deploy.sh  production
-#   .github/scripts/release-deploy/coolify-monitor.sh production
+#   .github/scripts/release/coolify-deploy.sh  production
+#   .github/scripts/release/coolify-monitor.sh production
 #   .github/scripts/shared/coolify-env-sync.sh        both
 #
 # Every one of them had its own copy of `call` and `require_ok` before the

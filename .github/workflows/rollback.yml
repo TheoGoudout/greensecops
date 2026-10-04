@@ -1,18 +1,33 @@
-name: rollback
+name: Rollback
 
-# Click-to-rollback: Actions → rollback → Run workflow, pick an environment.
+# Click-to-rollback: Actions → Rollback → Run workflow, pick an environment and
+# a tag.
 #
-# Leave the tag empty to return to whatever was deployed before the current
-# release — the deploy workflow records that pointer before every rollout, so
-# it is correct even when the deploy it recorded went on to fail.
+# A thin wrapper over the same two reusable workflows release.yml calls, so a
+# rollback goes through exactly the machinery a deploy does — the image check
+# and deploy monitor in deploy-coolify.yml and the build checks in
+# pages-reusable.yml all hold, which is what makes "it rolled back" a checked
+# claim rather than a hopeful one. Nothing is rebuilt from scratch that
+# a deploy would not also rebuild.
 #
-# Nothing is rebuilt: the images are already in ECR, so a rollback is a tag
-# change plus a rolling restart. Give an explicit tag to go further back than
-# one release.
+# **The order is the reverse of release.yml, and that is the point.** A release
+# deploys the backend first, because "API ahead of dashboard" is the tolerable
+# mismatch: the dashboard ships a generated OpenAPI client, so a dashboard ahead
+# of its API calls a contract the server has not shipped. A rollback moves the
+# API *backwards*. Running it first would leave the new dashboard talking to the
+# old API — the bad direction, for the whole length of the Cloudflare deploy.
+# So the dashboard goes back first here, and the API follows.
 #
-# A rollback only reverts application images. If the release it is undoing also
-# changed infrastructure, revert that with Terraform separately — the two are
-# deliberately not coupled (deploy/README.md).
+# Both jobs share the concurrency groups of the deploy workflows they call, so a
+# rollback can never overlap a deploy of the same environment.
+#
+# Rolls back the Coolify deployment. The AWS deployment has its own,
+# rollback-aws.yml.
+#
+# This reverts application versions only. If the release being undone also
+# changed the database schema, the migration is not reversed — check that the
+# older backend can read the newer schema before rolling production back, or
+# roll the migration back first. See deployment.md.
 
 on:
   workflow_dispatch:
@@ -24,29 +39,71 @@ on:
         options:
           - staging
           - production
-      image_tag:
-        description: "Tag to roll back to (leave empty for the previous release)"
-        required: false
+      tag:
+        description: "Tag to roll back to, e.g. v0.12.0"
+        required: true
         type: string
-        default: ""
 
 permissions: {}
 
-# Shares the deploy group: a rollback must never overlap a deploy to the same
-# environment, or the two would race to set IMAGE_TAG.
 concurrency:
-  group: deploy-${{ inputs.environment }}
+  # Keyed on the environment, never cancelled: interrupting a rollback half-way
+  # is the state it exists to get out of.
+  group: rollback-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
-  rollback:
-    name: Roll back
-    uses: ./.github/workflows/deploy-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+  cloudflare:
+    name: Cloudflare (${{ inputs.environment }})
+    # First, not second — see the header. The dashboard must not be ahead of
+    # the API it is about to be pointed back at.
     permissions:
-      id-token: write # Passed to deploy-reusable.yml, which exchanges it for the AWS role.
       contents: read
+    uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
     with:
       environment: ${{ inputs.environment }}
-      image_tag: ${{ inputs.image_tag }}
-      # Only consult PREVIOUS_IMAGE_TAG when no explicit tag was given.
-      rollback_to_previous: ${{ inputs.image_tag == '' }}
+      ref: ${{ inputs.tag }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  coolify:
+    name: Coolify API (${{ inputs.environment }})
+    needs: cloudflare
+    permissions:
+      contents: read
+      packages: read # deploy-coolify.yml confirms the images exist.
+    uses: ./.github/workflows/deploy-coolify.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+    with:
+      environment: ${{ inputs.environment }}
+      ref: ${{ inputs.tag }}
+      image_tag: ${{ inputs.tag }}
+    secrets:
+      COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+      COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+      COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      COOLIFY_STAGING_UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+      COOLIFY_PRODUCTION_UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
+
+  rollback-complete:
+    name: Rollback complete
+    needs: [cloudflare, coolify]
+    # Runs even when a half failed, so the run's conclusion is the rollback's.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # To check out .github/scripts/ below.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Report
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          TAG: ${{ inputs.tag }}
+          CLOUDFLARE_RESULT: ${{ needs.cloudflare.result }}
+          COOLIFY_RESULT: ${{ needs.coolify.result }}
+        run: .github/scripts/rollback/report.sh

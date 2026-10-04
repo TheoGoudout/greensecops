@@ -1,6 +1,8 @@
-name: deploy
+name: Deploy to AWS
 
-# Click-to-deploy: Actions → deploy → Run workflow, pick an environment.
+# Click-to-deploy for the AWS deployment (deploy/README.md): Actions → Deploy to
+# AWS → Run workflow, pick an environment. The Coolify deployment is driven by
+# release.yml (staging, production) and by Coolify itself (dev) instead.
 #
 # Leave the tag empty to build the checked-out ref and deploy it. Give a tag
 # that is already in ECR to deploy that instead, without rebuilding.

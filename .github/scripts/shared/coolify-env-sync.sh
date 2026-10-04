@@ -27,7 +27,7 @@
 # immediately — see the note this prints when it changes something.
 #
 # Both callers therefore run it immediately *before* the deploy they trigger:
-# .github/workflows/images.yml for staging, release-deploy.yml for production.
+# .github/workflows/deploy-coolify.yml, for staging and production alike.
 # Run anywhere else in a pipeline and a changed hostname lands one deploy late.
 set -euo pipefail
 

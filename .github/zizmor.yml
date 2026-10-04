@@ -13,7 +13,7 @@
 # .github/workflows/zizmor.yml already had to be rescued from.
 #
 # A per-file, per-line exception belongs next to the line it excuses, as a
-# `# zizmor: ignore[audit-id] reason` comment, not here — release.yml and
+# `# zizmor: ignore[audit-id] reason` comment, not here — release-prepare.yml and
 # issue-manager.yml both do that. This file is for repository-wide policy.
 #
 # Note: audit IDs are not validated. A typo here silently configures nothing,
@@ -51,7 +51,7 @@ rules:
         - docker/*
         - oven-sh/*
         # Upstream of the project this repository was forked from; used by
-        # issue-manager.yml and latest-changes.yml.
+        # issue-manager.yml.
         - tiangolo/*
         # `collect: all` reaches the pre-commit configs too, so the hook
         # repositories are held to the same allowlist as the actions: a hook
