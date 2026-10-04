@@ -17,6 +17,7 @@ export function StatCard({
   hint,
   loading,
   accessory,
+  tone = "var(--signal-1)",
 }: {
   icon: LucideIcon
   title: string
@@ -24,14 +25,24 @@ export function StatCard({
   hint?: ReactNode
   loading: boolean
   accessory?: ReactNode
+  /** Accent colour of the icon chip and top rail; fixed per stat. */
+  tone?: string
 }) {
   return (
-    <Card>
+    <Card style={{ boxShadow: `inset 0 2px 0 ${tone}` }}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <span
+          className="flex size-8 items-center justify-center rounded-md"
+          style={{
+            color: tone,
+            backgroundColor: `color-mix(in oklch, ${tone} 14%, transparent)`,
+          }}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -39,7 +50,9 @@ export function StatCard({
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold">{value}</p>
+              <p className="font-display text-3xl font-bold tracking-tight">
+                {value}
+              </p>
               {accessory}
             </div>
             {hint && (

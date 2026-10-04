@@ -11,15 +11,18 @@ interface LogoProps {
   variant?: "full" | "icon" | "responsive"
   className?: string
   asLink?: boolean
+  /** Sits on a dark surface (the sidebar) whatever the theme. */
+  onDark?: boolean
 }
 
 export function Logo({
   variant = "full",
   className,
   asLink = true,
+  onDark = false,
 }: LogoProps) {
   const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
+  const isDark = onDark || resolvedTheme === "dark"
 
   const fullLogo = isDark ? logoFullDark : logoFull
   const iconLogo = isDark ? logoMarkDark : logoMark

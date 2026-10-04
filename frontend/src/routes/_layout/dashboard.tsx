@@ -279,7 +279,9 @@ function Dashboard() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-signal inline-block text-3xl font-bold tracking-tight">
+          Dashboard
+        </h1>
         <p className="text-muted-foreground">
           Security posture across every analysis type — CI workflows, Docker and
           infrastructure.
@@ -300,6 +302,7 @@ function Dashboard() {
         <StatCard
           icon={AlertCircle}
           title="Open findings"
+          tone="var(--signal-3)"
           value={totalOpen}
           hint={`${totals?.critical_open ?? 0} critical, all engines`}
           loading={overviewLoading}
@@ -307,6 +310,7 @@ function Dashboard() {
         <StatCard
           icon={Wrench}
           title="Fix rate"
+          tone="var(--signal-2)"
           value={`${fixRate}%`}
           hint={`${totalResolved} of ${totalOpen + totalResolved} resolved`}
           loading={overviewLoading}
@@ -314,6 +318,7 @@ function Dashboard() {
         <StatCard
           icon={Layers}
           title="Scan coverage"
+          tone="var(--signal-4)"
           value={`${coveragePct}%`}
           hint={`${totals?.targets ?? 0} targets, ${
             totals?.never_scanned_targets ?? 0
