@@ -373,8 +373,13 @@ There are three environments, told apart by what deploys them:
 | Environment | Deployed by | When |
 |---|---|---|
 | dev | Coolify and Cloudflare Workers Builds, watching `main` | every push to `main` |
-| staging | `release.yml` | every published pre-release and release |
+| staging (opt-in) | `release.yml` | every published pre-release and release, once `STAGING_ENABLED` is `true` |
 | production | `release.yml` | every published release |
+
+Staging is optional: it is deployed only when the `STAGING_ENABLED` repository
+variable is `true`. Without it a release deploys production alone and a
+pre-release deploys nothing. Dev is optional too — it exists once its Coolify
+resource and Workers are set up.
 
 **Staging and production are two clicks**, and both halves move together:
 
@@ -384,7 +389,7 @@ There are three environments, told apart by what deploys them:
    this is reviewable and undoable.
 2. Review the draft, then **publish** it. That runs `release.yml`: it waits for
    the `v*` tag's images, then runs `deploy-environment.yml` for each target
-   environment — staging for a pre-release, staging and production side by side
+   environment — staging for a pre-release, production (and staging, if enabled)
    for a release — each promoting the API and then the static sites. Production
    waits for the reviewer its environment requires.
 
