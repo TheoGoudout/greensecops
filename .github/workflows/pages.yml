@@ -25,7 +25,7 @@ name: pages
 # OpenAPI client, so a dashboard that raced ahead of the backend on every merge
 # would break against a contract the server had not shipped yet.
 #
-# The ordinary way to reach production is now release-deploy.yml, which calls
+# The ordinary way to reach production is now release.yml, which calls
 # pages-reusable.yml directly after it has deployed the API and waited for
 # Coolify to report the deployment finished. The `production` dispatch option
 # here remains as the manual escape hatch — republishing the static surfaces

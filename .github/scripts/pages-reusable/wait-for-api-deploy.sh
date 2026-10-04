@@ -5,7 +5,7 @@
 # The dashboard ships a *generated* OpenAPI client, so publishing it before the
 # API that serves that contract is the one mismatch direction that actually
 # breaks: a client calling endpoints the server has not shipped.
-# release-deploy.yml sequences production for exactly this reason; this is
+# release.yml sequences production for exactly this reason; this is
 # staging's equivalent.
 #
 # The API deploy is the last job of images.yml, so waiting for that run to finish

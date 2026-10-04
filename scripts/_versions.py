@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
 
 # Semantic versions, including pre-release and build metadata. Deliberately
-# permissive about the suffix: release.yml accepts an explicit version so a
+# permissive about the suffix: release-prepare.yml accepts an explicit version so a
 # release candidate can be cut without teaching the bump arithmetic about them.
 SEMVER = re.compile(
     r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
@@ -77,7 +77,7 @@ TARGETS = [
     # schema's `info.version` and openapi-ts writes it out here.
     #
     # The pre-commit hook that regenerates the client only fires on
-    # `backend/app/**.py`, which a release does touch — but release.yml does not
+    # `backend/app/**.py`, which a release does touch — but release-prepare.yml does not
     # run pre-commit, so without this the file would sit one version behind
     # until some unrelated pull request regenerated it and carried a confusing
     # stray diff. Rewriting it here keeps the release self-consistent; a

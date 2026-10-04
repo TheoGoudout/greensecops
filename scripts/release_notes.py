@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write a release's notes from the pull requests merged since the last one.
 
-The notes are generated once, when ``.github/workflows/release.yml`` cuts the
+The notes are generated once, when ``.github/workflows/release-prepare.yml`` cuts the
 release, and used twice: prepended to ``release-notes.md`` as
 ``## X.Y.Z (date)``, and written verbatim to ``--body-file`` as the body of the
 GitHub release draft. Deriving them once is what keeps the two from
@@ -70,7 +70,7 @@ MERGE_SUBJECT = re.compile(r"^Merge pull request #(\d+)\b")
 SQUASH_SUBJECT = re.compile(r"\(#(\d+)\)\s*$")
 
 # A released section's heading. Accepts a pre-release suffix (0.11.0-rc1),
-# which release.yml can cut from an explicit version.
+# which release-prepare.yml can cut from an explicit version.
 RELEASE_HEADER = re.compile(
     r"^## (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\s*(\(.*\))?\s*$",
     re.MULTILINE,

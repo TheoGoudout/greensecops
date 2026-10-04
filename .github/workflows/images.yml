@@ -50,7 +50,7 @@ permissions: {}
 concurrency:
   group: images-${{ github.ref }}
   # Not cancelled, unlike an ordinary build workflow: this run ends in a Coolify
-  # rollout, and interrupting one half-way is the state release-deploy.yml
+  # rollout, and interrupting one half-way is the state release.yml
   # exists to avoid — see its concurrency block. Rapid pushes therefore queue
   # rather than cancel, which also serialises the deploys the same way
   # deploy.yml's `deploy-${{ inputs.environment }}` group does.
@@ -216,7 +216,7 @@ jobs:
     name: Deploy the staging API
     needs: [merge]
     # `main` only. A `v*` tag push builds images here too, but promoting one is
-    # release-deploy.yml's job and gated on a reviewer — repointing staging at a
+    # release.yml's job and gated on a reviewer — repointing staging at a
     # release tag from here would quietly take it off main.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -241,7 +241,7 @@ jobs:
     # commit's `latest` instead — while pages.yml put *this* commit's dashboard
     # on Cloudflare in under a minute. The dashboard ships a generated OpenAPI
     # client, so that is the bad direction: a client calling a contract the
-    # server has not shipped. release-deploy.yml sequences production precisely
+    # server has not shipped. release.yml sequences production precisely
     # to avoid it; staging had nothing.
     #
     # Here, the images provably exist — the merge job just published them. Turn

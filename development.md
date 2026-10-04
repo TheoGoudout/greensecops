@@ -244,7 +244,7 @@ member. The validator asserts they stay that way.
 
 Two steps, and the first one deploys nothing.
 
-1. **Actions → release → Run workflow**, from `main`. Pick
+1. **Actions → Prepare Release → Run workflow**, from `main`. Pick
    `patch`/`minor`/`major`, or type an exact version to override it (this is
    how a `0.11.0-rc1` gets cut). The workflow refuses to run unless every
    manifest agrees with `VERSION`, the version sorts above every existing tag
@@ -258,7 +258,7 @@ Two steps, and the first one deploys nothing.
 2. **Publish the draft.** GitHub creates the `vX.Y.Z` tag at that moment, on
    the commit the draft targets, and the tag push starts `images.yml` building
    `greensecops-{backend,opa}:vX.Y.Z`. Publishing also runs
-   `release-deploy.yml`: it waits for those images, then — after the
+   `release.yml`: it waits for those images, then — after the
    `production` environment's reviewer approves — deploys the API through
    Coolify's API and blocks until Coolify reports the deployment finished, then
    publishes the three static surfaces to Cloudflare.

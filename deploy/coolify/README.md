@@ -272,7 +272,7 @@ generated customer workflows) empties the same way.
 `deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
 built from, so the two halves of a deployment cannot disagree about a hostname.
 `.github/scripts/shared/coolify-env-sync.sh` does it, called from
-`images.yml` for staging and from `release-deploy.yml` for production. **Editing those three by hand in
+`images.yml` for staging and from `release.yml` for production. **Editing those three by hand in
 Coolify is pointless: the next sync overwrites them.** Change
 `deploy/cloudflare/env/<environment>.env` instead.
 
@@ -299,7 +299,7 @@ Cloudflare's.
 **`TAG` is owned by CI on both resources, and you should not set it by hand.**
 On **staging** it belongs to `.github/workflows/images.yml`, which sets it to
 `sha-<short>` for the commit it has just built. On **production** it belongs to
-`.github/workflows/release-deploy.yml`, which sets it to the published release's
+`.github/workflows/release.yml`, which sets it to the published release's
 tag alongside the resource's git ref.
 
 Neither needs creating by hand — both workflows create the variable if it is
@@ -320,7 +320,7 @@ An immutable per-commit tag is what makes the pull reliable, and it is worth
 knowing why `latest` was not enough. A tag that does not change gives Docker no
 reason to look for a new image: Compose's default pull policy is `missing`, and
 an ordinary Coolify deploy does not force a pull — which is what `force=true` in
-`release-deploy.yml` is for. `sha-<short>` is a reference the host has never
+`release.yml` is for. `sha-<short>` is a reference the host has never
 seen, so the pull happens because it must. `deploy/coolify/compose.yml` also
 carries `pull_policy: always` on every service running one of this project's
 images, which covers a redeploy clicked here by hand.
@@ -380,7 +380,7 @@ sequence, not in parallel:
    Coolify reports it finished.
 3. Only then does `pages.yml` publish the dashboard. Its `api-gate` job waits on
    this commit's `images.yml` run and fails rather than publishing if that run
-   failed — the same "API first" rule `release-deploy.yml` enforces for
+   failed — the same "API first" rule `release.yml` enforces for
    production, for the same reason. The landing page and docs do not ship the
    generated client, so they publish without waiting.
 
@@ -394,13 +394,13 @@ staging.
    everywhere, closes off the accumulated release notes, tags `vX.Y.Z` and
    opens a **draft** GitHub release. Nothing is deployed — this is reviewable
    and undoable.
-2. Review the draft, then **publish** it. That runs `release-deploy.yml`, which
+2. Review the draft, then **publish** it. That runs `release.yml`, which
    waits for the reviewer the `production` environment requires and then
    promotes the API and the static sites in that order.
 
 The ordering is the point. The dashboard ships a generated OpenAPI client, so a
 promoted dashboard talking to an unpromoted API breaks against a contract the
-server has not shipped yet — `release-deploy.yml` deploys Coolify first and
+server has not shipped yet — `release.yml` deploys Coolify first and
 blocks until Coolify reports the deployment finished, so the dashboard can
 never get ahead. The reverse window still exists and is the tolerable one.
 
@@ -423,7 +423,7 @@ Four repository secrets, all for the Coolify half:
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
 | `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy either of them |
-| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release-deploy.yml` |
+| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release.yml` |
 | `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `images.yml`, which syncs its URLs, sets its `TAG` and deploys it |
 
 Set all four or none. Both workflows refuse a partial set rather than skipping:
@@ -434,7 +434,7 @@ The Pi is not in the request path, but it *is* in the deploy path — if its API
 is not reachable from GitHub's runners, the Coolify job cannot run and
 production has to be promoted from Coolify's UI instead.
 
-`release.yml` reuses the existing `LATEST_CHANGES` PAT to push the release
+`release-prepare.yml` reuses the existing `LATEST_CHANGES` PAT to push the release
 commit and the tag. That has to be a PAT rather than `GITHUB_TOKEN`: a push
 authenticated with `GITHUB_TOKEN` does not trigger other workflows, so
 `images.yml` would never build the release images.

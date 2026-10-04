@@ -33,7 +33,7 @@ The rest of this document describes the generic single-host Compose deployment, 
 
 These `SERVICE_URL_*`/`FRONTEND_HOST`/`BACKEND_HOST`/`DOCS_URL`/`MARKETING_URL`/`BACKEND_CORS_ORIGINS` pairs are wired with flat `${SERVICE_URL_X}` references (no `${VAR:-default}` fallback chain) so Coolify's variable scanner reliably detects them — nested `${VAR:-${OTHER}}` defaults aren't documented as supported by Coolify's UI. This means these values are fixed to the corresponding magic variable in `compose.yml`; they're only independently overridable when running the compose file by hand without Coolify (see below), or in local dev via `compose.override.yml`.
 
-**The Coolify stack is the exception to the frontend half of this.** `deploy/coolify/compose.yml` runs no frontend, landing or docs container — those three are Cloudflare Workers — so Coolify generates no `SERVICE_URL_FRONTEND`, `SERVICE_URL_LANDING` or `SERVICE_URL_DOCS` for it, and that file reads `FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` directly instead. CI writes all three onto the resource from `deploy/cloudflare/env/<environment>.env` via `.github/scripts/shared/coolify-env-sync.sh` — from `images.yml` for staging and `release-deploy.yml` for production, in both cases immediately before the deploy that applies them — so they are not typed by hand on this deployment and hand edits are overwritten on the next sync; see [deploy/coolify/README.md](deploy/coolify/README.md#4-configure), which explains what an unset `FRONTEND_HOST` costs. `scripts/validate_coolify_compose.py` records the divergence and checks that file stays documented.
+**The Coolify stack is the exception to the frontend half of this.** `deploy/coolify/compose.yml` runs no frontend, landing or docs container — those three are Cloudflare Workers — so Coolify generates no `SERVICE_URL_FRONTEND`, `SERVICE_URL_LANDING` or `SERVICE_URL_DOCS` for it, and that file reads `FRONTEND_HOST`, `MARKETING_URL` and `DOCS_URL` directly instead. CI writes all three onto the resource from `deploy/cloudflare/env/<environment>.env` via `.github/scripts/shared/coolify-env-sync.sh` — from `images.yml` for staging and `release.yml` for production, in both cases immediately before the deploy that applies them — so they are not typed by hand on this deployment and hand edits are overwritten on the next sync; see [deploy/coolify/README.md](deploy/coolify/README.md#4-configure), which explains what an unset `FRONTEND_HOST` costs. `scripts/validate_coolify_compose.py` records the divergence and checks that file stays documented.
 
 Those three also carry `${VAR:?}` there, which is the one interpolation form this repository does use with Coolify — it is Coolify's own documented syntax for a required variable, not a generic-compose trick, and it makes the UI sort an empty one to the top of the Environment Variables tab with a red border. The reasoning above still holds for everything else: no `${VAR:-default}` chains on the values Coolify's scanner has to detect.
 
@@ -103,7 +103,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 **Image tag**
 
-* `TAG`: Docker image tag to deploy (e.g. a released version or git SHA). Default: `latest`. On the Coolify deployments CI owns this variable and you should not set it by hand — `images.yml` pins staging to `sha-<short>` for the commit it built, and `release-deploy.yml` pins production to the published release's tag. An immutable tag is deliberate: a tag that does not change gives Docker no reason to re-pull, since Compose's default pull policy is `missing`, which is how staging once served an image a commit behind its dashboard.
+* `TAG`: Docker image tag to deploy (e.g. a released version or git SHA). Default: `latest`. On the Coolify deployments CI owns this variable and you should not set it by hand — `images.yml` pins staging to `sha-<short>` for the commit it built, and `release.yml` pins production to the published release's tag. An immutable tag is deliberate: a tag that does not change gives Docker no reason to re-pull, since Compose's default pull policy is `missing`, which is how staging once served an image a commit behind its dashboard.
 
 **Emails**
 
@@ -151,7 +151,7 @@ Note: the GitHub OAuth callback URL is not configurable separately — the backe
 
 There are some environment variables only used by GitHub Actions (as repository secrets) that you can configure:
 
-* `LATEST_CHANGES`: Personal access token `release.yml` pushes the version bump to `main` and opens the draft release with. It has to be a PAT: a push made with `GITHUB_TOKEN` starts no workflow, so the released commit would get no CI. (The name is historical — it was first used by the latest-changes action, which the release notes no longer come from.)
+* `LATEST_CHANGES`: Personal access token `release-prepare.yml` pushes the version bump to `main` and opens the draft release with. It has to be a PAT: a push made with `GITHUB_TOKEN` starts no workflow, so the released commit would get no CI. (The name is historical — it was first used by the latest-changes action, which the release notes no longer come from.)
 * `SMOKESHOW_AUTH_KEY`: Used to handle and publish the code coverage using [Smokeshow](https://github.com/samuelcolvin/smokeshow), follow their instructions to create a (free) Smokeshow key.
 
 ## Deploy with Docker Compose
