@@ -1,11 +1,15 @@
 name: Release
 
-# Promotes a published release to production, on both platforms.
+# Promotes a published release or pre-release, on both platforms:
+#
+#   pre-release -> staging
+#   release     -> staging and production, side by side
 #
 # Triggered by publishing the draft release-prepare.yml opened — that click is the
 # human decision this whole flow is built around, and it is the only thing that
-# moves production. Staging is untouched here: it tracks main automatically
-# (pages.yml for the static surfaces, Coolify's own auto-deploy for the API).
+# moves staging or production. deploy-environment.yml is each environment's
+# rollout, so the two are the same jobs with a different GitHub Environment.
+# Dev is not here: Coolify and Workers Builds deploy it from main themselves.
 #
 # The whole promotion is one run, so there is one place to read its status and
 # "Re-run failed jobs" re-drives only the half that broke. The workflow_dispatch
@@ -14,7 +18,7 @@ name: Release
 # half-failed release — Coolify deployed, Cloudflare did not — where restarting
 # a rollout that already succeeded is the wrong move.
 #
-# The two halves run in sequence, backend first, and that ordering is
+# Within an environment the two halves run in sequence, backend first, and that ordering is
 # load-bearing rather than tidy. The dashboard ships a *generated* OpenAPI
 # client, so the two mismatch directions are not equally bad:
 #
@@ -78,6 +82,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       run_coolify: ${{ steps.targets.outputs.coolify }}
       run_cloudflare: ${{ steps.targets.outputs.cloudflare }}
+      environments: ${{ steps.environments.outputs.environments }}
 
     steps:
       # The steps below run scripts from .github/scripts/, so this job needs
@@ -98,6 +103,12 @@ jobs:
         env:
           TARGETS: ${{ inputs.targets || 'all' }}
         run: .github/scripts/release/resolve-targets.sh
+
+      - name: Resolve the environments
+        id: environments
+        env:
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: .github/scripts/release/resolve-environments.sh
 
   verify:
     name: Verify the images
@@ -127,25 +138,36 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: .github/scripts/release/wait-for-images.sh
 
-  coolify:
-    name: API (production)
+  deploy:
+    name: Deploy ${{ matrix.environment }}
+    # No `always()` on the image half: a release whose images never appeared
+    # deploys nothing. A skipped verify (targets: cloudflare) lets it through.
     needs: [resolve, verify]
-    # No `always()` here, deliberately: this job must not run unless the images
-    # are actually in the registry, so the default "every `needs` succeeded"
-    # gate is the one we want. `run_coolify` only narrows it further.
-    #
-    # The approval gate is the `production` environment deploy-coolify.yml's
-    # job names. One approval releases every job in the run that names it, so
-    # the dashboard below is covered by the same click.
-    if: needs.resolve.outputs.run_coolify == 'true'
+    if: >-
+      always() &&
+      needs.resolve.result == 'success' &&
+      needs.verify.result != 'failure' &&
+      needs.verify.result != 'cancelled' &&
+      (needs.resolve.outputs.run_coolify == 'true' || needs.resolve.outputs.run_cloudflare == 'true')
+    strategy:
+      # Staging and production roll out side by side; one failing does not
+      # cancel the other.
+      fail-fast: false
+      matrix:
+        # staging for a pre-release; staging and production for a release.
+        environment: ${{ fromJSON(needs.resolve.outputs.environments) }}
+    # The approval gate is each environment's own protection rules, held by
+    # the jobs deploy-environment.yml calls: one production approval releases
+    # both its API and its dashboard.
     permissions:
       contents: read
       packages: read # deploy-coolify.yml confirms the images exist.
-    uses: ./.github/workflows/deploy-coolify.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+    uses: ./.github/workflows/deploy-environment.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
     with:
-      environment: production
+      environment: ${{ matrix.environment }}
       ref: ${{ needs.resolve.outputs.tag }}
-      image_tag: ${{ needs.resolve.outputs.tag }}
+      coolify: ${{ needs.resolve.outputs.run_coolify == 'true' }}
+      cloudflare: ${{ needs.resolve.outputs.run_cloudflare == 'true' }}
     secrets:
       COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
       COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
@@ -153,39 +175,12 @@ jobs:
       COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
       COOLIFY_STAGING_UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
       COOLIFY_PRODUCTION_UUID: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
-
-  cloudflare:
-    name: Static surfaces (production)
-    # Gated on the API being live, not merely started. The coolify job blocks
-    # until Coolify reports `finished`, so this ordering is real.
-    #
-    # `always()` is what lets a *skipped* coolify job through — `targets:
-    # cloudflare` skips it, and a plain `needs:` would then skip this job too.
-    # A coolify job that actually failed still blocks the dashboard, which is
-    # the whole point of the sequencing above.
-    needs: [resolve, coolify]
-    if: >-
-      always() &&
-      needs.resolve.result == 'success' &&
-      needs.resolve.outputs.run_cloudflare == 'true' &&
-      needs.coolify.result != 'failure' &&
-      needs.coolify.result != 'cancelled'
-    uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
-    permissions:
-      contents: read
-    with:
-      environment: production
-    secrets:
-      # Named explicitly. pages-reusable.yml declares these as workflow_call
-      # secrets and deliberately does not inherit — and omitting them here
-      # would not fail: HAS_CLOUDFLARE would simply be false and the run would
-      # go green having deployed nothing at all.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   summary:
     name: Summarise
-    needs: [resolve, verify, coolify, cloudflare]
+    needs: [resolve, verify, deploy]
     # Runs even when a stage failed or was skipped, so the run's conclusion is
     # the release's conclusion rather than just the last job's.
     if: always()
@@ -206,8 +201,8 @@ jobs:
         env:
           TAG: ${{ needs.resolve.outputs.tag || github.event.release.tag_name || inputs.tag }}
           IMAGES: ${{ needs.verify.result }}
-          API: ${{ needs.coolify.result }}
-          STATIC: ${{ needs.cloudflare.result }}
+          DEPLOY: ${{ needs.deploy.result }}
+          ENVIRONMENTS: ${{ needs.resolve.outputs.environments }}
         run: .github/scripts/release/report.sh
 
       # The report above always exits 0 — right for a report, wrong for the last
@@ -216,6 +211,5 @@ jobs:
       - name: Fail if any target failed
         env:
           IMAGES: ${{ needs.verify.result }}
-          API: ${{ needs.coolify.result }}
-          STATIC: ${{ needs.cloudflare.result }}
+          DEPLOY: ${{ needs.deploy.result }}
         run: .github/scripts/release/fail-if-any-target-failed.sh

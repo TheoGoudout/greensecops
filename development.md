@@ -258,10 +258,15 @@ Two steps, and the first one deploys nothing.
 2. **Publish the draft.** GitHub creates the `vX.Y.Z` tag at that moment, on
    the commit the draft targets, and the tag push starts `images.yml` building
    `greensecops-{backend,opa}:vX.Y.Z`. Publishing also runs
-   `release.yml`: it waits for those images, then — after the
-   `production` environment's reviewer approves — deploys the API through
-   Coolify's API and blocks until Coolify reports the deployment finished, then
-   publishes the three static surfaces to Cloudflare.
+   `release.yml`: it waits for those images, then deploys each target
+   environment — **staging** for a pre-release (an `-rcN` version), **staging
+   and production** side by side for a release. In each, it deploys the API
+   through Coolify's API and blocks until Coolify reports the deployment
+   finished, then publishes the three static surfaces to Cloudflare; production
+   first waits for its environment's reviewer.
+
+Dev is not part of a release: Coolify and Cloudflare Workers Builds deploy it
+from every push to `main` (deploy/coolify/README.md).
 
 Between the two steps nothing has been tagged or deployed, so a release that
 looks wrong is undone by deleting the draft and reverting the commit. Because

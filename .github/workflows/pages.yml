@@ -20,8 +20,9 @@ name: pages
 #   workflow_dispatch    → staging or production, whichever was chosen
 #   pull_request         → a throwaway preview version of the staging Worker
 #
-# A push to main reaches staging through deploy-staging.yml instead, which
-# publishes these surfaces only after it has deployed that commit's API.
+# Releases reach staging and production through release.yml instead, which
+# publishes these surfaces only after it has deployed that release's API; a
+# push to main reaches dev through Cloudflare Workers Builds.
 #
 # Production is deliberately not automatic. The dashboard ships a generated
 # OpenAPI client, so a dashboard that raced ahead of the backend on every merge

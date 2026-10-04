@@ -22,15 +22,14 @@ name: images
 # over `uv sync`, and a Raspberry Pi acting as Coolify's control plane should
 # not be building anything at all. Coolify only pulls.
 
-# This workflow deploys nothing: its callers do, after it. On a `v*` tag push —
-# which publishing a release performs — it builds the release images that
-# release.yml waits for; deploy-staging.yml calls it on every push to `main`,
-# then deploys staging once the images exist.
+# This workflow deploys nothing. On a `v*` tag push — which publishing a release
+# or pre-release performs — it builds the images release.yml waits for before
+# deploying staging and production. Dev does not use it: Coolify builds dev's
+# images from source (deploy/coolify/compose.dev.yml).
 
 on:
   push:
     tags: ["v*"]
-  workflow_call:
   workflow_dispatch:
 
 permissions: {}
