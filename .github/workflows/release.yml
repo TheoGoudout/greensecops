@@ -200,11 +200,8 @@ jobs:
       needs.coolify.result != 'failure' &&
       needs.coolify.result != 'cancelled'
     uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
-    # See pages.yml: a caller's permissions cap every job in the called
-    # workflow, so api-gate's declaration has to be granted here too.
     permissions:
       contents: read
-      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       environment: production
     secrets:

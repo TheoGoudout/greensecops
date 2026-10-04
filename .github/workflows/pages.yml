@@ -17,9 +17,11 @@ name: pages
 #
 # Which event goes where:
 #
-#   push to main         → staging, automatically
 #   workflow_dispatch    → staging or production, whichever was chosen
 #   pull_request         → a throwaway preview version of the staging Worker
+#
+# A push to main reaches staging through deploy-staging.yml instead, which
+# publishes these surfaces only after it has deployed that commit's API.
 #
 # Production is deliberately not automatic. The dashboard ships a generated
 # OpenAPI client, so a dashboard that raced ahead of the backend on every merge
@@ -38,20 +40,6 @@ name: pages
 # deploy/README.md.
 
 on:
-  push:
-    branches: [main]
-    # Duplicated under pull_request below: GitHub Actions does not support YAML
-    # anchors, so the two lists have to be kept in step by hand.
-    paths:
-      - "landing/**"
-      - "frontend/**"
-      - "docs/**"
-      - "backend/app/rules/**"
-      - "examples/**"
-      - "deploy/cloudflare/**"
-      - ".github/workflows/pages.yml"
-      - ".github/workflows/pages-reusable.yml"
-      - ".github/scripts/**"
   pull_request:
     paths:
       - "landing/**"
@@ -75,9 +63,8 @@ on:
 permissions: {}
 
 # Cancelled on pull requests only. A preview version is disposable, so a new
-# push should replace the one in flight — but the `push` to main path publishes
-# the staging Workers, and interrupting a publish half-way leaves the three
-# surfaces on two different builds.
+# push should replace the one in flight — but a dispatched publish is not, and
+# interrupting one half-way leaves the three surfaces on two different builds.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -85,17 +72,10 @@ concurrency:
 jobs:
   staging:
     name: Staging
-    if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'staging'
     uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
-    # A caller's permissions are the ceiling for every job in the called
-    # workflow, and GitHub validates them statically across all of them before
-    # any `if:` is evaluated — so api-gate's `actions: read` is needed on every
-    # caller, not only the staging one whose api-gate step does any work.
     permissions:
       contents: read
-      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       environment: staging
     secrets:
@@ -106,13 +86,8 @@ jobs:
     name: Production
     if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
     uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
-    # A caller's permissions are the ceiling for every job in the called
-    # workflow, and GitHub validates them statically across all of them before
-    # any `if:` is evaluated — so api-gate's `actions: read` is needed on every
-    # caller, not only the staging one whose api-gate step does any work.
     permissions:
       contents: read
-      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       environment: production
     secrets:
@@ -123,13 +98,8 @@ jobs:
     name: Preview
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
-    # A caller's permissions are the ceiling for every job in the called
-    # workflow, and GitHub validates them statically across all of them before
-    # any `if:` is evaluated — so api-gate's `actions: read` is needed on every
-    # caller, not only the staging one whose api-gate step does any work.
     permissions:
       contents: read
-      actions: read # For api-gate, to read this commit's images.yml run.
     with:
       # Previews build against staging — its variables, its Worker, its
       # noindex headers — so an unreviewed branch can never resolve to the

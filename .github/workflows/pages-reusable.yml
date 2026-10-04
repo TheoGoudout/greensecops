@@ -103,11 +103,9 @@ on:
       CLOUDFLARE_ACCOUNT_ID:
         description: Cloudflare account the Workers live in.
         required: false
-      # No Coolify secrets here any more. The API half of a staging deployment
-      # — syncing the resource's public URLs and deploying it — moved to
-      # images.yml's deploy-staging job, which is the only place that knows the
-      # commit's images exist. This workflow now *waits* on that run rather than
-      # racing it; see the api-gate job below.
+      # No Coolify secrets here. The API half of a deployment is the caller's:
+      # deploy-staging.yml and release.yml each deploy the API first and only
+      # then call this, so the dashboard never gets ahead of it.
     outputs:
       # Empty on every run that is not a preview, and on preview runs with no
       # Cloudflare credentials. pages.yml owns the job that reports these,
@@ -256,11 +254,7 @@ jobs:
 
   frontend:
     name: Dashboard (${{ inputs.environment }})
-    # api-gate, and only here: this is the surface that ships the generated
-    # OpenAPI client, so it is the only one that can get ahead of the API in a
-    # way that breaks. The landing page and the docs are independent of the
-    # contract and stay ungated, and therefore fast.
-    needs: [config, api-gate]
+    needs: config
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ inputs.environment }}
@@ -429,32 +423,3 @@ jobs:
           has-cloudflare: ${{ env.HAS_CLOUDFLARE }}
           api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  api-gate:
-    name: Wait for the API (${{ inputs.environment }})
-    # Deliberately unconditional, with the condition on the step instead. A
-    # skipped `needs` dependency skips its dependents, so an `if:` here would
-    # silently stop publishing the dashboard on production and on previews —
-    # the exact class of quiet non-deployment this file keeps guarding against.
-    # Everywhere but staging this job succeeds having done nothing.
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-
-    permissions:
-      contents: read
-      actions: read # To read this commit's workflow runs, and wait on the API deploy.
-
-    steps:
-      # The steps below run scripts from .github/scripts/, so this job needs
-      # the repository even though it builds nothing from it.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Wait for this commit's API deploy
-        if: ${{ inputs.environment == 'staging' && !inputs.preview }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: .github/scripts/pages-reusable/wait-for-api-deploy.sh

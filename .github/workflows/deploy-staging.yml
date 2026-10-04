@@ -1,0 +1,180 @@
+name: Deploy staging
+
+# Every push to main deploys staging, as one run and in the same order a release
+# deploys production: the images are built and published (images.yml), the
+# staging API is pointed at them, and only then are the static surfaces
+# published (pages-reusable.yml).
+#
+# The order matters for the same reason it does in release.yml. The dashboard
+# ships a generated OpenAPI client, and the Cloudflare upload takes under a
+# minute while the image build takes ten to twenty-five, so deployed
+# independently every API change would put a staging dashboard in front of a
+# backend that does not serve it yet — a client calling a contract the server
+# has not shipped.
+#
+# Disabling this workflow stops staging and nothing else: release images are
+# built by images.yml on the tag push, and pull-request previews and manual
+# publishes stay in pages.yml.
+#
+# **Turn Automatic Deployment off on the staging resource in Coolify**, or its
+# watcher keeps racing this run with a stale deploy. See deploy/coolify/README.md.
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  # Queued, never cancelled: a cancelled run can leave the API deployed and the
+  # dashboard not, which is the mismatch this workflow exists to prevent.
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          # Only what each half is built from, so a docs-only commit does not
+          # redeploy the API.
+          filters: |
+            backend:
+              - backend/**
+              - opa/**
+              - pyproject.toml
+              - uv.lock
+              # Not an input to the image build, but the API deploy syncs the
+              # resource's public URLs from these files, and a hostname change
+              # reaches the containers only on a deploy.
+              - deploy/cloudflare/env/**
+              - .github/workflows/deploy-staging.yml
+              - .github/workflows/images.yml
+              - .github/scripts/images/**
+              - .github/scripts/deploy-staging/**
+              - .github/scripts/shared/**
+            frontend:
+              - landing/**
+              - frontend/**
+              - docs/**
+              - backend/app/rules/**
+              - examples/**
+              - deploy/cloudflare/**
+              - .github/workflows/deploy-staging.yml
+              - .github/workflows/pages-reusable.yml
+              - .github/scripts/pages-reusable/**
+
+  images:
+    name: Images
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    permissions:
+      contents: read
+      packages: write # images.yml pushes the images to GHCR.
+    uses: ./.github/workflows/images.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+
+  coolify:
+    name: Deploy the staging API
+    needs: [changes, images]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The Coolify credentials below belong to this environment, not to the
+    # repository: binding the job scopes them to the one deploy that needs them,
+    # and gives the run a deployment record on `staging`. Unlike `production`,
+    # staging carries no reviewer rule, so nothing here waits for a click. See
+    # deploy/README.md.
+    environment: staging
+
+    permissions:
+      contents: read
+      packages: read # To confirm the tag this job is about to deploy actually resolves.
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the Coolify secrets
+        id: secrets
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+        run: .github/scripts/deploy-staging/check-coolify-secrets.sh
+
+      - name: Resolve and confirm the release tag
+        id: tag
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: .github/scripts/deploy-staging/resolve-tag.sh
+
+      # Before the deploy, not after. The sync itself does not deploy — Coolify
+      # applies a variable on the resource's next deploy — so running it here
+      # means a changed hostname reaches the containers in this run rather than
+      # on whatever push happens next.
+      - name: Sync the public URLs
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+        run: .github/scripts/shared/coolify-env-sync.sh staging "${UUID}"
+
+      - name: Point the resource at the commit and deploy it
+        id: trigger
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: .github/scripts/deploy-staging/coolify-deploy.sh
+
+      - name: Monitor the deploy
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
+        run: .github/scripts/deploy-staging/coolify-monitor.sh
+
+  cloudflare:
+    name: Static surfaces
+    needs: [changes, images, coolify]
+    # `always()` lets a *skipped* API deploy (a frontend-only commit) through; a
+    # failed image build or API deploy still holds the dashboard back.
+    if: >-
+      always() &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.frontend == 'true' &&
+      needs.images.result != 'failure' &&
+      needs.images.result != 'cancelled' &&
+      needs.coolify.result != 'failure' &&
+      needs.coolify.result != 'cancelled'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pages-reusable.yml # zizmor: ignore[self-repository] -- `./`, not `$/`: changing reference syntax is deliberate, not a lint fix
+    with:
+      environment: staging
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

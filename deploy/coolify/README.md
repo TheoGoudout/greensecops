@@ -272,7 +272,7 @@ generated customer workflows) empties the same way.
 `deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
 built from, so the two halves of a deployment cannot disagree about a hostname.
 `.github/scripts/shared/coolify-env-sync.sh` does it, called from
-`images.yml` for staging and from `release.yml` for production. **Editing those three by hand in
+`deploy-staging.yml` for staging and from `release.yml` for production. **Editing those three by hand in
 Coolify is pointless: the next sync overwrites them.** Change
 `deploy/cloudflare/env/<environment>.env` instead.
 
@@ -297,8 +297,8 @@ Coolify's proxy terminates TLS and routes to it. The other three hostnames are
 Cloudflare's.
 
 **`TAG` is owned by CI on both resources, and you should not set it by hand.**
-On **staging** it belongs to `.github/workflows/images.yml`, which sets it to
-`sha-<short>` for the commit it has just built. On **production** it belongs to
+On **staging** it belongs to `.github/workflows/deploy-staging.yml`, which sets
+it to `sha-<short>` for the commit it has just built. On **production** it belongs to
 `.github/workflows/release.yml`, which sets it to the published release's
 tag alongside the resource's git ref.
 
@@ -309,12 +309,11 @@ the resource to whatever you typed until the next deploy overwrites it.
 **Turn Automatic Deployment off on the staging resource.** This is the one
 setting that has to be clicked rather than committed, and leaving it on is a
 bug rather than a redundancy. Coolify's git watcher fires the moment a push
-lands — ten to twenty-five minutes before `images.yml` has published that
-commit's images — so it deploys the *previous* commit's image while `pages.yml`
-puts the new commit's dashboard on Cloudflare within a minute. The dashboard
-ships a generated OpenAPI client, so that is a client calling a contract the
-server has not shipped. With the watcher off, `images.yml` deploys staging
-itself once the images provably exist.
+lands — ten to twenty-five minutes before that commit's images are published —
+so it deploys the *previous* commit's image, and the new commit's dashboard can
+reach Cloudflare first. The dashboard ships a generated OpenAPI client, so that
+is a client calling a contract the server has not shipped. With the watcher off,
+`deploy-staging.yml` deploys staging itself once the images provably exist.
 
 An immutable per-commit tag is what makes the pull reliable, and it is worth
 knowing why `latest` was not enough. A tag that does not change gives Docker no
@@ -370,23 +369,21 @@ the one to run by hand.
 
 ### 5. Deploy
 
-**Staging is automatic, and ordered.** Push to `main` and three things happen in
-sequence, not in parallel:
+**Staging is automatic, and ordered.** Push to `main` and `deploy-staging.yml`
+does three things in sequence, not in parallel:
 
 1. `images.yml` publishes the backend and OPA images to GHCR, tagged both
    `latest` and `sha-<short>` for the commit.
-2. The same run then deploys the staging API: it syncs the resource's public
-   URLs, sets `TAG` to that `sha-<short>`, triggers the deploy and blocks until
-   Coolify reports it finished.
-3. Only then does `pages.yml` publish the dashboard. Its `api-gate` job waits on
-   this commit's `images.yml` run and fails rather than publishing if that run
-   failed — the same "API first" rule `release.yml` enforces for
-   production, for the same reason. The landing page and docs do not ship the
-   generated client, so they publish without waiting.
+2. It deploys the staging API: it syncs the resource's public URLs, sets `TAG`
+   to that `sha-<short>`, triggers the deploy and blocks until Coolify reports
+   it finished.
+3. Only then does it publish the static surfaces (`pages-reusable.yml`), and not
+   at all if the API deploy failed — the same "API first" rule `release.yml`
+   enforces for production, for the same reason.
 
-A commit that touches nothing `images.yml` watches produces no run for that SHA,
-the gate clears immediately, and the static surfaces publish as before. Look at
-staging.
+A commit that touches only one half deploys only that half. Disable the
+workflow (Actions → Deploy staging → Disable workflow) to stop staging without
+touching anything else. Look at staging.
 
 **Production is two clicks**, and both halves move together:
 
@@ -424,7 +421,7 @@ Four repository secrets, all for the Coolify half:
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
 | `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy either of them |
 | `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release.yml` |
-| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `images.yml`, which syncs its URLs, sets its `TAG` and deploys it |
+| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `deploy-staging.yml`, which syncs its URLs, sets its `TAG` and deploys it |
 
 Set all four or none. Both workflows refuse a partial set rather than skipping:
 deploying nothing and passing is exactly how staging kept a localhost
