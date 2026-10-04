@@ -6,7 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_GITHUB_OAUTH_CLIENT_ID: string
   /**
    * Which deployment this bundle was built for: "production", "staging",
-   * "preview" or "local". Drives the footer's environment badge, so an
+   * "dev", "preview" or "local". Drives the footer's environment badge, so an
    * unset value has to read as "not production" rather than as production.
    */
   readonly VITE_APP_ENVIRONMENT: string

@@ -9,11 +9,11 @@
 # Skipped is not failed — a `targets: cloudflare` dispatch deliberately skips
 # the API half, and that run should be able to go green.
 #
-# IMAGES, API and STATIC come from the calling step's env.
+# IMAGES and DEPLOY come from the calling step's env.
 set -euo pipefail
 
 failed=""
-for stage in "Images:${IMAGES}" "API:${API}" "Static surfaces:${STATIC}"; do
+for stage in "Images:${IMAGES}" "Deploy:${DEPLOY}"; do
   name=${stage%%:*}
   result=${stage#*:}
   case "${result}" in

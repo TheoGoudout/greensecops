@@ -1,30 +1,5 @@
 # Release Notes
 
-## Latest Changes
-
-### Features
-
-* feat(coolify): mount the AI provider catalog as an editable file. PR [#331](https://github.com/TheoGoudout/greensecops/pull/331) by [@TheoGoudout](https://github.com/TheoGoudout).
-* feat(billing): confirm every plan change on Stripe's own page. PR [#325](https://github.com/TheoGoudout/greensecops/pull/325) by [@TheoGoudout](https://github.com/TheoGoudout).
-* feat(ux): say what is running, and stop the click that races it. PR [#327](https://github.com/TheoGoudout/greensecops/pull/327) by [@TheoGoudout](https://github.com/TheoGoudout).
-
-### Upgrades
-
-* ⬆ bump the docker group across 4 directories with 3 updates. PR [#330](https://github.com/TheoGoudout/greensecops/pull/330) by [@dependabot[bot]](https://github.com/apps/dependabot).
-* ⬆ Bump the python group across 2 directories with 1 update. PR [#319](https://github.com/TheoGoudout/greensecops/pull/319) by [@dependabot[bot]](https://github.com/apps/dependabot).
-
-### Internal
-
-* ci: cut releases as drafts the tag is created from, and harden CI. PR [#350](https://github.com/TheoGoudout/greensecops/pull/350) by [@TheoGoudout](https://github.com/TheoGoudout).
-* feat(deploy): default the Coolify API and Celery worker to one process each. PR [#349](https://github.com/TheoGoudout/greensecops/pull/349) by [@TheoGoudout](https://github.com/TheoGoudout).
-* feat(deploy): make the Coolify backend's worker count configurable. PR [#348](https://github.com/TheoGoudout/greensecops/pull/348) by [@TheoGoudout](https://github.com/TheoGoudout).
-* ⬆ bump the pre-commit group across 2 directories with 1 update. PR [#329](https://github.com/TheoGoudout/greensecops/pull/329) by [@dependabot[bot]](https://github.com/apps/dependabot).
-* ⬆ bump the npm-packages group across 1 directory with 11 updates. PR [#322](https://github.com/TheoGoudout/greensecops/pull/322) by [@dependabot[bot]](https://github.com/apps/dependabot).
-* ci: adopt Shop'n'Cook's release-orchestrator shape, and fix the drift an audit found. PR [#326](https://github.com/TheoGoudout/greensecops/pull/326) by [@TheoGoudout](https://github.com/TheoGoudout).
-* ci: install Wrangler outside the workspace, where npm 12 cannot crash. PR [#328](https://github.com/TheoGoudout/greensecops/pull/328) by [@TheoGoudout](https://github.com/TheoGoudout).
-* ⬆ Bump the pre-commit group across 2 directories with 1 update. PR [#320](https://github.com/TheoGoudout/greensecops/pull/320) by [@dependabot[bot]](https://github.com/apps/dependabot).
-* ⬆ Bump re-actors/alls-green from 1.2.2 to 1.3.0 in the github-actions group across 1 directory. PR [#323](https://github.com/TheoGoudout/greensecops/pull/323) by [@dependabot[bot]](https://github.com/apps/dependabot).
-
 ## 0.12.0 (2026-09-03)
 
 ### Breaking Changes

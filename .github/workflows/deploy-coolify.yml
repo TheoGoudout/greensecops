@@ -1,0 +1,149 @@
+name: Deploy API to Coolify
+
+# Deploys the API — the stack in deploy/coolify/compose.yml — to one Coolify
+# resource: sync its public URLs, point it at an image tag (and, for
+# production, the matching git ref), deploy it, and wait for Coolify to report
+# the deployment finished.
+#
+# Nothing is built on the Coolify host: images.yml publishes the images to GHCR
+# and compose.yml only names them. The TAG variable decides which image runs.
+#
+#   called by deploy-environment.yml -> staging or production, pinned to the
+#                                       release tag (release.yml decides which)
+#   called by rollback.yml           -> either environment, at an older tag
+#   workflow_dispatch                -> either environment, any tag that has images
+#
+# Dev is not deployed from here: its Coolify resource auto-deploys
+# deploy/coolify/compose.dev.yml from main and builds the images itself.
+#
+# The secrets are read from the job's GitHub Environment. The names the other
+# repositories use (COOLIFY_API_TOKEN, COOLIFY_APP_UUID) win; the older ones
+# (COOLIFY_TOKEN, COOLIFY_STAGING_UUID, COOLIFY_PRODUCTION_UUID) are still read
+# while they exist. See deploy/coolify/README.md.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        type: string
+      ref:
+        description: "Git ref for the resource to track; empty leaves it where it is"
+        required: false
+        default: ""
+        type: string
+      image_tag:
+        description: "Image tag to run; defaults to sha-<short> of this commit"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      # Named rather than inherited. None is required here: the first step of
+      # the job fails the run when the environment's set is incomplete.
+      COOLIFY_URL:
+        required: false
+      COOLIFY_API_TOKEN:
+        required: false
+      COOLIFY_APP_UUID:
+        required: false
+      COOLIFY_TOKEN:
+        required: false
+      COOLIFY_STAGING_UUID:
+        required: false
+      COOLIFY_PRODUCTION_UUID:
+        required: false
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      ref:
+        description: "Git ref for the resource to track, e.g. v0.13.0; empty leaves it where it is"
+        required: false
+        default: ""
+        type: string
+      image_tag:
+        description: "Image tag to run, e.g. v0.13.0; defaults to sha-<short> of the dispatched commit"
+        required: false
+        default: ""
+        type: string
+
+permissions: {}
+
+concurrency:
+  # Never let two deploys of the same environment race each other — the loser
+  # would leave the resource pinned to a tag nobody asked for.
+  group: deploy-coolify-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  deploy:
+    name: Deploy the API (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The approval gate on production: its protection rules hold this job until
+    # a reviewer approves. Staging carries no reviewer rule.
+    environment: ${{ inputs.environment }}
+
+    permissions:
+      contents: read
+      packages: read # To confirm the tag this job is about to deploy actually resolves.
+
+    env:
+      COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_API_TOKEN || secrets.COOLIFY_TOKEN }}
+      UUID: ${{ secrets.COOLIFY_APP_UUID || (inputs.environment == 'production' && secrets.COOLIFY_PRODUCTION_UUID || secrets.COOLIFY_STAGING_UUID) }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require Coolify credentials
+        env:
+          COOLIFY_API_TOKEN: ${{ env.COOLIFY_TOKEN }}
+          COOLIFY_APP_UUID: ${{ env.UUID }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: .github/scripts/deploy-coolify/require-coolify-credentials.sh
+
+      - name: Confirm the images exist
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: .github/scripts/deploy-coolify/confirm-the-images-exist.sh
+
+      # Before the deploy, not after. The sync itself does not deploy — Coolify
+      # applies a variable on the resource's next deploy — so running it here
+      # means a changed hostname reaches the containers in this run rather than
+      # on the next one. The values come from the same file the dashboard is
+      # built from: the API cannot derive them, because the dashboard, landing
+      # and docs are Cloudflare Workers rather than services in compose.yml.
+      - name: Sync the public URLs
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: .github/scripts/shared/coolify-env-sync.sh "${ENVIRONMENT}" "${UUID}"
+
+      - name: Point the resource at the tag and deploy it
+        id: trigger
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REF: ${{ inputs.ref }}
+        run: .github/scripts/deploy-coolify/point-the-resource-at-the-tag-and-deploy-it.sh
+
+      - name: Monitor the deploy
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: .github/scripts/deploy-coolify/monitor-the-deploy.sh

@@ -7,7 +7,7 @@ set -euo pipefail
 SHA=$(git rev-parse HEAD)
 
 # Keyed on workflow file paths rather than check-run names, which are job names
-# and drift. The deploy workflows (images.yml's staging deploy, pages.yml) are
+# and drift. The deploy workflows (release.yml's own, pages.yml) are
 # deliberately absent: a staging hiccup should not block cutting a release.
 REQUIRED="test-backend.yml playwright.yml test-docker-compose.yml zizmor.yml opa.yml deploy-checks.yml test-action.yml build-proc-sampler.yml"
 

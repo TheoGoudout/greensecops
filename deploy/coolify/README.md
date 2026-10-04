@@ -272,8 +272,10 @@ generated customer workflows) empties the same way.
 `deploy/cloudflare/env/<environment>.env` — the same file the static surfaces are
 built from, so the two halves of a deployment cannot disagree about a hostname.
 `.github/scripts/shared/coolify-env-sync.sh` does it, called from
-`images.yml` for staging and from `release-deploy.yml` for production. **Editing those three by hand in
-Coolify is pointless: the next sync overwrites them.** Change
+`deploy-coolify.yml` whenever `release.yml` deploys staging or production.
+**Editing those three by hand in Coolify is pointless there: the next sync
+overwrites them.** (Dev deploys itself, so on the dev resource you set them by
+hand — see [Dev](#dev).) Change
 `deploy/cloudflare/env/<environment>.env` instead.
 
 Two things follow from CI owning them. The sync does not deploy — Coolify applies
@@ -296,31 +298,27 @@ Only `api.` needs a domain in Coolify — set it on the `backend` service so
 Coolify's proxy terminates TLS and routes to it. The other three hostnames are
 Cloudflare's.
 
-**`TAG` is owned by CI on both resources, and you should not set it by hand.**
-On **staging** it belongs to `.github/workflows/images.yml`, which sets it to
-`sha-<short>` for the commit it has just built. On **production** it belongs to
-`.github/workflows/release-deploy.yml`, which sets it to the published release's
-tag alongside the resource's git ref.
+**`TAG` is owned by CI on the staging and production resources, and you should
+not set it by hand.** `.github/workflows/release.yml` sets it on both to the
+published release's tag, alongside the resource's git ref — staging for every
+pre-release and release, production for releases. Dev takes no `TAG`: it builds
+its images from source.
 
 Neither needs creating by hand — both workflows create the variable if it is
 absent and update it if it is not. Leave it alone after that: editing it pins
 the resource to whatever you typed until the next deploy overwrites it.
 
-**Turn Automatic Deployment off on the staging resource.** This is the one
-setting that has to be clicked rather than committed, and leaving it on is a
-bug rather than a redundancy. Coolify's git watcher fires the moment a push
-lands — ten to twenty-five minutes before `images.yml` has published that
-commit's images — so it deploys the *previous* commit's image while `pages.yml`
-puts the new commit's dashboard on Cloudflare within a minute. The dashboard
-ships a generated OpenAPI client, so that is a client calling a contract the
-server has not shipped. With the watcher off, `images.yml` deploys staging
-itself once the images provably exist.
+**Turn Automatic Deployment off on the staging and production resources.** This
+is the one setting that has to be clicked rather than committed. Both are moved
+by `release.yml`, once the release's images provably exist; Coolify's git
+watcher would instead redeploy on every push to `main`, pulling whatever image
+the resource's `TAG` already names. Only the dev resource keeps it on.
 
 An immutable per-commit tag is what makes the pull reliable, and it is worth
 knowing why `latest` was not enough. A tag that does not change gives Docker no
 reason to look for a new image: Compose's default pull policy is `missing`, and
 an ordinary Coolify deploy does not force a pull — which is what `force=true` in
-`release-deploy.yml` is for. `sha-<short>` is a reference the host has never
+`release.yml` is for. `sha-<short>` is a reference the host has never
 seen, so the pull happens because it must. `deploy/coolify/compose.yml` also
 carries `pull_policy: always` on every service running one of this project's
 images, which covers a redeploy clicked here by hand.
@@ -370,37 +368,34 @@ the one to run by hand.
 
 ### 5. Deploy
 
-**Staging is automatic, and ordered.** Push to `main` and three things happen in
-sequence, not in parallel:
+There are three environments, told apart by what deploys them:
 
-1. `images.yml` publishes the backend and OPA images to GHCR, tagged both
-   `latest` and `sha-<short>` for the commit.
-2. The same run then deploys the staging API: it syncs the resource's public
-   URLs, sets `TAG` to that `sha-<short>`, triggers the deploy and blocks until
-   Coolify reports it finished.
-3. Only then does `pages.yml` publish the dashboard. Its `api-gate` job waits on
-   this commit's `images.yml` run and fails rather than publishing if that run
-   failed — the same "API first" rule `release-deploy.yml` enforces for
-   production, for the same reason. The landing page and docs do not ship the
-   generated client, so they publish without waiting.
+| Environment | Deployed by | When |
+|---|---|---|
+| dev | Coolify and Cloudflare Workers Builds, watching `main` | every push to `main` |
+| staging (opt-in) | `release.yml` | every published pre-release and release, once `STAGING_ENABLED` is `true` |
+| production | `release.yml` | every published release |
 
-A commit that touches nothing `images.yml` watches produces no run for that SHA,
-the gate clears immediately, and the static surfaces publish as before. Look at
-staging.
+Staging is optional: it is deployed only when the `STAGING_ENABLED` repository
+variable is `true`. Without it a release deploys production alone and a
+pre-release deploys nothing. Dev is optional too — it exists once its Coolify
+resource and Workers are set up.
 
-**Production is two clicks**, and both halves move together:
+**Staging and production are two clicks**, and both halves move together:
 
-1. Actions → **release** → *Run workflow*, pick a bump. It sets the version
-   everywhere, closes off the accumulated release notes, tags `vX.Y.Z` and
-   opens a **draft** GitHub release. Nothing is deployed — this is reviewable
-   and undoable.
-2. Review the draft, then **publish** it. That runs `release-deploy.yml`, which
-   waits for the reviewer the `production` environment requires and then
-   promotes the API and the static sites in that order.
+1. Actions → **Prepare Release** → *Run workflow*, pick a bump (or type an
+   `-rcN` version for a pre-release). It sets the version everywhere, writes the
+   release notes and opens a **draft** GitHub release. Nothing is deployed —
+   this is reviewable and undoable.
+2. Review the draft, then **publish** it. That runs `release.yml`: it waits for
+   the `v*` tag's images, then runs `deploy-environment.yml` for each target
+   environment — staging for a pre-release, production (and staging, if enabled)
+   for a release — each promoting the API and then the static sites. Production
+   waits for the reviewer its environment requires.
 
 The ordering is the point. The dashboard ships a generated OpenAPI client, so a
 promoted dashboard talking to an unpromoted API breaks against a contract the
-server has not shipped yet — `release-deploy.yml` deploys Coolify first and
+server has not shipped yet — `release.yml` deploys Coolify first and
 blocks until Coolify reports the deployment finished, so the dashboard can
 never get ahead. The reverse window still exists and is the tolerable one.
 
@@ -415,26 +410,70 @@ different version from the dashboard.
 If your GHCR packages are private, add a registry credential in Coolify with a
 personal access token holding `read:packages`.
 
+### Dev
+
+Dev follows `main` with no GitHub Actions involved, so nothing orders its two
+halves: for a few minutes after a push the dev dashboard can run ahead of the
+dev API. That is acceptable for dev, and the reason staging and production go
+through `release.yml` instead.
+
+**The API — a third Coolify resource**, set up like the other two except:
+
+1. Compose file **`deploy/coolify/compose.dev.yml`**, branch `main`, and
+   **Automatic Deployment on**.
+2. `compose.dev.yml` is `compose.yml` with the backend and OPA images built
+   from the checkout (`build:` and `pull_policy: build`) instead of pulled from
+   GHCR — dev is the one resource whose host builds, so give it the headroom.
+   It is generated: after changing `compose.yml`, run
+   `scripts/generate_compose_dev.py` and commit the result; deploy-checks.yml
+   fails while it is stale.
+3. No `TAG`, and no workflow syncs its URLs: set `FRONTEND_HOST`,
+   `MARKETING_URL` and `DOCS_URL` by hand to `https://app.dev.greensecops.com`,
+   `https://dev.greensecops.com` and `https://docs.dev.greensecops.com`.
+   `ENVIRONMENT` needs no setting: `compose.dev.yml` defaults it to `dev`, which
+   the backend treats like staging and production.
+4. Domain `https://api.dev.greensecops.com:8000` on the `backend` service, and a
+   GitHub App of its own (its callback is the dev dashboard).
+
+**The static surfaces — Cloudflare Workers Builds.** Connect the repository to
+each dev Worker (**Workers & Pages → the Worker → Settings → Builds → Connect**),
+branch `main`, root directory `/`:
+
+| Worker | Build command | Deploy command |
+|---|---|---|
+| `greensecops-landing-dev` | `deploy/cloudflare/build.sh landing dev` | `cd landing && npx wrangler deploy --env dev` |
+| `greensecops-dashboard-dev` | `deploy/cloudflare/build.sh frontend dev` | `cd frontend && npx wrangler deploy --env dev` |
+| `greensecops-docs-dev` | `deploy/cloudflare/build.sh docs dev` | `cd docs && npx wrangler deploy --env dev` |
+
+Set `BUN_VERSION` (from `.bun-version`) as a build variable on the dashboard.
+`build.sh` reads `deploy/cloudflare/env/dev.env` and runs the same scripts
+`pages-reusable.yml` does for staging and production. The dashboard build
+refuses to publish until that file's `GITHUB_APP_NAME` and `GITHUB_CLIENT_ID`
+name dev's GitHub App. Create each Worker with one manual deploy before
+connecting it, then bind its custom domain.
+
 #### What the release workflows need
 
-Four repository secrets, all for the Coolify half:
+The Coolify half reads three secrets, the same names Shop'n'Cook and Prism use,
+set on **each** of the `staging` and `production` GitHub Environments with that
+environment's values. All three are required: `deploy-coolify.yml` fails the run
+when one is missing, rather than going green having deployed nothing.
 
 | Secret | What it is |
 |---|---|
 | `COOLIFY_URL` | Base URL of the Coolify control plane, reachable from GitHub Actions |
-| `COOLIFY_TOKEN` | An API token with permission to read and write both resources' variables, and to deploy either of them |
-| `COOLIFY_PRODUCTION_UUID` | The production resource's UUID. Read by `release-deploy.yml` |
-| `COOLIFY_STAGING_UUID` | The staging resource's UUID. Read by `images.yml`, which syncs its URLs, sets its `TAG` and deploys it |
+| `COOLIFY_API_TOKEN` | An API token with permission to read and write the resource's variables, and to deploy it |
+| `COOLIFY_APP_UUID` | The environment's resource UUID. `deploy-coolify.yml` syncs its URLs, sets its `TAG` and deploys it |
 
-Set all four or none. Both workflows refuse a partial set rather than skipping:
-deploying nothing and passing is exactly how staging kept a localhost
-`FRONTEND_HOST` for the life of the deployment.
+The older names are still read while the new ones are unset: `COOLIFY_TOKEN` for
+`COOLIFY_API_TOKEN`, and `COOLIFY_STAGING_UUID` / `COOLIFY_PRODUCTION_UUID` for
+`COOLIFY_APP_UUID`. Delete them once the new ones are in place.
 
 The Pi is not in the request path, but it *is* in the deploy path — if its API
 is not reachable from GitHub's runners, the Coolify job cannot run and
 production has to be promoted from Coolify's UI instead.
 
-`release.yml` reuses the existing `LATEST_CHANGES` PAT to push the release
+`release-prepare.yml` uses the `RELEASE_TOKEN` PAT (or, until it is set, the older `LATEST_CHANGES`) to push the release
 commit and the tag. That has to be a PAT rather than `GITHUB_TOKEN`: a push
 authenticated with `GITHUB_TOKEN` does not trigger other workflows, so
 `images.yml` would never build the release images.

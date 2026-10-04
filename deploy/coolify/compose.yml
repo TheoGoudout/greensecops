@@ -18,7 +18,7 @@
 # deployment served a stale backend against a freshly published dashboard.
 #
 # The real fix is upstream — CI pins TAG to an immutable `sha-<short>` per
-# commit (images.yml on staging, release-deploy.yml on production), so the
+# commit (release.yml, for staging and production), so the
 # reference itself changes and the pull cannot be skipped. This is the braces to
 # that belt: it covers a redeploy clicked by hand and a fork still on
 # `TAG=latest`.

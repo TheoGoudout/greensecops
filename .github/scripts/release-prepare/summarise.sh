@@ -14,7 +14,7 @@ set -euo pipefail
     echo "**Nothing is tagged or deployed yet.** Review the draft at"
     echo "${REPO_URL}/releases — **publishing it** creates the tag, which starts"
     echo "\`images.yml\` building \`greensecops-{backend,opa}:${TAG}\`, and runs"
-    echo "\`release-deploy.yml\`, which waits for those images, then promotes"
+    echo "\`release.yml\`, which waits for those images, then promotes"
     echo "Coolify and then Cloudflare."
   else
     echo "The release did not complete, and no tag was created. If the log shows"

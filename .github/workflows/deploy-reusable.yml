@@ -1,6 +1,6 @@
 name: deploy-reusable
 
-# The mechanics behind deploy.yml and rollback.yml. Both do the same thing —
+# The mechanics behind deploy-aws.yml and rollback-aws.yml. Both do the same thing —
 # point an environment at an image tag and roll the instances — so the
 # difference between a deploy and a rollback is only which tag, and whether it
 # has to be built first.
