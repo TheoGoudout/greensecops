@@ -19,7 +19,7 @@ export function Footer() {
 
   // The dashboard and the API are promoted through different platforms —
   // Cloudflare Workers and Coolify — so this bundle cannot infer what the API
-  // is running. release-deploy.yml deploys them in order and waits, but a
+  // is running. release.yml deploys them in order and waits, but a
   // half-finished promotion is still possible, and this is what makes it
   // visible rather than leaving it to surface as a confusing error later.
   //

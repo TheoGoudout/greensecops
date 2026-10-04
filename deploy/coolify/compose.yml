@@ -18,7 +18,7 @@
 # deployment served a stale backend against a freshly published dashboard.
 #
 # The real fix is upstream — CI pins TAG to an immutable `sha-<short>` per
-# commit (images.yml on staging, release-deploy.yml on production), so the
+# commit (release.yml, for staging and production), so the
 # reference itself changes and the pull cannot be skipped. This is the braces to
 # that belt: it covers a redeploy clicked by hand and a fork still on
 # `TAG=latest`.
@@ -42,7 +42,7 @@
 # nothing here bounds itself, and an unbounded Celery worker means the kernel's
 # OOM killer choosing a victim by score rather than by importance. The values
 # are the same, except for celery-worker, which is smaller here because this
-# deployment defaults to CELERY_CONCURRENCY=2 rather than 4.
+# deployment defaults to CELERY_CONCURRENCY=1 rather than 4.
 #
 # It matters more on this deployment than on any other. Coolify is a
 # multi-tenant platform and this is the topology people put other projects
@@ -282,14 +282,17 @@ services:
       # Observability
       - SENTRY_DSN=${SENTRY_DSN}
       # Celery
-      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-1}
 
   backend:
     image: ${IMAGE_REGISTRY:-ghcr.io/theogoudout}/greensecops-backend:${TAG:-latest}
     restart: always
     pull_policy: always
-    # The image runs `fastapi run --workers 4`; each uvicorn worker holds its
-    # own copy of the application, so the floor is four of them.
+    # One uvicorn worker per WEB_CONCURRENCY; each holds its own copy of the
+    # application, so the floor is that many of them. One by default (the
+    # image's own CMD runs four), sized for a small host shared with other
+    # stacks; raise it on a bigger one.
+    command: ["fastapi", "run", "--workers", "${WEB_CONCURRENCY:-1}", "app/main.py"]
     mem_limit: 1536m
     mem_reservation: 512m
     cpu_shares: 1024
@@ -345,7 +348,7 @@ services:
     # beat back out, as the root compose.yml has it.
     command: >-
       celery -A app.workers.celery_app worker --loglevel=info
-      --concurrency=${CELERY_CONCURRENCY:-2}
+      --concurrency=${CELERY_CONCURRENCY:-1}
       -Q default,analysis,fixes
       --beat --scheduler celery.beat:PersistentScheduler
       --schedule /var/lib/celery/celerybeat-schedule

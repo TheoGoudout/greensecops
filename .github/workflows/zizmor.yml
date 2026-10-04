@@ -22,10 +22,12 @@ name: Zizmor
 #   gate    the subset worth blocking a merge on, annotated on the offending
 #           line. Fails the build.
 #
-# What the gate blocks on is `min-confidence: medium`, not severity. Severity is
-# how bad a finding would be if real; confidence is whether it *is* real. Only
-# the second should ever spend a red check. The report job still records
-# everything the gate lets through, so strictness here costs no visibility.
+# The gate blocks on two floors, and they answer different questions. Confidence
+# is whether a finding *is* real; severity is how bad it would be if it were.
+# `min-confidence: medium` keeps speculative findings from spending a red check,
+# and `min-severity: low` does the same for the purely stylistic audits. The
+# report job still records everything the gate lets through, so strictness here
+# costs no visibility.
 #
 # Which audits run, and which publishers we are willing to run at all, live in
 # .github/zizmor.yml — zizmor discovers that file itself, so neither job passes
@@ -102,3 +104,7 @@ jobs:
           # or that a version comment no longer matches its pin.
           online-audits: true
           min-confidence: medium
+          # The purely advisory audits (`self-repository`, `superfluous-actions`)
+          # are style: decide them deliberately rather than under a failing
+          # check. The report job still records them.
+          min-severity: low

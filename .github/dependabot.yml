@@ -1,5 +1,10 @@
 version: 2
 
+# Minor and patch updates are grouped into one pull request per ecosystem;
+# major updates get a pull request each, since they are the ones that need code
+# changes and one breaking bump should not hold back the rest of the group.
+# (The `python` docker group below is the exception, on purpose — see there.)
+
 updates:
   # GitHub Actions
   - package-ecosystem: github-actions
@@ -23,8 +28,7 @@ updates:
     labels: [dependencies, internal]
     groups:
       github-actions:
-        patterns:
-          - "*"
+        update-types: [minor, patch]
   # Python uv — packages only. This never touches the interpreter version; that
   # lives in the two Dockerfiles and is handled by the `python` group below.
   - package-ecosystem: uv
@@ -38,8 +42,7 @@ updates:
     labels: [dependencies, internal]
     groups:
       python-packages:
-        patterns:
-          - "*"
+        update-types: [minor, patch]
   # bun — one entry serves the whole workspace (frontend, landing, action):
   # they share bun.lock at the repo root, and Dependabot allows only one entry
   # per package-ecosystem + directory pair.
@@ -71,8 +74,7 @@ updates:
           - ">=7"
     groups:
       npm-packages:
-        patterns:
-          - "*"
+        update-types: [minor, patch]
   # Docker — one entry over every directory, split into groups rather than into
   # entries, because a directory can appear only once per ecosystem.
   #
@@ -122,6 +124,7 @@ updates:
           - "*"
         exclude-patterns:
           - "python"
+        update-types: [minor, patch]
   # Docker Compose
   - package-ecosystem: docker-compose
     directory: /
@@ -134,8 +137,7 @@ updates:
     labels: [dependencies, internal]
     groups:
       docker-compose:
-        patterns:
-          - "*"
+        update-types: [minor, patch]
   # Go modules
   - package-ecosystem: gomod
     directory: /action/native/proc-sampler
@@ -148,8 +150,7 @@ updates:
     labels: [dependencies, internal]
     groups:
       go-packages:
-        patterns:
-          - "*"
+        update-types: [minor, patch]
   # pre-commit
   - package-ecosystem: "pre-commit"
     directories:
@@ -168,8 +169,7 @@ updates:
     labels: [dependencies, internal]
     groups:
       pre-commit:
-        patterns:
-          - "*"
+        update-types: [minor, patch]
   # Terraform providers and modules for the AWS deployment
   - package-ecosystem: "terraform"
     directories:
@@ -184,5 +184,4 @@ updates:
     labels: [dependencies, internal]
     groups:
       terraform:
-        patterns:
-          - "*"
+        update-types: [minor, patch]

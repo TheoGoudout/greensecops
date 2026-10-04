@@ -1,0 +1,6 @@
+# hadolint configuration (the hadolint pre-commit hook).
+ignored:
+  # Pinning apt package versions breaks the build every time the base image's
+  # distribution moves on; the base images themselves are pinned and updated
+  # by Dependabot instead.
+  - DL3008

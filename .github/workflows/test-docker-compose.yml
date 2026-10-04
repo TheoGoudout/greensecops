@@ -8,6 +8,7 @@ on:
     types:
       - opened
       - synchronize
+      - reopened
 
 permissions: {}
 
@@ -50,11 +51,63 @@ jobs:
       - name: Prepare env files
         run: .github/scripts/shared/prepare-env-files.sh
       - run: docker compose -f compose.yml build
-      - run: docker compose -f compose.yml down -v --remove-orphans
       # The two static sites are waited on alongside the app services because
       # building their images proves nothing about their boot: landing templates
       # the shipped pages in its entrypoint and docs serves a Sphinx build, and
       # either failing leaves a restart-looping container only a started
       # container shows.
       - run: docker compose -f compose.yml up -d --wait backend frontend landing docs
-      - run: docker compose -f compose.yml down -v --remove-orphans
+      - name: Show the logs
+        if: failure()
+        run: docker compose -f compose.yml logs
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f compose.yml down -v --remove-orphans
+
+  # The stack a contributor runs: compose.yml with compose.override.yml on top,
+  # which swaps in the hot-reloading backend and the Vite dev server and
+  # publishes their ports. Nothing else brings it up before someone's first
+  # `docker compose up` after a merge.
+  dev:
+    name: Local development stack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # To check out the repository below.
+    timeout-minutes: 15
+    env:
+      # Same values as the job above, plus the plain variables
+      # compose.override.yml reads (it takes precedence over compose.yml's
+      # Coolify variables, so these must be set explicitly), as in
+      # playwright.yml.
+      SERVICE_USER_POSTGRES: postgres
+      SERVICE_PASSWORD_POSTGRES: testpassword
+      SERVICE_PASSWORD_64_SECRETKEY: changethischangethischangethischangethischangethischangethischanget
+      SERVICE_PASSWORD_FIRSTSUPERUSER: testpassword
+      SERVICE_HEX_40_GITHUBWEBHOOKSECRET: 0000000000000000000000000000000000000000
+      SERVICE_URL_BACKEND: http://localhost:8000
+      SERVICE_URL_FRONTEND: http://localhost:5173
+      SERVICE_URL_DOCS: http://localhost:3002
+      SERVICE_URL_LANDING: http://localhost:3001
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: testpassword
+      SECRET_KEY: changethischangethischangethischangethischangethischangethischanget
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare env files
+        run: .github/scripts/test-docker-compose/prepare-dev-env-files.sh
+      - run: docker compose build backend frontend
+      - name: Start the stack
+        run: docker compose up -d --wait --wait-timeout 300 backend frontend
+      - name: Test backend is up
+        run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:8000/api/v1/system/health
+      - name: Test frontend is up
+        run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null http://localhost:5173
+      - name: Show the logs
+        if: failure()
+        run: docker compose logs
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v --remove-orphans

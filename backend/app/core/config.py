@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # General
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    ENVIRONMENT: Literal["local", "dev", "staging", "production"] = "local"
 
     # Hosts & URLs
     # The dev-server default. Named because _reject_local_frontend_host below

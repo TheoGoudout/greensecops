@@ -22,38 +22,21 @@ name: images
 # over `uv sync`, and a Raspberry Pi acting as Coolify's control plane should
 # not be building anything at all. Coolify only pulls.
 
-# This workflow does not only build: on `main` it also deploys the staging API,
-# in the `deploy-staging` job below. That is deliberate — the deploy has to
-# happen *after* the images exist, and here is the only place that knows they
-# do. See the comment on that job.
+# This workflow deploys nothing. On a `v*` tag push — which publishing a release
+# or pre-release performs — it builds the images release.yml waits for before
+# deploying staging and production. Dev does not use it: Coolify builds dev's
+# images from source (deploy/coolify/compose.dev.yml).
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-    paths:
-      - "backend/**"
-      - "opa/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/images.yml"
-      - ".github/scripts/**"
-      # Not an input to the image build — an input to the staging deploy below,
-      # which syncs the resource's public URLs from these files before it
-      # deploys. A hostname change reaches the containers only on a deploy, so
-      # it has to be able to trigger one.
-      - "deploy/cloudflare/env/**"
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
   group: images-${{ github.ref }}
-  # Not cancelled, unlike an ordinary build workflow: this run ends in a Coolify
-  # rollout, and interrupting one half-way is the state release-deploy.yml
-  # exists to avoid — see its concurrency block. Rapid pushes therefore queue
-  # rather than cancel, which also serialises the deploys the same way
-  # deploy.yml's `deploy-${{ inputs.environment }}` group does.
+  # Never cancelled: a half-pushed manifest is worse than a queued one.
   cancel-in-progress: false
 
 env:
@@ -211,92 +194,3 @@ jobs:
           IMAGE: ${{ steps.image.outputs.name }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: .github/scripts/images/confirm-architectures.sh
-
-  deploy-staging:
-    name: Deploy the staging API
-    needs: [merge]
-    # `main` only. A `v*` tag push builds images here too, but promoting one is
-    # release-deploy.yml's job and gated on a reviewer — repointing staging at a
-    # release tag from here would quietly take it off main.
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # The Coolify credentials below belong to this environment, not to the
-    # repository: binding the job scopes them to the one deploy that needs them,
-    # and gives the run a deployment record on `staging`. Unlike `production`,
-    # staging carries no reviewer rule, so nothing here waits for a click. See
-    # deploy/README.md.
-    environment: staging
-
-    permissions:
-      contents: read
-      packages: read # To confirm the tag this job is about to deploy actually resolves.
-
-    # Why the staging deploy lives at the end of the *image* workflow rather
-    # than being left to Coolify's git watcher, which is what used to do it:
-    #
-    # The watcher fires on the push, and this workflow takes ten to twenty-five
-    # minutes to publish the images for that same commit. So the deploy always
-    # started before the image it wanted existed, and pulled the previous
-    # commit's `latest` instead — while pages.yml put *this* commit's dashboard
-    # on Cloudflare in under a minute. The dashboard ships a generated OpenAPI
-    # client, so that is the bad direction: a client calling a contract the
-    # server has not shipped. release-deploy.yml sequences production precisely
-    # to avoid it; staging had nothing.
-    #
-    # Here, the images provably exist — the merge job just published them. Turn
-    # **Automatic Deployment off** on the staging resource in Coolify, or its
-    # watcher keeps racing this with a stale deploy. See
-    # deploy/coolify/README.md.
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Check the Coolify secrets
-        id: secrets
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-        run: .github/scripts/images/check-coolify-secrets.sh
-
-      - name: Resolve and confirm the release tag
-        id: tag
-        if: steps.secrets.outputs.run == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER: ${{ github.repository_owner }}
-        run: .github/scripts/images/resolve-tag.sh
-
-      # Before the deploy, not after. The sync itself does not deploy — Coolify
-      # applies a variable on the resource's next deploy — so running it here
-      # means a changed hostname reaches the containers in this run rather than
-      # on whatever push happens next.
-      - name: Sync the public URLs
-        if: steps.secrets.outputs.run == 'true'
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-        run: .github/scripts/shared/coolify-env-sync.sh staging "${UUID}"
-
-      - name: Point the resource at the commit and deploy it
-        id: trigger
-        if: steps.secrets.outputs.run == 'true'
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          UUID: ${{ secrets.COOLIFY_STAGING_UUID }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: .github/scripts/images/coolify-deploy.sh
-
-      - name: Monitor the deploy
-        if: steps.secrets.outputs.run == 'true'
-        env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          TAG: ${{ steps.tag.outputs.tag }}
-          DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
-        run: .github/scripts/images/coolify-monitor.sh

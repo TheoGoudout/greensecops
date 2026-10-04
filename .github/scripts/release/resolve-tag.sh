@@ -16,17 +16,22 @@ if [ -z "${TAG}" ]; then
   exit 1
 fi
 
-if ! is_draft=$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq .isDraft); then
+if ! state=$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"'); then
   echo "::error::No release named ${TAG}. Check the tag; nothing has been deployed."
   exit 1
 fi
 
 # A draft has no tag behind it yet, so every job downstream would be operating
 # on a ref that does not exist.
+read -r is_draft prerelease <<< "${state}"
+
 if [ "${is_draft}" = "true" ]; then
   echo "::error::${TAG} is still a draft. Publish it — that is what creates the tag."
   exit 1
 fi
 
-echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-echo "Promoting ${TAG}."
+{
+  echo "tag=${TAG}"
+  echo "prerelease=${prerelease}"
+} >> "$GITHUB_OUTPUT"
+echo "Promoting ${TAG} (prerelease=${prerelease})."
