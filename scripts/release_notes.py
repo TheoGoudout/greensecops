@@ -7,21 +7,16 @@ release, and used twice: prepended to ``release-notes.md`` as
 GitHub release draft. Deriving them once is what keeps the two from
 disagreeing.
 
-They used to accumulate instead: ``latest-changes.yml`` pushed a
-``📝 Update release notes`` commit to ``main`` after every merged pull request.
-Those commits skip CI, so ``main``'s head was almost never a commit CI had run
-on, and ``require-main-to-be-green.sh`` — which insists at least one required
-workflow ran against the commit being released — refused every release.
-Writing the notes at release time leaves ``main``'s head a real merge.
-
 The range is the first-parent history from the most recent *stable* tag to
 ``HEAD``, so a stable release's notes cover everything since the last stable
 release rather than only the delta since its own release candidate. Each merge
 names its pull request (``Merge pull request #N`` or a squash's ``(#N)``);
 commits that name none, like the release bump itself, are not changes to
-report. The pull request's labels pick its section, with the same label names
-and headings ``tiangolo/latest-changes`` used, so the file reads the same on
-either side of the switch.
+report. The pull request's labels pick its section: ``labeler.yml`` requires
+one on every pull request, and ``SECTIONS`` below maps them to headings.
+
+This file is the same in every repository that releases this way; change it
+in all of them together.
 
 Usage:
 
@@ -47,9 +42,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_NOTES = ROOT / "release-notes.md"
 
-# Label -> heading, in the order the sections appear. These are
-# tiangolo/latest-changes' defaults, which every existing section of
-# release-notes.md was written with.
+# Label -> heading, in the order the sections appear. These are the headings
+# tiangolo/latest-changes uses, which older release-notes.md sections were
+# written with.
 SECTIONS: list[tuple[str, str]] = [
     ("breaking", "Breaking Changes"),
     ("security", "Security Fixes"),
@@ -188,11 +183,11 @@ def render(repo: str, numbers: list[int]) -> str:
 
 
 def drop_latest_changes(text: str) -> str:
-    """Remove a leftover ``## Latest Changes`` section.
+    """Remove a ``## Latest Changes`` section, as tiangolo/latest-changes writes.
 
-    latest-changes.yml ran from the base branch, so the merge that deleted it
-    still ran it once more. Every entry it wrote is a merged pull request this
-    script lists again, so the section is dropped rather than released twice.
+    Every entry in it is a merged pull request this script lists again, so it
+    is dropped rather than released twice. A repository that never ran that
+    action has no such section, and this does nothing.
     """
     start = text.find(f"{LATEST_CHANGES_HEADER}\n")
     if start == -1:
