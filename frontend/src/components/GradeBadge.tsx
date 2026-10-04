@@ -5,18 +5,19 @@ interface GradeBadgeProps {
   className?: string
 }
 
+// Like an energy label: the A grades share success, deepening as they climb;
+// then warning, serious and destructive. The label always shows, so two
+// grades sharing a hue stay distinct.
 const GRADE_STYLES: Record<string, string> = {
-  "A+++":
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  "A++":
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  "A+": "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  A: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
-  B: "bg-lime-100 text-lime-800 dark:bg-lime-900/40 dark:text-lime-300",
-  C: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
-  D: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
-  E: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-  F: "bg-red-200 text-red-900 dark:bg-red-950/60 dark:text-red-300",
+  "A+++": "bg-success/25 text-success-ink",
+  "A++": "bg-success/22 text-success-ink",
+  "A+": "bg-success/18 text-success-ink",
+  A: "bg-success/15 text-success-ink",
+  B: "bg-success/10 text-success-ink",
+  C: "bg-warning/15 text-warning-ink",
+  D: "bg-serious/15 text-serious-ink",
+  E: "bg-destructive/15 text-destructive",
+  F: "bg-destructive text-white",
 }
 
 const FALLBACK_STYLE = "bg-muted text-muted-foreground"

@@ -64,7 +64,7 @@ export function EngineOverviewTable({
                 <span className="text-right text-sm tabular-nums">
                   <span className="font-medium">{findings.open}</span>
                   {findings.critical_open > 0 && (
-                    <span className="ml-1 text-xs text-red-600 dark:text-red-400">
+                    <span className="ml-1 text-xs text-destructive">
                       {findings.critical_open} crit
                     </span>
                   )}

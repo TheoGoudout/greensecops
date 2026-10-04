@@ -15,10 +15,10 @@ interface RuntimeFindingRowProps {
 export function RuntimeFindingRow({ finding }: RuntimeFindingRowProps) {
   return (
     <div className="flex items-start gap-3 px-6 py-4">
-      <Activity className="mt-0.5 shrink-0 h-4 w-4 text-amber-600 dark:text-amber-400" />
+      <Activity className="mt-0.5 shrink-0 h-4 w-4 text-warning-ink" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-warning/15 text-warning-ink">
             Runtime
           </span>
           <RuleSlugChip>{finding.rule_slug}</RuleSlugChip>

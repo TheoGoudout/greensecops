@@ -31,9 +31,9 @@ export function UsageBar({
           className={cn(
             "h-full rounded-full transition-all",
             pct != null && pct >= 90
-              ? "bg-red-500"
+              ? "bg-destructive"
               : pct != null && pct >= 70
-                ? "bg-amber-500"
+                ? "bg-warning"
                 : "bg-primary",
           )}
           style={{ width: pct != null ? `${pct}%` : "4px" }}

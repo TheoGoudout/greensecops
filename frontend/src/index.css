@@ -31,6 +31,17 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-ink: var(--warning-ink);
+  --color-serious: var(--serious);
+  --color-serious-ink: var(--serious-ink);
+  --color-info: var(--info);
+  --color-info-ink: var(--info-ink);
+  --color-info-foreground: var(--info-foreground);
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-variable: var(--syntax-variable);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -70,9 +81,27 @@
   --secondary-foreground: oklch(0.28 0.04 165);
   --muted: oklch(0.955 0.006 180);
   --muted-foreground: oklch(0.5 0.02 200);
-  --accent: oklch(0.62 0.14 225);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --accent: oklch(0.945 0.018 165);
+  --accent-foreground: oklch(0.28 0.05 160);
+  --destructive: oklch(0.5 0.21 27);
+  /* The meaning palette: every status, severity, grade and category maps
+     onto these four plus destructive, primary and muted. Each tone has a
+     vivid value for fills, bars, dots and borders, and an -ink value for
+     text and icons (>= 4.5:1 on a /15 tint of the tone over the card). */
+  --success: oklch(0.64 0.15 156);
+  --success-ink: oklch(0.48 0.12 156);
+  --warning: oklch(0.8 0.15 82);
+  --warning-ink: oklch(0.5 0.12 72);
+  --serious: oklch(0.68 0.17 50);
+  --serious-ink: oklch(0.48 0.15 45);
+  /* SecOps cyan. Also the brand's second colour (links, the signal
+     gradient's far end). */
+  --info: oklch(0.64 0.13 232);
+  --info-ink: oklch(0.48 0.12 235);
+  --info-foreground: oklch(0.985 0 0);
+  /* Code highlighting: the two hues the meaning palette lacks. */
+  --syntax-keyword: oklch(0.52 0.2 295);
+  --syntax-variable: oklch(0.56 0.19 350);
   --border: oklch(0.9 0.01 175);
   --input: oklch(0.88 0.012 175);
   --ring: oklch(0.5 0.13 156);
@@ -102,66 +131,6 @@
   --sidebar-border: oklch(1 0 0 / 0.07);
   --sidebar-ring: oklch(0.78 0.17 158);
   --sidebar-active: oklch(0.78 0.17 158);
-
-  /* ---- Brand palette scales ---- */
-  --green-50: #e7f5ee;
-  --green-100: #c5e8d5;
-  --green-200: #93d3b0;
-  --green-300: #5fbc8b;
-  --green-400: #34a26b;
-  --green-500: #1f8a56;
-  --green-600: #1a7a4a;
-  --green-700: #15633c;
-  --green-800: #114f30;
-  --green-900: #0c3a23;
-  --blue-50: #e0f4fe;
-  --blue-100: #b8e8fd;
-  --blue-200: #7dd3fc;
-  --blue-300: #38bdf8;
-  --blue-400: #0ea5e9;
-  --blue-500: #0284c7;
-  --blue-600: #0369a1;
-  --blue-700: #075985;
-
-  /* ---- Grade scale (A+++ → F) ---- */
-  --grade-aaa-bg: #d1fae5;
-  --grade-aaa-fg: #065f46;
-  --grade-a-bg: #c5e8d5;
-  --grade-a-fg: #114f30;
-  --grade-b-bg: #ecfccb;
-  --grade-b-fg: #4d7c0f;
-  --grade-c-bg: #fef9c3;
-  --grade-c-fg: #a16207;
-  --grade-d-bg: #ffedd5;
-  --grade-d-fg: #c2410c;
-  --grade-e-bg: #fee2e2;
-  --grade-e-fg: #b91c1c;
-  --grade-f-bg: #fecaca;
-  --grade-f-fg: #7f1d1d;
-
-  /* ---- Severity scale ---- */
-  --sev-critical-bg: #fee2e2;
-  --sev-critical-fg: #b91c1c;
-  --sev-critical-bd: #fecaca;
-  --sev-high-bg: #ffedd5;
-  --sev-high-fg: #c2410c;
-  --sev-high-bd: #fed7aa;
-  --sev-medium-bg: #fef9c3;
-  --sev-medium-fg: #a16207;
-  --sev-medium-bd: #fef08a;
-  --sev-low-bg: #e0f4fe;
-  --sev-low-fg: #075985;
-  --sev-low-bd: #bae6fd;
-  --sev-info-bg: #f1f5f9;
-  --sev-info-fg: #475569;
-  --sev-info-bd: #e2e8f0;
-
-  /* ---- Category accents (5 analysis axes) ---- */
-  --cat-energy: #f59e0b;
-  --cat-reliability: #0ea5e9;
-  --cat-security: #ef4444;
-  --cat-performance: #1a7a4a;
-  --cat-maintainability: #64748b;
 
   /* ---- Shadows ---- */
   --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
@@ -216,9 +185,20 @@
   --secondary-foreground: oklch(0.95 0.008 170);
   --muted: oklch(0.23 0.012 180);
   --muted-foreground: oklch(0.68 0.02 180);
-  --accent: oklch(0.72 0.14 220);
-  --accent-foreground: oklch(0.16 0.03 220);
+  --accent: oklch(0.26 0.02 175);
+  --accent-foreground: oklch(0.95 0.008 170);
   --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.78 0.15 156);
+  --success-ink: oklch(0.78 0.15 156);
+  --warning: oklch(0.83 0.14 85);
+  --warning-ink: oklch(0.83 0.14 85);
+  --serious: oklch(0.76 0.15 50);
+  --serious-ink: oklch(0.76 0.15 50);
+  --info: oklch(0.75 0.13 222);
+  --info-ink: oklch(0.75 0.13 222);
+  --info-foreground: oklch(0.16 0.03 220);
+  --syntax-keyword: oklch(0.74 0.14 295);
+  --syntax-variable: oklch(0.75 0.14 350);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 13%);
   --ring: oklch(0.78 0.17 158);
@@ -245,39 +225,6 @@
   --sidebar-border: oklch(1 0 0 / 0.07);
   --sidebar-ring: oklch(0.78 0.17 158);
   --sidebar-active: oklch(0.78 0.17 158);
-
-  /* ---- Grade scale — dark ---- */
-  --grade-aaa-bg: rgba(16, 185, 129, 0.18);
-  --grade-aaa-fg: #6ee7b7;
-  --grade-a-bg: rgba(26, 122, 74, 0.2);
-  --grade-a-fg: #5fbc8b;
-  --grade-b-bg: rgba(101, 163, 13, 0.2);
-  --grade-b-fg: #bef264;
-  --grade-c-bg: rgba(234, 179, 8, 0.18);
-  --grade-c-fg: #fde047;
-  --grade-d-bg: rgba(249, 115, 22, 0.18);
-  --grade-d-fg: #fdba74;
-  --grade-e-bg: rgba(239, 68, 68, 0.18);
-  --grade-e-fg: #fca5a5;
-  --grade-f-bg: rgba(127, 29, 29, 0.45);
-  --grade-f-fg: #fca5a5;
-
-  /* ---- Severity scale — dark ---- */
-  --sev-critical-bg: rgba(239, 68, 68, 0.16);
-  --sev-critical-fg: #fca5a5;
-  --sev-critical-bd: rgba(239, 68, 68, 0.35);
-  --sev-high-bg: rgba(249, 115, 22, 0.16);
-  --sev-high-fg: #fdba74;
-  --sev-high-bd: rgba(249, 115, 22, 0.35);
-  --sev-medium-bg: rgba(234, 179, 8, 0.16);
-  --sev-medium-fg: #fde047;
-  --sev-medium-bd: rgba(234, 179, 8, 0.32);
-  --sev-low-bg: rgba(14, 165, 233, 0.16);
-  --sev-low-fg: #7dd3fc;
-  --sev-low-bd: rgba(14, 165, 233, 0.32);
-  --sev-info-bg: #1f2a3f;
-  --sev-info-fg: #cbd5e1;
-  --sev-info-bd: #25304a;
 }
 
 @layer base {
@@ -310,7 +257,7 @@
     background-image: linear-gradient(
       135deg,
       var(--primary) 30%,
-      color-mix(in oklch, var(--primary) 45%, var(--accent))
+      color-mix(in oklch, var(--primary) 45%, var(--info))
     );
     box-shadow: var(--glow-primary);
   }

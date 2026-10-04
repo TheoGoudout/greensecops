@@ -9,13 +9,13 @@ import type {
 } from "@/client"
 
 // One palette of semantic status classes, mapped per domain below so the
-// Tailwind tokens are defined exactly once.
+// colour tokens are chosen exactly once.
 const STATUS_CLASSES = {
-  success: "bg-green-500/15 text-green-700 dark:text-green-400",
-  landed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  running: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  failed: "bg-red-500/15 text-red-700 dark:text-red-400",
-  pending: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+  success: "bg-success/15 text-success-ink",
+  landed: "bg-success/25 text-success-ink",
+  running: "bg-info/15 text-info-ink",
+  failed: "bg-destructive/15 text-destructive",
+  pending: "bg-warning/15 text-warning-ink",
   muted: "bg-muted text-muted-foreground",
   mutedStruck: "bg-muted text-muted-foreground line-through",
 } as const

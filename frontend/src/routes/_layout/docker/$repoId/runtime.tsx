@@ -401,9 +401,7 @@ function ContainerTable({
                 </td>
                 <td className="py-1">
                   {container.oom_killed === true ? (
-                    <span className="text-red-600 dark:text-red-400">
-                      OOM-killed
-                    </span>
+                    <span className="text-destructive">OOM-killed</span>
                   ) : (
                     (container.health_status as string) || "—"
                   )}

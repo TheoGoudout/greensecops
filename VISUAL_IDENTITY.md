@@ -40,12 +40,13 @@ hex in components. Hex values below are approximations for design tools.
 | Token | Light | Dark | Role |
 |---|---|---|---|
 | `--primary` | `oklch(0.5 0.13 156)` ≈ `#007842` forest green | `oklch(0.78 0.17 158)` ≈ `#31D78C` mint | The leaf in the logo: primary actions, links, focus, the active item |
-| `--accent` | `oklch(0.62 0.14 225)` ≈ `#0096C5` | `oklch(0.72 0.14 220)` ≈ `#00B8E1` | "SecOps" cyan: secondary emphasis, the far end of the signal gradient |
+| `--info` | `oklch(0.64 0.13 232)`, ink `oklch(0.48 0.12 235)` | `oklch(0.75 0.13 222)` | "SecOps" cyan: links, running states, low severity, the signal gradient's far end |
 | `--signal` | green → cyan, 90° | brighter in dark | The signature gradient (see below) |
 
-Contrast: white on light primary 5.3:1; dark text on mint 9.6:1. **White on
-the light cyan accent is only 3.3:1**, so accent fills carry icons or bold
-text of 18px and up, never body copy.
+`--accent` is **not** a brand colour: it is shadcn's hover fill (menus, ghost
+buttons), a pale mint with dark text. Brand cyan is `info`.
+
+Contrast: white on the light primary 5.3:1; dark text on mint 9.6:1.
 
 ### Surfaces
 
@@ -77,21 +78,44 @@ violet. Each dashboard stat tile owns one (score, findings, fix rate,
 coverage) for its icon chip and its 2px top rail. Fixed per stat, never
 cycled.
 
-### Meaning scales
+### The meaning palette
 
-These carry the product's vocabulary and must stay consistent everywhere.
+Every status, severity, grade and category in the app is drawn from the same
+handful of tones:
 
-| Scale | Values | Colours |
-|---|---|---|
-| **Grade** | A+++ → F | emerald → green → lime → yellow → orange → red → deep red (like an energy label) |
-| **Severity** | critical, high, medium, low, info | red, orange, yellow, blue, muted |
-| **Category** | energy, reliability, security, performance, maintainability | amber, sky, red, green, slate |
-| **Heat** | `--heat-1`…`--heat-4` | an ordinal red ramp for the findings heatmap, validated per mode |
+| Token | Meaning |
+|---|---|
+| `success` | done, passing, resolved, good grades |
+| `warning` | pending, needs attention, medium severity, grade C |
+| `serious` | high severity, grade D, usage nearly exhausted |
+| `destructive` | failed, critical, grades E–F |
+| `info` | running, low severity, links |
+| `primary` | merged / landed |
+| `muted` | ignored, withdrawn, info severity |
 
-Grades and severities always show their label next to the colour. Today
-their classes live in `components/GradeBadge.tsx`,
-`components/SeverityChip.tsx`, `lib/engine-meta.ts` and `lib/file-viewer.ts`
-as Tailwind palette steps. Change a scale there, in all of them at once.
+Each of `success`, `warning`, `serious` and `info` has two values. The
+**vivid** one (`bg-warning`, `border-warning`, `bg-warning/15`) is for fills,
+bars, dots and borders. The **ink** one (`text-warning-ink`) is for text and
+icons, dark enough for 4.5:1 on a 15% tint of the tone. In dark mode they are
+the same. Pills are always `bg-<tone>/15 text-<tone>-ink`.
+
+| Scale | Mapping |
+|---|---|
+| **Grade** | A+++ → B: `success`, the tint deepening as the grade climbs (10% → 25%); C `warning`; D `serious`; E `destructive` tint; F solid `destructive` |
+| **Severity** | critical `destructive`, high `serious`, medium `warning`, low `info`, info `muted` |
+| **Status** (`lib/status-colors.ts`) | success, landed (`success`, stronger), running (`info`), failed, pending (`warning`), muted |
+| **Heat** | `--heat-1`…`--heat-4`, an ordinal red ramp for the findings heatmap, validated per mode |
+
+The mappings live in one place each: `GradeBadge`, `SeverityChip`,
+`lib/engine-meta.ts` (bars), `lib/file-viewer.ts` (line rails) and
+`lib/status-colors.ts`. Labels always accompany the colour.
+
+**Code highlighting** reuses the tones (keys `info`, strings `success`,
+numbers `warning`, functions `serious`, comments `muted`) plus two of its
+own: `--syntax-keyword` (violet) and `--syntax-variable` (pink).
+
+No component uses a Tailwind palette class (`text-red-600`, `bg-amber-100`…).
+Keep it that way: a new state maps onto a tone above.
 
 ### Charts
 
@@ -132,6 +156,9 @@ domain: no Google Fonts and no third-party font CDN.
 - Sticky, translucent header with the signal rule under it.
 - Pages: title (dashboard in `text-signal`), one-line description, then a
   row of stat tiles and dense tables.
+- Sign-in: the login card beside a preview of the product built from the
+  app's own components (a repository's grade, a finding on its way to a pull
+  request), over the grid (`components/Common/AuthShowcase.tsx`).
 
 ## Logo
 
@@ -141,16 +168,8 @@ each with a `-dark` variant for dark surfaces. `<Logo onDark />` forces the
 dark variant (the sidebar uses it in both themes). Don't recolour the logo or
 place it on the signal gradient.
 
-## Not yet aligned
+## Landing page
 
-- **About 150 Tailwind palette classes** remain in components (the meaning
-  scales above, plus older one-offs). New code uses tokens; move the scales
-  onto shared tokens when they are next touched.
-- The `--green-*`, `--blue-*`, `--grade-*`, `--sev-*` and `--cat-*` CSS
-  variables in `index.css` are not referenced by any component. Wire the
-  scales to them, or delete them.
-- Shadcn menus and ghost buttons hover with `bg-accent text-accent-foreground`,
-  so today they show white text on the light cyan (3.3:1). Either darken
-  `--accent` in light mode or move hover fills to a neutral token.
-- `landing/` still loads Inter and JetBrains Mono from Google Fonts and uses
-  its own hex palette.
+`landing/` uses the same fonts, self-hosted in `landing/assets/fonts/`
+(Latin and Latin Extended subsets, with their OFL licences). Its colours are
+its own hex tokens in `landing/assets/style.css`, mirroring the app's.

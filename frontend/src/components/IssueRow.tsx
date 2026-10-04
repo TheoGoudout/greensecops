@@ -84,7 +84,7 @@ export function IssueRow({
           )}
           {issue.needs_manual_work && (
             <StatusPill
-              colorClass="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+              colorClass="bg-warning/15 text-warning-ink"
               className="inline-flex items-center"
               title={
                 issue.manual_work_note ??

@@ -25,7 +25,7 @@ const HEAT_STEPS = [
   { fill: "bg-heat-1", ink: "text-white" },
   { fill: "bg-heat-2", ink: "text-white" },
   { fill: "bg-heat-3", ink: "text-white" },
-  { fill: "bg-heat-4", ink: "text-white dark:text-red-950" },
+  { fill: "bg-heat-4", ink: "text-white dark:text-background" },
 ]
 
 /**

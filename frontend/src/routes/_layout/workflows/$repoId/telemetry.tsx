@@ -417,7 +417,7 @@ function TelemetryPage() {
         <Card>
           <CardHeader className="pb-2 pt-4">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <Activity className="h-4 w-4 text-warning-ink" />
               Runtime findings
               <span className="text-muted-foreground font-normal text-xs">
                 ({findings.length})

@@ -19,10 +19,10 @@ import {
 } from "@/lib/status-colors"
 
 const STATE_CLASSES: Record<string, string> = {
-  merged: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
-  closed: "bg-red-500/15 text-red-700 dark:text-red-400",
+  merged: "bg-primary/15 text-primary",
+  closed: "bg-destructive/15 text-destructive",
   draft: "bg-muted text-muted-foreground",
-  open: "bg-green-500/15 text-green-700 dark:text-green-400",
+  open: "bg-success/15 text-success-ink",
 }
 
 /** The minimum a scan target needs to be listed and redelivered here. */
@@ -264,7 +264,7 @@ export function EnginePullRequestsTab({
                         href={pr.pr_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline truncate flex items-center gap-1.5 min-w-0"
+                        className="text-xs font-mono text-info-ink hover:underline truncate flex items-center gap-1.5 min-w-0"
                       >
                         <GitPullRequest className="h-3 w-3 shrink-0" />
                         {pr.pr_url.replace("https://github.com/", "")}

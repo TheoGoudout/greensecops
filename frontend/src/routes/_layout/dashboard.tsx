@@ -84,7 +84,7 @@ function SectionSummary({ engines }: { engines: EngineOverview[] }) {
         <span className="font-medium text-foreground">{open}</span> open
       </span>
       {critical > 0 && (
-        <span className="text-xs font-medium text-red-600 dark:text-red-400 tabular-nums">
+        <span className="text-xs font-medium text-destructive tabular-nums">
           {critical} critical
         </span>
       )}

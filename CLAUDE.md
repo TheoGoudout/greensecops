@@ -127,9 +127,12 @@ pins the ones that exist today.
 
 `VISUAL_IDENTITY.md` is the graphical chart (the `brand` skill summarises
 it). Colours are OKLCH tokens in `frontend/src/index.css`, used through
-Tailwind classes — no hex, no new palette classes. The green→cyan signal
-gradient is for three brand moments only, never data. Grade and severity
-colours come from `GradeBadge` / `SeverityChip`, always with their label.
+Tailwind classes — no hex and no Tailwind palette classes (`text-red-600`):
+every state maps onto `success` / `warning` / `serious` / `destructive` /
+`info` (vivid for fills, `-ink` for text). `accent` is only the hover fill.
+The green→cyan signal gradient is for three brand moments only, never data.
+Grade and severity colours come from `GradeBadge` / `SeverityChip`, always
+with their label.
 Fonts are bundled from `@fontsource-variable`; never add a font-CDN link.
 
 ## Changing the API

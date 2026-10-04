@@ -21,16 +21,20 @@ hardcode hex or add new Tailwind palette classes in components.
 | Token | Use |
 |-------|-----|
 | `primary` | Forest green / mint: primary actions, links, focus, active item |
-| `accent` | Cyan: secondary emphasis. White text on it is 3.3:1 — icons or bold 18px+ only |
+| `info` | Brand cyan: links, running, low severity |
+| `success` / `warning` / `serious` / `destructive` | The meaning palette (see below) |
+| `accent` | Shadcn hover fill only (pale mint) — not a brand colour |
 | `bg-signal` / `text-signal` | The green→cyan gradient: header rule, primary buttons, dashboard title. Nowhere else, never on data |
 | `--signal-1`…`--signal-4` | Stat-tile accents (pass as `StatCard` `tone`), fixed per stat |
 | `chart-1`…`chart-8`, `heat-1`…`heat-4` | Data series; heat is the heatmap ramp |
+| `syntax-keyword`, `syntax-variable` | Code highlighting only |
 | `muted`, `border`, `card`, `background` | Neutral chrome |
 
-Grade (A+++→F: emerald→red) and severity (critical red, high orange, medium
-yellow, low blue, info muted) scales live in `GradeBadge`, `SeverityChip`,
-`lib/engine-meta.ts` and `lib/file-viewer.ts` — reuse those components, and
-change a scale in all of them together. Always show the label with the colour.
+**Vivid vs ink**: `bg-warning`, `bg-warning/15`, `border-warning` use the
+vivid tone; text and icons use `text-warning-ink`. Pills are
+`bg-<tone>/15 text-<tone>-ink`. Never use a Tailwind palette class
+(`text-red-600`…); map a new state onto a tone. Reuse `GradeBadge`,
+`SeverityChip` and `lib/status-colors.ts` rather than re-mapping.
 
 ## Typography
 

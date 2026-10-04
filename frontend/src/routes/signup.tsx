@@ -192,7 +192,7 @@ function SignUp() {
             Already have an account?{" "}
             <RouterLink
               to="/login"
-              className="text-accent underline underline-offset-4"
+              className="text-info-ink underline underline-offset-4"
             >
               Log in
             </RouterLink>

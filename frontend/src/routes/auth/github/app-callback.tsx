@@ -114,7 +114,7 @@ function GitHubAppCallback() {
           </>
         ) : syncState === "done" ? (
           <>
-            <CheckCircle className="h-12 w-12 text-green-500" />
+            <CheckCircle className="h-12 w-12 text-success-ink" />
             <h2 className="text-lg font-semibold">{doneTitle}</h2>
             <p className="text-sm text-muted-foreground">{doneBody}</p>
           </>

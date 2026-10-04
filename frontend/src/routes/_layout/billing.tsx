@@ -123,7 +123,7 @@ function UsageBar({
               pct >= 90
                 ? "bg-destructive"
                 : pct >= 70
-                  ? "bg-orange-500"
+                  ? "bg-serious"
                   : "bg-primary"
             }`}
             style={{ width: `${pct}%` }}
@@ -164,7 +164,7 @@ function PaymentStateBanner({
       role="alert"
       className={`rounded-lg border p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${
         isGrace
-          ? "border-orange-500/50 bg-orange-500/10"
+          ? "border-serious/50 bg-serious/10"
           : "border-destructive/50 bg-destructive/10"
       }`}
     >

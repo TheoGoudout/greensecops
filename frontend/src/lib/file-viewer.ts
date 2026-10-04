@@ -17,10 +17,10 @@ import type { Severity, WorkflowFixPublic } from "@/client"
 export const CONTEXT_LINES = 5
 
 export const SEVERITY_BORDER: Record<Severity, string> = {
-  critical: "border-l-red-500",
-  high: "border-l-orange-500",
-  medium: "border-l-yellow-500",
-  low: "border-l-blue-400",
+  critical: "border-l-destructive",
+  high: "border-l-serious",
+  medium: "border-l-warning",
+  low: "border-l-info",
   info: "border-l-muted-foreground",
 }
 
@@ -45,29 +45,29 @@ const GRAMMARS: Record<Grammar, Prism.Grammar> = {
  * here simply renders unstyled.
  */
 const TOKEN_COLORS: Record<string, string> = {
-  comment: "text-slate-400 dark:text-slate-500 italic",
-  keyword: "text-violet-600 dark:text-violet-400",
-  instruction: "text-violet-600 dark:text-violet-400",
-  directive: "text-violet-600 dark:text-violet-400",
-  "directive-block": "text-violet-600 dark:text-violet-400",
-  boolean: "text-violet-600 dark:text-violet-400",
-  null: "text-violet-400 dark:text-violet-300",
-  key: "text-sky-600 dark:text-sky-400",
-  atrule: "text-sky-600 dark:text-sky-400",
-  property: "text-sky-600 dark:text-sky-400",
-  string: "text-emerald-600 dark:text-emerald-400",
-  scalar: "text-emerald-600 dark:text-emerald-400",
-  number: "text-amber-600 dark:text-amber-400",
-  datetime: "text-amber-600 dark:text-amber-400",
-  function: "text-orange-600 dark:text-orange-400",
-  important: "text-orange-600 dark:text-orange-400",
-  variable: "text-pink-600 dark:text-pink-400",
-  interpolation: "text-pink-600 dark:text-pink-400",
-  "interpolation-punctuation": "text-pink-600 dark:text-pink-400",
-  anchor: "text-pink-600 dark:text-pink-400",
-  tag: "text-pink-600 dark:text-pink-400",
-  punctuation: "text-slate-400 dark:text-slate-500",
-  operator: "text-slate-400 dark:text-slate-500",
+  comment: "text-muted-foreground italic",
+  keyword: "text-syntax-keyword",
+  instruction: "text-syntax-keyword",
+  directive: "text-syntax-keyword",
+  "directive-block": "text-syntax-keyword",
+  boolean: "text-syntax-keyword",
+  null: "text-syntax-keyword",
+  key: "text-info-ink",
+  atrule: "text-info-ink",
+  property: "text-info-ink",
+  string: "text-success-ink",
+  scalar: "text-success-ink",
+  number: "text-warning-ink",
+  datetime: "text-warning-ink",
+  function: "text-serious-ink",
+  important: "text-serious-ink",
+  variable: "text-syntax-variable",
+  interpolation: "text-syntax-variable",
+  "interpolation-punctuation": "text-syntax-variable",
+  anchor: "text-syntax-variable",
+  tag: "text-syntax-variable",
+  punctuation: "text-muted-foreground",
+  operator: "text-muted-foreground",
 }
 
 export type FlatToken = { type: string; text: string; className: string }
