@@ -126,7 +126,7 @@ export function FileViewer({
                 severity={annotation.severity}
                 className="shrink-0"
               />
-              <span className="font-mono text-blue-700 dark:text-blue-300 shrink-0">
+              <span className="font-mono text-info-ink shrink-0">
                 {annotation.rule_slug}
               </span>
               <span className="text-foreground break-words">
@@ -195,9 +195,9 @@ function LineRow({
   const topSeverity = annotations[0]?.severity ?? null
   const lineClass =
     line.type === "add"
-      ? "bg-green-50 dark:bg-green-950/30"
+      ? "bg-success/10"
       : line.type === "remove"
-        ? "bg-red-50 dark:bg-red-950/30"
+        ? "bg-destructive/10"
         : ""
   const prefix = line.type === "add" ? "+" : line.type === "remove" ? "-" : " "
 
@@ -216,7 +216,7 @@ function LineRow({
             {annotation.message}
           </span>
           {resolvedIds?.has(annotation.id) && (
-            <span className="text-xs text-green-600 dark:text-green-400 shrink-0">
+            <span className="text-xs text-success-ink shrink-0">
               fix applied ↓
             </span>
           )}

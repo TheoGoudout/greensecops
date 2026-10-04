@@ -25,7 +25,7 @@ export function EngineOverviewTable({
     <div className="overflow-x-auto">
       <div className="min-w-[46rem]">
         <div
-          className={`grid ${COLUMNS} items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-3`}
+          className={`grid ${COLUMNS} items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider gap-3`}
         >
           <span>Engine</span>
           <span>Grade</span>
@@ -64,7 +64,7 @@ export function EngineOverviewTable({
                 <span className="text-right text-sm tabular-nums">
                   <span className="font-medium">{findings.open}</span>
                   {findings.critical_open > 0 && (
-                    <span className="ml-1 text-xs text-red-600 dark:text-red-400">
+                    <span className="ml-1 text-xs text-destructive">
                       {findings.critical_open} crit
                     </span>
                   )}

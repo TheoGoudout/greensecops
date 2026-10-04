@@ -27,8 +27,12 @@ function Layout() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
+      <SidebarInset className="bg-tech-grid">
+        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 bg-background/75 px-4 backdrop-blur">
+          <span
+            aria-hidden="true"
+            className="bg-signal pointer-events-none absolute inset-x-0 bottom-0 h-0.5"
+          />
           <SidebarTrigger className="-ml-1 text-muted-foreground" />
         </header>
         <main className="flex-1 p-6 md:p-8">

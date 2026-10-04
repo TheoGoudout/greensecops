@@ -11,9 +11,7 @@ export function ScoreDelta({ value }: { value: number }) {
     <span
       className={cn(
         "inline-flex items-center gap-0.5 text-xs font-medium",
-        value > 0
-          ? "text-emerald-600 dark:text-emerald-400"
-          : "text-red-600 dark:text-red-400",
+        value > 0 ? "text-success-ink" : "text-destructive",
       )}
     >
       {value > 0 ? (

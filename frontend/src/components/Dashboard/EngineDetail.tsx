@@ -85,7 +85,7 @@ export function EngineDetail({ engine }: { engine: EngineOverview }) {
       </div>
 
       {coverage.latest_scan_failed > 0 && (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-xs text-warning-ink">
           {coverage.latest_scan_failed} target
           {coverage.latest_scan_failed === 1 ? "'s" : "s'"} most recent scan
           failed — the grade above is from the last scan that completed.

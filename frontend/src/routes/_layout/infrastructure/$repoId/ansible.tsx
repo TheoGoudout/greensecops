@@ -408,7 +408,7 @@ function ProjectCard({
                           href={fileFix.pr_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0"
+                          className="text-xs text-info-ink hover:underline flex items-center gap-1 shrink-0"
                         >
                           <GitPullRequest className="h-3 w-3" />
                           View PR

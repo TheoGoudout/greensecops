@@ -234,7 +234,7 @@ function Repositories() {
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider">
                 <span>Repository</span>
                 <span className="hidden sm:block">Default branch</span>
                 <span className="hidden sm:block">Latest grade</span>

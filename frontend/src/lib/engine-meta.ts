@@ -74,9 +74,9 @@ export const SECTION_ORDER: OverviewSection[] = ["ci", "docker", "infra"]
  * only one.
  */
 export const SEVERITY_FILL: Record<Severity, string> = {
-  critical: "bg-red-600 dark:bg-red-500",
-  high: "bg-orange-500 dark:bg-orange-400",
-  medium: "bg-yellow-500 dark:bg-yellow-400",
-  low: "bg-blue-500 dark:bg-blue-400",
-  info: "bg-slate-400 dark:bg-slate-500",
+  critical: "bg-destructive",
+  high: "bg-serious",
+  medium: "bg-warning",
+  low: "bg-info",
+  info: "bg-muted-foreground",
 }

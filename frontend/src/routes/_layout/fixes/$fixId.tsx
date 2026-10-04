@@ -183,7 +183,7 @@ function FixDetail() {
                 href={fix.pr_url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm text-info-ink hover:underline"
               >
                 <GitPullRequest className="h-4 w-4" />
                 View PR
@@ -196,7 +196,7 @@ function FixDetail() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="text-sm font-medium text-muted-foreground font-mono uppercase tracking-wider">
               Issues addressed
             </CardTitle>
             {fix && (

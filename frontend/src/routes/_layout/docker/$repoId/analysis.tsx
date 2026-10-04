@@ -392,7 +392,7 @@ function TargetCard({
                       href={fileFix.pr_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      className="text-xs text-info-ink hover:underline"
                     >
                       View PR
                     </a>

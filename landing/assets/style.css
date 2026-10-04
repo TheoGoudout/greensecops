@@ -1,4 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap");
+/* Self-hosted: no request leaves the site for a typeface. */
+@import url("./fonts/fonts.css");
 
 /* ============================================================
    DESIGN TOKENS — mirrors frontend/src/index.css exactly
@@ -100,6 +101,7 @@
 
   /* Typography */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -177,6 +179,16 @@ body {
   background-color: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headlines in Space Grotesk, as in the app. Its heaviest weight is 700. */
+h1,
+h2,
+h3,
+.hero__headline,
+.section__heading {
+  font-family: var(--font-display);
+  font-weight: 700;
 }
 
 img { display: block; max-width: 100%; }

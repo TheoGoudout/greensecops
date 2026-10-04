@@ -119,7 +119,7 @@ function RecoverPassword() {
             Remember your password?{" "}
             <RouterLink
               to="/login"
-              className="text-accent underline underline-offset-4"
+              className="text-info-ink underline underline-offset-4"
             >
               Log in
             </RouterLink>

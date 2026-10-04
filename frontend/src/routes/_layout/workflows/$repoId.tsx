@@ -105,7 +105,7 @@ function RepositoryLayout() {
       />
 
       {!isLoading && !isAccessible && (
-        <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300">
+        <div className="flex items-center gap-2 rounded-md border border-serious/30 bg-serious/10 px-4 py-3 text-sm text-serious-ink">
           <WifiOff className="h-4 w-4 shrink-0" />
           <span>
             GitHub App access lost — this repository is disabled. Actions are

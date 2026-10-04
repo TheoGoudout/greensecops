@@ -417,7 +417,7 @@ function TelemetryPage() {
         <Card>
           <CardHeader className="pb-2 pt-4">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <Activity className="h-4 w-4 text-warning-ink" />
               Runtime findings
               <span className="text-muted-foreground font-normal text-xs">
                 ({findings.length})
@@ -455,7 +455,7 @@ function TelemetryPage() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <div className="grid grid-cols-[1.5rem_1fr_6rem_6rem_5rem_6rem] min-w-[38rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                <div className="grid grid-cols-[1.5rem_1fr_6rem_6rem_5rem_6rem] min-w-[38rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider gap-4">
                   <span />
                   <span>Run</span>
                   <span className="text-right">CPU</span>

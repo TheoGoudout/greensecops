@@ -140,7 +140,7 @@ function Login() {
 
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <RouterLink to="/signup" className="text-accent hover:underline">
+          <RouterLink to="/signup" className="text-info-ink hover:underline">
             Sign up
           </RouterLink>
         </p>

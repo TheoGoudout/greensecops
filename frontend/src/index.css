@@ -1,4 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -9,8 +11,10 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo,
+    "JetBrains Mono Variable", ui-monospace, "SF Mono", "SFMono-Regular", Menlo,
     Consolas, "Liberation Mono", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -27,6 +31,17 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-ink: var(--warning-ink);
+  --color-serious: var(--serious);
+  --color-serious-ink: var(--serious-ink);
+  --color-info: var(--info);
+  --color-info-ink: var(--info-ink);
+  --color-info-foreground: var(--info-foreground);
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-variable: var(--syntax-variable);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -54,25 +69,43 @@
 
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.985 0.002 152);
-  --foreground: oklch(0.15 0.02 152);
+  --background: oklch(0.982 0.004 170);
+  --foreground: oklch(0.2 0.02 200);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.02 152);
+  --card-foreground: oklch(0.2 0.02 200);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 152);
-  --primary: oklch(0.46 0.12 152);
+  --popover-foreground: oklch(0.2 0.02 200);
+  --primary: oklch(0.5 0.13 156);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0.02 152);
-  --secondary-foreground: oklch(0.25 0.05 152);
-  --muted: oklch(0.94 0.01 152);
-  --muted-foreground: oklch(0.52 0.03 152);
-  --accent: oklch(0.65 0.155 215);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.88 0.015 152);
-  --input: oklch(0.88 0.015 152);
-  --ring: oklch(0.46 0.12 152);
-  --chart-1: oklch(0.46 0.12 152);
+  --secondary: oklch(0.95 0.012 165);
+  --secondary-foreground: oklch(0.28 0.04 165);
+  --muted: oklch(0.955 0.006 180);
+  --muted-foreground: oklch(0.5 0.02 200);
+  --accent: oklch(0.945 0.018 165);
+  --accent-foreground: oklch(0.28 0.05 160);
+  --destructive: oklch(0.5 0.21 27);
+  /* The meaning palette: every status, severity, grade and category maps
+     onto these four plus destructive, primary and muted. Each tone has a
+     vivid value for fills, bars, dots and borders, and an -ink value for
+     text and icons (>= 4.5:1 on a /15 tint of the tone over the card). */
+  --success: oklch(0.64 0.15 156);
+  --success-ink: oklch(0.48 0.12 156);
+  --warning: oklch(0.8 0.15 82);
+  --warning-ink: oklch(0.5 0.12 72);
+  --serious: oklch(0.68 0.17 50);
+  --serious-ink: oklch(0.48 0.15 45);
+  /* SecOps cyan. Also the brand's second colour (links, the signal
+     gradient's far end). */
+  --info: oklch(0.64 0.13 232);
+  --info-ink: oklch(0.48 0.12 235);
+  --info-foreground: oklch(0.985 0 0);
+  /* Code highlighting: the two hues the meaning palette lacks. */
+  --syntax-keyword: oklch(0.52 0.2 295);
+  --syntax-variable: oklch(0.56 0.19 350);
+  --border: oklch(0.9 0.01 175);
+  --input: oklch(0.88 0.012 175);
+  --ring: oklch(0.5 0.13 156);
+  --chart-1: oklch(0.5 0.13 156);
   --chart-2: oklch(0.65 0.155 215);
   --chart-3: oklch(0.76 0.17 85);
   --chart-4: oklch(0.7 0.17 162);
@@ -89,75 +122,15 @@
   --heat-2: oklch(0.53 0.23 27.4);
   --heat-3: oklch(0.47 0.2 27.3);
   --heat-4: oklch(0.38 0.14 26.4);
-  --sidebar: oklch(0.96 0.01 152);
-  --sidebar-foreground: oklch(0.15 0.02 152);
-  --sidebar-primary: oklch(0.46 0.12 152);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.91 0.03 152);
-  --sidebar-accent-foreground: oklch(0.25 0.05 152);
-  --sidebar-border: oklch(0.88 0.015 152);
-  --sidebar-ring: oklch(0.46 0.12 152);
-  --sidebar-active: oklch(0.46 0.12 152);
-
-  /* ---- Brand palette scales ---- */
-  --green-50: #e7f5ee;
-  --green-100: #c5e8d5;
-  --green-200: #93d3b0;
-  --green-300: #5fbc8b;
-  --green-400: #34a26b;
-  --green-500: #1f8a56;
-  --green-600: #1a7a4a;
-  --green-700: #15633c;
-  --green-800: #114f30;
-  --green-900: #0c3a23;
-  --blue-50: #e0f4fe;
-  --blue-100: #b8e8fd;
-  --blue-200: #7dd3fc;
-  --blue-300: #38bdf8;
-  --blue-400: #0ea5e9;
-  --blue-500: #0284c7;
-  --blue-600: #0369a1;
-  --blue-700: #075985;
-
-  /* ---- Grade scale (A+++ → F) ---- */
-  --grade-aaa-bg: #d1fae5;
-  --grade-aaa-fg: #065f46;
-  --grade-a-bg: #c5e8d5;
-  --grade-a-fg: #114f30;
-  --grade-b-bg: #ecfccb;
-  --grade-b-fg: #4d7c0f;
-  --grade-c-bg: #fef9c3;
-  --grade-c-fg: #a16207;
-  --grade-d-bg: #ffedd5;
-  --grade-d-fg: #c2410c;
-  --grade-e-bg: #fee2e2;
-  --grade-e-fg: #b91c1c;
-  --grade-f-bg: #fecaca;
-  --grade-f-fg: #7f1d1d;
-
-  /* ---- Severity scale ---- */
-  --sev-critical-bg: #fee2e2;
-  --sev-critical-fg: #b91c1c;
-  --sev-critical-bd: #fecaca;
-  --sev-high-bg: #ffedd5;
-  --sev-high-fg: #c2410c;
-  --sev-high-bd: #fed7aa;
-  --sev-medium-bg: #fef9c3;
-  --sev-medium-fg: #a16207;
-  --sev-medium-bd: #fef08a;
-  --sev-low-bg: #e0f4fe;
-  --sev-low-fg: #075985;
-  --sev-low-bd: #bae6fd;
-  --sev-info-bg: #f1f5f9;
-  --sev-info-fg: #475569;
-  --sev-info-bd: #e2e8f0;
-
-  /* ---- Category accents (5 analysis axes) ---- */
-  --cat-energy: #f59e0b;
-  --cat-reliability: #0ea5e9;
-  --cat-security: #ef4444;
-  --cat-performance: #1a7a4a;
-  --cat-maintainability: #64748b;
+  --sidebar: oklch(0.18 0.015 175);
+  --sidebar-foreground: oklch(0.82 0.02 170);
+  --sidebar-primary: oklch(0.78 0.17 158);
+  --sidebar-primary-foreground: oklch(0.18 0.03 160);
+  --sidebar-accent: oklch(0.78 0.17 158 / 0.12);
+  --sidebar-accent-foreground: oklch(0.88 0.14 158);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar-ring: oklch(0.78 0.17 158);
+  --sidebar-active: oklch(0.78 0.17 158);
 
   /* ---- Shadows ---- */
   --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
@@ -168,8 +141,18 @@
   --shadow-lg:
     0 12px 28px -8px rgba(15, 23, 42, 0.16),
     0 6px 12px -6px rgba(15, 23, 42, 0.08);
-  --shadow-focus: 0 0 0 3px rgba(26, 122, 74, 0.3);
-  --glow-primary: 0 4px 16px -4px rgba(26, 122, 74, 0.45);
+  --shadow-focus: 0 0 0 3px oklch(0.5 0.13 156 / 0.3);
+  --glow-primary: 0 6px 18px -6px oklch(0.55 0.14 170 / 0.55);
+  /* Faint engineering grid behind the pages. */
+  --grid-line: oklch(0.5 0.13 156 / 0.055);
+  /* Signal gradient: the leaf's green flowing into the SecOps cyan. Brand
+     moments only (header rule, primary actions, the dashboard title). */
+  --signal: linear-gradient(90deg, oklch(0.62 0.16 156), oklch(0.65 0.14 220));
+  /* Stat-tile accents, fixed per stat. */
+  --signal-1: oklch(0.55 0.14 156);
+  --signal-2: oklch(0.6 0.14 225);
+  --signal-3: oklch(0.7 0.15 70);
+  --signal-4: oklch(0.58 0.18 295);
 
   /* ---- Motion ---- */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -181,25 +164,45 @@
 }
 
 .dark {
-  --background: oklch(0.145 0.02 253);
-  --foreground: oklch(0.97 0.005 152);
-  --card: oklch(0.19 0.02 253);
-  --card-foreground: oklch(0.97 0.005 152);
-  --popover: oklch(0.19 0.02 253);
-  --popover-foreground: oklch(0.97 0.005 152);
-  --primary: oklch(0.6 0.13 152);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.24 0.02 253);
-  --secondary-foreground: oklch(0.97 0.005 152);
-  --muted: oklch(0.24 0.02 253);
-  --muted-foreground: oklch(0.65 0.02 152);
-  --accent: oklch(0.67 0.16 215);
-  --accent-foreground: oklch(0.985 0 0);
+  --glow-primary:
+    0 0 0 1px oklch(0.78 0.17 158 / 0.25),
+    0 6px 20px -6px oklch(0.78 0.17 158 / 0.5);
+  --grid-line: oklch(0.78 0.17 158 / 0.045);
+  --signal: linear-gradient(90deg, oklch(0.8 0.17 158), oklch(0.75 0.14 215));
+  --signal-1: oklch(0.78 0.17 158);
+  --signal-2: oklch(0.75 0.14 220);
+  --signal-3: oklch(0.82 0.15 80);
+  --signal-4: oklch(0.72 0.16 295);
+  --background: oklch(0.155 0.01 180);
+  --foreground: oklch(0.95 0.008 170);
+  --card: oklch(0.19 0.012 180);
+  --card-foreground: oklch(0.95 0.008 170);
+  --popover: oklch(0.21 0.013 180);
+  --popover-foreground: oklch(0.95 0.008 170);
+  --primary: oklch(0.78 0.17 158);
+  --primary-foreground: oklch(0.18 0.03 160);
+  --secondary: oklch(0.24 0.014 180);
+  --secondary-foreground: oklch(0.95 0.008 170);
+  --muted: oklch(0.23 0.012 180);
+  --muted-foreground: oklch(0.68 0.02 180);
+  --accent: oklch(0.26 0.02 175);
+  --accent-foreground: oklch(0.95 0.008 170);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.6 0.13 152);
-  --chart-1: oklch(0.6 0.13 152);
+  --success: oklch(0.78 0.15 156);
+  --success-ink: oklch(0.78 0.15 156);
+  --warning: oklch(0.83 0.14 85);
+  --warning-ink: oklch(0.83 0.14 85);
+  --serious: oklch(0.76 0.15 50);
+  --serious-ink: oklch(0.76 0.15 50);
+  --info: oklch(0.75 0.13 222);
+  --info-ink: oklch(0.75 0.13 222);
+  --info-foreground: oklch(0.16 0.03 220);
+  --syntax-keyword: oklch(0.74 0.14 295);
+  --syntax-variable: oklch(0.75 0.14 350);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.78 0.17 158);
+  --chart-1: oklch(0.78 0.17 158);
   --chart-2: oklch(0.67 0.16 215);
   --chart-3: oklch(0.76 0.17 85);
   --chart-4: oklch(0.7 0.17 162);
@@ -213,48 +216,15 @@
   --heat-2: oklch(0.51 0.22 27.5);
   --heat-3: oklch(0.68 0.19 22.2);
   --heat-4: oklch(0.86 0.08 17.4);
-  --sidebar: oklch(0.19 0.02 253);
-  --sidebar-foreground: oklch(0.97 0.005 152);
-  --sidebar-primary: oklch(0.6 0.13 152);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.24 0.02 253);
-  --sidebar-accent-foreground: oklch(0.97 0.005 152);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.6 0.13 152);
-  --sidebar-active: oklch(0.6 0.13 152);
-
-  /* ---- Grade scale — dark ---- */
-  --grade-aaa-bg: rgba(16, 185, 129, 0.18);
-  --grade-aaa-fg: #6ee7b7;
-  --grade-a-bg: rgba(26, 122, 74, 0.2);
-  --grade-a-fg: #5fbc8b;
-  --grade-b-bg: rgba(101, 163, 13, 0.2);
-  --grade-b-fg: #bef264;
-  --grade-c-bg: rgba(234, 179, 8, 0.18);
-  --grade-c-fg: #fde047;
-  --grade-d-bg: rgba(249, 115, 22, 0.18);
-  --grade-d-fg: #fdba74;
-  --grade-e-bg: rgba(239, 68, 68, 0.18);
-  --grade-e-fg: #fca5a5;
-  --grade-f-bg: rgba(127, 29, 29, 0.45);
-  --grade-f-fg: #fca5a5;
-
-  /* ---- Severity scale — dark ---- */
-  --sev-critical-bg: rgba(239, 68, 68, 0.16);
-  --sev-critical-fg: #fca5a5;
-  --sev-critical-bd: rgba(239, 68, 68, 0.35);
-  --sev-high-bg: rgba(249, 115, 22, 0.16);
-  --sev-high-fg: #fdba74;
-  --sev-high-bd: rgba(249, 115, 22, 0.35);
-  --sev-medium-bg: rgba(234, 179, 8, 0.16);
-  --sev-medium-fg: #fde047;
-  --sev-medium-bd: rgba(234, 179, 8, 0.32);
-  --sev-low-bg: rgba(14, 165, 233, 0.16);
-  --sev-low-fg: #7dd3fc;
-  --sev-low-bd: rgba(14, 165, 233, 0.32);
-  --sev-info-bg: #1f2a3f;
-  --sev-info-fg: #cbd5e1;
-  --sev-info-bd: #25304a;
+  --sidebar: oklch(0.13 0.01 180);
+  --sidebar-foreground: oklch(0.82 0.02 170);
+  --sidebar-primary: oklch(0.78 0.17 158);
+  --sidebar-primary-foreground: oklch(0.18 0.03 160);
+  --sidebar-accent: oklch(0.78 0.17 158 / 0.12);
+  --sidebar-accent-foreground: oklch(0.88 0.14 158);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar-ring: oklch(0.78 0.17 158);
+  --sidebar-active: oklch(0.78 0.17 158);
 }
 
 @layer base {
@@ -263,6 +233,50 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss03";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  /* Instrument-panel table headers: mono caps, recessive. */
+  [data-slot="table-head"] {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  /* The primary action carries the signal gradient and glows like a
+     status LED. */
+  :is(button, a[data-slot="button"]).bg-primary {
+    background-image: linear-gradient(
+      135deg,
+      var(--primary) 30%,
+      color-mix(in oklch, var(--primary) 45%, var(--info))
+    );
+    box-shadow: var(--glow-primary);
+  }
+  /* Console sidebar: mono section labels, a lit rail on the active item. */
+  [data-sidebar="group-label"] {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  [data-sidebar="menu-button"][data-active="true"] {
+    box-shadow: inset 2px 0 0 var(--sidebar-primary);
+  }
+  .dark [data-slot="card"] {
+    background-image: linear-gradient(
+      to bottom,
+      oklch(1 0 0 / 0.025),
+      transparent 8rem
+    );
   }
   button,
   [role="button"] {
@@ -271,6 +285,28 @@
 }
 
 @layer utilities {
+  .bg-signal {
+    background-image: var(--signal);
+  }
+  .text-signal {
+    background-image: var(--signal);
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-tech-grid {
+    background-image:
+      radial-gradient(
+        ellipse 60% 45% at 50% 0%,
+        oklch(0.78 0.17 158 / 0.1),
+        transparent 70%
+      ),
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:
+      100% 100%,
+      32px 32px,
+      32px 32px;
+  }
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;

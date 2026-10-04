@@ -123,6 +123,18 @@ before the `{id}` pattern beside it or it is unreachable — and it fails as a 4
 "not a valid UUID", which reads like a client bug. `tests/api/test_roles.py`
 pins the ones that exist today.
 
+## Visual identity
+
+`VISUAL_IDENTITY.md` is the graphical chart (the `brand` skill summarises
+it). Colours are OKLCH tokens in `frontend/src/index.css`, used through
+Tailwind classes — no hex and no Tailwind palette classes (`text-red-600`):
+every state maps onto `success` / `warning` / `serious` / `destructive` /
+`info` (vivid for fills, `-ink` for text). `accent` is only the hover fill.
+The green→cyan signal gradient is for three brand moments only, never data.
+Grade and severity colours come from `GradeBadge` / `SeverityChip`, always
+with their label.
+Fonts are bundled from `@fontsource-variable`; never add a font-CDN link.
+
 ## Changing the API
 
 The frontend and Action clients are generated. After any change to a route or a

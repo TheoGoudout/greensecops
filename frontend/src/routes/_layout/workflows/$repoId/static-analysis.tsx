@@ -642,7 +642,7 @@ function StaticAnalysisPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <div className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] min-w-[44rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground uppercase tracking-wide gap-4">
+                  <div className="grid grid-cols-[1fr_12rem_10rem_7rem_5rem_9rem] min-w-[44rem] items-center px-6 py-2 border-b text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider gap-4">
                     <span>Branch</span>
                     <span>Workflow</span>
                     <span>Triggered by</span>
@@ -964,19 +964,15 @@ function StaticAnalysisPage() {
                           href={fileFix.pr_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0"
+                          className="text-info-ink hover:underline flex items-center gap-1 shrink-0"
                         >
                           <GitPullRequest className="h-3 w-3" />
                           View PR
                           {fileFix.pr_state === "closed" && (
-                            <span className="text-orange-500 dark:text-orange-400">
-                              (closed)
-                            </span>
+                            <span className="text-serious-ink">(closed)</span>
                           )}
                           {fileFix.pr_state === "merged" && (
-                            <span className="text-purple-500 dark:text-purple-400">
-                              (merged)
-                            </span>
+                            <span className="text-primary">(merged)</span>
                           )}
                         </a>
                       )}

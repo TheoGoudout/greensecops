@@ -31,7 +31,7 @@ const STATE_STYLES: Record<FlowStageState, string> = {
 
 const ICON_STYLES: Record<FlowStageState, string> = {
   running: "animate-spin text-primary",
-  done: "text-emerald-600 dark:text-emerald-400",
+  done: "text-success-ink",
   todo: "text-muted-foreground",
   blocked: "text-muted-foreground/60",
 }

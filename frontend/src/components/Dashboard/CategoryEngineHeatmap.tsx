@@ -25,7 +25,7 @@ const HEAT_STEPS = [
   { fill: "bg-heat-1", ink: "text-white" },
   { fill: "bg-heat-2", ink: "text-white" },
   { fill: "bg-heat-3", ink: "text-white" },
-  { fill: "bg-heat-4", ink: "text-white dark:text-red-950" },
+  { fill: "bg-heat-4", ink: "text-white dark:text-background" },
 ]
 
 /**
@@ -89,7 +89,7 @@ export function CategoryEngineHeatmap({
       <div className="overflow-x-auto">
         <div className="min-w-[26rem]">
           <div className="grid gap-1 pb-1" style={columns}>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide self-end">
+            <span className="text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider self-end">
               Category
             </span>
             {engines.map((engine) => (
