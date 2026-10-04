@@ -109,7 +109,7 @@ on:
         description: Cloudflare account the Workers live in.
         required: false
       # No Coolify secrets here. The API half of a deployment is the caller's:
-      # deploy-staging.yml and release.yml each deploy the API first and only
+      # release.yml (deploy-environment.yml) deploys the API first and only
       # then call this, so the dashboard never gets ahead of it.
     outputs:
       # Empty on every run that is not a preview, and on preview runs with no

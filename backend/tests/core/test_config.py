@@ -38,7 +38,7 @@ def test_all_cors_origins_omits_public_url_when_unset() -> None:
     assert all("ngrok" not in origin for origin in settings.all_cors_origins)
 
 
-@pytest.mark.parametrize("environment", ["staging", "production"])
+@pytest.mark.parametrize("environment", ["dev", "staging", "production"])
 def test_default_frontend_host_is_rejected_when_deployed(environment: str) -> None:
     """The localhost default is a bug outside local, not a fallback.
 
@@ -50,7 +50,7 @@ def test_default_frontend_host_is_rejected_when_deployed(environment: str) -> No
         _settings(ENVIRONMENT=environment, SECRET_KEY="a-real-key")
 
 
-@pytest.mark.parametrize("environment", ["staging", "production"])
+@pytest.mark.parametrize("environment", ["dev", "staging", "production"])
 def test_public_frontend_host_is_accepted_when_deployed(environment: str) -> None:
     settings = _settings(
         ENVIRONMENT=environment,

@@ -79,6 +79,13 @@ jobs:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: testpassword
       SECRET_KEY: changethischangethischangethischangethischangethischangethischanget
+      # Every test drives the app from the one container IP, and the suite logs
+      # in far more than LIMIT_AUTH's 10 a minute (core/rate_limit.py): with the
+      # limiter on, a login gets a 429, never reaches "/", and the retry in the
+      # next minute passes — which --fail-on-flaky-tests then fails the shard
+      # for. No E2E test asserts on a 429; the limiter has its own unit tests.
+      # Read by compose.yml, where it overrides the .env copied from .env.example.
+      RATE_LIMIT_ENABLED: "False"
     strategy:
       matrix:
         shardIndex: [1, 2, 3, 4]
