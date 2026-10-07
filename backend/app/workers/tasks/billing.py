@@ -23,7 +23,7 @@ from datetime import timedelta
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.core.db import engine
+from app.core.db import commit, engine
 from app.core.plans import DEFAULT_TIER, limits_for
 from app.models import (
     BillingSubscription,
@@ -84,10 +84,11 @@ def _run_dunning_impl() -> dict[str, int]:
                     days=settings.BILLING_GRACE_PERIOD_DAYS
                 )
                 session.add(sub)
-                session.commit()
+                commit(session)
 
             if sub.grace_expires_at is not None and now >= sub.grace_expires_at:
                 if transition(session, sub, "grace_expired"):
+                    commit(session)
                     expired += 1
                     logger.info(
                         "Grace period expired for subscription %s (%s) — now on "
@@ -107,7 +108,7 @@ def _run_dunning_impl() -> dict[str, int]:
                 # not replayed tomorrow either.
                 sub.dunning_stage = due
                 session.add(sub)
-                session.commit()
+                commit(session)
                 send_billing_email(session, sub, "payment_failed")
                 reminded += 1
 
@@ -121,9 +122,10 @@ def _run_dunning_impl() -> dict[str, int]:
         )
         for sub in pending:
             if sub.period_end is not None and now >= sub.period_end:
+                # The status and the tier it implies commit together.
                 if transition(session, sub, "period_ended"):
                     apply_tier(session, sub, DEFAULT_TIER)
-                    session.commit()
+                    commit(session)
                     send_billing_email(session, sub, "subscription_canceled")
                     canceled += 1
 
@@ -168,6 +170,9 @@ def _run_quota_warnings_impl() -> dict[str, int]:
             if user is None or user.is_superuser:
                 continue
             sub = ensure_current_period(session, sub)
+            # Persist the rollover (and the warning level it cleared) whether
+            # or not a warning goes out below.
+            session.commit()
             limits = limits_for(effective_tier(sub))
             used_by_meter = {
                 "analyses": period_usage(
