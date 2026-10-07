@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.13.1 (2026-10-07)
+
+### Refactors
+
+* refactor: atomic transactions, shared engine routes and pages. PR [#361](https://github.com/TheoGoudout/greensecops/pull/361) by [@TheoGoudout](https://github.com/TheoGoudout).
+
 ## 0.13.0 (2026-10-04)
 
 ### Features
