@@ -345,34 +345,6 @@ def _record_batch_result(
         )
 
 
-def resolve_llm_provider(repo: Repository) -> tuple[str, str]:
-    """Return (provider_str, model_str), cascading repo → org → first available."""
-    provider_str = repo.llm_provider.value if repo.llm_provider else None
-    model_str = repo.llm_model
-
-    if not provider_str and repo.organization:
-        org = repo.organization
-        provider_str = (
-            org.default_llm_provider.value if org.default_llm_provider else None
-        )
-        model_str = model_str or org.default_llm_model
-
-    if not provider_str:
-        from app.services.llm.catalog import get_first_available_provider
-
-        provider_str, fallback_model = get_first_available_provider()
-        model_str = model_str or fallback_model
-
-    if not model_str:
-        # Use the provider's own catalog default — an OpenAI model name
-        # handed to anthropic/gemini/ollama would fail at request time.
-        from app.services.llm.catalog import get_default_model
-
-        model_str = get_default_model(provider_str)
-
-    return provider_str, model_str or "gpt-4o-mini"
-
-
 def _load_generation_context(
     session: Session,
     issue_ids: list[str],

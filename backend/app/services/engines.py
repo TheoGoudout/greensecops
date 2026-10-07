@@ -247,6 +247,11 @@ ANSIBLE_ENGINE = EngineSpec(
 )
 
 
+# Every file engine — for code that must cover all of them, such as a query
+# over every table holding a fix.
+FILE_ENGINES: tuple[EngineSpec, ...] = (TERRAFORM_ENGINE, DOCKER_ENGINE, ANSIBLE_ENGINE)
+
+
 # ─── Dashboard aggregation ────────────────────────────────────────────────────────
 
 
@@ -392,9 +397,7 @@ OVERVIEW_SPECS: list[OverviewSpec] = [
 # angles; where both speak about one engine they must mean the same tables.
 # A silent disagreement would show the dashboard one engine's findings under
 # another's heading, which no test would notice.
-_FILE_FIX_SPECS: dict[Engine, EngineSpec] = {
-    spec.engine: spec for spec in (TERRAFORM_ENGINE, DOCKER_ENGINE, ANSIBLE_ENGINE)
-}
+_FILE_FIX_SPECS: dict[Engine, EngineSpec] = {spec.engine: spec for spec in FILE_ENGINES}
 
 for _ov in OVERVIEW_SPECS:
     _fx = _FILE_FIX_SPECS.get(_ov.key)

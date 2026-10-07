@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
-from app.models import LLMProvider
+from app.models import LLMProvider, Repository
 from app.services.llm.base import BaseLLMProvider
 
 logger = logging.getLogger(__name__)
@@ -92,6 +92,30 @@ def get_first_available_provider() -> tuple[str, str]:
         "No LLM provider is configured. Set at least one of: "
         "OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OLLAMA_BASE_URL."
     )
+
+
+def resolve_llm_provider(repo: Repository) -> tuple[str, str]:
+    """Return (provider_str, model_str), cascading repo → org → first available."""
+    provider_str = repo.llm_provider.value if repo.llm_provider else None
+    model_str = repo.llm_model
+
+    if not provider_str and repo.organization:
+        org = repo.organization
+        provider_str = (
+            org.default_llm_provider.value if org.default_llm_provider else None
+        )
+        model_str = model_str or org.default_llm_model
+
+    if not provider_str:
+        provider_str, fallback_model = get_first_available_provider()
+        model_str = model_str or fallback_model
+
+    if not model_str:
+        # Use the provider's own catalog default — an OpenAI model name
+        # handed to anthropic/gemini/ollama would fail at request time.
+        model_str = get_default_model(provider_str)
+
+    return provider_str, model_str or "gpt-4o-mini"
 
 
 def get_provider(

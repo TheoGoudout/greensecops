@@ -17,7 +17,8 @@ from app.models import (
     Category,
     FindingResolutionReason,
     FixStatus,
-    LLMProvider,
+    PullRequest,
+    PullRequestState,
     Repository,
     Rule,
     RuleDomain,
@@ -33,6 +34,7 @@ from app.models import (
     WorkflowScan,
 )
 from app.services import state_machines as sm
+from app.services import workflow_fixes
 from app.services.billing import quota as billing_quota
 from app.services.billing import usage as billing_usage
 from app.services.deduplication import (
@@ -63,13 +65,13 @@ logger = logging.getLogger(__name__)
 def _auto_queue_fix_generation(
     session: Session,
     repo: Repository,
-    org_id: str,
     changed_wf_ids: set[uuid.UUID] | None = None,
 ) -> None:
     """Reconcile a repo's fixes with its latest analysis and re-deliver its PR.
 
-    Mirrors the API-level trigger_fix_generation_for_repo but skips billing/auth.
-    Only targets the latest completed analysis per workflow file.
+    The automatic counterpart of ``POST /workflow/repositories/{id}/fixes``,
+    minus billing and authorization: only the latest completed analysis per
+    workflow file is targeted.
 
     ``changed_wf_ids`` are the workflow files whose content was freshly analysed
     this run (a duplicate-skipped file is absent). A workflow file whose content
@@ -80,87 +82,47 @@ def _auto_queue_fix_generation(
     A merged fix is left untouched (its code is already on the default branch).
     Fixes on a non-merged PR are refreshed so the open PR, once re-delivered,
     reflects exactly the current issue set — rebased onto the default branch.
+
+    Deleting the replaced fixes and creating their successors is one
+    transaction; generation is dispatched only once it has committed.
     """
-    from collections import defaultdict
-
-    from app.models import PullRequest, PullRequestState
-    from app.workers.tasks.fix_generation import (
-        init_fix_batch,
-        resolve_llm_provider,
-        run_fix_generation,
-    )
-
     changed_wf_ids = changed_wf_ids or set()
 
-    latest_analysis_subq = (
-        select(WorkflowScan.id)
-        .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
-        .where(WorkflowScan.repo_id == repo.id)
-        .where(WorkflowScan.status == ScanStatus.completed)
-        .order_by(
-            col(WorkflowScan.completed_at).desc().nulls_last(),
-            col(WorkflowScan.created_at).desc(),
-        )
-        .limit(1)
-        .correlate(WorkflowFinding)
-        .scalar_subquery()
-    )
-    issues = session.exec(
-        select(WorkflowFinding)
-        .join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
-        .join(WorkflowFile, WorkflowFinding.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .where(WorkflowScan.repo_id == repo.id)
-        # Fixes and PRs only ever target the default branch; feature-branch
-        # issues are tracked but never auto-fixed.
-        .where(WorkflowFile.branch == repo.default_branch)
-        .where(WorkflowFinding.analysis_id == latest_analysis_subq)
-        .where(col(WorkflowFinding.resolved_at).is_(None))
-        .where(col(WorkflowFinding.ignored_at).is_(None))
-    ).all()
-
-    if not issues:
+    by_file = workflow_fixes.latest_unresolved_findings(session, repo)
+    if not by_file:
         return
-
-    by_wf_file: dict[uuid.UUID, list[WorkflowFinding]] = defaultdict(list)
-    for issue in issues:
-        by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
-
-    wf_file_ids = list(by_wf_file)
 
     # Existing fix (at most one per workflow file) and the state of its PR.
     existing_rows = session.exec(
         select(WorkflowFix, PullRequest.pr_state)
-        .join(PullRequest, WorkflowFix.pr_id == PullRequest.id, isouter=True)  # type: ignore[arg-type]
-        .where(col(WorkflowFix.workflow_file_id).in_(wf_file_ids))
+        .join(PullRequest, col(WorkflowFix.pr_id) == col(PullRequest.id), isouter=True)
+        .where(col(WorkflowFix.workflow_file_id).in_(list(by_file)))
     ).all()
-    fix_by_wf: dict[uuid.UUID, WorkflowFix] = {}
-    prstate_by_wf: dict[uuid.UUID, object] = {}
-    for row_fix, pr_state in existing_rows:
-        fix_by_wf[row_fix.workflow_file_id] = row_fix
-        prstate_by_wf[row_fix.workflow_file_id] = pr_state
+    existing = {
+        fix.workflow_file_id: (fix, pr_state) for fix, pr_state in existing_rows
+    }
 
     # Split target workflow files into ones whose current fix can be reused as-is
     # and ones that must be (re)generated.
     to_keep: list[WorkflowFix] = []
-    to_generate: list[uuid.UUID] = []
+    to_generate: workflow_fixes.FindingsByFile = {}
     delete_ids: list[uuid.UUID] = []
-    for wf_id in wf_file_ids:
-        existing_fix = fix_by_wf.get(wf_id)
-        if prstate_by_wf.get(wf_id) == PullRequestState.merged:
+    for wf_id, findings in by_file.items():
+        existing_fix, pr_state = existing.get(wf_id, (None, None))
+        if pr_state == PullRequestState.merged:
             # The fix was merged: its content is on the default branch already.
             continue
-        reusable = (
+        if (
             existing_fix is not None
-            and bool(existing_fix.full_content)
+            and existing_fix.full_content
             and existing_fix.status in (FixStatus.ready, FixStatus.delivered)
             and wf_id not in changed_wf_ids
-        )
-        if reusable and existing_fix is not None:
+        ):
             to_keep.append(existing_fix)
-        else:
-            to_generate.append(wf_id)
-            if existing_fix is not None:
-                delete_ids.append(existing_fix.id)
+            continue
+        to_generate[wf_id] = findings
+        if existing_fix is not None:
+            delete_ids.append(existing_fix.id)
 
     # Nothing changed that would alter the PR: leave it (and its comments) alone.
     if not to_generate:
@@ -175,46 +137,12 @@ def _auto_queue_fix_generation(
         if fix.status != FixStatus.ready:
             sm.advance(fix, sm.FixMachine, "mark_ready")
             session.add(fix)
-    session.commit()
-
-    provider_str, model_str = resolve_llm_provider(repo)
-    pending_fixes: list[WorkflowFix] = []
-    for wf_id in to_generate:
-        fix = WorkflowFix(
-            workflow_file_id=wf_id,
-            llm_provider=LLMProvider(provider_str),
-            llm_model=model_str,
-            status=FixStatus.pending,
-        )
-        session.add(fix)
-        session.flush()
-        for issue in by_wf_file[wf_id]:
-            issue.fix_id = fix.id
-            session.add(issue)
-        pending_fixes.append(fix)
-    session.commit()
-
-    from app.services.events import publisher as events_pub
-    from app.services.events import schemas as ev
-
-    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
-    events_pub.publish_event(
-        ev.fix_generating(
-            org_id,
-            str(repo.id),
-            fix_ids=[str(f.id) for f in pending_fixes],
-            issue_ids=[
-                str(i.id) for i in issues if i.workflow_file_id in pending_wf_ids
-            ],
-        )
+    session.flush()
+    pending_fixes = workflow_fixes.create_pending_fixes(
+        session, repo, to_generate, billable=False
     )
-
-    batch_id = uuid.uuid4().hex
-    init_fix_batch(batch_id, len(pending_wf_ids))
-    for wf_id in pending_wf_ids:
-        run_fix_generation.delay(
-            issue_ids=[str(i.id) for i in by_wf_file[wf_id]], batch_id=batch_id
-        )
+    session.commit()
+    workflow_fixes.dispatch_fix_generation(repo, to_generate, pending_fixes)
 
     logger.info(
         "Auto-queued fix generation: repo=%s regenerated=%d reused=%d",
@@ -813,7 +741,7 @@ def _run_static_analysis_impl(
         ):
             try:
                 _auto_queue_fix_generation(
-                    session, repo, org_id, changed_wf_ids=tally.changed_wf_ids
+                    session, repo, changed_wf_ids=tally.changed_wf_ids
                 )
             except Exception:
                 logger.exception(

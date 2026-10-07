@@ -59,7 +59,7 @@ from app.services.engines import TERRAFORM_ENGINE
 from app.services.github.fetch import (
     fetch_terraform_files as _fetch_terraform_files,
 )
-from app.workers.tasks.fix_generation import resolve_llm_provider
+from app.services.llm.catalog import resolve_llm_provider
 from app.workers.tasks.terraform_analysis import run_terraform_scan
 from app.workers.tasks.terraform_fix_delivery import deliver_terraform_fixes
 from app.workers.tasks.terraform_fix_generation import run_terraform_fix_generation

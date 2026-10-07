@@ -3508,10 +3508,6 @@ export class WorkflowService {
      * Deliver one workflow file's fix as a single PR.
      *
      * When force=True, a fix in any status is accepted (not just ready).
-     *
-     * The fix id used to arrive in the body, which left this endpoint no path
-     * parameter to resolve an organization from and so no org role — it ran as
-     * ``Role.user`` while every sibling delivery endpoint was ``org_admin``.
      * @param data The data for the request.
      * @param data.fixId
      * @param data.force

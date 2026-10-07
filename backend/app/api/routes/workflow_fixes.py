@@ -1,9 +1,11 @@
 import logging
 import uuid
 from collections import defaultdict
+from typing import Any
 
 from fastapi import Body, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import and_
 from sqlmodel import col, delete, or_, select
 
 from app.api.deps import (
@@ -24,21 +26,14 @@ from app.api.router import Role, RoleRouter
 from app.core.config import settings
 from app.core.rate_limit import LIMIT_EXPENSIVE
 from app.models import (
-    DockerFix,
     FixFindingSummary,
     FixStatus,
-    LLMProvider,
     PullRequest,
     PullRequestPublic,
     PullRequestState,
     Repository,
     Rule,
-    ScanStatus,
     TargetAction,
-    TerraformFix,
-    UsageEngine,
-    UsageMeter,
-    User,
     WorkflowFile,
     WorkflowFinding,
     WorkflowFix,
@@ -46,7 +41,7 @@ from app.models import (
     WorkflowScan,
 )
 from app.services import state_machines as sm
-from app.services.billing import usage as billing_usage
+from app.services import workflow_fixes
 from app.services.billing.quota import enforce_quota
 from app.services.delivery_pr import (
     WF_FIX_BRANCH_RE,
@@ -59,11 +54,7 @@ from app.services.events import schemas as ev
 from app.services.github.app_client import parse_pr_url
 from app.services.state_machines import DELIVERED_FIX_STATUSES, IN_FLIGHT_STATUSES
 from app.workers.tasks.fix_delivery import deliver_fixes_batch
-from app.workers.tasks.fix_generation import (
-    init_fix_batch,
-    resolve_llm_provider,
-    run_fix_generation,
-)
+from app.workers.tasks.fix_generation import run_fix_generation
 
 logger = logging.getLogger(__name__)
 
@@ -74,228 +65,51 @@ class BatchFixRequest(BaseModel):
 
 router = RoleRouter()
 
-# Statuses of fixes a worker is still processing; such fixes cannot be
-# regenerated out from under the worker. Sourced from the fix state machine so
-# the two never drift.
+
+def require_accessible(repo: Repository) -> None:
+    """403 when the GitHub App can no longer reach ``repo``."""
+    if not repo.is_accessible:
+        raise HTTPException(status_code=403, detail="Repository is not accessible")
 
 
-def _repo_id_for_fix(session: SessionDep, fix: WorkflowFix) -> uuid.UUID | None:
-    """Resolve the owning repository id for a fix (fix → workflow file)."""
-    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    return wf_file.repo_id if wf_file else None
+def _fix_with_owners(
+    session: SessionDep, fix_id: uuid.UUID
+) -> tuple[WorkflowFix, WorkflowFile, Repository]:
+    """A fix with the workflow file and repository that own it.
+
+    Authorization is the router's: every route calling this declares an org
+    role, which ``ORG_RESOLVERS["fix_id"]`` resolves through these same rows.
+    Both foreign keys are non-null and cascading, so once the fix exists its
+    owners do too.
+    """
+    fix = get_or_404(session, WorkflowFix, fix_id)
+    wf_file = session.get_one(WorkflowFile, fix.workflow_file_id)
+    return fix, wf_file, session.get_one(Repository, wf_file.repo_id)
 
 
-def _authorize_fix(session: SessionDep, user: User, fix: WorkflowFix) -> None:
-    """Enforce that ``user`` may act on ``fix`` via its owning repository."""
-    if user.is_superuser:
-        return
-    repo_id = _repo_id_for_fix(session, fix)
-    if repo_id is None:
-        raise HTTPException(status_code=404, detail="Workflow fix not found")
-    authorize_repo(session, user, repo_id, detail="Workflow fix not found")
-
-
-def _create_pending_fixes(
+def _replace_fixes(
     session: SessionDep,
     repo: Repository,
-    by_wf_file: dict[uuid.UUID, list[WorkflowFinding]],
-) -> list[WorkflowFix]:
-    """Create a pending fix per workflow file and link its issues.
+    by_file: workflow_fixes.FindingsByFile,
+    *,
+    delete_where: Any,
+    drop_closed_prs: bool = False,
+) -> int:
+    """Swap the matching fixes for fresh pending ones, then queue generation.
 
-    Workflow files that still carry a fix (e.g. a delivered one kept when
-    force=False) are skipped — the unique constraint allows only one fix per
-    file, and the worker only processes pending fixes.
+    One transaction: the old fixes are deleted and the new ones created and
+    billed together, so a failure part-way leaves the previous fixes in place
+    rather than a file with nothing. Tasks are dispatched only after the commit,
+    so a worker never looks for a row that does not exist yet.
     """
-    taken = set(
-        session.exec(
-            select(WorkflowFix.workflow_file_id).where(
-                col(WorkflowFix.workflow_file_id).in_(list(by_wf_file))
-            )
-        ).all()
-    )
-    provider_str, model_str = resolve_llm_provider(repo)
-    wf_files = {
-        wf.id: wf
-        for wf in session.exec(
-            select(WorkflowFile).where(col(WorkflowFile.id).in_(list(by_wf_file)))
-        ).all()
-    }
-    created: list[WorkflowFix] = []
-    for wf_id, issues in by_wf_file.items():
-        if wf_id in taken:
-            continue
-        fix = WorkflowFix(
-            workflow_file_id=wf_id,
-            llm_provider=LLMProvider(provider_str),
-            llm_model=model_str,
-            status=FixStatus.pending,
-        )
-        session.add(fix)
-        session.flush()
-        for issue in issues:
-            issue.fix_id = fix.id
-            session.add(issue)
-        wf_file = wf_files.get(wf_id)
-        if wf_file is not None:
-            wf_file.fix_generation_count += 1
-            session.add(wf_file)
-            # The billable event is the *generation*, not the surviving row —
-            # a regenerate discards the old fix and bills again, which is why
-            # this counts alongside the lifetime counter rather than being
-            # derived from ``SELECT count(*) FROM fix``.
-            billing_usage.record_for_org(
-                session,
-                org_id=repo.org_id,
-                repo_id=repo.id,
-                meter=UsageMeter.fixes,
-                engine=UsageEngine.workflow,
-                source_type="fix",
-                source_id=fix.id,
-                commit=False,
-            )
-        created.append(fix)
+    session.exec(delete(WorkflowFix).where(delete_where))
+    if drop_closed_prs:
+        workflow_fixes.delete_orphaned_closed_prs(session, repo.id)
+    session.flush()
+    pending = workflow_fixes.create_pending_fixes(session, repo, by_file, billable=True)
     session.commit()
-    for fix in created:
-        session.refresh(fix)
-    return created
-
-
-def _latest_unresolved_issues(
-    session: SessionDep,
-    repo_id: uuid.UUID,
-    wf_file_ids: list[uuid.UUID] | None = None,
-    issue_ids: list[uuid.UUID] | None = None,
-    exclude_manual: bool = True,
-) -> dict[uuid.UUID, list[WorkflowFinding]]:
-    """Unresolved issues from each workflow file's latest completed analysis.
-
-    Grouped by workflow file → one whole-file fix (one LLM call) per file.
-    The latest-analysis correlation guarantees workflow_file_id is set.
-    Restricted to default-branch workflow files: fixes and PRs only ever
-    target the default branch.
-
-    ``exclude_manual`` skips issues a prior LLM attempt flagged as
-    ``needs_manual_work``, so an implicit bulk selection doesn't keep
-    re-spending fix generations on issues it already reported it can't fix.
-    An explicit retry on a specific workflow/issue set passes ``False`` to
-    give the LLM another attempt.
-    """
-    repo = session.get(Repository, repo_id)
-    default_branch = repo.default_branch if repo else "main"
-    latest_analysis_subq = (
-        select(WorkflowScan.id)
-        .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
-        .where(WorkflowScan.status == ScanStatus.completed)
-        .order_by(
-            col(WorkflowScan.completed_at).desc().nulls_last(),
-            col(WorkflowScan.created_at).desc(),
-        )
-        .limit(1)
-        .correlate(WorkflowFinding)
-        .scalar_subquery()
-    )
-    query = (
-        select(WorkflowFinding)
-        .join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
-        .join(WorkflowFile, WorkflowFinding.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-        .where(WorkflowScan.repo_id == repo_id)
-        .where(WorkflowFile.branch == default_branch)
-        .where(WorkflowFinding.analysis_id == latest_analysis_subq)
-        .where(col(WorkflowFinding.resolved_at).is_(None))
-        .where(col(WorkflowFinding.ignored_at).is_(None))
-    )
-    if exclude_manual:
-        query = query.where(col(WorkflowFinding.needs_manual_work).is_(False))
-    if wf_file_ids is not None:
-        query = query.where(col(WorkflowFinding.workflow_file_id).in_(wf_file_ids))
-    if issue_ids is not None:
-        query = query.where(WorkflowFinding.id.in_(issue_ids))  # type: ignore[attr-defined]
-
-    by_wf_file: dict[uuid.UUID, list[WorkflowFinding]] = defaultdict(list)
-    for issue in session.exec(query).all():
-        by_wf_file[issue.workflow_file_id].append(issue)  # type: ignore[index]
-    return dict(by_wf_file)
-
-
-def _queue_fix_generation(
-    session: SessionDep,
-    repo: Repository,
-    by_wf_file: dict[uuid.UUID, list[WorkflowFinding]],
-) -> list[WorkflowFix]:
-    """Create pending fixes and queue one generation task per workflow file.
-
-    Pending fixes give the UI a DB-backed queued state immediately; the worker
-    flips them to generating/ready/failed. Workflow files that still carry a
-    fix are skipped by _create_pending_fixes.
-    """
-    pending_fixes = _create_pending_fixes(session, repo, by_wf_file)
-    if not pending_fixes:
-        return []
-    pending_wf_ids = {f.workflow_file_id for f in pending_fixes}
-
-    events_pub.publish_event(
-        ev.fix_generating(
-            str(repo.org_id),
-            str(repo.id),
-            fix_ids=[str(f.id) for f in pending_fixes],
-            issue_ids=[
-                str(i.id) for wf_id in pending_wf_ids for i in by_wf_file[wf_id]
-            ],
-        )
-    )
-
-    # One aggregated ready/failed notification for the whole run.
-    batch_id = uuid.uuid4().hex
-    init_fix_batch(batch_id, len(pending_wf_ids))
-    for wf_id in pending_wf_ids:
-        run_fix_generation.delay(
-            issue_ids=[str(i.id) for i in by_wf_file[wf_id]], batch_id=batch_id
-        )
-    return pending_fixes
-
-
-def _delete_orphaned_closed_prs(session: SessionDep, repo_id: uuid.UUID) -> None:
-    """Delete closed PR records that no fix references anymore.
-
-    A closed record on a fix branch makes every later delivery on that branch
-    auto-reject its fixes (the closed-PR guard in deliver_fixes_batch), and
-    regenerating is an explicit request for a new PR. Records still referenced
-    by surviving fixes are kept — deleting them would silently clear those
-    fixes' pr_id (ON DELETE SET NULL). The next successful delivery creates a
-    fresh record — and reuses the GitHub PR itself if the user reopened it in
-    the meantime.
-    """
-    # Every engine's fixes share the one `pull_request` table, so a record is
-    # orphaned only when *no* engine still points at it. Checking `WorkflowFix` alone used
-    # to delete a Terraform or Docker PR record out from under its own fix,
-    # clearing that fix's pr_id through the very ON DELETE SET NULL this
-    # docstring warns about.
-    stale_prs = session.exec(
-        select(PullRequest)
-        .where(PullRequest.repo_id == repo_id)
-        .where(PullRequest.pr_state == PullRequestState.closed)
-        .where(
-            ~col(PullRequest.id).in_(
-                select(col(WorkflowFix.pr_id)).where(
-                    col(WorkflowFix.pr_id).is_not(None)
-                )
-            )
-        )
-        .where(
-            ~col(PullRequest.id).in_(
-                select(col(TerraformFix.pr_id)).where(
-                    col(TerraformFix.pr_id).is_not(None)
-                )
-            )
-        )
-        .where(
-            ~col(PullRequest.id).in_(
-                select(col(DockerFix.pr_id)).where(col(DockerFix.pr_id).is_not(None))
-            )
-        )
-    ).all()
-    for pr in stale_prs:
-        session.delete(pr)
+    workflow_fixes.dispatch_fix_generation(repo, by_file, pending)
+    return len(pending)
 
 
 def _fixes_to_public(
@@ -455,17 +269,13 @@ def list_pull_requests(
 def get_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
 ) -> WorkflowFixPublic:
-    fix = get_or_404(session, WorkflowFix, fix_id)
-    _authorize_fix(session, current_user, fix)
+    fix, wf_file, _repo = _fix_with_owners(session, fix_id)
     data = _fixes_to_public(session, [fix])[0]
-
     # The content the rewrite was generated from, so the diff on screen is the
     # diff delivery will push. Falls back to the stored snapshot for fixes
     # generated before base_content was recorded.
-    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    data.base_content = fix.base_content or (wf_file.raw_content if wf_file else None)
+    data.base_content = fix.base_content or wf_file.raw_content
     return data
 
 
@@ -495,44 +305,27 @@ def generate_repository_fixes(
         repository_activity(session, repo_id), TargetAction.generate, "repository"
     )
 
-    by_wf_file = _latest_unresolved_issues(
+    by_file = workflow_fixes.latest_unresolved_findings(
         session,
-        repo_id,
-        issue_ids=body.issue_ids,
+        repo,
+        finding_ids=body.issue_ids,
         # An explicit issue selection is a deliberate retry request; only the
         # implicit "generate for everything" path skips manual-flagged issues.
         exclude_manual=body.issue_ids is None,
     )
-    if not by_wf_file:
+    if not by_file:
         return {"queued": 0}
-
-    wf_file_ids = list(by_wf_file)
 
     # Regenerating (force=True) bills as new generations, same as a first-time
     # generate — usage is a cumulative count of generation events, not a live
     # row count, so a discard-and-recreate here still adds to the total.
-    enforce_quota(
-        session,
-        current_user,
-        repo.org_id,
-        "fixes",
-        requested=len(by_wf_file),
-    )
+    enforce_quota(session, current_user, repo.org_id, "fixes", requested=len(by_file))
+    require_accessible(repo)
 
-    delete_stmt = delete(WorkflowFix).where(
-        col(WorkflowFix.workflow_file_id).in_(wf_file_ids)
-    )
+    replaced: Any = col(WorkflowFix.workflow_file_id).in_(list(by_file))
     if not force:
-        delete_stmt = delete_stmt.where(col(WorkflowFix.status) != FixStatus.delivered)
-    session.exec(delete_stmt)
-    session.commit()
-
-    repo = get_or_404(session, Repository, repo_id, detail="Repository not found")
-    if not repo.is_accessible:
-        raise HTTPException(status_code=403, detail="Repository is not accessible")
-
-    pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
-    return {"queued": len(pending_fixes)}
+        replaced = and_(replaced, col(WorkflowFix.status) != FixStatus.delivered)
+    return {"queued": _replace_fixes(session, repo, by_file, delete_where=replaced)}
 
 
 @router.post(
@@ -544,29 +337,16 @@ def generate_repository_fixes(
 def deliver_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
     force: bool = False,
 ) -> dict[str, str]:
     """Deliver one workflow file's fix as a single PR.
 
     When force=True, a fix in any status is accepted (not just ready).
-
-    The fix id used to arrive in the body, which left this endpoint no path
-    parameter to resolve an organization from and so no org role — it ran as
-    ``Role.user`` while every sibling delivery endpoint was ``org_admin``.
     """
-    fix = session.get(WorkflowFix, fix_id)
-    if not fix or (not force and fix.status != FixStatus.ready):
+    fix, wf_file, repo = _fix_with_owners(session, fix_id)
+    if not force and fix.status != FixStatus.ready:
         raise HTTPException(status_code=404, detail="No ready fix found")
-
-    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    if not current_user.is_superuser:
-        authorize_repo(session, current_user, repo.id, detail="Repository not found")
-    if not repo.is_accessible:
-        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_accessible(repo)
     # ``force`` overrides the *fix status* precondition above, not this one: a
     # running scan or an in-flight sibling is a collision, not a stale state the
     # caller is knowingly overriding.
@@ -609,30 +389,28 @@ def deliver_repository_fixes(
     When force=True, fixes in any status are included (not just ready).
     """
     repo = authorize_repo(session, current_user, repo_id)
-    if not repo.is_accessible:
-        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_accessible(repo)
     require_idle(
         repository_activity(session, repo_id), TargetAction.deliver, "repository"
     )
 
-    base_query = (
+    query = (
         select(WorkflowFix)
-        .join(WorkflowFile, WorkflowFix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(WorkflowFile, col(WorkflowFix.workflow_file_id) == col(WorkflowFile.id))
         .where(WorkflowFile.repo_id == repo_id)
     )
-    query = (
-        base_query if force else base_query.where(WorkflowFix.status == FixStatus.ready)
-    )
+    if not force:
+        query = query.where(WorkflowFix.status == FixStatus.ready)
     fixes = list(session.exec(query).all())
     if not fixes:
         raise HTTPException(status_code=404, detail="No ready fixes found")
 
     existing_pr = session.exec(
         select(PullRequest)
-        .join(WorkflowFix, WorkflowFix.pr_id == PullRequest.id)  # type: ignore[arg-type]
-        .join(WorkflowFile, WorkflowFix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
+        .join(WorkflowFix, col(WorkflowFix.pr_id) == col(PullRequest.id))
+        .join(WorkflowFile, col(WorkflowFix.workflow_file_id) == col(WorkflowFile.id))
         .where(WorkflowFile.repo_id == repo_id)
-        .order_by(PullRequest.updated_at.desc().nulls_last())  # type: ignore[union-attr]
+        .order_by(col(PullRequest.updated_at).desc().nulls_last())
         .limit(1)
     ).first()
     pr_branch = existing_pr.pr_branch if existing_pr else repo_fix_branch(repo_id)
@@ -653,10 +431,8 @@ def deliver_repository_fixes(
 def reject_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
 ) -> None:
-    fix = get_or_404(session, WorkflowFix, fix_id)
-    _authorize_fix(session, current_user, fix)
+    fix, _wf_file, repo = _fix_with_owners(session, fix_id)
     # try_advance: rejecting an already terminal fix (already rejected_by_user,
     # or failed) is an idempotent no-op rather than an error, so the DELETE stays
     # safe to retry.
@@ -664,13 +440,9 @@ def reject_fix(
         return
     session.add(fix)
     session.commit()
-
-    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
-    if repo:
-        events_pub.publish_event(
-            ev.fix_rejected(str(repo.org_id), str(repo.id), str(fix_id))
-        )
+    events_pub.publish_event(
+        ev.fix_rejected(str(repo.org_id), str(repo.id), str(fix_id))
+    )
 
 
 @router.post(
@@ -692,8 +464,7 @@ def regenerate_repository_fixes(
     kept: there is nothing to regenerate them from.
     """
     repo = authorize_repo(session, current_user, repo_id)
-    if not repo.is_accessible:
-        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_accessible(repo)
     require_idle(
         repository_activity(session, repo_id), TargetAction.generate, "repository"
     )
@@ -703,8 +474,12 @@ def regenerate_repository_fixes(
     eligible = list(
         session.exec(
             select(WorkflowFix)
-            .join(WorkflowFile, WorkflowFix.workflow_file_id == WorkflowFile.id)  # type: ignore[arg-type]
-            .join(PullRequest, WorkflowFix.pr_id == PullRequest.id, isouter=True)  # type: ignore[arg-type]
+            .join(
+                WorkflowFile, col(WorkflowFix.workflow_file_id) == col(WorkflowFile.id)
+            )
+            .join(
+                PullRequest, col(WorkflowFix.pr_id) == col(PullRequest.id), isouter=True
+            )
             .where(WorkflowFile.repo_id == repo_id)
             .where(col(WorkflowFix.status).not_in(IN_FLIGHT_STATUSES))
             .where(
@@ -719,31 +494,22 @@ def regenerate_repository_fixes(
     if not eligible:
         return {"queued": 0}
 
-    by_wf_file = _latest_unresolved_issues(
-        session, repo_id, wf_file_ids=[f.workflow_file_id for f in eligible]
+    by_file = workflow_fixes.latest_unresolved_findings(
+        session, repo, wf_file_ids=[f.workflow_file_id for f in eligible]
     )
-    fixes_to_delete = [f for f in eligible if f.workflow_file_id in by_wf_file]
-    if not fixes_to_delete:
+    to_replace = [f.id for f in eligible if f.workflow_file_id in by_file]
+    if not to_replace:
         return {"queued": 0}
 
-    enforce_quota(
+    enforce_quota(session, current_user, repo.org_id, "fixes", requested=len(by_file))
+    queued = _replace_fixes(
         session,
-        current_user,
-        repo.org_id,
-        "fixes",
-        requested=len(by_wf_file),
+        repo,
+        by_file,
+        delete_where=col(WorkflowFix.id).in_(to_replace),
+        drop_closed_prs=True,
     )
-
-    session.exec(
-        delete(WorkflowFix).where(
-            col(WorkflowFix.id).in_([f.id for f in fixes_to_delete])
-        )
-    )
-    _delete_orphaned_closed_prs(session, repo_id)
-    session.commit()
-
-    pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
-    return {"queued": len(pending_fixes)}
+    return {"queued": queued}
 
 
 @router.post(
@@ -763,8 +529,7 @@ def regenerate_fix(
     (the code changes were already applied), and when the latest analysis
     has no unresolved issues left to regenerate from.
     """
-    fix = get_or_404(session, WorkflowFix, fix_id)
-    _authorize_fix(session, current_user, fix)
+    fix, wf_file, repo = _fix_with_owners(session, fix_id)
 
     if fix.status in IN_FLIGHT_STATUSES:
         raise HTTPException(
@@ -776,13 +541,7 @@ def regenerate_fix(
             status_code=409,
             detail="Workflow fix was already merged; nothing to regenerate",
         )
-
-    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    if not repo.is_accessible:
-        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    require_accessible(repo)
     # The in-flight check above covers this fix; this one covers the scan that
     # is about to replace the issues it would be regenerated from.
     require_idle(
@@ -791,28 +550,29 @@ def regenerate_fix(
         "workflow file",
     )
 
-    by_wf_file = _latest_unresolved_issues(
+    by_file = workflow_fixes.latest_unresolved_findings(
         session,
-        repo.id,
+        repo,
         wf_file_ids=[fix.workflow_file_id],
         # Explicit retry of this one workflow's fix — give the LLM another
         # attempt even if a prior run flagged it as needing manual work.
         exclude_manual=False,
     )
-    if not by_wf_file:
+    if not by_file:
         raise HTTPException(
             status_code=409,
             detail="No unresolved issues found for this workflow file",
         )
 
     enforce_quota(session, current_user, repo.org_id, "fixes", requested=1)
-
-    session.delete(fix)
-    _delete_orphaned_closed_prs(session, repo.id)
-    session.commit()
-
-    pending_fixes = _queue_fix_generation(session, repo, by_wf_file)
-    return {"queued": len(pending_fixes)}
+    queued = _replace_fixes(
+        session,
+        repo,
+        by_file,
+        delete_where=col(WorkflowFix.id) == fix.id,
+        drop_closed_prs=True,
+    )
+    return {"queued": queued}
 
 
 @router.post(
@@ -821,7 +581,6 @@ def regenerate_fix(
 def retry_fix(
     fix_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
 ) -> dict[str, str]:
     """Retry a failed fix in place (``failed`` -> ``pending``), reusing the row.
 
@@ -829,15 +588,8 @@ def retry_fix(
     one), this recovers a fix that failed generation/precheck without losing its
     identity or PR linkage. Only legal from ``failed``.
     """
-    fix = get_or_404(session, WorkflowFix, fix_id)
-    _authorize_fix(session, current_user, fix)
-
-    wf_file = session.get(WorkflowFile, fix.workflow_file_id)
-    repo = session.get(Repository, wf_file.repo_id) if wf_file else None
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    if not repo.is_accessible:
-        raise HTTPException(status_code=403, detail="Repository is not accessible")
+    fix, wf_file, repo = _fix_with_owners(session, fix_id)
+    require_accessible(repo)
     require_idle(
         workflow_file_activity(session, wf_file),
         TargetAction.generate,
@@ -846,9 +598,9 @@ def retry_fix(
 
     # Issues still needing this fix (a resolved/ignored issue no longer counts).
     issue_ids = [
-        str(i.id)
-        for i in session.exec(
-            select(WorkflowFinding)
+        str(issue_id)
+        for issue_id in session.exec(
+            select(WorkflowFinding.id)
             .where(WorkflowFinding.fix_id == fix.id)
             .where(col(WorkflowFinding.resolved_at).is_(None))
             .where(col(WorkflowFinding.ignored_at).is_(None))

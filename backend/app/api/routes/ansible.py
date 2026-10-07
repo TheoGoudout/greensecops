@@ -61,7 +61,7 @@ from app.services.github.fetch import fetch_ansible_files as _fetch_ansible_file
 from app.workers.tasks.ansible_analysis import run_ansible_scan
 from app.workers.tasks.ansible_fix_delivery import deliver_ansible_fixes
 from app.workers.tasks.ansible_fix_generation import run_ansible_fix_generation
-from app.workers.tasks.fix_generation import resolve_llm_provider
+from app.services.llm.catalog import resolve_llm_provider
 
 # `project_id` rather than `target_id` or `root_id`: `api/router.ORG_RESOLVERS`
 # is keyed by path-parameter *name*, and those two are already taken by Docker

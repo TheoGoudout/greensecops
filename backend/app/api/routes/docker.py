@@ -68,7 +68,7 @@ from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
 from app.workers.tasks.docker_analysis import run_docker_scan
 from app.workers.tasks.docker_fix_delivery import deliver_docker_fixes
 from app.workers.tasks.docker_fix_generation import run_docker_fix_generation
-from app.workers.tasks.fix_generation import resolve_llm_provider
+from app.services.llm.catalog import resolve_llm_provider
 
 router = RoleRouter(prefix="/docker", tags=["docker"])
 

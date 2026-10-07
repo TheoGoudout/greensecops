@@ -84,8 +84,9 @@ def record_usage(
         quantity=quantity,
         source_type=source_type,
         source_id=source_id,
-        **({"occurred_at": occurred_at} if occurred_at is not None else {}),
     )
+    if occurred_at is not None:
+        record.occurred_at = occurred_at
     session.add(record)
     if commit:
         session.commit()
