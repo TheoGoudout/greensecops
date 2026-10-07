@@ -43,6 +43,30 @@ from app.services.llm.catalog import resolve_llm_provider
 FindingsByFile = dict[uuid.UUID, list[WorkflowFinding]]
 
 
+def is_from_latest_scan() -> Any:
+    """A finding belongs to its workflow file's latest *completed* scan.
+
+    Correlated on ``WorkflowFinding``: every scan writes fresh finding rows, so
+    without this a query counts the same violation once per scan it survived.
+    Latest by ``completed_at`` first — the order the scans finished in, which is
+    what "current" means — then by ``created_at`` for scans that never recorded
+    a completion time.
+    """
+    latest_scan = (
+        select(WorkflowScan.id)
+        .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
+        .where(WorkflowScan.status == ScanStatus.completed)
+        .order_by(
+            col(WorkflowScan.completed_at).desc().nulls_last(),
+            col(WorkflowScan.created_at).desc(),
+        )
+        .limit(1)
+        .correlate(WorkflowFinding)
+        .scalar_subquery()
+    )
+    return WorkflowFinding.analysis_id == latest_scan
+
+
 def latest_unresolved_findings(
     session: Session,
     repo: Repository,
@@ -62,18 +86,6 @@ def latest_unresolved_findings(
     ``needs_manual_work``, so an implicit bulk selection does not keep
     re-spending generations on findings it already said it cannot fix.
     """
-    latest_scan = (
-        select(WorkflowScan.id)
-        .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
-        .where(WorkflowScan.status == ScanStatus.completed)
-        .order_by(
-            col(WorkflowScan.completed_at).desc().nulls_last(),
-            col(WorkflowScan.created_at).desc(),
-        )
-        .limit(1)
-        .correlate(WorkflowFinding)
-        .scalar_subquery()
-    )
     query = (
         select(WorkflowFinding)
         .join(WorkflowScan, col(WorkflowFinding.analysis_id) == col(WorkflowScan.id))
@@ -82,7 +94,7 @@ def latest_unresolved_findings(
         )
         .where(WorkflowScan.repo_id == repo.id)
         .where(WorkflowFile.branch == repo.default_branch)
-        .where(WorkflowFinding.analysis_id == latest_scan)
+        .where(is_from_latest_scan())
         .where(col(WorkflowFinding.resolved_at).is_(None))
         .where(col(WorkflowFinding.ignored_at).is_(None))
     )
