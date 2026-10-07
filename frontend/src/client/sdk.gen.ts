@@ -2888,6 +2888,9 @@ export class WebhooksService {
      * own schedule, and without this a replayed ``invoice.payment_failed`` would
      * re-send a dunning email while a replayed subscription update would re-run a
      * transition.
+     *
+     * One transaction per event: the handlers below only stage changes, and the
+     * commit at the end makes them durable together with the event's id.
      * @param data The data for the request.
      * @param data.stripeSignature
      * @returns string Successful Response
