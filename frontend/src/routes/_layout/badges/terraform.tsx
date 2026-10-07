@@ -35,7 +35,7 @@ function toEntry(root: TerraformRootPublic): BadgeEntry {
 function TerraformBadges() {
   return (
     <BadgePage
-      queryKey={["terraform-roots"]}
+      queryKey={["terraform-targets"]}
       queryFn={() => TerraformService.listRoots({})}
       toEntry={toEntry}
       subject="Terraform roots"

@@ -276,7 +276,7 @@ test.describe("Terraform", () => {
     const request = page.waitForRequest(
       (r) =>
         r.url().includes(`/terraform/roots/${MOCK_TERRAFORM_ROOT.id}`) &&
-        r.method() === "PATCH",
+        r.method() === "DELETE",
     )
     await dialog.getByRole("button", { name: "Remove" }).click()
     await request

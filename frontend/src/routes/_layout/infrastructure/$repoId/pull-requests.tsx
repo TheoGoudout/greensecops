@@ -37,12 +37,12 @@ function InfrastructurePullRequestsTab() {
   const { isAccessible } = useRepository(repoId)
 
   const { data: roots } = useQuery({
-    queryKey: ["terraform-roots", "repo", repoId],
+    queryKey: ["terraform-targets", "repo", repoId],
     queryFn: () => TerraformService.listRoots({ repoId }),
   })
 
   const { data: projects } = useQuery({
-    queryKey: ["ansible-projects", "repo", repoId],
+    queryKey: ["ansible-targets", "repo", repoId],
     queryFn: () => AnsibleService.listProjects({ repoId }),
   })
 

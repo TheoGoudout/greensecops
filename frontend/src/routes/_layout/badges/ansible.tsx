@@ -36,7 +36,7 @@ function toEntry(project: AnsibleProjectPublic): BadgeEntry {
 function AnsibleBadges() {
   return (
     <BadgePage
-      queryKey={["ansible-projects"]}
+      queryKey={["ansible-targets"]}
       queryFn={() => AnsibleService.listProjects({})}
       toEntry={toEntry}
       subject="Ansible projects"

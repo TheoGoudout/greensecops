@@ -32,11 +32,7 @@ test.describe("Ansible", () => {
     await page.goto(`/infrastructure/${MOCK_REPO.id}/ansible`)
 
     // "" is a legal root_path for this engine and renders as the repo root.
-    // Scoped to the card title: a bare "/" also matches the router devtools
-    // panel dev mode injects, which is not what this asserts.
-    await expect(
-      page.locator("span.truncate").filter({ hasText: /^\/$/ }),
-    ).toBeVisible()
+    await expect(page.getByText("/ (repository root)")).toBeVisible()
     await expect(page.getByText("deploy/ansible")).toBeVisible()
     await expect(page.getByText("C", { exact: true })).toBeVisible()
   })
