@@ -162,6 +162,7 @@ ignore = [
 "app/services/llm/base.py" = ["PLC0415"]  # optional dependency
 "app/services/llm/catalog.py" = ["PLC0415"]  # optional dependency
 "app/services/scan_runner.py" = ["C901", "PLR0912", "PLR0915"]  # 11/-/58
+"app/services/workflow_fixes.py" = ["PLC0415"]  # import cycle
 "app/workers/tasks/ansible_fix_generation.py" = ["PLC0415"]  # import cycle
 "app/workers/tasks/cloud_scan.py" = ["C901", "PLR0912", "PLR0915"]  # -/-/55
 "app/workers/tasks/docker_fix_generation.py" = ["PLC0415"]  # import cycle

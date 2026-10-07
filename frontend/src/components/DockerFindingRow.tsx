@@ -21,10 +21,11 @@ export function DockerFindingRow({
   const mutation = useFindingLifecycle({
     findingId: finding.id,
     ignored,
-    ignore: (dockerFindingId) =>
-      DockerService.ignoreFinding({ dockerFindingId }),
-    unignore: (dockerFindingId) =>
-      DockerService.unignoreFinding({ dockerFindingId }),
+    update: (dockerFindingId, ignored) =>
+      DockerService.updateFinding({
+        dockerFindingId,
+        requestBody: { ignored },
+      }),
     invalidateKeys: [["docker-findings", finding.docker_target_id]],
   })
 

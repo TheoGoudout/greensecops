@@ -17,10 +17,11 @@ export function TerraformFindingRow({
   const mutation = useFindingLifecycle({
     findingId: finding.id,
     ignored,
-    ignore: (terraformFindingId) =>
-      TerraformService.ignoreFinding({ terraformFindingId }),
-    unignore: (terraformFindingId) =>
-      TerraformService.unignoreFinding({ terraformFindingId }),
+    update: (terraformFindingId, ignored) =>
+      TerraformService.updateFinding({
+        terraformFindingId,
+        requestBody: { ignored },
+      }),
     invalidateKeys: [["terraform-findings", finding.terraform_root_id]],
   })
 

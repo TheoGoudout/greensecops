@@ -17,10 +17,11 @@ export function AnsibleFindingRow({
   const mutation = useFindingLifecycle({
     findingId: finding.id,
     ignored,
-    ignore: (ansibleFindingId) =>
-      AnsibleService.ignoreFinding({ ansibleFindingId }),
-    unignore: (ansibleFindingId) =>
-      AnsibleService.unignoreFinding({ ansibleFindingId }),
+    update: (ansibleFindingId, ignored) =>
+      AnsibleService.updateFinding({
+        ansibleFindingId,
+        requestBody: { ignored },
+      }),
     invalidateKeys: [["ansible-findings", finding.ansible_project_id]],
   })
 

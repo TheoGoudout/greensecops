@@ -201,7 +201,7 @@ transitions; the trigger owns writes.
 - **Events** — `link_fix`, `unlink_fix`, `resolve`, `recur`, `ignore`,
   `unignore`
 - **Code** — `state_machines/issue.py`; trigger in migrations `0022`/`0026`;
-  `api/routes/issues.py` (`/ignore`, `/unignore`), `/greensecops ignore
+  `PATCH /{engine}/findings/{id}` with `{"ignored": true|false}`, `/greensecops ignore
   <fingerprint>` comment command in the webhook handler
 
 `ignored` takes precedence in the trigger: a muted violation reads `ignored`
@@ -234,7 +234,7 @@ stateDiagram-v2
 ```
 
 **Closed in this pass:** an `ignored` state implements `/greensecops ignore`
-(and a REST `/ignore` endpoint), letting users mute false positives / accepted
+(and `PATCH /{engine}/findings/{id}`), letting users mute false positives / accepted
 risk; the status is a real persisted column with `ignored_at` precedence; a
 `resolution_reason` attribute (`no_longer_detected` / `file_removed` /
 `merged` / `branch_deleted`) records *why* an issue resolved, set alongside

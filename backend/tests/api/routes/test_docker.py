@@ -475,9 +475,7 @@ def test_list_files_reports_a_github_failure_as_502(
 def test_public_target_badge_needs_no_signature(
     client: TestClient, target: DockerTarget, completed_scan: DockerScan
 ) -> None:
-    response = client.get(
-        f"{settings.API_V1_STR}/badges/docker/{target.id}.svg"
-    )
+    response = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.svg")
     assert response.status_code == 200
     assert "Docker" in response.text
     assert "B" in response.text
@@ -494,9 +492,7 @@ def test_private_target_badge_requires_a_valid_signature(
     db.add(repo)
     db.commit()
 
-    unsigned = client.get(
-        f"{settings.API_V1_STR}/badges/docker/{target.id}.json"
-    )
+    unsigned = client.get(f"{settings.API_V1_STR}/badges/docker/{target.id}.json")
     assert unsigned.json()["message"] == "not configured"
 
     from app.services.badge_signing import sign_badge
@@ -511,9 +507,7 @@ def test_private_target_badge_requires_a_valid_signature(
 def test_unknown_target_badge_is_indistinguishable_from_unauthorized(
     client: TestClient,
 ) -> None:
-    response = client.get(
-        f"{settings.API_V1_STR}/badges/docker/{uuid.uuid4()}.json"
-    )
+    response = client.get(f"{settings.API_V1_STR}/badges/docker/{uuid.uuid4()}.json")
     assert response.json()["message"] == "not configured"
 
 
@@ -698,6 +692,7 @@ def test_repository_fixes_span_every_target(
     assert response.status_code == 200, response.text
     body = response.json()
     assert {f["docker_target_id"] for f in body} == {str(target.id), str(other.id)}
+
 
 # ─── GET /docker/targets/{id}/runtime-findings ────────────────────────────────────────
 
@@ -1007,8 +1002,9 @@ def test_ignore_and_unignore_docker_finding(
 ) -> None:
     finding = _add_finding(db, target, completed_scan, seeded_docker_rule)
 
-    resp = client.put(
-        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -1017,15 +1013,17 @@ def test_ignore_and_unignore_docker_finding(
     assert finding.status is FindingStatus.ignored
 
     # Idempotent.
-    resp = client.put(
-        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
 
-    resp = client.delete(
-        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}",
+        json={"ignored": False},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -1043,8 +1041,9 @@ def test_ignore_docker_finding_wrong_tenant_is_404(
     seeded_docker_rule: Rule,
 ) -> None:
     finding = _add_finding(db, target, completed_scan, seeded_docker_rule)
-    resp = client.put(
-        f"{settings.API_V1_STR}/docker/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/docker/findings/{finding.id}",
+        json={"ignored": True},
         headers=normal_user_token_headers,
     )
     assert resp.status_code == 404

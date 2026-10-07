@@ -759,8 +759,9 @@ def test_ignore_and_unignore_terraform_finding(
     superuser_token_headers: dict[str, str],
     terraform_finding: TerraformFinding,
 ) -> None:
-    resp = client.put(
-        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -769,15 +770,17 @@ def test_ignore_and_unignore_terraform_finding(
     assert terraform_finding.status is FindingStatus.ignored
 
     # Idempotent: ignoring an already-ignored finding is a no-op, not an error.
-    resp = client.put(
-        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
 
-    resp = client.delete(
-        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}",
+        json={"ignored": False},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -786,8 +789,9 @@ def test_ignore_and_unignore_terraform_finding(
     assert terraform_finding.status is FindingStatus.open
 
     # Idempotent the other way too.
-    resp = client.delete(
-        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}",
+        json={"ignored": False},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -802,8 +806,9 @@ def test_ignore_terraform_finding_wrong_tenant_is_404(
 ) -> None:
     # normal_user_token_headers belongs to no org at all here, so the finding's
     # org membership check must fail the same way a missing finding would.
-    resp = client.put(
-        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/terraform/findings/{terraform_finding.id}",
+        json={"ignored": True},
         headers=normal_user_token_headers,
     )
     assert resp.status_code == 404

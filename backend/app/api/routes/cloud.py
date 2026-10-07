@@ -15,6 +15,7 @@ from app.api.engine_routes import (
     cloud_account_activities,
     cloud_account_activity,
     require_idle,
+    set_finding_ignored,
 )
 from app.api.mappers import (
     to_cloud_account_public,
@@ -32,6 +33,7 @@ from app.models import (
     CloudFindingPublic,
     CloudScan,
     CloudScanPublic,
+    FindingUpdate,
     ScanTargetUpdate,
     TargetAction,
     TargetActivity,
@@ -253,37 +255,24 @@ def get_finding(
     return to_cloud_finding_public(finding)
 
 
-@router.put(
-    "/findings/{cloud_finding_id}/ignore",
+@router.patch(
+    "/findings/{cloud_finding_id}",
     role=Role.org_admin,
     response_model=CloudFindingPublic,
 )
-def ignore_finding(
+def update_finding(
     cloud_finding_id: uuid.UUID,
+    body: FindingUpdate,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> CloudFindingPublic:
     finding = _get_finding_for_user(cloud_finding_id, session, current_user)
-    if sm.try_advance(finding, sm.FindingMachine, "ignore"):
-        session.add(finding)
-        session.commit()
-        session.refresh(finding)
-    return to_cloud_finding_public(finding)
-
-
-@router.delete(
-    "/findings/{cloud_finding_id}/ignore",
-    role=Role.org_admin,
-    response_model=CloudFindingPublic,
-)
-def unignore_finding(
-    cloud_finding_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> CloudFindingPublic:
-    finding = _get_finding_for_user(cloud_finding_id, session, current_user)
-    if sm.try_advance(finding, sm.FindingMachine, "unignore"):
-        session.add(finding)
-        session.commit()
-        session.refresh(finding)
-    return to_cloud_finding_public(finding)
+    if body.ignored is not None:
+        require_idle(
+            cloud_account_activity(session, finding.cloud_account_id),
+            TargetAction.ignore,
+            "cloud account",
+        )
+    return to_cloud_finding_public(
+        set_finding_ignored(session, finding, body.ignored, "Cloud")
+    )

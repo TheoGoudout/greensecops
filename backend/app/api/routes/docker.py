@@ -2,31 +2,12 @@ import uuid
 from collections import defaultdict
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import Query
 from pydantic import BaseModel
 from sqlmodel import col, select
 
-from app.api.deps import (
-    CurrentUser,
-    GitHubOidcClaims,
-    SessionDep,
-    authorize_repo,
-    get_or_404,
-    user_org_ids,
-)
-from app.api.engine_routes import (
-    enabled_targets_for_claims,
-    get_finding_for_user,
-    get_target_for_user,
-    ignore_finding_for_user,
-    list_fixes_for_repo,
-    prepare_pending_fix,
-    require_target_idle,
-    sarif_for_claims,
-    target_activities,
-    target_activity,
-    unignore_finding_for_user,
-)
+from app.api import engine_routes as shared
+from app.api.deps import CurrentUser, GitHubOidcClaims, SessionDep
 from app.api.mappers import (
     to_docker_build_telemetry_public,
     to_docker_finding_public,
@@ -42,52 +23,33 @@ from app.models import (
     DockerBuildTelemetry,
     DockerBuildTelemetryPublic,
     DockerFilePublic,
-    DockerFinding,
     DockerFindingPublic,
-    DockerFix,
     DockerFixPublic,
     DockerRuntimeFindingPublic,
-    DockerScan,
     DockerScanPublic,
     DockerTarget,
     DockerTargetCreate,
     DockerTargetPublic,
     Engine,
-    Repository,
+    FindingUpdate,
+    FixGenerateRequest,
     Rule,
     ScanTargetUpdate,
     TargetAction,
-    TargetActivity,
-    UsageEngine,
 )
-from app.services.billing.quota import enforce_quota
-from app.services.delivery_pr import docker_fix_branch
 from app.services.docker.merge import classify_docker_file
-from app.services.engines import DOCKER_ENGINE
-from app.services.github.fetch import fetch_docker_files as _fetch_docker_files
+from app.services.engines import DOCKER_ENGINE as SPEC
+from app.services.github.fetch import (
+    fetch_docker_files as _fetch_docker_files,
+)
 from app.workers.tasks.docker_analysis import run_docker_scan
 from app.workers.tasks.docker_fix_delivery import deliver_docker_fixes
 from app.workers.tasks.docker_fix_generation import run_docker_fix_generation
-from app.services.llm.catalog import resolve_llm_provider
 
+# The bodies live in api/engine_routes.py, shared with Docker and Ansible. The
+# functions stay one per endpoint here because their names become the OpenAPI
+# operation ids, and so the generated clients' method names.
 router = RoleRouter(prefix="/docker", tags=["docker"])
-
-
-class DockerFixGenerateRequest(BaseModel):
-    # Optional subset of finding ids to fix; omit to fix every open finding in
-    # the target. Findings are grouped by file into one whole-file fix each.
-    finding_ids: list[uuid.UUID] | None = None
-
-
-def _normalize_root_path(raw: str) -> str:
-    """Collapse the several spellings of "the repository root" to ``""``.
-
-    ``uq_docker_target_repo_path`` treats ``""``, ``"/"`` and ``"./"`` as three
-    distinct paths, so without this a repo could accumulate duplicate
-    repo-root targets that each scan the same files.
-    """
-    stripped = raw.strip().strip("/")
-    return "" if stripped in ("", ".") else stripped
 
 
 @router.post(
@@ -104,22 +66,14 @@ def create_target(
     automatically. This exists for monorepos that want each sub-project graded
     separately.
     """
-    authorize_repo(session, current_user, target_in.repo_id)
-    repo = get_or_404(
-        session, Repository, target_in.repo_id, detail="Repository not found"
+    target = shared.create_target(
+        SPEC,
+        session,
+        current_user,
+        target_in.repo_id,
+        target_in.root_path,
+        allow_repo_root=True,
     )
-    normalized_path = _normalize_root_path(target_in.root_path)
-    existing = session.exec(
-        select(DockerTarget)
-        .where(DockerTarget.repo_id == repo.id)
-        .where(DockerTarget.root_path == normalized_path)
-    ).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="This path is already configured")
-    target = DockerTarget(repo_id=repo.id, root_path=normalized_path)
-    session.add(target)
-    session.commit()
-    session.refresh(target)
     return to_docker_target_public(target)
 
 
@@ -129,29 +83,14 @@ def list_targets(
     current_user: CurrentUser,
     repo_id: uuid.UUID | None = None,
 ) -> list[DockerTargetPublic]:
-    """List targets for one repo, or every target the user can see.
-
-    Dual-mode so the same endpoint powers both the org-wide Infrastructure
-    page and the per-repo Docker tab.
-    """
-    if repo_id:
-        authorize_repo(session, current_user, repo_id)
-        query = select(DockerTarget).where(DockerTarget.repo_id == repo_id)
-    else:
-        query = select(DockerTarget)
-        if not current_user.is_superuser:
-            query = query.join(
-                Repository,
-                # Same SQLModel/mypy limitation the Terraform route documents:
-                # a model-attribute comparison isn't seen as a ColumnElement.
-                DockerTarget.repo_id == Repository.id,  # type: ignore[arg-type]
-            ).where(col(Repository.org_id).in_(user_org_ids(session, current_user)))
-    targets = session.exec(query.order_by(col(DockerTarget.root_path))).all()
-    # Batched for the whole page — see the Terraform list route.
-    activities = target_activities(DOCKER_ENGINE, session, [t.id for t in targets])
+    """List Docker targets. Omit ``repo_id`` for the org-wide Infrastructure
+    page (every target across every repo the user can access); pass it to
+    scope to one repo."""
     return [
-        to_docker_target_public(t, activities.get(t.id, TargetActivity.idle))
-        for t in targets
+        to_docker_target_public(target, activity)
+        for target, activity in shared.list_targets(
+            SPEC, session, current_user, repo_id
+        )
     ]
 
 
@@ -164,27 +103,18 @@ def update_target(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> DockerTargetPublic:
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    if body.enabled is not None:
-        target.enabled = body.enabled
-    session.add(target)
-    session.commit()
-    session.refresh(target)
     return to_docker_target_public(
-        target, target_activity(DOCKER_ENGINE, session, target.id)
+        *shared.update_target(SPEC, target_id, body, session, current_user)
     )
 
 
 @router.delete("/targets/{target_id}", role=Role.org_admin, status_code=204)
 def delete_target(
-    target_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
 ) -> None:
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    # Cascades to its scans, findings and fixes, so a worker still holding one
-    # of them would be writing into a deleted tree.
-    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.remove)
-    session.delete(target)
-    session.commit()
+    shared.delete_target(SPEC, target_id, session, current_user)
 
 
 @router.post(
@@ -199,21 +129,9 @@ def trigger_scan(
     current_user: CurrentUser,
     branch: str | None = None,
 ) -> dict[str, str]:
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    if not target.enabled:
-        raise HTTPException(status_code=403, detail="Docker target is disabled")
-    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.scan)
-    repo = get_or_404(
-        session, Repository, target.repo_id, detail="Repository not found"
+    return shared.trigger_target_scan(
+        SPEC, run_docker_scan, target_id, session, current_user, branch
     )
-    # Fail fast with a precise 402; the worker re-checks and is the real gate.
-    enforce_quota(
-        session, current_user, repo.org_id, "analyses", engine=UsageEngine.docker
-    )
-    run_docker_scan.delay(
-        docker_target_id=str(target.id), branch=branch or "", trigger="manual"
-    )
-    return {"status": "queued", "docker_target_id": str(target_id)}
 
 
 @router.get(
@@ -225,16 +143,12 @@ def list_scans(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-    limit: int = 20,
+    limit: int = Query(default=20, ge=1, le=200),
 ) -> list[DockerScanPublic]:
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    scans = session.exec(
-        select(DockerScan)
-        .where(DockerScan.docker_target_id == target.id)
-        .order_by(col(DockerScan.created_at).desc())
-        .limit(limit)
-    ).all()
-    return [to_docker_scan_public(s) for s in scans]
+    return [
+        to_docker_scan_public(s)
+        for s in shared.list_target_scans(SPEC, target_id, session, current_user, limit)
+    ]
 
 
 @router.get(
@@ -248,14 +162,12 @@ def list_findings(
     current_user: CurrentUser,
     include_resolved: bool = False,
 ) -> list[DockerFindingPublic]:
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    query = select(DockerFinding).where(DockerFinding.docker_target_id == target.id)
-    if not include_resolved:
-        query = query.where(col(DockerFinding.resolved_at).is_(None))
-    findings = session.exec(
-        query.order_by(col(DockerFinding.file_path), col(DockerFinding.line_start))
-    ).all()
-    return [to_docker_finding_public(f) for f in findings]
+    return [
+        to_docker_finding_public(f)
+        for f in shared.list_target_findings(
+            SPEC, target_id, session, current_user, include_resolved
+        )
+    ]
 
 
 @router.get(
@@ -268,42 +180,27 @@ def get_finding(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> DockerFindingPublic:
-    finding = get_finding_for_user(
-        DOCKER_ENGINE, docker_finding_id, session, current_user
+    return to_docker_finding_public(
+        shared.get_finding_for_user(SPEC, docker_finding_id, session, current_user)
     )
-    return to_docker_finding_public(finding)
 
 
-@router.put(
-    "/findings/{docker_finding_id}/ignore",
+@router.patch(
+    "/findings/{docker_finding_id}",
     role=Role.org_admin,
     response_model=DockerFindingPublic,
 )
-def ignore_finding(
+def update_finding(
     docker_finding_id: uuid.UUID,
+    body: FindingUpdate,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> DockerFindingPublic:
-    finding = ignore_finding_for_user(
-        DOCKER_ENGINE, docker_finding_id, session, current_user
+    return to_docker_finding_public(
+        shared.update_finding_for_user(
+            SPEC, docker_finding_id, body, session, current_user
+        )
     )
-    return to_docker_finding_public(finding)
-
-
-@router.delete(
-    "/findings/{docker_finding_id}/ignore",
-    role=Role.org_admin,
-    response_model=DockerFindingPublic,
-)
-def unignore_finding(
-    docker_finding_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> DockerFindingPublic:
-    finding = unignore_finding_for_user(
-        DOCKER_ENGINE, docker_finding_id, session, current_user
-    )
-    return to_docker_finding_public(finding)
 
 
 @router.get(
@@ -317,21 +214,7 @@ def list_files(
     current_user: CurrentUser,
     ref: str | None = None,
 ) -> list[DockerFilePublic]:
-    """Live source of the target's Docker files, fetched from GitHub.
-
-    Docker files aren't persisted, so this reaches through to GitHub on each
-    call — any failure there is upstream's, hence 502 rather than 500.
-    """
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    repo = get_or_404(
-        session, Repository, target.repo_id, detail="Repository not found"
-    )
-    try:
-        fetched = _fetch_docker_files(repo, target.root_path, ref=ref)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail="Failed to fetch Docker files from GitHub"
-        ) from exc
+    """The target's live Docker source, fetched from GitHub on demand."""
     return [
         DockerFilePublic(
             path=f.path,
@@ -340,7 +223,9 @@ def list_files(
             # has to re-derive Dockerfile-vs-Compose from the filename.
             kind=classify_docker_file(f.path) or "dockerfile",
         )
-        for f in sorted(fetched, key=lambda f: f.path)
+        for f in shared.fetch_target_files(
+            SPEC, target_id, session, current_user, ref, _fetch_docker_files
+        )
     ]
 
 
@@ -384,7 +269,7 @@ def list_runtime_findings(
     current_user: CurrentUser,
 ) -> list[DockerBuildTelemetryPublic]:
     """Measured builds for this target, each with the findings it produced."""
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
+    target = shared.get_target_for_user(SPEC, target_id, session, current_user)
 
     roots = list(
         session.exec(
@@ -447,15 +332,12 @@ def list_repository_fixes(
 ) -> list[DockerFixPublic]:
     """Every fix across a repository's Docker targets.
 
-    The cross-target read beside the per-target one, matching
-    ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
-    "Update PR" may be pressed: a delivery already in flight, or a fix still
-    being generated, refuses one — and asking per target would be a request per
-    card on a page that already lists them all.
+    The pull-requests tab reads it to decide whether "Update PR" may be
+    pressed, without a request per card.
     """
     return [
         to_docker_fix_public(f)
-        for f in list_fixes_for_repo(DOCKER_ENGINE, session, current_user, repo_id)
+        for f in shared.list_fixes_for_repo(SPEC, session, current_user, repo_id)
     ]
 
 
@@ -469,13 +351,10 @@ def list_fixes(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> list[DockerFixPublic]:
-    get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    fixes = session.exec(
-        select(DockerFix)
-        .where(DockerFix.docker_target_id == target_id)
-        .order_by(col(DockerFix.created_at).desc())
-    ).all()
-    return [to_docker_fix_public(f) for f in fixes]
+    return [
+        to_docker_fix_public(f)
+        for f in shared.list_target_fixes(SPEC, target_id, session, current_user)
+    ]
 
 
 @router.post(
@@ -488,70 +367,19 @@ def generate_fixes(
     target_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-    body: DockerFixGenerateRequest | None = None,
+    body: FixGenerateRequest | None = None,
     force: bool = False,
 ) -> dict[str, str | int]:
     """Generate LLM fixes for a target's open findings, one whole-file fix each."""
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.generate)
-    repo = get_or_404(
-        session, Repository, target.repo_id, detail="Repository not found"
-    )
-
-    query = (
-        select(DockerFinding)
-        .where(DockerFinding.docker_target_id == target_id)
-        .where(col(DockerFinding.resolved_at).is_(None))
-        .where(col(DockerFinding.ignored_at).is_(None))
-    )
-    if body and body.finding_ids:
-        query = query.where(col(DockerFinding.id).in_(body.finding_ids))
-    findings = list(session.exec(query).all())
-    if not findings:
-        return {"status": "no_findings", "queued": 0}
-
-    # One LLM call per file, not per finding: the model rewrites the whole file
-    # once with every finding in front of it, which is both cheaper and avoids
-    # two fixes racing to patch the same lines.
-    by_file: dict[str, list[DockerFinding]] = defaultdict(list)
-    for finding in findings:
-        by_file[finding.file_path].append(finding)
-
-    # One whole-file LLM rewrite per file. Like the Terraform route, this had
-    # no quota check before — the same LLM spend as a workflow fix, unmetered.
-    enforce_quota(
+    return shared.generate_target_fixes(
+        SPEC,
+        run_docker_fix_generation,
+        target_id,
         session,
         current_user,
-        repo.org_id,
-        "fixes",
-        requested=len(by_file),
-        engine=UsageEngine.docker,
+        body.finding_ids if body else None,
+        force,
     )
-
-    provider_str, model_str = resolve_llm_provider(repo)
-    queued = 0
-    for file_path, group in by_file.items():
-        fix = prepare_pending_fix(
-            DOCKER_ENGINE,
-            session,
-            target_id,
-            file_path,
-            provider_str,
-            model_str,
-            force,
-            repo=repo,
-        )
-        if fix is None:
-            continue
-        session.flush()
-        for finding in group:
-            finding.fix_id = fix.id
-            session.add(finding)
-        session.commit()
-        run_docker_fix_generation.delay(finding_ids=[str(f.id) for f in group])
-        queued += 1
-
-    return {"status": "queued", "queued": queued}
 
 
 class DockerRuntimeFixRequest(BaseModel):
@@ -584,11 +412,8 @@ def generate_runtime_fixes(
     one LLM rewrite per file, exactly as the static route does, so a runtime fix
     and a static fix can never race to patch the same lines.
     """
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.generate)
-    repo = get_or_404(
-        session, Repository, target.repo_id, detail="Repository not found"
-    )
+    target = shared.get_target_for_user(SPEC, target_id, session, current_user)
+    shared.require_target_idle(SPEC, session, target_id, TargetAction.generate)
 
     enrichments = list(
         session.exec(
@@ -600,69 +425,40 @@ def generate_runtime_fixes(
     if not enrichments:
         return {"status": "no_findings", "queued": 0}
 
-    telemetry_ids = {e.telemetry_id for e in enrichments}
-    telemetry = session.exec(
-        select(DockerBuildTelemetry).where(
-            col(DockerBuildTelemetry.id).in_(telemetry_ids)
-        )
-    ).all()
-    paths = {t.id: t.dockerfile_path for t in telemetry}
-
-    by_file: dict[str, list[DockerBuildEnrichment]] = defaultdict(list)
+    paths = dict(
+        session.exec(
+            select(DockerBuildTelemetry.id, DockerBuildTelemetry.dockerfile_path).where(
+                col(DockerBuildTelemetry.id).in_({e.telemetry_id for e in enrichments})
+            )
+        ).all()
+    )
+    enrichments_by_file: dict[str, list[DockerBuildEnrichment]] = defaultdict(list)
     for enrichment in enrichments:
         path = paths.get(enrichment.telemetry_id)
         if path:
-            by_file[path].append(enrichment)
-    if not by_file:
+            enrichments_by_file[path].append(enrichment)
+    if not enrichments_by_file:
         return {"status": "no_dockerfile_path", "queued": 0}
 
-    enforce_quota(
-        session,
-        current_user,
-        repo.org_id,
-        "fixes",
-        requested=len(by_file),
-        engine=UsageEngine.docker,
-    )
+    # The static findings each fix will link, file by file.
+    static_by_file = {
+        path: shared.open_findings_by_file(
+            SPEC, session, target_id, file_path=path
+        ).get(path, [])
+        for path in enrichments_by_file
+    }
 
-    provider_str, model_str = resolve_llm_provider(repo)
-    queued = 0
-    for file_path, group in by_file.items():
-        static = list(
-            session.exec(
-                select(DockerFinding)
-                .where(DockerFinding.docker_target_id == target_id)
-                .where(DockerFinding.file_path == file_path)
-                .where(col(DockerFinding.resolved_at).is_(None))
-                .where(col(DockerFinding.ignored_at).is_(None))
-            ).all()
-        )
-        fix = prepare_pending_fix(
-            DOCKER_ENGINE,
-            session,
-            target_id,
-            file_path,
-            provider_str,
-            model_str,
-            force,
-            repo=repo,
-        )
-        if fix is None:
-            continue
-        session.flush()
-        for finding in static:
-            finding.fix_id = fix.id
-            session.add(finding)
-        session.commit()
+    def dispatch(file_path: str, static: list[Any]) -> None:
         run_docker_fix_generation.delay(
             finding_ids=[str(f.id) for f in static],
-            enrichment_ids=[str(e.id) for e in group],
+            enrichment_ids=[str(e.id) for e in enrichments_by_file[file_path]],
             docker_target_id=str(target_id),
             file_path=file_path,
         )
-        queued += 1
 
-    return {"status": "queued", "queued": queued}
+    return shared.queue_file_fixes(
+        SPEC, session, current_user, target, static_by_file, force, dispatch
+    )
 
 
 @router.post(
@@ -678,15 +474,9 @@ def deliver_fixes(
     force: bool = False,
 ) -> dict[str, str]:
     """Deliver the target's ready fixes as a single PR (branch per target)."""
-    target = get_target_for_user(DOCKER_ENGINE, target_id, session, current_user)
-    require_target_idle(DOCKER_ENGINE, session, target_id, TargetAction.deliver)
-    deliver_docker_fixes.delay(docker_target_id=str(target.id), force=force)
-    return {
-        "status": "queued",
-        "docker_target_id": str(target_id),
-        # Returned so the UI can match this target against an already-open PR.
-        "pr_branch": docker_fix_branch(target.id),
-    }
+    return shared.deliver_target_fixes(
+        SPEC, deliver_docker_fixes, target_id, session, current_user, force
+    )
 
 
 @router.get("/sarif", role=Role.service, limit=LIMIT_INGEST)
@@ -697,14 +487,12 @@ def get_sarif(
     """This repository's open Docker findings as a SARIF 2.1.0 log.
 
     For a workflow that runs ``upload-sarif`` on its own runner, so a team can
-    read GreenSecOps findings in the security tab and on the PR diff alongside
-    whatever else they scan with — the same findings, in the format GitHub
-    reads, without installing the App.
-
-    Authenticated by the run's GitHub OIDC token: the repository comes from the
-    signed claim, so no id is needed and none would be honoured.
+    read GreenSecOps findings in the security tab and on the PR diff without
+    installing the App. Authenticated by the run's GitHub OIDC token: the
+    repository comes from the signed claim, so no id is needed and none would
+    be honoured.
     """
-    return sarif_for_claims(Engine.docker, session, claims)
+    return shared.sarif_for_claims(Engine.docker, session, claims)
 
 
 @router.post("/scans", role=Role.service, limit=LIMIT_EXPENSIVE, status_code=202)
@@ -715,31 +503,9 @@ def trigger_scans_for_code_scanning(
 ) -> dict[str, str]:
     """Re-scan every enabled Docker target in the calling repository.
 
-    The first half of the Code Scanning flow: a workflow asks for fresh
-    analysis and then fetches ``GET /docker/sarif``. Without it a team using
-    the workflows rather than the App would only ever publish whatever the last
-    scan found — nothing at all, on a repository the App has never touched.
-
     Authenticated by the run's GitHub OIDC token, so the repository is the one
-    the token was minted for and cannot be chosen by the caller. Quota is
-    charged to the org's billing owner, exactly as a dashboard-triggered scan
-    is; there is no user to attribute it to.
+    the token was minted for and cannot be chosen by the caller.
     """
-    repo, targets = enabled_targets_for_claims(DOCKER_ENGINE, session, claims)
-    if not targets:
-        return {"status": "no_targets", "queued": "0"}
-    enforce_quota(
-        session,
-        None,
-        repo.org_id,
-        "analyses",
-        requested=len(targets),
-        engine=UsageEngine.docker,
+    return shared.trigger_code_scanning_scans(
+        SPEC, run_docker_scan, session, claims, branch
     )
-    for target in targets:
-        run_docker_scan.delay(
-            docker_target_id=str(target.id),
-            branch=branch or "",
-            trigger="code_scanning",
-        )
-    return {"status": "queued", "queued": str(len(targets))}

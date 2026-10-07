@@ -527,7 +527,7 @@ function cloneFindings<T extends { id: string; status: string }>(
 }
 
 /**
- * GET/PUT/DELETE `/{engine}/findings/{id}(/ignore)?` — shared across
+ * GET/PATCH `/{engine}/findings/{id}` — shared across
  * Terraform, Docker, Ansible and Cloud. Mutates ``findings`` in place so a
  * subsequent list refetch (after the mutation's `invalidateQueries`) reflects
  * the new status, the way the real API does — caller must pass an array
@@ -547,10 +547,11 @@ function mockFindingLifecycle(
       route.fulfill({ status: 404, json: { detail: "not found" } })
       return
     }
-    if (url.endsWith("/ignore") && method === "PUT") {
-      finding.status = "ignored"
-    } else if (url.endsWith("/ignore") && method === "DELETE") {
-      finding.status = "open"
+    if (method === "PATCH") {
+      const { ignored } = route.request().postDataJSON() as {
+        ignored?: boolean
+      }
+      if (ignored !== undefined) finding.status = ignored ? "ignored" : "open"
     }
     route.fulfill({ json: finding })
   })

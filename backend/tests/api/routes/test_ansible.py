@@ -692,8 +692,9 @@ def test_ignore_and_unignore_ansible_finding(
         db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
     )
 
-    resp = client.put(
-        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -702,15 +703,17 @@ def test_ignore_and_unignore_ansible_finding(
     assert finding.status is FindingStatus.ignored
 
     # Idempotent.
-    resp = client.put(
-        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
 
-    resp = client.delete(
-        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}",
+        json={"ignored": False},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -730,8 +733,9 @@ def test_ignore_ansible_finding_wrong_tenant_is_404(
     finding = _open_finding(
         db, project, completed_scan, seeded_ansible_rule, "roles/a/tasks/main.yml"
     )
-    resp = client.put(
-        f"{settings.API_V1_STR}/ansible/findings/{finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/ansible/findings/{finding.id}",
+        json={"ignored": True},
         headers=normal_user_token_headers,
     )
     assert resp.status_code == 404

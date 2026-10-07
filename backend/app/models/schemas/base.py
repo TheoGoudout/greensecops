@@ -143,3 +143,22 @@ class ScanTargetUpdate(SQLModel):
     """
 
     enabled: bool | None = None
+
+
+class FixGenerateRequest(SQLModel):
+    """Which findings of a target to fix; omit ``finding_ids`` for all open ones.
+
+    Findings are grouped by file into one whole-file fix each.
+    """
+
+    finding_ids: list[uuid.UUID] | None = None
+
+
+class FindingUpdate(SQLModel):
+    """The mutable part of a finding, the same for every engine.
+
+    ``ignored`` mutes a violation (false positive / accepted risk) or un-mutes
+    it. Optional so a ``PATCH`` that omits it leaves the finding alone.
+    """
+
+    ignored: bool | None = None

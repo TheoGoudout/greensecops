@@ -47,10 +47,6 @@ export type AnsibleFindingPublic = {
     task_name?: (string | null);
 };
 
-export type AnsibleFixGenerateRequest = {
-    finding_ids?: (Array<(string)> | null);
-};
-
 export type AnsibleFixPublic = {
     id: string;
     file_path: string;
@@ -322,10 +318,6 @@ export type DockerFindingPublic = {
     line_end?: (number | null);
 };
 
-export type DockerFixGenerateRequest = {
-    finding_ids?: (Array<(string)> | null);
-};
-
 export type DockerFixPublic = {
     id: string;
     file_path: string;
@@ -556,6 +548,16 @@ export type FindingResolutionReason = 'no_longer_detected' | 'target_removed' | 
  */
 export type FindingStatus = 'open' | 'fix_in_progress' | 'resolved' | 'ignored';
 
+/**
+ * The mutable part of a finding, the same for every engine.
+ *
+ * ``ignored`` mutes a violation (false positive / accepted risk) or un-mutes
+ * it. Optional so a ``PATCH`` that omits it leaves the finding alone.
+ */
+export type FindingUpdate = {
+    ignored?: (boolean | null);
+};
+
 export type FixDeliveryMode = 'pr' | 'comment' | 'disabled';
 
 /**
@@ -569,6 +571,15 @@ export type FixFindingSummary = {
     message?: (string | null);
     line_start?: (number | null);
     line_end?: (number | null);
+};
+
+/**
+ * Which findings of a target to fix; omit ``finding_ids`` for all open ones.
+ *
+ * Findings are grouped by file into one whole-file fix each.
+ */
+export type FixGenerateRequest = {
+    finding_ids?: (Array<(string)> | null);
 };
 
 export type FixStatus = 'pending' | 'generating' | 'ready' | 'delivering' | 'delivered' | 'failed' | 'rejected_by_user' | 'superseded_by_closed_pr' | 'superseded_by_deleted_file' | 'landed' | 'no_op';
@@ -1118,10 +1129,6 @@ export type TerraformFindingPublic = {
     terraform_address?: (string | null);
 };
 
-export type TerraformFixGenerateRequest = {
-    finding_ids?: (Array<(string)> | null);
-};
-
 export type TerraformFixPublic = {
     id: string;
     file_path: string;
@@ -1454,6 +1461,7 @@ export type AnsibleTriggerScanResponse = ({
 });
 
 export type AnsibleListScansData = {
+    limit?: number;
     projectId: string;
 };
 
@@ -1472,17 +1480,12 @@ export type AnsibleGetFindingData = {
 
 export type AnsibleGetFindingResponse = (AnsibleFindingPublic);
 
-export type AnsibleIgnoreFindingData = {
+export type AnsibleUpdateFindingData = {
     ansibleFindingId: string;
+    requestBody: FindingUpdate;
 };
 
-export type AnsibleIgnoreFindingResponse = (AnsibleFindingPublic);
-
-export type AnsibleUnignoreFindingData = {
-    ansibleFindingId: string;
-};
-
-export type AnsibleUnignoreFindingResponse = (AnsibleFindingPublic);
+export type AnsibleUpdateFindingResponse = (AnsibleFindingPublic);
 
 export type AnsibleListFilesData = {
     projectId: string;
@@ -1506,7 +1509,7 @@ export type AnsibleListFixesResponse = (Array<AnsibleFixPublic>);
 export type AnsibleGenerateFixesData = {
     force?: boolean;
     projectId: string;
-    requestBody?: (AnsibleFixGenerateRequest | null);
+    requestBody?: (FixGenerateRequest | null);
 };
 
 export type AnsibleGenerateFixesResponse = ({
@@ -1754,17 +1757,12 @@ export type CloudGetFindingData = {
 
 export type CloudGetFindingResponse = (CloudFindingPublic);
 
-export type CloudIgnoreFindingData = {
+export type CloudUpdateFindingData = {
     cloudFindingId: string;
+    requestBody: FindingUpdate;
 };
 
-export type CloudIgnoreFindingResponse = (CloudFindingPublic);
-
-export type CloudUnignoreFindingData = {
-    cloudFindingId: string;
-};
-
-export type CloudUnignoreFindingResponse = (CloudFindingPublic);
+export type CloudUpdateFindingResponse = (CloudFindingPublic);
 
 export type DockerCreateTargetData = {
     requestBody: DockerTargetCreate;
@@ -1820,17 +1818,12 @@ export type DockerGetFindingData = {
 
 export type DockerGetFindingResponse = (DockerFindingPublic);
 
-export type DockerIgnoreFindingData = {
+export type DockerUpdateFindingData = {
     dockerFindingId: string;
+    requestBody: FindingUpdate;
 };
 
-export type DockerIgnoreFindingResponse = (DockerFindingPublic);
-
-export type DockerUnignoreFindingData = {
-    dockerFindingId: string;
-};
-
-export type DockerUnignoreFindingResponse = (DockerFindingPublic);
+export type DockerUpdateFindingResponse = (DockerFindingPublic);
 
 export type DockerListFilesData = {
     ref?: (string | null);
@@ -1859,7 +1852,7 @@ export type DockerListFixesResponse = (Array<DockerFixPublic>);
 
 export type DockerGenerateFixesData = {
     force?: boolean;
-    requestBody?: (DockerFixGenerateRequest | null);
+    requestBody?: (FixGenerateRequest | null);
     targetId: string;
 };
 
@@ -2121,6 +2114,7 @@ export type TerraformTriggerScanResponse = ({
 });
 
 export type TerraformListScansData = {
+    limit?: number;
     rootId: string;
 };
 
@@ -2139,17 +2133,12 @@ export type TerraformGetFindingData = {
 
 export type TerraformGetFindingResponse = (TerraformFindingPublic);
 
-export type TerraformIgnoreFindingData = {
+export type TerraformUpdateFindingData = {
+    requestBody: FindingUpdate;
     terraformFindingId: string;
 };
 
-export type TerraformIgnoreFindingResponse = (TerraformFindingPublic);
-
-export type TerraformUnignoreFindingData = {
-    terraformFindingId: string;
-};
-
-export type TerraformUnignoreFindingResponse = (TerraformFindingPublic);
+export type TerraformUpdateFindingResponse = (TerraformFindingPublic);
 
 export type TerraformListFilesData = {
     ref?: (string | null);
@@ -2172,7 +2161,7 @@ export type TerraformListFixesResponse = (Array<TerraformFixPublic>);
 
 export type TerraformGenerateFixesData = {
     force?: boolean;
-    requestBody?: (TerraformFixGenerateRequest | null);
+    requestBody?: (FixGenerateRequest | null);
     rootId: string;
 };
 
@@ -2366,17 +2355,12 @@ export type WorkflowGetFindingData = {
 
 export type WorkflowGetFindingResponse = (WorkflowFindingPublic);
 
-export type WorkflowIgnoreFindingData = {
+export type WorkflowUpdateFindingData = {
     findingId: string;
+    requestBody: FindingUpdate;
 };
 
-export type WorkflowIgnoreFindingResponse = (WorkflowFindingPublic);
-
-export type WorkflowUnignoreFindingData = {
-    findingId: string;
-};
-
-export type WorkflowUnignoreFindingResponse = (WorkflowFindingPublic);
+export type WorkflowUpdateFindingResponse = (WorkflowFindingPublic);
 
 export type WorkflowListFixesData = {
     branch?: (string | null);

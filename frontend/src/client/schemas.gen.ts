@@ -220,28 +220,6 @@ export const AnsibleFindingPublicSchema = {
     title: 'AnsibleFindingPublic'
 } as const;
 
-export const AnsibleFixGenerateRequestSchema = {
-    properties: {
-        finding_ids: {
-            anyOf: [
-                {
-                    items: {
-                        type: 'string',
-                        format: 'uuid'
-                    },
-                    type: 'array'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Finding Ids'
-        }
-    },
-    type: 'object',
-    title: 'AnsibleFixGenerateRequest'
-} as const;
-
 export const AnsibleFixPublicSchema = {
     properties: {
         id: {
@@ -1676,28 +1654,6 @@ export const DockerFindingPublicSchema = {
     title: 'DockerFindingPublic'
 } as const;
 
-export const DockerFixGenerateRequestSchema = {
-    properties: {
-        finding_ids: {
-            anyOf: [
-                {
-                    items: {
-                        type: 'string',
-                        format: 'uuid'
-                    },
-                    type: 'array'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Finding Ids'
-        }
-    },
-    type: 'object',
-    title: 'DockerFixGenerateRequest'
-} as const;
-
 export const DockerFixPublicSchema = {
     properties: {
         id: {
@@ -2552,6 +2508,28 @@ declared here rather than in a CI-only enum because the state is about the
 finding, not about which engine found it.`
 } as const;
 
+export const FindingUpdateSchema = {
+    properties: {
+        ignored: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Ignored'
+        }
+    },
+    type: 'object',
+    title: 'FindingUpdate',
+    description: `The mutable part of a finding, the same for every engine.
+
+\`\`ignored\`\` mutes a violation (false positive / accepted risk) or un-mutes
+it. Optional so a \`\`PATCH\`\` that omits it leaves the finding alone.`
+} as const;
+
 export const FixDeliveryModeSchema = {
     type: 'string',
     enum: ['pr', 'comment', 'disabled'],
@@ -2634,6 +2612,31 @@ export const FixFindingSummarySchema = {
     required: ['id'],
     title: 'FixFindingSummary',
     description: 'The findings one fix set out to resolve, as the fix detail view lists them.'
+} as const;
+
+export const FixGenerateRequestSchema = {
+    properties: {
+        finding_ids: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string',
+                        format: 'uuid'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finding Ids'
+        }
+    },
+    type: 'object',
+    title: 'FixGenerateRequest',
+    description: `Which findings of a target to fix; omit \`\`finding_ids\`\` for all open ones.
+
+Findings are grouped by file into one whole-file fix each.`
 } as const;
 
 export const FixStatusSchema = {
@@ -4798,28 +4801,6 @@ export const TerraformFindingPublicSchema = {
     type: 'object',
     required: ['id', 'scan_id', 'rule_id', 'rule_slug', 'severity', 'category', 'message', 'status', 'terraform_root_id', 'file_path'],
     title: 'TerraformFindingPublic'
-} as const;
-
-export const TerraformFixGenerateRequestSchema = {
-    properties: {
-        finding_ids: {
-            anyOf: [
-                {
-                    items: {
-                        type: 'string',
-                        format: 'uuid'
-                    },
-                    type: 'array'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Finding Ids'
-        }
-    },
-    type: 'object',
-    title: 'TerraformFixGenerateRequest'
 } as const;
 
 export const TerraformFixPublicSchema = {
