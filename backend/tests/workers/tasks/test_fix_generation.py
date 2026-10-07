@@ -23,6 +23,7 @@ from app.models import (
     WorkflowFix,
     WorkflowScan,
 )
+from app.services.llm.catalog import resolve_llm_provider
 from app.services.llm.response import (
     parse_full_content,
     parse_unfixed_issues,
@@ -33,7 +34,6 @@ from app.workers.tasks.fix_generation import (
     _maybe_auto_deliver,
     _record_batch_result,
     init_fix_batch,
-    resolve_llm_provider,
 )
 
 _FULL_CONTENT = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"

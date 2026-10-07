@@ -1,5 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
 import { type WorkflowFindingPublic, WorkflowService } from "@/client"
 import { CategoryIcon } from "@/components/CategoryIcon"
 import { FindingIgnoreButton } from "@/components/FindingRow"
@@ -7,7 +5,7 @@ import { RuleSlugChip } from "@/components/RuleSlugChip"
 import { SeverityChip } from "@/components/SeverityChip"
 import { StatusPill } from "@/components/StatusPill"
 import { Checkbox } from "@/components/ui/checkbox"
-import { apiErrorDetail } from "@/lib/api-error"
+import { useFindingLifecycle } from "@/hooks/useFindingLifecycle"
 import { type EngineActionInput, ignoreAction } from "@/lib/engine-actions"
 import { findingStatusColor, findingStatusLabel } from "@/lib/status-colors"
 
@@ -31,28 +29,19 @@ export function IssueRow({
   onCheckedChange,
   targetState,
 }: IssueRowProps) {
-  const queryClient = useQueryClient()
   const ignored = issue.status === "ignored"
   // While muted, a violation isn't a fix candidate — hide its selection box.
   const hasCheckbox = onCheckedChange !== undefined && !ignored
 
-  const muteMutation = useMutation({
-    mutationFn: () =>
-      ignored
-        ? WorkflowService.unignoreFinding({ findingId: issue.id })
-        : WorkflowService.ignoreFinding({ findingId: issue.id }),
-    onSuccess: () => {
-      toast.success(ignored ? "Issue unignored" : "Issue ignored")
-      queryClient.invalidateQueries({ queryKey: ["findings", "repo", repoId] })
-      queryClient.invalidateQueries({ queryKey: ["findings", "open"] })
-    },
-    onError: (error) =>
-      toast.error(
-        ignored ? "Failed to unignore issue" : "Failed to ignore issue",
-        {
-          description: apiErrorDetail(error),
-        },
-      ),
+  const muteMutation = useFindingLifecycle({
+    findingId: issue.id,
+    ignored,
+    update: (findingId, ignored) =>
+      WorkflowService.updateFinding({ findingId, requestBody: { ignored } }),
+    invalidateKeys: [
+      ["findings", "repo", repoId],
+      ["findings", "open"],
+    ],
   })
 
   return (

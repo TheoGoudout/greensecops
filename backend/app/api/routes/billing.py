@@ -29,6 +29,7 @@ from app.api.deps import (
 )
 from app.api.router import Role, RoleRouter
 from app.core.config import settings
+from app.core.db import after_commit, commit
 from app.core.plans import get_plan, ordered_plans
 from app.core.rate_limit import LIMIT_EXPENSIVE, LIMIT_PUBLIC, LIMIT_WEBHOOK
 from app.models import (
@@ -137,6 +138,9 @@ def get_subscription(
     current_user: CurrentUser,
 ) -> BillingSubscriptionPublic:
     snap = snapshot(session, current_user)
+    # Persist the subscription a first read creates (and any period rollover),
+    # so the id returned here is the one the next request sees.
+    session.commit()
     sub = snap.subscription
 
     return BillingSubscriptionPublic(
@@ -336,6 +340,9 @@ def create_checkout_session(
             )
         )
     sub = get_or_create_subscription(session, current_user)
+    # Committed before Stripe hears of it: the id travels as the checkout's
+    # client_reference_id, and the completion webhook must find that row.
+    session.commit()
     if sub.tier == body.tier and sub.status in (
         SubscriptionStatus.active,
         SubscriptionStatus.trialing,
@@ -363,6 +370,7 @@ def create_checkout_session(
         # repair path for an account already broken before the
         # ``customer.deleted`` handler below existed — that event is long gone.
         _forget_stripe_customer(session, sub)
+        session.commit()
     return CheckoutSessionPublic(url=checkout.url)
 
 
@@ -608,7 +616,6 @@ def _forget_stripe_customer(session: Session, sub: BillingSubscription) -> None:
     sub.stripe_customer_id = None
     sub.stripe_subscription_id = None
     session.add(sub)
-    session.commit()
 
 
 def _handle_subscription_upsert(session: Session, data: dict[str, Any]) -> None:
@@ -645,7 +652,6 @@ def _handle_subscription_upsert(session: Session, data: dict[str, Any]) -> None:
             transition(session, sub, "plan_changed")
         else:
             apply_tier(session, sub, tier)
-    session.commit()
 
     # Stripe's status -> our lifecycle event. ``transition`` is a no-op when the
     # event is illegal from the current state, which is what makes redelivered
@@ -701,13 +707,11 @@ def _handle_invoice(session: Session, data: dict[str, Any], event_type: str) -> 
         invoice.period_end = datetime.fromtimestamp(period_end, tz=timezone.utc)
     if due_date := data.get("due_date"):
         invoice.due_at = datetime.fromtimestamp(due_date, tz=timezone.utc)
-    session.add(invoice)
-    session.commit()
-
     if event_type == "invoice.paid":
         invoice.paid_at = get_datetime_utc()
-        session.add(invoice)
-        session.commit()
+    session.add(invoice)
+
+    if event_type == "invoice.paid":
         # Recovery from either side of the grace boundary, restoring the plan
         # in full rather than leaving the account on Free until the next cycle.
         _first_legal(
@@ -727,17 +731,21 @@ def _handle_invoice(session: Session, data: dict[str, Any], event_type: str) -> 
 def _notify(
     session: Session, sub: BillingSubscription, kind: str, **context: Any
 ) -> None:
-    """Send a billing email, never letting a delivery failure break a webhook.
+    """Send a billing email once the webhook's transaction has committed.
 
-    Stripe retries any non-2xx, so raising out of a handler because SMTP was
-    briefly down would re-run the whole handler — and re-send whatever did
-    succeed.
+    After the commit, so a handler that fails part-way (and is retried by
+    Stripe) has not already told the user about a change that rolled back. A
+    delivery failure is logged, never raised: Stripe retries any non-2xx, and
+    re-running a committed handler would re-send whatever did succeed.
     """
 
-    try:
-        send_billing_email(session, sub, kind, **context)
-    except Exception:
-        logger.exception("Failed to send %s billing email for %s", kind, sub.id)
+    def send() -> None:
+        try:
+            send_billing_email(session, sub, kind, **context)
+        except Exception:
+            logger.exception("Failed to send %s billing email for %s", kind, sub.id)
+
+    after_commit(session, send)
 
 
 @webhook_router.post("/stripe", role=Role.service, limit=LIMIT_WEBHOOK, status_code=200)
@@ -752,6 +760,9 @@ async def stripe_webhook(
     own schedule, and without this a replayed ``invoice.payment_failed`` would
     re-send a dunning email while a replayed subscription update would re-run a
     transition.
+
+    One transaction per event: the handlers below only stage changes, and the
+    commit at the end makes them durable together with the event's id.
     """
     payload = await request.body()
     event = stripe_gateway.parse_webhook_event(payload, stripe_signature)
@@ -783,7 +794,6 @@ async def stripe_webhook(
             # gone; ``effective_tier`` already reports Free from the moment it
             # entered a non-entitled state.
             apply_tier(session, sub, UserTier.free)
-            session.commit()
             _notify(session, sub, "subscription_canceled")
 
     elif event_type == "customer.deleted":
@@ -815,7 +825,6 @@ async def stripe_webhook(
             sub.stripe_customer_id = customer_id or sub.stripe_customer_id
             sub.stripe_subscription_id = stripe_sub_id or sub.stripe_subscription_id
             session.add(sub)
-            session.commit()
             if transition(session, sub, "checkout_completed"):
                 _notify(session, sub, "subscription_started")
 
@@ -836,9 +845,13 @@ async def stripe_webhook(
     else:
         logger.debug("Unhandled Stripe event type: %s", event_type)
 
+    # The idempotency record commits with everything the event changed, so a
+    # handler that fails part-way leaves no trace and Stripe's retry runs it
+    # again from the start. Two concurrent deliveries of one event both get
+    # this far, and the unique stripe_event_id rolls the second back.
     if event_id:
         session.add(
             BillingWebhookEvent(stripe_event_id=event_id, event_type=event_type)
         )
-        session.commit()
+    commit(session)
     return {"status": "ok"}

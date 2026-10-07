@@ -12,18 +12,28 @@ recency), so parameterising them would need more knobs than it saves.
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
-from app.api.deps import CurrentUser, SessionDep, authorize_repo, get_or_404
+from app.api.deps import (
+    CurrentUser,
+    SessionDep,
+    authorize_repo,
+    get_or_404,
+    user_org_ids,
+)
 from app.models import (
     CloudScan,
     Engine,
+    FindingUpdate,
     LLMProvider,
     Repository,
+    ScanTargetUpdate,
     UsageEngine,
     UsageMeter,
     WorkflowFile,
@@ -39,7 +49,9 @@ from app.models.enums import (
 )
 from app.services import state_machines as sm
 from app.services.billing import usage as billing_usage
+from app.services.billing.quota import enforce_quota
 from app.services.engines import EngineSpec
+from app.services.llm.catalog import resolve_llm_provider
 from app.services.sarif_report import sarif_for_repository
 
 
@@ -82,63 +94,55 @@ def get_finding_for_user(
     return finding
 
 
-def ignore_finding_for_user(
-    spec: EngineSpec,
-    finding_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
+def set_finding_ignored(
+    session: Session, finding: Any, ignored: bool | None, label: str
 ) -> Any:
-    """Mute a violation (false positive / accepted risk).
+    """Mute or un-mute a finding through ``FindingMachine``, then commit.
 
-    Idempotent on an already-ignored finding, and a **409** on one that is
-    ``resolved``: ``FindingMachine.ignore`` is legal only from ``open`` and
-    ``fix_in_progress``, so this used to answer ``200`` with an unchanged row
-    and let the UI toast "Finding ignored" over a finding it had not ignored.
-    The two cases look identical to ``try_advance``, which is why the
-    idempotent one is decided before it rather than read out of its ``False``.
+    Muting is idempotent on an already-ignored finding and a **409** on one
+    that is ``resolved``: ``FindingMachine.ignore`` is legal only from ``open``
+    and ``fix_in_progress``, and answering ``200`` with an unchanged row would
+    let the UI toast "Finding ignored" over a finding it had not ignored.
+    Un-muting stays silent where muting raises: a finding that is not ignored
+    has nothing to un-ignore whatever the reason, so the call is safe to retry.
     """
-    finding = get_finding_for_user(spec, finding_id, session, current_user)
-    require_target_idle(
-        spec, session, getattr(finding, spec.target_id_field), TargetAction.ignore
-    )
-    if finding.status == FindingStatus.ignored:
+    if ignored is None:
         return finding
-    if not sm.try_advance(finding, sm.FindingMachine, "ignore"):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"A {spec.label} finding that is {finding.status.value} "
-                "cannot be ignored"
-            ),
-        )
+    if ignored:
+        if finding.status == FindingStatus.ignored:
+            return finding
+        if not sm.try_advance(finding, sm.FindingMachine, "ignore"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"A {label} finding that is {finding.status.value} "
+                "cannot be ignored",
+            )
+    elif not sm.try_advance(finding, sm.FindingMachine, "unignore"):
+        return finding
     session.add(finding)
     session.commit()
     session.refresh(finding)
     return finding
 
 
-def unignore_finding_for_user(
+def update_finding_for_user(
     spec: EngineSpec,
     finding_id: uuid.UUID,
+    body: FindingUpdate,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
-    """Un-mute a previously ignored violation. Idempotent.
+    """``PATCH /{engine}/findings/{id}``: apply ``body`` to one finding.
 
-    Stays silent where its counterpart now raises: a finding that is not
-    ignored has nothing to un-ignore whatever the reason, so every non-
-    ``ignored`` state is the idempotent case and the DELETE remains safe to
-    retry.
+    Refused while the owning target is busy: a scan in flight is about to
+    rewrite the finding the user is muting.
     """
     finding = get_finding_for_user(spec, finding_id, session, current_user)
-    require_target_idle(
-        spec, session, getattr(finding, spec.target_id_field), TargetAction.ignore
-    )
-    if sm.try_advance(finding, sm.FindingMachine, "unignore"):
-        session.add(finding)
-        session.commit()
-        session.refresh(finding)
-    return finding
+    if body.ignored is not None:
+        require_target_idle(
+            spec, session, getattr(finding, spec.target_id_field), TargetAction.ignore
+        )
+    return set_finding_ignored(session, finding, body.ignored, spec.label)
 
 
 def list_fixes_for_repo(
@@ -561,6 +565,369 @@ def _charge_fix(
     )
 
 
+# ─── Route bodies every file engine shares ──────────────────────────────────
+
+
+def normalize_root_path(raw: str) -> str:
+    """Collapse the spellings of one folder to one.
+
+    ``"infra"``, ``"/infra/"`` and ``" infra "`` all address the same folder,
+    and ``""``, ``"/"`` and ``"."`` all mean the repository root. The
+    ``(repo_id, root_path)`` unique constraints compare strings, so without
+    this a repository could accumulate targets that scan the same files.
+    """
+    stripped = raw.strip().strip("/")
+    return "" if stripped in ("", ".") else stripped
+
+
+def create_target(
+    spec: EngineSpec,
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID,
+    root_path: str,
+    *,
+    allow_repo_root: bool,
+) -> Any:
+    """Register a folder of a repository as one of ``spec``'s targets.
+
+    ``allow_repo_root`` is the per-engine part: a Terraform root must name a
+    folder, while a Docker target or an Ansible project frequently *is* the
+    whole repository.
+    """
+    repo = authorize_repo(session, current_user, repo_id)
+    path = normalize_root_path(root_path)
+    if not path and not allow_repo_root:
+        raise HTTPException(status_code=422, detail="root_path must not be empty")
+    existing = session.exec(
+        select(spec.target_model)
+        .where(spec.target_model.repo_id == repo.id)
+        .where(spec.target_model.root_path == path)
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="This path is already configured")
+    target = spec.target_model(repo_id=repo.id, root_path=path)
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    return target
+
+
+def list_targets(
+    spec: EngineSpec,
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID | None,
+) -> list[tuple[Any, TargetActivity]]:
+    """One repository's targets, or every target the user can see, by path.
+
+    Dual-mode so the same endpoint powers both the org-wide Infrastructure page
+    and the per-repository tab. Each target comes with what it is busy with, in
+    one batched read for the whole page, so a list can grey its own actions
+    without fetching each target's fixes to work it out.
+    """
+    model = spec.target_model
+    query = select(model)
+    if repo_id:
+        authorize_repo(session, current_user, repo_id)
+        query = query.where(model.repo_id == repo_id)
+    elif not current_user.is_superuser:
+        query = query.join(Repository, col(model.repo_id) == col(Repository.id)).where(
+            col(Repository.org_id).in_(user_org_ids(session, current_user))
+        )
+    targets = session.exec(query.order_by(col(model.root_path))).all()
+    activities = target_activities(spec, session, [t.id for t in targets])
+    return [(t, activities.get(t.id, TargetActivity.idle)) for t in targets]
+
+
+def update_target(
+    spec: EngineSpec,
+    target_id: uuid.UUID,
+    body: ScanTargetUpdate,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> tuple[Any, TargetActivity]:
+    """Apply ``body`` to a target and return it with its current activity."""
+    target = get_target_for_user(spec, target_id, session, current_user)
+    if body.enabled is not None:
+        target.enabled = body.enabled
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    return target, target_activity(spec, session, target.id)
+
+
+def delete_target(
+    spec: EngineSpec,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> None:
+    """Remove a target and, by cascade, its scans, findings and fixes.
+
+    Which is why it needs the guard the disable switch does not: a worker
+    still holding one of those rows would be writing into a deleted tree.
+    """
+    target = get_target_for_user(spec, target_id, session, current_user)
+    require_target_idle(spec, session, target_id, TargetAction.remove)
+    session.delete(target)
+    session.commit()
+
+
+def trigger_target_scan(
+    spec: EngineSpec,
+    scan_task: Any,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    branch: str | None,
+) -> dict[str, str]:
+    """Queue a manual scan of one target."""
+    target = get_target_for_user(spec, target_id, session, current_user)
+    if not target.enabled:
+        raise HTTPException(status_code=403, detail=f"{spec.target_label} is disabled")
+    require_target_idle(spec, session, target_id, TargetAction.scan)
+    repo = session.get_one(Repository, target.repo_id)
+    # Fail fast with a precise 402 rather than letting the user watch a job
+    # disappear. The worker re-checks — that gate is the one that holds.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "analyses",
+        engine=UsageEngine.of(spec.engine),
+    )
+    scan_task.delay(
+        **{spec.target_id_field: str(target.id)},
+        branch=branch or "",
+        trigger="manual",
+    )
+    return {"status": "queued", spec.target_id_field: str(target_id)}
+
+
+def list_target_scans(
+    spec: EngineSpec,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    limit: int,
+) -> list[Any]:
+    """A target's most recent scans, newest first."""
+    get_target_for_user(spec, target_id, session, current_user)
+    scan_model = spec.scan_model
+    return list(
+        session.exec(
+            select(scan_model)
+            .where(getattr(scan_model, spec.target_id_field) == target_id)
+            .order_by(col(scan_model.created_at).desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+def list_target_findings(
+    spec: EngineSpec,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    include_resolved: bool,
+) -> list[Any]:
+    """A target's findings, by file then line.
+
+    The order a reader works in: one file at a time, top to bottom.
+    """
+    get_target_for_user(spec, target_id, session, current_user)
+    model = spec.finding_model
+    query = select(model).where(getattr(model, spec.target_id_field) == target_id)
+    if not include_resolved:
+        query = query.where(col(model.resolved_at).is_(None))
+    return list(
+        session.exec(query.order_by(col(model.file_path), col(model.line_start))).all()
+    )
+
+
+def fetch_target_files(
+    spec: EngineSpec,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    ref: str | None,
+    fetch_files: Callable[..., list[Any]],
+) -> list[Any]:
+    """A target's live source, fetched from GitHub on demand, by path.
+
+    These files are not persisted (unlike ``WorkflowFile``), so this fetches
+    them the same way the scan worker does — which lets the UI show source with
+    the findings annotated inline. Any failure there is upstream's, hence 502.
+
+    ``fetch_files`` is passed in by the route module because its module-level
+    name is the seam the tests patch.
+    """
+    target = get_target_for_user(spec, target_id, session, current_user)
+    repo = session.get_one(Repository, target.repo_id)
+    try:
+        fetched = fetch_files(repo, target.root_path, ref=ref)
+    except Exception as exc:  # network / GitHub failures are transient
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch {spec.files_description} from GitHub",
+        ) from exc
+    return sorted(fetched, key=lambda f: f.path)
+
+
+def list_target_fixes(
+    spec: EngineSpec,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[Any]:
+    """A target's fixes, newest first."""
+    get_target_for_user(spec, target_id, session, current_user)
+    model = spec.fix_model
+    return list(
+        session.exec(
+            select(model)
+            .where(getattr(model, spec.target_id_field) == target_id)
+            .order_by(col(model.created_at).desc())
+        ).all()
+    )
+
+
+def open_findings_by_file(
+    spec: EngineSpec,
+    session: SessionDep,
+    target_id: uuid.UUID,
+    finding_ids: list[uuid.UUID] | None = None,
+    file_path: str | None = None,
+) -> dict[str, list[Any]]:
+    """A target's open findings — or the chosen subset — grouped by file.
+
+    One whole-file LLM rewrite per file: the model sees every finding in the
+    file at once, which is cheaper and keeps two fixes from racing to patch
+    the same lines.
+    """
+    model = spec.finding_model
+    query = (
+        select(model)
+        .where(getattr(model, spec.target_id_field) == target_id)
+        .where(col(model.resolved_at).is_(None))
+        .where(col(model.ignored_at).is_(None))
+    )
+    if finding_ids:
+        query = query.where(col(model.id).in_(finding_ids))
+    if file_path is not None:
+        query = query.where(model.file_path == file_path)
+    by_file: dict[str, list[Any]] = defaultdict(list)
+    for finding in session.exec(query).all():
+        by_file[finding.file_path].append(finding)
+    return dict(by_file)
+
+
+def queue_file_fixes(
+    spec: EngineSpec,
+    session: SessionDep,
+    current_user: CurrentUser,
+    target: Any,
+    by_file: dict[str, list[Any]],
+    force: bool,
+    dispatch: Callable[[str, list[Any]], None],
+) -> dict[str, str | int]:
+    """Create one pending fix per file, charge for them, then queue each.
+
+    One transaction for the whole request: every fix row, the findings linked
+    to it and its usage charge commit together, and ``dispatch`` runs only
+    after that commit — so a worker never picks up a row a later failure would
+    roll back, and a half-processed request cannot bill for fixes it never
+    queued. ``dispatch(file_path, findings)`` queues the engine's generation
+    task for one file.
+    """
+    repo = session.get_one(Repository, target.repo_id)
+    # Each file is one LLM call, so the request costs as many generations as
+    # there are files.
+    enforce_quota(
+        session,
+        current_user,
+        repo.org_id,
+        "fixes",
+        requested=len(by_file),
+        engine=UsageEngine.of(spec.engine),
+    )
+    provider_str, model_str = resolve_llm_provider(repo)
+    queued: list[str] = []
+    for file_path, findings in by_file.items():
+        fix = prepare_pending_fix(
+            spec,
+            session,
+            target.id,
+            file_path,
+            provider_str,
+            model_str,
+            force,
+            repo=repo,
+        )
+        if fix is None:
+            continue
+        for finding in findings:
+            finding.fix_id = fix.id
+            session.add(finding)
+        queued.append(file_path)
+    session.commit()
+    for file_path in queued:
+        dispatch(file_path, by_file[file_path])
+    return {"status": "queued", "queued": len(queued)}
+
+
+def generate_target_fixes(
+    spec: EngineSpec,
+    fix_task: Any,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    finding_ids: list[uuid.UUID] | None,
+    force: bool,
+) -> dict[str, str | int]:
+    """Generate LLM fixes for a target's open findings, one whole-file fix each."""
+    target = get_target_for_user(spec, target_id, session, current_user)
+    require_target_idle(spec, session, target_id, TargetAction.generate)
+    by_file = open_findings_by_file(spec, session, target_id, finding_ids)
+    if not by_file:
+        return {"status": "no_findings", "queued": 0}
+    return queue_file_fixes(
+        spec,
+        session,
+        current_user,
+        target,
+        by_file,
+        force,
+        lambda _path, findings: fix_task.delay(
+            finding_ids=[str(f.id) for f in findings]
+        ),
+    )
+
+
+def deliver_target_fixes(
+    spec: EngineSpec,
+    delivery_task: Any,
+    target_id: uuid.UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    force: bool,
+) -> dict[str, str]:
+    """Deliver a target's ready fixes as a single PR (one branch per target).
+
+    The branch is returned so the UI can match the target against a PR that is
+    already open.
+    """
+    target = get_target_for_user(spec, target_id, session, current_user)
+    require_target_idle(spec, session, target_id, TargetAction.deliver)
+    delivery_task.delay(**{spec.target_id_field: str(target.id)}, force=force)
+    return {
+        "status": "queued",
+        spec.target_id_field: str(target_id),
+        "pr_branch": spec.fix_branch(target.id),
+    }
+
+
 # ─── SARIF, for GitHub Code Scanning ─────────────────────────────────────────
 
 
@@ -627,3 +994,37 @@ def enabled_targets_for_claims(
         ).all()
     )
     return repo, targets
+
+
+def trigger_code_scanning_scans(
+    spec: EngineSpec,
+    scan_task: Any,
+    session: SessionDep,
+    claims: dict[str, Any],
+    branch: str | None,
+) -> dict[str, str]:
+    """Re-scan every enabled target of ``spec`` in the calling repository.
+
+    The first half of the Code Scanning flow: a workflow asks for fresh
+    analysis and then fetches ``GET /{engine}/sarif``. Quota is charged to the
+    org's billing owner, exactly as a dashboard-triggered scan is; there is no
+    user to attribute it to.
+    """
+    repo, targets = enabled_targets_for_claims(spec, session, claims)
+    if not targets:
+        return {"status": "no_targets", "queued": "0"}
+    enforce_quota(
+        session,
+        None,
+        repo.org_id,
+        "analyses",
+        requested=len(targets),
+        engine=UsageEngine.of(spec.engine),
+    )
+    for target in targets:
+        scan_task.delay(
+            **{spec.target_id_field: str(target.id)},
+            branch=branch or "",
+            trigger="code_scanning",
+        )
+    return {"status": "queued", "queued": str(len(targets))}

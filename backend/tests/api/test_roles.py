@@ -312,8 +312,8 @@ def test_malformed_resource_id_is_a_404_not_a_500(
 
 
 def test_put_routes_also_require_a_role() -> None:
-    """``PUT /workflow/findings/{finding_id}/ignore`` is the only PUT today;
-    the override still has to behave for any other."""
+    """No route uses PUT today; the override still has to guard any that is
+    added."""
     router = RoleRouter()
 
     @router.put("/thing", role=Role.admin)

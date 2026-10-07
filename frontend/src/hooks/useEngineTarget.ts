@@ -11,20 +11,17 @@ import { isFixInFlight } from "@/lib/engine-actions"
 import { SCAN_POLL_MS } from "@/lib/scan-polling"
 
 /**
- * What the Terraform and Docker scan-target cards do identically, once.
+ * What every file engine's scan-target card does, once.
  *
- * Both pages show a list of registered targets, expand one to load its files,
- * findings and fixes, and offer the same six actions: enable/disable, scan now,
- * remove, generate a fix for one file, generate fixes for everything, deliver a
- * PR. The two files each wrote that out — four `useQuery`s and six
- * `useMutation`s apiece, with the same invalidate-then-toast wiring and the same
- * `apiErrorDetail` error handling, differing only in which service method to
- * call and what the toast says.
+ * Each engine's page shows a list of registered targets, expands one to load
+ * its files, findings and fixes, and offers the same six actions:
+ * enable/disable, scan now, remove, generate a fix for one file, generate fixes
+ * for everything, deliver a PR. Only which service method to call and what the
+ * toast says differ.
  *
- * The *rendering* stays per-engine on purpose. A Terraform card shows module
- * paths and a scan history; a Docker card shows build stages and Compose
- * services. Those are different screens that happen to share a data layer, and
- * merging their JSX would mean a component whose body is mostly branches.
+ * The card that renders it is shared too — see `components/FileTargetTab`. The
+ * list-of-targets query it invalidates is keyed `${keyPrefix}-targets`, which
+ * every page listing an engine's targets uses.
  */
 
 export interface EngineTargetCalls<TFile, TFinding, TFix> {

@@ -720,8 +720,9 @@ def test_ignoring_a_finding_waits_for_a_scan_but_not_for_fix_work(
     finding = _make_engine_finding(db, engine, target, scan)
 
     _assert_conflict(
-        client.put(
-            _url(f"/{engine}/findings/{finding.id}/ignore"),
+        client.patch(
+            _url(f"/{engine}/findings/{finding.id}"),
+            json={"ignored": True},
             headers=superuser_token_headers,
         ),
         "a scan is already running",
@@ -733,8 +734,9 @@ def test_ignoring_a_finding_waits_for_a_scan_but_not_for_fix_work(
     db.add(scan)
     db.commit()
 
-    allowed = client.put(
-        _url(f"/{engine}/findings/{finding.id}/ignore"),
+    allowed = client.patch(
+        _url(f"/{engine}/findings/{finding.id}"),
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert allowed.status_code == 200, allowed.text
@@ -756,8 +758,9 @@ def test_ignoring_a_resolved_finding_is_a_conflict_not_a_silent_no_op(
         db, engine, target, scan, status=FindingStatus.resolved
     )
 
-    response = client.put(
-        _url(f"/{engine}/findings/{finding.id}/ignore"),
+    response = client.patch(
+        _url(f"/{engine}/findings/{finding.id}"),
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
 
@@ -779,8 +782,9 @@ def test_ignoring_an_already_ignored_finding_stays_idempotent(
         db, engine, target, scan, status=FindingStatus.ignored
     )
 
-    response = client.put(
-        _url(f"/{engine}/findings/{finding.id}/ignore"),
+    response = client.patch(
+        _url(f"/{engine}/findings/{finding.id}"),
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
 
@@ -811,8 +815,9 @@ def test_ignoring_a_workflow_finding_follows_the_same_two_rules(
     db.commit()
 
     _assert_conflict(
-        client.put(
-            _url(f"/workflow/findings/{finding.id}/ignore"),
+        client.patch(
+            _url(f"/workflow/findings/{finding.id}"),
+            json={"ignored": True},
             headers=superuser_token_headers,
         ),
         "a scan is already running",
@@ -824,8 +829,9 @@ def test_ignoring_a_workflow_finding_follows_the_same_two_rules(
     db.add(finding)
     db.commit()
 
-    resolved = client.put(
-        _url(f"/workflow/findings/{finding.id}/ignore"),
+    resolved = client.patch(
+        _url(f"/workflow/findings/{finding.id}"),
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resolved.status_code == 409, resolved.text

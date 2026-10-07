@@ -1330,7 +1330,7 @@ def test_auto_queue_fix_generation_no_open_issues_is_noop(
     _completed_analysis(db, repo, workflow_file)
 
     with patch("app.workers.tasks.fix_generation.run_fix_generation") as mock_task:
-        _auto_queue_fix_generation(db, repo, str(repo.org_id))
+        _auto_queue_fix_generation(db, repo)
 
     mock_task.delay.assert_not_called()
     fixes = db.exec(
@@ -1371,7 +1371,7 @@ def test_auto_queue_fix_generation_creates_pending_fix_and_queues_task(
         patch("app.workers.tasks.fix_generation.init_fix_batch") as mock_init,
         patch("app.services.events.publisher.publish_event") as mock_publish,
     ):
-        _auto_queue_fix_generation(db, repo, str(repo.org_id))
+        _auto_queue_fix_generation(db, repo)
 
     fix = db.exec(
         select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
@@ -1463,9 +1463,7 @@ def test_auto_queue_regenerates_delivered_fix_when_content_changed(
         patch("app.workers.tasks.fix_generation.init_fix_batch"),
         patch("app.services.events.publisher.publish_event"),
     ):
-        _auto_queue_fix_generation(
-            db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
-        )
+        _auto_queue_fix_generation(db, repo, changed_wf_ids={workflow_file.id})
 
     fix = db.exec(
         select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
@@ -1513,9 +1511,7 @@ def test_auto_queue_reuses_unchanged_fix_and_regenerates_changed(
         patch("app.workers.tasks.fix_generation.init_fix_batch"),
         patch("app.services.events.publisher.publish_event"),
     ):
-        _auto_queue_fix_generation(
-            db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
-        )
+        _auto_queue_fix_generation(db, repo, changed_wf_ids={workflow_file.id})
 
     changed = db.exec(
         select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
@@ -1555,9 +1551,7 @@ def test_auto_queue_skips_merged_fix(
         patch("app.workers.tasks.fix_generation.init_fix_batch"),
         patch("app.services.events.publisher.publish_event"),
     ):
-        _auto_queue_fix_generation(
-            db, repo, str(repo.org_id), changed_wf_ids={workflow_file.id}
-        )
+        _auto_queue_fix_generation(db, repo, changed_wf_ids={workflow_file.id})
 
     fix = db.exec(
         select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)
@@ -1589,7 +1583,7 @@ def test_auto_queue_is_noop_when_nothing_changed(
         patch("app.workers.tasks.fix_generation.init_fix_batch"),
         patch("app.services.events.publisher.publish_event"),
     ):
-        _auto_queue_fix_generation(db, repo, str(repo.org_id), changed_wf_ids=set())
+        _auto_queue_fix_generation(db, repo, changed_wf_ids=set())
 
     fix = db.exec(
         select(WorkflowFix).where(WorkflowFix.workflow_file_id == workflow_file.id)

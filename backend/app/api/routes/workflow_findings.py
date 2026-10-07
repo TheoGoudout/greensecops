@@ -1,6 +1,7 @@
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, Query
 from sqlalchemy import case, func
@@ -13,11 +14,11 @@ from app.api.router import Role, RoleRouter
 from app.models import (
     Category,
     FindingCategoryStat,
+    FindingUpdate,
     RepoCategoryStat,
     RepoFindingStats,
     Repository,
     Rule,
-    ScanStatus,
     Severity,
     TargetAction,
     WorkflowFile,
@@ -34,20 +35,53 @@ from app.services.scoring import (
     severity_penalty_case,
 )
 from app.services.state_machines import REJECTED_STATUSES
+from app.services.workflow_fixes import is_from_latest_scan
 
 router = RoleRouter()
 
 
-def _authorize_issue(
-    session: SessionDep, current_user: CurrentUser, issue: WorkflowFinding
-) -> None:
-    """404 unless the caller is a superuser or a member of the issue's org."""
-    if current_user.is_superuser:
-        return
-    analysis = session.get(WorkflowScan, issue.analysis_id)
-    repo = session.get(Repository, analysis.repo_id) if analysis else None
-    if not repo or repo.org_id not in user_org_ids(session, current_user):
-        raise HTTPException(status_code=404, detail="Workflow finding not found")
+def _visible_findings(
+    session: SessionDep,
+    current_user: CurrentUser,
+    repo_id: uuid.UUID | None,
+    branch: str | None,
+    latest_only: bool,
+) -> Any:
+    """The findings the caller may see, narrowed the way both reads narrow them.
+
+    Findings belong to a per-branch ``WorkflowFile``, so a repository read
+    without an explicit branch shows the default branch — feature-branch
+    findings appear only when asked for. ``latest_only`` keeps each file's
+    latest completed scan, regardless of repository scoping, so org-wide reads
+    (the dashboard) do not count rows left over from earlier scans.
+
+    ``WorkflowScan`` is always joined: tenant scoping, the repository filter and
+    the per-repository breakdown all read it, and the foreign key is non-null.
+    """
+    query = select(WorkflowFinding).join(
+        WorkflowScan, col(WorkflowFinding.analysis_id) == col(WorkflowScan.id)
+    )
+    if not current_user.is_superuser:
+        query = query.where(
+            col(WorkflowScan.repo_id).in_(
+                select(Repository.id).where(
+                    col(Repository.org_id).in_(user_org_ids(session, current_user))
+                )
+            )
+        )
+    if repo_id is not None:
+        query = query.where(WorkflowScan.repo_id == repo_id)
+        if branch is None:
+            repo = session.get(Repository, repo_id)
+            branch = repo.default_branch if repo else None
+    if branch:
+        query = query.join(
+            WorkflowFile,
+            col(WorkflowFinding.workflow_file_id) == col(WorkflowFile.id),
+        ).where(WorkflowFile.branch == branch)
+    if latest_only:
+        query = query.where(is_from_latest_scan())
+    return query
 
 
 @router.get("/findings", role=Role.user, response_model=list[WorkflowFindingPublic])
@@ -66,56 +100,13 @@ def list_findings(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, le=500),
 ) -> list[WorkflowFindingPublic]:
-    query = select(WorkflowFinding)
+    query = _visible_findings(session, current_user, repo_id, branch, latest_only)
     if not include_resolved:
         query = query.where(col(WorkflowFinding.resolved_at).is_(None))
     if not include_ignored:
         query = query.where(col(WorkflowFinding.ignored_at).is_(None))
-    # Issues belong to a per-branch WorkflowFile row; a repo listing without an
-    # explicit branch shows the default branch (feature-branch issues only
-    # appear when asked for).
-    if repo_id is not None and branch is None:
-        repo = session.get(Repository, repo_id)
-        branch = repo.default_branch if repo else None
-    # Join WorkflowScan once if either tenant scoping or repo filtering needs it.
-    needs_analysis_join = repo_id is not None or not current_user.is_superuser
-    if needs_analysis_join:
-        query = query.join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
-    if not current_user.is_superuser:
-        query = query.where(
-            WorkflowScan.repo_id.in_(  # type: ignore[attr-defined]
-                select(Repository.id).where(
-                    Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
-                )
-            )
-        )
     if scan_id:
         query = query.where(WorkflowFinding.analysis_id == scan_id)
-    if branch:
-        query = query.join(
-            WorkflowFile,
-            WorkflowFinding.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
-        ).where(WorkflowFile.branch == branch)
-    if repo_id:
-        query = query.where(WorkflowScan.repo_id == repo_id)
-    if latest_only:
-        # The workflow_file_id correlation is inherently branch-scoped now
-        # that WorkflowFile rows are per-branch. Applies regardless of repo_id
-        # scoping so org-wide listings (e.g. the dashboard) don't count stale
-        # issue rows left over from a workflow file's earlier analyses.
-        latest_subq = (
-            select(WorkflowScan.id)
-            .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
-            .where(WorkflowScan.status == ScanStatus.completed)
-            .order_by(
-                col(WorkflowScan.completed_at).desc().nulls_last(),
-                col(WorkflowScan.created_at).desc(),
-            )
-            .limit(1)
-            .correlate(WorkflowFinding)
-            .scalar_subquery()
-        )
-        query = query.where(WorkflowFinding.analysis_id == latest_subq)
     if unfixed:
         active_fix_ids = select(WorkflowFix.id).where(
             col(WorkflowFix.status).not_in(REJECTED_STATUSES)
@@ -161,48 +152,13 @@ def get_finding_stats(
     org — every matching row is summed server-side, never materialized into
     a capped page of ``WorkflowFindingPublic`` objects.
     """
-    query = select(WorkflowFinding).where(col(WorkflowFinding.ignored_at).is_(None))
-
-    if repo_id is not None and branch is None:
-        repo = session.get(Repository, repo_id)
-        branch = repo.default_branch if repo else None
-
-    needs_analysis_join = repo_id is not None or not current_user.is_superuser
-    if needs_analysis_join:
-        query = query.join(WorkflowScan, WorkflowFinding.analysis_id == WorkflowScan.id)  # type: ignore[arg-type]
-    if not current_user.is_superuser:
-        query = query.where(
-            WorkflowScan.repo_id.in_(  # type: ignore[attr-defined]
-                select(Repository.id).where(
-                    Repository.org_id.in_(user_org_ids(session, current_user))  # type: ignore[attr-defined]
-                )
-            )
-        )
-    if branch:
-        query = query.join(
-            WorkflowFile,
-            WorkflowFinding.workflow_file_id == WorkflowFile.id,  # type: ignore[arg-type]
-        ).where(WorkflowFile.branch == branch)
-    if repo_id:
-        query = query.where(WorkflowScan.repo_id == repo_id)
-    if latest_only:
-        latest_subq = (
-            select(WorkflowScan.id)
-            .where(WorkflowScan.workflow_file_id == WorkflowFinding.workflow_file_id)
-            .where(WorkflowScan.status == ScanStatus.completed)
-            .order_by(
-                col(WorkflowScan.completed_at).desc().nulls_last(),
-                col(WorkflowScan.created_at).desc(),
-            )
-            .limit(1)
-            .correlate(WorkflowFinding)
-            .scalar_subquery()
-        )
-        query = query.where(WorkflowFinding.analysis_id == latest_subq)
+    query = _visible_findings(
+        session, current_user, repo_id, branch, latest_only
+    ).where(col(WorkflowFinding.ignored_at).is_(None))
 
     is_open = col(WorkflowFinding.resolved_at).is_(None)
     is_critical = WorkflowFinding.severity == Severity.critical
-    grouped = query.with_only_columns(  # type: ignore[call-overload]
+    grouped = query.with_only_columns(
         WorkflowFinding.category,
         func.sum(case((is_open, 1), else_=0)).label("open"),
         func.sum(case((~is_open, 1), else_=0)).label("resolved"),
@@ -224,20 +180,12 @@ def get_finding_stats(
     ]
 
     # Per-repo breakdown for the dashboard's category health star diagram.
-    # Only meaningful when not already scoped to a single repo; needs
-    # WorkflowScan (and Rule, for severity_weight) joined regardless of the
-    # superuser/org-filter branch above.
+    # Only meaningful when not already scoped to a single repo; joins Rule for
+    # its severity_weight.
     by_repo: list[RepoFindingStats] = []
     if repo_id is None:
-        repo_query = (
-            query
-            if needs_analysis_join
-            else query.join(
-                WorkflowScan, col(WorkflowFinding.analysis_id) == WorkflowScan.id
-            )
-        )
-        repo_query = repo_query.join(Rule, WorkflowFinding.rule_id == Rule.id)  # type: ignore[arg-type]
-        repo_grouped = repo_query.with_only_columns(  # type: ignore[call-overload]
+        repo_query = query.join(Rule, col(WorkflowFinding.rule_id) == col(Rule.id))
+        repo_grouped = repo_query.with_only_columns(
             WorkflowScan.repo_id,
             WorkflowFinding.category,
             func.sum(case((is_open, 1), else_=0)).label("open"),
@@ -321,83 +269,45 @@ def get_finding_stats(
 def get_finding(
     finding_id: uuid.UUID,
     session: SessionDep,
-    current_user: CurrentUser,
 ) -> WorkflowFindingPublic:
-    issue = get_or_404(session, WorkflowFinding, finding_id)
-    _authorize_issue(session, current_user, issue)
-    return to_workflow_finding_public(issue)
+    return to_workflow_finding_public(get_or_404(session, WorkflowFinding, finding_id))
 
 
-@router.put(
-    "/findings/{finding_id}/ignore",
+@router.patch(
+    "/findings/{finding_id}",
     role=Role.org_admin,
     response_model=WorkflowFindingPublic,
 )
-def ignore_finding(
+def update_finding(
     finding_id: uuid.UUID,
+    body: FindingUpdate,
     session: SessionDep,
-    current_user: CurrentUser,
 ) -> WorkflowFindingPublic:
-    """Mute a violation (false positive / accepted risk).
+    """Mute (``ignored: true``) or un-mute a violation.
 
-    Sets ``ignored_at``; the DB trigger recomputes ``status`` to ``ignored``,
-    which takes precedence over resolve/fix state and drops the issue out of the
-    default (active) issue and fix queries. Idempotent on an already-ignored
-    issue, and a 409 on a resolved one.
-
-    That precedence is for an issue resolved *after* it was muted, not a licence
-    to mute one that is already gone — the other four engines refuse it outright
-    (``FindingMachine.ignore`` is legal only from ``open`` and
-    ``fix_in_progress``), and one vocabulary means this engine says the same.
-    The PR-comment ``/greensecops ignore`` path writes the column directly and
-    is deliberately untouched: a bulk fingerprint mute is not a click on a
-    button that should have been grey.
+    Muting sets ``ignored_at``; the DB trigger recomputes ``status`` to
+    ``ignored``, which takes precedence over resolve/fix state and drops the
+    issue out of the default (active) issue and fix queries. It is idempotent on
+    an already-ignored issue and a 409 on a resolved one, as on every other
+    engine (``FindingMachine.ignore`` is legal only from ``open`` and
+    ``fix_in_progress``). Un-muting is idempotent in every state. The PR-comment
+    ``/greensecops ignore`` path writes the column directly and is deliberately
+    untouched: a bulk fingerprint mute is not a click on a button that should
+    have been grey.
     """
     issue = get_or_404(session, WorkflowFinding, finding_id)
-    _authorize_issue(session, current_user, issue)
-    if issue.ignored_at is not None:
+    if body.ignored is None or body.ignored == (issue.ignored_at is not None):
         return to_workflow_finding_public(issue)
     wf_file = get_or_404(session, WorkflowFile, issue.workflow_file_id)
     require_idle(
         workflow_file_activity(session, wf_file), TargetAction.ignore, "workflow file"
     )
-    if issue.resolved_at is not None:
+    if body.ignored and issue.resolved_at is not None:
         raise HTTPException(
             status_code=409,
             detail="A workflow finding that is resolved cannot be ignored",
         )
-    issue.ignored_at = datetime.now(timezone.utc)
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    return to_workflow_finding_public(issue)
-
-
-@router.delete(
-    "/findings/{finding_id}/ignore",
-    role=Role.org_admin,
-    response_model=WorkflowFindingPublic,
-)
-def unignore_finding(
-    finding_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> WorkflowFindingPublic:
-    """Un-mute a previously ignored violation. Idempotent.
-
-    An issue that is not ignored has nothing to un-ignore whatever the reason,
-    so every such state is the idempotent case and this stays safe to retry —
-    the same split its counterpart above now draws.
-    """
-    issue = get_or_404(session, WorkflowFinding, finding_id)
-    _authorize_issue(session, current_user, issue)
-    if issue.ignored_at is None:
-        return to_workflow_finding_public(issue)
-    wf_file = get_or_404(session, WorkflowFile, issue.workflow_file_id)
-    require_idle(
-        workflow_file_activity(session, wf_file), TargetAction.ignore, "workflow file"
-    )
-    issue.ignored_at = None
+    issue.ignored_at = datetime.now(timezone.utc) if body.ignored else None
     session.add(issue)
     session.commit()
     session.refresh(issue)

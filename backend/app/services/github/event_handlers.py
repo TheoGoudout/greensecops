@@ -269,18 +269,13 @@ def handle_pull_request_lifecycle(
 
     sm.try_advance(pr_record, sm.PullRequestMachine, event)
     session.add(pr_record)
-    session.commit()
-    logger.info(
-        "PR %s -> state=%s for PR record %s",
-        pr_record.pr_url,
-        pr_record.pr_state,
-        pr_record.id,
-    )
 
     pr_fixes = list(
         session.exec(select(WorkflowFix).where(WorkflowFix.pr_id == pr_record.id)).all()
     )
 
+    # Fixes whose transition is announced once the transaction commits.
+    changed: list[WorkflowFix] = []
     if event == "reopen":
         # Reopening withdraws the close-as-rejection signal: fixes the closed-PR
         # delivery guard auto-rejected (``superseded_by_closed_pr``) become
@@ -289,67 +284,64 @@ def handle_pull_request_lifecycle(
             if pr_fix.status == FixStatus.superseded_by_closed_pr:
                 sm.advance(pr_fix, sm.FixMachine, "restore")
                 session.add(pr_fix)
-        session.commit()
     elif event == "close":
         # A delivered PR closed without merging withdraws its fixes: move them to
         # ``superseded_by_closed_pr`` so ``reopen`` restores them. try_advance
         # keeps it a no-op for any already-terminal fix.
-        superseded_fixes: list[WorkflowFix] = []
-        for pr_fix in pr_fixes:
-            if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr"):
-                session.add(pr_fix)
-                superseded_fixes.append(pr_fix)
-        if superseded_fixes:
-            session.commit()
-            repo = session.get(Repository, pr_record.repo_id)
-            if repo:
-                for pr_fix in superseded_fixes:
-                    events_pub.publish_event(
-                        ev.fix_rejected(str(repo.org_id), str(repo.id), str(pr_fix.id))
-                    )
+        changed = [
+            pr_fix
+            for pr_fix in pr_fixes
+            if sm.try_advance(pr_fix, sm.FixMachine, "supersede_closed_pr")
+        ]
     elif event == "merge":
         # The PR merged: land its delivered fixes (terminal) and resolve the
         # issues they addressed — the code is now on the branch. try_advance
         # keeps non-``delivered`` fixes untouched.
-        landed_fixes: list[WorkflowFix] = []
-        for pr_fix in pr_fixes:
-            if sm.try_advance(pr_fix, sm.FixMachine, "land"):
-                session.add(pr_fix)
-                landed_fixes.append(pr_fix)
-        if landed_fixes:
-            _resolve_issues_for_landed_fixes(session, landed_fixes)
-            session.commit()
-            repo = session.get(Repository, pr_record.repo_id)
-            if repo:
-                for pr_fix in landed_fixes:
-                    events_pub.publish_event(
-                        ev.fix_landed(str(repo.org_id), str(repo.id), str(pr_fix.id))
-                    )
+        changed = [
+            pr_fix
+            for pr_fix in pr_fixes
+            if sm.try_advance(pr_fix, sm.FixMachine, "land")
+        ]
+        if changed:
+            _resolve_issues_for_landed_fixes(session, changed)
+    session.add_all(changed)
 
-    fix = pr_fixes[0] if pr_fixes else None
-    if fix:
-        repo = session.get(Repository, pr_record.repo_id)
-        if repo:
-            if event in ("close", "merge"):
-                events_pub.publish_event(
-                    ev.pr_closed(
-                        str(repo.org_id),
-                        str(repo.id),
-                        str(fix.id),
-                        pr_record.pr_url or "",
-                        merged,
-                    )
-                )
-            else:
-                events_pub.publish_event(
-                    ev.pr_opened(
-                        str(repo.org_id),
-                        str(repo.id),
-                        [str(fix.id)],
-                        pr_record.pr_url or "",
-                        pr_record.pr_branch,
-                    )
-                )
+    # The PR's new state and every consequence for its fixes and issues commit
+    # together, so a failure part-way cannot leave a merged PR whose fixes are
+    # still "delivered".
+    session.commit()
+    logger.info(
+        "PR %s -> state=%s for PR record %s",
+        pr_record.pr_url,
+        pr_record.pr_state,
+        pr_record.id,
+    )
+
+    repo = session.get(Repository, pr_record.repo_id)
+    if repo is None:
+        return
+    org_id, repo_id = str(repo.org_id), str(repo.id)
+    fix_event = ev.fix_landed if event == "merge" else ev.fix_rejected
+    for pr_fix in changed:
+        events_pub.publish_event(fix_event(org_id, repo_id, str(pr_fix.id)))
+
+    if not pr_fixes:
+        return
+    fix = pr_fixes[0]
+    if event in ("close", "merge"):
+        events_pub.publish_event(
+            ev.pr_closed(org_id, repo_id, str(fix.id), pr_record.pr_url or "", merged)
+        )
+    else:
+        events_pub.publish_event(
+            ev.pr_opened(
+                org_id,
+                repo_id,
+                [str(fix.id)],
+                pr_record.pr_url or "",
+                pr_record.pr_branch,
+            )
+        )
 
 
 def _resolve_issues_for_landed_fixes(

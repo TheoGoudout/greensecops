@@ -17,9 +17,8 @@ export function CloudFindingRow({
   const mutation = useFindingLifecycle({
     findingId: finding.id,
     ignored,
-    ignore: (cloudFindingId) => CloudService.ignoreFinding({ cloudFindingId }),
-    unignore: (cloudFindingId) =>
-      CloudService.unignoreFinding({ cloudFindingId }),
+    update: (cloudFindingId, ignored) =>
+      CloudService.updateFinding({ cloudFindingId, requestBody: { ignored } }),
     invalidateKeys: [["cloud-findings", finding.cloud_account_id]],
   })
 

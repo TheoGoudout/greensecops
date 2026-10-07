@@ -21,9 +21,11 @@ import math
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.core.db import after_commit
 from app.core.plans import DEFAULT_TIER
 from app.models import (
     BillingSubscription,
@@ -88,18 +90,28 @@ def get_or_create_subscription(session: Session, user: User) -> BillingSubscript
     ``User.tier`` and its billing page from ``BillingSubscription.tier`` — two
     different answers to the same question. The subscription is the authority
     now; ``User.tier`` is a mirror kept in sync by ``apply_tier``.
+
+    Never commits: it is called from inside other transactions (approving an
+    open-source application, enforcing a quota), and committing here used to
+    commit the caller's half-finished work along with it. The row is inserted
+    under a savepoint instead, so a concurrent request that created it first
+    costs a rollback to that savepoint rather than the caller's transaction.
     """
     sub = get_subscription(session, user.id)
     if sub is not None:
         return sub
-    sub = BillingSubscription(
-        user_id=user.id,
-        tier=user.tier or DEFAULT_TIER,
-        status=SubscriptionStatus.active,
-    )
-    session.add(sub)
-    session.commit()
-    session.refresh(sub)
+    try:
+        with session.begin_nested():
+            sub = BillingSubscription(
+                user_id=user.id,
+                tier=user.tier or DEFAULT_TIER,
+                status=SubscriptionStatus.active,
+            )
+            session.add(sub)
+    except IntegrityError:
+        # Lost the race on the unique user_id: the other request's row wins.
+        sub = get_subscription(session, user.id)
+        assert sub is not None
     return sub
 
 
@@ -146,6 +158,10 @@ def ensure_current_period(
     derived from a lifetime counter and the only way to scope it to a period
     was to subtract where the last one ended. The ledger records when each unit
     was consumed, so a period is just a date range.
+
+    Never commits, for the same reason as ``get_or_create_subscription``: the
+    rollover is part of whatever transaction read the period. A read-only
+    caller that never commits simply recomputes the same window next time.
     """
     now = get_datetime_utc()
     if sub.period_end is not None and now < sub.period_end:
@@ -155,8 +171,6 @@ def ensure_current_period(
     # hit 100% in March would never be warned again.
     sub.quota_warning_percent = 0
     session.add(sub)
-    session.commit()
-    session.refresh(sub)
     return sub
 
 
@@ -178,7 +192,8 @@ def set_stripe_period(
 
 
 def _publish(session: Session, sub: BillingSubscription, event: str) -> None:
-    """Emit the transition's declared SSE output to every org it affects.
+    """Emit the transition's declared SSE output, once it has committed, to
+    every org it affects.
 
     SSE is routed by org while a subscription belongs to a user, so a user who
     is the billing owner of three orgs gets the signal on all three — each of
@@ -187,12 +202,16 @@ def _publish(session: Session, sub: BillingSubscription, event: str) -> None:
     signal = sm.output_for(sm.BillingSubscriptionMachine, event)
     if signal is None:
         return
-    for org_id in billing_owner_org_ids(session, sub.user_id):
-        events_pub.publish_event(
-            ev.subscription_changed(
-                str(org_id), signal, sub.tier.value, sub.status.value
-            )
-        )
+    events = [
+        ev.subscription_changed(str(org_id), signal, sub.tier.value, sub.status.value)
+        for org_id in billing_owner_org_ids(session, sub.user_id)
+    ]
+
+    def publish() -> None:
+        for changed in events:
+            events_pub.publish_event(changed)
+
+    after_commit(session, publish)
 
 
 def transition(session: Session, sub: BillingSubscription, event: str) -> bool:
@@ -238,8 +257,6 @@ def transition(session: Session, sub: BillingSubscription, event: str) -> bool:
         sub.cancel_at_period_end = False
 
     session.add(sub)
-    session.commit()
-    session.refresh(sub)
     _publish(session, sub, event)
     return True
 

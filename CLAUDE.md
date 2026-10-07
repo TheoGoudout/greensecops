@@ -69,6 +69,21 @@ The shared flows themselves live in `services/scan_runner.py`,
 should be a Celery task, a lock, a retry policy and a spec — if one is growing
 a scan pipeline of its own, it is diverging from the others.
 
+## Transactions
+
+One request or task step is one transaction, committed once by whoever owns
+it — the route or the worker, never a helper it calls. A service function that
+writes stages its changes and returns; one that must announce a change (an SSE
+event, an email) queues it with `core.db.after_commit`, and the owner ends the
+transaction with `core.db.commit`, which runs those effects only once the data
+is durable. Celery tasks are dispatched after the commit that created the rows
+they will read. `services/workflow_fixes.py` and the Stripe webhook are the
+worked examples.
+
+The file engines' route bodies live in `api/engine_routes.py`; each engine's
+module keeps one thin function per endpoint, because the function name is the
+operation id.
+
 ## Authorization
 
 Every endpoint declares its caller in the decorator:

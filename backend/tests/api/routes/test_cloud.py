@@ -482,8 +482,9 @@ def test_ignore_and_unignore_cloud_finding(
     superuser_token_headers: dict[str, str],
     cloud_finding: CloudFinding,
 ) -> None:
-    resp = client.put(
-        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -492,15 +493,17 @@ def test_ignore_and_unignore_cloud_finding(
     assert cloud_finding.status is FindingStatus.ignored
 
     # Idempotent.
-    resp = client.put(
-        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
 
-    resp = client.delete(
-        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}",
+        json={"ignored": False},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -514,8 +517,9 @@ def test_ignore_cloud_finding_wrong_tenant_is_404(
     normal_user_token_headers: dict[str, str],
     cloud_finding: CloudFinding,
 ) -> None:
-    resp = client.put(
-        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/cloud/findings/{cloud_finding.id}",
+        json={"ignored": True},
         headers=normal_user_token_headers,
     )
     assert resp.status_code == 404

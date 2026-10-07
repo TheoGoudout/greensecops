@@ -166,11 +166,8 @@ test.describe("Terraform", () => {
 
     const ignoreRequest = page.waitForRequest(
       (r) =>
-        r
-          .url()
-          .includes(
-            `/terraform/findings/${MOCK_TERRAFORM_FINDING.id}/ignore`,
-          ) && r.method() === "PUT",
+        r.url().includes(`/terraform/findings/${MOCK_TERRAFORM_FINDING.id}`) &&
+        r.method() === "PATCH",
     )
     await page.getByRole("button", { name: "Ignore" }).first().click()
     await ignoreRequest
@@ -185,11 +182,8 @@ test.describe("Terraform", () => {
 
     const unignoreRequest = page.waitForRequest(
       (r) =>
-        r
-          .url()
-          .includes(
-            `/terraform/findings/${MOCK_TERRAFORM_FINDING.id}/ignore`,
-          ) && r.method() === "DELETE",
+        r.url().includes(`/terraform/findings/${MOCK_TERRAFORM_FINDING.id}`) &&
+        r.method() === "PATCH",
     )
     await unignoreButton.click()
     await unignoreRequest

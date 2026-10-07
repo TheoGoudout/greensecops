@@ -1,32 +1,10 @@
 import uuid
-from collections import defaultdict
 from typing import Any
 
-from fastapi import HTTPException
-from pydantic import BaseModel
-from sqlmodel import col, select
+from fastapi import Query
 
-from app.api.deps import (
-    CurrentUser,
-    GitHubOidcClaims,
-    SessionDep,
-    authorize_repo,
-    get_or_404,
-    user_org_ids,
-)
-from app.api.engine_routes import (
-    enabled_targets_for_claims,
-    get_finding_for_user,
-    get_target_for_user,
-    ignore_finding_for_user,
-    list_fixes_for_repo,
-    prepare_pending_fix,
-    require_target_idle,
-    sarif_for_claims,
-    target_activities,
-    target_activity,
-    unignore_finding_for_user,
-)
+from app.api import engine_routes as shared
+from app.api.deps import CurrentUser, GitHubOidcClaims, SessionDep
 from app.api.mappers import (
     to_ansible_finding_public,
     to_ansible_fix_public,
@@ -37,44 +15,34 @@ from app.api.router import Role, RoleRouter
 from app.core.rate_limit import LIMIT_EXPENSIVE, LIMIT_INGEST
 from app.models import (
     AnsibleFilePublic,
-    AnsibleFinding,
     AnsibleFindingPublic,
-    AnsibleFix,
     AnsibleFixPublic,
-    AnsibleProject,
     AnsibleProjectCreate,
     AnsibleProjectPublic,
-    AnsibleScan,
     AnsibleScanPublic,
     Engine,
-    Repository,
+    FindingUpdate,
+    FixGenerateRequest,
     ScanTargetUpdate,
-    TargetAction,
-    TargetActivity,
-    UsageEngine,
 )
 from app.services.ansible.discovery import classify_ansible_file
-from app.services.billing.quota import enforce_quota
-from app.services.delivery_pr import ansible_fix_branch
-from app.services.engines import ANSIBLE_ENGINE
-from app.services.github.fetch import fetch_ansible_files as _fetch_ansible_files
+from app.services.engines import ANSIBLE_ENGINE as SPEC
+from app.services.github.fetch import (
+    fetch_ansible_files as _fetch_ansible_files,
+)
 from app.workers.tasks.ansible_analysis import run_ansible_scan
 from app.workers.tasks.ansible_fix_delivery import deliver_ansible_fixes
 from app.workers.tasks.ansible_fix_generation import run_ansible_fix_generation
-from app.workers.tasks.fix_generation import resolve_llm_provider
 
 # `project_id` rather than `target_id` or `root_id`: `api/router.ORG_RESOLVERS`
 # is keyed by path-parameter *name*, and those two are already taken by Docker
 # and Terraform. Reusing one would resolve this engine's role checks against
 # the wrong table.
+#
+# The bodies live in api/engine_routes.py, shared with Terraform and Docker. The
+# functions stay one per endpoint here because their names become the OpenAPI
+# operation ids, and so the generated clients' method names.
 router = RoleRouter(prefix="/ansible", tags=["ansible"])
-
-
-class AnsibleFixGenerateRequest(BaseModel):
-    # Optional subset of finding ids to fix; omit to fix every open finding
-    # in the project. Findings are grouped by file into one whole-file fix
-    # each, the way the Terraform route groups them.
-    finding_ids: list[uuid.UUID] | None = None
 
 
 @router.post(
@@ -85,30 +53,16 @@ def create_project(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AnsibleProjectPublic:
-    repo = authorize_repo(session, current_user, project_in.repo_id)
-    # Normalize so "infra", "/infra", "infra/" and "/infra/" all address the
-    # same project — otherwise the (repo_id, root_path) uniqueness constraint
-    # would let a user create near-duplicates that mean the same thing.
-    #
-    # Unlike Terraform, "" is allowed and means the repository root: an Ansible
-    # project frequently *is* the whole repo, with playbooks/ and roles/ at the
-    # top level.
-    normalized_path = project_in.root_path.strip("/")
-
-    existing = session.exec(
-        select(AnsibleProject)
-        .where(AnsibleProject.repo_id == repo.id)
-        .where(AnsibleProject.root_path == normalized_path)
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=409, detail="This project path is already configured"
-        )
-
-    project = AnsibleProject(repo_id=repo.id, root_path=normalized_path)
-    session.add(project)
-    session.commit()
-    session.refresh(project)
+    # The repository root is allowed: an Ansible project frequently *is* the
+    # whole repository, with playbooks/ and roles/ at the top level.
+    project = shared.create_target(
+        SPEC,
+        session,
+        current_user,
+        project_in.repo_id,
+        project_in.root_path,
+        allow_repo_root=True,
+    )
     return to_ansible_project_public(project)
 
 
@@ -121,22 +75,11 @@ def list_projects(
     """List Ansible projects. Omit ``repo_id`` for the org-wide Infrastructure
     page (every project across every repo the user can access); pass it to
     scope to one repo."""
-    if repo_id:
-        authorize_repo(session, current_user, repo_id)
-        query = select(AnsibleProject).where(AnsibleProject.repo_id == repo_id)
-    else:
-        query = select(AnsibleProject)
-        if not current_user.is_superuser:
-            query = query.join(
-                Repository,
-                AnsibleProject.repo_id == Repository.id,  # type: ignore[arg-type]
-            ).where(Repository.org_id.in_(user_org_ids(session, current_user)))  # type: ignore[attr-defined]
-    projects = session.exec(query.order_by(col(AnsibleProject.root_path))).all()
-    # Batched for the whole page — see the Terraform list route.
-    activities = target_activities(ANSIBLE_ENGINE, session, [p.id for p in projects])
     return [
-        to_ansible_project_public(p, activities.get(p.id, TargetActivity.idle))
-        for p in projects
+        to_ansible_project_public(project, activity)
+        for project, activity in shared.list_targets(
+            SPEC, session, current_user, repo_id
+        )
     ]
 
 
@@ -149,14 +92,8 @@ def update_project(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AnsibleProjectPublic:
-    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    if body.enabled is not None:
-        project.enabled = body.enabled
-    session.add(project)
-    session.commit()
-    session.refresh(project)
     return to_ansible_project_public(
-        project, target_activity(ANSIBLE_ENGINE, session, project.id)
+        *shared.update_target(SPEC, project_id, body, session, current_user)
     )
 
 
@@ -166,14 +103,7 @@ def delete_project(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> None:
-    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    # Cascades to its scans/findings — the user is removing this project, not
-    # just disabling it. Which is why it needs the guard the disable switch does
-    # not: a worker still holding one of those rows would be writing into a
-    # deleted tree.
-    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.remove)
-    session.delete(project)
-    session.commit()
+    shared.delete_target(SPEC, project_id, session, current_user)
 
 
 @router.post(
@@ -188,28 +118,9 @@ def trigger_scan(
     current_user: CurrentUser,
     branch: str | None = None,
 ) -> dict[str, str]:
-    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    if not project.enabled:
-        raise HTTPException(status_code=403, detail="Ansible project is disabled")
-    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.scan)
-    repo = get_or_404(
-        session, Repository, project.repo_id, detail="Repository not found"
+    return shared.trigger_target_scan(
+        SPEC, run_ansible_scan, project_id, session, current_user, branch
     )
-    # Fail fast with a precise 402 rather than letting the user watch a job
-    # disappear. The worker re-checks — that gate is the one that holds.
-    enforce_quota(
-        session,
-        current_user,
-        repo.org_id,
-        "analyses",
-        engine=UsageEngine.ansible,
-    )
-    run_ansible_scan.delay(
-        ansible_project_id=str(project.id),
-        branch=branch or "",
-        trigger="manual",
-    )
-    return {"status": "queued", "ansible_project_id": str(project_id)}
 
 
 @router.get(
@@ -221,15 +132,14 @@ def list_scans(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> list[AnsibleScanPublic]:
-    get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    scans = session.exec(
-        select(AnsibleScan)
-        .where(AnsibleScan.ansible_project_id == project_id)
-        .order_by(col(AnsibleScan.created_at).desc())
-        .limit(50)
-    ).all()
-    return [to_ansible_scan_public(s) for s in scans]
+    return [
+        to_ansible_scan_public(s)
+        for s in shared.list_target_scans(
+            SPEC, project_id, session, current_user, limit
+        )
+    ]
 
 
 @router.get(
@@ -243,18 +153,12 @@ def list_findings(
     current_user: CurrentUser,
     include_resolved: bool = False,
 ) -> list[AnsibleFindingPublic]:
-    get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    query = select(AnsibleFinding).where(
-        AnsibleFinding.ansible_project_id == project_id
-    )
-    if not include_resolved:
-        query = query.where(col(AnsibleFinding.resolved_at).is_(None))
-    # By file then line, the way the Docker list orders: a reader works through
-    # one file at a time, and a play reads top to bottom.
-    findings = session.exec(
-        query.order_by(col(AnsibleFinding.file_path), col(AnsibleFinding.line_start))
-    ).all()
-    return [to_ansible_finding_public(f) for f in findings]
+    return [
+        to_ansible_finding_public(f)
+        for f in shared.list_target_findings(
+            SPEC, project_id, session, current_user, include_resolved
+        )
+    ]
 
 
 @router.get(
@@ -267,42 +171,27 @@ def get_finding(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AnsibleFindingPublic:
-    finding = get_finding_for_user(
-        ANSIBLE_ENGINE, ansible_finding_id, session, current_user
+    return to_ansible_finding_public(
+        shared.get_finding_for_user(SPEC, ansible_finding_id, session, current_user)
     )
-    return to_ansible_finding_public(finding)
 
 
-@router.put(
-    "/findings/{ansible_finding_id}/ignore",
+@router.patch(
+    "/findings/{ansible_finding_id}",
     role=Role.org_admin,
     response_model=AnsibleFindingPublic,
 )
-def ignore_finding(
+def update_finding(
     ansible_finding_id: uuid.UUID,
+    body: FindingUpdate,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AnsibleFindingPublic:
-    finding = ignore_finding_for_user(
-        ANSIBLE_ENGINE, ansible_finding_id, session, current_user
+    return to_ansible_finding_public(
+        shared.update_finding_for_user(
+            SPEC, ansible_finding_id, body, session, current_user
+        )
     )
-    return to_ansible_finding_public(finding)
-
-
-@router.delete(
-    "/findings/{ansible_finding_id}/ignore",
-    role=Role.org_admin,
-    response_model=AnsibleFindingPublic,
-)
-def unignore_finding(
-    ansible_finding_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> AnsibleFindingPublic:
-    finding = unignore_finding_for_user(
-        ANSIBLE_ENGINE, ansible_finding_id, session, current_user
-    )
-    return to_ansible_finding_public(finding)
 
 
 @router.get(
@@ -318,34 +207,19 @@ def list_files(
 ) -> list[AnsibleFilePublic]:
     """The project's live Ansible source, fetched from GitHub on demand.
 
-    Ansible files aren't persisted (unlike WorkflowFile), so this fetches them
-    the same way the scan worker does — which lets the UI show source with the
-    findings annotated inline.
-
     Each file carries the ``kind`` the classifier assigned it, so the frontend
     can label a playbook differently from a variables file without re-deriving
-    the classification it has no way to compute.
+    a classification it has no way to compute.
     """
-    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    repo = get_or_404(
-        session, Repository, project.repo_id, detail="Repository not found"
-    )
-    try:
-        fetched = _fetch_ansible_files(repo, project.root_path, ref=ref)
-    except Exception as exc:  # network / GitHub failures are transient
-        raise HTTPException(
-            status_code=502, detail="Failed to fetch Ansible files from GitHub"
-        ) from exc
     return [
         AnsibleFilePublic(
             path=f.path,
             raw_content=f.content,
-            # The fetcher already classified these to decide they were worth
-            # returning; re-running it is cheap and keeps the wire shape honest
-            # rather than threading the kind through the transport type.
             kind=classify_ansible_file(f.path, f.content) or "tasks",
         )
-        for f in sorted(fetched, key=lambda f: f.path)
+        for f in shared.fetch_target_files(
+            SPEC, project_id, session, current_user, ref, _fetch_ansible_files
+        )
     ]
 
 
@@ -357,15 +231,12 @@ def list_repository_fixes(
 ) -> list[AnsibleFixPublic]:
     """Every fix across a repository's Ansible projects.
 
-    The cross-target read beside the per-target one, matching
-    ``GET /workflow/fixes``. The pull-requests tab reads it to decide whether
-    "Update PR" may be pressed: a delivery already in flight, or a fix still
-    being generated, refuses one — and asking per target would be a request per
-    card on a page that already lists them all.
+    The pull-requests tab reads it to decide whether "Update PR" may be
+    pressed, without a request per card.
     """
     return [
         to_ansible_fix_public(f)
-        for f in list_fixes_for_repo(ANSIBLE_ENGINE, session, current_user, repo_id)
+        for f in shared.list_fixes_for_repo(SPEC, session, current_user, repo_id)
     ]
 
 
@@ -379,13 +250,10 @@ def list_fixes(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> list[AnsibleFixPublic]:
-    get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    fixes = session.exec(
-        select(AnsibleFix)
-        .where(AnsibleFix.ansible_project_id == project_id)
-        .order_by(col(AnsibleFix.created_at).desc())
-    ).all()
-    return [to_ansible_fix_public(f) for f in fixes]
+    return [
+        to_ansible_fix_public(f)
+        for f in shared.list_target_fixes(SPEC, project_id, session, current_user)
+    ]
 
 
 @router.post(
@@ -398,67 +266,19 @@ def generate_fixes(
     project_id: uuid.UUID,
     session: SessionDep,
     current_user: CurrentUser,
-    body: AnsibleFixGenerateRequest | None = None,
+    body: FixGenerateRequest | None = None,
     force: bool = False,
 ) -> dict[str, str | int]:
     """Generate LLM fixes for a project's open findings, one whole-file fix each."""
-    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.generate)
-    repo = get_or_404(
-        session, Repository, project.repo_id, detail="Repository not found"
-    )
-
-    query = (
-        select(AnsibleFinding)
-        .where(AnsibleFinding.ansible_project_id == project_id)
-        .where(col(AnsibleFinding.resolved_at).is_(None))
-        .where(col(AnsibleFinding.ignored_at).is_(None))
-    )
-    if body and body.finding_ids:
-        query = query.where(col(AnsibleFinding.id).in_(body.finding_ids))
-    findings = list(session.exec(query).all())
-    if not findings:
-        return {"status": "no_findings", "queued": 0}
-
-    by_file: dict[str, list[AnsibleFinding]] = defaultdict(list)
-    for finding in findings:
-        by_file[finding.file_path].append(finding)
-
-    # One whole-file LLM rewrite per file, so the request costs as many fix
-    # generations as there are files.
-    enforce_quota(
+    return shared.generate_target_fixes(
+        SPEC,
+        run_ansible_fix_generation,
+        project_id,
         session,
         current_user,
-        repo.org_id,
-        "fixes",
-        requested=len(by_file),
-        engine=UsageEngine.ansible,
+        body.finding_ids if body else None,
+        force,
     )
-
-    provider_str, model_str = resolve_llm_provider(repo)
-    queued = 0
-    for file_path, group in by_file.items():
-        fix = prepare_pending_fix(
-            ANSIBLE_ENGINE,
-            session,
-            project_id,
-            file_path,
-            provider_str,
-            model_str,
-            force,
-            repo=repo,
-        )
-        if fix is None:
-            continue
-        session.flush()
-        for finding in group:
-            finding.fix_id = fix.id
-            session.add(finding)
-        session.commit()
-        run_ansible_fix_generation.delay(finding_ids=[str(f.id) for f in group])
-        queued += 1
-
-    return {"status": "queued", "queued": queued}
 
 
 @router.post(
@@ -474,14 +294,9 @@ def deliver_fixes(
     force: bool = False,
 ) -> dict[str, str]:
     """Deliver the project's ready fixes as a single PR (branch per project)."""
-    project = get_target_for_user(ANSIBLE_ENGINE, project_id, session, current_user)
-    require_target_idle(ANSIBLE_ENGINE, session, project_id, TargetAction.deliver)
-    deliver_ansible_fixes.delay(ansible_project_id=str(project.id), force=force)
-    return {
-        "status": "queued",
-        "ansible_project_id": str(project_id),
-        "pr_branch": ansible_fix_branch(project.id),
-    }
+    return shared.deliver_target_fixes(
+        SPEC, deliver_ansible_fixes, project_id, session, current_user, force
+    )
 
 
 @router.get("/sarif", role=Role.service, limit=LIMIT_INGEST)
@@ -492,14 +307,12 @@ def get_sarif(
     """This repository's open Ansible findings as a SARIF 2.1.0 log.
 
     For a workflow that runs ``upload-sarif`` on its own runner, so a team can
-    read GreenSecOps findings in the security tab and on the PR diff alongside
-    whatever else they scan with — the same findings, in the format GitHub
-    reads, without installing the App.
-
-    Authenticated by the run's GitHub OIDC token: the repository comes from the
-    signed claim, so no id is needed and none would be honoured.
+    read GreenSecOps findings in the security tab and on the PR diff without
+    installing the App. Authenticated by the run's GitHub OIDC token: the
+    repository comes from the signed claim, so no id is needed and none would
+    be honoured.
     """
-    return sarif_for_claims(Engine.ansible, session, claims)
+    return shared.sarif_for_claims(Engine.ansible, session, claims)
 
 
 @router.post("/scans", role=Role.service, limit=LIMIT_EXPENSIVE, status_code=202)
@@ -508,33 +321,11 @@ def trigger_scans_for_code_scanning(
     claims: GitHubOidcClaims,
     branch: str | None = None,
 ) -> dict[str, str]:
-    """Re-scan every enabled Ansible target in the calling repository.
-
-    The first half of the Code Scanning flow: a workflow asks for fresh
-    analysis and then fetches ``GET /ansible/sarif``. Without it a team using
-    the workflows rather than the App would only ever publish whatever the last
-    scan found — nothing at all, on a repository the App has never touched.
+    """Re-scan every enabled Ansible project in the calling repository.
 
     Authenticated by the run's GitHub OIDC token, so the repository is the one
-    the token was minted for and cannot be chosen by the caller. Quota is
-    charged to the org's billing owner, exactly as a dashboard-triggered scan
-    is; there is no user to attribute it to.
+    the token was minted for and cannot be chosen by the caller.
     """
-    repo, targets = enabled_targets_for_claims(ANSIBLE_ENGINE, session, claims)
-    if not targets:
-        return {"status": "no_targets", "queued": "0"}
-    enforce_quota(
-        session,
-        None,
-        repo.org_id,
-        "analyses",
-        requested=len(targets),
-        engine=UsageEngine.ansible,
+    return shared.trigger_code_scanning_scans(
+        SPEC, run_ansible_scan, session, claims, branch
     )
-    for target in targets:
-        run_ansible_scan.delay(
-            ansible_project_id=str(target.id),
-            branch=branch or "",
-            trigger="code_scanning",
-        )
-    return {"status": "queued", "queued": str(len(targets))}

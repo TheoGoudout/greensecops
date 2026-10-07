@@ -761,7 +761,7 @@ def test_list_issues_latest_only_applies_without_repo_id(
     assert str(issue.id) not in ids
 
 
-# ─── POST /issues/{id}/ignore & /unignore ─────────────────────────────────────
+# ─── PATCH /workflow/findings/{id} ─────────────────────────────────────────────
 
 
 def test_ignore_and_unignore_finding(
@@ -771,8 +771,9 @@ def test_ignore_and_unignore_finding(
     issue: WorkflowFinding,
 ) -> None:
     # Ignore → status becomes ignored (DB trigger) and ignored_at is set.
-    resp = client.put(
-        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -782,16 +783,18 @@ def test_ignore_and_unignore_finding(
     assert issue.status is FindingStatus.ignored
 
     # Ignore again is idempotent.
-    resp = client.put(
-        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ignored"
 
     # Unignore → reverts to the underlying (open) state.
-    resp = client.delete(
-        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
+    resp = client.patch(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}",
+        json={"ignored": False},
         headers=superuser_token_headers,
     )
     assert resp.status_code == 200
@@ -807,8 +810,9 @@ def test_ignored_issue_hidden_by_default_shown_with_flag(
     repo: Repository,
     issue: WorkflowFinding,
 ) -> None:
-    client.put(
-        f"{settings.API_V1_STR}/workflow/findings/{issue.id}/ignore",
+    client.patch(
+        f"{settings.API_V1_STR}/workflow/findings/{issue.id}",
+        json={"ignored": True},
         headers=superuser_token_headers,
     )
     # Default list excludes ignored issues.

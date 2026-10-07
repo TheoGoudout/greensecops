@@ -3,31 +3,28 @@ import { toast } from "sonner"
 import { apiErrorDetail } from "@/lib/api-error"
 
 /**
- * Ignore/unignore for one finding, shared across Terraform, Docker, Cloud and
- * Ansible — the same action IssueRow has always had for Workflow findings,
- * generalized once the four other engines' routes caught up to it.
+ * Ignore/unignore for one finding, shared by every engine's finding row.
  *
- * A named hook (not inlined in each `*FindingRow`) so the mutation, toast and
- * invalidation wiring exists once; only which service method to call and
- * which query keys to refresh differ per engine.
+ * Every engine answers the same `PATCH /{engine}/findings/{id}` with an
+ * `{ ignored }` body, so only which service method to call and which query
+ * keys to refresh differ per engine.
  */
 export function useFindingLifecycle({
   findingId,
   ignored,
-  ignore,
-  unignore,
+  update,
   invalidateKeys,
 }: {
   findingId: string
   ignored: boolean
-  ignore: (findingId: string) => Promise<unknown>
-  unignore: (findingId: string) => Promise<unknown>
+  /** The engine's `updateFinding`, given the id and the new `ignored` value. */
+  update: (findingId: string, ignored: boolean) => Promise<unknown>
   invalidateKeys: readonly (readonly unknown[])[]
 }) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => (ignored ? unignore(findingId) : ignore(findingId)),
+    mutationFn: () => update(findingId, !ignored),
     onSuccess: () => {
       toast.success(ignored ? "Finding unignored" : "Finding ignored")
       for (const key of invalidateKeys) {
