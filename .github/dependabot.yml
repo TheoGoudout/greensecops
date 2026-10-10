@@ -40,6 +40,24 @@ updates:
     commit-message:
       prefix: ⬆
     labels: [dependencies, internal]
+    # Major bumps that cannot resolve against the rest of the workspace. Each
+    # one failed every weekly run with `dependency_file_not_resolvable`, which
+    # marks the whole uv update job as failed. Drop an entry when its blocker
+    # goes:
+    #   - langchain 1.x needs langchain-core 1.x across the whole family plus
+    #     langsmith; that is one migration, not five independent bumps.
+    #   - redis 6+ is outside what celery[redis]/kombu accept.
+    #   - sphinx 9 requires Python >=3.12, and the workspace still supports
+    #     3.10 (test-backend.yml runs on it).
+    ignore:
+      - dependency-name: "langchain*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "langsmith"
+        update-types: [version-update:semver-major]
+      - dependency-name: "redis"
+        update-types: [version-update:semver-major]
+      - dependency-name: "sphinx"
+        update-types: [version-update:semver-major]
     groups:
       python-packages:
         update-types: [minor, patch]
