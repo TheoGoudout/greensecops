@@ -194,7 +194,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.15.0,<3.0.0" },
     { name = "pygithub", git = "https://github.com/TheoGoudout/PyGithub?rev=332b0617" },
     { name = "pyjwt", specifier = ">=2.8.0,<3.0.0" },
-    { name = "python-hcl2", specifier = ">=6.1,<7.0" },
+    { name = "python-hcl2", specifier = ">=8.1.4,<9.0" },
     { name = "python-multipart", specifier = ">=0.0.27,<1.0.0" },
     { name = "python-statemachine", specifier = ">=2.3,<3.0" },
     { name = "pyyaml", specifier = ">=6.0,<7.0" },
@@ -2988,14 +2988,15 @@ wheels = [
 
 [[package]]
 name = "python-hcl2"
-version = "6.1.1"
+version = "8.1.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lark" },
+    { name = "regex" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/92/3c1352c7efa352b35cd5777f82f5213b69b8df0825aec0442a4eb5afd853/python-hcl2-6.1.1.tar.gz", hash = "sha256:5c41525c71bd7b6b5a3a64e45a9bf40b1c1782da4fdaea42311d42ede71d2ec2", size = 30786, upload-time = "2025-02-13T13:56:52.222Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/3b/a66df999c382abf2d37f6c7b618a782958615acd41a53615f994dfd6611b/python_hcl2-8.1.4.tar.gz", hash = "sha256:b4145c930540e99e3e9b4f7de297775bdf856df29782a7abdb0916cbfcab7865", size = 119307, upload-time = "2026-09-08T08:26:26.55Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/31/d5d856c98b174c43eaba33f151951a632da5870db554a2e9c0a065a1e263/python_hcl2-6.1.1-py3-none-any.whl", hash = "sha256:67a0859bdb7d4f258a3278c3f2f058e6d65df28b5f99a8c2b1f0907a51eddfc8", size = 20558, upload-time = "2025-02-13T13:56:50.692Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/c7/9b8918ab4954ecad677b03f36f9121d5467a4285f41507fdc6789a33dc3c/python_hcl2-8.1.4-py3-none-any.whl", hash = "sha256:75738bd95717d692a683495babf4d00063f1b211e2eca04b156c6d79b9a0feae", size = 102957, upload-time = "2026-09-08T08:26:25.344Z" },
 ]
 
 [[package]]
