@@ -23,11 +23,18 @@ RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
 
 COPY package.json bun.lock /app/
 
+# Every workspace manifest, not just frontend's: with one missing, bun treats
+# the lockfile as stale and re-resolves against the registry, so the image
+# picked up whatever was published that minute (a half-published TanStack
+# release broke every shard this way). --frozen-lockfile installs exactly what
+# bun.lock pins, and fails loudly if the two ever disagree.
 COPY frontend/package.json /app/frontend/
+COPY landing/package.json /app/landing/
+COPY action/package.json /app/action/
 
 WORKDIR /app/frontend
 
-RUN bun install
+RUN bun install --frozen-lockfile
 
 COPY ./frontend /app/frontend
 
