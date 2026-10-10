@@ -186,7 +186,7 @@ requires-dist = [
     { name = "langchain-anthropic", specifier = ">=0.3.0,<0.4.0" },
     { name = "langchain-google-genai", specifier = ">=2.0.0,<3.0.0" },
     { name = "langchain-ollama", specifier = ">=0.2.0,<0.3.0" },
-    { name = "langchain-openai", specifier = ">=0.2.0,<0.3.0" },
+    { name = "langchain-openai", specifier = ">=0.3.35,<0.4.0" },
     { name = "langsmith", specifier = ">=0.14.4,<0.15.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6,<4.0.0" },
     { name = "pwdlib", extras = ["argon2", "bcrypt"], specifier = ">=0.3.1" },
@@ -1347,17 +1347,18 @@ wheels = [
 
 [[package]]
 name = "google-ai-generativelanguage"
-version = "0.6.18"
+version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
     { name = "google-auth" },
+    { name = "grpcio" },
     { name = "proto-plus" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/eb/77/3e89a4c4200135eac74eca2f6c9153127e3719a825681ad55f5a4a58b422/google_ai_generativelanguage-0.6.18.tar.gz", hash = "sha256:274ba9fcf69466ff64e971d565884434388e523300afd468fc8e3033cd8e606e", size = 1444757, upload-time = "2025-04-29T15:45:45.527Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/99/e1/4a7920fc1126e2c6b9e4fa6f9d93ee2b882307682515a24b9502114186c8/google_ai_generativelanguage-0.12.1.tar.gz", hash = "sha256:1a210b7f284465d6e13c4153d58c6ede639e67fec84b85ab984bb74ed4269fb5", size = 1476703, upload-time = "2026-10-01T18:14:14.481Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/77/ca2889903a2d93b3072a49056d48b3f55410219743e338a1d7f94dc6455e/google_ai_generativelanguage-0.6.18-py3-none-any.whl", hash = "sha256:13d8174fea90b633f520789d32df7b422058fd5883b022989c349f1017db7fcf", size = 1372256, upload-time = "2025-04-29T15:45:43.601Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/27/62a768dd4dae19da3f860dbc219c4f6f2186623d516b21c9410e73df9734/google_ai_generativelanguage-0.12.1-py3-none-any.whl", hash = "sha256:f3b3bb9069d0effd787818c0ffc4a1cccf8459d8c8c5b25641d2af0ee4e91c87", size = 1400988, upload-time = "2026-10-01T18:07:17.444Z" },
 ]
 
 [[package]]
@@ -1896,16 +1897,16 @@ wheels = [
 
 [[package]]
 name = "langchain-anthropic"
-version = "0.3.15"
+version = "0.3.22"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
     { name = "langchain-core" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/47/c5/c5cd0164e342812787c157a385e8a9529510a514a5fe6acb487e990e82b0/langchain_anthropic-0.3.15.tar.gz", hash = "sha256:e62de2b0175c1fcca49fc4cc1f8742a4ab2385f0b94b7df4533fd06d577efd36", size = 54218, upload-time = "2025-06-03T15:04:44.062Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/ac/4791e4451e1972f80cb517e19d003678239921fc0685a4c4b265fe47e216/langchain_anthropic-0.3.22.tar.gz", hash = "sha256:6c440278bd8012bc94ae341f416bfc724fdc5d2d2b69630fe6e82fa6ee9682ac", size = 471312, upload-time = "2025-10-09T18:39:26.983Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/c0/9a1d58ab8718505bf25b7ad375a2a104886dfe64519d8b96442bb295637e/langchain_anthropic-0.3.15-py3-none-any.whl", hash = "sha256:894d670bc44e68e0b1f2f09e7e7f977a8f07085a596f114c79aefbb789f6d88d", size = 28054, upload-time = "2025-06-03T15:04:43.108Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/ac/019fd9d45716a4d74c154f160665074ae49885ff4764c8313737f5fda348/langchain_anthropic-0.3.22-py3-none-any.whl", hash = "sha256:17721b240342a1a3f70bf0b2ff33520ba60d69008e3b9433190a62a52ff87cf6", size = 32592, upload-time = "2025-10-09T18:39:25.766Z" },
 ]
 
 [[package]]
@@ -1929,7 +1930,7 @@ wheels = [
 
 [[package]]
 name = "langchain-google-genai"
-version = "2.1.5"
+version = "2.1.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filetype" },
@@ -1937,9 +1938,9 @@ dependencies = [
     { name = "langchain-core" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/a5/d9b8d5afdf4a33f13e7d973f2705891cd13cc1dfb578719c9861a8d8385b/langchain_google_genai-2.1.5.tar.gz", hash = "sha256:6e71375a7707667bdecc5a7d1c86438ec10f2c7bb6dc6e3f095f5b22523c4fc9", size = 40813, upload-time = "2025-05-28T13:49:09.574Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/38/8b3a71c729bd03e9eb0fd8bdb19e06a074c35bc2eaa61b1b9edfa863f38d/langchain_google_genai-2.1.12.tar.gz", hash = "sha256:4a98371e545eb97fcdf483086a4aebbb8eceeb9597ca5a9c4c35e92f4fbbd271", size = 77566, upload-time = "2025-09-17T01:27:11.747Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/70/0747358eca996f713f715e2bfc2d0805804f8f705af57381fbee91bb475a/langchain_google_genai-2.1.5-py3-none-any.whl", hash = "sha256:6c8ccaf33a41f83b1d08a2398edbf47a1eebea27a7ec6930f34a0c019f309253", size = 44788, upload-time = "2025-05-28T13:49:08.22Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/8d/9dd9653e5414e73cae3480e5947bbbbd94ba7fa824efdf46e7ff2c0faef2/langchain_google_genai-2.1.12-py3-none-any.whl", hash = "sha256:4c07630419a8fbe7a2ec512c6dea68289663bfe7d5fae0ba431d2cd59a0d0880", size = 50746, upload-time = "2025-09-17T01:27:10.653Z" },
 ]
 
 [[package]]
@@ -1957,16 +1958,16 @@ wheels = [
 
 [[package]]
 name = "langchain-openai"
-version = "0.2.14"
+version = "0.3.35"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "openai" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/fd/8256eba9a159f95a13c5bf7f1f49683de93b3876585b768e6be5dc3a5765/langchain_openai-0.2.14.tar.gz", hash = "sha256:7a514f309e356b182a337c0ed36ab3fbe34d9834a235a3b85cb7f91ae775d978", size = 43647, upload-time = "2024-12-19T21:51:40.629Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/96/06d0d25a37e05a0ff2d918f0a4b0bf0732aed6a43b472b0b68426ce04ef8/langchain_openai-0.3.35.tar.gz", hash = "sha256:fa985fd041c3809da256a040c98e8a43e91c6d165b96dcfeb770d8bd457bf76f", size = 786635, upload-time = "2025-10-06T15:09:28.463Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/54/63c8264d7dbc3bf31ba61bf97740fdd76386b2d4f9a58f58afd3961ce7d7/langchain_openai-0.2.14-py3-none-any.whl", hash = "sha256:d232496662f79ece9a11caf7d798ba863e559c771bc366814f7688e0fe664fe8", size = 50876, upload-time = "2024-12-19T21:51:39.3Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/d5/c90c5478215c20ee71d8feaf676f7ffd78d0568f8c98bd83f81ce7562ed7/langchain_openai-0.3.35-py3-none-any.whl", hash = "sha256:76d5707e6e81fd461d33964ad618bd326cb661a1975cef7c1cb0703576bdada5", size = 75952, upload-time = "2025-10-06T15:09:27.137Z" },
 ]
 
 [[package]]
