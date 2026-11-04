@@ -82,7 +82,7 @@ repos:
 
   # Schemas: GitHub workflows, composite actions and Dependabot.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.38.2
+    rev: 0.39.0
     hooks:
       - id: check-github-workflows
       - id: check-github-actions
